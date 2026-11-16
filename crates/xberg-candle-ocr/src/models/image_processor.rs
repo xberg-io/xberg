@@ -14,17 +14,36 @@ use crate::error::{CandleOcrError, Result};
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
 #[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
-pub(super) fn decode_image_with_budget(bytes: &[u8], budget: u64) -> image::ImageResult<image::DynamicImage> {
-    let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(budget.checked_sub(encoded_bytes).ok_or_else(|| {
+pub(super) fn decode_image_with_budget(
+    bytes: &[u8],
+    budget: u64,
+    convert_to_rgb8: bool,
+) -> image::ImageResult<image::DynamicImage> {
+    use image::ImageDecoder as _;
+
+    let insufficient_memory = || {
         image::ImageError::Limits(image::error::LimitError::from_kind(
             image::error::LimitErrorKind::InsufficientMemory,
         ))
-    })?);
+    };
+    let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(budget.checked_sub(encoded_bytes).ok_or_else(insufficient_memory)?);
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
-    reader.limits(limits);
-    reader.decode()
+    reader.limits(limits.clone());
+    let mut decoder = reader.into_decoder()?;
+    let (width, height) = decoder.dimensions();
+    limits.check_dimensions(width, height)?;
+    limits.reserve(decoder.total_bytes())?;
+    if convert_to_rgb8 && decoder.color_type() != image::ColorType::Rgb8 {
+        let rgb_bytes = (u64::from(width) * u64::from(height))
+            .checked_mul(u64::from(image::ColorType::Rgb8.bytes_per_pixel()))
+            .ok_or_else(insufficient_memory)?;
+        // Conversion follows decoding, so this checks a separate peak from decoder scratch space. ~keep
+        limits.clone().reserve(rgb_bytes)?;
+    }
+    decoder.set_limits(limits)?;
+    image::DynamicImage::from_decoder(decoder)
 }
 
 /// ViT-style image processor: resize to NxN, normalize to mean/std.
@@ -104,10 +123,25 @@ mod decode_tests {
         let budget = 4 * 1024;
         assert!(png.get_ref().len() < usize::try_from(budget).unwrap());
         assert!(matches!(
-            decode_image_with_budget(png.get_ref(), budget),
+            decode_image_with_budget(png.get_ref(), budget, false),
             Err(image::ImageError::Limits(_))
         ));
-        let image = decode_image_with_budget(png.get_ref(), 1 << 20).unwrap();
+        let image = decode_image_with_budget(png.get_ref(), 1 << 20, false).unwrap();
         assert_eq!((image.width(), image.height()), (64, 64));
+    }
+
+    #[test]
+    fn grayscale_and_rgb_rasters_must_fit_when_standalone_decode_converts_color() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_luma8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let budget = 15 * 1024;
+        assert!(decode_image_with_budget(png.get_ref(), budget, false).is_ok());
+        assert!(matches!(
+            decode_image_with_budget(png.get_ref(), budget, true),
+            Err(image::ImageError::Limits(_))
+        ));
+        assert!(decode_image_with_budget(png.get_ref(), 1 << 20, true).is_ok());
     }
 }

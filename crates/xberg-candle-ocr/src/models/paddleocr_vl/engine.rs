@@ -154,7 +154,7 @@ impl PaddleOcrVlEngine {
     /// Process an image and return the recognized text as markdown.
     pub fn process_image(&mut self, image_bytes: &[u8]) -> Result<CandleOcrOutput> {
         tracing::debug!(image_size = image_bytes.len(), task = %self.task, "PaddleOCR-VL: starting inference");
-        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET)
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, true)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Decode image: {e}")))?;
         self.process_rgb_image(img.into_rgb8())
     }

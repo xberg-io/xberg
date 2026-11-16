@@ -407,7 +407,7 @@ impl DeepseekOCREngine {
             version = self.version,
             "DeepSeek-OCR: starting inference"
         );
-        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET)
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {e}")))?;
         self.process_decoded_image(&img, prompt)
     }
