@@ -352,6 +352,45 @@ jobs:
           package: xberg-io/xberg
           version: ${{ needs.prepare.outputs.version }}
 
+  # PIE archives are gated on the release, not on Packagist: Packagist syncs every tag on its
+  # own, so it lists the version before any archive exists, and gating on it skipped the PHP
+  # builds on every re-run (v1.4.1: on Packagist, zero release assets). ~keep
+  check-php-pie:
+    name: Check GitHub Release for PHP PIE assets
+    needs: prepare
+    if: >-
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_php == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: List expected PIE assets
+        id: names
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Keep in sync with the php-extension matrix and verify-assets. ~keep
+          names=()
+          for php in 8.3 8.4 8.5; do
+            for platform in x86_64-linux-glibc arm64-linux-glibc arm64-darwin-bsdlibc; do
+              names+=("php_xberg-${TAG}_php${php}-${platform}-nts.tgz")
+            done
+            names+=("php_xberg-${TAG}-${php}-nts-vs17-x86_64.zip")
+          done
+          (IFS=,; echo "names=${names[*]}") >>"$GITHUB_OUTPUT"
+
+      - id: check
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: github-release
+          package: xberg
+          version: ${{ needs.prepare.outputs.version }}
+          repo: xberg-io/xberg
+          tag: ${{ needs.prepare.outputs.tag }}
+          assets: ${{ steps.names.outputs.names }}
+
   check-cratesio:
     name: Check crates.io for existing versions
     needs: prepare
@@ -1458,13 +1497,13 @@ jobs:
 
   php-extension:
     name: Build PHP extension (php${{ matrix.php }} ${{ matrix.platform.label }})
-    needs: [prepare, check-packagist, publish-crates]
+    needs: [prepare, check-php-pie, publish-crates]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
           needs.prepare.outputs.release_php == 'true' &&
           ((needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.php_registry_core_available == 'true') ||
            (needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' &&
-            (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
+            (needs.check-php-pie.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.platform.os }}
     env:
       MISE_ENV: ci
@@ -4965,7 +5004,7 @@ jobs:
         with:
           channel: Packagist
           needs: ${{ toJSON(needs) }}
-          succeeded: |
+          succeeded-or-skipped: |
             upload-php-pie-release
 
       - uses: xberg-io/actions/publish-packagist@v1
