@@ -2,7 +2,7 @@
 
 mod helpers;
 
-use helpers::{extract_uri_document_blocking, get_test_file_path};
+use helpers::{extract_bytes_document_blocking, extract_uri_document_blocking, get_test_file_path};
 use xberg::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 use xberg::types::{ImagePreprocessingConfig, TesseractConfig};
 
@@ -13,10 +13,26 @@ fn scanned_prose_rejoins_witnessed_line_end_hyphens() {
     }
 }
 
-fn assert_witnessed_wraps(psm: Option<i32>) {
-    let path = get_test_file_path("pdf_scanned/docling_scanned.pdf");
-    assert!(path.is_file(), "fetch the corpus-pinned scan at {}", path.display());
-    let config = ExtractionConfig {
+#[test]
+fn scanned_lexical_wrap_keeps_hyphen_despite_closed_spelling() {
+    // The image-only page has a physical well-/known wrap and both spellings on separate lines. ~keep
+    let pdf = include_bytes!("../../../fixtures/repros/scanned-dehyphenation/lexical-wrap.pdf");
+    let result = extract_bytes_document_blocking(pdf, "application/pdf", &scan_config(Some(6)))
+        .expect("OCR of the synthetic image-only PDF must succeed");
+    assert!(result.metadata.ocr_used);
+    let pages = result.pages.expect("page extraction requested");
+    assert_eq!(pages.len(), 1);
+    let text = pages[0].content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        text.contains("The printed paragraph ends with a well-known term and gives a clear example."),
+        "the wrapped token must join with its lexical hyphen: {text}"
+    );
+    assert!(text.contains("The witness spells it wellknown here."), "{text}");
+    assert!(text.contains("A separate well-known label is valid."), "{text}");
+}
+
+fn scan_config(psm: Option<i32>) -> ExtractionConfig {
+    ExtractionConfig {
         force_ocr: true,
         use_cache: false,
         output_format: OutputFormat::Plain,
@@ -41,8 +57,13 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
             ..Default::default()
         }),
         ..Default::default()
-    };
-    let result = extract_uri_document_blocking(path, Some("application/pdf"), &config)
+    }
+}
+
+fn assert_witnessed_wraps(psm: Option<i32>) {
+    let path = get_test_file_path("pdf_scanned/docling_scanned.pdf");
+    assert!(path.is_file(), "fetch the corpus-pinned scan at {}", path.display());
+    let result = extract_uri_document_blocking(path, Some("application/pdf"), &scan_config(psm))
         .expect("OCR of the public image-only PDF must succeed");
     let pages = result.pages.expect("page extraction requested");
     let first_page = pages.first().expect("the scan must have a first page");
@@ -55,15 +76,19 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
         page_text.contains("commodity hardware. Its code"),
         "join the witnessed wrap before the sentence boundary: {page_text}"
     );
-    // The abstract contains a physical MIT-/licensed break but no independent MIT-licensed
-    // witness. PSM 6 may insert a token from the margin stamp between the two words. ~keep
+    // Check that the dash remains visible across the physical break. The abstract supplies
+    // no independent lexical witness; PSM 6 may insert one token from the margin stamp. ~keep
     let license = page_text
         .split_once("self-contained, MIT-")
         .and_then(|(_, tail)| tail.split_once("licensed open-source package"));
     assert!(
         license.is_some_and(|(between, _)| {
             between.is_empty()
-                || (between.starts_with(' ') && between.ends_with(' ') && between.split_whitespace().count() <= 1)
+                || between == " "
+                || (psm == Some(6)
+                    && between.starts_with(' ')
+                    && between.ends_with(' ')
+                    && between.split_whitespace().count() == 1)
         }),
         "PSM {psm:?} must preserve the hard hyphen in the abstract's MIT license phrase: {page_text}"
     );
