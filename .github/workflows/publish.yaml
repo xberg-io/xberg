@@ -539,6 +539,26 @@ jobs:
             *-win_amd64.whl
             *.tar.gz
 
+  check-swift:
+    name: Check GitHub Release for the Swift artifact bundle
+    needs: prepare
+    if: >-
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - id: check
+        if: needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true'
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: github-release
+          package: xberg
+          version: ${{ needs.prepare.outputs.version }}
+          repo: xberg-io/xberg
+          tag: ${{ needs.prepare.outputs.tag }}
+          assets: Xberg-rs.artifactbundle.zip
+
   check-go:
     name: Check GitHub Release for Go FFI assets
     needs: prepare
@@ -3456,9 +3476,9 @@ jobs:
 
   swift-target:
     name: Build Swift library (${{ matrix.target }})
-    needs: prepare
+    needs: [prepare, check-swift]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true') }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.check-swift.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: macos-26
     # One triple per job. The monolithic job built all five back to back and was killed by its
     # own 330-minute cap twice running (a timeout kill reports as `cancelled`, which is why it
@@ -3617,9 +3637,12 @@ jobs:
     # A real release checks the exact uploaded asset; a dry run checks the run artifact
     # because upload-release-assets intentionally creates no release. Only the real
     # release may rewrite Package.swift or move remote refs. ~keep
+    # A skipped upload means the bundle is already on the release; the job still runs so a
+    # release whose upload landed but whose manifest update did not gets pinned, and it moves
+    # nothing when the tag's Package.swift already pins that exact bundle. ~keep
     needs: [prepare, upload-swift-bundle]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true' && needs.upload-swift-bundle.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_swift == 'true' && (needs.upload-swift-bundle.result == 'success' || (needs.upload-swift-bundle.result == 'skipped' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -3656,8 +3679,29 @@ jobs:
           CHECKSUM=$(sha256sum bundle-dl/Xberg-rs.artifactbundle.zip | cut -d' ' -f1)
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
 
-      - name: Update Package.swift with version and checksum
+      - name: Check whether the tag already pins this bundle
+        id: pinned
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          CHECKSUM: ${{ steps.checksum.outputs.checksum }}
+        run: |
+          set -euo pipefail
+          # Read the remote tag, not the checkout: a re-run may have checked out the
+          # pre-move commit while an earlier run already moved the tag. ~keep
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          manifest="$(git show "refs/tags/${TAG}:Package.swift")"
+          if grep -qF "/releases/download/${TAG}/Xberg-rs.artifactbundle.zip\"" <<<"$manifest" \
+            && grep -qE "checksum:[[:space:]]*\"${CHECKSUM}\"" <<<"$manifest"; then
+            echo "Package.swift at ${TAG} already pins ${CHECKSUM}; leaving the tag where it is"
+            echo "pinned=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "pinned=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Update Package.swift with version and checksum
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned != 'true' }}
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
@@ -3672,7 +3716,7 @@ jobs:
           head -40 Package.swift
 
       - name: Commit and push Package.swift
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned != 'true' }}
         run: |
           git config user.name "xberg-dev-publisher[bot]"
           git config user.email "291994444+xberg-dev-publisher[bot]@users.noreply.github.com"
@@ -3685,6 +3729,20 @@ jobs:
           # ref must exist for SwiftPM to resolve the package with the substituted XCFramework
           # checksum.
           git push origin -f "HEAD:refs/heads/release/swift/${{ needs.prepare.outputs.version }}"
+
+      - name: Ensure the release/swift branch exists
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned == 'true' }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="refs/heads/release/swift/${VERSION}"
+          if git ls-remote --exit-code origin "$branch" >/dev/null; then
+            echo "$branch exists"
+          else
+            git push origin "HEAD:${branch}"
+          fi
 
   zig-package:
     name: Build Zig package (smoke check)
@@ -4199,9 +4257,9 @@ jobs:
 
   upload-swift-bundle:
     name: Upload Swift artifact bundle to GitHub Release
-    needs: [prepare, swift-artifactbundle]
+    needs: [prepare, check-swift, swift-artifactbundle]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_swift == 'true') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_swift == 'true' && (needs.check-swift.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Require the jobs this channel publishes from
