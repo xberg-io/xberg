@@ -415,6 +415,8 @@ pdf-ocr)
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
+  run_exact psm6_html_preserves_scan_rows_only_with_owned_columns --test pdf_auto_dot_leader_rows_2503
+  expected=$((expected + 1))
   ;;
 office-pages)
   expected=35

@@ -7,7 +7,9 @@
 
 mod helpers;
 
+use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
+use std::io::Read;
 use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 
 const SOURCE_ROWS: [[&str; 3]; 12] = [
@@ -207,19 +209,21 @@ fn plain_200_dpi_psm6_keeps_source_leader_occurrences_in_order() {
 }
 
 #[test]
-#[ignore = "requires the pinned #2432 scan and the shifted-heading control"]
 fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
-    let pinned = |variable: &str, sha: &str| {
-        let bytes = std::fs::read(std::env::var_os(variable).expect(variable)).unwrap();
+    let pinned = |compressed: &[u8], sha: &str| {
+        let mut bytes = Vec::new();
+        GzDecoder::new(compressed)
+            .read_to_end(&mut bytes)
+            .expect("decompress synthetic scan PDF");
         assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
         bytes
     };
     let original = pinned(
-        "XBERG_2503_PLAIN_150_PDF",
+        include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-plain.pdf.gz"),
         "9f427df6284fe295ea131e46211844b24b0a8693b2c36da1ce004439148abc6c",
     );
     let shifted = pinned(
-        "XBERG_2503_PLAIN_150_SHIFTED_HEADER_PDF",
+        include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-shifted-count-header.pdf.gz"),
         "5d6a45358a6824f9003ead2d6bb0aed701e98a4e72826511848c38819bc56b60",
     );
     let plain = extract_with_psm(&original, Some(6));
