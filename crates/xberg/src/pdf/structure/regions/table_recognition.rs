@@ -1261,6 +1261,16 @@ fn has_tatr_rule_coverage(covered: u32, width: u32) -> bool {
 }
 
 #[cfg(feature = "layout-detection")]
+fn has_contiguous_tatr_rule_coverage(mut track: std::ops::Range<u32>, matches: impl Fn(u32) -> bool) -> bool {
+    let width = track.end.saturating_sub(track.start);
+    let mut run = 0;
+    track.any(|column| {
+        run = if matches(column) { run + 1 } else { 0 };
+        has_tatr_rule_coverage(run, width)
+    })
+}
+
+#[cfg(feature = "layout-detection")]
 fn has_tatr_rule_run(
     crop: &TatrCrop,
     track: std::ops::Range<u32>,
@@ -1273,14 +1283,8 @@ fn has_tatr_rule_run(
     if width == 0 {
         return false;
     }
-    let crosses_tracks = |matches: &dyn Fn(u32) -> bool| {
-        let mut run = 0;
-        (left..right).any(|column| {
-            run = if matches(column) { run + 1 } else { 0 };
-            has_tatr_rule_coverage(run, width)
-        })
-    };
-    let is_rule_row = |row| crosses_tracks(&|column| tatr_pixel_below_white_cutoff(crop, column, row));
+    let is_rule_row =
+        |row| has_contiguous_tatr_rule_coverage(left..right, |column| tatr_pixel_below_white_cutoff(crop, column, row));
     let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
     if band.is_empty() {
         return false;
@@ -1356,16 +1360,19 @@ fn has_tatr_span_rule_run(
     let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
     band.clone().any(|start| {
         let upper = start - 1;
-        let upper_edge = track
-            .clone()
-            .filter(|&column| tatr_rule_contrasts(crop, column, start, upper))
-            .count() as u32;
-        if !has_tatr_rule_coverage(upper_edge, width) {
+        if !has_contiguous_tatr_rule_coverage(track.clone(), |column| tatr_rule_contrasts(crop, column, start, upper)) {
             return false;
         }
         let maximum_end = band.end.min(start.saturating_add(max_rule_height));
         (start + 1..=maximum_end).any(|end| {
             let rows = start..end;
+            if !rows.clone().all(|ink| {
+                has_contiguous_tatr_rule_coverage(track.clone(), |column| {
+                    tatr_rule_contrasts(crop, column, ink, upper) || tatr_rule_contrasts(crop, column, ink, end)
+                })
+            }) {
+                return false;
+            }
             let coverage = track
                 .clone()
                 .filter(|&column| {

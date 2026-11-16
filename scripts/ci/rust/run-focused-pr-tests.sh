@@ -426,7 +426,7 @@ api-jobs)
   run_api_cases
   ;;
 pdf-table-paint)
-  expected=20
+  expected=21
   table_module="pdf::structure::regions::table_recognition"
   for name in \
     native_tatr_vertical_span_stops_at_a_painted_rule \
@@ -436,6 +436,7 @@ pdf-table-paint)
     native_tatr_preserves_three_adjacent_rowspans_across_empty_continuations \
     native_tatr_preserves_a_tinted_open_track \
     native_tatr_resolves_open_and_divided_tracks_on_full_width_tints \
+    native_tatr_requires_continuous_flank_rule_on_a_tint \
     native_tatr_preserves_a_noisy_near_white_open_track \
     native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor; do
     run_exact "$table_module::metadata_tests::$name" --lib

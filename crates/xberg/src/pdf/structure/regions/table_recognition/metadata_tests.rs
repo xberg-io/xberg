@@ -387,6 +387,25 @@ fn native_tatr_resolves_open_and_divided_tracks_on_full_width_tints() {
 }
 
 #[test]
+fn native_tatr_requires_continuous_flank_rule_on_a_tint() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let solid = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let dashed = [(20, 0, 24), (20, 25, 50), (20, 100, 150), (40, 0, 150)];
+    let fill = [(0, 60, 0, 150, 198)];
+    for (rules, expected_span) in [(solid.as_slice(), 2), (dashed.as_slice(), 1)] {
+        let result = recognize_rows_with_paint(rows, 1, &spans, rules, &fill);
+        let grid = derived_grid(&result);
+        let stub = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+        assert_eq!((stub.row, stub.col, stub.row_span), (0, 1, expected_span), "{rules:?}");
+    }
+}
+
+#[test]
 fn native_tatr_preserves_a_noisy_near_white_open_track() {
     let rows: &[&[&str]] = &[
         &["North", "Region", "Code"],
