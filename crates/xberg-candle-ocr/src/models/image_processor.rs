@@ -10,10 +10,10 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::error::{CandleOcrError, Result};
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
 pub(super) fn decode_image_with_budget(
     bytes: &[u8],
     budget: u64,
@@ -116,7 +116,7 @@ impl ImageProcessor {
     }
 }
 
-#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr")))]
+#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr")))]
 mod decode_tests {
     use super::decode_image_with_budget;
 

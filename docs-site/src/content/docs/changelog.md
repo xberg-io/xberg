@@ -268,6 +268,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Honor the configured image budget in both GLM-OCR modes.**
+  Xberg checks `security_limits.max_content_size` for input bytes, decoding, RGB conversion, and paired layout and crop checks.
+  The standalone byte APIs use a 100 MiB input, decode, and RGB conversion budget. GLM resize and inference allocate separately. (#3168)
+
 - **(ocr): Bound PaddleOCR-VL and DeepSeek OCR image decoding before loading a model.**
   Xberg uses `security_limits.max_content_size` for the encoded input, decoding, and PaddleOCR-VL's immediate RGB conversion.
   The standalone `xberg-candle-ocr` byte APIs use a 100 MiB budget in place of the image library's 512 MiB decoder default and return typed image errors.

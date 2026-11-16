@@ -188,6 +188,7 @@ mod engine {
     use super::{connector::VisionConnector, decoder::Glm4Decoder, vision::CogVit};
     use super::{preprocess, tokenizer};
     use crate::error::Result;
+    use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
     use crate::{CandleOcrError, CandleOcrOutput};
 
     /// GLM-OCR inference engine. Owns the loaded model components and runs
@@ -357,9 +358,11 @@ mod engine {
         /// Run inference over a single image with a specified task and return the recognised content.
         ///
         /// This mirrors `process_image` but uses the supplied task for prompt construction
-        /// instead of `self.task`. Useful for overriding the engine's default task per invocation.
+        /// instead of `self.task`. Encoded input, decoding and RGB conversion share a 100 MiB
+        /// budget. Image decode failures return [`CandleOcrError::Image`].
         pub fn process_image_with_task(&self, image_bytes: &[u8], task: GlmOcrTask) -> Result<CandleOcrOutput> {
-            self.process_image_inner(image_bytes, task)
+            let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, true)?.into_rgb8();
+            self.process_rgb_image_with_task(&img, task)
         }
 
         /// Run inference over a single image and return the recognised content.
@@ -375,13 +378,13 @@ mod engine {
         /// 8. Run autoregressive generation with MTP decoding
         /// 9. Decode token sequence to markdown text
         pub fn process_image(&self, image_bytes: &[u8]) -> Result<CandleOcrOutput> {
-            self.process_image_inner(image_bytes, self.task)
+            self.process_image_with_task(image_bytes, self.task)
         }
 
         /// Run the vision encoder and connector over `pixel_values`, returning the projected
         /// vision embeddings plus the merged patch grid `(h_merged, w_merged)` and the
         /// resulting image-token count after spatial merge. Split out of
-        /// [`Self::process_image_inner`] to keep that function under the workspace line-count
+        /// [`Self::process_rgb_image_with_task`] to keep that function under the workspace line-count
         /// limit. ~keep
         fn encode_and_project(
             &self,
@@ -415,7 +418,7 @@ mod engine {
 
         /// Build the token sequence with image placeholders, embed it, and splice the
         /// projected vision embeddings into the placeholder positions. Returns
-        /// `(input_embeds, image_tokens_start)`. Split out of [`Self::process_image_inner`] to
+        /// `(input_embeds, image_tokens_start)`. Split out of [`Self::process_rgb_image_with_task`] to
         /// keep that function under the workspace line-count limit. ~keep
         fn build_input_embeds(
             &self,
@@ -460,7 +463,7 @@ mod engine {
         /// before `image_tokens_start` and after the vision region are plain sequential
         /// offsets; positions inside the vision region encode `(t, h, w)` via
         /// `image_tokens_start` plus the row/column within the merged patch grid. Split out of
-        /// [`Self::process_image_inner`] to keep that function under the workspace line-count
+        /// [`Self::process_rgb_image_with_task`] to keep that function under the workspace line-count
         /// limit. ~keep
         fn build_mrope_position_ids(
             &self,
@@ -512,8 +515,9 @@ mod engine {
             Ok((prefill_position_ids, next_text_pos_start))
         }
 
-        fn process_image_inner(&self, image_bytes: &[u8], task: GlmOcrTask) -> Result<CandleOcrOutput> {
-            tracing::debug!(image_size = image_bytes.len(), task = %task, "GLM-OCR: starting inference");
+        /// Run the chosen task on an RGB image decoded and budgeted by the caller.
+        pub fn process_rgb_image_with_task(&self, img: &image::RgbImage, task: GlmOcrTask) -> Result<CandleOcrOutput> {
+            tracing::debug!(width = img.width(), height = img.height(), task = %task, "GLM-OCR: starting inference");
             // `patch_size`/`t_patch_size` must match the vision encoder's `config.json`-derived
             // values (the encoder rejects pixel_values whose H/W are not multiples of
             // `patch_size`), so they are taken from the same deserialized `VisionConfig` rather
@@ -525,7 +529,7 @@ mod engine {
                 ..preprocess::PreprocessConfig::default()
             };
             let (pixel_values, grid_thw) =
-                preprocess::preprocess(image_bytes, &preprocess_config, &self.device, self.dtype)?;
+                preprocess::preprocess_rgb(img, &preprocess_config, &self.device, self.dtype)?;
             super::glm_debug_tensor("pixel_values", &pixel_values);
 
             let grid_vec = grid_thw

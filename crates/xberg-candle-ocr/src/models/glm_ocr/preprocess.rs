@@ -38,9 +38,11 @@ mod imp {
     use super::PreprocessConfig;
     use crate::CandleOcrError;
     use crate::error::Result;
+    use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
 
     /// Preprocess image bytes into a `(pixel_values, grid_thw)` pair compatible
-    /// with the CogViT encoder.
+    /// with the CogViT encoder. Encoded input, decode and RGB conversion share a
+    /// 100 MiB budget. The resize and tensor allocations are separate.
     ///
     /// Returns:
     /// - `pixel_values`: `(1, 3, H, W)` tensor in the specified dtype, normalized
@@ -51,17 +53,23 @@ mod imp {
         device: &Device,
         dtype: DType,
     ) -> Result<(Tensor, Tensor)> {
-        let img = image::load_from_memory(image_bytes)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {}", e)))?;
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, true)?.into_rgb8();
+        preprocess_rgb(&img, config, device, dtype)
+    }
 
-        let img = img.to_rgb8();
+    pub fn preprocess_rgb(
+        img: &image::RgbImage,
+        config: &PreprocessConfig,
+        device: &Device,
+        dtype: DType,
+    ) -> Result<(Tensor, Tensor)> {
         let (width, height) = (img.width() as usize, img.height() as usize);
 
         let factor = config.patch_size * config.t_patch_size;
         let (new_height, new_width) = smart_resize(height, width, factor, config.min_pixels, config.max_pixels)?;
 
         let resized = image::imageops::resize(
-            &img,
+            img,
             new_width as u32,
             new_height as u32,
             image::imageops::FilterType::CatmullRom,
@@ -159,3 +167,32 @@ mod imp {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use imp::preprocess;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) use imp::preprocess_rgb;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use candle_core::{DType, Device};
+
+    #[test]
+    fn encoded_and_decoded_inputs_produce_equal_visual_tensors() {
+        let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(28, 28, |x, y| {
+            image::Rgba([x as u8, y as u8, 100, 128])
+        }));
+        let mut png = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let config = PreprocessConfig::default();
+        let (encoded, encoded_grid) = preprocess(png.get_ref(), &config, &Device::Cpu, DType::F32).unwrap();
+        let (rgb, rgb_grid) = preprocess_rgb(&img.to_rgb8(), &config, &Device::Cpu, DType::F32).unwrap();
+        assert_eq!(
+            encoded.flatten_all().unwrap().to_vec1::<f32>().unwrap(),
+            rgb.flatten_all().unwrap().to_vec1::<f32>().unwrap()
+        );
+        assert_eq!(
+            encoded_grid.to_vec2::<u32>().unwrap(),
+            rgb_grid.to_vec2::<u32>().unwrap()
+        );
+    }
+}
