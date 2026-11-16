@@ -27,7 +27,7 @@ fn recognize_rows_with_rules(
     recognize_rows_with_paint(rows, header_rows, span.as_slice(), rules, &[])
 }
 
-fn recognize_rows_with_paint(
+pub(super) fn recognize_rows_with_paint(
     rows: &[&[&str]],
     header_rows: usize,
     spans: &[[f32; 4]],
@@ -155,7 +155,7 @@ fn recognized_document(result: &RecognizedTatrTable) -> crate::types::internal::
     doc
 }
 
-fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
+pub(super) fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
     let doc = recognized_document(result);
     let derived =
         crate::extraction::derive::derive_extraction_result(doc, true, crate::core::config::OutputFormat::Markdown);
@@ -256,7 +256,7 @@ fn native_tatr_preserves_adjacent_source_supported_rowspans() {
         [100.0, 0.0, 200.0, 20.0],
     ];
     let rules = [(20, 100, 200), (40, 0, 200)];
-    let result = recognize_rows_with_paint(rows, 2, &spans, &rules, &[]);
+    let result = recognize_rows_with_paint(rows, 2, &spans, &rules, &[(20, 21, 20, 21, 225)]);
     let grid = derived_grid(&result);
     let headers: Vec<_> = grid
         .cells

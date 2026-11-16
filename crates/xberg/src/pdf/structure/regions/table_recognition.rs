@@ -9,6 +9,10 @@ mod structure;
 #[path = "table_recognition/metadata_tests.rs"]
 mod metadata_tests;
 
+#[cfg(all(test, feature = "layout-detection"))]
+#[path = "table_recognition/adjacent_span_tests.rs"]
+mod adjacent_span_tests;
+
 #[cfg(feature = "layout-detection")]
 use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
 #[cfg(feature = "layout-detection")]
