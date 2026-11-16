@@ -15,6 +15,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, ImageProcessor, decode_image_with_budget};
 use crate::{CandleOcrError, CandleOcrOutput, ModelKind};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -331,8 +333,11 @@ impl TrocrEngine {
     ///
     /// # Errors
     ///
-    /// - Image decode fails
+    /// - Image decode fails or exceeds its 100 MiB budget ([`CandleOcrError::Image`])
     /// - Model inference fails
+    ///
+    /// Resize and inference allocate separately. Use [`Self::process_decoded_image`]
+    /// for a raster decoded under your own budget.
     pub fn process_image(&self, image_bytes: &[u8]) -> Result<CandleOcrOutput> {
         if image_bytes.is_empty() {
             return Err(CandleOcrError::UnsupportedConfig("Empty image data".to_string()));
@@ -340,9 +345,15 @@ impl TrocrEngine {
 
         tracing::debug!(image_size = image_bytes.len(), "TrOCR: preprocessing image");
 
-        let processor = crate::models::image_processor::ImageProcessor::default();
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)?;
+        self.process_decoded_image(&img)
+    }
+
+    /// Recognize text from a raster already decoded and budgeted by the caller.
+    pub fn process_decoded_image(&self, img: &image::DynamicImage) -> Result<CandleOcrOutput> {
+        let processor = ImageProcessor::default();
         let image_tensor = processor
-            .process(image_bytes, &self.device)
+            .process_decoded_image(img, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Image preprocessing failed: {}", e)))?;
 
         tracing::debug!(tensor_shape = ?image_tensor.shape().dims(), "TrOCR: image tensor shape after preprocessing");

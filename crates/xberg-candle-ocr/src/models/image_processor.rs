@@ -10,10 +10,8 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::error::{CandleOcrError, Result};
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
 pub(super) fn decode_image_with_budget(
     bytes: &[u8],
     budget: u64,
@@ -74,7 +72,7 @@ impl Default for ImageProcessor {
     }
 }
 
-/// Decode `image_bytes` and return its `(width, height)` in pixels.
+/// Read the image header and return its `(width, height)` in pixels.
 ///
 /// Callers that expect a specific input granularity (e.g. TrOCR expects a single
 /// cropped text line, not a full page) can use this to inspect the raw raster shape
@@ -85,18 +83,25 @@ pub fn dimensions(image_bytes: &[u8]) -> Result<(u32, u32)> {
     if image_bytes.is_empty() {
         return Err(CandleOcrError::UnsupportedConfig("empty image data".to_string()));
     }
-    let img = image::load_from_memory(image_bytes)?;
-    Ok((img.width(), img.height()))
+    Ok(image::ImageReader::new(std::io::Cursor::new(image_bytes))
+        .with_guessed_format()
+        .map_err(image::ImageError::from)?
+        .into_dimensions()?)
 }
 
 impl ImageProcessor {
-    /// Decode `image_bytes`, resize, normalize, return `[1, 3, H, W]` float32 on `device`.
+    /// Decode `image_bytes` with a 100 MiB budget, resize and normalize into a
+    /// `[1, 3, H, W]` float32 tensor. Resize and tensor allocations are separate.
     pub fn process(&self, image_bytes: &[u8], device: &Device) -> Result<Tensor> {
         if image_bytes.is_empty() {
             return Err(CandleOcrError::UnsupportedConfig("empty image data".to_string()));
         }
 
-        let img = image::load_from_memory(image_bytes)?;
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)?;
+        self.process_decoded_image(&img, device)
+    }
+
+    pub(super) fn process_decoded_image(&self, img: &image::DynamicImage, device: &Device) -> Result<Tensor> {
         let resized = img.resize_exact(self.width, self.height, image::imageops::FilterType::Triangle);
         let rgb = resized.to_rgb8();
         let raw = rgb.into_raw();
@@ -116,7 +121,7 @@ impl ImageProcessor {
     }
 }
 
-#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr")))]
+#[cfg(test)]
 mod decode_tests {
     use super::decode_image_with_budget;
 
@@ -149,6 +154,7 @@ mod decode_tests {
         truncated.truncate(usize::try_from(pixel_offset).unwrap());
         let decoder = image::codecs::bmp::BmpDecoder::new(std::io::Cursor::new(&truncated)).unwrap();
         assert_eq!(decoder.dimensions(), (32, 32));
+        assert_eq!(super::dimensions(&truncated).unwrap(), (32, 32));
         let budget = 1024;
         let encoded_bytes = u64::try_from(truncated.len()).unwrap();
         assert!(encoded_bytes < budget && budget < encoded_bytes + decoder.total_bytes());

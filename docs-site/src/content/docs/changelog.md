@@ -268,6 +268,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Bound TrOCR image decoding and read line-crop dimensions from image headers.**
+  Xberg checks `security_limits.max_content_size` before allocating the decoded raster and reuses it for inference.
+  The standalone byte APIs use a 100 MiB budget for encoded input and decoding, and report typed image errors. Resize and inference allocate separately. (#3168)
+
 - **(ocr): Bound PaddleOCR-VL and DeepSeek OCR image decoding before loading a model.**
   Xberg uses `security_limits.max_content_size` for the encoded input, decoding, and PaddleOCR-VL's immediate RGB conversion.
   The standalone `xberg-candle-ocr` byte APIs use a 100 MiB budget in place of the image library's 512 MiB decoder default and return typed image errors.

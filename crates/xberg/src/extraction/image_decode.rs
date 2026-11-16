@@ -435,16 +435,20 @@ fn validate_standard_rgb8_peak(
 }
 
 #[cfg(any(
+    feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
     all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
 ))]
 pub(crate) struct PreparedCandleImageDecode<'a> {
     bytes: &'a [u8],
+    #[cfg(feature = "candle-trocr")]
+    dimensions: (u32, u32),
     format: ImageFormat,
     decoder_budget: ImageDecodeBudget,
 }
 
 #[cfg(any(
+    feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
     all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
 ))]
@@ -473,9 +477,16 @@ impl<'a> PreparedCandleImageDecode<'a> {
         }
         Ok(Self {
             bytes,
+            #[cfg(feature = "candle-trocr")]
+            dimensions: (probe.width, probe.height),
             format: probe.format,
             decoder_budget,
         })
+    }
+
+    #[cfg(feature = "candle-trocr")]
+    pub(crate) fn dimensions(&self) -> (u32, u32) {
+        self.dimensions
     }
 
     pub(crate) fn decode(self) -> Result<image::DynamicImage> {
