@@ -5,16 +5,18 @@ setup() {
 	xberg_setup
 	REPOSITORY_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 	cd "$XBERG_WORK" || return
-	mkdir -p scripts source/lib source/include temporary
+	mkdir -p scripts/ci/actions/setup-onnx-runtime source/lib source/include temporary
 	cp "$REPOSITORY_ROOT/scripts/download_pdfium_runtime.sh" scripts/
+	cp "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/verify-archive.sh" scripts/ci/actions/setup-onnx-runtime/
 	export PDFIUM_ARCHIVE="$XBERG_WORK/fixture.tgz" PREFIX="$XBERG_WORK/prefix"
 	export TMPDIR="$XBERG_WORK/temporary" PDFIUM_VERSION=7678 PKG_CONFIG_PATH=''
 	export PDFIUM_SYSTEM=Linux PDFIUM_ARCH=aarch64 REAL_CP
 	REAL_CP="$(command -v cp)"
-	unset CURL_STATUS HEADER_COPY_STATUS
+	unset CURL_STATUS HEADER_COPY_STATUS PDFIUM_CHECKSUMS_FILE
 	printf 'Linux runtime bytes\n' >source/lib/libpdfium.so
 	printf 'PDFium header bytes\n' >source/include/fpdfview.h
 	tar -czf "$PDFIUM_ARCHIVE" -C source lib include
+	pin_fixture_archive 7678 linux arm64 >scripts/pdfium-runtime-checksums.sha256
 	xberg_stub uname 'case "$1" in -s) printf "%s\n" "$PDFIUM_SYSTEM" ;; -m) printf "%s\n" "$PDFIUM_ARCH" ;; *) exit 97 ;; esac'
 	xberg_stub curl \
 		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
@@ -27,6 +29,16 @@ setup() {
 	xberg_stub pkg-config 'printf "7678\n"'
 }
 
+pin_fixture_archive() {
+	local digest
+	if command -v sha256sum >/dev/null 2>&1; then
+		digest="$(sha256sum "$PDFIUM_ARCHIVE")"
+	else
+		digest="$(shasum -a 256 "$PDFIUM_ARCHIVE")"
+	fi
+	printf '%s  %s-pdfium-%s-%s.tgz\n' "${digest%% *}" "$1" "$2" "$3"
+}
+
 prepare_macos_archive() {
 	export PDFIUM_SYSTEM=Darwin PDFIUM_ARCH=arm64
 	rm source/lib/libpdfium.so
@@ -37,11 +49,49 @@ prepare_macos_archive() {
 @test "local PDFium downloader should stage actual archive bytes to both build profiles" {
 	run bash "$XBERG_WORK/scripts/download_pdfium_runtime.sh"
 	xberg_assert_status 0
+	xberg_assert_output_contains "7678-pdfium-linux-arm64.tgz: SHA-256 verified"
 	xberg_assert_file target/release/libpdfium.so 'Linux runtime bytes'
 	xberg_assert_file target/debug/libpdfium.so 'Linux runtime bytes'
 	grep -Fq 'chromium/7678/pdfium-linux-arm64.tgz' "$XBERG_TRACE"
 	[ "$(find target -type f | wc -l | tr -d '[:space:]')" -eq 2 ]
 	[ -z "$(find temporary -mindepth 1 -print -quit)" ]
+}
+
+@test "local PDFium downloader should reject a checksum mismatch before tar and preserve existing runtimes" {
+	printf 'different PDFium runtime bytes\n' >source/lib/libpdfium.so
+	tar -czf "$PDFIUM_ARCHIVE" -C source lib include
+	xberg_stub_exit tar 93
+	mkdir -p target/release target/debug
+	printf 'existing runtime\n' | tee target/release/libpdfium.so target/debug/libpdfium.so >/dev/null
+	run bash "$XBERG_WORK/scripts/download_pdfium_runtime.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'SHA-256 mismatch for 7678-pdfium-linux-arm64.tgz'
+	xberg_assert_file target/release/libpdfium.so 'existing runtime'
+	xberg_assert_file target/debug/libpdfium.so 'existing runtime'
+	[ -z "$(find temporary -mindepth 1 -print -quit)" ]
+}
+
+@test "local PDFium downloader should reject an unpinned version before network access" {
+	unset PDFIUM_VERSION
+	run bash "$XBERG_WORK/scripts/download_pdfium_runtime.sh" 9999
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for 9999-pdfium-linux-arm64.tgz'
+	xberg_assert_trace_empty
+	[ ! -e target ]
+}
+
+@test "local PDFium downloader should accept a trusted Windows digest manifest for a version override" {
+	unset PDFIUM_VERSION
+	export PDFIUM_SYSTEM=MINGW64_NT PDFIUM_ARCH=x86_64 PDFIUM_CHECKSUMS_FILE="$XBERG_WORK/custom.sha256"
+	mv source/lib/libpdfium.so source/lib/pdfium.dll
+	tar -czf "$PDFIUM_ARCHIVE" -C source lib include
+	pin_fixture_archive 9999 win x64 | awk '{ printf "%s\r\n", $0 }' >"$PDFIUM_CHECKSUMS_FILE"
+	run bash "$XBERG_WORK/scripts/download_pdfium_runtime.sh" 9999
+	xberg_assert_status 0
+	xberg_assert_output_contains '9999-pdfium-win-x64.tgz: SHA-256 verified'
+	xberg_assert_file target/release/pdfium.dll 'Linux runtime bytes'
+	xberg_assert_file target/debug/pdfium.dll 'Linux runtime bytes'
+	grep -Fq 'chromium/9999/pdfium-win-x64.tgz' "$XBERG_TRACE"
 }
 
 @test "local PDFium downloader should preserve download failure and clean its temporary directory" {
@@ -54,6 +104,7 @@ prepare_macos_archive() {
 
 @test "local PDFium downloader should reject archives without runtime libraries before creating build outputs" {
 	tar -czf "$PDFIUM_ARCHIVE" -C source include
+	pin_fixture_archive 7678 linux arm64 >scripts/pdfium-runtime-checksums.sha256
 	run bash "$XBERG_WORK/scripts/download_pdfium_runtime.sh"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'archive did not contain lib directory'
