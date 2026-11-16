@@ -31,9 +31,9 @@ fn broken_subset_font() -> Vec<u8> {
 
 /// A PDF with `page_count` identical pages, each painting "AB" in the
 /// broken embedded font. 'A' paints; 'B' drops.
-fn pdf_with_broken_font(page_count: usize) -> Vec<u8> {
+fn pdf_with_broken_font(page_count: usize, dropped_glyphs: usize) -> Vec<u8> {
     let font = broken_subset_font();
-    let content = b"BT /F1 24 Tf 50 100 Td (AB) Tj ET";
+    let content = format!("BT /F1 24 Tf 50 100 Td (A{}) Tj ET", "B".repeat(dropped_glyphs));
     let n_objs = 5 + 2 * page_count;
 
     let mut buf: Vec<u8> = Vec::new();
@@ -95,7 +95,7 @@ fn pdf_with_broken_font(page_count: usize) -> Vec<u8> {
         );
         off[contents_id] = buf.len();
         buf.extend_from_slice(format!("{contents_id} 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
-        buf.extend_from_slice(content);
+        buf.extend_from_slice(content.as_bytes());
         buf.extend_from_slice(b"\nendstream\nendobj\n");
     }
 
@@ -124,7 +124,7 @@ fn drain_broken_subset_warnings(doc: &PdfDocument) -> Vec<String> {
 
 #[test]
 fn a_dropped_glyph_warns_on_every_page_it_paints() {
-    let doc = PdfDocument::from_bytes(pdf_with_broken_font(2)).expect("parse fixture");
+    let doc = PdfDocument::from_bytes(pdf_with_broken_font(2, 1)).expect("parse fixture");
     let mut renderer = PageRenderer::new(RenderOptions::default());
 
     renderer.render_page(&doc, 0).expect("render page 0");
@@ -147,4 +147,29 @@ fn a_dropped_glyph_warns_on_every_page_it_paints() {
         1,
         "page 1 must warn again — the latch is page-scoped, not process-scoped: {second:?}"
     );
+}
+
+#[test]
+fn concurrent_renderers_keep_their_own_dropped_glyph_warnings() {
+    let documents = std::thread::scope(|scope| {
+        let renderers = [1, 2].map(|dropped_glyphs| {
+            scope.spawn(move || {
+                let doc = PdfDocument::from_bytes(pdf_with_broken_font(1, dropped_glyphs)).expect("open fixture");
+                PageRenderer::new(RenderOptions::default())
+                    .render_page(&doc, 0)
+                    .expect("render fixture");
+                doc
+            })
+        });
+        renderers.map(|renderer| renderer.join().expect("renderer thread"))
+    });
+
+    for (dropped_glyphs, doc) in [1, 2].into_iter().zip(documents) {
+        let warnings = drain_broken_subset_warnings(&doc);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains(&format!("for {dropped_glyphs} glyph(s)")),
+            "{warnings:?}"
+        );
+    }
 }

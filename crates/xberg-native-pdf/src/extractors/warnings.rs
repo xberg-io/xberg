@@ -11,6 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -94,7 +95,8 @@ pub struct WarningSink {
 }
 
 // The document owns the sink. Each synchronous parser or renderer entry point
-// binds it on the thread actually performing the work, including worker threads. ~keep
+// binds it on the thread performing the work. Outside a scope, the tracing
+// event still fires and the warning remains unattributed. ~keep
 thread_local! {
     static ACTIVE_SINK: RefCell<Option<WarningSink>> = const { RefCell::new(None) };
 }
@@ -115,18 +117,20 @@ pub(crate) fn record_warning(warning: Warning) {
     let sink = ACTIVE_SINK.with(|slot| slot.borrow().clone());
     if let Some(sink) = sink {
         sink.push(warning);
-    } else {
-        push_global_warning(warning);
     }
 }
 
-static UNSCOPED_WARNINGS: Mutex<Vec<Warning>> = Mutex::new(Vec::new());
+const UNSCOPED_WARNING_LIMIT: usize = 256;
+static UNSCOPED_WARNINGS: Mutex<VecDeque<Warning>> = Mutex::new(VecDeque::new());
 
-/// Push a warning into the legacy process-wide sink for standalone operations.
-/// Warnings in this sink are never attached to a document.
+/// Explicitly push a warning into the legacy process-wide sink.
+/// It retains the 256 most recent entries, independently of document scopes.
 pub fn push_global_warning(warning: Warning) {
     if let Ok(mut warnings) = UNSCOPED_WARNINGS.lock() {
-        warnings.push(warning);
+        if warnings.len() == UNSCOPED_WARNING_LIMIT {
+            warnings.pop_front();
+        }
+        warnings.push_back(warning);
     }
 }
 
@@ -134,7 +138,7 @@ pub fn push_global_warning(warning: Warning) {
 pub fn drain_global_warnings() -> Vec<Warning> {
     UNSCOPED_WARNINGS
         .lock()
-        .map(|mut warnings| std::mem::take(&mut *warnings))
+        .map(|mut warnings| warnings.drain(..).collect())
         .unwrap_or_default()
 }
 
@@ -142,7 +146,7 @@ pub fn drain_global_warnings() -> Vec<Warning> {
 pub fn snapshot_global_warnings() -> Vec<Warning> {
     UNSCOPED_WARNINGS
         .lock()
-        .map(|warnings| warnings.clone())
+        .map(|warnings| warnings.iter().cloned().collect())
         .unwrap_or_default()
 }
 
@@ -255,6 +259,76 @@ mod tests {
         assert_eq!(sink.len(), 1);
         sink.clear();
         assert!(sink.is_empty());
+    }
+
+    fn scope_warning(message: &str) -> Warning {
+        Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: message.into(),
+            spec_section: None,
+        }
+    }
+
+    #[test]
+    fn nested_warning_scope_restores_the_outer_sink() {
+        let outer = WarningSink::new();
+        let inner = WarningSink::new();
+        let _outer = outer.enter();
+        record_warning(scope_warning("before"));
+        {
+            let _inner = inner.enter();
+            record_warning(scope_warning("inner"));
+        }
+        record_warning(scope_warning("after"));
+        let messages: Vec<_> = outer.take().into_iter().map(|warning| warning.message).collect();
+        assert_eq!(messages, ["before", "after"]);
+        assert_eq!(inner.take()[0].message, "inner");
+        assert!(inner.is_empty());
+    }
+
+    #[test]
+    fn unwinding_restores_the_outer_warning_scope() {
+        let outer = WarningSink::new();
+        let inner = WarningSink::new();
+        let _outer = outer.enter();
+        let result = std::panic::catch_unwind(|| {
+            let _inner = inner.enter();
+            record_warning(scope_warning("during unwind"));
+            panic!("exercise warning scope cleanup");
+        });
+        assert!(result.is_err());
+        record_warning(scope_warning("after unwind"));
+        assert_eq!(
+            outer
+                .snapshot()
+                .iter()
+                .map(|warning| warning.message.as_str())
+                .collect::<Vec<_>>(),
+            ["after unwind"]
+        );
+        assert_eq!(
+            inner
+                .snapshot()
+                .iter()
+                .map(|warning| warning.message.as_str())
+                .collect::<Vec<_>>(),
+            ["during unwind"]
+        );
+    }
+
+    #[test]
+    fn automatic_warning_outside_a_scope_is_not_retained() {
+        let sink = WarningSink::new();
+        drop(sink.enter());
+        let message = "automatic warning without a document scope";
+        record_warning(scope_warning(message));
+        assert!(sink.is_empty());
+        assert!(
+            !snapshot_global_warnings()
+                .iter()
+                .any(|warning| warning.message == message)
+        );
     }
 
     #[test]

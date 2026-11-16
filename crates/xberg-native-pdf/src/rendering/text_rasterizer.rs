@@ -2370,17 +2370,15 @@ mod tests {
         tally.record("no outline", 0x43, 9);
         let rasterizer = TextRasterizer::with_fontdb(Arc::new(fontdb::Database::new()));
 
+        let sink = crate::extractors::warnings::WarningSink::new();
+        let _scope = sink.enter();
         let events = capture_events(|| {
             for font_name in [SECRET_FONT, "3", "no outline", "font"] {
                 rasterizer.report_drops(&tally, font_name);
             }
         });
-        // The structured sink is process-wide and twelve other tests in this binary push into
-        // it, so neither draining it nor measuring its total length is safe from a test thread:
-        // a stranger's warning landing mid-window reads as one of ours, and draining steals
-        // warnings a peer is about to assert on. Count only records carrying this tally's own
-        // signature, and leave the sink untouched. ~keep
-        let mine = crate::extractors::warnings::snapshot_global_warnings()
+        let mine = sink
+            .snapshot()
             .into_iter()
             .filter(|warning| {
                 warning.category == crate::extractors::warnings::WarningCategory::GlyphDropped

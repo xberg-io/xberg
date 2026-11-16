@@ -39,6 +39,8 @@
 
 #![allow(clippy::needless_return)]
 
+mod common;
+
 use std::sync::Mutex;
 use xberg_native_pdf::converters::text_post_processor::TextPostProcessor;
 use xberg_native_pdf::encryption::PdfPermissions;
@@ -700,23 +702,91 @@ fn descendant_fonts_inline_dict_accepted() {
 }
 
 #[test]
-fn global_warning_sink_drain_round_trips() {
+fn explicit_global_warnings_round_trip_with_a_bounded_backlog() {
     use xberg_native_pdf::extractors::warnings::{
-        Warning, WarningCategory, drain_global_warnings, push_global_warning, snapshot_global_warnings,
+        drain_global_warnings, push_global_warning, snapshot_global_warnings,
     };
     let _ = drain_global_warnings();
-    push_global_warning(Warning {
-        category: WarningCategory::SpecViolation,
-        page: None,
-        message: "test_v0356".into(),
-        spec_section: Some("7.3.8.1"),
-    });
-    let snap = snapshot_global_warnings();
-    assert!(snap.iter().any(|w| w.message == "test_v0356"));
+    for index in 0..=256 {
+        push_global_warning(Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: format!("explicit warning {index}"),
+            spec_section: Some("7.3.8.1"),
+        });
+    }
+
+    let snapshot = snapshot_global_warnings();
     let drained = drain_global_warnings();
-    assert!(drained.iter().any(|w| w.message == "test_v0356"));
-    let after = snapshot_global_warnings();
-    assert!(!after.iter().any(|w| w.message == "test_v0356"));
+    assert_eq!(snapshot.len(), 256);
+    assert_eq!(snapshot[0].message, "explicit warning 1");
+    assert_eq!(snapshot[255].message, "explicit warning 256");
+    assert_eq!(
+        snapshot.iter().map(|warning| &warning.message).collect::<Vec<_>>(),
+        drained.iter().map(|warning| &warning.message).collect::<Vec<_>>(),
+    );
+    assert!(snapshot_global_warnings().is_empty());
+}
+
+fn pdf_with_shared_type0_font(tounicode: &str) -> Vec<u8> {
+    let font = format!(
+        "<< /Type /Font /Subtype /Type0 /BaseFont /SharedWarningTestMincho /Encoding /Identity-H \
+         /DescendantFonts [5 0 R] {tounicode} >>"
+    );
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![0];
+    for (index, body) in [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> >>",
+        &font,
+        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SharedWarningTestMincho \
+         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>",
+        "null",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+    }
+    common::finalize_pdf(pdf, &offsets)
+}
+
+#[test]
+fn shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_document() {
+    use std::sync::Arc;
+    use xberg_native_pdf::PdfDocument;
+    use xberg_native_pdf::extractors::TextExtractor;
+
+    let load_font = |doc: &PdfDocument| {
+        let mut extractor = TextExtractor::new();
+        let resources = doc.get_page_resources(0).expect("page resources");
+        doc.load_fonts_public(&resources, &mut extractor).expect("load font");
+        let mut fonts = extractor.get_font_set();
+        assert_eq!(fonts.len(), 1);
+        assert_eq!(fonts[0].0, "F1");
+        fonts.pop().unwrap().1
+    };
+
+    for (tounicode, expected_count) in [("", 1), ("/ToUnicode null", 1), ("/ToUnicode 6 0 R", 0)] {
+        let pdf = pdf_with_shared_type0_font(tounicode);
+        let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold document");
+        let cold_font = load_font(&cold);
+        let warm = PdfDocument::from_bytes(pdf).expect("open warm document");
+        assert!(warm.structured_warnings().is_empty());
+        for _ in 0..2 {
+            assert!(Arc::ptr_eq(&cold_font, &load_font(&warm)), "the font must be shared");
+        }
+        for doc in [&cold, &warm] {
+            let warnings: Vec<_> = doc
+                .structured_warnings()
+                .into_iter()
+                .filter(|warning| warning.category == WarningCategory::ToUnicodeMissing)
+                .collect();
+            assert_eq!(warnings.len(), expected_count, "{tounicode}: {warnings:?}");
+        }
+    }
 }
 
 /// The `starts_with_agl_ligature` helper detects AGL ligature codepoints

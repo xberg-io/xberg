@@ -3321,7 +3321,7 @@ fn warn_on_jpx_size_mismatch(doc: Option<&crate::document::PdfDocument>, declare
     if let Some(doc) = doc {
         doc.push_structured_warning(warning);
     } else {
-        crate::extractors::warnings::push_global_warning(warning);
+        crate::extractors::warnings::record_warning(warning);
     }
 }
 
