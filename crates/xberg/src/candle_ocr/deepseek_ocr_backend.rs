@@ -19,9 +19,7 @@ use crate::candle_ocr::config::{
 };
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
-use crate::extraction::image_decode::{
-    decode_standard_image_with_security_limits, validate_candle_image_decode_budget,
-};
+use crate::extraction::image_decode::{ImageDecodeBudget, PreparedCandleImageDecode};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::DType;
@@ -309,7 +307,7 @@ impl Plugin for DeepseekOcrBackend {
 
 /// Inherits the `RequiresUpright` default for `page_orientation_handling` — unmeasured, not validated (#657).
 impl DeepseekOcrBackend {
-    async fn process_image_inner(&self, image_bytes: Cow<'_, [u8]>, config: &OcrConfig) -> Result<ExtractedDocument> {
+    async fn process_image_inner(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
         if image_bytes.is_empty() {
             return Err(crate::XbergError::Validation {
                 message: "Empty image data provided to DeepSeek-OCR".to_string(),
@@ -326,11 +324,8 @@ impl DeepseekOcrBackend {
                 source: Some(Box::new(error)),
             },
         };
-        // Validate the complete decode peak before copying a borrowed input or staging a model. ~keep
-        validate_candle_image_decode_budget(&image_bytes, &limits, false).map_err(decode_error)?;
-        let image_bytes = image_bytes.into_owned();
-
         let (content, image_bytes) = tokio::task::spawn_blocking(move || {
+            let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, false).map_err(decode_error)?;
             let model_path = match options.model_path {
                 Some(path) => PathBuf::from(path),
                 None => super::model_stager::ensure_deepseek_ocr(
@@ -349,7 +344,7 @@ impl DeepseekOcrBackend {
             let dtype = options.dtype.unwrap_or_else(|| default_dtype_for(&device));
             let engine = get_or_init_engine(options.device, device, dtype, &model_path, options.version)?;
             let mut engine_guard = engine.lock();
-            let img = decode_standard_image_with_security_limits(&image_bytes, &limits).map_err(decode_error)?;
+            let img = decode.decode().map_err(decode_error)?;
             let output = engine_guard
                 .process_decoded_image(&img, None)
                 .map_err(|e| crate::XbergError::Ocr {
@@ -389,7 +384,17 @@ impl OcrBackend for DeepseekOcrBackend {
     /// [`crate::XbergError::Ocr`] if weight download, device selection, engine
     /// initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
-        self.process_image_inner(Cow::Borrowed(image_bytes), config).await
+        let limits = config.security_limits.clone().unwrap_or_default();
+        ImageDecodeBudget::from_security_limits(&limits).validate(
+            1,
+            1,
+            u64::try_from(image_bytes.len()).unwrap_or(u64::MAX),
+        )?;
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
+
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image_inner(image_bytes, config).await
     }
 
     /// Process an image file using the DeepSeek-OCR engine.
@@ -400,7 +405,7 @@ impl OcrBackend for DeepseekOcrBackend {
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
         let limits = config.security_limits.clone().unwrap_or_default();
         let bytes = super::read_image_file(path, &limits).await?;
-        self.process_image_inner(Cow::Owned(bytes), config).await
+        self.process_image_owned(Arc::new(bytes), config).await
     }
 
     fn supports_language(&self, _lang: &str) -> bool {

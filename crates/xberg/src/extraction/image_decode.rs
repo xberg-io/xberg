@@ -150,6 +150,15 @@ fn probe_standard_image(
     budget: ImageDecodeBudget,
     format: Option<ImageFormat>,
 ) -> Result<StandardImageProbe> {
+    probe_standard_image_with_decoder_budget(bytes, budget, format, budget)
+}
+
+fn probe_standard_image_with_decoder_budget(
+    bytes: &[u8],
+    budget: ImageDecodeBudget,
+    format: Option<ImageFormat>,
+    decoder_budget: ImageDecodeBudget,
+) -> Result<StandardImageProbe> {
     let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     budget.validate(1, 1, encoded_bytes)?;
     let mut reader = match format {
@@ -161,7 +170,7 @@ fn probe_standard_image(
     let format = reader
         .format()
         .ok_or_else(|| XbergError::parsing("Could not determine image format".to_string()))?;
-    reader.limits(image_decode_limits(budget));
+    reader.limits(image_decode_limits(decoder_budget));
     let decoder = reader.into_decoder().map_err(map_image_decode_error)?;
     let (width, height) = decoder.dimensions();
     let decoded_bytes = decoder.total_bytes();
@@ -317,7 +326,7 @@ fn decode_standard_image(
 ) -> Result<image::DynamicImage> {
     let budget = ImageDecodeBudget::from_security_limits(limits);
     let probe = probe_standard_image(bytes, budget, format)?;
-    validate_standard_decode_peak(bytes, budget, probe)?;
+    validate_standard_decode_peak(u64::try_from(bytes.len()).unwrap_or(u64::MAX), budget, probe)?;
     let mut reader = ImageReader::with_format(Cursor::new(bytes), probe.format);
     reader.limits(image_decode_limits(budget));
     reader.decode().map_err(map_image_decode_error)
@@ -331,9 +340,11 @@ fn decode_standard_image(
     feature = "ocr-wasm",
     feature = "ocr-pipeline"
 ))]
-fn validate_standard_decode_peak(bytes: &[u8], budget: ImageDecodeBudget, probe: StandardImageProbe) -> Result<()> {
-    let encoded_bytes =
-        u64::try_from(bytes.len()).map_err(|_| image_dimension_error(probe.width, probe.height, u64::MAX, u64::MAX))?;
+fn validate_standard_decode_peak(
+    encoded_bytes: u64,
+    budget: ImageDecodeBudget,
+    probe: StandardImageProbe,
+) -> Result<()> {
     let peak_bytes = probe
         .decoded_bytes
         .checked_add(encoded_bytes)
@@ -389,7 +400,12 @@ fn conversion_peak_bytes(
 fn decode_standard_rgb8(bytes: &[u8], limits: &SecurityLimits, additional_live_bytes: u64) -> Result<image::RgbImage> {
     let budget = ImageDecodeBudget::from_security_limits(limits);
     let probe = probe_standard_image(bytes, budget, None)?;
-    validate_standard_rgb8_peak(bytes, budget, probe, additional_live_bytes)?;
+    validate_standard_rgb8_peak(
+        u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        budget,
+        probe,
+        additional_live_bytes,
+    )?;
     let mut reader = ImageReader::with_format(Cursor::new(bytes), probe.format);
     reader.limits(image_decode_limits(budget));
     reader
@@ -409,13 +425,11 @@ fn decode_standard_rgb8(bytes: &[u8], limits: &SecurityLimits, additional_live_b
     feature = "sceptre-wasm"
 ))]
 fn validate_standard_rgb8_peak(
-    bytes: &[u8],
+    encoded_live_bytes: u64,
     budget: ImageDecodeBudget,
     probe: StandardImageProbe,
     additional_live_bytes: u64,
 ) -> Result<()> {
-    let encoded_live_bytes =
-        u64::try_from(bytes.len()).map_err(|_| image_dimension_error(probe.width, probe.height, u64::MAX, u64::MAX))?;
     let peak_bytes = conversion_peak_bytes(probe, ColorType::Rgb8, encoded_live_bytes, additional_live_bytes)?;
     budget.validate(probe.width, probe.height, peak_bytes)
 }
@@ -424,17 +438,50 @@ fn validate_standard_rgb8_peak(
     feature = "candle-paddleocr-vl",
     all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
 ))]
-pub(crate) fn validate_candle_image_decode_budget(
-    bytes: &[u8],
-    limits: &SecurityLimits,
-    convert_to_rgb8: bool,
-) -> Result<()> {
-    let budget = ImageDecodeBudget::from_security_limits(limits);
-    let probe = probe_standard_image(bytes, budget, None)?;
-    if convert_to_rgb8 {
-        validate_standard_rgb8_peak(bytes, budget, probe, 0)
-    } else {
-        validate_standard_decode_peak(bytes, budget, probe)
+pub(crate) struct PreparedCandleImageDecode<'a> {
+    bytes: &'a [u8],
+    format: ImageFormat,
+    decoder_budget: ImageDecodeBudget,
+}
+
+#[cfg(any(
+    feature = "candle-paddleocr-vl",
+    all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+))]
+impl<'a> PreparedCandleImageDecode<'a> {
+    pub(crate) fn new(bytes: &'a [u8], limits: &SecurityLimits, convert_to_rgb8: bool) -> Result<Self> {
+        let budget = ImageDecodeBudget::from_security_limits(limits);
+        let format = image::guess_format(bytes).ok();
+        let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+        // image's JPEG decoder retains its own copy of the entire encoded buffer. ~keep
+        let encoded_live_bytes = if format == Some(ImageFormat::Jpeg) {
+            encoded_bytes
+                .checked_mul(2)
+                .ok_or_else(|| image_dimension_error(1, 1, u64::MAX, budget.max_decoded_bytes))?
+        } else {
+            encoded_bytes
+        };
+        budget.validate(1, 1, encoded_live_bytes)?;
+        let decoder_budget = ImageDecodeBudget {
+            max_decoded_bytes: budget.max_decoded_bytes - encoded_live_bytes,
+        };
+        let probe = probe_standard_image_with_decoder_budget(bytes, budget, format, decoder_budget)?;
+        if convert_to_rgb8 {
+            validate_standard_rgb8_peak(encoded_live_bytes, budget, probe, 0)?;
+        } else {
+            validate_standard_decode_peak(encoded_live_bytes, budget, probe)?;
+        }
+        Ok(Self {
+            bytes,
+            format: probe.format,
+            decoder_budget,
+        })
+    }
+
+    pub(crate) fn decode(self) -> Result<image::DynamicImage> {
+        let mut reader = ImageReader::with_format(Cursor::new(self.bytes), self.format);
+        reader.limits(image_decode_limits(self.decoder_budget));
+        reader.decode().map_err(map_image_decode_error)
     }
 }
 

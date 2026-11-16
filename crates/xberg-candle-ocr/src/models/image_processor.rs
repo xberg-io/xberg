@@ -27,9 +27,15 @@ pub(super) fn decode_image_with_budget(
         ))
     };
     let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(budget.checked_sub(encoded_bytes).ok_or_else(insufficient_memory)?);
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+    // The JPEG decoder holds its own copy of the encoded input during decoding. ~keep
+    let encoded_live_bytes = if reader.format() == Some(image::ImageFormat::Jpeg) {
+        encoded_bytes.checked_mul(2).ok_or_else(insufficient_memory)?
+    } else {
+        encoded_bytes
+    };
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(budget.checked_sub(encoded_live_bytes).ok_or_else(insufficient_memory)?);
     reader.limits(limits.clone());
     let mut decoder = reader.into_decoder()?;
     let (width, height) = decoder.dimensions();
@@ -143,5 +149,19 @@ mod decode_tests {
             Err(image::ImageError::Limits(_))
         ));
         assert!(decode_image_with_budget(png.get_ref(), 1 << 20, true).is_ok());
+    }
+
+    #[test]
+    fn standalone_jpeg_decoder_copy_counts_toward_the_budget() {
+        let mut jpeg = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(1, 1)
+            .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+            .unwrap();
+        let budget = u64::try_from(jpeg.get_ref().len()).unwrap() + 3;
+        assert!(matches!(
+            decode_image_with_budget(jpeg.get_ref(), budget, false),
+            Err(image::ImageError::Limits(_))
+        ));
+        assert!(decode_image_with_budget(jpeg.get_ref(), 1 << 20, false).is_ok());
     }
 }
