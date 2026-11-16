@@ -55,8 +55,16 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
         page_text.contains("commodity hardware. Its code"),
         "join the witnessed wrap before the sentence boundary: {page_text}"
     );
+    // The abstract contains a physical MIT-/licensed break but no independent MIT-licensed
+    // witness. PSM 6 may insert a token from the margin stamp between the two words. ~keep
+    let license = page_text
+        .split_once("self-contained, MIT-")
+        .and_then(|(_, tail)| tail.split_once("licensed open-source package"));
     assert!(
-        !page_text.to_ascii_lowercase().contains("mitlicensed"),
-        "a lexical hard hyphen must survive: {page_text}"
+        license.is_some_and(|(between, _)| {
+            between.is_empty()
+                || (between.starts_with(' ') && between.ends_with(' ') && between.split_whitespace().count() <= 1)
+        }),
+        "PSM {psm:?} must preserve the hard hyphen in the abstract's MIT license phrase: {page_text}"
     );
 }
