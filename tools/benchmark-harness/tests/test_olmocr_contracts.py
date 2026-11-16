@@ -2,9 +2,13 @@
 
 import hashlib
 import importlib.util
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 # ruff: noqa: PT027
 
@@ -146,6 +150,92 @@ class ContractsTest(unittest.TestCase):
             frozen = Path(result["file"])
             assert frozen.read_bytes() == b"original integrity bytes"
             assert frozen.stat().st_mode & 0o222 == 0
+
+
+class FormulaCacheTest(unittest.TestCase):
+    """Only explicitly bound formula files belong in each fresh cache."""
+
+    def setUp(self):
+        """Create a temporary model store and a synthetic producer plan."""
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        with patch.object(sys, "path", [str(Path(__file__).parents[1]), *sys.path]):
+            self.runner = importlib.import_module("olmocr_bench.runner")
+            contracts = importlib.import_module("olmocr_bench.contracts")
+
+        self.model_dir = self.root / "models"
+        self.model_dir.mkdir()
+        names = ("image_resizer.onnx", "encoder.onnx", "decoder.onnx", "tokenizer.json")
+        self.models = [self._bind(self.model_dir / name, name.encode()) for name in names]
+        self.pins = {Path(row["file"]).name: row["sha256"] for row in self.models}
+        self.enterContext(patch.object(contracts, "FORMULA_MODEL_SHA256", self.pins, create=True))
+        self.pdf = self._bind(self.root / "synthetic.pdf", b"synthetic PDF identity")
+        self.pdf["file"] = "synthetic.pdf"
+        self.plan = {
+            "producers": {"baseline": {"executable": {"file": "/unused/synthetic-producer"}}},
+            "config": {"file": "/unused/synthetic-config"},
+            "data_root": str(self.root),
+            "models": [*self.models, self._bind(self.model_dir / "unrelated.onnx", b"unrelated")],
+            "argv": ["extract", "{pdf}", "--config", "{config}", "--format", "json"],
+            "environment": {"HF_HUB_CACHE": str(self.model_dir)},
+        }
+
+    @staticmethod
+    def _bind(path, data):
+        path.write_bytes(data)
+        return {"file": str(path), "sha256": hashlib.sha256(data).hexdigest()}
+
+    def _extract(self):
+        return self.runner._extract(self.plan, {"role": "baseline"}, self.pdf, self.root, 1)
+
+    def test_formula_model_links_are_isolated_per_extraction(self):
+        """Separate invocations reuse only the formula files and forget result state."""
+        caches = []
+
+        def produce(*_args, env, **_kwargs):
+            cache = Path(env["XBERG_CACHE_DIR"])
+            assert not (cache / "previous-result").exists()
+            formula = cache / "formula-recognition"
+            assert not formula.is_symlink()
+            assert {path.name for path in formula.iterdir()} == self.pins.keys()
+            for path in formula.iterdir():
+                assert path.is_symlink()
+                assert path.readlink() == self.model_dir / path.name
+                assert path.read_bytes() == path.name.encode()
+            assert env["HF_HUB_CACHE"] == str(self.model_dir)
+            (cache / "previous-result").touch()
+            caches.append(cache)
+            return subprocess.CompletedProcess([], 0, json.dumps({"result": {"content": "synthetic"}}).encode(), b"")
+
+        with patch.object(self.runner.subprocess, "run", side_effect=produce) as invoke:
+            for _ in range(2):
+                assert self._extract()[0] == "synthetic"
+            assert invoke.call_count == 2
+        assert len(set(caches)) == 2
+        assert not any(path.exists() for path in caches)
+        assert {path.name for path in self.model_dir.iterdir()} == self.pins.keys() | {"unrelated.onnx"}
+
+    def test_bad_formula_layout_fails_before_launching_the_producer(self):
+        """A producer never starts when a formula path is invalid or ambiguous."""
+        for models in (
+            self.models[1:],
+            [*self.models[1:], dict(self.models[0], sha256="a" * 64)],
+            [*self.models, self.models[0]],
+            [*self.models[1:], dict(self.models[0], file="relative/image_resizer.onnx")],
+        ):
+            with self.subTest(models=models), patch.object(self.runner.subprocess, "run") as invoke:
+                self.plan["models"] = models
+                with self.assertRaisesRegex(ValueError, "exactly one pinned RapidLaTeXOCR image_resizer.onnx"):
+                    self._extract()
+                invoke.assert_not_called()
+
+        self.plan["models"] = self.models
+        Path(self.models[0]["file"]).unlink()
+        with patch.object(self.runner.subprocess, "run") as invoke:
+            with self.assertRaisesRegex(ValueError, "missing pinned RapidLaTeXOCR file"):
+                self._extract()
+            invoke.assert_not_called()
 
 
 if __name__ == "__main__":

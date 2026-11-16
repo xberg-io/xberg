@@ -12,6 +12,7 @@ from .contracts import (
     ROLES,
     TEST_COUNT,
     digest,
+    formula_model_paths,
     schedule,
     validate_argv,
     validate_config,
@@ -43,6 +44,7 @@ def _verify(plan: dict, *, corpus: bool = False) -> None:
         assets.extend([producer["executable"], *producer["evidence"]])
     if corpus:
         assets.extend(plan["catalog"]["input_assets"])
+    formula_model_paths(plan["models"])
     verify_assets(assets)
     validate_argv(plan["argv"])
     validate_config(json.loads(Path(plan["config"]["file"]).read_text()))
@@ -112,7 +114,15 @@ def _extract(plan: dict, case: dict, pdf: dict, diagnostics: Path, timeout: floa
     verify_assets([{"file": str(pdf_path), "sha256": pdf["sha256"]}])
     substitutions = {"pdf": str(pdf_path), "config": plan["config"]["file"]}
     argv = [producer["executable"]["file"], *(argument.format_map(substitutions) for argument in plan["argv"])]
+    formula_models = formula_model_paths(plan["models"])
     with tempfile.TemporaryDirectory(prefix="olmocr-result-cache-") as cache:
+        formula_cache = Path(cache) / "formula-recognition"
+        formula_cache.mkdir()
+        for name, model in formula_models.items():
+            if not model.is_file():
+                raise ValueError(f"missing pinned RapidLaTeXOCR file: {model}")
+            (formula_cache / name).symlink_to(model)
+
         environment = {
             "PATH": os.environ.get("PATH", ""),
             "HOME": cache,
