@@ -263,20 +263,15 @@ impl XbergMcp {
         config.map_err(|e| rmcp::ErrorData::invalid_params(e, None))
     }
 
-    /// On HTTP, reject a per-input LLM stage that would run on the server's environment
-    /// credentials. Forbidden-field errors keep precedence, as in [`parse_extract_input`].
+    /// On HTTP, reject a parsed per-input override whose LLM stage differs from the request's
+    /// effective stage, unless the operator opted in.
     fn reject_remote_input_llm_stage(
         &self,
-        input: &serde_json::Value,
+        input: &crate::ExtractInput,
         effective: &ExtractionConfig,
     ) -> Result<(), rmcp::ErrorData> {
-        use crate::core::config::request_security::{
-            reject_caller_llm_env_credentials, validate_caller_extraction_config,
-        };
-
-        if let Some(config) = input.get("config").filter(|_| self.http_transport) {
-            validate_caller_extraction_config(config)
-                .and_then(|()| reject_caller_llm_env_credentials(effective, config))
+        if let Some(config) = input.config.as_ref().filter(|_| self.http_transport) {
+            crate::core::config::request_security::reject_caller_input_llm_stages(effective, config)
                 .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         }
         Ok(())
@@ -317,8 +312,8 @@ impl XbergMcp {
         let mut config = self.request_config(params.config)?;
         apply_pdf_password(&mut config, params.pdf_password)?;
         self.apply_local_path_policy(&mut config);
-        self.reject_remote_input_llm_stage(&params.input, &config)?;
         let input = parse_extract_input(params.input, &config)?;
+        self.reject_remote_input_llm_stage(&input, &config)?;
         self.reject_local_input(&input)?;
 
         let mut output = crate::extract(input, &config)
@@ -353,8 +348,9 @@ impl XbergMcp {
             .inputs
             .into_iter()
             .map(|input| {
-                self.reject_remote_input_llm_stage(&input, &config)?;
-                parse_batch_extract_input(input, &config)
+                let options = parse_batch_extract_input(input, &config)?;
+                self.reject_remote_input_llm_stage(&options.input, &config)?;
+                Ok(options)
             })
             .collect::<Result<Vec<_>, _>>()?;
         for options in &inputs {
@@ -1542,10 +1538,32 @@ mod tests {
         assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS);
         assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
 
+        let input = parse_extract_input(vlm_stage_input(), &ExtractionConfig::default()).expect("input parses");
         let error = server
-            .reject_remote_input_llm_stage(&vlm_stage_input(), &ExtractionConfig::default())
+            .reject_remote_input_llm_stage(&input, &ExtractionConfig::default())
             .expect_err("a per-input LLM stage needs the operator's opt-in");
         assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
+    }
+
+    #[test]
+    fn should_accept_operator_llm_stage_resent_unchanged_over_mcp_http() {
+        let operator = ExtractionConfig {
+            ocr: Some(crate::OcrConfig {
+                vlm_config: Some(crate::LlmConfig {
+                    model: "openai/gpt-4o-mini".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let server = XbergMcp::with_config(operator.clone()).for_http(false);
+
+        let config = server
+            .request_config(Some(vlm_stage_input()["config"].clone()))
+            .expect("an unchanged operator stage needs no opt-in");
+        let input = parse_extract_input(vlm_stage_input(), &config).expect("input parses");
+        assert!(server.reject_remote_input_llm_stage(&input, &config).is_ok());
     }
 
     #[test]
@@ -1561,13 +1579,13 @@ mod tests {
             Some("openai/gpt-4o-mini".to_string())
         );
 
-        assert!(
-            server
-                .reject_remote_input_llm_stage(&vlm_stage_input(), &ExtractionConfig::default())
-                .is_ok()
-        );
         let input =
             parse_extract_input(vlm_stage_input(), &ExtractionConfig::default()).expect("per-input stage parses");
+        assert!(
+            server
+                .reject_remote_input_llm_stage(&input, &ExtractionConfig::default())
+                .is_ok()
+        );
         assert!(input.config.and_then(|config| config.ocr).is_some());
     }
 

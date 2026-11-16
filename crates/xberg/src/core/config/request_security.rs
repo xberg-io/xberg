@@ -139,16 +139,20 @@ pub(crate) fn resolve_caller_extraction_config(
 
 /// [`resolve_caller_extraction_config`] for a caller that reaches the server over the network
 /// (the REST API and MCP over HTTP), whose LLM stages also need the operator's opt-in; see
-/// [`reject_caller_llm_env_credentials`]. MCP over stdio runs as the operator and skips it.
+/// [`check_caller_llm_stages`]. MCP over stdio runs as the operator and skips it.
 pub(crate) fn resolve_remote_caller_extraction_config(
     operator: &super::ExtractionConfig,
     caller: Option<&Value>,
 ) -> Result<super::ExtractionConfig, String> {
-    if let Some(caller) = caller {
-        validate_caller_extraction_config(caller)?;
-        reject_caller_llm_env_credentials(operator, caller)?;
+    let effective = resolve_caller_extraction_config(operator, caller)?;
+    if caller.is_some() {
+        check_caller_llm_stages(
+            &config_json(operator)?,
+            &config_json(&effective)?,
+            caller_llm_env_credentials_allowed(),
+        )?;
     }
-    resolve_caller_extraction_config(operator, caller)
+    Ok(effective)
 }
 
 pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &mut Value) -> Result<(), String> {
@@ -285,37 +289,34 @@ pub(crate) fn caller_llm_env_credentials_allowed() -> bool {
         .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
 }
 
-/// Reject a caller LLM stage that would authenticate with the server's environment credentials,
-/// unless the operator set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`].
-///
-/// `base` is the config the caller JSON applies to: the operator config for a request config, the
-/// request's effective config for a per-input override.
-pub(crate) fn reject_caller_llm_env_credentials(base: &super::ExtractionConfig, caller: &Value) -> Result<(), String> {
-    check_caller_llm_env_credentials(base, caller, caller_llm_env_credentials_allowed())
+/// Reject an LLM stage of a remote caller's per-input override that differs from the request's
+/// effective stage at the same place, unless the operator set
+/// [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`]. `input` is the override as it will run.
+pub(crate) fn reject_caller_input_llm_stages(
+    effective: &super::ExtractionConfig,
+    input: &super::FileExtractionConfig,
+) -> Result<(), String> {
+    check_caller_llm_stages(
+        &config_json(effective)?,
+        &config_json(input)?,
+        caller_llm_env_credentials_allowed(),
+    )
 }
 
-/// A caller cannot send credentials or transport settings, and its section replaces the one in
-/// `base`, so every caller LLM stage authenticates from the server environment. That is the
-/// operator's own choice only when `base` configures the same model at the same place with no
-/// credential or transport settings of its own; any other stage needs the opt-in.
-fn check_caller_llm_env_credentials(
-    base: &super::ExtractionConfig,
-    caller: &Value,
-    allow_env_credentials: bool,
-) -> Result<(), String> {
+fn config_json(config: &impl serde::Serialize) -> Result<Value, String> {
+    serde_json::to_value(config).map_err(|e| format!("Failed to serialize extraction config: {e}"))
+}
+
+/// Every LLM stage of the configuration that will run (`effective`) must be identical, field for
+/// field, to the stage the trusted configuration (`operator`) has at the same place: then the
+/// caller changed nothing and the stage runs as the operator configured it. A new or changed stage
+/// could spend the server's credentials on the caller's terms, so it needs the operator's opt-in.
+fn check_caller_llm_stages(operator: &Value, effective: &Value, allow_env_credentials: bool) -> Result<(), String> {
     if allow_env_credentials {
         return Ok(());
     }
-    let stages = caller_llm_stages(caller);
-    if stages.is_empty() {
-        return Ok(());
-    }
-    let base = serde_json::to_value(base).map_err(|e| format!("Failed to serialize server config: {e}"))?;
-    for (pointer, path) in stages {
-        let Some(llm) = caller.pointer(&pointer) else {
-            continue;
-        };
-        if !is_operator_llm_stage(base.pointer(&pointer), llm) {
+    for (pointer, path) in caller_llm_stages(effective) {
+        if effective.pointer(&pointer) != operator.pointer(&pointer) {
             return Err(format!(
                 "Caller extraction config may not use the server's LLM credentials for {path}; \
                  the server operator must set {ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV}=1 to allow it"
@@ -343,22 +344,6 @@ fn caller_llm_stages(config: &Value) -> Vec<(String, String)> {
         }
     }
     stages
-}
-
-fn is_operator_llm_stage(base: Option<&Value>, caller: &Value) -> bool {
-    let Some(base) = base.filter(|base| base.is_object()) else {
-        return false;
-    };
-    let operator_transport = FORBIDDEN_LLM_FIELDS.iter().any(|field| match base.get(field) {
-        None | Some(Value::Null) => false,
-        // liter-llm's default, which the caller's stage gets too. ~keep
-        Some(Value::Bool(true)) => *field != "load_env",
-        Some(_) => true,
-    });
-    !operator_transport
-        && base
-            .get("model")
-            .is_some_and(|model| Some(model) == caller.get("model"))
 }
 
 fn validate_llm_fields(llm: &Value, path: &str) -> Result<(), String> {
@@ -649,11 +634,16 @@ mod tests {
         }
     }
 
-    fn vlm_llm(model: &str) -> super::super::LlmConfig {
+    fn operator_vlm() -> super::super::LlmConfig {
         super::super::LlmConfig {
-            model: model.to_string(),
+            model: "openai/gpt-4o-mini".to_string(),
+            temperature: Some(0.2),
             ..Default::default()
         }
+    }
+
+    fn caller_vlm(temperature: f64) -> Value {
+        serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini", "temperature": temperature}}})
     }
 
     fn env_credentials_error(path: &str) -> String {
@@ -663,85 +653,75 @@ mod tests {
         )
     }
 
+    /// The operator and effective configs as JSON, after the caller JSON is merged as it runs.
+    fn operator_and_effective(operator: &super::super::ExtractionConfig, caller: &Value) -> (Value, Value) {
+        let effective = resolve_caller_extraction_config(operator, Some(caller)).expect("caller config merges");
+        (config_json(operator).unwrap(), config_json(&effective).unwrap())
+    }
+
     #[test]
-    fn should_reject_caller_llm_stage_at_every_path_without_operator_opt_in() {
-        let operator = super::super::ExtractionConfig::default();
+    fn should_reject_new_llm_stage_at_every_path_without_operator_opt_in() {
+        let operator = config_json(&super::super::ExtractionConfig::default()).unwrap();
         for path in LLM_PATHS {
-            let caller = nested_config(path, "model", serde_json::json!("openai/gpt-4o-mini"));
+            let effective = nested_config(path, "model", serde_json::json!("openai/gpt-4o-mini"));
 
             assert_eq!(
-                check_caller_llm_env_credentials(&operator, &caller, false),
+                check_caller_llm_stages(&operator, &effective, false),
                 Err(env_credentials_error(&path.join(".")))
             );
-            assert_eq!(check_caller_llm_env_credentials(&operator, &caller, true), Ok(()));
+            assert_eq!(check_caller_llm_stages(&operator, &effective, true), Ok(()));
         }
     }
 
     #[test]
-    fn should_reject_caller_vlm_in_ocr_pipeline_stage_without_operator_opt_in() {
-        let caller = serde_json::json!({
+    fn should_reject_new_vlm_in_ocr_pipeline_stage_without_operator_opt_in() {
+        let effective = serde_json::json!({
             "ocr": {"pipeline": {"stages": [{"backend": "tesseract"}, {"vlm_config": {"model": "openai/gpt-4o"}}]}}
         });
 
         assert_eq!(
-            check_caller_llm_env_credentials(&super::super::ExtractionConfig::default(), &caller, false),
+            check_caller_llm_stages(&serde_json::json!({}), &effective, false),
             Err(env_credentials_error("ocr.pipeline.stages[1].vlm_config"))
         );
     }
 
     #[test]
-    fn should_let_caller_tune_operator_stage_that_already_uses_environment_credentials() {
-        let caller = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini", "temperature": 0.1}}});
+    fn should_accept_operator_llm_stage_resent_unchanged() {
+        let operator = operator_with_vlm(operator_vlm());
+        let (operator_json, effective) = operator_and_effective(&operator, &caller_vlm(0.2));
 
-        for operator in [
-            vlm_llm("openai/gpt-4o-mini"),
-            super::super::LlmConfig {
-                load_env: Some(true),
-                ..vlm_llm("openai/gpt-4o-mini")
-            },
-        ] {
-            assert_eq!(
-                check_caller_llm_env_credentials(&operator_with_vlm(operator), &caller, false),
-                Ok(())
-            );
-        }
+        assert_eq!(check_caller_llm_stages(&operator_json, &effective, false), Ok(()));
+        assert_eq!(
+            resolve_remote_caller_extraction_config(&operator, Some(&caller_vlm(0.2)))
+                .map(|config| config.ocr.and_then(|ocr| ocr.vlm_config)),
+            Ok(Some(operator_vlm()))
+        );
     }
 
     #[test]
-    fn should_reject_caller_stage_that_changes_model_or_drops_operator_credentials() {
-        let same_model = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}});
-        let other_model = serde_json::json!({"ocr": {"vlm_config": {"model": "anthropic/claude-sonnet-4-5"}}});
-        let cases = [
-            (vlm_llm("openai/gpt-4o-mini"), &other_model),
-            (
-                super::super::LlmConfig {
-                    api_key: Some("operator-key".to_string()),
-                    ..vlm_llm("openai/gpt-4o-mini")
-                },
-                &same_model,
-            ),
-            (
-                super::super::LlmConfig {
-                    load_env: Some(false),
-                    ..vlm_llm("openai/gpt-4o-mini")
-                },
-                &same_model,
-            ),
-            (
-                super::super::LlmConfig {
-                    base_url: Some("https://gateway.internal".to_string()),
-                    ..vlm_llm("openai/gpt-4o-mini")
-                },
-                &same_model,
-            ),
-        ];
+    fn should_reject_tweaked_operator_stage_without_opt_in_and_accept_it_with_opt_in() {
+        let operator = operator_with_vlm(operator_vlm());
+        let (operator_json, effective) = operator_and_effective(&operator, &caller_vlm(0.7));
 
-        for (operator, caller) in cases {
-            let error = check_caller_llm_env_credentials(&operator_with_vlm(operator), caller, false)
-                .expect_err("the caller stage would authenticate from the server environment");
-            assert_eq!(error, env_credentials_error("ocr.vlm_config"));
-            assert!(!error.contains("operator-key"));
-        }
+        assert_eq!(
+            check_caller_llm_stages(&operator_json, &effective, false),
+            Err(env_credentials_error("ocr.vlm_config"))
+        );
+        assert_eq!(check_caller_llm_stages(&operator_json, &effective, true), Ok(()));
+    }
+
+    #[test]
+    fn should_reject_operator_stage_resent_without_its_credentials() {
+        let operator = operator_with_vlm(super::super::LlmConfig {
+            api_key: Some("operator-key".to_string()),
+            ..operator_vlm()
+        });
+        let (operator_json, effective) = operator_and_effective(&operator, &caller_vlm(0.2));
+
+        let error = check_caller_llm_stages(&operator_json, &effective, false)
+            .expect_err("the caller's copy drops the operator's key, so it would run on the environment");
+        assert_eq!(error, env_credentials_error("ocr.vlm_config"));
+        assert!(!error.contains("operator-key"));
     }
 
     #[test]
@@ -757,6 +737,35 @@ mod tests {
         assert_eq!(
             local.ocr.and_then(|ocr| ocr.vlm_config).map(|llm| llm.model),
             Some("openai/gpt-4o".to_string())
+        );
+    }
+
+    #[test]
+    fn should_compare_per_input_llm_stage_with_the_request_stage() {
+        let effective = operator_with_vlm(operator_vlm());
+        let input = |llm| super::super::FileExtractionConfig {
+            ocr: Some(super::super::OcrConfig {
+                vlm_config: Some(llm),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            reject_caller_input_llm_stages(&effective, &input(operator_vlm())),
+            Ok(())
+        );
+        let tweaked = super::super::LlmConfig {
+            temperature: Some(0.7),
+            ..operator_vlm()
+        };
+        assert_eq!(
+            reject_caller_input_llm_stages(&effective, &input(tweaked)),
+            Err(env_credentials_error("ocr.vlm_config"))
+        );
+        assert_eq!(
+            reject_caller_input_llm_stages(&super::super::ExtractionConfig::default(), &input(operator_vlm())),
+            Err(env_credentials_error("ocr.vlm_config"))
         );
     }
 

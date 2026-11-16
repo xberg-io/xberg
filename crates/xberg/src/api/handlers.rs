@@ -161,19 +161,19 @@ fn resolve_input_config(
     effective: &crate::ExtractionConfig,
 ) -> Result<Option<FileExtractionConfig>, ApiError> {
     use crate::core::config::request_security::{
-        adopt_file_operator_policy, merge_html_override, reject_caller_llm_env_credentials,
+        adopt_file_operator_policy, merge_html_override, reject_caller_input_llm_stages,
     };
 
     let Some(mut config) = config else {
         return Ok(None);
     };
-    reject_caller_llm_env_credentials(effective, &config).map_err(ApiError::caller_config)?;
     merge_html_override(effective, &mut config).map_err(ApiError::caller_config)?;
-    let mut config = serde_json::from_value(config).map_err(|error| {
+    let mut config: FileExtractionConfig = serde_json::from_value(config).map_err(|error| {
         ApiError::validation(crate::error::XbergError::validation(format!(
             "Invalid per-input configuration: {error}"
         )))
     })?;
+    reject_caller_input_llm_stages(effective, &config).map_err(ApiError::caller_config)?;
     adopt_file_operator_policy(&mut config, effective);
     Ok(Some(config))
 }
