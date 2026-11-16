@@ -5584,14 +5584,15 @@ jobs:
         shell: bash
 
   # The Windows counterpart of publish-homebrew-formula. There is deliberately no
-  # `check-scoop` idempotency gate: the render step rewrites the manifest in place and
-  # the commit below is guarded by `git diff --quiet bucket/`, so re-running a release
-  # is already a no-op. ~keep
+  # `check-scoop` idempotency gate: the action rewrites the manifest in place and commits
+  # only when the staged manifest differs from the bucket, so re-running a release is a
+  # no-op. It reads the Windows zip from the release rather than this run, so a skipped
+  # CLI upload (assets already there) does not skip it, and a missing zip fails it. ~keep
   publish-scoop-manifest:
     name: Update Scoop manifest
     needs: [prepare, upload-cli-release]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_scoop == 'true' && needs.upload-cli-release.result == 'success' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && needs.upload-cli-release.result != 'failure' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -5629,40 +5630,7 @@ jobs:
           github-repo: ${{ github.repository }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           token: ${{ steps.source-token.outputs.token }}
-
-      - name: Commit and push to bucket
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        working-directory: scoop-bucket
-        env:
-          GH_TOKEN: ${{ steps.bucket-token.outputs.token }}
-        run: |
-          git config user.name "xberg-dev-publisher[bot]"
-          git config user.email "291994444+xberg-dev-publisher[bot]@users.noreply.github.com"
-          if git diff --quiet bucket/; then
-            echo "No manifest changes; skipping commit."
-            exit 0
-          fi
-          git add bucket/xberg.json
-          git commit -m "xberg ${{ needs.prepare.outputs.version }}"
-          # Six release pipelines push to this one bucket, so a concurrent release can land
-          # between our checkout and our push and reject it as non-fast-forward. Each repo
-          # touches only its own manifest, so rebasing onto the new tip and retrying is safe --
-          # there is nothing for two releases to genuinely conflict over. ~keep
-          for attempt in 1 2 3 4 5; do
-            if git push origin HEAD; then
-              exit 0
-            fi
-            echo "push rejected (attempt $attempt); rebasing onto the current bucket tip"
-            git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "::error::bucket rebase hit a real conflict; refusing to force the push"
-              exit 1
-            fi
-            sleep $((attempt * 3))
-          done
-          echo "::error::could not push to the bucket after 5 attempts"
-          exit 1
+          commit: "true"
 
   homebrew-bottles:
     name: Build Homebrew bottle (${{ matrix.bottle_tag }})
