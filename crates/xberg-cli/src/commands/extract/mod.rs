@@ -256,9 +256,7 @@ fn extract_input_sync(
             // "Caused by:"), so asserting a specific diagnosis here ("ensure the resource is
             // readable and the format is supported") would misreport failures that have nothing
             // to do with readability or format support — an OCR backend crash, for example.
-            block_on_extract(input, config)
-                .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
-                .with_context(|| format!("Failed to extract input '{uri}'"))?
+            block_on_extract(input, config).with_context(|| format!("Failed to extract input '{uri}'"))?
         }
         ExtractInputSource::Stdin => {
             let mime_type = mime_type.unwrap_or("text/plain");
@@ -272,7 +270,6 @@ fn extract_input_sync(
             // See the URI branch above: describe the attempted operation only. The real cause
             // (e.g. a genuinely wrong --mime-type) still surfaces via the preserved error chain.
             block_on_extract(ExtractInput::from_bytes(data, mime_type, None), config)
-                .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
                 .with_context(|| format!("Failed to extract stdin input as MIME type '{mime_type}'"))?
         }
     };
@@ -307,6 +304,9 @@ fn fail_if_errors(errors: &[ExtractionErrorItem]) -> Result<()> {
     Ok(())
 }
 
+#[cfg(all(test, any(feature = "pdf-ocr", feature = "ocr")))]
+mod ocr_diagnostic_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,23 +327,25 @@ mod tests {
     /// preserve the underlying error as this error's `source()`, so the real cause was always
     /// present in the chain -- but the outermost line a user reads asserted a specific, false
     /// diagnosis instead of describing what was attempted. This exercises the real (unmocked)
-    /// `extract_input_sync` failure path with a nonexistent file, which `xberg::extract` reports
-    /// as `XbergError::Io` or `XbergError::Validation` (see
-    /// `crates/xberg/tests/error_handling.rs::test_nonexistent_file`), to confirm the CLI's own
-    /// wrapping context no longer asserts that false diagnosis.
+    /// `extract_input_sync` failure path with a nonexistent file to confirm the CLI keeps
+    /// the underlying filesystem error and describes the attempted operation.
     #[test]
     fn uri_extraction_failure_does_not_assert_a_false_readability_diagnosis() {
         let config = ExtractionConfig::default();
-        let missing_uri = "test_documents_definitely_missing/does-not-exist-9f3c2a11.txt";
+        let directory = tempfile::tempdir().unwrap();
+        let missing_path = directory.path().join("missing.txt");
+        let missing_uri = missing_path.to_str().unwrap();
 
         let err = extract_input_sync(ExtractInputSource::Uri(missing_uri.to_string()), None, &config)
             .expect_err("extracting a nonexistent file must fail");
+        let Some(xberg::XbergError::Io(source)) = err.downcast_ref::<xberg::XbergError>() else {
+            panic!("expected a typed filesystem error, got {err:?}");
+        };
+        assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+        let source = source.to_string();
         let rendered = format!("{err:?}");
-
-        assert!(
-            rendered.contains("Caused by:"),
-            "ordinary extraction errors retain their causes"
-        );
+        assert!(rendered.contains(&source), "{rendered}");
+        assert!(format!("{err:#}").contains(&source));
         assert!(
             !rendered.contains("Ensure the resource is readable and the format is supported"),
             "context must describe the attempted operation, not assert a (possibly false) \

@@ -356,7 +356,7 @@ impl XbergError {
 /// itself as the next link in the typed source chain. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Debug, Error)]
-#[error("{0}")]
+#[error("PDF OCR backend failure")]
 struct PdfOcrFailureCause(#[source] XbergError);
 
 impl XbergError {
