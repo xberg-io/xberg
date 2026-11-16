@@ -3,10 +3,13 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
 use std::sync::{Arc, Mutex};
 
+/// Owns a native choice iterator allocation. The current choice can borrow Tesseract word data.
+/// The constructor takes a raw handle and cannot check its type, ownership, or backing lifetime.
 pub struct ChoiceIterator {
     handle: Arc<Mutex<*mut c_void>>,
 }
 
+// The mutex serializes wrapper calls only. The backing native data must remain valid across uses. ~keep
 unsafe impl Send for ChoiceIterator {}
 unsafe impl Sync for ChoiceIterator {}
 
@@ -29,6 +32,7 @@ impl ChoiceIterator {
     /// Returns `true` if the next choice is successful, otherwise returns `false`.
     pub fn next(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The guard serializes advancement on a live choice iterator whose source word is still valid. ~keep
         Ok(unsafe { TessChoiceIteratorNext(*handle) != 0 })
     }
 
@@ -41,10 +45,12 @@ impl ChoiceIterator {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         // The returned pointer is owned by the iterator, so it must not be passed to
         // `TessDeleteText`. ~keep
+        // SAFETY: The locked choice iterator borrows the current string from its native storage. ~keep
         let text_ptr = unsafe { TessChoiceIteratorGetUTF8Text(*handle) };
         if text_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: The non-null native string is NUL-terminated and copied before advancing or unlocking. ~keep
         let c_str = unsafe { CStr::from_ptr(text_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -56,6 +62,7 @@ impl ChoiceIterator {
     /// Returns the confidence as a `f32`.
     pub fn confidence(&self) -> Result<f32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The guard serializes the read of the current choice confidence, returned as a C float. ~keep
         Ok(unsafe { TessChoiceIteratorConfidence(*handle) })
     }
 }
@@ -63,6 +70,7 @@ impl ChoiceIterator {
 impl Drop for ChoiceIterator {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
+            // SAFETY: The wrapper must own the choice iterator allocation. This native deleter frees it. ~keep
             unsafe { TessChoiceIteratorDelete(*handle) };
         }
     }
