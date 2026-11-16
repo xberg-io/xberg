@@ -284,8 +284,8 @@ fn witnessed_edit_start(former: &str, continuation: &str, witnesses: &SpellingWi
     if !ascii_word_part(prefix) || !ascii_word_part(continuation) {
         return None;
     }
-    if should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
-        return former.ends_with('-').then_some(former.len());
+    if former.ends_with('-') && should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
+        return Some(former.len());
     }
 
     let prefix_lower = prefix.to_ascii_lowercase();
@@ -398,6 +398,21 @@ mod tests {
             let (mut elements, words) = scan(text, &[full, (550, 940), full]);
             assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
             assert_eq!(elements[0].text, text);
+        }
+    }
+
+    #[test]
+    fn joins_a_soft_hyphen_when_the_page_proves_the_closed_spelling() {
+        for (witness, expected_change) in [("well-known and wellknown", true), ("well-known", false)] {
+            let text = format!("This is a well\u{00ad}\nknown comparison with it\nThe page also shows {witness}");
+            let (mut elements, words) = scan(&text, &[(160, 840); 3]);
+            assert_eq!(join_scanned_wraps(&mut elements, &words, 1000, false), expected_change);
+            let expected = if expected_change {
+                format!("This is a wellknown\ncomparison with it\nThe page also shows {witness}")
+            } else {
+                text
+            };
+            assert_eq!(elements[0].text, expected);
         }
     }
 
