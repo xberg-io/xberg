@@ -255,6 +255,7 @@ ocr = [
     "dep:hayro-jbig2",
     "dep:jpeg-decoder",
     "dep:ureq",
+    "dep:sha2",
     "html",
 ]
 # Embed the English `eng.traineddata` blob (tessdata_fast, ~4 MB) at compile time
