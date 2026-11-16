@@ -315,8 +315,7 @@ async fn publishing_preprocessing_uses_the_remaining_output_budget() {
 
     let error = recover_with_limits(vec![read(PROSE, marker, false)], &thresholds, &limits(required - 1))
         .await
-        .err()
-        .expect("publishing preprocessing would exceed the limit by one byte");
+        .expect_err("publishing preprocessing would exceed the limit by one byte");
     let crate::XbergError::Security { message, .. } = error else {
         panic!("expected a content-size error, got {error}");
     };

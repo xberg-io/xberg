@@ -564,8 +564,8 @@ fn clipping_text_modes_should_clip_the_next_fill_for_every_show_operator() {
     let reference = "BT /F1 60 Tf 20 25 Td (O) Tj ET";
     let doc = PdfDocument::from_bytes(build_pdf_text(reference, "")).expect("PDF parses");
     let pixels = render_with_pipeline(&doc, true);
-    let rows = pixels.chunks_exact(ROW_BYTES).enumerate();
-    let has_ink = |row: &[u8]| row.chunks_exact(4).any(|pixel| pixel == black);
+    let rows = pixels.as_chunks::<ROW_BYTES>().0.iter().enumerate();
+    let has_ink = |row: &[u8; ROW_BYTES]| row.as_chunks::<4>().0.contains(&black);
     let mut ink_rows = rows.filter(|(_, row)| has_ink(row));
     let top = ink_rows.next();
     let bottom = ink_rows.next_back();
@@ -573,12 +573,12 @@ fn clipping_text_modes_should_clip_the_next_fill_for_every_show_operator() {
     let (bottom, _) = bottom.expect("reference glyph spans multiple rows");
     let row_start = ((top + bottom) / 2) * ROW_BYTES;
     let row = &pixels[row_start..row_start + ROW_BYTES];
-    let row_pixels = row.chunks_exact(4);
-    let left = row_pixels.clone().position(|pixel| pixel == black);
-    let right = row_pixels.clone().rposition(|pixel| pixel == black);
+    let row_pixels = row.as_chunks::<4>().0.iter();
+    let left = row_pixels.clone().position(|pixel| *pixel == black);
+    let right = row_pixels.clone().rposition(|pixel| *pixel == black);
     let left = left.expect("left wall");
     let right = right.expect("right wall");
-    let wall = row_pixels.skip(left).take_while(|pixel| *pixel == black);
+    let wall = row_pixels.skip(left).take_while(|pixel| **pixel == black);
     let wall_width = wall.count();
     let inside = row_start + (left + wall_width / 2) * 4;
     let hole = row_start + ((left + right) / 2) * 4;
