@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
-use crate::core::config::request_security::redact_paths;
+use crate::core::config::remote_errors::public_error_message;
 use crate::error::{ApiStatusCategory, XbergError};
 
 use super::types::ErrorResponse;
@@ -103,12 +103,13 @@ pub struct ApiError {
 impl ApiError {
     /// Create a new API error.
     ///
-    /// The client gets the error kind and its message with server filesystem paths replaced by
-    /// `<path>`; the full message is logged for server errors and for redacted client errors.
+    /// The client gets the error kind and its public message: a fixed one for filesystem-backed
+    /// errors, otherwise the text with server paths replaced by `<path>`. The full message is
+    /// logged for server errors and for client errors whose message changed.
     pub(crate) fn new(status: StatusCode, error: XbergError) -> Self {
         let error_type = error.api_error_type();
         let full_message = error.to_string();
-        let message = redact_paths(&full_message);
+        let message = public_error_message(&error, &full_message);
         if status.is_server_error() {
             tracing::error!(status = status.as_u16(), error_type, error = %full_message, "API request failed");
         } else if message != full_message {
@@ -285,7 +286,7 @@ mod tests {
                 )),
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "IOError",
-                "IO error: cannot read '<path>'",
+                "IO error: a file could not be read or written",
                 "/home/operator",
             ),
             (
@@ -321,6 +322,37 @@ mod tests {
     }
 
     #[test]
+    fn should_give_filesystem_errors_a_fixed_public_message() {
+        let cases = [
+            (
+                XbergError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "File does not exist: \"/srv/my docs/a.pdf\"",
+                )),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "IOError",
+                "IO error: file not found",
+            ),
+            (
+                XbergError::cache("cannot write 'C:\\Program Files\\x\\a.pdf'"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "CacheError",
+                "Cache error: the cache could not be read or written",
+            ),
+        ];
+
+        for (error, status, error_type, message) in cases {
+            let api_error = ApiError::from(error);
+            assert_eq!(api_error.status, status);
+            assert_eq!(api_error.body.error_type, error_type);
+            assert_eq!(api_error.body.message, message);
+            for fragment in ["srv", "my docs", "a.pdf", "Program", "Files"] {
+                assert!(!api_error.body.message.contains(fragment), "{fragment} survived");
+            }
+        }
+    }
+
+    #[test]
     fn should_keep_urls_mime_types_and_whitespace_when_redacting() {
         for message in [
             "Validation error: Local path and file:// URI extraction are disabled for the HTTP API.",
@@ -328,9 +360,12 @@ mod tests {
             "Unsupported format: application/x-unsupported-format",
             "no paths here",
         ] {
-            assert_eq!(redact_paths(message), message);
+            assert_eq!(crate::core::config::remote_errors::redact_paths(message), message);
         }
-        assert_eq!(redact_paths("a  /srv/x\tb\n"), "a  <path>\tb\n");
+        assert_eq!(
+            crate::core::config::remote_errors::redact_paths("a  /srv/x\tb\n"),
+            "a  <path>\tb\n"
+        );
     }
 
     #[test]

@@ -198,11 +198,39 @@ impl XbergMcp {
     /// Map an extraction error for the client. Over HTTP, server filesystem paths in the message
     /// become `<path>` and the full error is logged.
     fn xberg_error(&self, error: crate::XbergError) -> rmcp::ErrorData {
+        let fixed = self.public_filesystem_message(&error);
         let mut mapped = super::errors::map_xberg_error_to_mcp(error);
+        if let Some(fixed) = fixed {
+            tracing::warn!(error = %mapped.message, "MCP tool call failed");
+            mapped.message = fixed.into();
+            return mapped;
+        }
         mapped.message = self
             .client_message(std::mem::take(&mut mapped.message).into_owned())
             .into();
         mapped
+    }
+
+    /// Over HTTP, the fixed public message of a filesystem-backed error, whose text is not shown.
+    fn public_filesystem_message(&self, error: &crate::XbergError) -> Option<&'static str> {
+        self.http_transport
+            .then(|| crate::core::config::remote_errors::filesystem_error_message(error))
+            .flatten()
+    }
+
+    /// An internal error for a failed model download: `context` with the error's public message.
+    #[cfg_attr(
+        not(any(test, paddle_ocr, feature = "embeddings", feature = "ner-onnx")),
+        allow(dead_code)
+    )]
+    fn download_error(&self, context: String, error: crate::XbergError) -> rmcp::ErrorData {
+        match self.public_filesystem_message(&error) {
+            Some(fixed) => {
+                tracing::warn!(error = %error, "{context}");
+                rmcp::ErrorData::internal_error(format!("{context}: {fixed}"), None)
+            }
+            None => self.internal_error(format!("{context}: {error}")),
+        }
     }
 
     /// An internal error whose message names a server failure, redacted like [`Self::xberg_error`].
@@ -227,7 +255,7 @@ impl XbergMcp {
         if !self.http_transport {
             return message;
         }
-        let redacted = crate::core::config::request_security::redact_paths(&message);
+        let redacted = crate::core::config::remote_errors::redact_paths(&message);
         if redacted != message {
             tracing::warn!(error = %message, "MCP tool call failed");
         }
@@ -237,14 +265,14 @@ impl XbergMcp {
     /// Over HTTP, redact server filesystem paths in the result's per-input error messages.
     fn redact_result_errors(&self, output: &mut crate::ExtractionResult) {
         if self.http_transport {
-            crate::core::config::request_security::redact_error_items(&mut output.errors);
+            crate::core::config::remote_errors::redact_error_items(&mut output.errors);
         }
     }
 
     /// The cache directory as shown to the client: hidden over HTTP.
     fn client_cache_dir(&self, cache_dir: &std::path::Path) -> String {
         if self.http_transport {
-            crate::core::config::request_security::REDACTED_PATH.to_string()
+            crate::core::config::remote_errors::REDACTED_PATH.to_string()
         } else {
             cache_dir.to_string_lossy().into_owned()
         }
@@ -643,7 +671,7 @@ impl XbergMcp {
             let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
             manager
                 .ensure_all_models()
-                .map_err(|e| self.internal_error(format!("Failed to download PaddleOCR models: {}", e)))?;
+                .map_err(|e| self.download_error("Failed to download PaddleOCR models".to_string(), e))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -737,9 +765,7 @@ impl XbergMcp {
                     },
                     Some(embeddings_dir.clone()),
                 )
-                .map_err(|e| {
-                    self.internal_error(format!("Failed to download embedding model '{}': {}", preset.name, e))
-                })?;
+                .map_err(|e| self.download_error(format!("Failed to download embedding model '{}'", preset.name), e))?;
                 record_warmed_model(
                     &mut available,
                     &mut downloaded,
@@ -773,7 +799,7 @@ impl XbergMcp {
 
                 for model in &models_to_warm {
                     let path = crate::text::ner::download_model(model, None)
-                        .map_err(|e| self.internal_error(format!("Failed to download NER model '{}': {}", model, e)))?;
+                        .map_err(|e| self.download_error(format!("Failed to download NER model '{model}'"), e))?;
                     record_warmed_model(
                         &mut available,
                         &mut downloaded,
@@ -2178,6 +2204,50 @@ mod tests {
             stdio.errors[0].message,
             "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated"
         );
+    }
+
+    #[test]
+    fn should_give_filesystem_tool_errors_a_fixed_message_only_on_http_transport() {
+        let error = || {
+            crate::XbergError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "File does not exist: \"/srv/my docs/a.pdf\"",
+            ))
+        };
+
+        let http = http_server_without_local_paths().xberg_error(error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(http.message, "IO error: file not found");
+        for fragment in ["srv", "my docs", "a.pdf"] {
+            assert!(!http.message.contains(fragment), "{fragment} survived");
+        }
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).xberg_error(error());
+        assert!(stdio.message.contains("/srv/my docs/a.pdf"), "{}", stdio.message);
+    }
+
+    #[test]
+    fn should_give_filesystem_download_errors_a_fixed_message_only_on_http_transport() {
+        let error = || {
+            crate::XbergError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "cannot write 'C:\\Program Files\\x\\a.pdf'",
+            ))
+        };
+        let context = || "Failed to download NER model 'gliner'".to_string();
+
+        let http = http_server_without_local_paths().download_error(context(), error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(
+            http.message,
+            "Failed to download NER model 'gliner': IO error: permission denied"
+        );
+        for fragment in ["Program", "Files", "a.pdf"] {
+            assert!(!http.message.contains(fragment), "{fragment} survived");
+        }
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).download_error(context(), error());
+        assert!(stdio.message.contains("Program Files"), "{}", stdio.message);
     }
 
     #[test]

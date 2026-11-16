@@ -840,7 +840,7 @@ async fn extract_unified_inputs(
     let mut result = crate::extract_batch_with_input_options(inputs, &config)
         .await
         .map_err(ApiError::from)?;
-    crate::core::config::request_security::redact_error_items(&mut result.errors);
+    crate::core::config::remote_errors::redact_error_items(&mut result.errors);
     Ok(result)
 }
 

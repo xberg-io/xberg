@@ -28,6 +28,8 @@ pub mod pdf;
 pub mod processing;
 pub mod redaction;
 #[cfg(any(feature = "api", feature = "mcp"))]
+pub(crate) mod remote_errors;
+#[cfg(any(feature = "api", feature = "mcp"))]
 pub(crate) mod request_security;
 pub mod reranker;
 pub mod sparse_embedding;
