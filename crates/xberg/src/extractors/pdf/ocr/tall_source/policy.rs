@@ -1,10 +1,11 @@
 //! Which configurations may use source-image strips, and the warning for a tall page that did not.
 
-use super::{MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
+use super::{MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI, read_geometry};
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PdfBackend, PdfConfig};
+use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 use crate::types::{ExtractedDocument, ProcessingWarning};
 use std::borrow::Cow;
-use xberg_native_pdf::PdfDocument;
+use xberg_native_pdf::{PdfDocument, document::PageRotation};
 
 pub(in super::super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
     unsupported_reason(config, ocr).is_none()
@@ -98,24 +99,29 @@ pub(in super::super) enum Unrecovered {
     Rejected,
 }
 
-/// Reports when a tall page keeps a read below the standard scan density.
+/// Describes the retained low-density read when strip recovery was declined or ineligible.
 pub(in super::super) fn note_unrecovered(
     original: &mut ExtractedDocument,
     ocr: &OcrConfig,
     (document, page): (&PdfDocument, usize),
-    raster_height: u32,
+    raster: (u32, u32),
     why: Unrecovered,
 ) {
     let (_, page_height) = super::super::rendering::page_dimensions_pt(document, page);
-    let render_dpi = f64::from(raster_height) * 72.0 / f64::from(page_height.max(1.0));
+    let render_dpi = f64::from(raster.1) * 72.0 / f64::from(page_height.max(1.0));
     let density_floor = MIN_STANDARD_SOURCE_DPI * 0.98;
     let clamp_dpi = if render_dpi < density_floor {
         None
     } else {
-        if f64::from(page_height) <= f64::from(MAX_TILE_SIDE) * 72.0 / MIN_STANDARD_SOURCE_DPI {
+        if f64::from(page_height) <= f64::from(MAX_TILE_SIDE) * 72.0 / MIN_STANDARD_SOURCE_DPI
+            || !matches!(
+                document.get_page_rotation_status(page),
+                Ok(PageRotation::Absent | PageRotation::Valid(0))
+            )
+        {
             return;
         }
-        let Some(ocr_height) = clamped_ocr_height(original, raster_height) else {
+        let Some(ocr_height) = clamped_ocr_height(original, raster) else {
             return;
         };
         let ocr_dpi = f64::from(ocr_height) * 72.0 / f64::from(page_height.max(1.0));
@@ -163,16 +169,22 @@ pub(in super::super) fn note_unrecovered(
     });
 }
 
-fn clamped_ocr_height(original: &ExtractedDocument, raster_height: u32) -> Option<u32> {
+fn clamped_ocr_height(original: &ExtractedDocument, raster: (u32, u32)) -> Option<u32> {
     let resize = original.metadata.image_preprocessing.as_ref()?;
-    if !resize.dimension_clamped
-        || resize.resize_error.is_some()
-        || resize.original_dimensions.height != raster_height as usize
-    {
-        return None;
-    }
-    let height = u32::try_from(resize.new_dimensions.as_ref()?.height).ok()?;
-    (1..raster_height).contains(&height).then_some(height)
+    let metadata = &original.metadata.additional;
+    let dimension = |key| u32::try_from(metadata.get(key)?.as_u64()?).ok();
+    let processed = (
+        dimension(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)?,
+        dimension(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY)?,
+    );
+    // Require the selected read's dimensions and rotation, not just an intermediate resize. ~keep
+    (resize.dimension_clamped
+        && !resize.skipped_resize
+        && (1..=raster.0).contains(&processed.0)
+        && (1..raster.1).contains(&processed.1)
+        && read_geometry::select_read_width(original, raster) == Some(processed.0)
+        && read_geometry::scale_only(raster, processed, Some(resize)))
+    .then_some(processed.1)
 }
 
 #[cfg(test)]
@@ -193,7 +205,7 @@ mod tests {
             &mut original,
             &OcrConfig::default(),
             (&document, 0),
-            raster_height,
+            (1275, raster_height),
             Unrecovered::TablesOrFormulas,
         );
         original
@@ -217,11 +229,17 @@ mod tests {
         );
     }
 
-    #[test]
-    fn reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render() {
-        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+    fn clamped_pdf_read() -> ExtractedDocument {
         let mut original = ExtractedDocument::default();
         original.metadata.additional.insert("mean_text_conf".into(), 1.into());
+        original
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), 435.into());
+        original
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), 4096.into());
         original.metadata.image_preprocessing = Some(crate::types::ImagePreprocessingMetadata {
             original_dimensions: (1275, 12_000).into(),
             original_dpi: (150.0, 150.0).into(),
@@ -236,10 +254,17 @@ mod tests {
             skipped_resize: false,
             resize_error: None,
         });
+        original
+    }
+
+    #[test]
+    fn reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render() {
+        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+        let mut original = clamped_pdf_read();
         let ocr = OcrConfig::default();
         let source = (&document, 0);
         let why = || Unrecovered::Config("the output format is not plain text or Markdown");
-        note_unrecovered(&mut original, &ocr, source, 12_000, why());
+        note_unrecovered(&mut original, &ocr, source, (1275, 12_000), why());
         let [warning] = original.processing_warnings.as_slice() else {
             panic!("expected exactly one warning, got {:?}", original.processing_warnings);
         };
@@ -251,15 +276,56 @@ mod tests {
         );
 
         original.processing_warnings.clear();
-        original
+        let check_abstention = |mut read, raster| {
+            note_unrecovered(&mut read, &ocr, source, raster, why());
+            assert!(read.processing_warnings.is_empty());
+        };
+        check_abstention(original.clone(), (1274, 12_000));
+        check_abstention(original.clone(), (1275, 11_999));
+
+        let mut different_read = original.clone();
+        different_read
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), 4000.into());
+        check_abstention(different_read, (1275, 12_000));
+
+        let mut different_width = original.clone();
+        different_width
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), 436.into());
+        check_abstention(different_width, (1275, 12_000));
+
+        let mut inconsistent_scale = original.clone();
+        inconsistent_scale
             .metadata
             .image_preprocessing
             .as_mut()
             .unwrap()
-            .original_dimensions
-            .height = 11_999;
-        note_unrecovered(&mut original, &ocr, source, 12_000, why());
-        assert!(original.processing_warnings.is_empty(), "unmatched resize metadata");
+            .scale_factor = 0.4;
+        check_abstention(inconsistent_scale, (1275, 12_000));
+
+        let mut rotated_read = original.clone();
+        rotated_read.metadata.additional.insert(
+            crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY.into(),
+            true.into(),
+        );
+        check_abstention(rotated_read, (1275, 12_000));
+
+        let mut pdf = lopdf::Document::load_mem(TALL_PAGE).unwrap();
+        let page_id = pdf.get_pages()[&1];
+        pdf.get_object_mut(page_id)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .set("Rotate", 180);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        let rotated = PdfDocument::from_bytes(bytes).unwrap();
+        assert_eq!(rotated.get_page_rotation_status(0).unwrap(), PageRotation::Valid(180));
+        note_unrecovered(&mut original, &ocr, (&rotated, 0), (1275, 12_000), why());
+        assert!(original.processing_warnings.is_empty());
     }
 
     #[test]

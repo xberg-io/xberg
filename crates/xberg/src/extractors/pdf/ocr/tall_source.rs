@@ -127,7 +127,7 @@ pub(super) async fn try_replace(
 ) -> crate::Result<bool> {
     let source = (document, page);
     if !original.tables.is_empty() || !original.formulas.is_empty() {
-        note_unrecovered(original, ocr, source, *height, Unrecovered::TablesOrFormulas);
+        note_unrecovered(original, ocr, source, (*width, *height), Unrecovered::TablesOrFormulas);
         return Ok(false);
     }
     let Some(quality) = RecognitionQuality::from_result(original) else {
@@ -152,7 +152,7 @@ pub(super) async fn try_replace(
         None if indexed::is_indexed_rgb_scan(&attempt) => Unrecovered::IndexedRgb,
         None => Unrecovered::Uncertified,
     };
-    note_unrecovered(original, ocr, source, *height, why);
+    note_unrecovered(original, ocr, source, (*width, *height), why);
     Ok(false)
 }
 
