@@ -8,6 +8,7 @@ use crate::geometry::Rect;
 
 use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
+use crate::text::cjk_ranges::{is_spatial_prose_cjk, suppress_table_cell_space};
 use std::collections::HashMap;
 
 mod fill_backgrounds;
@@ -415,21 +416,10 @@ fn looks_like_prose_paragraph(table: &Table) -> bool {
 /// consecutive CJK characters. Ruled / author-marked tables never reach here.
 fn looks_like_cjk_prose(table: &Table) -> bool {
     const MIN_CJK_RUN: usize = 12;
-    fn is_cjk(c: char) -> bool {
-        matches!(
-            c as u32,
-            0x3040..=0x30FF      // Hiragana + Katakana ~keep
-            | 0x3400..=0x4DBF    // CJK Ext A ~keep
-            | 0x4E00..=0x9FFF    // CJK Unified ~keep
-            | 0xF900..=0xFAFF    // CJK Compatibility ~keep
-            | 0xFF66..=0xFF9F    // Halfwidth Katakana ~keep
-            | 0xAC00..=0xD7AF    // Hangul Syllables ~keep
-        )
-    }
     table.rows.iter().flat_map(|r| &r.cells).any(|c| {
         let mut run = 0usize;
         for ch in c.text.chars() {
-            if is_cjk(ch) {
+            if is_spatial_prose_cjk(ch) {
                 run += 1;
                 if run >= MIN_CJK_RUN {
                     return true;
@@ -5408,39 +5398,14 @@ fn cell_span_separator(prev: &TextSpan, current: &TextSpan) -> &'static str {
     // gap above the inter-glyph threshold now gets at least a single
     // space. ~keep
 
-    // CJK / fullwidth-operator suppression — same rule as
-    // pipeline::converters::has_horizontal_gap.  pdftotext keeps an
-    // ideograph + adjacent fullwidth/math operator without a separator. ~keep
-    let is_cjk = |c: char| {
-        matches!(
-            c as u32,
-            0x3040..=0x309F
-            | 0x30A0..=0x30FF
-            | 0x4E00..=0x9FFF
-            | 0xAC00..=0xD7AF
-            | 0x3400..=0x4DBF
-            | 0x20000..=0x2A6DF
-        )
-    };
-    let is_fw_op = |c: char| {
-        matches!(
-            c as u32,
-            0xFF0B | 0xFF0D | 0xFF1A | 0xFF1B
-            | 0xFF1C..=0xFF1E
-            | 0x2260 | 0x2248
-            | 0x2264..=0x2265
-            | 0x00B5 | 0x03BC
-            | 0x00B1 | 0x00D7 | 0x00F7
-        )
-    };
-    let prev_tail = prev.text.chars().next_back();
-    let curr_head = current.text.chars().next();
-    if let (Some(p), Some(c)) = (prev_tail, curr_head) {
-        let p_cjk = is_cjk(p);
-        let c_cjk = is_cjk(c);
-        if (p_cjk || is_fw_op(p)) && (c_cjk || is_fw_op(c)) && (p_cjk || c_cjk) {
-            return "";
-        }
+    if prev
+        .text
+        .chars()
+        .next_back()
+        .zip(current.text.chars().next())
+        .is_some_and(|(left, right)| suppress_table_cell_space(left, right))
+    {
+        return "";
     }
 
     " "
