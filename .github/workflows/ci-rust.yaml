@@ -24,6 +24,8 @@ on:
       - "mise-tasks/nli/**"
       - "tools/benchmark-harness/nli_qualification/**"
       - "scripts/ci/rust/**"
+      # crate-packages reads the crates.io publish list from the publish-crates step. ~keep
+      - ".github/workflows/publish.yaml"
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
       - ".github/actions/setup-paddle-ocr-models/**"
@@ -688,6 +690,40 @@ jobs:
 
       - name: Chunking scaling bench smoke
         run: cargo bench --locked -p xberg --no-default-features --features chunking --bench chunking_scaling -- --test
+        shell: bash
+
+  # v1.4.1's crates.io publish stopped halfway: `cargo publish` compiles each packaged crate
+  # standalone at default features, where Cargo 1.100's `unused_dependencies` lint fired on
+  # dependencies only optional features use, and `build.warnings = deny` failed it. Workspace
+  # builds unify features across members and never see that, so this leg packages and verifies
+  # the publish-crates list the same way, before a tag does. ~keep
+  crate-packages:
+    name: Crate package verification
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-crate-packages
+          use-sccache: "true"
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Install mise
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: python
+
+      - name: Package and verify published crates
+        run: mise run rust:check:packages
         shell: bash
 
   # #741 continued: `wasm-target` is only ever compiled by publish.yaml's `wasm-bindings`

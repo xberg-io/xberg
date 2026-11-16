@@ -15,14 +15,19 @@ sha=$(git rev-parse "$tag^{commit}")
 create_tag() {
   local t="$1"
 
-  if git rev-parse "$t" >/dev/null 2>&1; then
-    echo "::notice::Go module tag $t already exists locally; skipping."
-    return
-  fi
+  local existing=""
 
-  if git ls-remote --tags origin | grep -q "refs/tags/${t}$"; then
-    echo "::notice::Go module tag $t already exists on remote; skipping."
-    return
+  # A re-run must be a no-op when the tag already names this release's commit, and must
+  # fail rather than leave a module tag on a different commit than the release. ~keep
+  git fetch --quiet --force origin "refs/tags/${t}:refs/tags/${t}" 2>/dev/null || true
+  existing=$(git rev-parse --verify --quiet "${t}^{commit}" || true)
+  if [[ -n "$existing" ]]; then
+    if [[ "$existing" == "$sha" ]]; then
+      echo "::notice::Go module tag $t already points at ${sha:0:12}; skipping."
+      return
+    fi
+    echo "::error::Go module tag $t points at ${existing:0:12}, not the release commit ${sha:0:12}" >&2
+    exit 1
   fi
 
   git tag -a "$t" "$tag" -m "Go module tag ${t}"
