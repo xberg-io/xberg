@@ -1,14 +1,16 @@
-"""Reject CI jobs that can run outside main, including manual dispatches."""
+"""Enforce main-only CI and its narrowly scoped exceptions."""
 
 from __future__ import annotations
 
 import ast
+import json
 import re
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
+from test_publish_workflow_contracts import evaluate_condition, evaluate_expression
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,6 +22,7 @@ EXPECTED_JOBS = 79
 EXPECTED_CHECKOUTS = 79
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
+DOCKER_CI_WORKFLOW = "ci-docker.yaml"
 FOCUSED_PR_GUARDS = (
     "github.event_name == 'push' && github.ref == 'refs/heads/main'",
     "github.repository == 'xberg-io/xberg'",
@@ -230,10 +233,86 @@ class MainOnlyCiTests(unittest.TestCase):
             for name, job in jobs.items():
                 with self.subTest(workflow=path.name, job=name):
                     condition = job.get("if", "")
-                    assert condition and requires_main(condition), f"{path}:{name}: main ref is not required"
+                    if (path.name, name) != (DOCKER_CI_WORKFLOW, "docker"):
+                        assert condition and requires_main(condition), f"{path}:{name}: main ref is not required"
                 job_count += 1
         assert job_count >= len(paths), "workflow job inventory was incomplete"
         print(f"Checked {job_count} jobs across {len(paths)} CI workflows")
+
+    def test_docker_ci_admits_only_main_and_explicit_same_repository_branch_dispatch(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / DOCKER_CI_WORKFLOW).read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        assert set(triggers) == {"push", "workflow_dispatch"}
+        assert triggers["push"]["branches"] == ["main"]
+        assert set(workflow["jobs"]) == {"docker"}
+        condition = workflow["jobs"]["docker"]["if"].strip().removeprefix("${{").removesuffix("}}")
+        branch = "refs/heads/codex/cli-fix"
+        main = "refs/heads/main"
+        repository = "xberg-io/xberg"
+        contributor = "maintainer"
+        cases = [
+            ("push", main, repository, contributor, False, True),
+            ("push", branch, repository, contributor, True, False),
+            ("workflow_dispatch", main, repository, contributor, False, True),
+            ("workflow_dispatch", main, repository, contributor, True, True),
+            ("workflow_dispatch", branch, repository, contributor, True, True),
+            ("workflow_dispatch", branch, repository, contributor, False, False),
+            ("workflow_dispatch", "refs/tags/v1.4.2", repository, contributor, True, False),
+            ("workflow_dispatch", "refs/pull/42/merge", repository, contributor, True, False),
+            ("workflow_dispatch", branch, "maintainer/xberg", contributor, True, False),
+            ("workflow_dispatch", branch, repository, "dependabot[bot]", True, False),
+        ]
+        for event, ref, repo, actor, cli_only, expected in cases:
+            with self.subTest(event=event, ref=ref, repo=repo, actor=actor, cli_only=cli_only):
+                context = {
+                    "github": {
+                        "event_name": event,
+                        "ref": ref,
+                        "repository": repo,
+                        "actor": actor,
+                        "event": {"pull_request": {"draft": False}},
+                    },
+                    "inputs": {"cli_only": cli_only},
+                }
+                assert evaluate_condition(condition, context) is expected
+
+    def test_docker_ci_dispatch_runs_both_cli_architectures_with_read_only_permissions(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / DOCKER_CI_WORKFLOW).read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        inputs = triggers["workflow_dispatch"]["inputs"]
+        assert set(inputs) == {"cli_only"}
+        assert inputs["cli_only"]["type"] == "boolean"
+        assert inputs["cli_only"]["default"] is False
+        assert workflow["permissions"] == {"contents": "read"}
+
+        job = workflow["jobs"]["docker"]
+        assert "permissions" not in job
+        steps = {step["name"]: step for step in job["steps"] if "name" in step}
+        checkout = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@"))
+        assert checkout["with"]["persist-credentials"] is False
+        build = steps["Build Docker image"]
+        assert build["with"]["push"] is False and build["with"]["load"] is True
+        assert build["with"]["platforms"] == "linux/${{ matrix.architecture }}"
+        test = steps["Run CLI tests"]
+        assert test["run"] == "scripts/ci/docker/run-cli-tests.sh"
+        assert job["steps"].index(build) < job["steps"].index(test)
+
+        matrix = job["strategy"]["matrix"]
+        for cli_only, variants, architectures in [
+            (False, ["core", "full", "cli"], ["amd64"]),
+            (True, ["cli"], ["amd64", "arm64"]),
+        ]:
+            with self.subTest(cli_only=cli_only):
+                context = {"inputs": {"cli_only": cli_only}}
+                for dimension, expected in [("variant", variants), ("architecture", architectures)]:
+                    source = matrix[dimension].removeprefix("${{ fromJSON(").removesuffix(") }}")
+                    assert json.loads(str(evaluate_expression(source, context))) == expected
+                for variant in variants:
+                    assert evaluate_condition(test["if"], {"matrix": {"variant": variant}}) is (variant == "cli")
+                for arch in architectures:
+                    runner = job["runs-on"].removeprefix("${{").removesuffix("}}")
+                    expected = "ubuntu-24.04-arm" if arch == "arm64" else "ubuntu-latest"
+                    assert evaluate_expression(runner, {"matrix": {"architecture": arch}}) == expected
 
     def test_ci_checkouts_cannot_override_the_dispatched_main_revision(self) -> None:
         checkout_count = 0

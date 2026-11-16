@@ -883,6 +883,30 @@ def test_security_nonroot(t: TestRunner) -> None:
         t.fail_test("Non-root user", f"Container running as: {user} (expected: xberg)")
 
 
+def test_cli_nonroot_paths(t: TestRunner) -> None:
+    t.start("CLI runs as a non-root user with a writable home and caches")
+    result = t.docker_run(
+        "--name",
+        t.container_name(),
+        "--entrypoint",
+        "/bin/sh",
+        t.image,
+        "-exc",
+        """
+        test "$(id -un)" = xberg
+        test "$(id -u)" -ne 0
+        touch "${HOME:?}/.xberg-ci"
+        touch "${XBERG_CACHE_DIR:?}/.xberg-ci"
+        mkdir -p "${HF_HOME:?}"
+        touch "$HF_HOME/.xberg-ci"
+        """,
+    )
+    if result.returncode == 0:
+        t.pass_test()
+    else:
+        t.fail_test("CLI non-root filesystem access", f"Exit code {result.returncode}: {result.stderr.strip()}")
+
+
 def test_security_readonly(t: TestRunner) -> None:
     t.start("Security: Read-only volume enforcement")
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -983,7 +1007,7 @@ def run_cli_tests(t: TestRunner) -> None:
     test_batch_cli(t)
     test_readonly_mount(t)
     test_nonexistent_file(t)
-    test_security_nonroot(t)
+    test_cli_nonroot_paths(t)
 
 
 def run_core_full_tests(t: TestRunner) -> None:
