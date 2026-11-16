@@ -138,9 +138,21 @@ impl UnifiedExtractRequest {
         &mut self,
         operator: &crate::core::config::ExtractionConfig,
     ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
+        self.resolve_config_with(
+            operator,
+            crate::core::config::request_security::caller_llm_env_credentials_allowed(),
+        )
+    }
+
+    fn resolve_config_with(
+        &mut self,
+        operator: &crate::core::config::ExtractionConfig,
+        allow_caller_llm_env_credentials: bool,
+    ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
         crate::core::config::request_security::resolve_remote_caller_extraction_config(
             operator,
             self.config.take().as_ref(),
+            allow_caller_llm_env_credentials,
         )
         .map_err(ApiError::caller_config)
     }
@@ -160,6 +172,18 @@ fn resolve_input_config(
     config: Option<serde_json::Value>,
     effective: &crate::ExtractionConfig,
 ) -> Result<Option<FileExtractionConfig>, ApiError> {
+    resolve_input_config_with(
+        config,
+        effective,
+        crate::core::config::request_security::caller_llm_env_credentials_allowed(),
+    )
+}
+
+fn resolve_input_config_with(
+    config: Option<serde_json::Value>,
+    effective: &crate::ExtractionConfig,
+    allow_caller_llm_env_credentials: bool,
+) -> Result<Option<FileExtractionConfig>, ApiError> {
     use crate::core::config::request_security::{
         adopt_file_operator_policy, merge_html_override, reject_caller_input_llm_stages,
     };
@@ -173,7 +197,8 @@ fn resolve_input_config(
             "Invalid per-input configuration: {error}"
         )))
     })?;
-    reject_caller_input_llm_stages(effective, &config).map_err(ApiError::caller_config)?;
+    reject_caller_input_llm_stages(effective, &config, allow_caller_llm_env_credentials)
+        .map_err(ApiError::caller_config)?;
     adopt_file_operator_policy(&mut config, effective);
     Ok(Some(config))
 }
@@ -2249,7 +2274,7 @@ mod tests {
     fn should_reject_per_input_llm_stage_that_would_use_server_env_credentials() {
         let config = serde_json::json!({"captioning": {"llm": {"model": "openai/gpt-4o-mini"}}});
 
-        let error = resolve_input_config(Some(config), &crate::ExtractionConfig::default())
+        let error = resolve_input_config_with(Some(config), &crate::ExtractionConfig::default(), false)
             .expect_err("a caller LLM stage needs the operator's opt-in");
 
         assert_eq!(error.status, StatusCode::BAD_REQUEST);
@@ -2278,7 +2303,7 @@ mod tests {
             .expect("request parses");
 
         let error = parsed
-            .resolve_config(&crate::ExtractionConfig::default())
+            .resolve_config_with(&crate::ExtractionConfig::default(), false)
             .expect_err("a caller LLM stage needs the operator's opt-in");
 
         assert_eq!(error.status, StatusCode::BAD_REQUEST);

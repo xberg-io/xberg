@@ -19,13 +19,29 @@ fn openweb_config(
     operator: &crate::core::config::ExtractionConfig,
     config_json: Option<&str>,
 ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
+    openweb_config_with(
+        operator,
+        config_json,
+        crate::core::config::request_security::caller_llm_env_credentials_allowed(),
+    )
+}
+
+fn openweb_config_with(
+    operator: &crate::core::config::ExtractionConfig,
+    config_json: Option<&str>,
+    allow_caller_llm_env_credentials: bool,
+) -> Result<crate::core::config::ExtractionConfig, ApiError> {
     let validation_error = |message| ApiError::validation(crate::error::XbergError::validation(message));
     let caller = config_json
         .map(serde_json::from_str::<serde_json::Value>)
         .transpose()
         .map_err(|error| validation_error(format!("Failed to parse override JSON: {error}")))?;
-    crate::core::config::request_security::resolve_remote_caller_extraction_config(operator, caller.as_ref())
-        .map_err(ApiError::caller_config)
+    crate::core::config::request_security::resolve_remote_caller_extraction_config(
+        operator,
+        caller.as_ref(),
+        allow_caller_llm_env_credentials,
+    )
+    .map_err(ApiError::caller_config)
 }
 
 async fn resolve_openweb_bytes(
@@ -284,9 +300,10 @@ mod tests {
 
     #[test]
     fn openweb_config_rejects_caller_llm_stage_on_server_env_credentials() {
-        let error = openweb_config(
+        let error = openweb_config_with(
             &crate::ExtractionConfig::default(),
             Some(r#"{"ocr":{"vlm_config":{"model":"openai/gpt-4o-mini"}}}"#),
+            false,
         )
         .expect_err("a caller LLM stage needs the operator's opt-in");
 

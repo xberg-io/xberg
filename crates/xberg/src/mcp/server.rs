@@ -113,6 +113,9 @@ pub struct XbergMcp {
     /// Whether the server answers over HTTP, where callers are remote, rather than over stdio,
     /// where the caller is the operator's own process.
     http_transport: bool,
+    /// Whether a remote caller's added or changed LLM stage may run; set over HTTP from
+    /// `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS`.
+    allow_caller_llm_env_credentials: bool,
     /// Whether tools may read server-local paths and `file://` URIs: always on stdio, on the
     /// HTTP transport only when the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS`.
     allow_local_paths: bool,
@@ -132,6 +135,7 @@ impl Clone for XbergMcp {
             extraction_service: std::sync::Mutex::new(svc),
             tasks: self.tasks.clone(),
             http_transport: self.http_transport,
+            allow_caller_llm_env_credentials: self.allow_caller_llm_env_credentials,
             allow_local_paths: self.allow_local_paths,
         }
     }
@@ -182,16 +186,19 @@ impl XbergMcp {
             extraction_service: std::sync::Mutex::new(extraction_service),
             tasks: TaskManager::new(),
             http_transport: false,
+            allow_caller_llm_env_credentials: false,
             allow_local_paths: true,
         }
     }
 
-    /// Configure the server for the HTTP transport, where a caller's LLM stages need the
-    /// operator's opt-in and local paths are readable only when `allow_local_paths` is set.
+    /// Configure the server for the HTTP transport, where local paths are readable only when
+    /// `allow_local_paths` is set and a caller's added or changed LLM stage runs only when
+    /// `allow_caller_llm_env_credentials` is set.
     #[cfg_attr(not(any(test, feature = "mcp-http")), allow(dead_code))]
-    pub(crate) fn for_http(mut self, allow_local_paths: bool) -> Self {
+    pub(crate) fn for_http(mut self, allow_local_paths: bool, allow_caller_llm_env_credentials: bool) -> Self {
         self.http_transport = true;
         self.allow_local_paths = allow_local_paths;
+        self.allow_caller_llm_env_credentials = allow_caller_llm_env_credentials;
         self
     }
 
@@ -284,6 +291,7 @@ impl XbergMcp {
             crate::core::config::request_security::resolve_remote_caller_extraction_config(
                 &self.default_config,
                 caller.as_ref(),
+                self.allow_caller_llm_env_credentials,
             )
         } else {
             build_config(&self.default_config, caller)
@@ -299,8 +307,12 @@ impl XbergMcp {
         effective: &ExtractionConfig,
     ) -> Result<(), rmcp::ErrorData> {
         if let Some(config) = input.config.as_ref().filter(|_| self.http_transport) {
-            crate::core::config::request_security::reject_caller_input_llm_stages(effective, config)
-                .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+            crate::core::config::request_security::reject_caller_input_llm_stages(
+                effective,
+                config,
+                self.allow_caller_llm_env_credentials,
+            )
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         }
         Ok(())
     }
@@ -1388,10 +1400,11 @@ pub async fn start_mcp_server_http(
     use std::net::SocketAddr;
 
     let allow_local_paths = mcp_http_allows_local_paths();
+    let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
     let http_service = StreamableHttpService::new(
         move || {
             XbergMcp::new()
-                .map(|server| server.for_http(allow_local_paths))
+                .map(|server| server.for_http(allow_local_paths, allow_llm_env))
                 .map_err(|e| std::io::Error::other(e.to_string()))
         },
         LocalSessionManager::default().into(),
@@ -1455,8 +1468,9 @@ pub async fn start_mcp_server_http_with_config(
     use std::net::SocketAddr;
 
     let allow_local_paths = mcp_http_allows_local_paths();
+    let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
     let http_service = StreamableHttpService::new(
-        move || Ok(XbergMcp::with_config(config.clone()).for_http(allow_local_paths)),
+        move || Ok(XbergMcp::with_config(config.clone()).for_http(allow_local_paths, allow_llm_env)),
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
@@ -1561,7 +1575,7 @@ mod tests {
 
     #[test]
     fn should_reject_mcp_http_llm_stage_that_would_use_server_env_credentials() {
-        let server = XbergMcp::with_config(ExtractionConfig::default()).for_http(false);
+        let server = XbergMcp::with_config(ExtractionConfig::default()).for_http(false, false);
         let request_config = vlm_stage_input()["config"].clone();
 
         let error = server
@@ -1589,7 +1603,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let server = XbergMcp::with_config(operator.clone()).for_http(false);
+        let server = XbergMcp::with_config(operator.clone()).for_http(false, false);
 
         let config = server
             .request_config(Some(vlm_stage_input()["config"].clone()))
@@ -2139,7 +2153,7 @@ mod tests {
     }
 
     fn http_server_without_local_paths() -> XbergMcp {
-        XbergMcp::with_config(ExtractionConfig::default()).for_http(false)
+        XbergMcp::with_config(ExtractionConfig::default()).for_http(false, false)
     }
 
     #[tokio::test]
@@ -2335,7 +2349,7 @@ mod tests {
         assert!(stdio.reject_local_input(&local).is_ok());
         assert!(
             XbergMcp::with_config(ExtractionConfig::default())
-                .for_http(true)
+                .for_http(true, false)
                 .reject_local_input(&local)
                 .is_ok()
         );

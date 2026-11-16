@@ -139,16 +139,18 @@ pub(crate) fn resolve_caller_extraction_config(
 /// [`resolve_caller_extraction_config`] for a caller that reaches the server over the network
 /// (the REST API and MCP over HTTP), whose LLM stages also need the operator's opt-in; see
 /// [`check_caller_llm_stages`]. MCP over stdio runs as the operator and skips it.
+/// `allow_env_credentials` is [`caller_llm_env_credentials_allowed`] on a server.
 pub(crate) fn resolve_remote_caller_extraction_config(
     operator: &super::ExtractionConfig,
     caller: Option<&Value>,
+    allow_env_credentials: bool,
 ) -> Result<super::ExtractionConfig, String> {
     let effective = resolve_caller_extraction_config(operator, caller)?;
     if caller.is_some() {
         check_caller_llm_stages(
             &config_json(operator)?,
             &config_json(&effective)?,
-            caller_llm_env_credentials_allowed(),
+            allow_env_credentials,
         )?;
     }
     Ok(effective)
@@ -282,7 +284,9 @@ fn tighten_transcription_limits(
     transcription.verify_hash |= operator.verify_hash;
 }
 
-/// Whether the operator set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`].
+/// Whether the operator set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`]. Read by the servers, which
+/// pass it on, so tests can set the flag without touching the environment.
+#[cfg_attr(not(any(feature = "api", feature = "mcp-http")), allow(dead_code))]
 pub(crate) fn caller_llm_env_credentials_allowed() -> bool {
     std::env::var(ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV)
         .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
@@ -294,12 +298,9 @@ pub(crate) fn caller_llm_env_credentials_allowed() -> bool {
 pub(crate) fn reject_caller_input_llm_stages(
     effective: &super::ExtractionConfig,
     input: &super::FileExtractionConfig,
+    allow_env_credentials: bool,
 ) -> Result<(), String> {
-    check_caller_llm_stages(
-        &config_json(effective)?,
-        &config_json(input)?,
-        caller_llm_env_credentials_allowed(),
-    )
+    check_caller_llm_stages(&config_json(effective)?, &config_json(input)?, allow_env_credentials)
 }
 
 fn config_json(config: &impl serde::Serialize) -> Result<Value, String> {
@@ -632,7 +633,7 @@ mod tests {
 
         assert_eq!(check_caller_llm_stages(&operator_json, &effective, false), Ok(()));
         assert_eq!(
-            resolve_remote_caller_extraction_config(&operator, Some(&caller_vlm(0.2)))
+            resolve_remote_caller_extraction_config(&operator, Some(&caller_vlm(0.2)), false)
                 .map(|config| config.ocr.and_then(|ocr| ocr.vlm_config)),
             Ok(Some(operator_vlm()))
         );
@@ -670,7 +671,7 @@ mod tests {
         let caller = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o"}}});
 
         assert_eq!(
-            resolve_remote_caller_extraction_config(&operator, Some(&caller)).map(drop),
+            resolve_remote_caller_extraction_config(&operator, Some(&caller), false).map(drop),
             Err(env_credentials_error("ocr.vlm_config"))
         );
         let local = resolve_caller_extraction_config(&operator, Some(&caller)).expect("local caller is the operator");
@@ -692,7 +693,7 @@ mod tests {
         };
 
         assert_eq!(
-            reject_caller_input_llm_stages(&effective, &input(operator_vlm())),
+            reject_caller_input_llm_stages(&effective, &input(operator_vlm()), false),
             Ok(())
         );
         let tweaked = super::super::LlmConfig {
@@ -700,11 +701,15 @@ mod tests {
             ..operator_vlm()
         };
         assert_eq!(
-            reject_caller_input_llm_stages(&effective, &input(tweaked)),
+            reject_caller_input_llm_stages(&effective, &input(tweaked), false),
             Err(env_credentials_error("ocr.vlm_config"))
         );
         assert_eq!(
-            reject_caller_input_llm_stages(&super::super::ExtractionConfig::default(), &input(operator_vlm())),
+            reject_caller_input_llm_stages(
+                &super::super::ExtractionConfig::default(),
+                &input(operator_vlm()),
+                false
+            ),
             Err(env_credentials_error("ocr.vlm_config"))
         );
     }
