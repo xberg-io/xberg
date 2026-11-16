@@ -456,8 +456,14 @@ jobs:
     if: >-
       ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_cli == 'true') }}
     runs-on: ubuntu-latest
+    # `exists` gates the CLI builds, so it also covers the PyPI xberg-cli wheels built from
+    # them: with only the release assets checked, a re-run after a failed PyPI upload skipped
+    # the builds and the proxy publish alike. The npm proxy downloads the binaries at install
+    # time, so it is checked separately and needs no rebuild. ~keep
     outputs:
-      exists: ${{ steps.check.outputs.exists }}
+      exists: ${{ steps.check.outputs.exists == 'true' && steps.pypi.outputs.exists == 'true' }}
+      npm_exists: ${{ steps.npm.outputs.exists }}
+      pypi_exists: ${{ steps.pypi.outputs.exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -468,8 +474,31 @@ jobs:
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
           asset-prefix: xberg-cli-
-          assets: |
+          assets: >-
             xberg-cli-aarch64-apple-darwin.tar.gz,xberg-cli-x86_64-apple-darwin.tar.gz,xberg-cli-aarch64-unknown-linux-gnu.tar.gz,xberg-cli-aarch64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-unknown-linux-gnu.tar.gz,xberg-cli-x86_64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-pc-windows-msvc.zip
+
+      - id: npm
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: npm
+          package: "@xberg-io/xberg-cli"
+          version: ${{ needs.prepare.outputs.version }}
+
+      - id: pypi
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: pypi
+          package: xberg-cli
+          version: ${{ needs.prepare.outputs.version }}
+          required-files: |
+            *-macosx_*_arm64.whl
+            *-macosx_*_x86_64.whl
+            *-manylinux_*_aarch64.whl
+            *-manylinux_*_x86_64.whl
+            *-musllinux_*_aarch64.whl
+            *-musllinux_*_x86_64.whl
+            *-win_amd64.whl
+            *.tar.gz
 
   check-go:
     name: Check GitHub Release for Go FFI assets
@@ -4453,7 +4482,7 @@ jobs:
     name: Publish CLI proxy to PyPI (wheels + sdist)
     needs: [prepare, check-cli, cli-proxy-wheels]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.pypi_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -5910,7 +5939,7 @@ jobs:
     name: Publish CLI proxy package (npm)
     needs: [prepare, check-cli]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.npm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
