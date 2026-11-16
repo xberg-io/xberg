@@ -224,29 +224,29 @@ impl XbergMcp {
         allow(dead_code)
     )]
     fn download_error(&self, context: String, error: crate::XbergError) -> rmcp::ErrorData {
-        match self.public_filesystem_message(&error) {
-            Some(fixed) => {
-                tracing::warn!(error = %error, "{context}");
-                rmcp::ErrorData::internal_error(format!("{context}: {fixed}"), None)
-            }
-            None => self.internal_error(format!("{context}: {error}")),
+        if !self.http_transport {
+            return rmcp::ErrorData::internal_error(format!("{context}: {error}"), None);
         }
+        let full_message = error.to_string();
+        let public = crate::core::config::remote_errors::public_error_message(&error, &full_message);
+        if public != full_message {
+            tracing::warn!(error = %full_message, "{context}");
+        }
+        rmcp::ErrorData::internal_error(format!("{context}: {public}"), None)
     }
 
-    /// An internal error whose message names a server failure, redacted like [`Self::xberg_error`].
+    /// An internal error for a failed model download whose error is not an `XbergError` and may
+    /// name a path: over HTTP the client gets only `context` and the full error is logged.
     #[cfg_attr(
-        not(any(
-            test,
-            paddle_ocr,
-            feature = "formula-recognition",
-            feature = "layout-detection",
-            feature = "embeddings",
-            feature = "ner-onnx"
-        )),
+        not(any(test, feature = "formula-recognition", feature = "layout-detection")),
         allow(dead_code)
     )]
-    fn internal_error(&self, message: String) -> rmcp::ErrorData {
-        rmcp::ErrorData::internal_error(self.client_message(message), None)
+    fn opaque_download_error(&self, context: &str, error: &dyn std::fmt::Display) -> rmcp::ErrorData {
+        if !self.http_transport {
+            return rmcp::ErrorData::internal_error(format!("{context}: {error}"), None);
+        }
+        tracing::warn!(error = %error, "{context}");
+        rmcp::ErrorData::internal_error(context.to_string(), None)
     }
 
     /// `message` as shown to the client: over HTTP, server filesystem paths become `<path>` and
@@ -686,7 +686,7 @@ impl XbergMcp {
             let formula_dir = cache_base.join("formula-recognition");
             let was_cached = crate::formula_recognition::models_cached_in(Some(&formula_dir));
             crate::formula_recognition::ensure_models_in(Some(&formula_dir))
-                .map_err(|e| self.internal_error(format!("Failed to download formula recognition models: {e}")))?;
+                .map_err(|e| self.opaque_download_error("Failed to download formula recognition models", &e))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -717,7 +717,7 @@ impl XbergMcp {
             } else {
                 manager
                     .ensure_all_models()
-                    .map_err(|e| self.internal_error(format!("Failed to download layout models: {}", e)))?;
+                    .map_err(|e| self.opaque_download_error("Failed to download layout models", &e))?;
                 let disposition = if !rtdetr_was_cached && !tatr_was_cached {
                     CacheWarmDisposition::Downloaded
                 } else {
@@ -2257,16 +2257,16 @@ mod tests {
     }
 
     #[test]
-    fn should_redact_cache_warm_download_errors_only_on_http_transport() {
-        let message =
-            || "Failed to download layout models: cannot write /srv/xberg/cache/layout/rtdetr.onnx".to_string();
+    fn should_hide_untyped_download_error_details_only_on_http_transport() {
+        let context = "Failed to download formula recognition models";
+        let detail = "cannot create model cache dir \"/srv/my docs/formula\": denied";
 
-        let http = http_server_without_local_paths().internal_error(message());
+        let http = http_server_without_local_paths().opaque_download_error(context, &detail);
         assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert_eq!(http.message, "Failed to download layout models: cannot write <path>");
+        assert_eq!(http.message, context);
 
-        let stdio = XbergMcp::with_config(ExtractionConfig::default()).internal_error(message());
-        assert_eq!(stdio.message, message());
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).opaque_download_error(context, &detail);
+        assert_eq!(stdio.message, format!("{context}: {detail}"));
     }
 
     #[test]

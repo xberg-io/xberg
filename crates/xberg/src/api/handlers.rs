@@ -1201,12 +1201,9 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         if was_cached {
             already_cached.push("layout (rtdetr, tatr)".to_string());
         } else {
-            manager.ensure_all_models().map_err(|e| {
-                ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                    "Failed to download layout models: {}",
-                    e
-                )))
-            })?;
+            manager
+                .ensure_all_models()
+                .map_err(|e| opaque_download_error("Failed to download layout models", &e))?;
             downloaded.push("layout (rtdetr, tatr)".to_string());
         }
     }
@@ -1240,12 +1237,7 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
                 },
                 Some(embeddings_dir.clone()),
             )
-            .map_err(|e| {
-                ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                    "Failed to download embedding model '{}': {}",
-                    preset.name, e
-                )))
-            })?;
+            .map_err(|e| download_error(&format!("Failed to download embedding model '{}'", preset.name), &e))?;
             downloaded.push(label);
         }
     }
@@ -1271,12 +1263,8 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
             };
 
             for model in &models_to_warm {
-                crate::text::ner::download_model(model, None).map_err(|e| {
-                    ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                        "Failed to download NER model '{}': {}",
-                        model, e
-                    )))
-                })?;
+                crate::text::ner::download_model(model, None)
+                    .map_err(|e| download_error(&format!("Failed to download NER model '{model}'"), &e))?;
                 downloaded.push(ner_warm_label(model));
             }
         }
@@ -1296,6 +1284,30 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         downloaded,
         already_cached,
     }))
+}
+
+/// A 502 for a failed model download: `context` with the error's public message, the full error
+/// logged.
+#[cfg(any(test, feature = "embeddings", feature = "ner-onnx"))]
+fn download_error(context: &str, error: &crate::error::XbergError) -> ApiError {
+    let full_message = error.to_string();
+    tracing::error!(error = %full_message, "{context}");
+    let public = crate::core::config::remote_errors::public_error_message(error, &full_message);
+    ApiError::new(
+        axum::http::StatusCode::BAD_GATEWAY,
+        crate::error::XbergError::Other(format!("{context}: {public}")),
+    )
+}
+
+/// A 502 for a failed model download whose error is not an `XbergError` and may name a path:
+/// the client gets only `context`, the full error is logged.
+#[cfg(any(test, feature = "layout-detection"))]
+fn opaque_download_error(context: &str, error: &dyn std::fmt::Display) -> ApiError {
+    tracing::error!(error = %error, "{context}");
+    ApiError::new(
+        axum::http::StatusCode::BAD_GATEWAY,
+        crate::error::XbergError::Other(context.to_string()),
+    )
 }
 
 /// The `downloaded` label of a warmed NER model. It names the model, never its cache path.
@@ -2431,6 +2443,34 @@ mod tests {
             assert!(json["already_cached"].is_array());
             let cache_dir = crate::cache_dir::resolve_cache_base();
             assert!(!json.to_string().contains(&*cache_dir.to_string_lossy()), "{json}");
+        }
+    }
+
+    #[test]
+    fn should_report_model_download_failures_without_server_paths() {
+        let error = crate::error::XbergError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "cannot write 'C:\\Program Files\\x\\a.pdf'",
+        ));
+
+        let typed = download_error("Failed to download NER model 'gliner'", &error);
+        assert_eq!(typed.status, StatusCode::BAD_GATEWAY);
+        assert_eq!(
+            typed.body.message,
+            "Failed to download NER model 'gliner': IO error: permission denied"
+        );
+
+        let opaque = opaque_download_error(
+            "Failed to download layout models",
+            &"Model download failed: cannot write \"/srv/my docs/a.onnx\"",
+        );
+        assert_eq!(opaque.status, StatusCode::BAD_GATEWAY);
+        assert_eq!(opaque.body.message, "Failed to download layout models");
+
+        for message in [&typed.body.message, &opaque.body.message] {
+            for fragment in ["Program", "Files", "a.pdf", "srv", "my docs", "a.onnx"] {
+                assert!(!message.contains(fragment), "{fragment} survived in {message}");
+            }
         }
     }
 
