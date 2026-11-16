@@ -77,9 +77,76 @@ get_latest_version() {
   echo "$tag"
 }
 
+release_asset_digest() {
+  local artifact="$1" metadata="$2"
+  # Tokenize JSON strings intact, then read only direct fields of objects in .assets. ~keep
+  LC_ALL=C awk -v asset="\"$artifact\"" '
+    BEGIN { separator = "\036" }
+    {
+      gsub(/"(\\.|[^"\\])*"|[{}:,]|\[|\]|true|false|null|-?[0-9][0-9.eE+-]*/, "&" separator)
+      count = split($0, tokens, separator)
+      for (i = 1; i <= count; i++) {
+        token = tokens[i]
+        sub(/^[[:space:]]+/, "", token)
+        if (token == "") continue
+
+        if (depth == 1 && previous == ":" && key == "\"assets\"") {
+          assets_fields++
+          in_assets = (token == "[")
+        } else if (in_assets && depth == 2 && token == "{") {
+          selected = name_fields = digest_fields = 0
+          digest = ""
+        } else if (in_assets && depth == 3) {
+          if (token == "}" && selected) {
+            matches++
+            if (name_fields == 1 && digest_fields == 1) expected = digest
+          } else if (previous == ":" && key == "\"name\"") {
+            name_fields++
+            if (token == asset) selected = 1
+          } else if (previous == ":" && key == "\"digest\"") {
+            digest_fields++
+            digest = token
+          }
+        } else if (in_assets && depth == 2 && token == "]") {
+          in_assets = 0
+        }
+
+        if (token == "{" || token == "[") depth++
+        if (token == "}" || token == "]") depth--
+        key = previous
+        previous = token
+      }
+    }
+    END {
+      if (depth != 0 || assets_fields != 1 || matches != 1 ||
+          expected !~ /^"sha256:[[:xdigit:]]+"$/) exit 1
+      sub(/^"sha256:/, "", expected)
+      sub(/"$/, "", expected)
+      if (length(expected) != 64) exit 1
+      print tolower(expected)
+    }
+  ' "$metadata"
+}
+
+verify_archive() {
+  local artifact="$1" archive="$2" metadata="$3" expected actual
+  expected="$(release_asset_digest "$artifact" "$metadata")" ||
+    error "no valid SHA-256 digest for ${artifact} in GitHub release metadata"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum <"$archive")"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 <"$archive")"
+  else
+    error "need 'sha256sum' or 'shasum' to verify ${artifact}"
+  fi
+  [ "${actual%% *}" = "$expected" ] || error "SHA-256 mismatch for ${artifact}"
+}
+
 install() {
   need_cmd curl
   need_cmd tar
+  need_cmd awk
 
   local os arch target version install_dir
 
@@ -114,11 +181,17 @@ install() {
   trap 'rm -rf "$tmpdir"' EXIT
 
   local stage_dir binary_path version_output artifact url http_status status
+  local metadata="$tmpdir/release.json" metadata_url="https://api.github.com/repos/${REPO}/releases/tags/${version}"
   while :; do
     artifact="xberg-cli-${target}.tar.gz"
     url="https://github.com/${REPO}/releases/download/${version}/${artifact}"
     info "Downloading ${url}"
     if http_status="$(curl -fsSL -w '%{http_code}' "$url" -o "${tmpdir}/${artifact}")"; then
+      if [ ! -f "$metadata" ]; then
+        curl -fsSL --proto-redir '=https' "$metadata_url" -o "$metadata" ||
+          error "failed to fetch SHA-256 metadata for ${version} from GitHub"
+      fi
+      verify_archive "$artifact" "${tmpdir}/${artifact}" "$metadata"
       tar -xzf "${tmpdir}/${artifact}" -C "$tmpdir"
       stage_dir="${tmpdir}/xberg-cli-${target}"
       binary_path="${stage_dir}/${BINARY_NAME}"
