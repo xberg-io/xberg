@@ -44,14 +44,23 @@ ENV ORT_PREFER_DYNAMIC_LINK=1
 # chromium-browser-snapshots mirror used for the glibc images -- so this is
 # single-source with retries. Bundled into /build/lib below (not linked at build
 # time; see crates/xberg/src/extractors/pdf/pdfium_engine.rs for why).
+COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh scripts/pdfium-runtime-checksums.sha256 /opt/xberg-integrity/
+
 RUN mkdir -p /build/pdfium && \
+    case "$PDFIUM_VERSION" in ''|*[!0-9]*) echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2; exit 1 ;; esac && \
     ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then PDFIUM_ARCH="arm64"; else PDFIUM_ARCH="x64"; fi && \
+    PDFIUM_ASSET="pdfium-linux-musl-${PDFIUM_ARCH}.tgz" && \
+    PDFIUM_ARCHIVE="/build/${PDFIUM_VERSION}-${PDFIUM_ASSET}" && \
+    apk add --no-cache --virtual .pdfium-verify bash && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 --known && \
     curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
-        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-linux-musl-${PDFIUM_ARCH}.tgz" \
-        -o /build/pdfium.tgz && \
-    tar -xzf /build/pdfium.tgz -C /build/pdfium && \
-    rm /build/pdfium.tgz
+        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/${PDFIUM_ASSET}" \
+        -o "$PDFIUM_ARCHIVE" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 && \
+    tar -xzf "$PDFIUM_ARCHIVE" -C /build/pdfium && \
+    rm "$PDFIUM_ARCHIVE" && \
+    apk del .pdfium-verify
 
 COPY Cargo.toml Cargo.lock ./
 COPY vendored/sysinfo/ vendored/sysinfo/
