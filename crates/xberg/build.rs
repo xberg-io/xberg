@@ -18,9 +18,9 @@ fn main() {
     }
 
     println!("cargo::rustc-check-cfg=cfg(auto_rotate)");
-    if std::env::var_os("CARGO_FEATURE_AUTO_ROTATE").is_some()
-        || std::env::var_os("CARGO_FEATURE_AUTO_ROTATE_TRACT").is_some()
-    {
+    let auto_rotate = std::env::var_os("CARGO_FEATURE_AUTO_ROTATE").is_some()
+        || std::env::var_os("CARGO_FEATURE_AUTO_ROTATE_TRACT").is_some();
+    if auto_rotate {
         println!("cargo::rustc-cfg=auto_rotate");
     }
 
@@ -41,17 +41,22 @@ fn main() {
     }
 
     println!("cargo::rustc-check-cfg=cfg(layout_detection)");
-    if std::env::var_os("CARGO_FEATURE_LAYOUT_DETECTION").is_some()
-        || std::env::var_os("CARGO_FEATURE_LAYOUT_TRACT").is_some()
-    {
+    let layout_detection = std::env::var_os("CARGO_FEATURE_LAYOUT_DETECTION").is_some()
+        || std::env::var_os("CARGO_FEATURE_LAYOUT_TRACT").is_some();
+    if layout_detection {
         println!("cargo::rustc-cfg=layout_detection");
     }
 
     println!("cargo::rustc-check-cfg=cfg(paddle_ocr)");
-    if std::env::var_os("CARGO_FEATURE_PADDLE_OCR_ORT").is_some()
-        || std::env::var_os("CARGO_FEATURE_PADDLE_OCR_TRACT").is_some()
-    {
+    let paddle_ocr = std::env::var_os("CARGO_FEATURE_PADDLE_OCR_ORT").is_some()
+        || std::env::var_os("CARGO_FEATURE_PADDLE_OCR_TRACT").is_some();
+    if paddle_ocr {
         println!("cargo::rustc-cfg=paddle_ocr");
+    }
+
+    println!("cargo::rustc-check-cfg=cfg(model_download)");
+    if paddle_ocr || layout_detection || auto_rotate || has_direct_model_download_feature() {
+        println!("cargo::rustc-cfg=model_download");
     }
 
     // See `build_id`'s doc comment for what this feeds: `cache::version::cache_version_tag`
@@ -61,6 +66,20 @@ fn main() {
         emit_rerun_directives(&manifest_dir);
     }
     println!("cargo::rustc-env=XBERG_BUILD_ID={}", build_id());
+}
+
+fn has_direct_model_download_feature() -> bool {
+    [
+        "NER_ONNX",
+        "CANDLE_PADDLEOCR_VL",
+        "CANDLE_DEEPSEEK_OCR",
+        "TRANSCRIPTION",
+        "CHUNKING_TOKENIZERS",
+        "ONNX_RUNTIME",
+        "STATIC_EMBEDDINGS",
+    ]
+    .iter()
+    .any(|feature| std::env::var_os(format!("CARGO_FEATURE_{feature}")).is_some())
 }
 
 fn link_ios_compiler_runtime() {

@@ -232,22 +232,7 @@ pub mod doctor;
 ))]
 pub mod ort_discovery;
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        test,
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(all(not(target_arch = "wasm32"), any(test, model_download)))]
 pub(crate) mod model_download;
 
 /// Engine-neutral inference seam (issue #1275): backend/session traits over ONNX

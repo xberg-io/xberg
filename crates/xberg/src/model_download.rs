@@ -4,97 +4,24 @@
 ///
 /// Every reader and downloader of that repository takes its coordinates from here, so a cache that
 /// one of them fills is the cache that the others read. ~keep
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
-))]
+#[cfg(any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr))))]
 pub(crate) const PADDLE_MODELS_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
 
 /// The one immutable revision of [`PADDLE_MODELS_REPO_ID`]. It is the newest revision, because the
 /// PP-OCRv6 recognition checksums in the PaddleOCR manifest belong to it; every other file is
 /// identical between it and the older pin. ~keep
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr)))
-))]
+#[cfg(any(paddle_ocr, layout_detection, all(auto_rotate, any(feature = "ocr", sceptre_ocr))))]
 pub(crate) const PADDLE_MODELS_REVISION: &str = "bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8";
 
-// Every `Duration` use in this file (the two timeout constants and `model_download_timeout`)
-// sits behind the model-download feature set, so a default build has none and the bare import
-// warns as unused. Gate the import with the superset of those gates -- the `test` arm is
-// included because `DEFAULT_MODEL_DOWNLOAD_TIMEOUT` and `model_download_timeout` carry it for
-// the always-compiled `download_deadline_tests` watchdog.
-#[cfg(any(
-    all(
-        not(target_arch = "wasm32"),
-        any(
-            feature = "candle-paddleocr-vl",
-            feature = "candle-deepseek-ocr",
-            paddle_ocr,
-            auto_rotate,
-            layout_detection,
-            feature = "transcription",
-            feature = "chunking-tokenizers",
-            feature = "onnx-runtime",
-            feature = "ner-onnx",
-            feature = "static-embeddings"
-        )
-    ),
-    test
-))]
 use std::time::Duration;
 
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 use sha2::{Digest, Sha256};
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 use std::io::Read;
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 use std::path::Path;
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 use std::path::PathBuf;
 
 /// Default wall-clock ceiling for a single model-file download. This is a *total* deadline covering
@@ -103,86 +30,23 @@ use std::path::PathBuf;
 /// on a dead/blackholed network comes instead from the bounded `connect_timeout` and lowered retry
 /// count on the client built by [`hf_client_builder`], not from shortening this deadline (which would
 /// break legitimate slow downloads).
-///
-/// Gate mirrors [`model_download_timeout`], its only reader: the model-download feature set, plus
-/// `test` for the always-compiled `download_deadline_tests` watchdog below.
-#[cfg(any(
-    all(
-        not(target_arch = "wasm32"),
-        any(
-            feature = "candle-paddleocr-vl",
-            feature = "candle-deepseek-ocr",
-            paddle_ocr,
-            auto_rotate,
-            layout_detection,
-            feature = "transcription",
-            feature = "chunking-tokenizers",
-            feature = "onnx-runtime",
-            feature = "ner-onnx",
-            feature = "static-embeddings"
-        )
-    ),
-    test
-))]
 const DEFAULT_MODEL_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 static QUARANTINE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Per-connect ceiling for HuggingFace requests. On a host that advertises an IPv6 default route but
 /// blackholes IPv6 (common corporate config), a connect to an AAAA address otherwise parks in TCP
 /// `SYN_SENT` until the OS SYN timeout (~75 s) with no happy-eyeballs/IPv4 race — see #1249. Bounding
 /// the connect lets hf-hub's retry fail over quickly instead of burning the total deadline.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 const HF_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Max connect/transient retry attempts for HuggingFace requests. hf-hub's default is 5, which
 /// multiplies a blackholed-connect stall fivefold. Lowering it bounds *both* hf-hub retry loops —
 /// the metadata `HEAD` (via hf-hub's internal, non-overridable client) and the blob `GET` — since
 /// they share one `RetryConfig`. Two attempts still tolerate a single transient blip.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 const HF_MAX_RETRY_ATTEMPTS: usize = 2;
 
 /// A DNS resolver that orders IPv4 (`A`-record) addresses ahead of IPv6 (`AAAA`) ones.
@@ -194,39 +58,11 @@ const HF_MAX_RETRY_ATTEMPTS: usize = 2;
 /// `AAAA` only) keep working — unlike binding an IPv4 `local_address`, which would break them.
 /// Resolution runs on a blocking thread because `getaddrinfo` is synchronous; DNS itself is not the
 /// blackholed path (that's the TCP connect), so this stays fast.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 #[derive(Debug, Default)]
 struct Ipv4FirstResolver;
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 impl reqwest::dns::Resolve for Ipv4FirstResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let host = name.as_str().to_owned();
@@ -246,21 +82,7 @@ impl reqwest::dns::Resolve for Ipv4FirstResolver {
 /// Reorder resolved addresses so IPv4 (`A`) entries precede IPv6 (`AAAA`) ones, preserving the
 /// relative order within each family. Stable so the resolver stays deterministic for a given
 /// `getaddrinfo` result. See [`Ipv4FirstResolver`] for why (the #1249 IPv4 fallback).
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 fn order_ipv4_first(addrs: &mut [std::net::SocketAddr]) {
     addrs.sort_by_key(std::net::SocketAddr::is_ipv6);
 }
@@ -275,21 +97,7 @@ fn order_ipv4_first(addrs: &mut [std::net::SocketAddr]) {
 /// `HEAD` path. The HF auth token is applied per-request by hf-hub (not via client default headers),
 /// so injecting our own client does not disturb `HF_TOKEN`-gated downloads. If the client fails to
 /// build we fall back to hf-hub's default (unbounded) client rather than failing the download.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        paddle_ocr,
-        auto_rotate,
-        layout_detection,
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "ner-onnx",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 pub(crate) fn hf_client_builder() -> hf_hub::HFClientBuilder {
     let builder = hf_hub::HFClientBuilder::new().retry_max_attempts(HF_MAX_RETRY_ATTEMPTS);
     match reqwest::Client::builder()
@@ -315,24 +123,6 @@ pub(crate) fn hf_client_builder() -> hf_hub::HFClientBuilder {
 /// Callers are [`with_download_deadline`] (same gate) and [`acquire_artifact_file_lock`] (a strict
 /// subset of it), plus the always-compiled `download_deadline_tests` module — hence `test` in the
 /// gate below rather than the bare feature disjunction most siblings in this file use.
-#[cfg(any(
-    all(
-        not(target_arch = "wasm32"),
-        any(
-            feature = "candle-paddleocr-vl",
-            feature = "candle-deepseek-ocr",
-            paddle_ocr,
-            auto_rotate,
-            layout_detection,
-            feature = "transcription",
-            feature = "chunking-tokenizers",
-            feature = "onnx-runtime",
-            feature = "ner-onnx",
-            feature = "static-embeddings"
-        )
-    ),
-    test
-))]
 pub(crate) fn model_download_timeout() -> Duration {
     std::env::var("XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS")
         .ok()
@@ -346,18 +136,7 @@ pub(crate) fn model_download_timeout() -> Duration {
 ///
 /// Match the boolean spellings accepted by the Python Hugging Face clients while
 /// honoring both the current and legacy environment variable names.
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 pub(crate) fn hf_offline_mode() -> bool {
     ["HF_HUB_OFFLINE", "HUGGINGFACE_HUB_OFFLINE"]
         .iter()
@@ -365,36 +144,14 @@ pub(crate) fn hf_offline_mode() -> bool {
         .any(|value| env_flag_enabled(&value))
 }
 
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 fn env_flag_enabled(value: &std::ffi::OsStr) -> bool {
     value
         .to_str()
         .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "on" | "yes" | "true"))
 }
 
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 fn offline_cache_miss(repo_id: &str, remote_filename: &str, revision: Option<&str>) -> String {
     format!(
         "Hugging Face offline mode is enabled and '{remote_filename}' from {repo_id}@{} is not available in the local cache",
@@ -413,24 +170,6 @@ fn offline_cache_miss(repo_id: &str, remote_filename: &str, revision: Option<&st
 /// `hf_force_download_revision`) all fall within the model-download feature set below; the
 /// always-compiled `download_deadline_tests` module below exercises this watchdog directly under
 /// plain `#[cfg(test)]`, hence `test` in the gate rather than the bare feature disjunction.
-#[cfg(any(
-    all(
-        not(target_arch = "wasm32"),
-        any(
-            feature = "candle-paddleocr-vl",
-            feature = "candle-deepseek-ocr",
-            paddle_ocr,
-            auto_rotate,
-            layout_detection,
-            feature = "transcription",
-            feature = "chunking-tokenizers",
-            feature = "onnx-runtime",
-            feature = "ner-onnx",
-            feature = "static-embeddings"
-        )
-    ),
-    test
-))]
 pub(crate) fn with_download_deadline<T, F>(label: &str, f: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
@@ -473,18 +212,7 @@ where
 /// the same cold model can knock each other out. Serializing above hf-hub, keyed on
 /// the exact file, lets the first thread populate the cache while the rest wait and
 /// then get the warm copy; downloads of *different* files still run in parallel.
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 pub(crate) fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, OnceLock};
@@ -498,42 +226,14 @@ pub(crate) fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
 }
 
 /// Held advisory lock for model-cache mutations shared by all Xberg processes.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 #[derive(Debug)]
 pub(crate) struct ArtifactFileLock {
     file: std::fs::File,
     path: PathBuf,
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 impl Drop for ArtifactFileLock {
     fn drop(&mut self) {
         if let Err(error) = fs2::FileExt::unlock(&self.file) {
@@ -542,40 +242,12 @@ impl Drop for ArtifactFileLock {
     }
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 pub(crate) fn acquire_artifact_file_lock(path: &Path) -> Result<ArtifactFileLock, String> {
     acquire_artifact_file_lock_with_timeout(path, model_download_timeout())
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 pub(crate) fn acquire_artifact_file_lock_with_timeout(
     path: &Path,
     timeout: Duration,
@@ -626,21 +298,7 @@ pub(crate) fn acquire_artifact_file_lock_with_timeout(
     }
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 fn hf_artifact_lock_path(repo_id: &str, cache_dir: Option<&Path>, expected_sha256: &str) -> Result<PathBuf, String> {
     if !is_sha256_hex(expected_sha256) {
         return Err("Cannot construct Hugging Face artifact lock for an invalid SHA-256".to_string());
@@ -652,41 +310,14 @@ fn hf_artifact_lock_path(repo_id: &str, cache_dir: Option<&Path>, expected_sha25
         .join(format!(".xberg-{}.lock", expected_sha256.to_ascii_lowercase())))
 }
 
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 fn is_sha256_hex(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Build an hf-hub client using its standard cache resolution unless the caller
 /// explicitly supplied an alternative Hugging Face cache root.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 pub(crate) fn hf_client(cache_dir: Option<&Path>) -> Result<hf_hub::HFClientSync, String> {
     let builder = hf_client_builder();
     let builder = match cache_dir {
@@ -703,11 +334,7 @@ pub(crate) fn hf_client(cache_dir: Option<&Path>) -> Result<hf_hub::HFClientSync
 /// This does not create an Xberg cache or stage files. It mirrors the root used
 /// by [`hf_client`] so changing standard HF environment configuration cannot
 /// accidentally reuse an engine loaded from a different snapshot cache.
-#[cfg(any(
-    onnx_retrieval,
-    all(test, feature = "onnx-runtime"),
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(any(onnx_retrieval, all(test, feature = "onnx-runtime"), feature = "static-embeddings"))]
 pub(crate) fn hf_cache_key(cache_dir: Option<&Path>) -> String {
     cache_dir
         .map(Path::to_path_buf)
@@ -731,23 +358,7 @@ pub(crate) fn hf_cached_file(
 /// Minimum wall-clock gap between rendered progress lines. hf-hub emits a progress event per
 /// stream chunk, which on a fast link is thousands per second; throttling keeps both the
 /// rendering cost and the emitted log volume bounded.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 const PROGRESS_RENDER_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Reports Hugging Face download progress through `tracing`.
@@ -755,71 +366,23 @@ const PROGRESS_RENDER_INTERVAL: Duration = Duration::from_secs(1);
 /// Registered with hf-hub only when the capability config that triggered the download asked for
 /// it (see [`progress_handler`]). Each download builds its own handler, so concurrent downloads
 /// never share mutable state.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
+#[cfg(model_download)]
 #[derive(Default)]
-#[allow(dead_code)]
 struct TracingDownloadProgress {
     state: std::sync::Mutex<TracingProgressState>,
 }
 
 /// Mutable accounting behind [`TracingDownloadProgress`]. `per_file_bytes` holds each file's
 /// cumulative byte count because hf-hub's `Progress` events carry only the files that changed.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
+#[cfg(model_download)]
 #[derive(Default)]
-#[allow(dead_code)]
 struct TracingProgressState {
     total_bytes: u64,
     per_file_bytes: std::collections::HashMap<String, u64>,
     last_render: Option<std::time::Instant>,
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 impl TracingDownloadProgress {
     /// Record a batch of per-file deltas and return the line to render, or `None` while the
     /// render interval has not elapsed.
@@ -841,22 +404,7 @@ impl TracingDownloadProgress {
     }
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
+#[cfg(model_download)]
 impl hf_hub::progress::ProgressHandler for TracingDownloadProgress {
     fn on_progress(&self, event: &hf_hub::progress::ProgressEvent) {
         use hf_hub::progress::{DownloadEvent, ProgressEvent};
@@ -901,46 +449,14 @@ impl hf_hub::progress::ProgressHandler for TracingDownloadProgress {
 /// diagnostics belong to the subscriber (`clippy::print_stderr` is denied). Hosts that want the
 /// line visible need an `info`-level subscriber for `xberg::model_download`; the CLI installs
 /// one.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 fn render_progress(message: &str) {
     tracing::info!(target: "xberg::model_download", progress = %message, "model download progress");
 }
 
 /// Format `completed`/`total` as a human-readable transfer line. A zero total means hf-hub could
 /// not determine the remote size, so only the transferred amount is reported.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 fn format_transfer(completed: u64, total: u64) -> String {
     if total == 0 {
         return format!("downloaded {}", format_bytes(completed));
@@ -954,23 +470,7 @@ fn format_transfer(completed: u64, total: u64) -> String {
 }
 
 /// Format a byte count in MiB (models are megabyte-to-gigabyte scale).
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 fn format_bytes(bytes: u64) -> String {
     const BYTES_PER_MIB: f64 = 1024.0 * 1024.0;
     format!("{:.1} MiB", bytes as f64 / BYTES_PER_MIB)
@@ -980,45 +480,14 @@ fn format_bytes(bytes: u64) -> String {
 ///
 /// `None` is hf-hub's "emit nothing" — a disabled setting is genuinely silent rather than merely
 /// quiet, and no handler is allocated.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 pub(crate) fn progress_handler(progress: crate::core::config::DownloadProgress) -> Option<hf_hub::progress::Progress> {
     progress
         .is_enabled()
         .then(|| hf_hub::progress::Progress::new(TracingDownloadProgress::default()))
 }
 
-#[cfg(all(
-    test,
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(all(test, model_download))]
 mod progress_tests {
     use super::*;
     use crate::core::config::DownloadProgress;
@@ -1097,22 +566,7 @@ mod progress_tests {
 /// Entry point for artifact downloads that no capability config governs (OCR, layout,
 /// orientation, transcription and tokenizer models). Capability downloads whose config carries
 /// `show_download_progress` call [`hf_resolve_file_with_progress`] instead.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
+#[cfg(model_download)]
 #[allow(dead_code)]
 pub(crate) fn hf_resolve_file(
     repo_id: &str,
@@ -1144,23 +598,7 @@ pub(crate) fn hf_resolve_file(
 /// `progress` carries the triggering capability config's `show_download_progress` setting
 /// (#279). It is consulted only when a transfer actually happens — a cache hit stays silent
 /// whatever the setting says, because there is nothing to report.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings",
-        all(test, feature = "layout-detection")
-    )
-))]
-#[allow(dead_code)]
+#[cfg(model_download)]
 pub(crate) fn hf_resolve_file_with_progress(
     repo_id: &str,
     remote_filename: &str,
@@ -1291,15 +729,12 @@ pub(crate) fn hf_resolve_file_with_progress(
 /// Uses `hf-hub`'s built-in caching so repeated calls for the same file are fast.
 /// Concurrent calls for the same file serialize (see [`download_lock`]) so a cold
 /// cache is populated once instead of racing hf-hub's blob lock.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl"
-    )
+#[cfg(any(
+    paddle_ocr,
+    layout_detection,
+    auto_rotate,
+    feature = "ner-onnx",
+    feature = "candle-paddleocr-vl"
 ))]
 #[allow(dead_code)]
 pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBuf, String> {
@@ -1308,27 +743,13 @@ pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBu
 
 /// Resolve a pinned model artifact from the standard Hugging Face cache, falling
 /// back to the network only on a cache miss.
-#[cfg(all(not(target_arch = "wasm32"), any(layout_detection, paddle_ocr)))]
+#[cfg(any(layout_detection, paddle_ocr))]
 #[allow(dead_code)]
 pub(crate) fn hf_download_revision(repo_id: &str, remote_filename: &str, revision: &str) -> Result<PathBuf, String> {
     hf_download_at_revision(repo_id, remote_filename, Some(revision))
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 #[allow(dead_code)]
 fn hf_download_at_revision(repo_id: &str, remote_filename: &str, revision: Option<&str>) -> Result<PathBuf, String> {
     tracing::info!(
@@ -1376,7 +797,7 @@ fn hf_download_at_revision(repo_id: &str, remote_filename: &str, revision: Optio
 }
 
 /// Force a network refresh of a pinned artifact in the standard Hugging Face cache.
-#[cfg(all(not(target_arch = "wasm32"), layout_detection))]
+#[cfg(layout_detection)]
 pub(crate) fn hf_force_download_revision(
     repo_id: &str,
     remote_filename: &str,
@@ -1458,18 +879,7 @@ pub(crate) fn hf_force_download_revision(
     })
 }
 
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 fn verify_cached_artifact(
     path: &Path,
     expected_size: Option<u64>,
@@ -1489,7 +899,7 @@ fn verify_cached_artifact(
     verify_sha256(path, expected_sha256, label)
 }
 
-#[cfg(all(not(target_arch = "wasm32"), layout_detection))]
+#[cfg(layout_detection)]
 fn verified_cached_path(
     path: Option<&Path>,
     expected_size: u64,
@@ -1500,21 +910,7 @@ fn verified_cached_path(
         .map(Path::to_path_buf)
 }
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 #[derive(Debug)]
 struct QuarantinedEntry {
     original: PathBuf,
@@ -1527,21 +923,7 @@ struct QuarantinedEntry {
 /// cannot rename a replacement over an existing file, so both names must be absent.
 /// The caller holds the process-local artifact lock. Cross-process repair remains
 /// coordinated only by hf-hub's own blob lock.
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 fn quarantine_hf_cache_entry(
     path: &Path,
     expected_size: Option<u64>,
@@ -1594,21 +976,7 @@ fn quarantine_hf_cache_entry(
     Ok(moved)
 }
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 fn deterministic_hf_blob_path(snapshot: &Path, expected_sha256: &str) -> Option<PathBuf> {
     if !is_sha256_hex(expected_sha256) {
         return None;
@@ -1622,21 +990,7 @@ fn deterministic_hf_blob_path(snapshot: &Path, expected_sha256: &str) -> Option<
     blob.starts_with(repo_root.join("blobs")).then_some(blob)
 }
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 fn hf_blob_belongs_to_snapshot(snapshot: &Path, blob: &Path) -> bool {
     snapshot
         .ancestors()
@@ -1648,21 +1002,7 @@ fn hf_blob_belongs_to_snapshot(snapshot: &Path, blob: &Path) -> bool {
         })
 }
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 fn restore_quarantined_entries(
     entries: &[QuarantinedEntry],
     expected_size: Option<u64>,
@@ -1725,21 +1065,7 @@ fn restore_quarantined_entries(
     }
 }
 
-#[cfg(all(
-    any(windows, test),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
-    )
-))]
+#[cfg(all(any(windows, test), model_download))]
 fn remove_quarantined_entries(entries: &[QuarantinedEntry]) {
     let failures: Vec<String> = entries
         .iter()
@@ -1758,7 +1084,7 @@ fn remove_quarantined_entries(entries: &[QuarantinedEntry]) {
 }
 
 /// Resolve a pinned artifact strictly from the standard Hugging Face cache.
-#[cfg(all(not(target_arch = "wasm32"), layout_detection))]
+#[cfg(layout_detection)]
 pub(crate) fn hf_cached_revision(
     repo_id: &str,
     remote_filename: &str,
@@ -1770,21 +1096,7 @@ pub(crate) fn hf_cached_revision(
     hf_cached_revision_with_client(&api, repo_id, remote_filename, Some(revision))
 }
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(model_download)]
 pub(crate) fn hf_cached_revision_with_client(
     api: &hf_hub::HFClientSync,
     repo_id: &str,
@@ -1826,7 +1138,7 @@ pub(crate) fn hf_cached_revision_with_client(
     feature = "candle-paddleocr-vl",
     feature = "candle-deepseek-ocr",
     feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
+    feature = "static-embeddings"
 ))]
 pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
     let mut entries = Vec::new();
@@ -1872,7 +1184,7 @@ pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String
     feature = "candle-paddleocr-vl",
     feature = "candle-deepseek-ocr",
     feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
+    feature = "static-embeddings"
 ))]
 fn portable_artifact_component(component: &str) -> bool {
     if component.is_empty()
@@ -1900,18 +1212,7 @@ fn portable_artifact_component(component: &str) -> bool {
 ///
 /// ~keep Streams the file in 1 MiB chunks to avoid loading large model files (100MB+) entirely
 /// into memory. Returns `Ok(())` if the checksum matches or is empty (skip verification).
-#[cfg(any(
-    paddle_ocr,
-    layout_detection,
-    auto_rotate,
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "candle-deepseek-ocr",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
-    feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
-))]
+#[cfg(model_download)]
 pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<(), String> {
     if expected.is_empty() {
         return Ok(());
@@ -1943,22 +1244,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     Ok(())
 }
 
-#[cfg(all(
-    test,
-    not(target_arch = "wasm32"),
-    any(
-        paddle_ocr,
-        layout_detection,
-        auto_rotate,
-        feature = "ner-onnx",
-        feature = "candle-paddleocr-vl",
-        feature = "candle-deepseek-ocr",
-        feature = "transcription",
-        feature = "chunking-tokenizers",
-        feature = "onnx-runtime",
-        feature = "static-embeddings"
-    )
-))]
+#[cfg(all(test, model_download))]
 mod hf_cache_tests {
     use super::*;
 
@@ -2454,7 +1740,6 @@ mod download_deadline_tests {
 /// `connect_timeout` client path compiles and constructs on this platform.
 #[cfg(all(
     test,
-    not(target_arch = "wasm32"),
     any(
         feature = "candle-paddleocr-vl",
         feature = "candle-deepseek-ocr",
@@ -2592,7 +1877,7 @@ mod tests {
         feature = "candle-paddleocr-vl",
         feature = "candle-deepseek-ocr",
         feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
+        feature = "static-embeddings"
     )
 ))]
 mod vendored_manifest_tests {
@@ -2661,7 +1946,7 @@ mod vendored_manifest_registry_tests {
         feature = "candle-paddleocr-vl",
         feature = "candle-deepseek-ocr",
         feature = "onnx-runtime",
-        all(feature = "static-embeddings", not(target_arch = "wasm32"))
+        feature = "static-embeddings"
     )
 ))]
 #[path = "model_download/manifest_validation_tests.rs"]
