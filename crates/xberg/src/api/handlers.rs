@@ -1173,6 +1173,8 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         )));
     }
 
+    // Read only by the feature-gated model blocks below. ~keep
+    #[allow(unused_variables)]
     let cache_base = resolve_cache_base();
 
     #[allow(unused_mut)]
@@ -1269,16 +1271,13 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
             };
 
             for model in &models_to_warm {
-                let path = crate::text::ner::download_model(model, None).map_err(|e| {
+                crate::text::ner::download_model(model, None).map_err(|e| {
                     ApiError::bad_gateway(crate::error::XbergError::Other(format!(
                         "Failed to download NER model '{}': {}",
                         model, e
                     )))
                 })?;
-                downloaded.push(format!(
-                    "ner gliner ({model}) -> {} (Hugging Face cache)",
-                    path.display()
-                ));
+                downloaded.push(ner_warm_label(model));
             }
         }
     }
@@ -1293,10 +1292,16 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
     }
 
     Ok(Json(WarmResponse {
-        cache_dir: cache_base.to_string_lossy().to_string(),
+        cache_dir: String::new(),
         downloaded,
         already_cached,
     }))
+}
+
+/// The `downloaded` label of a warmed NER model. It names the model, never its cache path.
+#[cfg(any(test, feature = "ner-onnx"))]
+pub(crate) fn ner_warm_label(model: &str) -> String {
+    format!("ner gliner ({model}) (Hugging Face cache)")
 }
 
 /// Resolve the cache base directory.
@@ -2421,10 +2426,29 @@ mod tests {
         if status == StatusCode::OK {
             let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-            assert!(json["cache_dir"].is_string());
+            assert!(json.get("cache_dir").is_none(), "{json}");
             assert!(json["downloaded"].is_array());
             assert!(json["already_cached"].is_array());
+            let cache_dir = crate::cache_dir::resolve_cache_base();
+            assert!(!json.to_string().contains(&*cache_dir.to_string_lossy()), "{json}");
         }
+    }
+
+    #[test]
+    fn should_omit_cache_directory_and_model_paths_from_cache_warm_response() {
+        let response = WarmResponse {
+            cache_dir: String::new(),
+            downloaded: vec![ner_warm_label("gliner-small")],
+            already_cached: vec!["layout (rtdetr, tatr)".to_string()],
+        };
+
+        assert_eq!(
+            serde_json::to_value(&response).expect("response serializes"),
+            serde_json::json!({
+                "downloaded": ["ner gliner (gliner-small) (Hugging Face cache)"],
+                "already_cached": ["layout (rtdetr, tatr)"]
+            })
+        );
     }
 
     #[tokio::test]

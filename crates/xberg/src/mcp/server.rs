@@ -798,13 +798,13 @@ impl XbergMcp {
                 };
 
                 for model in &models_to_warm {
-                    let path = crate::text::ner::download_model(model, None)
+                    crate::text::ner::download_model(model, None)
                         .map_err(|e| self.download_error(format!("Failed to download NER model '{model}'"), e))?;
                     record_warmed_model(
                         &mut available,
                         &mut downloaded,
                         &mut already_cached,
-                        format!("ner gliner ({model}) -> {} (Hugging Face cache)", path.display()),
+                        ner_warm_label(model),
                         CacheWarmDisposition::AvailabilityConfirmed,
                     );
                 }
@@ -925,6 +925,12 @@ impl XbergMcp {
 
         Ok(CallToolResponse::Task(CreateTaskResult::new(task)))
     }
+}
+
+/// The label of a warmed NER model. It names the model, never its Hugging Face cache path.
+#[cfg(any(test, feature = "ner-onnx"))]
+fn ner_warm_label(model: &str) -> String {
+    format!("ner gliner ({model}) (Hugging Face cache)")
 }
 
 fn is_remote_uri(uri: &str) -> bool {
@@ -2261,6 +2267,14 @@ mod tests {
 
         let stdio = XbergMcp::with_config(ExtractionConfig::default()).internal_error(message());
         assert_eq!(stdio.message, message());
+    }
+
+    #[test]
+    fn should_label_warmed_ner_model_without_its_cache_path() {
+        assert_eq!(
+            ner_warm_label("gliner-small"),
+            "ner gliner (gliner-small) (Hugging Face cache)"
+        );
     }
 
     #[test]

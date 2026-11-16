@@ -380,10 +380,11 @@ pub struct WarmRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct WarmResponse {
-    /// Xberg-managed cache directory used.
+    /// Xberg-managed cache directory used. The server leaves it empty and omits it from
+    /// `POST /cache/warm` so clients do not learn its filesystem layout.
     ///
-    /// Hugging Face artifacts remain in the standard HF cache, and their
-    /// resolved paths are included in `downloaded`.
+    /// Hugging Face artifacts remain in the standard HF cache.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub cache_dir: String,
     /// Models that were downloaded
     pub downloaded: Vec<String>,

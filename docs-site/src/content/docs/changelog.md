@@ -205,9 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(mcp): The MCP HTTP transport no longer reads local files.** `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused over HTTP unless the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1`; the stdio transport is unchanged.
 
-- **(mcp): The MCP HTTP transport no longer reveals server filesystem paths.** Over HTTP, file I/O and cache errors in tool errors and in per-input extraction results get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path, the full error is logged server-side, and `cache_stats`, `cache_clear` and `cache_warm` report the cache directory as `<path>`; the stdio transport is unchanged.
+- **(mcp): The MCP HTTP transport no longer reveals server filesystem paths.** Over HTTP, file I/O and cache errors in tool errors and in per-input extraction results get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path, the full error is logged server-side, and `cache_stats`, `cache_clear` and `cache_warm` report the cache directory as `<path>`; `cache_warm` no longer names a model's cache path on either transport, and stdio is otherwise unchanged.
 
-- **(api): Error responses and cache endpoints no longer reveal server filesystem paths.** Error messages, including per-input errors in batch results, keep their `error_type`; file I/O and cache errors get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path, the full error is logged server-side, and `/cache/stats` and `/cache/clear` no longer return the cache `directory`.
+- **(api): Error responses and cache endpoints no longer reveal server filesystem paths.** Error messages, including per-input errors in batch results, keep their `error_type`; file I/O and cache errors get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path, the full error is logged server-side, and `/cache/stats`, `/cache/clear` and `/cache/warm` no longer return the cache directory or a model's cache path.
 
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
@@ -273,6 +273,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
+
+- **(onnx): Concurrent ONNX inference no longer shares a session mutably.** Embedding, sparse-embedding, late-interaction, reranking, transcription and layout/auto-rotate ONNX sessions are now locked for each inference call instead of being mutated through a shared reference, which was undefined behavior under concurrent use. (#3166)
 
 - **(fictionbook): Report security-limit violations inside paragraphs.**
   They were discarded, so an over-limit FictionBook paragraph was silently accepted.
