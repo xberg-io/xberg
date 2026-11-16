@@ -319,7 +319,8 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
 
 /// Recognize a crop off the async executor. Wait for the shared formula worker
 /// before entering the blocking pool so queued crops leave workers free for other
-/// tasks. The inline arm is unreachable today (the feature implies `tokio-runtime`
+/// tasks. Admitted work can wait for its runtime's blocking pool while its
+/// caller is live. The inline arm is unreachable today (the feature implies `tokio-runtime`
 /// and cannot be enabled on wasm32).
 ///
 /// Both callers are themselves feature-gated entry points -- the PDF layout route
@@ -355,17 +356,34 @@ async fn run_with_formula_slot<T: Send + 'static>(
     slot: std::sync::Arc<tokio::sync::Semaphore>,
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, String> {
+    use std::sync::{Arc, Mutex, PoisonError};
+    use tokio::sync::OwnedSemaphorePermit;
+
+    type Admission<W> = Arc<Mutex<Option<(OwnedSemaphorePermit, W)>>>;
+    struct Pending<W>(Admission<W>);
+
+    impl<W> Drop for Pending<W> {
+        fn drop(&mut self) {
+            let withdrawn = self.0.lock().unwrap_or_else(PoisonError::into_inner).take();
+            drop(withdrawn);
+        }
+    }
+
     let permit = slot
         .acquire_owned()
         .await
         .map_err(|e| format!("formula recognition admission failed: {e}"))?;
+    let admission = Arc::new(Mutex::new(Some((permit, work))));
+    let _pending = Pending(Arc::clone(&admission));
     tokio::task::spawn_blocking(move || {
-        // A dropped waiter cannot stop active blocking work. Keep its slot owned by that work. ~keep
-        let _permit = permit;
-        work()
+        // Once claimed, the actual decode holds the permit until completion. ~keep
+        let claimed = admission.lock().unwrap_or_else(PoisonError::into_inner).take();
+        let (_permit, work) = claimed?;
+        Some(work())
     })
     .await
-    .map_err(|e| format!("formula recognition task failed: {e}"))
+    .map_err(|e| format!("formula recognition task failed: {e}"))?
+    .ok_or_else(|| "formula recognition admission was withdrawn".to_string())
 }
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
