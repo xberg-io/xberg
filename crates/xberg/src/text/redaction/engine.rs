@@ -44,6 +44,7 @@ use crate::types::revisions::{DiffLine, RevisionAnchor};
 use super::external::compile_configured_findings_async;
 use super::external::{ExternalRedactionRequest, compile_configured_findings, compile_external_findings};
 use super::literal_leaf::plan::{self as literal_plan, LiteralPlan, Matchers};
+use super::literal_matcher::{LiteralMatcher, compile_literal};
 use super::patterns::{BorrowedMatch, PatternMatch, scan_text, visit_category};
 use super::strategy::{TokenCounter, apply_strategy};
 
@@ -321,7 +322,13 @@ fn redact_pass(
     };
     let categories: Vec<PiiCategory> = active.iter().cloned().collect();
     let custom = if include_configured_sources {
-        compile_custom(config, surfaces.formatted_markup().is_some())?
+        let budgeted_markup = surfaces.formatted_markup().is_some();
+        let can_share_literals = !budgeted_markup && surfaces.formatted_literal_backup().is_none();
+        compile_custom(
+            config,
+            budgeted_markup,
+            can_share_literals.then_some(result.content.as_str()),
+        )?
     } else {
         CompiledCustom::default()
     };
@@ -335,6 +342,7 @@ fn redact_pass(
         categories: &categories,
         config,
         custom_regexes: &custom.regexes,
+        custom_literals: custom.literals.as_ref(),
         custom_literal_count: custom.literal_count,
         html_pattern_caps: &custom.html_pattern_caps,
         ner_terms: &ner_terms,
@@ -425,6 +433,7 @@ struct RedactionPass<'a> {
     categories: &'a [PiiCategory],
     config: &'a RedactionConfig,
     custom_regexes: &'a [(String, regex::Regex)],
+    custom_literals: Option<&'a LiteralMatcher<'a>>,
     custom_literal_count: usize,
     html_pattern_caps: &'a [usize],
     ner_terms: &'a [(PiiCategory, regex::Regex)],
@@ -703,6 +712,9 @@ impl<'a> RedactionPass<'a> {
             Vec::new()
         };
 
+        if let Some(literals) = self.custom_literals {
+            literals.append_matches(text, &mut matches);
+        }
         let custom = self
             .custom_regexes
             .iter()
@@ -1600,35 +1612,30 @@ fn active_categories(config: &RedactionConfig) -> HashSet<PiiCategory> {
 }
 
 #[derive(Default)]
-struct CompiledCustom {
+struct CompiledCustom<'a> {
+    literals: Option<LiteralMatcher<'a>>,
     regexes: Vec<(String, regex::Regex)>,
     literal_count: usize,
     html_pattern_caps: Vec<usize>,
 }
 
-/// Compile every user-supplied term and pattern once. Returns `(label, regex)`
-/// tuples in declaration order — terms first, then patterns.
+/// Compile user-supplied terms into a shared matcher when possible and keep
+/// remaining regexes in declaration order, terms first, then patterns.
 ///
 /// Regex compilation has already been validated by
 /// [`RedactionConfig::validate`]; this function silently skips malformed inputs
 /// so a residual stray pattern can't crash the engine.
-fn compile_custom(config: &RedactionConfig, html: bool) -> Result<CompiledCustom> {
+fn compile_custom<'a>(
+    config: &'a RedactionConfig,
+    html: bool,
+    shared_literal_text: Option<&str>,
+) -> Result<CompiledCustom<'a>> {
+    let literals = shared_literal_text.and_then(|text| LiteralMatcher::build(&config.custom_terms, text));
     let mut out: Vec<(String, regex::Regex)> =
         Vec::with_capacity(config.custom_terms.len() + config.custom_patterns.len());
 
-    for term in &config.custom_terms {
-        if term.value.is_empty() {
-            continue;
-        }
-        let escaped = regex::escape(&term.value);
-        let pattern_str = if term.case_sensitive {
-            escaped
-        } else {
-            format!("(?i){escaped}")
-        };
-        if let Ok(regex) = regex::Regex::new(&pattern_str) {
-            out.push((term.label.clone(), regex));
-        }
+    if literals.is_none() {
+        out.extend(config.custom_terms.iter().filter_map(compile_literal));
     }
 
     let literal_count = out.len();
@@ -1652,6 +1659,7 @@ fn compile_custom(config: &RedactionConfig, html: bool) -> Result<CompiledCustom
     }
 
     Ok(CompiledCustom {
+        literals,
         regexes: out,
         literal_count,
         html_pattern_caps,

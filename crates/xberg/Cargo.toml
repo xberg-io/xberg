@@ -1883,5 +1883,10 @@ name = "chunking_scaling"
 harness = false
 required-features = ["chunking"]
 
+[[bench]]
+name = "redaction_literals"
+harness = false
+required-features = ["redaction", "tokio-runtime"]
+
 [lints]
 workspace = true
