@@ -242,18 +242,20 @@ async fn key(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>, bytes: Arc<Ve
 }
 
 fn observer_active() -> bool {
-    if !crate::core::extractor::cacheability::is_cacheable()
+    !crate::core::extractor::cacheability::is_cacheable()
         || crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested().is_some()
-    {
-        return true;
-    }
-    #[cfg(auto_rotate)]
-    if crate::ocr::tesseract_backend::orientation_evidence::CAPTURE
+        || orientation_capture_active()
+}
+
+#[cfg(auto_rotate)]
+fn orientation_capture_active() -> bool {
+    crate::ocr::tesseract_backend::orientation_evidence::CAPTURE
         .try_with(|_| ())
         .is_ok()
-    {
-        return true;
-    }
+}
+
+#[cfg(not(auto_rotate))]
+fn orientation_capture_active() -> bool {
     false
 }
 
