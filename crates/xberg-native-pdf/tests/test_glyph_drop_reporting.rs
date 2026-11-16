@@ -151,17 +151,21 @@ fn a_dropped_glyph_warns_on_every_page_it_paints() {
 
 #[test]
 fn concurrent_renderers_keep_their_own_dropped_glyph_warnings() {
+    let documents = [1, 2]
+        .map(|dropped_glyphs| PdfDocument::from_bytes(pdf_with_broken_font(1, dropped_glyphs)).expect("open fixture"));
+    let barrier = std::sync::Barrier::new(documents.len());
     let documents = std::thread::scope(|scope| {
-        let renderers = [1, 2].map(|dropped_glyphs| {
+        let threads = documents.map(|doc| {
+            let barrier = &barrier;
             scope.spawn(move || {
-                let doc = PdfDocument::from_bytes(pdf_with_broken_font(1, dropped_glyphs)).expect("open fixture");
+                barrier.wait();
                 PageRenderer::new(RenderOptions::default())
                     .render_page(&doc, 0)
                     .expect("render fixture");
                 doc
             })
         });
-        renderers.map(|renderer| renderer.join().expect("renderer thread"))
+        threads.map(|thread| thread.join().expect("renderer thread"))
     });
 
     for (dropped_glyphs, doc) in [1, 2].into_iter().zip(documents) {

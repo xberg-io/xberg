@@ -93,7 +93,21 @@ run_pdf_cases() {
   run_exact shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_document \
     --native-pdf --test extraction_api_regression
   run_exact concurrent_renderers_keep_their_own_dropped_glyph_warnings --native-pdf --test test_glyph_drop_reporting
-  expected=$((expected + 6))
+  run_exact 'extractors::warnings::tests::overlapping_warning_scopes_keep_each_threads_warnings' --native-pdf --lib
+  run_exact a_dropped_glyph_warns_on_every_page_it_paints --native-pdf --test test_glyph_drop_reporting
+  run_exact 'rendering::text_rasterizer::tests::glyph_drop_warning_hides_font_and_preserves_details' --native-pdf --lib
+  run_exact 'render_parity::fully_mapped_fonts_render_without_drop_warnings' --native-pdf --test test_decoder_characterization
+  run_exact 'render_parity::subset_missing_glyph_raises_one_drop_warning' --native-pdf --test test_decoder_characterization
+  local jpx_test
+  for jpx_test in \
+    a_dictionary_width_half_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_width_double_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_that_agrees_with_the_codestream_extracts_with_no_size_warning \
+    an_indexed_image_extracts_at_the_codestreams_size \
+    concurrent_documents_keep_their_own_jpx_size_warnings; do
+    run_exact "$jpx_test" --native-pdf --test gh1900_jpx_dict_size_disagrees_with_codestream
+  done
+  expected=$((expected + 16))
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::located_english_word_keeps_its_place_between_khmer_occurrences' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_khmer_occurrence_is_published_inline_in_both_surfaces' --lib

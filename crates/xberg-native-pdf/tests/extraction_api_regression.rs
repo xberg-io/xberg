@@ -728,10 +728,24 @@ fn explicit_global_warnings_round_trip_with_a_bounded_backlog() {
     assert!(snapshot_global_warnings().is_empty());
 }
 
-fn pdf_with_shared_type0_font(tounicode: &str) -> Vec<u8> {
+fn pdf_with_shared_type0_font(base_font: &str, tounicode: &str) -> Vec<u8> {
+    const CMAP: &str = concat!(
+        "/CIDInit /ProcSet findresource begin\n",
+        "12 dict begin\nbegincmap\n",
+        "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n",
+        "/CMapName /SharedWarningTestUCS def\n/CMapType 2 def\n",
+        "1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n",
+        "1 beginbfchar\n<0041> <03A9>\nendbfchar\n",
+        "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n",
+    );
+    let cmap_stream = format!("<< /Length {} >>\nstream\n{CMAP}endstream", CMAP.len());
     let font = format!(
-        "<< /Type /Font /Subtype /Type0 /BaseFont /SharedWarningTestMincho /Encoding /Identity-H \
+        "<< /Type /Font /Subtype /Type0 /BaseFont /{base_font} /Encoding /Identity-H \
          /DescendantFonts [5 0 R] {tounicode} >>"
+    );
+    let descendant = format!(
+        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{base_font} \
+         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>"
     );
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0];
@@ -740,9 +754,8 @@ fn pdf_with_shared_type0_font(tounicode: &str) -> Vec<u8> {
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> >>",
         &font,
-        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SharedWarningTestMincho \
-         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>",
-        "null",
+        &descendant,
+        &cmap_stream,
     ]
     .into_iter()
     .enumerate()
@@ -769,10 +782,18 @@ fn shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_documen
         fonts.pop().unwrap().1
     };
 
-    for (tounicode, expected_count) in [("", 1), ("/ToUnicode null", 1), ("/ToUnicode 6 0 R", 0)] {
-        let pdf = pdf_with_shared_type0_font(tounicode);
+    for (base_font, tounicode, expected_count) in [
+        ("SharedWarningTestMissing", "", 1),
+        ("SharedWarningTestNull", "/ToUnicode null", 1),
+        ("SharedWarningTestMapped", "/ToUnicode 6 0 R", 0),
+    ] {
+        let pdf = pdf_with_shared_type0_font(base_font, tounicode);
         let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold document");
         let cold_font = load_font(&cold);
+        assert_eq!(cold_font.base_font, base_font);
+        if expected_count == 0 {
+            assert_eq!(cold_font.char_to_unicode(0x41).as_deref(), Some("Ω"));
+        }
         let warm = PdfDocument::from_bytes(pdf).expect("open warm document");
         assert!(warm.structured_warnings().is_empty());
         for _ in 0..2 {

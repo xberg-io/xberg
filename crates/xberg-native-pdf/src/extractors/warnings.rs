@@ -318,6 +318,32 @@ mod tests {
     }
 
     #[test]
+    fn overlapping_warning_scopes_keep_each_threads_warnings() {
+        let barrier = std::sync::Barrier::new(2);
+        let workers = ["first document", "second document"];
+        let sinks = std::thread::scope(|scope| {
+            let threads = workers.map(|message| {
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let sink = WarningSink::new();
+                    let guard = sink.enter();
+                    barrier.wait();
+                    record_warning(scope_warning(message));
+                    barrier.wait();
+                    drop(guard);
+                    sink
+                })
+            });
+            threads.map(|worker| worker.join().expect("warning worker"))
+        });
+
+        for (sink, expected) in sinks.into_iter().zip(workers) {
+            let messages: Vec<_> = sink.take().into_iter().map(|warning| warning.message).collect();
+            assert_eq!(messages, [expected]);
+        }
+    }
+
+    #[test]
     fn automatic_warning_outside_a_scope_is_not_retained() {
         let sink = WarningSink::new();
         drop(sink.enter());
