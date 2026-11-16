@@ -10,7 +10,7 @@ mod helpers;
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::io::Read;
-use xberg::types::{ExtractionMethod, NodeContent};
+use xberg::types::{ExtractionMethod, NodeContent, ResultFormat};
 use xberg::{
     ExtractedDocument, ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OutputFormat, PageConfig,
 };
@@ -366,6 +366,27 @@ fn psm6_html_keeps_document_structure_flattened() {
         })
         .collect();
     assert_eq!(paragraphs, [(Some(1), stock.as_str())]);
+}
+
+#[test]
+fn psm6_html_keeps_element_output_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as_with_config(&original, Some(6), OutputFormat::Html, |config| {
+        config.result_format = ResultFormat::ElementBased;
+    });
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    assert_eq!(html.content.trim(), flattened);
+    let [page] = html.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(page.content.trim(), flattened);
+    assert!(html.elements.as_ref().is_some_and(|elements| !elements.is_empty()));
 }
 
 #[test]

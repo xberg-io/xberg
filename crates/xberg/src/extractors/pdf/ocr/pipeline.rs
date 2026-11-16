@@ -7011,9 +7011,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            if total_pages == 1
-                && lazy_pdf_page_count == 1
-                && detached_page.is_none()
+            // The lazy PDF count comes from the complete source, including on multi-page scans. ~keep
+            if lazy_pdf_page_count == 1
                 && config.output_format == crate::core::config::OutputFormat::Html
                 && config.result_format == crate::types::ResultFormat::Unified
                 && !config.include_document_structure
