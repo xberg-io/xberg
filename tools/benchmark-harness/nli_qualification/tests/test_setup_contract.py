@@ -18,6 +18,23 @@ def _bash() -> str:
     return executable
 
 
+def _check_focused_nli_setup(workflow: str) -> None:
+    """Check the local ONNX setup step selected by the NLI matrix suite."""
+    steps = []
+    for step in re.split(r"(?m)^      - ", workflow):
+        if not re.search(r"(?m)^        uses: \./\.github/actions/setup-onnx-runtime$", step):
+            continue
+        condition = re.search(r"(?m)^        if: (.+)$", step)
+        if condition and "matrix.suite == 'nli'" in [term.strip() for term in condition[1].split("||")]:
+            steps.append(step)
+    if len(steps) != 1:
+        raise ValueError("expected exactly one focused ONNX setup step for NLI")
+    if not re.search(r'(?m)^          verify-linux-archive: "true"$', steps[0]):
+        raise ValueError("focused NLI ONNX setup must verify the Linux archive")
+    if re.search(r"(?m)^          ort-version:", steps[0]):
+        raise ValueError("focused NLI ONNX setup must use the native action default")
+
+
 class SetupContract(unittest.TestCase):
     """Exercise real setup files and native archive refusal boundaries."""
 
@@ -27,11 +44,18 @@ class SetupContract(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci-rust.yaml").read_text()
         version_sources(action, workflow)
         focused = (ROOT / ".github/workflows/ci-focused-pr.yaml").read_text()
-        marker = "      - name: Setup ONNX Runtime for NLI admission tests"
-        assert focused.count(marker) == 1
-        step = focused.split(marker)[1].split("      - name:", 1)[0]
-        assert 'verify-linux-archive: "true"' in step
-        assert "ort-version:" not in step
+        separate_pdf_step = """
+      - name: Provision ONNX Runtime for a separate PDF job
+        if: matrix.suite == 'pdf-example'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+"""
+        _check_focused_nli_setup(focused)
+        _check_focused_nli_setup(focused + separate_pdf_step)
+        without_nli_verification = focused.replace('verify-linux-archive: "true"', 'verify-linux-archive: "false"')
+        with self.assertRaisesRegex(ValueError, "must verify the Linux archive"):  # noqa: PT027 -- Setup runs with stdlib only.
+            _check_focused_nli_setup(without_nli_verification + separate_pdf_step)
         for bad_action, bad_workflow in [
             (action, workflow + '\n  ORT_VERSION: "different"\n'),
             ("", workflow),
