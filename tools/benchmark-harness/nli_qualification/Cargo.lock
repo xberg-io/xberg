@@ -3951,7 +3951,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber",
  "url",
  "xberg-gliner",
  "yaml_serde",

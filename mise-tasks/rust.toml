@@ -5,6 +5,10 @@ description = "Verify OCR links host Tesseract without touching the vendor cache
 depends = ["os:require linux"]
 run = "bash scripts/ci/rust/check-tesseract-dynamic.sh"
 
+["rust:check:packages"]
+description = "Package and verify every crates.io crate standalone with warnings denied, as cargo publish does"
+run = "python3 scripts/ci/rust/verify-crate-packages.py"
+
 ["rust:check:libheif-runtime"]
 description = "Verify real v1_19 Rust decoding against the selected system runtime"
 depends = ["os:require linux"]
