@@ -1,6 +1,6 @@
 //! Utilities for splitting and analyzing PDF paragraphs.
 
-use super::types::{PdfLine, PdfParagraph};
+use super::types::PdfParagraph;
 
 mod accent;
 mod display_rows;
@@ -161,7 +161,7 @@ fn page_number_before_gap(current: &PdfParagraph, next: &PdfParagraph, paragraph
         .is_some_and(|number| number.convention == super::page_number::PageNumberConvention::BareDigits)
         || !paragraph_gaps
             .iter()
-            .any(|&gap| next_line.baseline_y < gap && gap < line.baseline_y)
+            .any(|&gap| next_line.baseline_or_zero() < gap && gap < line.baseline_or_zero())
     {
         return false;
     }
@@ -184,26 +184,17 @@ fn paragraphs_share_rotation(current: &PdfParagraph, next: &PdfParagraph) -> boo
 ///
 /// If either baseline is unknown, leave the decision to the other continuation signals.
 fn baselines_within_continuation_gap(current: &PdfParagraph, next: &PdfParagraph) -> bool {
-    let (Some(current_baseline), Some(next_baseline)) = (
-        current.lines.last().and_then(continuation_baseline),
-        next.lines.first().and_then(continuation_baseline),
-    ) else {
+    let Some((current_baseline, next_baseline)) = current
+        .lines
+        .last()
+        .and_then(|line| line.baseline_y)
+        .zip(next.lines.first().and_then(|line| line.baseline_y))
+    else {
         return true;
     };
     let gap = (current_baseline - next_baseline).abs();
     let line_height = current.dominant_font_size.max(next.dominant_font_size).max(1.0);
     gap <= line_height * MAX_CONTINUATION_LINE_GAP_MULTIPLE
-}
-
-fn continuation_baseline(line: &PdfLine) -> Option<f32> {
-    // Text-only synthesis emits a zero baseline and zeroed segment geometry. ~keep
-    let has_position = line.baseline_y != 0.0
-        || line.segments.iter().any(|segment| {
-            [segment.x, segment.y, segment.width, segment.height]
-                .into_iter()
-                .any(|value| value.is_finite() && value != 0.0)
-        });
-    has_position.then_some(line.baseline_y)
 }
 
 /// Union of two optional block bounding boxes in `(left, bottom, right, top)`
@@ -389,7 +380,7 @@ fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize
     }
 
     let mut line_start = 0;
-    let mut previous_baseline = intro.baseline_y;
+    let mut previous_baseline = intro.baseline_or_zero();
     let mut markers = Vec::new();
     for line in &para.lines {
         let next_line_start = line_start
@@ -400,11 +391,12 @@ fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize
                 .sum::<usize>();
         if line_start != 0 {
             let first = line.segments.first()?;
+            let baseline = line.baseline_or_zero();
             let row = &text[line_start..next_line_start - 1];
             let mut tokens = row.split_whitespace();
             if !(first.width > 0.0
                 && (first.x - marker_x).abs() <= alignment_tolerance
-                && line.baseline_y < previous_baseline
+                && baseline < previous_baseline
                 && matches!(tokens.next(), Some("•" | "·"))
                 && tokens
                     .next()
@@ -414,7 +406,7 @@ fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize
                 return None;
             }
             markers.push(line_start + row.len() - row.trim_start().len());
-            previous_baseline = line.baseline_y;
+            previous_baseline = baseline;
         } else if ends_with_numeric_expression(&text[..next_line_start - 1]) {
             return None;
         }
@@ -637,7 +629,7 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
     let line = super::types::PdfLine {
         native_scripts: Vec::new(),
         segments,
-        baseline_y: 0.0,
+        baseline_y: None,
         dominant_font_size: font_size,
         is_bold,
         is_monospace: false,
@@ -692,7 +684,7 @@ mod tests {
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: font_size,
             is_bold: false,
             is_monospace: false,
@@ -720,7 +712,7 @@ mod tests {
     fn legend_row(text: &str, x: f32, y: f32, width: f32, size: f32) -> PdfParagraph {
         let mut paragraph = make_body_paragraph(text, size);
         let line = &mut paragraph.lines[0];
-        line.baseline_y = y;
+        line.baseline_y = Some(y);
         let run = &mut line.segments[0];
         run.x = x;
         run.y = y;
@@ -808,7 +800,7 @@ mod tests {
 
     fn make_body_paragraph_at(text: &str, font_size: f32, baseline_y: f32) -> PdfParagraph {
         let mut para = make_body_paragraph(text, font_size);
-        para.lines[0].baseline_y = baseline_y;
+        para.lines[0].baseline_y = Some(baseline_y);
         if let Some(segment) = para.lines[0].segments.first_mut() {
             segment.baseline_y = baseline_y;
             segment.y = baseline_y;
@@ -851,6 +843,14 @@ mod tests {
         let distant = make_body_paragraph_at("The opening passage", 10.0, 90.0);
         let nearby = make_body_paragraph_at("The opening passage", 10.0, 12.0);
 
+        let mut zero_sized_origin = origin.clone();
+        let segment = &mut zero_sized_origin.lines[0].segments[0];
+        segment.x = 0.0;
+        segment.width = 0.0;
+        segment.height = 0.0;
+        assert_eq!(zero_sized_origin.lines[0].baseline_y, Some(0.0));
+        assert!(!baselines_within_continuation_gap(&distant, &zero_sized_origin));
+
         for mut paragraphs in [
             vec![distant.clone(), origin.clone()],
             vec![origin.clone(), distant.clone()],
@@ -864,6 +864,7 @@ mod tests {
         assert_eq!(positioned.len(), 1, "nearby lines may merge at the zero baseline");
 
         let synthetic = text_to_paragraph("continues without a measured baseline", 10.0, false, false);
+        assert_eq!(synthetic.lines[0].baseline_y, None);
         let mut unpositioned = vec![distant, synthetic];
         merge_continuation_paragraphs(&mut unpositioned);
         assert_eq!(
@@ -1211,7 +1212,7 @@ mod tests {
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size: 12.0,
             is_bold: true,
             is_monospace: false,

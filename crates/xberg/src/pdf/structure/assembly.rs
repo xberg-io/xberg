@@ -1068,7 +1068,7 @@ fn paragraph_vertical_anchor(paragraph: &PdfParagraph) -> Option<f32> {
     paragraph
         .block_bbox
         .map(|(_, _, _, top)| top)
-        .or_else(|| paragraph.lines.first().map(|line| line.baseline_y))
+        .or_else(|| paragraph.lines.first().map(|line| line.baseline_or_zero()))
         .filter(|anchor| anchor.is_finite())
 }
 
@@ -1884,9 +1884,9 @@ fn guess_furniture_layer(para: &PdfParagraph) -> ContentLayer {
         Some(LayoutHintClass::Footnote) => ContentLayer::Footnote,
         _ => {
             if let Some(first_line) = para.lines.first() {
-                if first_line.baseline_y > 700.0 {
+                if first_line.baseline_or_zero() > 700.0 {
                     ContentLayer::Header
-                } else if first_line.baseline_y < 100.0 {
+                } else if first_line.baseline_or_zero() < 100.0 {
                     ContentLayer::Footer
                 } else {
                     ContentLayer::Header
@@ -2265,7 +2265,7 @@ mod tests {
                 baseline_y,
                 ..plain_segment(text)
             }],
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3515,7 +3515,7 @@ mod tests {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
             segments: vec![bold_segment("• Bold item")],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: true,
             is_monospace: false,
@@ -3592,7 +3592,7 @@ mod tests {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
             segments: vec![plain_segment("I."), plain_segment("Split body")],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3625,7 +3625,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3714,7 +3714,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3794,7 +3794,7 @@ mod tests {
                     assigned_role: None,
                     ocr_heading_spans: None,
                 }],
-                baseline_y: 700.0,
+                baseline_y: Some(700.0),
                 dominant_font_size: 24.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3905,7 +3905,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3929,7 +3929,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3959,7 +3959,7 @@ mod tests {
                     baseline_y: 700.0,
                     ..plain_segment(trailing)
                 }],
-                baseline_y: 700.0,
+                baseline_y: Some(700.0),
                 dominant_font_size: 12.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3970,7 +3970,7 @@ mod tests {
                     baseline_y: 685.0,
                     ..plain_segment(leading)
                 }],
-                baseline_y: 685.0,
+                baseline_y: Some(685.0),
                 dominant_font_size: 12.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3993,7 +3993,7 @@ mod tests {
                 baseline_y: 700.0,
                 ..plain_segment("adjuvant Mon-")
             }],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -4004,7 +4004,7 @@ mod tests {
                 baseline_y: 685.0,
                 ..plain_segment("tanide was used")
             }],
-            baseline_y: 685.0,
+            baseline_y: Some(685.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -4024,7 +4024,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -4054,7 +4054,7 @@ mod tests {
                 baseline_y: 700.0,
                 ..plain_segment("Zie de installatie-")
             }],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -4065,7 +4065,7 @@ mod tests {
                 baseline_y: 686.0,
                 ..plain_segment("handleiding voor details")
             }],
-            baseline_y: 686.0,
+            baseline_y: Some(686.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
