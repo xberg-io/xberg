@@ -3,6 +3,7 @@
 //! Supports: Microsoft Word (.docx)
 
 use crate::Result;
+use crate::cancellation::CancellationToken;
 use crate::core::config::ExtractionConfig;
 use crate::extraction::office_metadata;
 use crate::extractors::security::SecurityBudget;
@@ -859,6 +860,31 @@ type DocxParseResult = (
     InternalDocument,
 );
 
+fn check_docx_cancelled(cancel: Option<&CancellationToken>) -> Result<()> {
+    if cancel.is_some_and(CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn await_docx_blocking<T>(task: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
+    struct AbortQueuedOnDrop<T>(tokio::task::JoinHandle<T>);
+
+    impl<T> Drop for AbortQueuedOnDrop<T> {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let mut task = AbortQueuedOnDrop(task);
+    match (&mut task.0).await {
+        Ok(result) => result,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(crate::XbergError::Cancelled),
+    }
+}
+
 /// Parse DOCX document content and extract text, tables, page boundaries, drawings, image
 /// relationships, and an `InternalDocument`.
 ///
@@ -871,9 +897,12 @@ fn parse_docx_core(
     inject_placeholders: bool,
     mut budget: SecurityBudget,
     limits: crate::extractors::security::SecurityLimits,
+    cancel: Option<&CancellationToken>,
 ) -> crate::error::Result<DocxParseResult> {
+    check_docx_cancelled(cancel)?;
     let (mut doc, hyperlinks) =
         crate::extraction::docx::parser::parse_document_with_hyperlinks(content, &mut budget, &limits)?;
+    check_docx_cancelled(cancel)?;
     // `is_markdown` gates `to_markdown()` vs. `to_plain_text()` for the flat text; DocTags takes
     // the markdown branch because it wants the same rendered shape. It no longer has any bearing
     // on image page numbers: those come from `Document::drawing_page_numbers()`, walked from the
@@ -886,6 +915,7 @@ fn parse_docx_core(
         ),
         inject_placeholders,
     );
+    check_docx_cancelled(cancel)?;
 
     let table_page_nums = doc.table_page_numbers();
     let tables: Vec<Table> = doc
@@ -904,6 +934,7 @@ fn parse_docx_core(
         None
     };
 
+    check_docx_cancelled(cancel)?;
     let mut internal_doc = build_internal_document(&doc, &hyperlinks, inject_placeholders);
     if !doc.revisions.is_empty() {
         internal_doc.revisions = Some(std::mem::take(&mut doc.revisions));
@@ -919,6 +950,7 @@ fn parse_docx_core(
     let drawing_page_nums = doc.drawing_page_numbers();
     let drawings = std::mem::take(&mut doc.drawings);
     let image_rels = std::mem::take(&mut doc.image_relationships);
+    check_docx_cancelled(cancel)?;
     Ok((
         text,
         tables,
@@ -1026,6 +1058,8 @@ impl InternalDocumentExtractor for DocxExtractor {
     ) -> Result<InternalDocument> {
         tracing::debug!("extract_docx: starting");
 
+        let cancel = config.cancel_token.as_ref();
+        check_docx_cancelled(cancel)?;
         let output_format = if config.images.as_ref().is_some_and(|i| i.extract_images) {
             crate::core::config::OutputFormat::Markdown
         } else {
@@ -1039,29 +1073,22 @@ impl InternalDocumentExtractor for DocxExtractor {
         let (text, tables, page_boundaries, drawings, drawing_page_nums, image_rels, mut internal_doc) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-                let cancel = config.cancel_token.clone();
-                if cancel
-                    .as_ref()
-                    .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
-                {
-                    return Err(crate::error::XbergError::Cancelled);
-                }
+                let cancel = cancel.cloned();
                 let parse_content = Arc::clone(&content_owned);
                 let parse_limits = limits.clone();
                 let span = tracing::Span::current();
-                runtime
-                    .spawn_blocking(move || {
-                        let _guard = span.entered();
-                        if cancel
-                            .as_ref()
-                            .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
-                        {
-                            return Err(crate::error::XbergError::Cancelled);
-                        }
-                        parse_docx_core(&parse_content, output_format, inject_placeholders, budget, parse_limits)
-                    })
-                    .await
-                    .map_err(|e| crate::error::XbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
+                await_docx_blocking(runtime.spawn_blocking(move || {
+                    let _guard = span.entered();
+                    parse_docx_core(
+                        &parse_content,
+                        output_format,
+                        inject_placeholders,
+                        budget,
+                        parse_limits,
+                        cancel.as_ref(),
+                    )
+                }))
+                .await?
             } else {
                 parse_docx_core(
                     &content_owned,
@@ -1069,6 +1096,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                     inject_placeholders,
                     budget,
                     limits.clone(),
+                    cancel,
                 )?
             }
 
@@ -1079,34 +1107,33 @@ impl InternalDocumentExtractor for DocxExtractor {
                 inject_placeholders,
                 budget,
                 limits.clone(),
+                cancel,
             )?
         };
 
+        check_docx_cancelled(cancel)?;
+        let open_archive = |content: Arc<[u8]>| {
+            zip::ZipArchive::new(Cursor::new(content))
+                .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))
+        };
         let mut archive = {
-            #[cfg(feature = "tokio-runtime")]
-            if crate::core::batch_mode::is_batch_mode() {
+            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if crate::core::batch_mode::is_batch_mode()
+                && let Ok(runtime) = tokio::runtime::Handle::try_current()
+            {
                 let archive_content = Arc::clone(&content_owned);
                 let span = tracing::Span::current();
-                tokio::task::spawn_blocking(move || -> crate::error::Result<_> {
+                await_docx_blocking(runtime.spawn_blocking(move || {
                     let _guard = span.entered();
-                    let cursor = Cursor::new(archive_content);
-                    zip::ZipArchive::new(cursor)
-                        .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))
-                })
-                .await
-                .map_err(|e| crate::error::XbergError::parsing(format!("Task join error: {}", e)))??
+                    open_archive(archive_content)
+                }))
+                .await?
             } else {
-                let cursor = Cursor::new(Arc::clone(&content_owned));
-                zip::ZipArchive::new(cursor)
-                    .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))?
+                open_archive(Arc::clone(&content_owned))?
             }
 
-            #[cfg(not(feature = "tokio-runtime"))]
-            {
-                let cursor = Cursor::new(Arc::clone(&content_owned));
-                zip::ZipArchive::new(cursor)
-                    .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))?
-            }
+            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+            open_archive(Arc::clone(&content_owned))?
         };
         // A second, independent open of the same bytes `parse_docx_core` already
         // validated -- but that validation lives on the other archive handle, so relying
@@ -1827,7 +1854,7 @@ mod tests {
         let extractor = DocxExtractor::new();
         let mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-        for cancel_while_queued in [false, true] {
+        for (cancel_before_poll, cancel_while_queued) in [(false, false), (false, true), (true, false)] {
             let (started_tx, started_rx) = mpsc::sync_channel(1);
             let (release_tx, release_rx) = mpsc::sync_channel(1);
             let blocker = runtime.spawn_blocking(move || {
@@ -1836,7 +1863,10 @@ mod tests {
             });
             started_rx.recv().unwrap();
 
-            let cancel = crate::cancellation::CancellationToken::new();
+            let cancel = CancellationToken::new();
+            if cancel_before_poll {
+                cancel.cancel();
+            }
             let config = ExtractionConfig {
                 max_archive_depth: 0,
                 cancel_token: Some(cancel.clone()),
@@ -1856,16 +1886,57 @@ mod tests {
                 }
             });
 
-            assert!(
-                queued,
-                "the single extraction must yield while its parser waits for the blocking worker"
+            assert_eq!(
+                queued, !cancel_before_poll,
+                "already cancelled calls must return before using the occupied blocking pool"
             );
-            if cancel_while_queued {
+            if cancel_before_poll || cancel_while_queued {
                 assert!(matches!(result, Err(crate::XbergError::Cancelled)));
             } else {
                 assert!(result.unwrap().revisions.is_some());
             }
         }
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn should_parse_inline_without_tokio_and_check_cancellation_before_parsing() {
+        use futures::executor::block_on;
+
+        let extractor = DocxExtractor::new();
+        let mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        let data = build_test_docx(TRACK_CHANGES_XML);
+        let document = block_on(extractor.extract_content(&data, mime_type, &ExtractionConfig::default())).unwrap();
+        assert!(document.revisions.is_some());
+
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(cancel),
+            ..Default::default()
+        };
+        let result = block_on(extractor.extract_content(b"invalid ZIP", mime_type, &config));
+        assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    #[should_panic(expected = "DOCX worker panic marker")]
+    fn should_resume_a_blocking_docx_worker_panic() {
+        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let task = runtime.spawn_blocking(|| -> Result<()> { panic!("DOCX worker panic marker") });
+        let _ = runtime.block_on(await_docx_blocking(task));
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn should_report_docx_worker_shutdown_as_cancellation() {
+        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let handle = runtime.handle().clone();
+        drop(runtime);
+        let task = handle.spawn_blocking(|| Ok(()));
+        let result = futures::executor::block_on(await_docx_blocking(task));
+        assert!(matches!(result, Err(crate::XbergError::Cancelled)));
     }
 
     #[tokio::test]

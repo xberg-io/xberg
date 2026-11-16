@@ -347,6 +347,9 @@ run_office_page_cases() {
     run_exact "extractors::docx::tests::$test_name" --lib
   done
   run_exact 'extractors::docx::tests::should_queue_single_docx_parse_and_honor_cancellation_before_it_starts' --lib
+  run_exact 'extractors::docx::tests::should_parse_inline_without_tokio_and_check_cancellation_before_parsing' --lib
+  run_exact 'extractors::docx::tests::should_resume_a_blocking_docx_worker_panic' --lib
+  run_exact 'extractors::docx::tests::should_report_docx_worker_shutdown_as_cancellation' --lib
   run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
@@ -419,7 +422,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=37
+  expected=40
   run_office_page_cases
   ;;
 api-jobs)

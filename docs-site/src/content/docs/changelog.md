@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(docx): Run parsing and document assembly on a blocking worker on native Tokio.** (#3171)
+  Extraction timeouts can now return while DOCX parsing is active. Queued work can be cancelled before it starts.
+  Running work observes cancellation between parsing, rendering, table conversion, and document assembly.
+
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)
 
