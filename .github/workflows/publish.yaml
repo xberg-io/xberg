@@ -4536,6 +4536,7 @@ jobs:
             validate-versions
             check-cratesio
             publish-crates
+            ${{ needs.prepare.outputs.dry_run == 'true' && 'python-sdist' || '' }}
 
       - name: Checkout publication helpers
         uses: actions/checkout@v7
