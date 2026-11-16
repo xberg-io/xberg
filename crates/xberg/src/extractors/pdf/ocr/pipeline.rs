@@ -8294,19 +8294,21 @@ pub(super) async fn extract_with_ocr_for_page(
             .next()
             .expect("at least one page failed");
         let first_failure = describe_page_failure(&first_error);
-        let message = if pages_with_empty_xobject_retry.is_empty() {
-            format!(
-                "OCR failed on all {total_pages} page(s) and no text could be recovered from the pages' \
-                 embedded images; first failure: {first_failure}"
-            )
+        let headline = format!("OCR failed on all {total_pages} page(s)");
+        let (message, cli_message) = if pages_with_empty_xobject_retry.is_empty() {
+            let summary = format!("{headline} and no text could be recovered from the pages' embedded images");
+            (format!("{summary}; first failure: {first_failure}"), summary)
         } else {
-            format!(
-                "OCR failed on all {total_pages} page(s); first failure: {first_failure}. The embedded-image \
-                 retry ran on {} of these page(s) and also returned no text.",
+            let retry = format!(
+                "The embedded-image retry ran on {} of these page(s) and also returned no text.",
                 pages_with_empty_xobject_retry.len()
+            );
+            (
+                format!("{headline}; first failure: {first_failure}. {retry}"),
+                format!("{headline}. {retry}"),
             )
         };
-        let error = crate::XbergError::all_page_ocr_failure(message, first_error);
+        let error = crate::XbergError::all_page_ocr_failure(message, cli_message, first_error);
         return Err(FailedOcrRun {
             error,
             page_failures,
@@ -11250,9 +11252,11 @@ async fn run_ocr_pipeline_stages(
                     .join("; ");
                 format!(" ({causes})")
             };
+            const HEADLINE: &str = "All OCR pipeline backends failed";
             Err(FailedOcrRun {
                 error: crate::XbergError::ocr_pipeline_failure(
-                    format!("All OCR pipeline backends failed{detail}"),
+                    format!("{HEADLINE}{detail}"),
+                    HEADLINE,
                     stage_failures.into_iter().next().map(|(_, error)| error),
                 ),
                 page_failures: Vec::new(),

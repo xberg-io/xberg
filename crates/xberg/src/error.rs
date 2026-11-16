@@ -357,23 +357,36 @@ impl XbergError {
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Debug, Error)]
 #[error("PDF OCR backend failure")]
-struct PdfOcrFailureCause(#[source] XbergError);
+struct PdfOcrFailureCause {
+    #[source]
+    backend: XbergError,
+    // Constructed from aggregate counts and fixed text. ~keep
+    cli_message: String,
+}
 
 impl XbergError {
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[cfg_attr(alef, alef(skip))]
-    pub(crate) fn all_page_ocr_failure(message: String, first_error: Self) -> Self {
+    pub(crate) fn all_page_ocr_failure(message: String, cli_message: String, first_error: Self) -> Self {
         Self::Ocr {
             message,
-            source: Some(Box::new(PdfOcrFailureCause(first_error))),
+            source: Some(Box::new(PdfOcrFailureCause {
+                backend: first_error,
+                cli_message,
+            })),
         }
     }
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-    pub(crate) fn ocr_pipeline_failure(message: String, first_error: Option<Self>) -> Self {
+    pub(crate) fn ocr_pipeline_failure(message: String, cli_message: &str, first_error: Option<Self>) -> Self {
         Self::Parsing {
             message,
-            source: first_error.map(|error| Box::new(PdfOcrFailureCause(error)) as _),
+            source: first_error.map(|backend| {
+                Box::new(PdfOcrFailureCause {
+                    backend,
+                    cli_message: cli_message.to_owned(),
+                }) as _
+            }),
         }
     }
 
@@ -389,16 +402,19 @@ impl XbergError {
         }
     }
 
-    /// Prepare an extraction error for the CLI's diagnostic renderer, which walks sources.
+    /// Prepare an extraction error for the CLI renderer using the aggregate's safe summary.
     #[doc(hidden)]
     #[cfg_attr(alef, alef(skip))]
     pub fn into_cli_extraction_diagnostic(self) -> Self {
         #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
         {
             let mut error = self;
-            if let Self::Ocr { source, .. } | Self::Parsing { source, .. } = &mut error
-                && source.as_ref().is_some_and(|cause| cause.is::<PdfOcrFailureCause>())
+            if let Self::Ocr { message, source } | Self::Parsing { message, source } = &mut error
+                && let Some(cause) = source
+                    .as_ref()
+                    .and_then(|cause| cause.downcast_ref::<PdfOcrFailureCause>())
             {
+                message.clone_from(&cause.cli_message);
                 *source = None;
             }
             error
@@ -592,15 +608,24 @@ mod tests {
         );
         assert!(ordinary_debug.contains("invalid header"));
 
-        for error in [
-            XbergError::all_page_ocr_failure("every page failed".into(), backend_failure()),
-            XbergError::ocr_pipeline_failure("every stage failed".into(), Some(backend_failure())),
+        let raw_message = format!("backend failed opening {PATH}");
+        for (error, raw_prefix, safe_message) in [
+            (
+                XbergError::all_page_ocr_failure(raw_message.clone(), "every page failed".into(), backend_failure()),
+                "OCR error",
+                "OCR error: every page failed",
+            ),
+            (
+                XbergError::ocr_pipeline_failure(raw_message.clone(), "every stage failed", Some(backend_failure())),
+                "Parsing error",
+                "Parsing error: every stage failed",
+            ),
         ] {
             let raw = format!("{error:?}");
             assert!(raw.contains(PATH) && raw.contains(SECRET), "{raw}");
-            let headline = error.to_string();
+            assert_eq!(error.to_string(), format!("{raw_prefix}: {raw_message}"));
             let diagnostic = error.into_cli_extraction_diagnostic();
-            assert_eq!(diagnostic.to_string(), headline);
+            assert_eq!(diagnostic.to_string(), safe_message);
             assert!(diagnostic.source().is_none());
             let rendered = format!("{diagnostic:?}");
             assert!(!rendered.contains(PATH) && !rendered.contains(SECRET), "{rendered}");

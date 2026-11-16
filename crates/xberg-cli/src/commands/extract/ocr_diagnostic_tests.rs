@@ -100,7 +100,7 @@ fn cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats() {
     assert!(matches!(&raw, XbergError::Ocr { .. }), "{raw:?}");
     let raw_debug = format!("{raw:?}");
     assert!(raw_debug.contains(PATH_SENTINEL) && raw_debug.contains(SECRET_SENTINEL));
-    let headline = raw.to_string();
+    assert!(raw.to_string().contains(PATH_SENTINEL));
     let raw = anyhow::Error::new(raw);
     let inner_io = raw.chain().find_map(|error| {
         let XbergError::Ocr {
@@ -127,6 +127,14 @@ fn cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats() {
     let projected = cli
         .downcast_ref::<XbergError>()
         .expect("CLI retains the typed aggregate");
-    assert_eq!(projected.to_string(), headline);
+    let summary = projected.to_string();
+    let expected = [
+        "OCR error: OCR failed on all 1 page(s) and no text could be recovered from the pages' embedded images",
+        concat!(
+            "OCR error: OCR failed on all 1 page(s). ",
+            "The embedded-image retry ran on 1 of these page(s) and also returned no text."
+        ),
+    ];
+    assert!(expected.contains(&summary.as_str()), "{summary}");
     assert!(projected.source().is_none());
 }
