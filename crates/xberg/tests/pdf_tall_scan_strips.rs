@@ -660,6 +660,7 @@ fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
         };
         assert!(cold.contains("xberg.cache.hit=false"), "{cold}");
         assert!(warm.contains("xberg.cache.hit=true"), "{warm}");
+        eprintln!("{cold}\n{warm}");
         return;
     }
 
@@ -669,7 +670,7 @@ fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
         .try_init()
         .expect("isolated cache lookup logging");
     assert_eq!(
-        format!("{:x}", Sha256::digest(TALL_JPEG)),
+        hex::encode(Sha256::digest(TALL_JPEG)),
         "c1d51612ea92e34e7ac0bac621fad1615d14508e4864402839478a45e6001da8"
     );
     // The document cache stays off so the warm read rebuilds the warning from cached OCR metadata. ~keep

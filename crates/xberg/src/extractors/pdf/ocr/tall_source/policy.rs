@@ -328,13 +328,13 @@ mod tests {
     fn reports_the_actual_density_of_a_budgeted_pdf_read() {
         let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
         for (raster, processed, render_dpi, read_dpi, dimension_clamped) in [
-            ((1275, 12_000), (297, 2800), 150, 35, false),
+            ((1275_u32, 12_000_u32), (297_u32, 2800_u32), 150, 35, false),
             ((850, 8000), (435, 4096), 100, 51, true),
         ] {
             let mut original = clamped_pdf_read();
             let resize = original.metadata.image_preprocessing.as_mut().unwrap();
-            resize.original_dimensions = raster.into();
-            resize.new_dimensions = Some(processed.into());
+            resize.original_dimensions = (raster.0 as usize, raster.1 as usize).into();
+            resize.new_dimensions = Some((processed.0 as usize, processed.1 as usize).into());
             resize.scale_factor = f64::from(processed.1) / f64::from(raster.1);
             resize.dimension_clamped = dimension_clamped;
             original.metadata.additional.extend([
