@@ -88,6 +88,14 @@ pub mod model_cache;
 pub mod plugins;
 pub mod rendering;
 pub mod telemetry;
+// `otel` declares tracing-opentelemetry for the embedder to install as its tracing layer, and
+// opentelemetry_sdk for the #332 telemetry test (a dev-dependency would build it for every test
+// build); the library never names either, so this marks them used for cargo's
+// unused_dependencies lint. ~keep
+#[cfg(feature = "otel")]
+use opentelemetry_sdk as _;
+#[cfg(feature = "otel")]
+use tracing_opentelemetry as _;
 /// Text post-processing: NER, summarisation, redaction, token reduction, and translation.
 pub mod text;
 pub mod types;

@@ -748,6 +748,7 @@ mcp-http = ["mcp", "api"]
 # ~keep reach the collector through the consumer's tracing-opentelemetry layer.
 otel = [
     "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
     "dep:tracing-opentelemetry",
     "crawlberg?/otel",
     "liter-llm?/otel",
@@ -762,7 +763,7 @@ otel = [
 # Cargo feature unification), so it does not need to be declared again here. `prometheus`
 # is pulled with `default-features = false` so its `protobuf` dependency is never enabled —
 # every remaining transitive dependency is already present in the workspace.
-prometheus = ["api", "otel", "dep:opentelemetry_sdk", "dep:opentelemetry-prometheus", "dep:prometheus"]
+prometheus = ["api", "otel", "dep:opentelemetry-prometheus", "dep:prometheus"]
 
 # no-ort-target: shared base for targets that cannot use ONNX Runtime (Android x86_64 emulator,
 # WASM). Pure-Rust only — no ORT, no native-only C++ deps. Used as a foundation for both
@@ -1040,7 +1041,7 @@ windows-target = [
     # late-interaction-presets is implied by "late-interaction" above (the ORT
     # ML feature added for full Windows ONNX Runtime parity).
     "markdown-footnotes",
-    # otel = [dep:opentelemetry, dep:tracing-opentelemetry,
+    # otel = [dep:opentelemetry, dep:opentelemetry_sdk, dep:tracing-opentelemetry,
     # crawlberg?/otel, liter-llm?/otel] (GH#1443). All three direct deps verified pure
     # Rust with no build script (their only target-specific blocks are wasm32 deps
     # and non-Windows dev-dependencies, neither of which apply here). The two weak (`?/`)
@@ -1154,7 +1155,7 @@ windows-gnu-target = [
     "chunking-tokenizers",
     "url-ingestion",
     "markdown-footnotes",
-    # otel = [dep:opentelemetry, dep:tracing-opentelemetry,
+    # otel = [dep:opentelemetry, dep:opentelemetry_sdk, dep:tracing-opentelemetry,
     # crawlberg?/otel, liter-llm?/otel] — pure Rust, no `dep:ort` (GH#1443 follow-up;
     # see `windows-target`'s identical entry for the full per-crate verification).
     "otel",
@@ -1432,7 +1433,7 @@ opentelemetry = { version = "0.33", features = ["trace"], optional = true }
 opentelemetry-prometheus = { version = "0.33", optional = true }
 # `testing` supplies `metrics::InMemoryMetricExporter`, which the #332 regression test
 # uses to read back real counter/histogram deltas instead of asserting on a mock. It is
-# a small module and only reachable from prometheus builds, which already pull this crate in;
+# a small module and only reachable from otel builds, which already pull this crate in;
 # declaring it as a dev-dependency instead would compile the whole SDK for every test
 # build, including the ones with `otel` off.
 opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "testing"], optional = true }

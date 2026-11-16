@@ -31,6 +31,11 @@ mod error;
 pub use dto::{WpdDocument, WpdEvent, WpdMetadata};
 pub use error::WpdError;
 
+// libz-sys is linked for the vendored librevenge zip stream and never named in Rust; this marks
+// it used for cargo's unused_dependencies lint. ~keep
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use libz_sys as _;
+
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod imp {
     use crate::{WpdDocument, WpdError, dto};

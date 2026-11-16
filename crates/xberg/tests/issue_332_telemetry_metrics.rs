@@ -21,7 +21,7 @@
 //! reach `get_metrics()`. Every test in this file is `#[serial]` so that one test's
 //! recordings cannot land inside another test's before/after snapshot window on the
 //! shared, cumulative counters.
-#![cfg(all(feature = "otel", feature = "prometheus"))]
+#![cfg(feature = "otel")]
 
 use std::sync::OnceLock;
 use std::time::Duration;
