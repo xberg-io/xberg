@@ -10,7 +10,10 @@ mod helpers;
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::io::Read;
-use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
+use xberg::types::{ExtractionMethod, NodeContent};
+use xberg::{
+    ExtractedDocument, ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OutputFormat, PageConfig,
+};
 
 const SOURCE_ROWS: [[&str; 3]; 12] = [
     ["97", "623,093", "(8,538)"],
@@ -61,6 +64,15 @@ fn extract_with_psm(bytes: &[u8], psm: Option<i32>) -> ExtractedDocument {
 }
 
 fn extract_as(bytes: &[u8], psm: Option<i32>, output_format: OutputFormat) -> ExtractedDocument {
+    extract_as_with_config(bytes, psm, output_format, |_| {})
+}
+
+fn extract_as_with_config(
+    bytes: &[u8],
+    psm: Option<i32>,
+    output_format: OutputFormat,
+    configure: impl FnOnce(&mut ExtractionConfig),
+) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
     assert_eq!(
@@ -68,7 +80,7 @@ fn extract_as(bytes: &[u8], psm: Option<i32>, output_format: OutputFormat) -> Ex
         "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
     );
     std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
-    let config = ExtractionConfig {
+    let mut config = ExtractionConfig {
         use_cache: false,
         output_format,
         ocr: Some(OcrConfig {
@@ -85,6 +97,7 @@ fn extract_as(bytes: &[u8], psm: Option<i32>, output_format: OutputFormat) -> Ex
         }),
         ..Default::default()
     };
+    configure(&mut config);
     helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
 }
 
@@ -265,18 +278,38 @@ fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
     }
 }
 
-fn duplicate_scan_page(bytes: &[u8]) -> Vec<u8> {
+const NATIVE_SENTENCE: &str = "This first page has a complete native sentence.";
+
+fn scan_with_sibling_page(bytes: &[u8], native_first_page: bool) -> Vec<u8> {
     let mut pdf = lopdf::Document::load_mem(bytes).expect("synthetic single-page scan");
     let originals = pdf.get_pages();
     assert_eq!(originals.len(), 1);
     let original = originals[&1];
-    let page = pdf.get_dictionary(original).unwrap().clone();
+    let mut page = pdf.get_dictionary(original).unwrap().clone();
     let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
-    let duplicate = pdf.add_object(page);
+    if native_first_page {
+        let font = pdf.add_object(lopdf::dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type1",
+            "BaseFont" => "Helvetica",
+        });
+        let text = format!("BT /F1 12 Tf 24 700 Td ({NATIVE_SENTENCE}) Tj ET");
+        let contents = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {}, text.into_bytes()));
+        page.set(
+            "Resources",
+            lopdf::dictionary! { "Font" => lopdf::dictionary! { "F1" => font } },
+        );
+        page.set("Contents", contents);
+    }
+    let sibling = lopdf::Object::Reference(pdf.add_object(page));
     let tree = pdf.get_dictionary_mut(parent).unwrap();
     let kids = tree.get_mut(b"Kids").unwrap().as_array_mut().unwrap();
     assert_eq!(kids.as_slice(), [lopdf::Object::Reference(original)]);
-    kids.push(lopdf::Object::Reference(duplicate));
+    if native_first_page {
+        kids.insert(0, sibling);
+    } else {
+        kids.push(sibling);
+    }
     tree.set("Count", 2);
     let mut bytes = Vec::new();
     pdf.save_to(&mut bytes).expect("serialize both synthetic pages");
@@ -292,7 +325,7 @@ fn psm6_html_leaves_each_page_of_a_two_page_scan_flattened() {
     assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
     let flattened = format!("<p>{stock}</p>");
 
-    let html = extract_as(&duplicate_scan_page(&original), Some(6), OutputFormat::Html);
+    let html = extract_as(&scan_with_sibling_page(&original, false), Some(6), OutputFormat::Html);
     assert!(html.metadata.ocr_used);
     assert!(html.tables.is_empty());
     let [first, second] = html.pages.as_deref().unwrap() else {
@@ -303,4 +336,76 @@ fn psm6_html_leaves_each_page_of_a_two_page_scan_flattened() {
         assert_eq!(page.content.trim(), flattened);
     }
     assert_eq!(html.content.matches(flattened.as_str()).count(), 2, "{}", html.content);
+}
+
+#[test]
+fn psm6_html_keeps_document_structure_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as_with_config(&original, Some(6), OutputFormat::Html, |config| {
+        config.include_document_structure = true;
+    });
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    assert_eq!(html.content.trim(), flattened);
+    let [page] = html.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(page.content.trim(), flattened);
+    let document = html.document.as_ref().expect("requested document structure");
+    let paragraphs: Vec<_> = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Paragraph { text } => Some((node.page, text.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(paragraphs, [(Some(1), stock.as_str())]);
+}
+
+#[test]
+fn psm6_html_keeps_a_detached_scan_flattened_beside_native_text() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+    let pdf = scan_with_sibling_page(&original, true);
+
+    let html = extract_as_with_config(&pdf, Some(6), OutputFormat::Html, |config| {
+        config.force_ocr_pages = Some(vec![2]);
+        let ocr = config.ocr.as_mut().unwrap();
+        #[expect(deprecated, reason = "OcrPipelineStage still requires the legacy PaddleOCR field")]
+        let stage = OcrPipelineStage {
+            backend: "tesseract".into(),
+            priority: 100,
+            language: None,
+            tesseract_config: ocr.tesseract_config.clone(),
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        // The explicit stage sends the selected raster through the detached page runner. ~keep
+        ocr.pipeline = Some(OcrPipelineConfig {
+            stages: vec![stage],
+            quality_thresholds: Default::default(),
+        });
+    });
+    assert_eq!(html.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    let [first, second] = html.pages.as_deref().unwrap() else {
+        panic!("one native page and one scan");
+    };
+    assert_eq!((first.page_number, second.page_number), (1, 2));
+    assert!(first.content.contains(NATIVE_SENTENCE), "{}", first.content);
+    assert_eq!(second.content.trim(), flattened);
+    assert_eq!(html.content.matches(NATIVE_SENTENCE).count(), 1);
+    assert_eq!(html.content.matches(flattened.as_str()).count(), 1, "{}", html.content);
 }
