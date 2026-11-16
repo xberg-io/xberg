@@ -39,6 +39,10 @@ struct ActiveJob {
 /// Admission (`MAX_ACTIVE_JOBS`) bounds how many jobs are queued; `execution_slots` bounds
 /// how many of them extract at once. The router sizes it from the request limit but keeps it
 /// apart from the request limiter, so submissions never wait for running jobs.
+///
+/// A slot is held while the job's task runs. When the job times out the task ends and frees
+/// its slot, but blocking extraction it started (`spawn_blocking`) may continue until it next
+/// checks the job's cancellation token, so the limit bounds running jobs, not that cleanup.
 pub struct JobStore {
     active: Mutex<HashMap<String, ActiveJob>>,
     finished: Cache<String, JobStatus>,

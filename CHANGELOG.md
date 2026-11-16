@@ -197,7 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request config over the server config instead of replacing it, and a request can only lower the server's security
   limits, archive depth, timeouts and URL caps, never raise or remove them.
 
-- **(api): Async jobs now run under a concurrency limit.** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs extract at once, in slots separate from synchronous requests; further jobs stay `pending` and submission still answers at once, so queued jobs can no longer run up to 100 extractions together.
+- **(api): Async jobs now run under a concurrency limit.** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs extract at once, in slots separate from synchronous requests; further jobs stay `pending` and submission still answers at once, so queued jobs can no longer run up to 100 extractions together. The limit counts running jobs: a job that times out frees its slot at once, while blocking work it started may still finish in the background.
 
 - **(api, mcp): A remote request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP-over-HTTP config whose effective LLM stage is new, differs in any setting from the server config's stage at the same place, or is switched on by a changed setting such as `ocr.backend`, `ner.backend` or `postprocessor`, is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; MCP over stdio, the library and the CLI are unchanged.
 

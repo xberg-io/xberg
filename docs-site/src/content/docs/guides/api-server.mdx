@@ -140,7 +140,9 @@ Queue an extraction job and return immediately. Accepts the same multipart form
 data or JSON body as `/extract`. Returns `202 Accepted` with a job identifier.
 Returns `429 Too Many Requests` when the concurrent job limit is reached.
 At most `XBERG_MAX_CONCURRENT_REQUESTS` jobs extract at once, in slots separate
-from synchronous requests; a queued job stays `pending` until one is free.
+from synchronous requests; a queued job stays `pending` until one is free. The
+limit counts running jobs: a job that times out frees its slot at once, while
+blocking work it started may still finish in the background.
 
 ```bash title="Terminal"
 curl -F "files=@document.pdf" http://localhost:8000/extract-async
