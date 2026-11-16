@@ -285,9 +285,7 @@ def verify_variant(name, text, allowlist):
     runs = [line for line in instructions if line.startswith("RUN ")]
     copies = [line.split()[1:] for line in instructions if line.startswith("COPY scripts/")]
     assert not any("chromium-browser-snapshots" in line for line in instructions), (name, "snapshot endpoint")
-    # The separate manylinux bootstrap is outside the two converted musl bootstrap steps.
-    expected_rustup = int(name in ("manylinux-node", "manylinux-rustler"))
-    assert sum(line.count("sh.rustup.rs") for line in instructions) == expected_rustup, (name, "Rustup endpoint")
+    assert not any("sh.rustup.rs" in line for line in instructions), (name, "Rustup endpoint")
 
     def verify_copy(source, target):
         destinations = [copy[-1] for copy in copies if source in copy[:-1]]
@@ -327,15 +325,38 @@ def verify_variant(name, text, allowlist):
     return len(expected)
 
 
-def rustup_pins(text):
+def rustup_pins(name, text, libc):
+    runs = [line for line in re.sub(r"\\\n[ \t]*", "", text).splitlines() if line.startswith("RUN RUSTUP_VERSION=")]
+    assert len(runs) == 1 and text.count("https://static.rust-lang.org/rustup/archive/") == 1, (name, "Rustup bootstrap count")
     version = re.findall(r"^RUN RUSTUP_VERSION=(\d+\.\d+\.\d+) &&", text, re.M)
-    pins = re.findall(r"^\s*(x86_64|aarch64)\) RUSTUP_SHA256=([0-9a-f]{64}) ;;", text, re.M)
-    assert len(version) == 1 and len(pins) == 2 and {arch for arch, _ in pins} == {"x86_64", "aarch64"}, "Rustup pin inventory"
-    return version[0], sorted(pins)
+    suffix = "-unknown-linux-gnu" if libc == "gnu" else ""
+    pins = re.findall(rf"^\s*(x86_64|aarch64){suffix}\) RUSTUP_SHA256=([0-9a-f]{{64}}) ;;", text, re.M)
+    assert version == ["1.29.3"] and len(pins) == 2 and {arch for arch, _ in pins} == {"x86_64", "aarch64"}, (name, "Rustup pin inventory")
+
+    target = "${TARGET}" if libc == "gnu" else "${ARCH}-unknown-linux-musl"
+    selector = 'case "$TARGET" in' if libc == "gnu" else 'case "$ARCH" in'
+    endpoint = f"https://static.rust-lang.org/rustup/archive/${{RUSTUP_VERSION}}/{target}/rustup-init"
+    steps = [step.strip() for step in runs[0].split("&&")]
+    guard = [step for step in steps if step.startswith(selector)]
+    assert len(guard) == 1 and "exit 1 ;;" in guard[0], (name, "Rustup target guard")
+    checked = [step for step in steps if step.startswith(("curl ", "printf ", "chmod ", "./rustup-init ", "rm rustup-init"))]
+    assert (
+        len(checked) == 5
+        and checked[0].startswith("curl ")
+        and checked[0].endswith(f'"{endpoint}" -o rustup-init')
+        and checked[1] == r"""printf '%s  rustup-init\n' "$RUSTUP_SHA256" | sha256sum -c -"""
+        and checked[2] == "chmod 0755 rustup-init"
+        and checked[3] == './rustup-init -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src'
+        and checked[4] == "rm rustup-init"
+        and steps.index(guard[0]) < steps.index(checked[0])
+    ), (name, "Rustup download/verify/execute order")
+    return sorted(pins)
 
 
-def verify_rustup(cli, musl):
-    assert rustup_pins(cli) == rustup_pins(musl), "CLI and musl Rustup pins differ"
+def verify_rustup(variants):
+    for libc, names in (("musl", ("cli", "musl-build")), ("gnu", ("manylinux-node", "manylinux-rustler"))):
+        left, right = (rustup_pins(name, variants[name], libc) for name in names)
+        assert left == right, (libc, "Rustup pins differ")
 
 
 if sys.argv[2] == "negative":
@@ -346,8 +367,10 @@ if sys.argv[2] == "negative":
         (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),
         (lambda: verify_variant("core", core, ignore.replace("!" + verifier, verifier)), "Docker allowlist"),
         (lambda: verify_variant("core", core + "\nRUN curl https://chromium-browser-snapshots.invalid\n", ignore), "snapshot endpoint"),
-        (lambda: verify_variant("cli", variants["cli"] + "\nRUN curl https://sh.rustup.rs\n", ignore), "Rustup endpoint"),
-        (lambda: verify_rustup(variants["cli"], variants["musl-build"].replace("RUSTUP_VERSION=1.29.3", "RUSTUP_VERSION=1.29.4")), "Rustup pins differ"),
+        (lambda: verify_variant("manylinux-node", variants["manylinux-node"] + "\nRUN curl https://sh.rustup.rs\n", ignore), "Rustup endpoint"),
+        (lambda: rustup_pins("manylinux-node", variants["manylinux-node"].replace('"$RUSTUP_SHA256" | sha256sum -c -', '"$RUSTUP_SHA256"', 1), "gnu"), "Rustup download/verify/execute order"),
+        (lambda: rustup_pins("manylinux-node", variants["manylinux-node"].replace("RUSTUP_SHA256=9", "RUSTUP_SHA256=g", 1), "gnu"), "Rustup pin inventory"),
+        (lambda: verify_rustup(dict(variants, **{"manylinux-rustler": variants["manylinux-rustler"].replace("RUSTUP_SHA256=b1c8", "RUSTUP_SHA256=a1c8", 1)})), "Rustup pins differ"),
     )
     for check, reason in checked:
         try:
@@ -359,8 +382,8 @@ if sys.argv[2] == "negative":
     print(f"rejected {len(checked)} expected archive integrity regressions")
 else:
     assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
-    verify_rustup(variants["cli"], variants["musl-build"])
-    print("six Dockerfiles: eight verified archive chains and two matching musl Rustup pin sets")
+    verify_rustup(variants)
+    print("six Dockerfiles: eight verified archive chains and four verified Rustup bootstraps with matching GNU and musl pins")
 PYTHON
 }
 
