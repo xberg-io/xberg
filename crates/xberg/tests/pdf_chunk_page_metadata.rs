@@ -110,10 +110,7 @@ fn chunks_from_multi_page_pdf_have_monotonic_page_numbers() {
 ///
 /// Regression test for issue #1105 (Problem 2): a one-page PDF with extracted text
 /// returned `chunks: null` instead of a populated chunk list when chunking was
-/// configured. The root cause was a `recomputed_boundaries = Some([])` (empty)
-/// result silently shadowing the `metadata.pages.boundaries` fallback path before
-/// the `.filter(|s| !s.is_empty())` guard was added.
-
+/// configured. An empty recomputed boundary list could shadow the metadata fallback.
 #[test]
 fn chunks_from_single_page_pdf_are_not_null() {
     const FIXTURE: &str = "pdf/searchable.pdf";

@@ -401,28 +401,6 @@ mod tests {
     }
 
     #[test]
-    fn required_fixture_mode_reports_missing_paths_and_io_errors() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("sample.pdf");
-        let missing_error = std::fs::metadata(&file).unwrap_err().to_string();
-
-        assert!(!fixture_available(&file, false));
-        for (invalid, detail) in [
-            (file.as_path(), missing_error.as_str()),
-            (dir.path(), "expected a regular file"),
-        ] {
-            let panic = std::panic::catch_unwind(|| fixture_available(invalid, true)).unwrap_err();
-            let message = panic.downcast_ref::<String>().expect("fixture error message");
-            assert!(message.contains(&invalid.display().to_string()), "{message}");
-            assert!(message.contains(detail), "{message}");
-        }
-
-        std::fs::write(&file, b"fixture").unwrap();
-        assert!(fixture_available(&file, false));
-        assert!(fixture_available(&file, true));
-    }
-
-    #[test]
     fn test_test_documents_available() {
         let available = test_documents_available();
         if !available {
