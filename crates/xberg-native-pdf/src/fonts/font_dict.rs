@@ -807,7 +807,7 @@ impl FontInfo {
             // user-defined CharProcs glyph-program model; the
             // standard glyph name registry doesn't apply, so
             // extraction may fall back to glyph-name heuristics. ~keep
-            crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+            doc.push_structured_warning(crate::extractors::warnings::Warning {
                 category: crate::extractors::warnings::WarningCategory::Type3Font,
                 page: None,
                 message: msg,
@@ -935,7 +935,7 @@ impl FontInfo {
                 // Spec §9.10.2 "ToUnicode CMaps" describes the
                 // mapping; absent ToUnicode triggers the fallback
                 // chain (Encoding → AGL → CID-as-Unicode) per §9.10.3. ~keep
-                crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+                doc.push_structured_warning(crate::extractors::warnings::Warning {
                     category: crate::extractors::warnings::WarningCategory::ToUnicodeMissing,
                     page: None,
                     message: msg,
@@ -1525,6 +1525,7 @@ impl FontInfo {
         let Some(decoded) = decoded else {
             return false;
         };
+        let _warnings = doc.warning_scope();
         let Ok(operators) = crate::content::parse_content_stream(&decoded)
             .inspect_err(|error| crate::error::trace_recovery("parse_type3_charproc", error))
         else {
@@ -7012,9 +7013,6 @@ mod tests {
             Object::Array(vec![Object::String(SECRET_OBJECT.as_bytes().to_vec())]),
         )]));
 
-        // This test asserts on tracing output only. It used to bracket the run with
-        // drain_global_warnings() as tidy-up, but that sink is process-wide: the drain
-        // emptied it for whichever peer test was mid-assertion on its own warnings. ~keep
         let logs = capture_warnings(|| {
             FontInfo::from_dict(&type3, &doc).expect("minimal Type3 dictionary must parse");
             FontInfo::parse_encoding(&encoding, &doc, None, false).expect("malformed differences must recover");

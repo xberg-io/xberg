@@ -666,7 +666,7 @@ impl TextRasterizer {
             message = warning.message,
             "glyph rendering omitted content"
         );
-        crate::extractors::warnings::push_global_warning(warning);
+        crate::extractors::warnings::record_warning(warning);
     }
 
     fn warn_font_not_found(_pdf_font_name: &str) {

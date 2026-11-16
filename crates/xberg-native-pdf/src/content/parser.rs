@@ -86,7 +86,7 @@ fn push_operator_cap_warning() {
     let cap = effective_max_operators();
     let msg = format!("Content stream exceeded {cap} operators, truncating");
     tracing::warn!(count = cap, "content stream exceeded operator cap; truncating");
-    crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+    crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
         category: crate::extractors::warnings::WarningCategory::OperatorCapExceeded,
         page: None,
         message: msg,

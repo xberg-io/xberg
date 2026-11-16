@@ -699,47 +699,6 @@ fn descendant_fonts_inline_dict_accepted() {
     );
 }
 
-/// Global warning sink wired into five
-/// log::warn sites in src/parser.rs (SPEC VIOLATION + Stream
-/// /Length mismatch) and src/fonts/font_dict.rs (Type 3 detected +
-/// Type0 ToUnicode missing) and src/content/parser.rs (4 operator-
-/// cap sites). Verify by source inspection that the wire-ups are
-/// in place.
-#[test]
-fn global_warning_sink_wired_into_log_warn_sites() {
-    let parser_src = include_str!("../src/parser.rs");
-    assert!(
-        parser_src.contains("push_global_warning"),
-        "src/parser.rs SPEC VIOLATION sites must push to global sink",
-    );
-    let fonts_src = include_str!("../src/fonts/font_dict.rs");
-    assert!(
-        fonts_src.contains("push_global_warning") && fonts_src.contains("Type3Font"),
-        "src/fonts/font_dict.rs Type3 site must push to global sink",
-    );
-    assert!(
-        fonts_src.contains("ToUnicodeMissing"),
-        "src/fonts/font_dict.rs Type0-ToUnicode-missing site must push",
-    );
-    let content_src = include_str!("../src/content/parser.rs");
-    assert!(
-        content_src.contains("OperatorCapExceeded"),
-        "src/content/parser.rs op-cap site must push to global sink",
-    );
-    // The 4 op-cap call sites are now wired through the shared
-    // `push_operator_cap_warning()` helper (refactored 2026-05-28 to
-    // collapse the four duplicated op-cap blocks and eliminate the
-    // exceeded-N-operators message divergence when the cap is
-    // overridden). Verify the helper exists and is invoked at least
-    // 4× across the module. ~keep
-    let helper_calls = content_src.matches("push_operator_cap_warning()").count();
-    assert!(
-        helper_calls >= 4,
-        "all 4 content-parser op-cap sites must call push_operator_cap_warning() (found {})",
-        helper_calls,
-    );
-}
-
 #[test]
 fn global_warning_sink_drain_round_trips() {
     use xberg_native_pdf::extractors::warnings::{
@@ -826,8 +785,15 @@ fn max_ops_setter_affects_parse_runtime() {
     // With cap=1, only the first operator parses. extract_text
     // succeeds but may produce very little output (the API doesn't
     // error on truncation). ~keep
-    let _ = doc.extract_text(0);
+    let capped = doc.extract_text(0);
     xberg_native_pdf::content::parser::set_max_ops_per_stream(original);
+    capped.expect("cap truncation must leave an extractable page");
+    assert!(
+        doc.take_structured_warnings()
+            .iter()
+            .any(|warning| warning.category == WarningCategory::OperatorCapExceeded),
+        "truncating a page stream must record an operator-cap warning on its document"
+    );
     let doc2 = xberg_native_pdf::document::PdfDocument::open(path).expect("re-open simple.pdf");
     let text = doc2.extract_text(0).expect("normal extract_text");
     assert!(

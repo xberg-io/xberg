@@ -3228,7 +3228,7 @@ fn decode_jpx_image(
     // codestream is not applied; the caller looks the indices up. (GH#1885) ~keep
     if let Some(highest_index) = indexed.map(IndexedResolution::highest_index) {
         let indices = crate::decoders::jpx::decode_jpx_indices(&codestream, highest_index)?;
-        warn_on_jpx_size_mismatch(declared_size, (indices.width, indices.height));
+        warn_on_jpx_size_mismatch(doc, declared_size, (indices.width, indices.height));
         return Ok(JpxDecoded {
             data: ImageData::Raw {
                 pixels: indices.samples,
@@ -3275,7 +3275,7 @@ fn decode_jpx_image(
     // trusts `width * height * components` either read a scrambled prefix at the wrong stride or
     // rejected the buffer outright as the wrong length, and neither recorded why (GH#1900).
     // Returning the codestream's own size keeps the two in agreement for every consumer. ~keep
-    warn_on_jpx_size_mismatch(declared_size, (img.width, img.height));
+    warn_on_jpx_size_mismatch(doc, declared_size, (img.width, img.height));
 
     let format = match img.num_components {
         1 => PixelFormat::Grayscale,
@@ -3301,7 +3301,7 @@ fn decode_jpx_image(
 
 /// Record a `JpxSizeMismatch` warning when a `/JPXDecode` image's dictionary declares a size other
 /// than its codestream's. The codestream's size is the one used (ISO 32000-1 §7.4.9, GH#1900).
-fn warn_on_jpx_size_mismatch(declared: (u32, u32), codestream: (u32, u32)) {
+fn warn_on_jpx_size_mismatch(doc: Option<&crate::document::PdfDocument>, declared: (u32, u32), codestream: (u32, u32)) {
     if declared == codestream {
         return;
     }
@@ -3312,12 +3312,17 @@ fn warn_on_jpx_size_mismatch(declared: (u32, u32), codestream: (u32, u32)) {
          treats /Width and /Height as informative for JPEG 2000, so the codestream's size is used."
     );
     tracing::warn!("{}", msg);
-    crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+    let warning = crate::extractors::warnings::Warning {
         category: crate::extractors::warnings::WarningCategory::JpxSizeMismatch,
         page: None,
         message: msg,
         spec_section: Some("7.4.9"),
-    });
+    };
+    if let Some(doc) = doc {
+        doc.push_structured_warning(warning);
+    } else {
+        crate::extractors::warnings::push_global_warning(warning);
+    }
 }
 
 /// A decoded `/JPXDecode` image: its samples, the codestream's own size, and its opacity channel

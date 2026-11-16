@@ -1,6 +1,6 @@
 //! Structured warning surface.
 //!
-//! `PdfDocument::flatten_warnings()` returns the warnings raised since
+//! `PdfDocument::structured_warnings()` returns the warnings raised since
 //! the document was opened, as a list of structured `Warning` records.
 //! Callers who want diagnostics as data (rather than stderr text from
 //! `tracing::warn!`) opt in to this surface. The existing `tracing::warn!`
@@ -10,7 +10,10 @@
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::cell::RefCell;
+use std::marker::PhantomData;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// A single structured warning raised during PDF processing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,61 +87,63 @@ impl WarningCategory {
     }
 }
 
-/// Thread-safe sink for warnings raised during a single `PdfDocument`
-/// lifetime. Backed by a `Mutex<Vec<Warning>>` so multi-threaded usage
-/// (e.g. parallel-page extraction) doesn't lose warnings to a data race.
-///
-/// One sink per document. The document holds it in an `Arc` so worker
-/// threads can clone it.
-#[derive(Debug, Default)]
+/// Thread-safe sink for warnings raised during a single PDF document's lifetime.
+#[derive(Debug, Default, Clone)]
 pub struct WarningSink {
-    warnings: Mutex<Vec<Warning>>,
+    warnings: Arc<Mutex<Vec<Warning>>>,
 }
 
-/// global process-wide structured-warning sink for
-/// the seven highest-frequency `tracing::warn!` sites that live in free
-/// functions (where `&PdfDocument` is not available to push to a
-/// per-document sink). Sites currently routed through this global
-/// sink:
-///
-/// - `src/parser.rs::read_stream_data` (SPEC VIOLATION / Stream
-///   /Length mismatch)
-/// - `src/content/parser.rs::*` (operator-cap exceeded)
-/// - `src/fonts/font_dict.rs::*` (Type0 ToUnicode missing, Type 3
-///   font detected)
-///
-/// Callers retrieve via [`drain_global_warnings`] OR through
-/// `PdfDocument::flatten_warnings()` which merges global +
-/// per-document warnings.
-///
-/// Process-wide scope means warnings from concurrent extractions on
-/// different `PdfDocument` instances appear together in the snapshot.
-/// For per-document isolation, use the per-document sink directly
-/// via `PdfDocument::push_structured_warning`.
-static GLOBAL_WARNING_SINK: Mutex<Vec<Warning>> = Mutex::new(Vec::new());
+// The document owns the sink. Each synchronous parser or renderer entry point
+// binds it on the thread actually performing the work, including worker threads. ~keep
+thread_local! {
+    static ACTIVE_SINK: RefCell<Option<WarningSink>> = const { RefCell::new(None) };
+}
 
-/// Push a structured warning into the process-wide sink. Called by
-/// free-function log sites that can't access a `&PdfDocument`.
-pub fn push_global_warning(warning: Warning) {
-    if let Ok(mut v) = GLOBAL_WARNING_SINK.lock() {
-        v.push(warning);
+#[must_use = "the warning scope ends when the guard is dropped"]
+pub(crate) struct WarningScope {
+    previous: Option<WarningSink>,
+    _thread_bound: PhantomData<Rc<()>>,
+}
+
+impl Drop for WarningScope {
+    fn drop(&mut self) {
+        ACTIVE_SINK.with(|slot| *slot.borrow_mut() = self.previous.take());
     }
 }
 
-/// Drain the process-wide structured-warning sink, returning a snapshot
-/// and clearing the underlying storage. Used by
-/// `PdfDocument::flatten_warnings` to surface free-function warnings
-/// alongside per-document ones.
+pub(crate) fn record_warning(warning: Warning) {
+    let sink = ACTIVE_SINK.with(|slot| slot.borrow().clone());
+    if let Some(sink) = sink {
+        sink.push(warning);
+    } else {
+        push_global_warning(warning);
+    }
+}
+
+static UNSCOPED_WARNINGS: Mutex<Vec<Warning>> = Mutex::new(Vec::new());
+
+/// Push a warning into the legacy process-wide sink for standalone operations.
+/// Warnings in this sink are never attached to a document.
+pub fn push_global_warning(warning: Warning) {
+    if let Ok(mut warnings) = UNSCOPED_WARNINGS.lock() {
+        warnings.push(warning);
+    }
+}
+
+/// Drain the legacy process-wide sink used by standalone operations.
 pub fn drain_global_warnings() -> Vec<Warning> {
-    GLOBAL_WARNING_SINK
+    UNSCOPED_WARNINGS
         .lock()
-        .map(|mut v| std::mem::take(&mut *v))
+        .map(|mut warnings| std::mem::take(&mut *warnings))
         .unwrap_or_default()
 }
 
-/// Snapshot the global sink without draining (for tests / observability).
+/// Snapshot the legacy process-wide sink used by standalone operations.
 pub fn snapshot_global_warnings() -> Vec<Warning> {
-    GLOBAL_WARNING_SINK.lock().map(|v| v.clone()).unwrap_or_default()
+    UNSCOPED_WARNINGS
+        .lock()
+        .map(|warnings| warnings.clone())
+        .unwrap_or_default()
 }
 
 impl WarningSink {
@@ -147,9 +152,15 @@ impl WarningSink {
         Self::default()
     }
 
-    /// Push a new warning. Inexpensive — no `log` macro fired here; the
-    /// existing `tracing::warn!` sites continue to fire on their own. Use
-    /// `push_with_log` from the migrated call sites to emit both.
+    pub(crate) fn enter(&self) -> WarningScope {
+        let previous = ACTIVE_SINK.with(|slot| slot.borrow_mut().replace(self.clone()));
+        WarningScope {
+            previous,
+            _thread_bound: PhantomData,
+        }
+    }
+
+    /// Record a warning without emitting a tracing event.
     pub fn push(&self, warning: Warning) {
         if let Ok(mut v) = self.warnings.lock() {
             v.push(warning);
@@ -181,9 +192,7 @@ impl WarningSink {
         }
     }
 
-    /// Push multiple warnings at once. Used by callers that merge a
-    /// drained external sink (e.g. the process-wide global sink) into
-    /// the per-document sink under a single lock acquisition.
+    /// Push multiple warnings under a single lock acquisition.
     pub fn extend(&self, warnings: impl IntoIterator<Item = Warning>) {
         if let Ok(mut v) = self.warnings.lock() {
             v.extend(warnings);

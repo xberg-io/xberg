@@ -15,7 +15,7 @@
 mod common;
 
 use xberg_native_pdf::PdfDocument;
-use xberg_native_pdf::extractors::warnings::{WarningCategory, drain_global_warnings};
+use xberg_native_pdf::extractors::warnings::WarningCategory;
 use xberg_native_pdf::rendering::{PageRenderer, RenderOptions};
 
 /// The shared box-glyph fixture font (see `common::build_box_glyph_font`),
@@ -114,17 +114,8 @@ fn pdf_with_broken_font(page_count: usize) -> Vec<u8> {
     buf
 }
 
-/// Glyph-drop warnings drained from the global sink.
-///
-/// No font-name filter. `TextRasterizer::report_drops` builds its message with
-/// `tally.warning("redacted")` — the PDF font name is deliberately withheld so it
-/// cannot leak into logs — so filtering on the fixture's `BrokenSubset` name matched
-/// nothing and this test could never pass. It was masked because the unit-test script
-/// aborts on the first failing binary, and `test_decoder_characterization` (which had
-/// the identical defect) failed first. Draining before and after each render is what
-/// makes the result attributable, not the name. ~keep
-fn drain_broken_subset_warnings() -> Vec<String> {
-    drain_global_warnings()
+fn drain_broken_subset_warnings(doc: &PdfDocument) -> Vec<String> {
+    doc.take_structured_warnings()
         .into_iter()
         .filter(|w| w.category == WarningCategory::GlyphDropped)
         .map(|w| w.message)
@@ -135,10 +126,9 @@ fn drain_broken_subset_warnings() -> Vec<String> {
 fn a_dropped_glyph_warns_on_every_page_it_paints() {
     let doc = PdfDocument::from_bytes(pdf_with_broken_font(2)).expect("parse fixture");
     let mut renderer = PageRenderer::new(RenderOptions::default());
-    let _ = drain_broken_subset_warnings();
 
     renderer.render_page(&doc, 0).expect("render page 0");
-    let first = drain_broken_subset_warnings();
+    let first = drain_broken_subset_warnings(&doc);
     assert_eq!(
         first.len(),
         1,
@@ -151,7 +141,7 @@ fn a_dropped_glyph_warns_on_every_page_it_paints() {
     );
 
     renderer.render_page(&doc, 1).expect("render page 1");
-    let second = drain_broken_subset_warnings();
+    let second = drain_broken_subset_warnings(&doc);
     assert_eq!(
         second.len(),
         1,

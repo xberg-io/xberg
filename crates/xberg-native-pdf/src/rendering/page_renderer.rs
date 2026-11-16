@@ -527,6 +527,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        let _warnings = doc.warning_scope();
         self.render_page_with_workspace_retries(page_num, doc, png_budget, raster_budget::MAX_WORKSPACE_DPI_RETRIES)
     }
 
