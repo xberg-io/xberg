@@ -1922,6 +1922,7 @@ fn make_ocr_pdf_line(
     };
     types::PdfLine {
         native_scripts: Vec::new(),
+        has_segment_geometry: baseline_y.is_some(),
         segments: vec![segment],
         baseline_y,
         dominant_font_size: font_size,
@@ -1936,6 +1937,35 @@ mod tests {
     use crate::types::extraction::BoundingBox;
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     use crate::types::ocr_elements::OcrElementLevel;
+
+    #[test]
+    fn boxless_ocr_line_cannot_match_a_layout_hint_at_its_placeholder_coordinates() {
+        let font_size = DEFAULT_OCR_FONT_SIZE_PT;
+        let text = "Chapter title";
+        let boxless = make_ocr_line_paragraph(text, 0, 1, None, font_size, false, false);
+        let mut measured =
+            make_ocr_line_paragraph(text, 0, 1, Some((0.0, 0.0, 100.0, font_size)), font_size, false, false);
+        measured.block_bbox = None;
+        let hint = types::LayoutHint {
+            class_name: types::LayoutHintClass::Title,
+            confidence: 0.9,
+            left: 0.0,
+            bottom: 0.0,
+            right: 100.0,
+            top: font_size,
+        };
+        let mut paragraphs = [boxless, measured];
+        let matches = super::super::layout_classify::apply_layout_overrides_with_matches(
+            &mut paragraphs,
+            &[hint],
+            0.5,
+            0.5,
+            None,
+        );
+        assert_eq!(matches, [None, Some(0)]);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+        assert_eq!(paragraphs[1].heading_level, Some(1));
+    }
 
     /// The three hOCR attribute keys this module reads are declared here as literals
     /// rather than imported, because `ocr::hocr_parser` is behind `feature = "ocr"`

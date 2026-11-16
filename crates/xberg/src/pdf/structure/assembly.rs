@@ -2261,6 +2261,7 @@ mod tests {
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![SegmentData {
                 baseline_y,
                 ..plain_segment(text)
@@ -3514,6 +3515,7 @@ mod tests {
     fn test_bold_list_annotation_is_shifted_after_unicode_bullet() {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![bold_segment("• Bold item")],
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3591,6 +3593,7 @@ mod tests {
     fn split_ordered_marker_and_body_render_as_one_clean_item() {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![plain_segment("I."), plain_segment("Split body")],
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3624,6 +3627,7 @@ mod tests {
 
         let line = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3713,6 +3717,7 @@ mod tests {
 
         let line = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3779,6 +3784,7 @@ mod tests {
             .enumerate()
             .map(|(i, word)| PdfLine {
                 native_scripts: Vec::new(),
+                has_segment_geometry: true,
                 segments: vec![SegmentData {
                     text: word.to_string(),
                     x: i as f32 * 50.0,
@@ -3904,6 +3910,7 @@ mod tests {
         let segments = vec![plain_segment("CV- "), bold_segment("en boiler")];
         let line = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3928,6 +3935,7 @@ mod tests {
         ];
         let line = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -3955,6 +3963,7 @@ mod tests {
         ] {
             let first = PdfLine {
                 native_scripts: Vec::new(),
+                has_segment_geometry: true,
                 segments: vec![SegmentData {
                     baseline_y: 700.0,
                     ..plain_segment(trailing)
@@ -3966,6 +3975,7 @@ mod tests {
             };
             let second = PdfLine {
                 native_scripts: Vec::new(),
+                has_segment_geometry: true,
                 segments: vec![SegmentData {
                     baseline_y: 685.0,
                     ..plain_segment(leading)
@@ -3989,6 +3999,7 @@ mod tests {
     fn a_genuine_wrap_hyphen_at_a_line_break_is_still_joined() {
         let first = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![SegmentData {
                 baseline_y: 700.0,
                 ..plain_segment("adjuvant Mon-")
@@ -4000,6 +4011,7 @@ mod tests {
         };
         let second = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![SegmentData {
                 baseline_y: 685.0,
                 ..plain_segment("tanide was used")
@@ -4023,6 +4035,7 @@ mod tests {
         let segments = vec![plain_segment("montage- "), plain_segment("en installatiehandleiding")];
         let line = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 12.0,
@@ -4050,6 +4063,7 @@ mod tests {
     fn genuine_line_wrap_hyphen_still_joins_across_visual_line_break() {
         let line1 = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![SegmentData {
                 baseline_y: 700.0,
                 ..plain_segment("Zie de installatie-")
@@ -4061,6 +4075,7 @@ mod tests {
         };
         let line2 = PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![SegmentData {
                 baseline_y: 686.0,
                 ..plain_segment("handleiding voor details")

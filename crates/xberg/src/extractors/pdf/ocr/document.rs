@@ -5098,6 +5098,7 @@ mod tests {
         };
         let line = crate::pdf::structure::types::PdfLine {
             native_scripts: Vec::new(),
+            has_segment_geometry: true,
             segments: vec![segment],
             baseline_y: Some(0.0),
             dominant_font_size: 12.0,
