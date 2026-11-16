@@ -96,6 +96,10 @@ pub mod telemetry;
 use opentelemetry_sdk as _;
 #[cfg(feature = "otel")]
 use tracing_opentelemetry as _;
+// `ocr-pipeline` enables strsim for the PDF OCR passes, which only compile with `pdf` too; a
+// build with `ocr-pipeline` and without `pdf` (e.g. `sceptre-ocr-ort`) never names it. ~keep
+#[cfg(feature = "ocr-pipeline")]
+use strsim as _;
 /// Text post-processing: NER, summarisation, redaction, token reduction, and translation.
 pub mod text;
 pub mod types;
