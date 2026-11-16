@@ -144,7 +144,7 @@ allowed_hosts = ["xberg.internal.example.com", "xberg.internal.example.com:8001"
 
 The HTTP transport rejects local paths and `file://` URIs: `extract` and `extract_batch` accept only bytes and HTTP(S) URLs, and `detect_mime_type` is unavailable. Set `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1` to let HTTP clients read files from the server's filesystem. The stdio transport always accepts local paths.
 
-Over HTTP the server also keeps its filesystem layout private: file I/O and cache errors in tool errors and per-input extraction results get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path (the full error is logged), and `cache_stats`, `cache_clear` and `cache_warm` report the cache directory as `<path>`. A request config that adds an LLM stage, or changes any setting of one the server config defines, is rejected unless `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1` is set. stdio is unaffected.
+Over HTTP the server also keeps its filesystem layout private: file I/O and cache errors in tool errors and per-input extraction results get a fixed message such as `IO error: file not found`, other messages show `<path>` in place of a server path (the full error is logged), and `cache_stats`, `cache_clear` and `cache_warm` report the cache directory as `<path>`. A request config that adds an LLM stage, changes any setting of one the server config defines, or changes a setting that decides whether it runs, is rejected unless `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1` is set. stdio is unaffected.
 
 ```bash title="Terminal (env var)"
 export XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1

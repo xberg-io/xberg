@@ -201,7 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(api): Async jobs now run under a concurrency limit.** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs extract at once, in slots separate from synchronous requests; further jobs stay `pending` and submission still answers at once, so queued jobs can no longer run up to 100 extractions together.
 
-- **(api, mcp): A remote request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP-over-HTTP config whose effective LLM stage is new or differs in any setting from the server config's stage at the same place is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; MCP over stdio, the library and the CLI are unchanged.
+- **(api, mcp): A remote request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP-over-HTTP config whose effective LLM stage is new, differs in any setting from the server config's stage at the same place, or is switched on by a changed setting such as `ocr.backend`, `ner.backend` or `postprocessor`, is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; MCP over stdio, the library and the CLI are unchanged.
 
 - **(mcp): The MCP HTTP transport no longer reads local files.** `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused over HTTP unless the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1`; the stdio transport is unchanged.
 

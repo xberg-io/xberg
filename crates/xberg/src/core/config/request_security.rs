@@ -24,6 +24,81 @@ const LLM_LOCATIONS: &[(&str, &str)] = &[
     ("/captioning/llm", "captioning.llm"),
 ];
 
+/// A setting outside an LLM stage that decides whether the stage runs. A caller who resends the
+/// operator's stage unchanged must leave these as the operator has them too, or it could wake a
+/// stage the operator configured but left dormant.
+#[derive(Clone, Copy)]
+enum StageSelector {
+    /// The value at this JSON pointer must equal the operator's.
+    Equal(&'static str),
+    /// Whether this JSON pointer holds a value must match the operator's.
+    Present(&'static str),
+}
+
+impl StageSelector {
+    fn matches(self, operator: &Value, run: &Value) -> bool {
+        fn value<'a>(config: &'a Value, pointer: &str) -> Option<&'a Value> {
+            config.pointer(pointer).filter(|value| !value.is_null())
+        }
+        match self {
+            Self::Equal(pointer) => value(operator, pointer) == value(run, pointer),
+            Self::Present(pointer) => value(operator, pointer).is_some() == value(run, pointer).is_some(),
+        }
+    }
+}
+
+/// The post-processor stages (NER, summarization, translation, page and chunk classification,
+/// captioning) run only when `postprocessor` leaves their processor enabled.
+const POSTPROCESSOR: StageSelector = StageSelector::Equal("/postprocessor");
+
+/// What decides whether the stage at each [`LLM_LOCATIONS`] pointer runs, traced from its dispatch:
+/// - `ocr.vlm_config`: the `vlm` backend or a `vlm_fallback` policy uses it, and only while no
+///   explicit `ocr.pipeline` replaces them (`OcrConfig::effective_pipeline`); `disable_ocr` and its
+///   `ocr.enabled` shorthand turn OCR off (`ExtractionConfig::effective_disable_ocr`).
+/// - `ner.llm`: only the `llm` backend uses it (`NerProcessor`).
+/// - `summarization.llm`: the `extractive` strategy never calls it (`SummarizationProcessor`).
+/// - `chunk_classification.llm`: classifies chunks, which exist only with `chunking`.
+/// - `captioning.llm`: captions extracted images, which exist only with `images.extract_images`.
+/// - `structured_extraction.llm`, `chunking.embedding.model.llm`, `translation.llm` and
+///   `page_classification.llm` run whenever their section is set.
+const LLM_STAGE_SELECTORS: &[(&str, &[StageSelector])] = &[
+    ("/structured_extraction/llm", &[]),
+    (
+        "/ocr/vlm_config",
+        &[
+            StageSelector::Equal("/ocr/backend"),
+            StageSelector::Equal("/ocr/vlm_fallback"),
+            StageSelector::Present("/ocr/pipeline"),
+            StageSelector::Equal("/ocr/enabled"),
+            StageSelector::Equal("/disable_ocr"),
+        ],
+    ),
+    ("/chunking/embedding/model/llm", &[]),
+    ("/ner/llm", &[StageSelector::Equal("/ner/backend"), POSTPROCESSOR]),
+    (
+        "/summarization/llm",
+        &[StageSelector::Equal("/summarization/strategy"), POSTPROCESSOR],
+    ),
+    ("/translation/llm", &[POSTPROCESSOR]),
+    ("/page_classification/llm", &[POSTPROCESSOR]),
+    (
+        "/chunk_classification/llm",
+        &[StageSelector::Present("/chunking"), POSTPROCESSOR],
+    ),
+    (
+        "/captioning/llm",
+        &[StageSelector::Equal("/images/extract_images"), POSTPROCESSOR],
+    ),
+];
+
+/// An `ocr.pipeline.stages[i].vlm_config` runs when its stage's backend is `vlm` and the pipeline's
+/// order and quality thresholds reach it, so the whole pipeline must be the operator's.
+const OCR_PIPELINE_STAGE_SELECTORS: &[StageSelector] = &[
+    StageSelector::Equal("/ocr/pipeline"),
+    StageSelector::Equal("/ocr/enabled"),
+    StageSelector::Equal("/disable_ocr"),
+];
+
 /// Server environment variable that lets a caller's LLM stage authenticate with the server's
 /// environment credentials (provider API-key variables, the AWS credential chain, Vertex ADC).
 pub(crate) const ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV: &str = "XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS";
@@ -292,31 +367,48 @@ pub(crate) fn caller_llm_env_credentials_allowed() -> bool {
         .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
 }
 
-/// Reject an LLM stage of a remote caller's per-input override that differs from the request's
-/// effective stage at the same place, unless the operator set
-/// [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`]. `input` is the override as it will run.
+/// Reject a remote caller's per-input override that adds or changes an LLM stage, or a setting
+/// that decides whether one runs, relative to the request's effective config, unless the operator
+/// set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`]. `input` is the override as it will run.
 pub(crate) fn reject_caller_input_llm_stages(
     effective: &super::ExtractionConfig,
     input: &super::FileExtractionConfig,
     allow_env_credentials: bool,
 ) -> Result<(), String> {
-    check_caller_llm_stages(&config_json(effective)?, &config_json(input)?, allow_env_credentials)
+    let effective = config_json(effective)?;
+    let run = with_input_overrides(&effective, &config_json(input)?);
+    check_caller_llm_stages(&effective, &run, allow_env_credentials)
+}
+
+/// `effective` with each section the per-input override sets replaced by the override's, as
+/// `ExtractionConfig::with_file_overrides` applies it.
+fn with_input_overrides(effective: &Value, input: &Value) -> Value {
+    let mut run = effective.clone();
+    if let (Some(run), Some(input)) = (run.as_object_mut(), input.as_object()) {
+        for (key, value) in input.iter().filter(|(_, value)| !value.is_null()) {
+            run.insert(key.clone(), value.clone());
+        }
+    }
+    run
 }
 
 fn config_json(config: &impl serde::Serialize) -> Result<Value, String> {
     serde_json::to_value(config).map_err(|e| format!("Failed to serialize extraction config: {e}"))
 }
 
-/// Every LLM stage of the configuration that will run (`effective`) must be identical, field for
-/// field, to the stage the trusted configuration (`operator`) has at the same place: then the
-/// caller changed nothing and the stage runs as the operator configured it. A new or changed stage
+/// Every LLM stage of the configuration that will run (`run`) must be identical, field for field,
+/// to the stage the trusted configuration (`operator`) has at the same place, and so must the
+/// settings that decide whether it runs ([`LLM_STAGE_SELECTORS`]): then the caller changed nothing
+/// and the stage runs only as the operator configured it. A new, changed or newly enabled stage
 /// could spend the server's credentials on the caller's terms, so it needs the operator's opt-in.
-fn check_caller_llm_stages(operator: &Value, effective: &Value, allow_env_credentials: bool) -> Result<(), String> {
+fn check_caller_llm_stages(operator: &Value, run: &Value, allow_env_credentials: bool) -> Result<(), String> {
     if allow_env_credentials {
         return Ok(());
     }
-    for (pointer, path) in caller_llm_stages(effective) {
-        if effective.pointer(&pointer) != operator.pointer(&pointer) {
+    for (pointer, path, selectors) in caller_llm_stages(run) {
+        let unchanged = run.pointer(&pointer) == operator.pointer(&pointer)
+            && selectors.iter().all(|selector| selector.matches(operator, run));
+        if !unchanged {
             return Err(format!(
                 "Caller extraction config may not use the server's LLM credentials for {path}; \
                  the server operator must set {ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV}=1 to allow it"
@@ -326,12 +418,12 @@ fn check_caller_llm_stages(operator: &Value, effective: &Value, allow_env_creden
     Ok(())
 }
 
-/// JSON pointer and dotted path of every non-null LLM config in `config`.
-fn caller_llm_stages(config: &Value) -> Vec<(String, String)> {
-    let mut stages: Vec<(String, String)> = LLM_LOCATIONS
+/// JSON pointer, dotted path and run selectors of every non-null LLM config in `config`.
+fn caller_llm_stages(config: &Value) -> Vec<(String, String, &'static [StageSelector])> {
+    let mut stages: Vec<(String, String, &'static [StageSelector])> = LLM_LOCATIONS
         .iter()
         .filter(|(pointer, _)| config.pointer(pointer).is_some_and(|llm| !llm.is_null()))
-        .map(|(pointer, path)| ((*pointer).to_string(), (*path).to_string()))
+        .map(|(pointer, path)| ((*pointer).to_string(), (*path).to_string(), stage_selectors(pointer)))
         .collect();
     if let Some(pipeline) = config.pointer("/ocr/pipeline/stages").and_then(Value::as_array) {
         for (index, stage) in pipeline.iter().enumerate() {
@@ -339,11 +431,19 @@ fn caller_llm_stages(config: &Value) -> Vec<(String, String)> {
                 stages.push((
                     format!("/ocr/pipeline/stages/{index}/vlm_config"),
                     format!("ocr.pipeline.stages[{index}].vlm_config"),
+                    OCR_PIPELINE_STAGE_SELECTORS,
                 ));
             }
         }
     }
     stages
+}
+
+fn stage_selectors(pointer: &str) -> &'static [StageSelector] {
+    LLM_STAGE_SELECTORS
+        .iter()
+        .find(|(location, _)| *location == pointer)
+        .map_or(&[][..], |&(_, selectors)| selectors)
 }
 
 fn validate_llm_fields(llm: &Value, path: &str) -> Result<(), String> {
@@ -624,6 +724,119 @@ mod tests {
             check_caller_llm_stages(&serde_json::json!({}), &effective, false),
             Err(env_credentials_error("ocr.pipeline.stages[1].vlm_config"))
         );
+    }
+
+    #[test]
+    fn should_list_run_selectors_for_every_llm_location() {
+        let locations: Vec<&str> = LLM_LOCATIONS.iter().map(|(pointer, _)| *pointer).collect();
+        let selectors: Vec<&str> = LLM_STAGE_SELECTORS.iter().map(|(pointer, _)| *pointer).collect();
+        assert_eq!(locations, selectors);
+    }
+
+    #[test]
+    fn should_reject_operator_stage_woken_by_a_changed_selector() {
+        let llm = serde_json::json!({"model": "openai/gpt-4o-mini"});
+        let cases = [
+            (
+                serde_json::json!({"ocr": {"backend": "tesseract", "vlm_config": llm}}),
+                serde_json::json!({"ocr": {"backend": "vlm", "vlm_config": llm}}),
+                "ocr.vlm_config",
+            ),
+            (
+                serde_json::json!({"ocr": {"vlm_config": llm, "vlm_fallback": {"mode": "disabled"}}}),
+                serde_json::json!({"ocr": {"vlm_config": llm, "vlm_fallback": {"mode": "always"}}}),
+                "ocr.vlm_config",
+            ),
+            (
+                serde_json::json!({"ocr": {"backend": "vlm", "vlm_config": llm, "pipeline": {"stages": []}}}),
+                serde_json::json!({"ocr": {"backend": "vlm", "vlm_config": llm}}),
+                "ocr.vlm_config",
+            ),
+            (
+                serde_json::json!({"disable_ocr": true, "ocr": {"backend": "vlm", "vlm_config": llm}}),
+                serde_json::json!({"disable_ocr": false, "ocr": {"backend": "vlm", "vlm_config": llm}}),
+                "ocr.vlm_config",
+            ),
+            (
+                serde_json::json!({"ocr": {"enabled": false, "backend": "vlm", "vlm_config": llm}}),
+                serde_json::json!({"ocr": {"enabled": true, "backend": "vlm", "vlm_config": llm}}),
+                "ocr.vlm_config",
+            ),
+            (
+                serde_json::json!({"ocr": {"pipeline": {"stages": [{"backend": "tesseract", "vlm_config": llm}]}}}),
+                serde_json::json!({"ocr": {"pipeline": {"stages": [{"backend": "vlm", "vlm_config": llm}]}}}),
+                "ocr.pipeline.stages[0].vlm_config",
+            ),
+            (
+                serde_json::json!({"ner": {"backend": "onnx", "llm": llm}}),
+                serde_json::json!({"ner": {"backend": "llm", "llm": llm}}),
+                "ner.llm",
+            ),
+            (
+                serde_json::json!({"summarization": {"strategy": "extractive", "llm": llm}}),
+                serde_json::json!({"summarization": {"strategy": "abstractive", "llm": llm}}),
+                "summarization.llm",
+            ),
+            (
+                serde_json::json!({"chunk_classification": {"llm": llm}}),
+                serde_json::json!({"chunk_classification": {"llm": llm}, "chunking": {}}),
+                "chunk_classification.llm",
+            ),
+            (
+                serde_json::json!({"captioning": {"llm": llm}}),
+                serde_json::json!({"captioning": {"llm": llm}, "images": {"extract_images": true}}),
+                "captioning.llm",
+            ),
+            (
+                serde_json::json!({"translation": {"llm": llm}, "postprocessor": {"enabled": false}}),
+                serde_json::json!({"translation": {"llm": llm}, "postprocessor": {"enabled": true}}),
+                "translation.llm",
+            ),
+        ];
+
+        for (operator, run, path) in cases {
+            assert_eq!(check_caller_llm_stages(&operator, &operator, false), Ok(()), "{path}");
+            assert_eq!(
+                check_caller_llm_stages(&operator, &run, false),
+                Err(env_credentials_error(path)),
+                "{run}"
+            );
+            assert_eq!(check_caller_llm_stages(&operator, &run, true), Ok(()), "{path}");
+        }
+    }
+
+    #[test]
+    fn should_reject_request_config_that_wakes_a_dormant_operator_vlm_stage() {
+        let operator = operator_with_vlm(operator_vlm());
+        let caller = serde_json::json!({"ocr": {"backend": "vlm", "vlm_config": {"model": "openai/gpt-4o-mini", "temperature": 0.2}}});
+
+        assert_eq!(
+            resolve_remote_caller_extraction_config(&operator, Some(&caller), false).map(drop),
+            Err(env_credentials_error("ocr.vlm_config"))
+        );
+    }
+
+    #[test]
+    fn should_reject_per_input_override_that_wakes_a_dormant_operator_stage() {
+        let effective = super::super::ExtractionConfig {
+            disable_ocr: true,
+            ocr: Some(super::super::OcrConfig {
+                backend: "vlm".to_string(),
+                vlm_config: Some(operator_vlm()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let input = |disable_ocr| super::super::FileExtractionConfig {
+            disable_ocr: Some(disable_ocr),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            reject_caller_input_llm_stages(&effective, &input(false), false),
+            Err(env_credentials_error("ocr.vlm_config"))
+        );
+        assert_eq!(reject_caller_input_llm_stages(&effective, &input(true), false), Ok(()));
     }
 
     #[test]
