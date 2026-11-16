@@ -192,6 +192,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(install): Verify CLI release archive integrity before extraction.** The install script reads SHA-256 digests from GitHub release metadata. (#3168)
+
 - **(api, mcp): Callers can no longer choose server paths or loosen operator limits.**
   REST and MCP requests are rejected when their config names a server file, directory or model source
   (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids,
