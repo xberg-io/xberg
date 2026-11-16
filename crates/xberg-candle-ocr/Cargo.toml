@@ -26,44 +26,51 @@ crate-type = ["lib"]
 default = []
 
 # Per-model sub-features. None enabled by default.
-trocr = []
-paddleocr-vl = []
-glm-ocr = []
-deepseek-ocr = []
+trocr = [
+    "dep:candle-transformers",
+    "dep:fs2",
+    "dep:hf-hub",
+    "dep:parking_lot",
+    "dep:sha2",
+    "dep:tokenizers",
+]
+paddleocr-vl = ["dep:tokenizers"]
+glm-ocr = ["dep:fs2", "dep:hf-hub", "dep:parking_lot", "dep:sha2", "dep:tokenizers"]
+deepseek-ocr = ["dep:candle-transformers", "dep:tokenizers"]
 
 # Device acceleration pass-throughs to candle.
 # CUDA: Linux/Unix only (requires nvcc compiler); not available on macOS, Windows, or WASM.
-cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers?/cuda"]
 # Metal: macOS only (Apple GPU support via Metal Framework).
-metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers?/metal"]
 # MKL: Intel Math Kernel Library (all platforms, but typically Linux/Windows).
-mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers?/mkl"]
 # Accelerate: macOS only (Apple's Accelerate Framework for SIMD/BLAS).
 accelerate = [
     "candle-core/accelerate",
     "candle-nn/accelerate",
-    "candle-transformers/accelerate",
+    "candle-transformers?/accelerate",
 ]
 
 [dependencies]
 base64 = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
-candle-transformers = { workspace = true }
-fs2 = { workspace = true }
+candle-transformers = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
 image = { workspace = true, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif"] }
-parking_lot = { workspace = true }
+parking_lot = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.11"
+sha2 = { version = "0.11", optional = true }
 thiserror = { workspace = true }
-tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"], optional = true }
 tracing = { workspace = true }
 
 # hf-hub 1.0 uses its own reqwest/rustls stack, so a single non-wasm declaration covers every
 # native target (the `blocking` feature provides the sync API over an internal tokio runtime).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-hf-hub = { version = "1.0", default-features = false, features = ["blocking"] }
+hf-hub = { version = "1.0", default-features = false, features = ["blocking"], optional = true }
 
 [lints]
 workspace = true
