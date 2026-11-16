@@ -982,8 +982,11 @@ pub(crate) async fn cache_stats_handler() -> Result<Json<CacheStatsResponse>, Ap
 )]
 #[cfg_attr(feature = "otel", tracing::instrument(name = "api.cache_clear"))]
 pub(crate) async fn cache_clear_handler() -> Result<Json<CacheClearResponse>, ApiError> {
-    let cache_dir = crate::cache_dir::resolve_cache_base();
+    clear_cache_at(&crate::cache_dir::resolve_cache_base())
+}
 
+/// The body of [`cache_clear_handler`] for a given cache directory.
+fn clear_cache_at(cache_dir: &std::path::Path) -> Result<Json<CacheClearResponse>, ApiError> {
     let cache_dir_str = cache_dir.to_str().ok_or_else(|| {
         ApiError::internal(crate::error::XbergError::Other(format!(
             "Cache directory path contains non-UTF8 characters: {}",
@@ -2379,15 +2382,19 @@ mod tests {
 
     #[test]
     fn should_omit_cache_directory_from_cache_clear_response() {
-        let response = CacheClearResponse {
-            directory: String::new(),
-            removed_files: 3,
-            freed_mb: 1.5,
-        };
+        // Runs the handler's body on a temporary directory: the handler itself clears the real
+        // cache, and pointing XBERG_CACHE_DIR elsewhere would race every concurrent test. ~keep
+        let cache_dir = tempfile::tempdir().expect("temporary cache directory");
 
-        assert_eq!(
-            serde_json::to_value(&response).expect("response serializes"),
-            serde_json::json!({"removed_files": 3, "freed_mb": 1.5})
+        let Json(response) = clear_cache_at(cache_dir.path()).expect("an empty cache clears");
+
+        let body = serde_json::to_value(&response).expect("response serializes");
+        let fields = body.as_object().expect("response is an object");
+        assert!(!fields.contains_key("directory"), "{body}");
+        assert_eq!(body["removed_files"], 0, "{body}");
+        assert!(
+            !body.to_string().contains(&*cache_dir.path().to_string_lossy()),
+            "{body}"
         );
     }
 
