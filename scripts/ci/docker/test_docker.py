@@ -884,27 +884,30 @@ def test_security_nonroot(t: TestRunner) -> None:
 
 
 def test_cli_nonroot_paths(t: TestRunner) -> None:
-    t.start("CLI runs as a non-root user with a writable home and caches")
-    result = t.docker_run(
-        "--name",
-        t.container_name(),
-        "--entrypoint",
-        "/bin/sh",
-        t.image,
-        "-exc",
-        """
-        test "$(id -un)" = xberg
-        test "$(id -u)" -ne 0
-        touch "${HOME:?}/.xberg-ci"
-        touch "${XBERG_CACHE_DIR:?}/.xberg-ci"
-        mkdir -p "${HF_HOME:?}"
+    checks = """
+        test "${HOME:?}" = /app
+        test "${XBERG_CACHE_DIR:?}" = /app/.xberg
+        test "${HF_HOME:?}" = /app/.xberg/huggingface
+        touch "$HOME/.xberg-ci"
+        touch "$XBERG_CACHE_DIR/.xberg-ci"
+        mkdir -p "$HF_HOME"
         touch "$HF_HOME/.xberg-ci"
-        """,
-    )
-    if result.returncode == 0:
-        t.pass_test()
-    else:
-        t.fail_test("CLI non-root filesystem access", f"Exit code {result.returncode}: {result.stderr.strip()}")
+        test -x /usr/local/bin/xberg
+        test ! -w /usr/local/bin/xberg
+        test ! -w /usr/local/bin
+        test ! -w /usr/local/lib
+        """
+    for identity, user_args in (("the default user", ()), ("12345:0", ("--user", "12345:0"))):
+        t.start(f"CLI home and caches are writable as {identity}")
+        result = t.docker_run(
+            "--name", t.container_name(), *user_args, "--entrypoint", "/bin/sh", t.image, "-exc", checks
+        )
+        if result.returncode == 0:
+            t.pass_test()
+        else:
+            t.fail_test(
+                f"CLI filesystem access as {identity}", f"Exit code {result.returncode}: {result.stderr.strip()}"
+            )
 
 
 def test_security_readonly(t: TestRunner) -> None:
@@ -1007,6 +1010,7 @@ def run_cli_tests(t: TestRunner) -> None:
     test_batch_cli(t)
     test_readonly_mount(t)
     test_nonexistent_file(t)
+    test_security_nonroot(t)
     test_cli_nonroot_paths(t)
 
 

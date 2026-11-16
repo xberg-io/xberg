@@ -123,6 +123,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(docker): Run the CLI image as the non-root user `10001:10001`.** Its home is `/app` and its cache is
+  `/app/.xberg`. Remount caches previously mounted at `/root/.cache/xberg`. Grant the CLI user write access
+  to host cache and output directories, or run with a matching non-root UID and group 0
+  (`--user <uid>:0`). (#3168)
+
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)
 

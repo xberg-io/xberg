@@ -113,8 +113,9 @@ ENV XBERG_BUILD_ID=${XBERG_BUILD_ID}
 
 RUN addgroup -S -g 10001 xberg && \
     adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G xberg xberg && \
-    mkdir -p /app/.xberg && \
-    chown xberg:xberg /app /app/.xberg
+    mkdir -p /app/.xberg/huggingface && \
+    chown xberg:root /app /app/.xberg /app/.xberg/huggingface && \
+    chmod 2775 /app /app/.xberg /app/.xberg/huggingface
 
 ENV HOME=/app \
     XBERG_CACHE_DIR=/app/.xberg \
