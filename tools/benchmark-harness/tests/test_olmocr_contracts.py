@@ -417,6 +417,22 @@ class FormulaCacheTest(unittest.TestCase):
         assert not self.runner._recognized_formula({"content": "$$x^2$$"}, trace)
         assert not self.runner._recognized_formula({"formulas": [{"page": 1, "latex": " "}]}, trace)
 
+    def test_recognition_reads_actual_core_cli_event_and_rejects_it_inside_span_text(self):
+        """Match the Full-format event captured from the public arXiv pilot."""
+        message = (
+            "xberg::extractors::pdf::formula_evidence: native PDF formula recognition applied "
+            "page=1 replaced=0 synthesized=2"
+        )
+        trace = (
+            '2026-11-16T22:40:07.780286Z DEBUG extract_file{mime_type=None xberg.operation="extract_file" '
+            'xberg.document.filename="2503.04048_pg46.pdf"}:xberg.pipeline{xberg.pipeline.stage="extraction" '
+            f'xberg.extractor.name="pdf-extractor" xberg.extractor.priority=50}}: {message}'
+        )
+        document = {"formulas": [{"page": 1, "latex": "x^2"}]}
+        assert self.runner._recognized_formula(document, trace)
+        decoy = f'DEBUG extraction{{detail="DEBUG {message}"}}: xberg::unrelated: extraction finished'
+        assert not self.runner._recognized_formula(document, decoy)
+
     def test_math_coverage_does_not_count_fallback_with_formula_evidence(self):
         """A fallback cannot qualify merely because an earlier formula ran."""
         pdfs = {"math": {"file": "bench_data/pdfs/arxiv_math/math.pdf"}}

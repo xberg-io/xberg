@@ -2255,15 +2255,7 @@ async fn recognize_pdf_formula_page_inputs(
                 }
             }
         }
-        if replaced_regions != 0 || !synthesized.is_empty() {
-            tracing::debug!(
-                target: "xberg::extractors::pdf::formula_evidence",
-                page = page_number,
-                replaced = replaced_regions,
-                synthesized = synthesized.len(),
-                "native PDF formula recognition applied"
-            );
-        }
+        trace_formula_recognition(page_number, replaced_regions, synthesized.len());
         if !synthesized.is_empty() {
             tracing::info!(
                 page = page_number,
@@ -2276,6 +2268,19 @@ async fn recognize_pdf_formula_page_inputs(
     drop(element_slots);
     if let Some(doc) = ocr_doc {
         insert_missing_formula_elements(doc, missing_elements);
+    }
+}
+
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+fn trace_formula_recognition(page: u32, replaced: usize, synthesized: usize) {
+    if replaced != 0 || synthesized != 0 {
+        tracing::debug!(
+            target: "xberg::extractors::pdf::formula_evidence",
+            page = page,
+            replaced = replaced,
+            synthesized = synthesized,
+            "native PDF formula recognition applied"
+        );
     }
 }
 
