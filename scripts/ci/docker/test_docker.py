@@ -983,6 +983,7 @@ def run_cli_tests(t: TestRunner) -> None:
     test_batch_cli(t)
     test_readonly_mount(t)
     test_nonexistent_file(t)
+    test_security_nonroot(t)
 
 
 def run_core_full_tests(t: TestRunner) -> None:
