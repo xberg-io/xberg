@@ -538,7 +538,10 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: xberg-ffi-
+          # One archive per c-ffi-libraries matrix platform; a prefix match alone took a
+          # single archive as the whole set. ~keep
+          assets: >-
+            xberg-ffi-linux-x86_64.tar.gz,xberg-ffi-linux-aarch64.tar.gz,xberg-ffi-macos-arm64.tar.gz,xberg-ffi-windows-x86_64.tar.gz
 
   check-elixir-release:
     name: Check GitHub Release for Elixir NIF assets
@@ -5344,9 +5347,9 @@ jobs:
   publish-zig:
     name: Publish Zig package metadata
     needs: [prepare, upload-c-ffi-release, check-zig, c-ffi-libraries]
-    # Consumes c-ffi RUN-artifacts, so c-ffi-libraries must have SUCCEEDED this run
-    # (a skip means there are no artifacts to download). Independent of every other
-    # channel: it waits on the C FFI upload, not on finalize. ~keep
+    # Consumes this run's c-ffi artifacts, or the release's C FFI archives when
+    # c-ffi-libraries was skipped because they are already uploaded. Independent of every
+    # other channel: it waits on the C FFI upload, not on finalize. ~keep
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -5356,9 +5359,8 @@ jobs:
         with:
           channel: Zig
           needs: ${{ toJSON(needs) }}
-          succeeded: |
-            c-ffi-libraries
           succeeded-or-skipped: |
+            c-ffi-libraries
             upload-c-ffi-release
 
       - uses: actions/checkout@v7
@@ -5367,10 +5369,23 @@ jobs:
           submodules: false
 
       - uses: actions/download-artifact@v8
+        if: ${{ needs.c-ffi-libraries.result == 'success' }}
         with:
           pattern: c-ffi-*
           path: dist/c-ffi-downloaded
           merge-multiple: false
+
+      - name: Download C FFI archives from the release
+        if: ${{ needs.c-ffi-libraries.result != 'success' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'xberg-ffi-*.tar.gz' --dir dist/c-ffi-downloaded/release
+          ls -la dist/c-ffi-downloaded/release
 
       - name: Lay out FFI artifacts for multi-platform Zig bundle
         shell: bash
