@@ -9,7 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: plugin-artifacts-${{ inputs.tag }}
@@ -18,6 +18,8 @@ concurrency:
 jobs:
   package:
     runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,6 +48,31 @@ jobs:
           tar --sort=name --mtime="@$(git show -s --format=%ct HEAD)" \
             --owner=0 --group=0 --numeric-owner -cf - -C dist/plugin . | gzip -n > "$bundle"
           (cd dist && sha256sum "$(basename "$bundle")") > "$bundle.sha256"
+      - name: Upload verified plugin archive and metadata
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-release-assets
+          path: |
+            dist/*-plugins-*.tar.gz
+            dist/*-plugins-*.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+  attach:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified plugin archive and metadata
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.package.outputs.artifact-id }}
+          path: dist
+      - name: Verify the transferred archive checksum
+        working-directory: dist
+        run: sha256sum --check -- *-plugins-*.tar.gz.sha256
       - name: Attach verified plugin archive and metadata
         uses: xberg-io/actions/upload-release-assets@v1
         with:
