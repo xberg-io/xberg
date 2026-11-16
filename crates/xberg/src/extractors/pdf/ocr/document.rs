@@ -2384,14 +2384,6 @@ pub(super) fn carry_page_ocr_payload_forward(
     existing: &crate::types::internal::InternalDocument,
     new_page_doc: &mut crate::types::internal::InternalDocument,
 ) {
-    if let [paragraph] = existing.elements.as_slice()
-        && paragraph
-            .attributes
-            .as_ref()
-            .is_some_and(|attrs| attrs.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE))
-    {
-        certify_scan_html_paragraph(new_page_doc, &paragraph.text);
-    }
     // Both rebuild paths skip cell-only tables. Final native yield and output still need them. ~keep
     new_page_doc.tables.extend(
         existing

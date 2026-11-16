@@ -208,21 +208,26 @@ fn plain_200_dpi_psm6_keeps_source_leader_occurrences_in_order() {
     }
 }
 
-#[test]
-fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
-    let pinned = |compressed: &[u8], sha: &str| {
-        let mut bytes = Vec::new();
-        GzDecoder::new(compressed)
-            .read_to_end(&mut bytes)
-            .expect("decompress synthetic scan PDF");
-        assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
-        bytes
-    };
-    let original = pinned(
+fn pinned_synthetic_scan(compressed: &[u8], sha: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    GzDecoder::new(compressed)
+        .read_to_end(&mut bytes)
+        .expect("decompress synthetic scan PDF");
+    assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
+    bytes
+}
+
+fn plain_scan() -> Vec<u8> {
+    pinned_synthetic_scan(
         include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-plain.pdf.gz"),
         "9f427df6284fe295ea131e46211844b24b0a8693b2c36da1ce004439148abc6c",
-    );
-    let shifted = pinned(
+    )
+}
+
+#[test]
+fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
+    let original = plain_scan();
+    let shifted = pinned_synthetic_scan(
         include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-shifted-count-header.pdf.gz"),
         "5d6a45358a6824f9003ead2d6bb0aed701e98a4e72826511848c38819bc56b60",
     );
@@ -258,4 +263,44 @@ fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
         assert_eq!(html.content.trim(), expected);
         assert_eq!(page.content.trim(), expected);
     }
+}
+
+fn duplicate_scan_page(bytes: &[u8]) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(bytes).expect("synthetic single-page scan");
+    let originals = pdf.get_pages();
+    assert_eq!(originals.len(), 1);
+    let original = originals[&1];
+    let page = pdf.get_dictionary(original).unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let duplicate = pdf.add_object(page);
+    let tree = pdf.get_dictionary_mut(parent).unwrap();
+    let kids = tree.get_mut(b"Kids").unwrap().as_array_mut().unwrap();
+    assert_eq!(kids.as_slice(), [lopdf::Object::Reference(original)]);
+    kids.push(lopdf::Object::Reference(duplicate));
+    tree.set("Count", 2);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).expect("serialize both synthetic pages");
+    assert_eq!(lopdf::Document::load_mem(&bytes).unwrap().get_pages().len(), 2);
+    bytes
+}
+
+#[test]
+fn psm6_html_leaves_each_page_of_a_two_page_scan_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as(&duplicate_scan_page(&original), Some(6), OutputFormat::Html);
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    let [first, second] = html.pages.as_deref().unwrap() else {
+        panic!("two source pages");
+    };
+    for (page, number) in [(first, 1), (second, 2)] {
+        assert_eq!(page.page_number, number);
+        assert_eq!(page.content.trim(), flattened);
+    }
+    assert_eq!(html.content.matches(flattened.as_str()).count(), 2, "{}", html.content);
 }

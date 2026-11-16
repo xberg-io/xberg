@@ -7012,7 +7012,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 not(target_arch = "wasm32")
             ))]
             if total_pages == 1
+                && lazy_pdf_page_count == 1
+                && detached_page.is_none()
                 && config.output_format == crate::core::config::OutputFormat::Html
+                && config.result_format == crate::types::ResultFormat::Unified
+                && !config.include_document_structure
                 && !has_layout_detections
                 && builtin_tesseract
                 && let Some(doc) = ocr_result.ocr_internal_document.as_ref()
