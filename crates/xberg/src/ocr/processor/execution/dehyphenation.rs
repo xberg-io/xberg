@@ -260,7 +260,7 @@ fn same_full_width_body(prior: &Line<'_>, next: &Line<'_>, page_width: u32) -> O
 }
 
 fn lexical_core(word: &str) -> &str {
-    word.trim_matches(|character: char| !character.is_ascii_alphabetic() && character != '-')
+    word.trim_matches(['.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '[', ']', '{', '}'])
 }
 
 fn witnessed_spelling(prefix: &str, continuation: &str, spellings: &HashSet<String>) -> bool {
@@ -333,6 +333,25 @@ mod tests {
         assert_eq!(elements[0].text, "A passage ends with recognition");
         assert_eq!(elements[1].text, "and explanatory text");
         assert_eq!(elements[2].text, "Earlier recognition supports it");
+    }
+
+    #[test]
+    fn digits_and_non_ascii_edges_do_not_license_joins() {
+        for (continuation, witness) in [
+            ("nition", "recognition2"),
+            ("nition", "érecognition"),
+            ("nition", "recognition\u{301}"),
+            ("nition2", "recognition"),
+            ("nitioné", "recognition"),
+            ("nition\u{301}", "recognition"),
+        ] {
+            let text = format!(
+                "A passage ends with recog-\n{continuation} and explanatory text\nEarlier {witness} supports it"
+            );
+            let (mut elements, words) = scan(&text, &[(160, 840); 3]);
+            assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
+            assert_eq!(elements[0].text, text);
+        }
     }
 
     #[test]
