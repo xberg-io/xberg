@@ -128,9 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   class. Python callers that caught `PluginError` should catch `OcrError` for this case. REST retains `PluginError`
   and HTTP 500. Batch extraction retains kind `plugin` and code 1008. An aggregate error embedded in
   `ocr_page_failures[].error` now starts with `OCR error:` in place of `Plugin error in 'ocr':`.
-  The typed in-process chain preserves the backend error and its sources. Generic source traversal and Debug
-  formatting can reveal their full messages. PDF page failure descriptions and the CLI's extraction error report
-  omit the aggregate's raw source messages.
+  All-page OCR and PDF OCR pipeline stage failures preserve the typed backend error and its sources in Rust.
+  Raw Rust error formatting and source traversal can expose backend diagnostic text. The single-document
+  `xberg extract` command uses a summary with the first failure's category and I/O error kind when available,
+  omitting backend messages and source details from those aggregates.
 
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)

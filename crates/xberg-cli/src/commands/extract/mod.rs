@@ -304,7 +304,7 @@ fn fail_if_errors(errors: &[ExtractionErrorItem]) -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(test, any(feature = "pdf-ocr", feature = "ocr")))]
+#[cfg(all(test, feature = "pdf-surface", any(feature = "pdf-ocr", feature = "ocr")))]
 mod ocr_diagnostic_tests;
 
 #[cfg(test)]

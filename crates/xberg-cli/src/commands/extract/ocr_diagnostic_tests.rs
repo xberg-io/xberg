@@ -135,6 +135,13 @@ fn cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats() {
             "The embedded-image retry ran on 1 of these page(s) and also returned no text."
         ),
     ];
-    assert!(expected.contains(&summary.as_str()), "{summary}");
+    let category = "; first failure category: ocr (Other)";
+    assert!(
+        expected
+            .iter()
+            .any(|headline| summary == format!("{headline}{category}")),
+        "{summary}"
+    );
+    assert!(format!("{cli:#}").ends_with(&summary));
     assert!(projected.source().is_none());
 }

@@ -32,6 +32,9 @@ run_exact() {
   if [[ "${1:-}" == --native-pdf ]]; then
     shift
     cargo_args=(test --locked -p xberg-native-pdf "$@")
+  elif [[ "${1:-}" == --cli ]]; then
+    shift
+    cargo_args=(test --locked -p xberg-cli --no-default-features --features pdf-ocr --bin xberg "$@")
   else
     cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
   fi
@@ -420,7 +423,9 @@ pdf-ocr)
   run_exact 'error::tests::cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug' --lib
   run_exact 'extractors::pdf::tests::inline_image_ocr_backend_cancellation_stops_pdf_extraction' --lib
   run_exact a_targeted_retry_backend_cancellation_discards_the_successful_whole_read --test pdf_marked_page_retry_fallback_2833
-  expected=$((expected + 8))
+  run_exact 'commands::extract::ocr_diagnostic_tests::cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats' --cli
+  run_exact 'commands::extract::tests::uri_extraction_failure_does_not_assert_a_false_readability_diagnosis' --cli
+  expected=$((expected + 10))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases

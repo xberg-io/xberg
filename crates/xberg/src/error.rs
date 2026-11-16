@@ -414,7 +414,20 @@ impl XbergError {
                     .as_ref()
                     .and_then(|cause| cause.downcast_ref::<PdfOcrFailureCause>())
             {
-                message.clone_from(&cause.cli_message);
+                use std::error::Error as _;
+
+                let category = cause.backend.extraction_error_type();
+                let io_error = match &cause.backend {
+                    Self::Io(error) => Some(error),
+                    backend => backend
+                        .source()
+                        .and_then(|source| source.downcast_ref::<std::io::Error>()),
+                };
+                let headline = &cause.cli_message;
+                *message = match io_error {
+                    Some(error) => format!("{headline}; first failure category: {category} ({:?})", error.kind()),
+                    None => format!("{headline}; first failure category: {category}"),
+                };
                 *source = None;
             }
             error
@@ -613,12 +626,12 @@ mod tests {
             (
                 XbergError::all_page_ocr_failure(raw_message.clone(), "every page failed".into(), backend_failure()),
                 "OCR error",
-                "OCR error: every page failed",
+                "OCR error: every page failed; first failure category: ocr (Other)",
             ),
             (
                 XbergError::ocr_pipeline_failure(raw_message.clone(), "every stage failed", Some(backend_failure())),
                 "Parsing error",
-                "Parsing error: every stage failed",
+                "Parsing error: every stage failed; first failure category: ocr (Other)",
             ),
         ] {
             let raw = format!("{error:?}");
