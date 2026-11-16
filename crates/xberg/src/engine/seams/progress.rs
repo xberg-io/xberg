@@ -30,7 +30,15 @@ pub trait ProgressSink: Send + Sync + 'static {
     /// Record a progress event. Implementations must not block.
     fn emit(&self, event: ProgressEvent);
 
-    /// Record completion of one OCR page.
+    /// Record the first completed OCR read of one page.
+    ///
+    /// Called once per page of an input, when the page's first OCR read completes; a later
+    /// read of the same page (a quality fallback stage or an embedded-image retry) is not
+    /// reported. `page` is 1-based and `total` is the input's page count. `completed` is the
+    /// number of distinct pages of the input reported so far, this one included. `backend`
+    /// names the backend of that first read, which a later quality fallback may replace in
+    /// the extraction result. `input_index` is the zero-based batch position, or `None`
+    /// outside a batch.
     fn emit_ocr_page(&self, page: usize, total: usize, completed: usize, backend: &str, _input_index: Option<usize>) {
         self.emit(ProgressEvent {
             stage: "ocr_page".to_string(),

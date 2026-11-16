@@ -148,7 +148,7 @@ in one request when a pipeline receives documents from multiple sources.
 
 ### Python OCR Progress
 
-Python callers can receive one event whenever an OCR page attempt completes. The callback runs outside the extraction worker, and an exception from it is logged and ignored.
+Python callers can receive one event per page of each input, when the page's first OCR read completes. The callback runs outside the extraction worker, and an exception from it is logged and ignored.
 
 ```python title="ocr_progress.py"
 from xberg import ExtractInput, ProgressEvent, extract_batch
@@ -167,7 +167,7 @@ output = await extract_batch(
 )
 ```
 
-`page` is 1-based. `input_index` is the zero-based position in `extract_batch`; it is `None` for `extract`.
+`page` is 1-based. `completed` counts the distinct pages of the input reported so far. `backend` names the backend of the page's first OCR read; when that read fails the quality check, a fallback backend may replace it in the result without a second event. `input_index` is the zero-based position in `extract_batch`; it is `None` for `extract`.
 
 ### Per-Input Configuration
 
