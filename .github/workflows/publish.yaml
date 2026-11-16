@@ -269,7 +269,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       node_exists: ${{ steps.check.outputs.exists }}
-      wasm_exists: ${{ steps.check.outputs.wasm_exists }}
+      wasm_exists: ${{ fromJSON(steps.check.outputs.results).wasm_exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -307,7 +307,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       java_exists: ${{ steps.check.outputs.exists }}
-      kotlin_exists: ${{ steps.check.outputs.kotlin_exists }}
+      kotlin_exists: ${{ fromJSON(steps.check.outputs.results).kotlin_exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -360,16 +360,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       xberg_exists: ${{ steps.check.outputs.exists }}
-      tesseract_exists: ${{ steps.check.outputs.tesseract_exists }}
-      paddle_exists: ${{ steps.check.outputs.paddle_exists }}
-      candle_exists: ${{ steps.check.outputs.candle_exists }}
-      libheif_exists: ${{ steps.check.outputs.libheif_exists }}
-      gliner_exists: ${{ steps.check.outputs.gliner_exists }}
-      libwpd_exists: ${{ steps.check.outputs.libwpd_exists }}
-      native_pdf_exists: ${{ steps.check.outputs.native_pdf_exists }}
-      pdfium_exists: ${{ steps.check.outputs.pdfium_exists }}
-      cli_exists: ${{ steps.check.outputs.cli_exists }}
-      all_exist: ${{ steps.derive.outputs.all_exist }}
+      all_exist: ${{ steps.check.outputs.all-exist }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -387,23 +378,6 @@ jobs:
             native_pdf_exists=xberg-native-pdf
             pdfium_exists=xberg-pdfium-render
             cli_exists=xberg-cli
-
-      - id: derive
-        run: |
-          if [[ "${{ steps.check.outputs.exists }}" == "true" \
-            && "${{ steps.check.outputs.tesseract_exists }}" == "true" \
-            && "${{ steps.check.outputs.paddle_exists }}" == "true" \
-            && "${{ steps.check.outputs.candle_exists }}" == "true" \
-            && "${{ steps.check.outputs.libheif_exists }}" == "true" \
-            && "${{ steps.check.outputs.gliner_exists }}" == "true" \
-            && "${{ steps.check.outputs.libwpd_exists }}" == "true" \
-            && "${{ steps.check.outputs.native_pdf_exists }}" == "true" \
-            && "${{ steps.check.outputs.pdfium_exists }}" == "true" \
-            && "${{ steps.check.outputs.cli_exists }}" == "true" ]]; then
-            echo "all_exist=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "all_exist=false" >> "$GITHUB_OUTPUT"
-          fi
 
   check-hex:
     name: Check Hex.pm for existing versions
