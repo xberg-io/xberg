@@ -32,6 +32,11 @@ mod source_archive;
 #[path = "build_support/source_cache.rs"]
 mod source_cache;
 
+// `dynamic-linking` compiles out the vendored download and build path, the only user of these
+// build dependencies, while `build-tesseract` still enables them. ~keep
+#[cfg(all(feature = "dynamic-linking", not(feature = "build-tesseract-wasm")))]
+use {reqwest as _, sha2 as _, tempfile as _, zip as _};
+
 #[cfg(any(
     feature = "build-tesseract-wasm",
     all(feature = "build-tesseract", not(feature = "dynamic-linking"))

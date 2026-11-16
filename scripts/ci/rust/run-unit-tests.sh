@@ -87,11 +87,12 @@ export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 # space while linking these binaries.
 # Build and run the targets in chunks and delete each chunk's executables once it has run, so
 # the peak is bounded by one chunk. The free space after every chunk is printed, which turns
-# the next failure of this kind into a measurement. Other platforms keep the single invocation.
+# the next failure of this kind into a measurement. macOS chunks too: its runner lost contact
+# while linking the single invocation's binaries. Windows keeps the single invocation.
 run_xberg_tests_in_chunks() {
   local features="$1"
   local chunk_size="${XBERG_TEST_CHUNK_SIZE:-40}"
-  local metadata target_dir deps name stem status=0 rc=0
+  local metadata target_dir deps build_out name stem status=0 rc=0
   local -a tests=() chunk=() args=()
 
   metadata="$(cargo metadata --no-deps --format-version 1)" || return 90
@@ -101,6 +102,10 @@ run_xberg_tests_in_chunks() {
     return 90
   fi
   deps="$target_dir/debug/deps"
+  # Cargo 1.100 links each test executable into debug/build/<package>/<hash>/out; earlier
+  # releases linked it into debug/deps. Pruning only the old directory deleted nothing and
+  # the runners filled up again, so search both and fail a chunk that pruned nothing. ~keep
+  build_out="$target_dir/debug/build/xberg"
   while IFS= read -r name; do
     [ -n "$name" ] && tests+=("$name")
   done < <(printf '%s' "$metadata" | jq -r '.packages[] | select(.name == "xberg") | .targets[] | select(.kind | index("test")) | .name')
@@ -111,11 +116,20 @@ run_xberg_tests_in_chunks() {
   echo "xberg integration-test targets: ${#tests[@]} (chunks of ${chunk_size})"
 
   prune_test_binaries() {
+    local pruned=0 found
     for name in "$@"; do
       stem="${name//-/_}"
-      [ -d "$deps" ] || continue
-      find "$deps" -maxdepth 1 -type f -name "${stem}-[0-9a-f]*" ! -name '*.*' -delete
+      if [ -d "$deps" ]; then
+        found="$(find "$deps" -maxdepth 1 -type f -name "${stem}-[0-9a-f]*" ! -name '*.*' -print -delete | wc -l)"
+        pruned=$((pruned + found))
+      fi
+      if [ -d "$build_out" ]; then
+        found="$(find "$build_out" -mindepth 3 -maxdepth 3 -type f -path '*/out/*' -name "${stem}-[0-9a-f]*" ! -name '*.*' -print -delete | wc -l)"
+        pruned=$((pruned + found))
+      fi
     done
+    echo "pruned test executables: ${pruned}"
+    [ "$pruned" -gt 0 ]
   }
 
   RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg --features "$features" \
@@ -131,7 +145,10 @@ run_xberg_tests_in_chunks() {
     RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg --features "$features" \
       "${args[@]}" --verbose || rc=$?
     [ "$rc" -eq 0 ] || status=$rc
-    prune_test_binaries "${chunk[@]}"
+    if ! prune_test_binaries "${chunk[@]}" && [ "$rc" -eq 0 ]; then
+      echo "ERROR: no test executables found to prune for: ${chunk[*]}" >&2
+      status=92
+    fi
     df -h "$target_dir" | tail -1 | sed "s/^/disk after tests $((i + 1))-$((i + ${#chunk[@]})): /"
     i=$((i + chunk_size))
   done
@@ -170,7 +187,7 @@ if ! {
     echo "Linux aarch64: using full-no-heic,heic (full pulls candle -> gemm-f16 needs fullfp16)"
     xberg_test_features=full-no-heic,heic,formula-recognition,classification-onnx,bundle-tessdata-eng
   fi
-  if [ "$(uname -s)" = "Linux" ]; then
+  if [ "$(uname -s)" = "Linux" ] || [ "$(uname -s)" = "Darwin" ]; then
     run_xberg_tests_in_chunks "$xberg_test_features" || exit
   else
     RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg --features "$xberg_test_features" --all-targets --verbose || exit
