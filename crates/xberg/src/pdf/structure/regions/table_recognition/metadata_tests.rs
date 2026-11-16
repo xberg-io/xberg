@@ -24,6 +24,16 @@ fn recognize_rows_with_rules(
     span: Option<[f32; 4]>,
     rules: &[(u32, u32, u32)],
 ) -> RecognizedTatrTable {
+    recognize_rows_with_paint(rows, header_rows, span.as_slice(), rules, &[])
+}
+
+fn recognize_rows_with_paint(
+    rows: &[&[&str]],
+    header_rows: usize,
+    spans: &[[f32; 4]],
+    rules: &[(u32, u32, u32)],
+    fills: &[(u32, u32, u32, u8)],
+) -> RecognizedTatrTable {
     let cols = rows[0].len();
     let width = (cols * 50) as u32;
     let height = (rows.len() * 20) as u32;
@@ -54,9 +64,9 @@ fn recognize_rows_with_rules(
             })
             .into_iter()
             .collect(),
-        spanning: span
-            .map(|bbox| detection(TatrClass::SpanningCell, bbox))
-            .into_iter()
+        spanning: spans
+            .iter()
+            .map(|&bbox| detection(TatrClass::SpanningCell, bbox))
             .collect(),
         table_bbox: Some([0.0, 0.0, width as f32, height as f32]),
     };
@@ -76,6 +86,13 @@ fn recognize_rows_with_rules(
         })
         .collect();
     let mut image = image::RgbImage::from_pixel(width, height, image::Rgb([255; 3]));
+    for &(bottom, left, right, shade) in fills {
+        for y in 0..bottom {
+            for x in left..right {
+                image.put_pixel(x, y, image::Rgb([shade; 3]));
+            }
+        }
+    }
     if !rules.is_empty() {
         for word in &words {
             for x in word.left + 2..word.left + word.width - 2 {
@@ -167,7 +184,12 @@ fn native_tatr_vertical_span_stops_at_a_painted_rule() {
         assert_eq!(result.table.cells[0], rows[0]);
         assert_eq!(result.table.cells[1], rows[1]);
         assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
-        assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row == 0)));
+        let without_span = recognize_rows_with_rules(rows, 3, None, &[divider]);
+        assert_eq!(grid, derived_grid(&without_span));
+        assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 3)));
+        let html = crate::rendering::render_html(&recognized_document(&result));
+        assert!(!html.contains("rowspan="), "{html}");
+        assert_eq!(html.matches("Industry").count(), 1, "{html}");
     }
 }
 
@@ -219,6 +241,66 @@ fn native_tatr_three_row_span_retains_only_the_source_supported_merge() {
         assert_eq!(html.matches("Region").count(), 1, "{html}");
         assert_eq!(html.matches("Coast").count(), 1, "{html}");
     }
+    assert_adjacent_source_supported_spans();
+    assert_tinted_source_supported_span(rows, span.unwrap());
+}
+
+fn assert_adjacent_source_supported_spans() {
+    let rows: &[&[&str]] = &[
+        &["Region", "Code", "2024", ""],
+        &["", "", "Q1", "Q2"],
+        &["North", "NY", "10", "12"],
+    ];
+    let spans = [
+        [0.0, 0.0, 50.0, 60.0],
+        [50.0, 0.0, 100.0, 60.0],
+        [100.0, 0.0, 200.0, 20.0],
+    ];
+    let rules = [(20, 100, 200), (40, 0, 200)];
+    let result = recognize_rows_with_paint(rows, 2, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    let headers: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.row == 0)
+        .map(|cell| (cell.row_span, cell.col_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(headers, [(2, 1, "Region"), (2, 1, "Code"), (1, 2, "2024")]);
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert_eq!(html.matches("rowspan=\"2\"").count(), 2, "{html}");
+    assert_eq!(html.matches("colspan=\"2\"").count(), 1, "{html}");
+    for label in ["Region", "Code", "2024", "Q1", "Q2"] {
+        assert_eq!(html.matches(label).count(), 1, "{html}");
+    }
+
+    let independent: &[&[&str]] = &[rows[0], &["", "District", "Q1", "Q2"], rows[2]];
+    let result = recognize_rows_with_paint(independent, 2, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+    assert!(
+        grid.cells
+            .iter()
+            .any(|cell| cell.row == 1 && cell.content == "District")
+    );
+}
+
+fn assert_tinted_source_supported_span(rows: &[&[&str]], span: [f32; 4]) {
+    let fills = [(31, 50, 100, 217)];
+    let rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let result = recognize_rows_with_paint(rows, 1, &[span], &rules, &fills);
+    let grid = derived_grid(&result);
+    let track: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.col == 1)
+        .map(|cell| (cell.row, cell.row_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(track, [(0, 2, "Region"), (2, 1, "Coast")]);
+
+    let crossing = [(20, 0, 150), (40, 0, 150)];
+    let result = recognize_rows_with_paint(rows, 1, &[span], &crossing, &fills);
+    let grid = derived_grid(&result);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
 }
 
 #[test]
