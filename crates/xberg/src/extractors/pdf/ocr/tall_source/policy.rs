@@ -94,6 +94,7 @@ pub(in super::super) fn note_flat_structure(result: &mut ExtractedDocument, conf
 pub(in super::super) enum Unrecovered {
     Config(&'static str),
     TablesOrFormulas,
+    InsufficientReadEvidence,
     Uncertified,
     IndexedRgb,
     Rejected,
@@ -108,31 +109,26 @@ pub(in super::super) fn note_unrecovered(
     why: Unrecovered,
 ) {
     let (_, page_height) = super::super::rendering::page_dimensions_pt(document, page);
-    let render_dpi = f64::from(raster.1) * 72.0 / f64::from(page_height.max(1.0));
+    let dpi = |height| f64::from(height) * 72.0 / f64::from(page_height.max(1.0));
+    let render_dpi = dpi(raster.1);
     let density_floor = MIN_STANDARD_SOURCE_DPI * 0.98;
-    let clamp_dpi = if render_dpi < density_floor {
-        None
-    } else {
-        if f64::from(page_height) <= f64::from(MAX_TILE_SIDE) * 72.0 / MIN_STANDARD_SOURCE_DPI
-            || !matches!(
-                document.get_page_rotation_status(page),
-                Ok(PageRotation::Absent | PageRotation::Valid(0))
-            )
-        {
-            return;
-        }
-        let Some(ocr_height) = clamped_ocr_height(original, raster) else {
-            return;
-        };
-        let ocr_dpi = f64::from(ocr_height) * 72.0 / f64::from(page_height.max(1.0));
-        if ocr_dpi >= density_floor {
-            return;
-        }
-        Some(ocr_dpi)
-    };
+    let tall_unrotated = f64::from(page_height) > f64::from(MAX_TILE_SIDE) * 72.0 / MIN_STANDARD_SOURCE_DPI
+        && matches!(
+            document.get_page_rotation_status(page),
+            Ok(PageRotation::Absent | PageRotation::Valid(0))
+        );
+    let reduced_dpi = tall_unrotated
+        .then(|| reduced_ocr_height(original, raster))
+        .flatten()
+        .map(dpi)
+        .filter(|&density| density < density_floor);
+    if reduced_dpi.is_none() && render_dpi >= density_floor {
+        return;
+    }
     let reason = match why {
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
+        Unrecovered::InsufficientReadEvidence => "the OCR read did not supply enough evidence to compare the strips",
         Unrecovered::IndexedRgb => "the general strip route declined the 8-bit Indexed RGB scan",
         Unrecovered::Uncertified => {
             "the page is not one scan image in a supported encoding and density within the memory limit, \
@@ -140,10 +136,9 @@ pub(in super::super) fn note_unrecovered(
         }
         Unrecovered::Rejected => "the strips were read but were not better than the downscaled read",
     };
-    if matches!(
-        why,
-        Unrecovered::Config(_) | Unrecovered::Uncertified | Unrecovered::IndexedRgb | Unrecovered::Rejected
-    ) {
+    let empty_read =
+        original.content.trim().is_empty() || super::super::word_count_of(&original.metadata.additional) == Some(0);
+    if !matches!(why, Unrecovered::TablesOrFormulas) && !empty_read {
         let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
         let noise = super::super::scoring::ocr_recognition_noise_decision(
             &original.content,
@@ -155,21 +150,22 @@ pub(in super::super) fn note_unrecovered(
             return;
         }
     }
-    let density = match clamp_dpi {
+    let density = match reduced_dpi {
         Some(ocr_dpi) => format!("a {render_dpi:.0} DPI render that OCR preprocessing reduced to {ocr_dpi:.0} DPI"),
         None => format!("a render downscaled to {render_dpi:.0} DPI"),
     };
-    original.processing_warnings.push(ProcessingWarning {
-        source: Cow::Borrowed("ocr"),
-        message: Cow::Owned(format!(
+    crate::core::diagnostics::push_warning(
+        &mut original.processing_warnings,
+        "ocr",
+        format!(
             "Page {} was read from {density} and its source-image strips were not used: {reason}. \
              The text may be incomplete.",
             page + 1
-        )),
-    });
+        ),
+    );
 }
 
-fn clamped_ocr_height(original: &ExtractedDocument, raster: (u32, u32)) -> Option<u32> {
+fn reduced_ocr_height(original: &ExtractedDocument, raster: (u32, u32)) -> Option<u32> {
     let resize = original.metadata.image_preprocessing.as_ref()?;
     let metadata = &original.metadata.additional;
     let dimension = |key| u32::try_from(metadata.get(key)?.as_u64()?).ok();
@@ -178,7 +174,7 @@ fn clamped_ocr_height(original: &ExtractedDocument, raster: (u32, u32)) -> Optio
         dimension(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY)?,
     );
     // Require the selected read's dimensions and rotation, not just an intermediate resize. ~keep
-    (resize.dimension_clamped
+    (resize.scale_factor < 1.0
         && !resize.skipped_resize
         && (1..=raster.0).contains(&processed.0)
         && (1..raster.1).contains(&processed.1)
@@ -326,6 +322,85 @@ mod tests {
         assert_eq!(rotated.get_page_rotation_status(0).unwrap(), PageRotation::Valid(180));
         note_unrecovered(&mut original, &ocr, (&rotated, 0), (1275, 12_000), why());
         assert!(original.processing_warnings.is_empty());
+    }
+
+    #[test]
+    fn reports_the_actual_density_of_a_budgeted_pdf_read() {
+        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+        for (raster, processed, render_dpi, read_dpi, dimension_clamped) in [
+            ((1275, 12_000), (297, 2800), 150, 35, false),
+            ((850, 8000), (435, 4096), 100, 51, true),
+        ] {
+            let mut original = clamped_pdf_read();
+            let resize = original.metadata.image_preprocessing.as_mut().unwrap();
+            resize.original_dimensions = raster.into();
+            resize.new_dimensions = Some(processed.into());
+            resize.scale_factor = f64::from(processed.1) / f64::from(raster.1);
+            resize.dimension_clamped = dimension_clamped;
+            original.metadata.additional.extend([
+                (OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), processed.0.into()),
+                (OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), processed.1.into()),
+            ]);
+            note_unrecovered(
+                &mut original,
+                &OcrConfig::default(),
+                (&document, 0),
+                raster,
+                Unrecovered::TablesOrFormulas,
+            );
+            let [warning] = original.processing_warnings.as_slice() else {
+                panic!("expected one warning, got {:?}", original.processing_warnings);
+            };
+            assert!(warning.message.starts_with(&format!(
+                "Page 1 was read from a {render_dpi} DPI render that OCR preprocessing reduced to {read_dpi} DPI "
+            )));
+        }
+    }
+
+    #[tokio::test]
+    async fn strip_recovery_early_returns_report_only_the_proven_density_once() {
+        use super::super::{RecognitionQuality, try_replace};
+        use crate::ocr::tesseract_backend::TesseractBackend;
+        use std::sync::Arc;
+
+        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+        let backend: Arc<dyn crate::plugins::OcrBackend> = Arc::new(TesseractBackend::new());
+        let config = ExtractionConfig::default();
+        let ocr = OcrConfig::default();
+
+        let mut empty = clamped_pdf_read();
+        empty.metadata.additional.remove("mean_text_conf");
+        empty.metadata.additional.insert("word_count".into(), 0.into());
+        assert!(RecognitionQuality::from_result(&empty).is_none());
+
+        let mut unknown_width = clamped_pdf_read();
+        unknown_width.metadata.format = Some(crate::types::FormatMetadata::Ocr(Default::default()));
+        unknown_width.content = "Illegible".into();
+        unknown_width.metadata.additional.extend([
+            ("word_count".into(), 1.into()),
+            ("low_conf_word_count".into(), 1.into()),
+            (super::super::DICTIONARY_INVALID.into(), 1.0.into()),
+            (OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), 700.into()),
+        ]);
+        assert!(RecognitionQuality::from_result(&unknown_width).is_some());
+        assert_eq!(read_geometry::select_read_width(&unknown_width, (850, 8000)), None);
+
+        for (mut read, (width, height), density) in [
+            (empty, (1275, 12_000), "preprocessing reduced to 51 DPI"),
+            (unknown_width, (850, 8000), "render downscaled to 100 DPI"),
+        ] {
+            let raster = (0, Arc::new(Vec::new()), width, height);
+            assert!(
+                !try_replace(&mut read, &backend, &config, &ocr, (&document, 0), &raster)
+                    .await
+                    .unwrap()
+            );
+            let [warning] = read.processing_warnings.as_slice() else {
+                panic!("expected one warning, got {:?}", read.processing_warnings);
+            };
+            assert!(warning.message.starts_with("Page 1 was read from "), "{warning:?}");
+            assert!(warning.message.contains(density), "{warning:?}");
+        }
     }
 
     #[test]

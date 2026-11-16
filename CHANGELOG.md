@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Warn when resizing a standalone tall image may leave text incomplete.** (#2502)
 
+- **(pdf): Report when a tall scanned page used a reduced-resolution OCR read and source-image strip recovery did not run or could not improve it.** (#2502)
+
 - **(math): explicit text annotations preserve LaTeX in Markdown, HTML, and Djot.**
   Rust callers can use `AnnotationKind::math(display)` and `math_display()`; other bindings can use the existing
   `Custom` representation with name `xberg.math` and value `inline` or `display`. Annotation byte ranges include

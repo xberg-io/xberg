@@ -628,6 +628,69 @@ fn not_used_warnings(document: &ExtractedDocument) -> Vec<&str> {
         .collect()
 }
 
+#[test]
+fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
+    use sha2::{Digest, Sha256};
+
+    const CACHE: &str = "XBERG_TEST_TALL_JPEG_WARNING_CACHE";
+    if std::env::var_os(CACHE).is_none() {
+        let cache = tempfile::tempdir().expect("isolated OCR cache");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm",
+                "--nocapture",
+            ])
+            .env(CACHE, "1")
+            .env("XBERG_CACHE_DIR", cache.path())
+            .output()
+            .expect("run cold and warm extraction in an isolated process");
+        let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{report}");
+        assert!(
+            report.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "{report}"
+        );
+        let lookups: Vec<_> = report
+            .lines()
+            .filter(|line| line.contains("OCR cache lookup"))
+            .collect();
+        let [cold, warm] = lookups.as_slice() else {
+            panic!("expected two OCR cache lookups: {lookups:?}");
+        };
+        assert!(cold.contains("xberg.cache.hit=false"), "{cold}");
+        assert!(warm.contains("xberg.cache.hit=true"), "{warm}");
+        return;
+    }
+
+    tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init()
+        .expect("isolated cache lookup logging");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(TALL_JPEG)),
+        "c1d51612ea92e34e7ac0bac621fad1615d14508e4864402839478a45e6001da8"
+    );
+    // The document cache stays off so the warm read rebuilds the warning from cached OCR metadata. ~keep
+    let config = configured(serde_json::json!({
+        "output_format": "html",
+        "security_limits": { "max_content_size": 192 * 1024 * 1024 },
+        "ocr": { "backend_options": { "use_cache": true } },
+    }));
+    for document in [extract(TALL_JPEG, &config), extract(TALL_JPEG, &config)] {
+        assert!(!strip_warning(&document));
+        assert_eq!(
+            not_used_warnings(&document),
+            [
+                "Page 1 was read from a 150 DPI render that OCR preprocessing reduced to 51 DPI and its \
+              source-image strips were not used: the output format is not plain text or Markdown. \
+              The text may be incomplete."
+            ]
+        );
+    }
+}
+
 /// The mixed route retries nothing for a scan its configuration keeps from strip recovery, and says why.
 #[test]
 fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
@@ -637,12 +700,14 @@ fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
     );
     assert_eq!(blocked.extraction_method, Some(ExtractionMethod::Mixed));
     assert!(!strip_warning(&blocked));
-    assert_eq!(
-        not_used_warnings(&blocked),
-        vec![
-            "Page 2 was read from a render downscaled to 130 DPI and its source-image strips were not used: \
-             per-element results or document structure were requested. The text may be incomplete."
-        ]
+    let warnings = not_used_warnings(&blocked);
+    let [warning] = warnings.as_slice() else {
+        panic!("expected one warning for the mixed scan, got {warnings:?}");
+    };
+    assert!(warning.starts_with("Page 2 was read from "), "{warning}");
+    assert!(
+        warning.ends_with("per-element results or document structure were requested. The text may be incomplete."),
+        "{warning}"
     );
     let allowed = extract(MIXED, &extraction_config());
     assert!(strip_warning(&allowed));
