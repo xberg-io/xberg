@@ -17,12 +17,12 @@
 //! Whitespace (space, \t, \r, \n, \0, \f) and comments (% to EOL) are skipped.
 
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::{take_till, take_while},
     character::complete::{char, digit1, one_of},
     combinator::{map, opt, value},
     sequence::{delimited, preceded},
-    IResult, Parser,
 };
 
 /// Token types recognized by the PDF lexer.
