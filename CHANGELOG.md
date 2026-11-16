@@ -268,6 +268,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Report each page's OCR progress once, even when a fallback backend or an image retry reads it again.** The event names the backend of the page's first read. (#3174)
 
+- **(ocr): Preserve cancellation and backend error sources when every PDF page fails OCR.** (#3175)
+  An all-page cancellation returns `XbergError::Cancelled`. When ordinary failures leave no recovered content,
+  the aggregate keeps the first backend error in its source chain. Rust callers receive `XbergError::Ocr`,
+  with raw FFI code 1002 (previously `XbergError::Plugin` and code 1008). REST retains `PluginError` and HTTP 500.
+  Batch extraction retains kind `plugin` and code 1008.
+
 - **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
