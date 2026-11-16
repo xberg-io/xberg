@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import itertools
 import os
 import re
@@ -1031,6 +1032,62 @@ def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
         assert result.returncode == expected, (arch, lto, result.stderr)
         if expected:
             assert "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" in result.stderr
+
+
+def test_python_manylinux_verifies_onnx_runtime_before_extraction(tmp_path: Path) -> None:
+    repo_root = WORKFLOW.parents[2]
+    integrity_path = Path("scripts/ci/actions/setup-onnx-runtime")
+    integrity = tmp_path / integrity_path
+    integrity.mkdir(parents=True)
+    shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
+    pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
+    fixture_manifest = integrity / "checksums.sha256"
+    stub = r"""
+        uname() { printf '%s\n' "$TEST_ARCH"; }
+        mkdir() { [[ "$*" == '-p /opt/msort' ]]; }
+        curl() {
+          [[ "${@: -3:1}" == -o ]]
+          printf 'curl %s\n' "${@: -1}"
+          printf '%s' "$TEST_PAYLOAD" > "${@: -2:1}"
+        }
+        tar() {
+          [[ "$*" == "-xzf $ort_archive -C /opt/msort --strip-components=1" ]]
+          printf 'tar %s\n' "${ort_archive##*/}"
+        }
+    """
+    for filename, job_name in (("publish.yaml", "python-wheels"), ("ci-python-wheel-smoke.yaml", "python-wheel-smoke")):
+        workflow = workflow_job(WORKFLOW.with_name(filename), job_name)
+        [step] = [step for step in workflow["steps"] if step.get("uses") == "xberg-io/actions/build-python-wheels@v1"]
+        hook = step["with"]["cibw-before-build-linux"]
+        assert hook.startswith("set -euo pipefail\n"), filename
+        prefix, boundary, stage = hook.partition("\nort_version=")
+        assert boundary and "curl " not in prefix and "tar " not in prefix, filename
+        script = textwrap.dedent(stub) + boundary + stage.replace("/project/", f"{tmp_path}/")
+        for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
+            archive = f"onnxruntime-linux-{asset_arch}-1.24.2.tgz"
+            assert len(re.findall(rf"(?m)^[a-f0-9]{{64}}\s+{re.escape(archive)}$", pinned_manifest)) == 1
+            url = f"https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/{archive}"
+            payload = f"fixture for {archive}"
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+            env = {**os.environ, "TEST_ARCH": uname, "TEST_PAYLOAD": payload, "TMPDIR": str(tmp_path)}
+
+            fixture_manifest.write_text("")
+            unpinned = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
+            assert unpinned.returncode == 1 and unpinned.stdout == "", (filename, uname, unpinned)
+            assert f"Expected exactly one pinned SHA-256 for {archive}" in unpinned.stderr
+
+            fixture_manifest.write_text(f"{digest}  {archive}\n")
+            verified = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
+            assert verified.returncode == 0, (filename, uname, verified.stderr)
+            assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
+
+            tampered = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_PAYLOAD": "tampered"})
+            assert tampered.returncode == 1 and tampered.stdout.splitlines() == [f"curl {url}"], (
+                filename,
+                uname,
+                tampered,
+            )
+            assert f"SHA-256 mismatch for {archive}" in tampered.stderr
 
 
 def test_docker_preflight_checks_out_the_resolved_candidate() -> None:
