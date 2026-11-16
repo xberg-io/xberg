@@ -412,6 +412,8 @@ pdf-ocr)
   expected=$((expected + 1))
   run_ink_probe_cases
   run_discarded_recovery_cases
+  run_exact 'extractors::pdf::ocr::tests::tests::should_error_when_every_page_fails_and_nothing_can_be_recovered' --lib
+  expected=$((expected + 1))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases

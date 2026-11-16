@@ -8305,8 +8305,8 @@ pub(super) async fn extract_with_ocr_for_page(
         } else {
             let first_error = page_backend_errors
                 .into_iter()
-                .next()
-                .expect("an all-page failure has a first backend error");
+                .find(|error| !matches!(error, crate::XbergError::Cancelled))
+                .expect("a mixed all-page failure has at least one non-cancellation error");
             let first_failure = describe_page_failure(&first_error);
             let message = if pages_with_empty_xobject_retry.is_empty() {
                 format!(

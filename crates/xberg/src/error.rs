@@ -104,10 +104,6 @@ pub enum XbergError {
     },
 
     /// An OCR engine returned an error or produced unusable output.
-    ///
-    /// A PDF OCR run that aggregates ordinary failures across every page uses this variant
-    /// with the first backend error in its source chain. This aggregate uses raw FFI code
-    /// 1002. REST and batch extraction report it as a plugin failure for compatibility.
     #[error("OCR error: {message}")]
     #[cfg_attr(alef, alef(error_code = 1002))]
     Ocr {
@@ -363,7 +359,7 @@ impl XbergError {
 struct AllPageOcrFailure(#[source] XbergError);
 
 impl XbergError {
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) fn all_page_ocr_failure(message: String, first_error: Self) -> Self {
         Self::Ocr {

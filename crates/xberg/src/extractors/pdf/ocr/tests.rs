@@ -11176,8 +11176,15 @@ Name: ___
 
         const BACKEND_NAME: &str = "always-failing-unrecoverable-test-backend";
 
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum BackendOutcome {
+            Failure,
+            Cancel,
+            CancelPortraitPage,
+        }
+
         struct AlwaysFailingBackend {
-            cancel: bool,
+            outcome: BackendOutcome,
         }
 
         #[async_trait::async_trait]
@@ -11188,8 +11195,20 @@ Name: ___
             fn supports_language(&self, _: &str) -> bool {
                 true
             }
-            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
-                if self.cancel {
+            async fn process_image(&self, bytes: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                let cancel = match self.outcome {
+                    BackendOutcome::Failure => false,
+                    BackendOutcome::Cancel => true,
+                    BackendOutcome::CancelPortraitPage => {
+                        let page = image::load_from_memory(bytes).expect("read the rendered fixture page");
+                        assert!(
+                            page.height() >= page.width(),
+                            "expected a portrait or square fixture page"
+                        );
+                        page.height() > page.width()
+                    }
+                };
+                if cancel {
                     return Err(crate::XbergError::Cancelled);
                 }
                 Err(crate::XbergError::Plugin {
@@ -11226,37 +11245,64 @@ Name: ___
             ..Default::default()
         };
 
-        for cancel in [false, true] {
-            crate::plugins::register_ocr_backend(Arc::new(AlwaysFailingBackend { cancel })).unwrap();
+        for outcome in [
+            BackendOutcome::Failure,
+            BackendOutcome::Cancel,
+            BackendOutcome::CancelPortraitPage,
+        ] {
+            crate::plugins::register_ocr_backend(Arc::new(AlwaysFailingBackend { outcome })).unwrap();
 
-            let result = extract_with_ocr(
+            let result = extract_with_ocr_with_page_hints(
                 Some(&pdf_bytes),
                 None,
                 #[cfg(feature = "layout-detection")]
                 None,
                 &config,
                 None,
+                None,
             )
             .await;
 
             crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
 
-            let error = result.expect_err("a document with no recoverable page must still fail");
-            if cancel {
+            let failed = result.expect_err("a document with no recoverable page must still fail");
+            if outcome == BackendOutcome::CancelPortraitPage {
+                assert_eq!(
+                    failed.page_failures,
+                    vec![
+                        crate::types::OcrPageFailure {
+                            page: 1,
+                            error: crate::XbergError::Cancelled.to_string(),
+                            recovered: false,
+                        },
+                        crate::types::OcrPageFailure {
+                            page: 2,
+                            error: format!("Plugin error in 'ocr': {VLM_NO_CONTENT_ERROR}"),
+                            recovered: false,
+                        },
+                    ]
+                );
+            }
+
+            let error = failed.error;
+            if outcome == BackendOutcome::Cancel {
                 assert!(matches!(error, crate::XbergError::Cancelled), "got: {error}");
             } else {
                 assert!(
                     error.to_string().contains("OCR failed on all 2 page(s)"),
                     "the aggregate failure must name the page count; got: {error}"
                 );
-                assert!(matches!(
-                    error
-                        .source()
-                        .and_then(std::error::Error::source)
-                        .and_then(|source| source.downcast_ref::<crate::XbergError>()),
-                    Some(crate::XbergError::Plugin { message, plugin_name })
-                        if message == VLM_NO_CONTENT_ERROR && plugin_name == "ocr"
-                ));
+                assert!(
+                    matches!(
+                        error
+                            .source()
+                            .and_then(std::error::Error::source)
+                            .and_then(|source| source.downcast_ref::<crate::XbergError>()),
+                        Some(crate::XbergError::Plugin { message, plugin_name })
+                            if message == VLM_NO_CONTENT_ERROR && plugin_name == "ocr"
+                    ),
+                    "expected the first non-cancellation error as the source, got {error:?}"
+                );
             }
         }
     }
