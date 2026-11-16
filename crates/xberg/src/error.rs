@@ -354,6 +354,7 @@ impl XbergError {
 
 /// Identifies the PDF OCR aggregate for legacy classification while retaining the backend
 /// error itself as the next link in the source chain. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Debug, Error)]
 #[error("{0}")]
 struct AllPageOcrFailure(#[source] XbergError);
@@ -370,7 +371,14 @@ impl XbergError {
 
     #[cfg_attr(alef, alef(skip))]
     pub(crate) fn is_all_page_ocr_failure(&self) -> bool {
-        matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<AllPageOcrFailure>())
+        #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+        {
+            matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<AllPageOcrFailure>())
+        }
+        #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+        {
+            false
+        }
     }
 }
 
