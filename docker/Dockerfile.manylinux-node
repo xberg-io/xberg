@@ -92,23 +92,26 @@ RUN cd /tmp && \
     readelf -d /usr/local/lib/libheif.so.1 | grep -q libaom && \
     cd / && rm -rf /tmp/libheif*
 
-# The two ORT_SHA256 values are the GitHub-published release digests for the
-# ONNXRUNTIME_VERSION pinned above. Overriding that ARG without updating them fails the
-# checksum -- deliberately: an unverified ORT tarball is linked into every published
-# artifact this image builds. ~keep
+COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh /opt/xberg-integrity/verify-archive.sh
+COPY scripts/ci/actions/setup-onnx-runtime/checksums.sha256 /opt/xberg-integrity/onnxruntime-checksums.sha256
+
 RUN mkdir -p /build/onnxruntime && \
+    case "$ONNXRUNTIME_VERSION" in ''|*[!A-Za-z0-9._-]*) echo "Invalid ONNX Runtime version: $ONNXRUNTIME_VERSION" >&2; exit 1 ;; esac && \
     if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then \
-        ORT_ARCH="aarch64"; ORT_SHA256="6715b3d19965a2a6981e78ed4ba24f17a8c30d2d26420dbed10aac7ceca0085e"; \
+        ORT_ARCH="aarch64"; \
     else \
-        ORT_ARCH="x64"; ORT_SHA256="43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6"; \
+        ORT_ARCH="x64"; \
     fi && \
-    curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" \
-        -o /build/onnxruntime.tgz && \
-    echo "${ORT_SHA256}  /build/onnxruntime.tgz" | sha256sum -c - && \
-    tar -xzf /build/onnxruntime.tgz -C /build/onnxruntime --strip-components=1 && \
+    ORT_ASSET="onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" && \
+    ORT_ARCHIVE="/build/$ORT_ASSET" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 --known && \
+    curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ORT_ASSET}" \
+        -o "$ORT_ARCHIVE" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 && \
+    tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1 && \
     cp /build/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ && \
     ldconfig && \
-    rm /build/onnxruntime.tgz
+    rm "$ORT_ARCHIVE"
 ENV ORT_LIB_LOCATION=/build/onnxruntime/lib \
     ORT_PREFER_DYNAMIC_LINK=1 \
     ORT_SKIP_DOWNLOAD=1 \
