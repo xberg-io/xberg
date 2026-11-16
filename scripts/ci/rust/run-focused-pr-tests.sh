@@ -113,6 +113,8 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
+  expected=$((expected + 1))
+  run_exact 'extractors::pdf::ocr::tall_source::policy::tests::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render' --lib
 }
 
 run_retry_timeout_cases() {

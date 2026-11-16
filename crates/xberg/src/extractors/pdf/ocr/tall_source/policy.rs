@@ -1,6 +1,6 @@
 //! Which configurations may use source-image strips, and the warning for a tall page that did not.
 
-use super::MIN_STANDARD_SOURCE_DPI;
+use super::{MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI};
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PdfBackend, PdfConfig};
 use crate::types::{ExtractedDocument, ProcessingWarning};
 use std::borrow::Cow;
@@ -98,8 +98,7 @@ pub(in super::super) enum Unrecovered {
     Rejected,
 }
 
-/// Tells the caller that a page read from a render shrunk below the standard scan density kept
-/// that read. `raster_height` is the pixel height of the render the page was read from.
+/// Reports when a tall page keeps a read below the standard scan density.
 pub(in super::super) fn note_unrecovered(
     original: &mut ExtractedDocument,
     ocr: &OcrConfig,
@@ -109,9 +108,22 @@ pub(in super::super) fn note_unrecovered(
 ) {
     let (_, page_height) = super::super::rendering::page_dimensions_pt(document, page);
     let render_dpi = f64::from(raster_height) * 72.0 / f64::from(page_height.max(1.0));
-    if render_dpi >= MIN_STANDARD_SOURCE_DPI * 0.98 {
-        return;
-    }
+    let density_floor = MIN_STANDARD_SOURCE_DPI * 0.98;
+    let clamp_dpi = if render_dpi < density_floor {
+        None
+    } else {
+        if f64::from(page_height) <= f64::from(MAX_TILE_SIDE) * 72.0 / MIN_STANDARD_SOURCE_DPI {
+            return;
+        }
+        let Some(ocr_height) = clamped_ocr_height(original, raster_height) else {
+            return;
+        };
+        let ocr_dpi = f64::from(ocr_height) * 72.0 / f64::from(page_height.max(1.0));
+        if ocr_dpi >= density_floor {
+            return;
+        }
+        Some(ocr_dpi)
+    };
     let reason = match why {
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
@@ -137,14 +149,30 @@ pub(in super::super) fn note_unrecovered(
             return;
         }
     }
+    let density = match clamp_dpi {
+        Some(ocr_dpi) => format!("a {render_dpi:.0} DPI render that OCR preprocessing reduced to {ocr_dpi:.0} DPI"),
+        None => format!("a render downscaled to {render_dpi:.0} DPI"),
+    };
     original.processing_warnings.push(ProcessingWarning {
         source: Cow::Borrowed("ocr"),
         message: Cow::Owned(format!(
-            "Page {} was read from a render downscaled to {render_dpi:.0} DPI and its source-image strips \
-             were not used: {reason}. The text may be incomplete.",
+            "Page {} was read from {density} and its source-image strips were not used: {reason}. \
+             The text may be incomplete.",
             page + 1
         )),
     });
+}
+
+fn clamped_ocr_height(original: &ExtractedDocument, raster_height: u32) -> Option<u32> {
+    let resize = original.metadata.image_preprocessing.as_ref()?;
+    if !resize.dimension_clamped
+        || resize.resize_error.is_some()
+        || resize.original_dimensions.height != raster_height as usize
+    {
+        return None;
+    }
+    let height = u32::try_from(resize.new_dimensions.as_ref()?.height).ok()?;
+    (1..raster_height).contains(&height).then_some(height)
 }
 
 #[cfg(test)]
@@ -187,6 +215,51 @@ mod tests {
                     .to_string()
             ]
         );
+    }
+
+    #[test]
+    fn reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render() {
+        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+        let mut original = ExtractedDocument::default();
+        original.metadata.additional.insert("mean_text_conf".into(), 1.into());
+        original.metadata.image_preprocessing = Some(crate::types::ImagePreprocessingMetadata {
+            original_dimensions: (1275, 12_000).into(),
+            original_dpi: (150.0, 150.0).into(),
+            target_dpi: 300,
+            scale_factor: 4096.0 / 12_000.0,
+            auto_adjusted: false,
+            final_dpi: 51,
+            new_dimensions: Some((435, 4096).into()),
+            resample_method: "LANCZOS3".into(),
+            dimension_clamped: true,
+            calculated_dpi: None,
+            skipped_resize: false,
+            resize_error: None,
+        });
+        let ocr = OcrConfig::default();
+        let source = (&document, 0);
+        let why = || Unrecovered::Config("the output format is not plain text or Markdown");
+        note_unrecovered(&mut original, &ocr, source, 12_000, why());
+        let [warning] = original.processing_warnings.as_slice() else {
+            panic!("expected exactly one warning, got {:?}", original.processing_warnings);
+        };
+        assert_eq!(warning.source, "ocr");
+        assert_eq!(
+            warning.message,
+            "Page 1 was read from a 150 DPI render that OCR preprocessing reduced to 51 DPI and its \
+             source-image strips were not used: the output format is not plain text or Markdown. The text may be incomplete."
+        );
+
+        original.processing_warnings.clear();
+        original
+            .metadata
+            .image_preprocessing
+            .as_mut()
+            .unwrap()
+            .original_dimensions
+            .height = 11_999;
+        note_unrecovered(&mut original, &ocr, source, 12_000, why());
+        assert!(original.processing_warnings.is_empty(), "unmatched resize metadata");
     }
 
     #[test]
