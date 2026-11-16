@@ -656,11 +656,10 @@ fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
             .filter(|line| line.contains("OCR cache lookup"))
             .collect();
         let [cold, warm] = lookups.as_slice() else {
-            panic!("expected two OCR cache lookups: {lookups:?}");
+            panic!("expected two OCR cache lookups: {lookups:?}\n{report}");
         };
         assert!(cold.contains("xberg.cache.hit=false"), "{cold}");
         assert!(warm.contains("xberg.cache.hit=true"), "{warm}");
-        eprintln!("{cold}\n{warm}");
         return;
     }
 
@@ -673,13 +672,30 @@ fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
         hex::encode(Sha256::digest(TALL_JPEG)),
         "c1d51612ea92e34e7ac0bac621fad1615d14508e4864402839478a45e6001da8"
     );
-    // The document cache stays off so the warm read rebuilds the warning from cached OCR metadata. ~keep
+    // Call the PDF extractor directly to bypass the document cache and exercise cached OCR metadata. ~keep
+    // Optional script retries can suppress OCR cache publication if their models fail. ~keep
     let config = configured(serde_json::json!({
+        "use_cache": true,
         "output_format": "html",
         "security_limits": { "max_content_size": 192 * 1024 * 1024 },
-        "ocr": { "backend_options": { "use_cache": true } },
+        "ocr": {
+            "backend_options": { "use_cache": true },
+            "quality_thresholds": { "min_ocr_mean_confidence": 0.0 }
+        },
     }));
-    for document in [extract(TALL_JPEG, &config), extract(TALL_JPEG, &config)] {
+    use xberg::extractors::pdf::PdfExtractor;
+    use xberg::plugins::DocumentExtractor;
+
+    let extractor = PdfExtractor;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("integration runtime");
+    for _ in 0..2 {
+        let input = ExtractInput::from_bytes(TALL_JPEG.to_vec(), "application/pdf", None);
+        let document = runtime
+            .block_on(extractor.extract(input, &config))
+            .expect("extract with the real Tesseract backend");
         assert!(!strip_warning(&document));
         assert_eq!(
             not_used_warnings(&document),
@@ -705,10 +721,11 @@ fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
     let [warning] = warnings.as_slice() else {
         panic!("expected one warning for the mixed scan, got {warnings:?}");
     };
-    assert!(warning.starts_with("Page 2 was read from "), "{warning}");
-    assert!(
-        warning.ends_with("per-element results or document structure were requested. The text may be incomplete."),
-        "{warning}"
+    assert_eq!(
+        *warning,
+        "Page 2 was read from a 130 DPI render that OCR preprocessing reduced to 68 DPI and its \
+         source-image strips were not used: per-element results or document structure were requested. \
+         The text may be incomplete."
     );
     let allowed = extract(MIXED, &extraction_config());
     assert!(strip_warning(&allowed));

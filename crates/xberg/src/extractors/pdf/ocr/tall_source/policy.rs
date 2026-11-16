@@ -351,9 +351,14 @@ mod tests {
             let [warning] = original.processing_warnings.as_slice() else {
                 panic!("expected one warning, got {:?}", original.processing_warnings);
             };
-            assert!(warning.message.starts_with(&format!(
-                "Page 1 was read from a {render_dpi} DPI render that OCR preprocessing reduced to {read_dpi} DPI "
-            )));
+            assert_eq!(
+                warning.message.as_ref(),
+                format!(
+                    "Page 1 was read from a {render_dpi} DPI render that OCR preprocessing reduced to {read_dpi} DPI \
+                     and its source-image strips were not used: the downscaled read already contains tables or formulas. \
+                     The text may be incomplete."
+                )
+            );
         }
     }
 
@@ -386,8 +391,12 @@ mod tests {
         assert_eq!(read_geometry::select_read_width(&unknown_width, (850, 8000)), None);
 
         for (mut read, (width, height), density) in [
-            (empty, (1275, 12_000), "preprocessing reduced to 51 DPI"),
-            (unknown_width, (850, 8000), "render downscaled to 100 DPI"),
+            (
+                empty,
+                (1275, 12_000),
+                "a 150 DPI render that OCR preprocessing reduced to 51 DPI",
+            ),
+            (unknown_width, (850, 8000), "a render downscaled to 100 DPI"),
         ] {
             let raster = (0, Arc::new(Vec::new()), width, height);
             assert!(
@@ -398,8 +407,13 @@ mod tests {
             let [warning] = read.processing_warnings.as_slice() else {
                 panic!("expected one warning, got {:?}", read.processing_warnings);
             };
-            assert!(warning.message.starts_with("Page 1 was read from "), "{warning:?}");
-            assert!(warning.message.contains(density), "{warning:?}");
+            assert_eq!(
+                warning.message.as_ref(),
+                format!(
+                    "Page 1 was read from {density} and its source-image strips were not used: \
+                     the OCR read did not supply enough evidence to compare the strips. The text may be incomplete."
+                )
+            );
         }
     }
 
