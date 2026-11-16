@@ -26,9 +26,22 @@ from .freeze import _dependencies, create_plan
 from .official import evaluation_environment, load_official, score_candidate
 
 MATH_GROUPS = ("arxiv_math", "old_scans_math")
+FORMULA_TRACE_TARGET = "xberg::extractors::pdf::formula_evidence"
+FORMULA_LOG_FILTER = f"info,{FORMULA_TRACE_TARGET}=debug"
+TRACE_TIMESTAMP = r"(?:\d{4}-\d{2}-\d{2}T\S+[ \t]+)?[ \t]*"
+# tracing-subscriber's full formatter prints colon-delimited spans before the event target.
+SPAN_NAME = r"[A-Za-z_][\w.-]*(?:::[A-Za-z_][\w.-]*)*"
+SPAN_FIELDS = r'\{(?:[^{}"\r\n]|"(?:\\.|[^"\\])*")*\}'
+TRACE_SPANS = rf"(?:(?:{SPAN_NAME}(?:{SPAN_FIELDS})?:)+[ \t]+)?"
 FORMULA_EVENT = re.compile(
-    r"\bINFO xberg::extractors::pdf: recognized formulas from layout regions with no extracted formula text "
-    r"page=(?P<page>[1-9][0-9]*) formulas=[1-9][0-9]*\s*$"
+    rf"{TRACE_TIMESTAMP}DEBUG[ \t]+{TRACE_SPANS}{re.escape(FORMULA_TRACE_TARGET)}: "
+    r"native PDF formula recognition applied page=(?P<page>[1-9][0-9]*) "
+    r"replaced=(?P<replaced>[0-9]+) synthesized=(?P<synthesized>[0-9]+)[ \t]*"
+)
+LEGACY_SYNTHESIS_EVENT = re.compile(
+    rf"{TRACE_TIMESTAMP}INFO[ \t]+{TRACE_SPANS}xberg::extractors::pdf: "
+    r"recognized formulas from layout regions with no extracted formula text "
+    r"page=(?P<page>[1-9][0-9]*) formulas=[1-9][0-9]*[ \t]*"
 )
 
 
@@ -129,12 +142,16 @@ def _formula_cache_intact(cache: Path, models: dict[str, Path]) -> bool:
 
 
 def _recognized_formula(document: dict, stderr: str) -> bool:
-    # Formula rows also carry native glyph text. A matching native synthesis event
-    # proves the model produced LaTeX, even when unrecognized text looks like TeX.
+    # Formula rows may come from native glyph text. Require native model evidence
+    # from stderr and a nonempty formula on the corresponding output page.
     plain_stderr = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
-    pages = {
-        int(event["page"]) for line in plain_stderr.splitlines() if (event := FORMULA_EVENT.search(line)) is not None
-    }
+    pages = set()
+    for line in plain_stderr.splitlines():
+        if event := FORMULA_EVENT.fullmatch(line):
+            if int(event["replaced"]) or int(event["synthesized"]):
+                pages.add(int(event["page"]))
+        elif event := LEGACY_SYNTHESIS_EVENT.fullmatch(line):
+            pages.add(int(event["page"]))
     return any(
         formula.get("page") in pages and bool(formula.get("latex", "").strip())
         for formula in document.get("formulas", [])
@@ -180,9 +197,9 @@ def _extract(plan: dict, case: dict, pdf: dict, diagnostics: Path, timeout: floa
 
         environment = {
             "PATH": os.environ.get("PATH", ""),
-            "RUST_LOG": "info",
             "HOME": cache,
             **plan["environment"],
+            "RUST_LOG": FORMULA_LOG_FILTER,
             "XDG_CACHE_HOME": cache,
             "XBERG_CACHE_DIR": cache,
             "TMPDIR": cache,

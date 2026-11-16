@@ -63,19 +63,19 @@ python -m olmocr_bench.runner generate --plan /external/plan.json --prepared /ex
 python -m olmocr_bench.runner score --plan /external/plan.json --prepared /external/prepared/ready.json --generation /external/generation --output /external/reports
 ```
 
-`prepare` attempts every official constructor, including real math reference rendering, before native extraction is allowed. A math reference carrying `reference_render.error` is an initialization error even when upstream construction returns normally. All initialization rows/errors remain in the original census. `generate` runs native extraction only when explicitly invoked, with a fresh result cache per case. That cache contains per-file links to the four verified formula assets, so no formula weights need to be downloaded or copied per case. It saves original stdout/stderr, real Markdown, warnings, latency/RSS from the CLI envelope, and a durable per-case JSONL ledger. Empty predictions, model fallback and execution errors invalidate qualification while remaining available for diagnostic scoring. A replaced formula link or leftover staging file also counts as a model fallback. Generation reports recognized cases by producer for `arxiv_math` and `old_scans_math`. Each producer with scheduled math cases needs at least one case with a native PDF synthesis trace and a nonempty formula on the same page. This signal counts successful synthesis and can undercount successful replacements of existing formula text. Scoring keeps diagnostic results when this check fails. Artifact hashes are rechecked around native calls and official scoring; repeated hashing is harness overhead. Native timings on a shared machine are contended upper bounds, separate from sweep duration.
+`prepare` attempts every official constructor, including real math reference rendering, before native extraction is allowed. A math reference carrying `reference_render.error` is an initialization error even when upstream construction returns normally. All initialization rows/errors remain in the original census. `generate` runs native extraction only when explicitly invoked, with a fresh result cache per case. That cache contains per-file links to the four verified formula assets, so no formula weights need to be downloaded or copied per case. It saves original stdout/stderr, real Markdown, warnings, latency/RSS from the CLI envelope, and a durable per-case JSONL ledger. Empty predictions, model fallback and execution errors invalidate qualification while remaining available for diagnostic scoring. A replaced formula link or leftover staging file also counts as a model fallback. Generation reports recognized cases by producer for `arxiv_math` and `old_scans_math`. Each producer with scheduled math cases needs at least one case with native PDF recognition evidence and a nonempty formula on the same page. The runner enables the scoped `xberg::extractors::pdf::formula_evidence=debug` target for both producers. It accepts successful replacement and synthesis events, including older synthesis-only INFO events. A baseline that only replaces existing formula text needs an instrumentation-only build with the same evidence event and unchanged recognition logic. Record the instrumented commit and binary digest in its build evidence. Scoring keeps diagnostic results when this check fails. Artifact hashes are rechecked around native calls and official scoring; repeated hashing is harness overhead. Native timings on a shared machine are contended upper bounds, separate from sweep duration.
 
 `score` calls the original `evaluate_candidate` per original reporting group. Its diagnostic `force=True` keeps missing files as counted errors instead of returning zero-work results; any such error makes qualification fail. No scores/errors are filtered. One repeat means the official per-test majority and pass ratio agree. The final macro score averages the six official group scores, preserving original baseline assignments. A structurally complete run can still have poor quality: no quality threshold is invented here.
 
 ## Controls and remaining gates
 
-Run the 25 standard-library integrity, cache isolation and coverage controls without external data:
+Run the 28 standard-library integrity, cache isolation and coverage controls without external data:
 
 ```sh
 mise run benchmark:validate:olmocr
 ```
 
-Run all 30 controls with the locked environment and pinned external inputs, including the five official-evaluator controls:
+Run all 33 controls with the locked environment and pinned external inputs, including the five official-evaluator controls:
 
 ```sh
 OLMOCR_DATA_ROOT=/external/cache/olmocr-issue2331 \
@@ -85,6 +85,6 @@ OLMOCR_REGISTRY=test_documents/scripts/data/benchmark-upstreams.json \
 /external/olmocr-env/bin/python -m unittest discover -s tools/benchmark-harness/tests -p 'test_olmocr_*.py'
 ```
 
-The Mise task deliberately selects only always-on controls. The discovery command also collects official controls, which explicitly skip unless `OLMOCR_DATA_ROOT`, `OLMOCR_EVALUATOR_ROOT` and `OLMOCR_BROWSER_ROOT` identify the pinned external data/evaluator/browser. Set `OLMOCR_REGISTRY` to exercise registry reuse too. Require 30 tests and zero skips when checking the full evaluator environment. Synthetic controls prove checksums and bookkeeping only; they never establish extraction quality.
+The Mise task deliberately selects only always-on controls. The discovery command also collects official controls, which explicitly skip unless `OLMOCR_DATA_ROOT`, `OLMOCR_EVALUATOR_ROOT` and `OLMOCR_BROWSER_ROOT` identify the pinned external data/evaluator/browser. Set `OLMOCR_REGISTRY` to exercise registry reuse too. Require 33 tests and zero skips when checking the full evaluator environment. Synthetic controls prove checksums and bookkeeping only; they never establish extraction quality.
 
 Root owns actual CLI builds, positive model pilots, full reference initialization, native generation, complete scoring, independent output review and issue closure. Keep #2331 open until its actual extraction defects and complete group results have been addressed.

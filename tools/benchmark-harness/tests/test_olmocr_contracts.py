@@ -160,6 +160,60 @@ class ContractsTest(unittest.TestCase):
             assert frozen.read_bytes() == b"original integrity bytes"
             assert frozen.stat().st_mode & 0o222 == 0
 
+    def test_score_retains_reports_but_rejects_math_without_native_evidence(self):
+        """A clean evaluator result cannot override missing native formula proof."""
+        with patch.object(sys, "path", [str(Path(__file__).parents[1]), *sys.path]):
+            runner = importlib.import_module("olmocr_bench.runner")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        plan_path = root / "plan.json"
+        plan_path.write_text("{}")
+        generation = root / "generation"
+        pdfs = [{"id": "math", "file": "bench_data/pdfs/arxiv_math/math.pdf"}]
+        cases = runner.schedule(pdfs)
+        rows = []
+        for case in cases:
+            prediction = generation / case["role"] / "arxiv_math/math_pg1_repeat1.md"
+            prediction.parent.mkdir(parents=True)
+            prediction.write_bytes(b"$$x^2$$")
+            rows.append(
+                dict(
+                    case,
+                    prediction={"file": str(prediction), "sha256": runner.digest(prediction)},
+                    status="extracted",
+                    recognized_formula=case["role"] == "baseline",
+                )
+            )
+        receipt = {"plan_sha256": runner.digest(plan_path), "rows": rows}
+        (generation / "generation.json").write_text(json.dumps(receipt))
+        report_dir = root / "reports"
+        plan = {
+            "cases": cases,
+            "catalog": {"pdfs": pdfs, "tests": [{}]},
+            "evaluator_root": str(root),
+            "browser_root": str(root),
+        }
+        with (
+            patch.object(runner, "_read_plan", return_value=plan),
+            patch.object(runner, "_ready"),
+            patch.object(runner, "_verify"),
+            patch.object(runner, "TEST_COUNT", 1),
+            patch.object(runner, "evaluation_environment"),
+            patch.object(runner, "load_official", return_value=([object()], [{}])),
+            patch.object(runner, "score_candidate", return_value={"tests": [{}], "errors": []}) as evaluate,
+        ):
+            with self.assertRaisesRegex(
+                ValueError, "qualification invalid: no native formula recognition in math cases for: candidate"
+            ):
+                runner.score(plan_path, plan_path, generation, report_dir)
+            assert evaluate.call_count == 2
+        coverage = json.loads((report_dir / "coverage.json").read_text())
+        assert coverage["official_test_results"] == 2
+        assert coverage["healthy"] is False
+        assert coverage["math_coverage"]["candidate"]["arxiv_math"] == {"cases": 1, "recognized_cases": 0}
+        assert all((report_dir / f"{role}.json").is_file() for role in runner.ROLES)
+
 
 class FormulaCacheTest(unittest.TestCase):
     """Only explicitly bound formula files belong in each fresh cache."""
@@ -213,6 +267,7 @@ class FormulaCacheTest(unittest.TestCase):
                 assert path.readlink() == self.model_dir / path.name
                 assert path.read_bytes() == path.name.encode()
             assert env["HF_HUB_CACHE"] == str(self.model_dir)
+            assert env["RUST_LOG"] == "info,xberg::extractors::pdf::formula_evidence=debug"
             (cache / "previous-result").touch()
             caches.append(cache)
             return subprocess.CompletedProcess([], 0, json.dumps({"result": {"content": "synthetic"}}).encode(), b"")
@@ -325,19 +380,76 @@ class FormulaCacheTest(unittest.TestCase):
             self.runner._read_plan(plan)
 
     def test_recognition_requires_positive_native_trace_and_matching_formula_page(self):
-        """Formula fields and TeX-looking source text alone do not prove inference."""
+        """Accept modeled core CLI Full-format spans for both native outcomes."""
         document = {"content": "$$x^2$$", "formulas": [{"page": 1, "latex": "x^2"}]}
-        trace = (
-            "2026-01-01T00:00:00Z INFO xberg::extractors::pdf: "
+        timestamp = "2026-01-01T00:00:00.000001Z"
+        spans = (
+            'extract_file{mime_type=None xberg.operation="extract_file" xberg.document.filename="paper {v2}.pdf"}:'
+            'xberg.pipeline{xberg.pipeline.stage="extraction" xberg.extractor.name="pdf" xberg.extractor.priority=50}: '
+        )
+        message = (
+            "xberg::extractors::pdf::formula_evidence: native PDF formula recognition applied "
+            "page=1 replaced=2 synthesized=0"
+        )
+        trace = f"{timestamp} DEBUG {spans}{message}"
+        synthesis = trace.replace("replaced=2 synthesized=0", "replaced=0 synthesized=2")
+        legacy = (
+            f"{timestamp}  INFO {spans}xberg::extractors::pdf: "
             "recognized formulas from layout regions with no extracted formula text page=1 formulas=1"
         )
-        assert self.runner._recognized_formula(document, trace)
-        assert self.runner._recognized_formula(document, trace.replace("INFO", "\x1b[32mINFO\x1b[0m"))
-        assert not self.runner._recognized_formula(document, "")
-        assert not self.runner._recognized_formula(document, trace.replace("page=1", "page=2"))
-        assert not self.runner._recognized_formula(document, trace.replace("formulas=1", "formulas=0"))
-        assert not self.runner._recognized_formula(document, trace.replace("xberg::extractors::pdf", "other"))
+
+        for evidence in (trace, synthesis, legacy, trace.replace(spans, ""), legacy.replace(spans, "")):
+            with self.subTest(evidence=evidence):
+                assert self.runner._recognized_formula(document, evidence)
+        assert self.runner._recognized_formula(document, trace.replace("DEBUG", "\x1b[32mDEBUG\x1b[0m"))
+
+        for evidence in (
+            "",
+            trace.replace("page=1", "page=2"),
+            trace.replace("replaced=2", "replaced=0"),
+            trace.replace("formula_evidence:", "unrelated:"),
+            trace.replace("DEBUG", "INFO"),
+            trace.replace("native PDF formula recognition applied", "unrelated PDF event"),
+            legacy.replace("formulas=1", "formulas=0"),
+        ):
+            with self.subTest(evidence=evidence):
+                assert not self.runner._recognized_formula(document, evidence)
         assert not self.runner._recognized_formula({"content": "$$x^2$$"}, trace)
+        assert not self.runner._recognized_formula({"formulas": [{"page": 1, "latex": " "}]}, trace)
+
+    def test_math_coverage_does_not_count_fallback_with_formula_evidence(self):
+        """A fallback cannot qualify merely because an earlier formula ran."""
+        pdfs = {"math": {"file": "bench_data/pdfs/arxiv_math/math.pdf"}}
+        rows = [{"role": "baseline", "pdf_id": "math", "status": "model_fallback", "recognized_formula": True}]
+        coverage = self.runner._math_coverage(rows, pdfs)
+        assert coverage["baseline"]["arxiv_math"] == {"cases": 1, "recognized_cases": 0}
+
+    def test_read_plan_rejects_an_installed_dependency_change(self):
+        """A previously frozen dependency version must still match at read time."""
+        plan = self.root / "plan.json"
+        lock = self.root / "requirements.lock"
+        lock.write_text("playwright==1.2.3\n")
+        catalog = {"registry": None}
+        plan.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "catalog": catalog,
+                    "data_root": str(self.root),
+                    "requirements": {"file": str(lock)},
+                    "dependencies": {"playwright": "1.2.3"},
+                }
+            )
+        )
+        freeze = importlib.import_module("olmocr_bench.freeze")
+        with (
+            patch.object(self.runner, "_verify"),
+            patch.object(self.runner, "load_catalog", return_value=catalog),
+            patch.object(freeze.importlib.metadata, "version", side_effect=["1.2.3", "1.2.4"]),
+        ):
+            assert self.runner._read_plan(plan)["dependencies"] == {"playwright": "1.2.3"}
+            with self.assertRaisesRegex(ValueError, "installed dependency differs from audited lock: playwright"):
+                self.runner._read_plan(plan)
 
     def test_generate_retains_failed_math_coverage_and_preserves_prose_only_controls(self):
         """A math case requires native evidence, while a prose-only pilot has no math gate."""

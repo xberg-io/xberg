@@ -2129,6 +2129,7 @@ async fn recognize_pdf_formula_page_inputs(
         }
 
         let mut synthesized: Vec<crate::types::Formula> = Vec::new();
+        let mut replaced_regions = 0;
         {
             let mut formula_slots: Vec<&mut crate::types::Formula> =
                 formulas.iter_mut().filter(|f| f.page == Some(page_number)).collect();
@@ -2237,7 +2238,9 @@ async fn recognize_pdf_formula_page_inputs(
                             *entry.1 = latex.clone();
                             replaced = true;
                         }
-                        if !replaced && allow_synthesis {
+                        if replaced {
+                            replaced_regions += 1;
+                        } else if allow_synthesis {
                             synthesized.push(crate::types::Formula {
                                 latex,
                                 bbox: Some(bbox),
@@ -2251,6 +2254,15 @@ async fn recognize_pdf_formula_page_inputs(
                     }
                 }
             }
+        }
+        if replaced_regions != 0 || !synthesized.is_empty() {
+            tracing::debug!(
+                target: "xberg::extractors::pdf::formula_evidence",
+                page = page_number,
+                replaced = replaced_regions,
+                synthesized = synthesized.len(),
+                "native PDF formula recognition applied"
+            );
         }
         if !synthesized.is_empty() {
             tracing::info!(
