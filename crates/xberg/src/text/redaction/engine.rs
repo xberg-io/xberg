@@ -1908,6 +1908,86 @@ mod tests {
         }
     }
 
+    fn generated_literal_terms(
+        case: usize,
+        case_sensitive: bool,
+    ) -> Vec<crate::core::config::redaction::RedactionTerm> {
+        use crate::core::config::redaction::RedactionTerm;
+
+        const ALPHABET: [char; 6] = ['a', 'b', 'A', '-', '+', ' '];
+        let mut terms: Vec<_> = (0..16 + case)
+            .map(|index| {
+                // Only the first byte is '@', so the generated literal cannot overlap itself. ~keep
+                let identifier: String = (0..6)
+                    .map(|bit| if index & (1 << bit) == 0 { 'a' } else { 'b' })
+                    .collect();
+                let body: String = (0..2 + index % 5)
+                    .map(|offset| ALPHABET[(case * 17 + index * 3 + offset * 5) % ALPHABET.len()])
+                    .collect();
+                RedactionTerm {
+                    label: format!("term-{index}"),
+                    value: format!("@{identifier}{body}"),
+                    case_sensitive,
+                }
+            })
+            .collect();
+        terms[0].value = "kilo".to_string();
+        terms[1].value = "sample".to_string();
+        terms[3].value = format!("{}-", terms[2].value);
+        terms[4].value = format!("?{}", terms[2].value);
+        terms
+    }
+
+    fn match_records(matches: Vec<PatternMatch>) -> Vec<(usize, usize, PiiCategory, String)> {
+        dedupe_overlaps(matches)
+            .into_iter()
+            .map(|matched| (matched.start, matched.end, matched.category, matched.text))
+            .collect()
+    }
+
+    #[test]
+    fn generated_shared_literals_match_regex_spans() {
+        for case_sensitive in [false, true] {
+            for case in 0..=24 {
+                let terms = generated_literal_terms(case, case_sensitive);
+                let mut ascii = format!("a b + - {} ?{} ", terms[3].value, terms[3].value);
+                for (index, term) in terms.iter().cycle().skip(case).take(terms.len()).enumerate() {
+                    let value = if index % 3 == 0 {
+                        term.value.to_ascii_uppercase()
+                    } else {
+                        term.value.clone()
+                    };
+                    ascii.push_str(&value);
+                    ascii.push(' ');
+                }
+                let unicode = format!("Kilo ſample {ascii}");
+                let matcher =
+                    LiteralMatcher::build(&terms, &ascii).expect("every generated set must take the shared path");
+                let regexes: Vec<_> = terms
+                    .iter()
+                    .map(|term| compile_literal(term).expect("generated literal must compile"))
+                    .collect();
+
+                for text in [&ascii, &unicode] {
+                    let old = scan_regexes(
+                        text,
+                        regexes
+                            .iter()
+                            .map(|(label, regex)| (PiiCategory::Custom(label.clone()), regex)),
+                    );
+                    assert!(!old.is_empty(), "generated input must contain a match");
+                    let mut shared = Vec::new();
+                    matcher.append_matches(text, &mut shared);
+                    assert_eq!(
+                        match_records(shared),
+                        match_records(old),
+                        "case {case}, case_sensitive={case_sensitive}, input={text:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_dedupe_overlaps_keeps_longer_first() {
         let matches = vec![
