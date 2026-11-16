@@ -2326,10 +2326,8 @@ mod hf_cache_tests {
 /// Each family's manifest const is only reachable when its module is compiled, so
 /// every entry is pushed under its own `#[cfg]` matching that module's feature gate.
 /// Returns an empty `Vec` when no relevant feature is enabled — callers must not
-/// assume non-empty. Used by the coverage test below and available for future
-/// tooling (e.g. `xberg cache manifest`) that wants a single source of truth for
-/// "which families are checksum-pinned right now".
-#[cfg_attr(not(test), allow(dead_code))]
+/// assume non-empty. Used by the manifest coverage tests below.
+#[cfg(test)]
 #[allow(unused_mut)]
 // Every push below is individually `#[cfg]`-gated on its family's feature, so the
 // entries cannot be expressed as a single `vec![]` literal. ~keep
