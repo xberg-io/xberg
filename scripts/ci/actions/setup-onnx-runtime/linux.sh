@@ -6,7 +6,9 @@ dest_dir="${2:-crates/xberg-node}"
 arch_id="${3:-}"
 strategy="${4:-system}"
 verify_archive="${5:-false}"
-script_dir="$(cd "$(dirname "$0")" && pwd)"
+script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# A custom version needs a trusted manifest with its archive's digest. ~keep
+checksums="${ORT_CHECKSUMS_FILE:-$script_dir/checksums.sha256}"
 case "$verify_archive" in
 true | false) ;;
 *)
@@ -14,6 +16,11 @@ true | false) ;;
   exit 2
   ;;
 esac
+
+if [[ ! "$ort_version" =~ ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$ ]]; then
+  echo "Invalid ONNX Runtime version: $ort_version" >&2
+  exit 1
+fi
 
 extract_dir="$RUNNER_TEMP/onnxruntime"
 
@@ -43,23 +50,32 @@ arm64)
   ;;
 esac
 
+download_ort_archive() {
+  local path="$1"
+  bash "$script_dir/verify-archive.sh" "$path" "$checksums" --known
+  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$path" \
+    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
+  bash "$script_dir/verify-archive.sh" "$path" "$checksums"
+}
+
 if [ "$verify_archive" = true ]; then
   archive_path="$extract_dir/$archive"
-  bash "$script_dir/verify-archive.sh" "$archive_path" "$script_dir/checksums.sha256" --known
-  mkdir -p "$extract_dir"
-  if [ ! -f "$archive_path" ]; then
-    curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$archive_path" \
-      "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
+  if [ -f "$archive_path" ]; then
+    bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"
+  else
+    download_ort_archive "$RUNNER_TEMP/$archive"
+    mkdir -p "$extract_dir"
+    mv "$RUNNER_TEMP/$archive" "$archive_path"
   fi
-  bash "$script_dir/verify-archive.sh" "$archive_path" "$script_dir/checksums.sha256"
   extract_dir="$(mktemp -d "$RUNNER_TEMP/onnxruntime-verified.XXXXXX")"
   tar -xzf "$archive_path" -C "$extract_dir"
 elif [ ! -d "$extract_dir/$ort_dir_name" ]; then
   echo "Cache miss: Downloading ONNX Runtime ${ort_version}"
-  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$RUNNER_TEMP/$archive" "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
+  download_ort_archive "$RUNNER_TEMP/$archive"
   mkdir -p "$extract_dir"
   tar -xzf "$RUNNER_TEMP/$archive" -C "$extract_dir"
 else
+  # The extracted-tree cache does not retain the archive for re-verification. ~keep
   echo "Cache hit: Using cached ONNX Runtime ${ort_version}"
 fi
 

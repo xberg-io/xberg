@@ -8,7 +8,7 @@ setup() {
 	export RUNNER_TEMP="$BATS_TEST_TMPDIR/runner"
 	mkdir -p "$RUNNER_TEMP"
 	export RUSTFLAGS='-C debuginfo=1' LD_LIBRARY_PATH=ambient-loader LIBRARY_PATH=ambient-linker
-	unset ORT_LIB_LOCATION ORT_STRATEGY ORT_SKIP_DOWNLOAD ORT_PREFER_DYNAMIC_LINK ORT_DYLIB_PATH
+	unset ORT_CHECKSUMS_FILE ORT_LIB_LOCATION ORT_STRATEGY ORT_SKIP_DOWNLOAD ORT_PREFER_DYNAMIC_LINK ORT_DYLIB_PATH
 	xberg_stub curl 'printf "%s\n" "$*" >>"$XBERG_TRACE"; exit 93'
 }
 
@@ -48,21 +48,88 @@ LIBRARY_PATH=$root/lib:$GITHUB_WORKSPACE/bindings:ambient-linker"
 	[ ! -e "$XBERG_TRACE" ]
 }
 
-@test "Linux ORT setup should download and extract the requested aarch64 release layout" {
-	root="$(runtime_root aarch64)"
-	mkdir -p "$BATS_TEST_TMPDIR/archive/onnxruntime-linux-aarch64-1.24.2/lib"
-	printf 'downloaded runtime\n' >"$BATS_TEST_TMPDIR/archive/onnxruntime-linux-aarch64-1.24.2/lib/libonnxruntime.so"
+prepare_ort_archive() {
+	local arch="$1" version="$2" checksum
+	local name="onnxruntime-linux-$arch-$version"
+	mkdir -p "$BATS_TEST_TMPDIR/archive/$name/lib"
+	printf 'downloaded runtime\n' >"$BATS_TEST_TMPDIR/archive/$name/lib/libonnxruntime.so"
 	export ORT_FIXTURE_ARCHIVE="$BATS_TEST_TMPDIR/runtime.tgz"
-	tar -czf "$ORT_FIXTURE_ARCHIVE" -C "$BATS_TEST_TMPDIR/archive" onnxruntime-linux-aarch64-1.24.2
+	export ORT_CHECKSUMS_FILE="$BATS_TEST_TMPDIR/trusted.sha256"
+	tar -czf "$ORT_FIXTURE_ARCHIVE" -C "$BATS_TEST_TMPDIR/archive" "$name"
+	checksum="$(shasum -a 256 "$ORT_FIXTURE_ARCHIVE")"
+	printf '%s  %s.tgz\n' "${checksum%% *}" "$name" >"$ORT_CHECKSUMS_FILE"
 	xberg_stub curl \
 		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
 		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_ARCHIVE" "$2"; exit; fi; shift; done' \
 		'exit 91'
+}
+
+@test "Linux ORT setup should download and extract the requested aarch64 release layout" {
+	root="$(runtime_root aarch64)"
+	prepare_ort_archive aarch64 1.24.2
 	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 downloaded arm64
 	xberg_assert_status 0
 	xberg_assert_file "$GITHUB_WORKSPACE/downloaded/libonnxruntime.so" 'downloaded runtime'
 	xberg_assert_file "$root/lib/libonnxruntime.so" 'downloaded runtime'
+	xberg_assert_output_contains 'onnxruntime-linux-aarch64-1.24.2.tgz: SHA-256 verified'
 	grep -Fq 'releases/download/v1.24.2/onnxruntime-linux-aarch64-1.24.2.tgz' "$XBERG_TRACE"
+}
+
+@test "Linux ORT setup should reject an unpinned fresh version before curl" {
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for onnxruntime-linux-x64-9.9.9.tgz'
+	xberg_assert_trace_empty
+	xberg_assert_github_env ''
+	[ ! -e "$RUNNER_TEMP/onnxruntime" ]
+	[ ! -e "$GITHUB_WORKSPACE/output" ]
+}
+
+@test "Linux ORT setup should reject tampered fresh bytes without extraction in either cache mode" {
+	prepare_ort_archive x64 1.24.2
+	printf 'tampered runtime\n' >"$ORT_FIXTURE_ARCHIVE"
+	xberg_stub_exit tar 94
+	for mode in false true; do
+		run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system "$mode"
+		xberg_assert_status 1
+		xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-1.24.2.tgz'
+		xberg_assert_github_env ''
+		[ ! -e "$RUNNER_TEMP/onnxruntime" ]
+		[ ! -e "$GITHUB_WORKSPACE/output" ]
+	done
+}
+
+@test "Linux ORT verified archive mode should use a trusted custom pin and recheck cache hits" {
+	prepare_ort_archive x64 9.9.9
+	cached_archive="$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-9.9.9.tgz"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
+	xberg_assert_status 0
+	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
+	cmp "$ORT_FIXTURE_ARCHIVE" "$cached_archive"
+	grep -Fq 'releases/download/v9.9.9/onnxruntime-linux-x64-9.9.9.tgz' "$XBERG_TRACE"
+	first_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
+	[[ "$first_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-9.9.9/lib ]]
+
+	: >"$GITHUB_ENV"
+	rm "$XBERG_TRACE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
+	xberg_assert_status 0
+	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
+	second_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
+	[[ "$second_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-9.9.9/lib ]]
+	[ "$second_root" != "$first_root" ]
+	xberg_assert_trace_empty
+
+	printf 'corrupt cache\n' >"$cached_archive"
+	xberg_stub_exit tar 94
+	: >"$GITHUB_ENV"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
+	xberg_assert_status 1
+	xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz'
+	xberg_assert_trace_empty
+	xberg_assert_github_env ''
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
 }
 
 @test "Linux ORT setup should reject unsupported architecture before downloading or exporting" {
