@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn image_budget_accounts_for_the_full_decode_peak_before_model_loading() {
+    async fn image_budget_counts_decoded_and_rgb_rasters_before_model_loading() {
         let mut png = std::io::Cursor::new(Vec::new());
         image::DynamicImage::new_luma8(64, 64)
             .write_to(&mut png, image::ImageFormat::Png)

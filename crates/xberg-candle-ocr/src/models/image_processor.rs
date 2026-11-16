@@ -137,6 +137,33 @@ mod decode_tests {
     }
 
     #[test]
+    fn standalone_raster_budget_rejects_before_reading_truncated_pixels() {
+        use image::ImageDecoder as _;
+
+        let mut bmp = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(32, 32)
+            .write_to(&mut bmp, image::ImageFormat::Bmp)
+            .unwrap();
+        let mut truncated = bmp.into_inner();
+        let pixel_offset = u32::from_le_bytes(truncated[10..14].try_into().unwrap());
+        truncated.truncate(usize::try_from(pixel_offset).unwrap());
+        let decoder = image::codecs::bmp::BmpDecoder::new(std::io::Cursor::new(&truncated)).unwrap();
+        assert_eq!(decoder.dimensions(), (32, 32));
+        let budget = 1024;
+        let encoded_bytes = u64::try_from(truncated.len()).unwrap();
+        assert!(encoded_bytes < budget && budget < encoded_bytes + decoder.total_bytes());
+
+        assert!(matches!(
+            decode_image_with_budget(&truncated, 1 << 20, false),
+            Err(image::ImageError::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof
+        ));
+        let Err(image::ImageError::Limits(error)) = decode_image_with_budget(&truncated, budget, false) else {
+            panic!("preflight must reject the raster before reading pixel data");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+    }
+
+    #[test]
     fn grayscale_and_rgb_rasters_must_fit_when_standalone_decode_converts_color() {
         let mut png = std::io::Cursor::new(Vec::new());
         image::DynamicImage::new_luma8(64, 64)

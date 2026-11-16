@@ -381,6 +381,10 @@ impl DeepseekOCREngine {
 
     /// Process an image and return the recognized text.
     ///
+    /// The encoded input and decoding use a 100 MiB budget. Preprocessing,
+    /// including resize and color conversion, and inference allocate separately.
+    /// Use [`Self::process_decoded_image`] for a raster decoded under your own budget.
+    ///
     /// Runs the full inference pipeline:
     /// 1. Decode image bytes to DynamicImage
     /// 2. Preprocess to tensor format (images_ori, image_crop, images_seq_mask, images_spatial_crop)
@@ -396,7 +400,7 @@ impl DeepseekOCREngine {
     /// # Errors
     ///
     /// Returns [`crate::error::CandleOcrError`] if:
-    /// - Image decoding fails
+    /// - Image decoding fails or exceeds the budget ([`CandleOcrError::Image`])
     /// - Preprocessing fails
     /// - Tokenization fails
     /// - Inference fails
@@ -407,8 +411,7 @@ impl DeepseekOCREngine {
             version = self.version,
             "DeepSeek-OCR: starting inference"
         );
-        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {e}")))?;
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)?;
         self.process_decoded_image(&img, prompt)
     }
 
