@@ -34,6 +34,20 @@ pub(super) fn recognize_rows_with_paint(
     rules: &[(u32, u32, u32)],
     fills: &[(u32, u32, u32, u32, u8)],
 ) -> RecognizedTatrTable {
+    let fills: Vec<_> = fills
+        .iter()
+        .map(|&(top, bottom, left, right, shade)| (top, bottom, left, right, [shade; 3]))
+        .collect();
+    recognize_rows_with_rgb_paint(rows, header_rows, spans, rules, &fills)
+}
+
+fn recognize_rows_with_rgb_paint(
+    rows: &[&[&str]],
+    header_rows: usize,
+    spans: &[[f32; 4]],
+    rules: &[(u32, u32, u32)],
+    fills: &[(u32, u32, u32, u32, [u8; 3])],
+) -> RecognizedTatrTable {
     let cols = rows[0].len();
     let width = (cols * 50) as u32;
     let height = (rows.len() * 20) as u32;
@@ -89,7 +103,7 @@ pub(super) fn recognize_rows_with_paint(
     for &(top, bottom, left, right, shade) in fills {
         for y in top..bottom {
             for x in left..right {
-                image.put_pixel(x, y, image::Rgb([shade; 3]));
+                image.put_pixel(x, y, image::Rgb(shade));
             }
         }
     }
@@ -342,6 +356,34 @@ fn native_tatr_preserves_a_tinted_open_track() {
             .iter()
             .any(|cell| cell.col == 1 && cell.row == 0 && cell.row_span == 1 && cell.content == "Region")
     );
+}
+
+#[test]
+fn native_tatr_resolves_open_and_divided_tracks_on_full_width_tints() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let flank_rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let crossing_rules = [(20, 0, 150), (40, 0, 150)];
+    let separator_only = [(40, 0, 150)];
+    for tint in [[198; 3], [0xB8, 0xCC, 0xE4], [0xB8, 0xC8, 0xD8]] {
+        let fills = [(0, 60, 0, 150, tint)];
+        for (rules, expected_span) in [
+            (flank_rules.as_slice(), 2),
+            (crossing_rules.as_slice(), 1),
+            (separator_only.as_slice(), 1),
+        ] {
+            let result = recognize_rows_with_rgb_paint(rows, 1, &spans, rules, &fills);
+            let grid = derived_grid(&result);
+            let stub = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+            assert_eq!((stub.row_span, stub.col_span), (expected_span, 1), "{tint:?} {rules:?}");
+            let coast = grid.cells.iter().find(|cell| cell.content == "Coast").unwrap();
+            assert_eq!((coast.row, coast.row_span), (2, 1), "{tint:?} {rules:?}");
+        }
+    }
 }
 
 #[test]

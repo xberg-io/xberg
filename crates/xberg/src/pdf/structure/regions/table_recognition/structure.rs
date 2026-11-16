@@ -3,7 +3,10 @@ use std::collections::BTreeMap;
 use crate::pdf::table_reconstruct::HocrWord;
 use crate::types::{BoundingBox, GridCell, TableGrid};
 
-use super::{TatrCrop, TatrInference, has_tatr_rule_coverage, has_tatr_rule_run, tatr_rule_band, tatr_rule_track};
+use super::{
+    TATR_NEAR_WHITE_CHANNEL, TatrCrop, TatrInference, has_tatr_rule_coverage, has_tatr_span_rule_run, tatr_rule_band,
+    tatr_rule_track,
+};
 
 type SpanPlan = Vec<Vec<Option<(usize, usize)>>>;
 
@@ -233,7 +236,7 @@ impl SpanBoundaryGeometry {
         let track = tatr_rule_track(crop, self.track);
         let band = tatr_rule_band(crop, self.band);
         let masks = word_masks(crop, words, &track, &band);
-        has_tatr_rule_run(crop, track, band, |x, rows| column_visible(&masks, x, rows), |_| true)
+        has_tatr_span_rule_run(crop, track, band, |x, rows| column_visible(&masks, x, rows), |_| true)
     }
 
     fn has_open_background(&self, crop: &TatrCrop, words: &[&HocrWord]) -> bool {
@@ -272,7 +275,7 @@ impl SpanBoundaryGeometry {
             let visible = track.clone().filter(|&x| column_visible(&masks, x, &rows)).count() as u32;
             has_tatr_rule_coverage(visible, track.end.saturating_sub(track.start))
         };
-        has_tatr_rule_run(
+        has_tatr_span_rule_run(
             crop,
             first,
             band.clone(),
@@ -281,7 +284,7 @@ impl SpanBoundaryGeometry {
                 second.as_ref().map_or_else(
                     || visibly_open(rows.clone()),
                     |(second, second_masks)| {
-                        has_tatr_rule_run(
+                        has_tatr_span_rule_run(
                             crop,
                             second.clone(),
                             band.clone(),
@@ -325,7 +328,13 @@ fn band_is_near_white(
             continue;
         }
         visible += 1;
-        if !column.all(|y| crop.image.get_pixel(x, y).0.iter().all(|&channel| channel >= 220)) {
+        if !column.all(|y| {
+            crop.image
+                .get_pixel(x, y)
+                .0
+                .iter()
+                .all(|&channel| channel >= TATR_NEAR_WHITE_CHANNEL)
+        }) {
             return false;
         }
     }
@@ -342,6 +351,7 @@ fn band_matches_local_background(
         return false;
     }
     const MAX_FILL_COLOR_DELTA: u8 = 8;
+    const MIN_FILL_CHANNEL: u8 = 128;
     let upper = band.start - 1;
     let lower = band.end;
     let mut visible = 0;
@@ -354,7 +364,7 @@ fn band_matches_local_background(
         let fill = crop.image.get_pixel(x, reference).0;
         // Dark vertical strokes can persist through an open track, but cannot
         // account for most of the visible background. ~keep
-        if fill.iter().all(|&channel| channel < 128) {
+        if fill.iter().all(|&channel| channel < MIN_FILL_CHANNEL) {
             continue;
         }
         let mut visible_band_pixel = false;

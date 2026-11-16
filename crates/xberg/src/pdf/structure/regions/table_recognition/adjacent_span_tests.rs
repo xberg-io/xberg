@@ -80,3 +80,26 @@ fn native_tatr_adjacent_opening_accepts_a_shorter_neighbor() {
         [(0, 0, 3, "Region"), (0, 1, 2, "Country"), (2, 1, 1, "District")]
     );
 }
+
+#[test]
+fn native_tatr_adjacent_opening_checks_only_the_neighbor_prefix_at_the_boundary() {
+    let spans = [[0.0, 0.0, 50.0, 80.0], [50.0, 0.0, 100.0, 80.0]];
+    let rules = [(20, 100, 200), (60, 0, 200)];
+    for (district_above_boundary, expected_span) in [(false, 2), (true, 1)] {
+        let (middle, lower) = if district_above_boundary {
+            ("District", "")
+        } else {
+            ("", "District")
+        };
+        let rows: &[&[&str]] = &[
+            &["Region", "Country", "2024", ""],
+            &["", middle, "H1", "H2"],
+            &["", lower, "Q1", "Q2"],
+            &["North", "US", "10", "12"],
+        ];
+        let result = recognize_rows_with_paint(rows, 3, &spans, &rules, &[]);
+        let grid = derived_grid(&result);
+        let stub = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+        assert_eq!((stub.row, stub.col, stub.row_span), (0, 0, expected_span));
+    }
+}

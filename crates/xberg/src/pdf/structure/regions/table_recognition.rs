@@ -1280,18 +1280,8 @@ fn has_tatr_rule_run(
             has_tatr_rule_coverage(run, width)
         })
     };
-    let is_rule_row =
-        |row| crosses_tracks(&|column| crop.image.get_pixel(column, row).0.iter().all(|&channel| channel < 220));
-    const MIN_SHOULDER_CONTRAST: u8 = 16;
-    let contrasts = |column, ink, shoulder| {
-        crop.image
-            .get_pixel(column, ink)
-            .0
-            .iter()
-            .zip(crop.image.get_pixel(column, shoulder).0)
-            .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
-    };
-    let max_rule_height = (crop.sy * 2.0).ceil() as u32;
+    let is_rule_row = |row| crosses_tracks(&|column| tatr_pixel_below_white_cutoff(crop, column, row));
+    let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
     if band.is_empty() {
         return false;
     }
@@ -1308,8 +1298,8 @@ fn has_tatr_rule_run(
                 let coverage = (left..right)
                     .filter(|&column| {
                         column_visible(column, &rows)
-                            && contrasts(column, first, first - 1)
-                            && contrasts(column, row - 1, row)
+                            && tatr_rule_contrasts(crop, column, first, first - 1)
+                            && tatr_rule_contrasts(crop, column, row - 1, row)
                     })
                     .count() as u32;
                 if has_tatr_rule_coverage(coverage, width) && accept(rows) {
@@ -1320,6 +1310,76 @@ fn has_tatr_rule_run(
         }
     }
     false
+}
+
+#[cfg(feature = "layout-detection")]
+const TATR_NEAR_WHITE_CHANNEL: u8 = 220;
+
+#[cfg(feature = "layout-detection")]
+const TATR_MAX_RULE_HEIGHT_PT: f32 = 2.0;
+
+#[cfg(feature = "layout-detection")]
+fn tatr_pixel_below_white_cutoff(crop: &TatrCrop, column: u32, row: u32) -> bool {
+    crop.image
+        .get_pixel(column, row)
+        .0
+        .iter()
+        .all(|&channel| channel < TATR_NEAR_WHITE_CHANNEL)
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_contrasts(crop: &TatrCrop, column: u32, ink: u32, shoulder: u32) -> bool {
+    const MIN_SHOULDER_CONTRAST: u8 = 16;
+    crop.image
+        .get_pixel(column, ink)
+        .0
+        .iter()
+        .zip(crop.image.get_pixel(column, shoulder).0)
+        .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_span_rule_run(
+    crop: &TatrCrop,
+    track: std::ops::Range<u32>,
+    band: std::ops::Range<u32>,
+    column_visible: impl Fn(u32, &std::ops::Range<u32>) -> bool,
+    accept: impl Fn(std::ops::Range<u32>) -> bool,
+) -> bool {
+    // A tint can be below the absolute ink cutoff. Require the thin rule to be
+    // darker than its immediate shoulders without treating the tint itself as ink. ~keep
+    if has_tatr_rule_run(crop, track.clone(), band.clone(), &column_visible, &accept) {
+        return true;
+    }
+
+    let width = track.end.saturating_sub(track.start);
+    let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
+    band.clone().any(|start| {
+        let upper = start - 1;
+        let upper_edge = track
+            .clone()
+            .filter(|&column| tatr_rule_contrasts(crop, column, start, upper))
+            .count() as u32;
+        if !has_tatr_rule_coverage(upper_edge, width) {
+            return false;
+        }
+        let maximum_end = band.end.min(start.saturating_add(max_rule_height));
+        (start + 1..=maximum_end).any(|end| {
+            let rows = start..end;
+            let coverage = track
+                .clone()
+                .filter(|&column| {
+                    column_visible(column, &rows)
+                        && (tatr_pixel_below_white_cutoff(crop, column, upper)
+                            || tatr_pixel_below_white_cutoff(crop, column, end))
+                        && rows.clone().all(|ink| {
+                            tatr_rule_contrasts(crop, column, ink, upper) && tatr_rule_contrasts(crop, column, ink, end)
+                        })
+                })
+                .count() as u32;
+            has_tatr_rule_coverage(coverage, width) && accept(rows)
+        })
+    })
 }
 
 #[cfg(feature = "layout-detection")]
