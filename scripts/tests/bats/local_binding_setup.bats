@@ -60,6 +60,9 @@ make_swift_output() {
 
 @test "Swift bridge setup should read the per-package build directory layout of cargo 1.100" {
 	make_swift_output target/release/build/xberg-swift/0123456789abcdef/out
+	# Cargo 1.100 also gives the library unit its own, later, out directory without bridge files.
+	sleep 1
+	mkdir -p target/release/build/xberg-swift/fedcba9876543210/out
 	run bash "$REPOSITORY_ROOT/scripts/setup-swift-bridge.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'target/release/build/xberg-swift/0123456789abcdef/out'

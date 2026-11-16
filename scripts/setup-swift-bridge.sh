@@ -2,10 +2,13 @@
 
 set -e
 
-# Cargo 1.100 writes build-script output to build/<package>/<hash>/out; earlier releases used
-# build/<package>-<hash>/out. ~keep
+# Cargo 1.100 writes build-script output to build/<package>/<hash>/out and gives every other unit of
+# the package its own <hash>/out too; earlier releases used build/<package>-<hash>/out. Select the
+# newest out directory that holds the bridge header, not merely the newest one. ~keep
 # shellcheck disable=SC2012
-OUT=$(ls -1td target/release/build/xberg-swift/*/out target/release/build/xberg-swift-*/out 2>/dev/null | head -1)
+HEADER=$(ls -1t target/release/build/xberg-swift/*/out/SwiftBridgeCore.h \
+  target/release/build/xberg-swift-*/out/SwiftBridgeCore.h 2>/dev/null | head -1)
+OUT=${HEADER%/SwiftBridgeCore.h}
 if [ -z "$OUT" ] || [ ! -d "$OUT" ]; then
   echo "ERROR: Could not find swift-bridge build output in target/release/build/"
   exit 1
