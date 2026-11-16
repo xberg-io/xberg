@@ -33,10 +33,38 @@
 #![allow(clippy::doc_suspicious_footnotes)]
 
 use std::path::PathBuf;
-use xberg::core::config::ExtractionConfig;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
 
 mod helpers;
-use helpers::extract_uri_document;
+use helpers::{extract_bytes_document, extract_uri_document};
+
+#[tokio::test]
+async fn should_preserve_source_spacing_across_inline_rtf_groups() {
+    let cases: &[(&[u8], &str, &str)] = &[
+        (
+            br"{\rtf1\ansi Account: 12{\i 34}56\par}",
+            "Account: 123456",
+            "Account: 12*34*56",
+        ),
+        (
+            br"{\rtf1\ansi Account: 12{\i 34} 56\par}",
+            "Account: 1234 56",
+            "Account: 12*34* 56",
+        ),
+    ];
+    for &(input, plain, markdown) in cases {
+        for (output_format, expected) in [(OutputFormat::Plain, plain), (OutputFormat::Markdown, markdown)] {
+            let config = ExtractionConfig {
+                output_format,
+                ..Default::default()
+            };
+            let result = extract_bytes_document(input, "application/rtf", &config)
+                .await
+                .expect("RTF extraction must succeed");
+            assert_eq!(result.content.trim(), expected);
+        }
+    }
+}
 
 /// Helper function to get path to RTF test document
 fn get_rtf_path(filename: &str) -> PathBuf {
