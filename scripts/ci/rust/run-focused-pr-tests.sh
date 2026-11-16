@@ -80,6 +80,9 @@ PYTHON
 }
 
 run_pdf_cases() {
+  run_exact scanned_prose_rejoins_witnessed_line_end_hyphens --test pdf_scanned_hyphenation_3170
+  run_exact 'ocr::processor::execution::dehyphenation::tests::joins_only_witnessed_aligned_page_width_wraps' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_can_share_a_wrap_without_merging_their_elements' --lib
   run_exact english_ocr_preserves_the_reporters_spanish_body --ignored --test issue_2951_spanish_layer
   run_exact correction_does_not_rewrite_the_same_spelling_at_a_disjoint_position --ignored --test issue_2951_spanish_layer
   run_exact recovery_does_not_publish_invisible_native_text --ignored --test issue_2951_spanish_layer
@@ -403,7 +406,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=120
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases

@@ -20,6 +20,10 @@ use fragmented_tables::{MAX_FRAGMENTED_HOCR_INPUT_BYTES, MAX_FRAGMENTED_HOCR_WOR
 mod recognition_orientation;
 
 #[cfg(feature = "pdf")]
+#[path = "execution/dehyphenation.rs"]
+mod dehyphenation;
+
+#[cfg(feature = "pdf")]
 #[path = "execution/full_scan_table.rs"]
 mod full_scan_table;
 
@@ -2902,6 +2906,10 @@ pub(super) fn perform_ocr(
             "hOCR region capture requested");
     }
     let mut retained_hocr_read = None;
+    #[cfg(feature = "pdf")]
+    let mut dehyphenation_words = None;
+    // Region receipts keep the exact selected hOCR bytes for later source replay. ~keep
+    let observe_hyphens = cfg!(feature = "pdf") && config.known_full_page_scan && !capture_requested;
 
     let dictionary_filter = DictionaryLineFilter {
         is_valid_word: &|text| dictionary.is_valid_word(text),
@@ -2919,7 +2927,7 @@ pub(super) fn perform_ocr(
                 .get_hocr_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
 
-            let (parse_result, occurrences) = if capture_region_hocr && merged_read.is_none() {
+            let (parse_result, occurrences) = if (capture_region_hocr || observe_hyphens) && merged_read.is_none() {
                 crate::ocr::hocr_parser::parse_hocr_with_occurrences(
                     &hocr,
                     Some(&dictionary_filter),
@@ -2939,13 +2947,20 @@ pub(super) fn perform_ocr(
                 tracing::trace!(parsed_occurrences = ?occurrences.as_ref().map(Vec::len),
                     elements = parse_result.document.elements.len(), "parsed selected hOCR occurrences");
             }
-            retained_hocr_read = occurrences.and_then(|words| {
-                capture_retained_hocr_read(
-                    &parse_result.document.elements,
-                    words,
-                    (ocr_image_width, ocr_image_height),
-                )
-            });
+            if capture_region_hocr {
+                retained_hocr_read = occurrences.and_then(|words| {
+                    capture_retained_hocr_read(
+                        &parse_result.document.elements,
+                        words,
+                        (ocr_image_width, ocr_image_height),
+                    )
+                });
+            } else {
+                #[cfg(feature = "pdf")]
+                {
+                    dehyphenation_words = occurrences;
+                }
+            }
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
             dictionary_kept_numeral_line_count = parse_result.dictionary_kept_numeral_line_count;
             if config.enable_table_detection
@@ -3483,6 +3498,23 @@ pub(super) fn perform_ocr(
                 );
             }
         }
+    }
+
+    #[cfg(feature = "pdf")]
+    if tables.is_empty()
+        && !fully_claimed
+        && content == raw_content
+        && let Some(words) = dehyphenation_words.as_deref()
+        && let Some(doc) = hocr_document.as_mut()
+        && content == flatten_hocr_elements_to_text(&doc.elements)
+        && dehyphenation::join_scanned_wraps(
+            &mut doc.elements,
+            words,
+            ocr_image_width,
+            config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8,
+        )
+    {
+        content = flatten_hocr_elements_to_text(&doc.elements);
     }
 
     if let Some(read) = retained_hocr_read.as_mut()
