@@ -342,34 +342,36 @@ fn band_matches_local_background(
         return false;
     }
     const MAX_FILL_COLOR_DELTA: u8 = 8;
-    let shoulder = band.start - 1;
-    let shoulders = shoulder..shoulder + 1;
-    let bottom = band.end..band.end + 1;
+    let upper = band.start - 1;
+    let lower = band.end;
     let mut visible = 0;
     for x in track.clone() {
-        if !column_visible(masks, x, &shoulders) || !column_visible(masks, x, &bottom) {
+        let pixel_visible = |y| column_visible(masks, x, &(y..y + 1));
+        // A label can mask one search-band edge without covering the actual crossing. ~keep
+        let Some(reference) = [upper, lower].into_iter().find(|&y| pixel_visible(y)) else {
             continue;
-        }
-        let fill = crop.image.get_pixel(x, shoulder).0;
+        };
+        let fill = crop.image.get_pixel(x, reference).0;
         // Dark vertical strokes can persist through an open track, but cannot
         // account for most of the visible background. ~keep
         if fill.iter().all(|&channel| channel < 128) {
             continue;
         }
-        visible += 1;
-        for y in band.clone().chain(std::iter::once(band.end)) {
-            if column_visible(masks, x, &(y..y + 1))
-                && crop
-                    .image
-                    .get_pixel(x, y)
-                    .0
-                    .iter()
-                    .zip(fill)
-                    .any(|(&channel, background)| channel.abs_diff(background) > MAX_FILL_COLOR_DELTA)
+        let mut visible_band_pixel = false;
+        for y in (upper..=lower).filter(|&y| pixel_visible(y)) {
+            visible_band_pixel |= band.contains(&y);
+            if crop
+                .image
+                .get_pixel(x, y)
+                .0
+                .iter()
+                .zip(fill)
+                .any(|(&channel, background)| channel.abs_diff(background) > MAX_FILL_COLOR_DELTA)
             {
                 return false;
             }
         }
+        visible += u32::from(visible_band_pixel);
     }
     has_tatr_rule_coverage(visible, track.end.saturating_sub(track.start))
 }

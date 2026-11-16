@@ -331,6 +331,17 @@ fn native_tatr_preserves_a_tinted_open_track() {
         &["East", "Coast", "MA"],
     ];
     assert_source_supported_open_track(rows, &[(0, 31, 50, 100, 217)]);
+
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let flank_rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let split_tint = [(0, 20, 50, 100, 217), (20, 31, 50, 100, 198)];
+    let result = recognize_rows_with_paint(rows, 1, &spans, &flank_rules, &split_tint);
+    let grid = derived_grid(&result);
+    assert!(
+        grid.cells
+            .iter()
+            .any(|cell| cell.col == 1 && cell.row == 0 && cell.row_span == 1 && cell.content == "Region")
+    );
 }
 
 #[test]
