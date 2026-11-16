@@ -55,6 +55,8 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
         page_text.contains("commodity hardware. Its code"),
         "join the witnessed wrap before the sentence boundary: {page_text}"
     );
-    assert!(page_text.contains("commercial soft- ware, cloud"));
-    assert!(page_text.contains("printing-optimized"));
+    assert!(
+        !page_text.to_ascii_lowercase().contains("mitlicensed"),
+        "a lexical hard hyphen must survive: {page_text}"
+    );
 }

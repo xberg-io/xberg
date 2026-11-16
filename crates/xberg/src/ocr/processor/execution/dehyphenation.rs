@@ -1,5 +1,5 @@
 use crate::ocr::hocr_parser::HocrWordOccurrence;
-use crate::pdf::structure::pipeline::should_preserve_lexical_hyphen;
+use crate::pdf::structure::pipeline::{HyphenWitnesses, should_preserve_lexical_hyphen};
 use crate::types::internal::{ElementKind, InternalElement};
 use std::collections::HashSet;
 use std::ops::Range;
@@ -82,6 +82,11 @@ struct Join {
     leading: Option<Edit>,
 }
 
+struct SpellingWitnesses {
+    words: HashSet<String>,
+    compounds: HyphenWitnesses,
+}
+
 pub(super) fn join_scanned_wraps(
     elements: &mut [InternalElement],
     words: &[HocrWordOccurrence],
@@ -107,10 +112,20 @@ pub(super) fn join_scanned_wraps(
         .filter_map(|word| word_text(elements, word))
         .map(|word| lexical_core(word).to_ascii_lowercase())
         .collect();
+    let compounds = spellings
+        .iter()
+        .filter_map(|word| word.split_once('-'))
+        .filter(|(left, right)| ascii_word_part(left) && ascii_word_part(right))
+        .map(|(left, right)| (left.to_owned(), right.to_owned()))
+        .collect();
+    let witnesses = SpellingWitnesses {
+        words: spellings,
+        compounds,
+    };
 
     let joins: Vec<_> = lines
         .windows(2)
-        .filter_map(|pair| witnessed_join(&pair[0], &pair[1], elements, &spellings, page_width, sparse))
+        .filter_map(|pair| witnessed_join(&pair[0], &pair[1], elements, &witnesses, page_width, sparse))
         .collect();
     let changed = !joins.is_empty();
     for join in joins.into_iter().rev() {
@@ -158,7 +173,7 @@ fn witnessed_join(
     prior: &Line<'_>,
     next: &Line<'_>,
     elements: &[InternalElement],
-    spellings: &HashSet<String>,
+    witnesses: &SpellingWitnesses,
     page_width: u32,
     sparse: bool,
 ) -> Option<Join> {
@@ -184,29 +199,26 @@ fn witnessed_join(
     let leading = next.words.first()?;
     let former = word_text(elements, trailing)?;
     let latter = word_text(elements, leading)?;
-    let prefix = former.strip_suffix(['-', '\u{00ad}'])?;
-    let next_word = lexical_core(latter);
-    if !latter.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
-        || !witnessed_spelling(prefix, next_word, spellings)
-    {
+    if !latter.as_bytes().first().is_some_and(u8::is_ascii_lowercase) {
         return None;
     }
+    let edit_start = witnessed_edit_start(former, lexical_core(latter), witnesses)?;
     same_full_width_body(prior, next, page_width)?;
-    plan_edits(prior, next, elements, prefix.len(), latter)
+    plan_edits(prior, next, elements, edit_start, latter)
 }
 
 fn plan_edits(
     prior: &Line<'_>,
     next: &Line<'_>,
     elements: &[InternalElement],
-    prefix_length: usize,
+    edit_start: usize,
     latter: &str,
 ) -> Option<Join> {
     let former_element = elements.get(prior.element)?;
     let latter_element = elements.get(next.element)?;
     let trailing = prior.words.last()?;
     let leading = next.words.first()?;
-    let start = trailing.bytes.start + prefix_length;
+    let start = trailing.bytes.start + edit_start;
     let end = next.words.get(1)?.bytes.start;
     if latter_element.text.get(leading.bytes.end..end)? != " " {
         return None;
@@ -263,17 +275,25 @@ fn lexical_core(word: &str) -> &str {
     word.trim_matches(['.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '[', ']', '{', '}'])
 }
 
-fn witnessed_spelling(prefix: &str, continuation: &str, spellings: &HashSet<String>) -> bool {
-    if [prefix, continuation]
-        .iter()
-        .any(|part| part.len() < 2 || !part.bytes().all(|byte| byte.is_ascii_alphabetic()))
-        || should_preserve_lexical_hyphen(prefix, continuation, &Default::default())
-    {
-        return false;
+fn ascii_word_part(word: &str) -> bool {
+    word.len() >= 2 && word.bytes().all(|byte| byte.is_ascii_alphabetic())
+}
+
+fn witnessed_edit_start(former: &str, continuation: &str, witnesses: &SpellingWitnesses) -> Option<usize> {
+    let prefix = former.strip_suffix(['-', '\u{00ad}'])?;
+    if !ascii_word_part(prefix) || !ascii_word_part(continuation) {
+        return None;
     }
-    let prefix = prefix.to_ascii_lowercase();
-    let continuation = continuation.to_ascii_lowercase();
-    spellings.contains(&format!("{prefix}{continuation}")) && !spellings.contains(&format!("{prefix}-{continuation}"))
+    if should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
+        return former.ends_with('-').then_some(former.len());
+    }
+
+    let prefix_lower = prefix.to_ascii_lowercase();
+    let continuation_lower = continuation.to_ascii_lowercase();
+    witnesses
+        .words
+        .contains(&format!("{prefix_lower}{continuation_lower}"))
+        .then_some(prefix.len())
 }
 
 #[cfg(test)]
@@ -355,6 +375,33 @@ mod tests {
     }
 
     #[test]
+    fn joins_lexical_hyphen_wraps_without_dropping_the_dash() {
+        let full = (160, 840);
+        for (text, expected) in [
+            (
+                "This is a well-\nknown comparison with it\nThe bare spelling wellknown occurs here",
+                "This is a well-known\ncomparison with it\nThe bare spelling wellknown occurs here",
+            ),
+            (
+                "A project ships the MIT-\nlicensed library with it\nAn MIT-licensed copy is available",
+                "A project ships the MIT-licensed\nlibrary with it\nAn MIT-licensed copy is available",
+            ),
+            (
+                "A passage ends with recog-\nnition and explanatory text\nRecognition and recog-nition coexist",
+                "A passage ends with recog-nition\nand explanatory text\nRecognition and recog-nition coexist",
+            ),
+        ] {
+            let (mut elements, words) = scan(text, &[full; 3]);
+            assert!(join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
+            assert_eq!(elements[0].text, expected);
+
+            let (mut elements, words) = scan(text, &[full, (550, 940), full]);
+            assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
+            assert_eq!(elements[0].text, text);
+        }
+    }
+
+    #[test]
     fn joins_only_witnessed_aligned_page_width_wraps() {
         let text = "A passage ends with recog-
 nition and explanatory text
@@ -377,18 +424,6 @@ Earlier recognition supports it"
                 "A passage ends with recog-
 nition and explanatory text
 No independent witness here",
-                [full; 3],
-            ),
-            (
-                "A passage ends with recog-
-nition and explanatory text
-Recognition and recog-nition coexist",
-                [full; 3],
-            ),
-            (
-                "This is a well-
-known comparison with it
-Wellknown appears here",
                 [full; 3],
             ),
         ] {

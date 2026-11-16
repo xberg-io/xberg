@@ -281,6 +281,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
+- **(ocr): Rejoin confirmed line-end words in eligible full-width scanned PDF text.** The OCR pass uses matching page
+  spellings to rejoin discretionary wraps and keeps lexical hard hyphens. Existing OCR cache entries are rebuilt
+  under the new cache schema. (#3170)
+
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)
 
 - **(pdf): Preserve verified decimal column headers and keep decimal records in table bodies in HTML.**
