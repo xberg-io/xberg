@@ -5024,7 +5024,7 @@ pub(super) mod tests {
             document.ocr_page_failures,
             vec![crate::types::OcrPageFailure {
                 page: 2,
-                error: "Parsing error: All OCR pipeline backends failed (tesseract: Plugin error in 'ocr': OCR failed on all 1 page(s) and no text could be recovered from the pages' embedded images; first failure: Plugin error in 'tesseract': tesseract partial failure; paddleocr: Plugin error in 'ocr': OCR failed on all 1 page(s) and no text could be recovered from the pages' embedded images; first failure: Plugin error in 'paddleocr': paddleocr partial failure)"
+                error: "Parsing error: All OCR pipeline backends failed (tesseract: OCR error: OCR failed on all 1 page(s) and no text could be recovered from the pages' embedded images; first failure: Plugin error in 'tesseract': tesseract partial failure; paddleocr: OCR error: OCR failed on all 1 page(s) and no text could be recovered from the pages' embedded images; first failure: Plugin error in 'paddleocr': paddleocr partial failure)"
                     .to_string(),
                 recovered: false,
             }]
@@ -11171,11 +11171,14 @@ Name: ___
         use crate::core::config::OcrConfig;
         use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
         use crate::types::ExtractedDocument;
+        use std::error::Error as _;
         use std::sync::Arc;
 
         const BACKEND_NAME: &str = "always-failing-unrecoverable-test-backend";
 
-        struct AlwaysFailingBackend;
+        struct AlwaysFailingBackend {
+            cancel: bool,
+        }
 
         #[async_trait::async_trait]
         impl OcrBackend for AlwaysFailingBackend {
@@ -11186,6 +11189,9 @@ Name: ___
                 true
             }
             async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                if self.cancel {
+                    return Err(crate::XbergError::Cancelled);
+                }
                 Err(crate::XbergError::Plugin {
                     message: VLM_NO_CONTENT_ERROR.to_string(),
                     plugin_name: "ocr".to_string(),
@@ -11211,9 +11217,7 @@ Name: ___
             }
         }
 
-        crate::plugins::register_ocr_backend(Arc::new(AlwaysFailingBackend)).unwrap();
-
-        let pdf_bytes = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+        let pdf_bytes = build_minimal_two_page_pdf_with_sizes((612.0, 792.0), (504.0, 504.0));
         let config = ExtractionConfig {
             ocr: Some(OcrConfig {
                 backend: BACKEND_NAME.to_string(),
@@ -11222,25 +11226,36 @@ Name: ___
             ..Default::default()
         };
 
-        let result = extract_with_ocr(
-            Some(&pdf_bytes),
-            None,
-            #[cfg(feature = "layout-detection")]
-            None,
-            &config,
-            None,
-        )
-        .await;
+        for cancel in [false, true] {
+            crate::plugins::register_ocr_backend(Arc::new(AlwaysFailingBackend { cancel })).unwrap();
 
-        crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
+            let result = extract_with_ocr(
+                Some(&pdf_bytes),
+                None,
+                #[cfg(feature = "layout-detection")]
+                None,
+                &config,
+                None,
+            )
+            .await;
 
-        let error = result
-            .expect_err("a document with no recoverable page must still fail")
-            .to_string();
-        assert!(
-            error.contains("OCR failed on all 1 page(s)") && error.contains(VLM_NO_CONTENT_ERROR),
-            "the aggregate failure must name the page count and the root cause; got: {error}"
-        );
+            crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
+
+            let error = result.expect_err("a document with no recoverable page must still fail");
+            if cancel {
+                assert!(matches!(error, crate::XbergError::Cancelled), "got: {error}");
+            } else {
+                assert!(
+                    error.to_string().contains("OCR failed on all 2 page(s)"),
+                    "the aggregate failure must name the page count; got: {error}"
+                );
+                assert!(matches!(
+                    error.source().and_then(|source| source.downcast_ref::<crate::XbergError>()),
+                    Some(crate::XbergError::Plugin { message, plugin_name })
+                        if message == VLM_NO_CONTENT_ERROR && plugin_name == "ocr"
+                ));
+            }
+        }
     }
 
     /// Supporting unit test for the ink sentinel (not a regression test -- the function is

@@ -4868,12 +4868,16 @@ async fn automatic_ocr_failure_with_no_native_text_returns_an_error() {
         .expect_err("a failed automatic OCR fallback with no native text must not report success");
 
     match error {
-        crate::XbergError::Plugin { plugin_name, message } => {
-            assert_eq!(plugin_name, "ocr");
+        crate::XbergError::Ocr { message, source } => {
             assert!(
                 message.contains(FAILURE),
                 "the backend failure must propagate, got: {message}"
             );
+            assert!(matches!(
+                source.and_then(|error| error.downcast::<crate::XbergError>().ok()).as_deref(),
+                Some(crate::XbergError::Plugin { plugin_name, message })
+                    if plugin_name == BACKEND_NAME && message == FAILURE
+            ));
         }
         other => panic!("the typed OCR failure must propagate, got: {other}"),
     }
