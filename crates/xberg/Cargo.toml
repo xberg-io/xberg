@@ -130,7 +130,7 @@ tokio-runtime = ["dep:tokio"]
 # build profile already lists; it now forwards to `pdf-native` so none of them
 # need to change. `pdf-native` carries the native engine dependency set,
 # unchanged from before this split.
-pdf = ["pdf-native"]
+pdf = ["pdf-native", "dep:tracing-subscriber"]
 pdf-native = [
     "dep:xberg-native-pdf",
     "dep:lopdf",
@@ -1536,7 +1536,7 @@ tracing-opentelemetry = { version = "0.34", optional = true }
 # called `set_global_default` would simply lose the race and go dark in the CLI while every
 # test binary — which has no `fmt` subscriber — still passed. See `pdf::render`.
 # Trimmed to what the layer needs: no `fmt`, `ansi` or `tracing-log` in the core crate.
-tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "registry"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "registry"], optional = true }
 # Pure-Rust ONNX engine — the inference-seam backend on no-ORT targets (WASM,
 # Android x86_64). `tract-onnx` (not the `tract` facade) is CPU-only + wasm-safe.
 tract-onnx = { workspace = true, optional = true }
