@@ -1037,20 +1037,31 @@ impl InternalDocumentExtractor for DocxExtractor {
         let limits = config.security_limits.clone().unwrap_or_default();
         let content_owned: Arc<[u8]> = Arc::from(content);
         let (text, tables, page_boundaries, drawings, drawing_page_nums, image_rels, mut internal_doc) = {
-            #[cfg(feature = "tokio-runtime")]
-            if crate::core::batch_mode::is_batch_mode() {
-                if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                let cancel = config.cancel_token.clone();
+                if cancel
+                    .as_ref()
+                    .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+                {
                     return Err(crate::error::XbergError::Cancelled);
                 }
                 let parse_content = Arc::clone(&content_owned);
                 let parse_limits = limits.clone();
                 let span = tracing::Span::current();
-                tokio::task::spawn_blocking(move || {
-                    let _guard = span.entered();
-                    parse_docx_core(&parse_content, output_format, inject_placeholders, budget, parse_limits)
-                })
-                .await
-                .map_err(|e| crate::error::XbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
+                runtime
+                    .spawn_blocking(move || {
+                        let _guard = span.entered();
+                        if cancel
+                            .as_ref()
+                            .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+                        {
+                            return Err(crate::error::XbergError::Cancelled);
+                        }
+                        parse_docx_core(&parse_content, output_format, inject_placeholders, budget, parse_limits)
+                    })
+                    .await
+                    .map_err(|e| crate::error::XbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
             } else {
                 parse_docx_core(
                     &content_owned,
@@ -1061,7 +1072,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                 )?
             }
 
-            #[cfg(not(feature = "tokio-runtime"))]
+            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
             parse_docx_core(
                 &content_owned,
                 output_format,
@@ -1799,6 +1810,62 @@ mod tests {
             serde_json::to_value(single).unwrap(),
             "batch-mode ownership changes must preserve the exact internal document"
         );
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn should_queue_single_docx_parse_and_honor_cancellation_before_it_starts() {
+        use std::future::{Future, poll_fn};
+        use std::sync::mpsc;
+        use std::task::Poll;
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let data = build_test_docx(TRACK_CHANGES_XML);
+        let extractor = DocxExtractor::new();
+        let mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+        for cancel_while_queued in [false, true] {
+            let (started_tx, started_rx) = mpsc::sync_channel(1);
+            let (release_tx, release_rx) = mpsc::sync_channel(1);
+            let blocker = runtime.spawn_blocking(move || {
+                started_tx.send(()).unwrap();
+                let _ = release_rx.recv();
+            });
+            started_rx.recv().unwrap();
+
+            let cancel = crate::cancellation::CancellationToken::new();
+            let config = ExtractionConfig {
+                max_archive_depth: 0,
+                cancel_token: Some(cancel.clone()),
+                ..Default::default()
+            };
+            let (queued, result) = runtime.block_on(async {
+                let mut extraction = Box::pin(extractor.extract_content(&data, mime_type, &config));
+                let first_poll = poll_fn(|context| Poll::Ready(extraction.as_mut().poll(context))).await;
+                if cancel_while_queued {
+                    cancel.cancel();
+                }
+                release_tx.send(()).unwrap();
+                blocker.await.unwrap();
+                match first_poll {
+                    Poll::Ready(result) => (false, result),
+                    Poll::Pending => (true, extraction.await),
+                }
+            });
+
+            assert!(
+                queued,
+                "the single extraction must yield while its parser waits for the blocking worker"
+            );
+            if cancel_while_queued {
+                assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+            } else {
+                assert!(result.unwrap().revisions.is_some());
+            }
+        }
     }
 
     #[tokio::test]
