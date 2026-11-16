@@ -10,6 +10,23 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::error::{CandleOcrError, Result};
 
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
+
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+pub(super) fn decode_image_with_budget(bytes: &[u8], budget: u64) -> image::ImageResult<image::DynamicImage> {
+    let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(budget.checked_sub(encoded_bytes).ok_or_else(|| {
+        image::ImageError::Limits(image::error::LimitError::from_kind(
+            image::error::LimitErrorKind::InsufficientMemory,
+        ))
+    })?);
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+    reader.limits(limits);
+    reader.decode()
+}
+
 /// ViT-style image processor: resize to NxN, normalize to mean/std.
 ///
 /// Defaults match TrOCR / PaddleOCR-VL ViT pretraining: 384x384, mean/std `[0.5; 3]`.
@@ -71,5 +88,26 @@ impl ImageProcessor {
             .broadcast_div(&std)?;
 
         Ok(normalized.unsqueeze(0)?)
+    }
+}
+
+#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr")))]
+mod decode_tests {
+    use super::decode_image_with_budget;
+
+    #[test]
+    fn encoded_and_decoded_bytes_must_fit_standalone_decode_budget() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let budget = 4 * 1024;
+        assert!(png.get_ref().len() < usize::try_from(budget).unwrap());
+        assert!(matches!(
+            decode_image_with_budget(png.get_ref(), budget),
+            Err(image::ImageError::Limits(_))
+        ));
+        let image = decode_image_with_budget(png.get_ref(), 1 << 20).unwrap();
+        assert_eq!((image.width(), image.height()), (64, 64));
     }
 }

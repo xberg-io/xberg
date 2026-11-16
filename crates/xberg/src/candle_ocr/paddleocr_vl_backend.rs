@@ -37,6 +37,9 @@ use crate::candle_ocr::config::{
 };
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
+use crate::extraction::image_decode::{
+    ImageDecodeBudget, decode_standard_rgb8_with_security_limits, probe_standard_image_with_security_limits,
+};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::DType;
@@ -265,7 +268,7 @@ impl OcrBackend for PaddleOcrVlBackend {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::XbergError::Validation`] if `image_bytes` is empty.
+    /// Returns [`crate::XbergError::Validation`] if the image is empty or exceeds the decode budget.
     /// Returns [`crate::XbergError::Ocr`] if weight download, device selection,
     /// engine initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
@@ -282,9 +285,24 @@ impl OcrBackend for PaddleOcrVlBackend {
             });
         }
 
+        let limits = config.security_limits.clone().unwrap_or_default();
+        ImageDecodeBudget::from_security_limits(&limits).validate(
+            1,
+            1,
+            u64::try_from(image_bytes.len()).unwrap_or(u64::MAX),
+        )?;
         let image_bytes_owned = image_bytes.to_vec();
 
         let content = tokio::task::spawn_blocking(move || {
+            let decode_error = |error| match error {
+                error @ crate::XbergError::Validation { .. } => error,
+                error => crate::XbergError::Ocr {
+                    message: format!("PaddleOCR-VL image decode failed: {error}"),
+                    source: Some(Box::new(error)),
+                },
+            };
+            // Reject oversized inputs before model staging. Keep raster allocation inside the model lock. ~keep
+            probe_standard_image_with_security_limits(&image_bytes_owned, &limits).map_err(decode_error)?;
             let model_path = match options.model_path {
                 Some(p) => p,
                 None => super::model_stager::ensure_paddleocr_vl_16(
@@ -301,8 +319,10 @@ impl OcrBackend for PaddleOcrVlBackend {
             let engine = get_or_init_engine(&model_path, options.task, options.device)?;
 
             let mut engine_guard = engine.lock();
+            let img = decode_standard_rgb8_with_security_limits(&image_bytes_owned, &limits).map_err(decode_error)?;
+            drop(image_bytes_owned);
             let output = engine_guard
-                .process_image(&image_bytes_owned)
+                .process_rgb_image(img)
                 .map_err(|e| crate::XbergError::Ocr {
                     message: format!("PaddleOCR-VL inference failed: {e}"),
                     source: Some(Box::new(e)),
@@ -376,6 +396,54 @@ mod tests {
 
     fn parse_default_options(config: &OcrConfig) -> Result<PaddleOcrVlOptions> {
         PaddleOcrVlBackend::default_task().parse_options(config)
+    }
+
+    #[tokio::test]
+    async fn configured_image_budget_rejects_decode_before_loading_model() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let limit = 4 * 1024;
+        assert!(png.get_ref().len() < limit);
+        let temp = tempfile::tempdir().unwrap();
+        let model_path = temp.path().join("missing-model").to_string_lossy().into_owned();
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({ "model_path": model_path, "device": "cpu" })),
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let backend = PaddleOcrVlBackend::default_task();
+        let error = backend
+            .process_image(png.get_ref(), &config)
+            .await
+            .expect_err("decoded raster exceeds the caller's budget");
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+
+        let admitted_config = OcrConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 1 << 20,
+                ..Default::default()
+            }),
+            ..config
+        };
+        let error = backend
+            .process_image(png.get_ref(), &admitted_config)
+            .await
+            .expect_err("the admitted raster reaches model initialization");
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, .. }
+            if message.contains("engine initialisation failed")),
+            "{error}"
+        );
     }
 
     #[test]

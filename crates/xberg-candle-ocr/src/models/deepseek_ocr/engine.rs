@@ -10,6 +10,7 @@ use tokenizers::Tokenizer;
 
 use crate::CandleOcrError;
 use crate::error::Result;
+use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
 use crate::vendor::aha::InferenceModel;
 
 use super::{config::DeepseekOCRConfig, model::DeepseekOCRModel, processor::DeepseekOCRProcessor};
@@ -406,9 +407,13 @@ impl DeepseekOCREngine {
             version = self.version,
             "DeepSeek-OCR: starting inference"
         );
-        let img = image::load_from_memory(image_bytes)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {}", e)))?;
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {e}")))?;
+        self.process_decoded_image(&img, prompt)
+    }
 
+    /// Run recognition on a raster already decoded and budgeted by the caller.
+    pub fn process_decoded_image(&mut self, img: &image::DynamicImage, prompt: Option<&str>) -> Result<String> {
         let (img_width, img_height) = (img.width(), img.height());
         tracing::debug!(width = img_width, height = img_height, "DeepSeek-OCR: image dimensions");
 
@@ -423,13 +428,13 @@ impl DeepseekOCREngine {
 
         let pad = (IMAGE_MEAN_STD * 255.0) as u8;
         let global_view =
-            crate::vendor::aha::image::resize_with_edge_padding(&img, BASE_SIZE, BASE_SIZE, [pad, pad, pad]);
+            crate::vendor::aha::image::resize_with_edge_padding(img, BASE_SIZE, BASE_SIZE, [pad, pad, pad]);
         let images_ori = crate::vendor::aha::image::img_transform(&global_view, &mean, &std, &self.device, self.dtype)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Global transform: {}", e)))?
             .unsqueeze(0)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Global batch: {}", e)))?;
 
-        let (image_crop, images_spatial_crop, num_image_tokens) = self.build_crop_tensors(&img, &mean, &std)?;
+        let (image_crop, images_spatial_crop, num_image_tokens) = self.build_crop_tensors(img, &mean, &std)?;
         let (input_ids, prompt_ids, images_seq_mask) =
             self.build_input_tensors(prompt, num_image_tokens, image_token_id)?;
 

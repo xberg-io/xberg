@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
 
 use crate::error::Result;
+use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
 use crate::{CandleOcrError, CandleOcrOutput};
 
 use super::config::{PaddleOCRVLConfig, PaddleOCRVLPreprocessorConfig};
@@ -153,10 +154,13 @@ impl PaddleOcrVlEngine {
     /// Process an image and return the recognized text as markdown.
     pub fn process_image(&mut self, image_bytes: &[u8]) -> Result<CandleOcrOutput> {
         tracing::debug!(image_size = image_bytes.len(), task = %self.task, "PaddleOCR-VL: starting inference");
-        let img = image::load_from_memory(image_bytes)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Decode image: {}", e)))?;
-        let img = img.to_rgb8();
+        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Decode image: {e}")))?;
+        self.process_rgb_image(img.into_rgb8())
+    }
 
+    /// Run recognition on an RGB raster already decoded and budgeted by the caller.
+    pub fn process_rgb_image(&mut self, img: image::RgbImage) -> Result<CandleOcrOutput> {
         let (img_width, img_height) = (img.width(), img.height());
         tracing::debug!(width = img_width, height = img_height, "PaddleOCR-VL: image dimensions");
 
