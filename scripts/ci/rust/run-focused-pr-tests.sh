@@ -426,12 +426,16 @@ api-jobs)
   run_api_cases
   ;;
 pdf-table-paint)
-  expected=9
+  expected=13
   table_module="pdf::structure::regions::table_recognition"
   for name in \
     native_tatr_vertical_span_stops_at_a_painted_rule \
     native_tatr_vertical_span_survives_a_rule_outside_the_merged_track \
     native_tatr_three_row_span_retains_only_the_source_supported_merge \
+    native_tatr_preserves_adjacent_source_supported_rowspans \
+    native_tatr_preserves_three_adjacent_rowspans_across_empty_continuations \
+    native_tatr_preserves_a_tinted_open_track \
+    native_tatr_preserves_a_noisy_near_white_open_track \
     native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor; do
     run_exact "$table_module::metadata_tests::$name" --lib
   done

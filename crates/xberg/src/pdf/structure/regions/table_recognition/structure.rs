@@ -93,7 +93,7 @@ fn apply_model_spans(
         for row in boundaries.chain(std::iter::once(row_end)) {
             let boundary = (row, col_start, col_end);
             let divided = row != row_end && paint.divides(boundary);
-            if row != row_end && !divided && paint.opens(boundary) {
+            if row != row_end && !divided && paint.opens(start, boundary) {
                 continue;
             }
             if row - start > 1 {
@@ -113,7 +113,7 @@ struct SpanPaint<'a> {
     inference: &'a TatrInference,
     crop: &'a TatrCrop,
     dividers: BTreeMap<SpanBoundary, bool>,
-    openings: BTreeMap<SpanBoundary, bool>,
+    openings: BTreeMap<(usize, SpanBoundary), bool>,
 }
 
 impl SpanPaint<'_> {
@@ -124,75 +124,76 @@ impl SpanPaint<'_> {
         })
     }
 
-    fn opens(&mut self, boundary: SpanBoundary) -> bool {
-        if let Some(&open) = self.openings.get(&boundary) {
+    fn opens(&mut self, start: usize, boundary: SpanBoundary) -> bool {
+        let key = (start, boundary);
+        if let Some(&open) = self.openings.get(&key) {
             return open;
         }
         let open = span_boundary_geometry(self.inference, self.crop, self.bands, boundary).is_some_and(|geometry| {
-            geometry.has_open_track(self.crop, self.words) || self.has_adjacent_open_tracks(boundary, &geometry)
+            geometry.has_open_track(self.crop, self.words) || self.has_adjacent_open_tracks(start, boundary, &geometry)
         });
-        self.openings.insert(boundary, open);
+        self.openings.insert(key, open);
         open
     }
 
-    fn has_adjacent_open_tracks(&self, (row, start, end): SpanBoundary, center: &SpanBoundaryGeometry) -> bool {
-        if !self.has_label_and_empty_continuation(row, start, end) {
+    fn has_adjacent_open_tracks(
+        &self,
+        top: usize,
+        (row, left, right): SpanBoundary,
+        center: &SpanBoundaryGeometry,
+    ) -> bool {
+        if !self.has_clear_continuation(top, row, left, right) {
             return false;
         }
-        let left = self.adjacent_track(row, |_, right| right == start);
-        let right = self.adjacent_track(row, |left, _| left == end);
-        if left.is_none() && right.is_none() {
-            return false;
+        let mut track = center.track;
+        for expand_left in [true, false] {
+            let mut edge = if expand_left { left } else { right };
+            while let Some((start, end)) = self.adjacent_track(top, row, edge, expand_left) {
+                if !self.has_clear_continuation(top, row, start, end) {
+                    return false;
+                }
+                let Some(neighbor) = span_boundary_geometry(self.inference, self.crop, self.bands, (row, start, end))
+                else {
+                    return false;
+                };
+                if expand_left {
+                    edge = start;
+                    track.0 = neighbor.track.0;
+                } else {
+                    edge = end;
+                    track.1 = neighbor.track.1;
+                }
+            }
         }
-        // Every track must independently expose its background. A wide adjacent
-        // cell cannot compensate for a covered or divided narrow cell. ~keep
-        if [left.as_ref(), Some(center), right.as_ref()]
-            .into_iter()
-            .flatten()
-            .any(|geometry| !geometry.has_visible_open_band(self.crop, self.words))
-        {
-            return false;
-        }
-        SpanBoundaryGeometry {
-            track: (
-                left.map_or(center.track.0, |geometry| geometry.track.0),
-                right.map_or(center.track.1, |geometry| geometry.track.1),
-            ),
-            ..*center
-        }
-        .has_open_track(self.crop, self.words)
+        track != center.track && SpanBoundaryGeometry { track, ..*center }.has_open_track(self.crop, self.words)
     }
 
-    fn adjacent_track(&self, row: usize, touches: impl Fn(usize, usize) -> bool) -> Option<SpanBoundaryGeometry> {
+    fn adjacent_track(&self, top: usize, row: usize, edge: usize, expand_left: bool) -> Option<(usize, usize)> {
         let mut candidates = self
             .inference
             .structure
             .spans
             .iter()
-            .filter_map(|&(top, bottom, left, right)| {
-                if top >= row || bottom <= row || left >= right || !touches(left, right) {
-                    return None;
-                }
-                // The adjacent model span must have its own label above the boundary
-                // and no independent text below. Never extend a proposal to another column. ~keep
-                if !self.has_label_and_empty_continuation(row, left, right) {
-                    return None;
-                }
-                span_boundary_geometry(self.inference, self.crop, self.bands, (row, left, right))
+            .filter_map(|&(start, bottom, left, right)| {
+                let touches = if expand_left { right == edge } else { left == edge };
+                (start == top && bottom > row && left < right && touches).then_some((left, right))
             });
-        let candidate = candidates.next()?;
-        candidates.next().is_none().then_some(candidate)
+        let track = candidates.next()?;
+        candidates.all(|candidate| candidate == track).then_some(track)
     }
 
-    fn has_label_and_empty_continuation(&self, row: usize, left: usize, right: usize) -> bool {
-        let upper = row.checked_sub(1).and_then(|upper| self.occupied.get(upper));
-        let lower = self.occupied.get(row);
-        upper
-            .and_then(|cells| cells.get(left..right))
-            .is_some_and(|cells| cells.iter().any(|&occupied| occupied))
-            && lower
-                .and_then(|cells| cells.get(left..right))
-                .is_some_and(|cells| cells.iter().all(|&occupied| !occupied))
+    fn has_clear_continuation(&self, top: usize, row: usize, left: usize, right: usize) -> bool {
+        let cells = |index: usize| self.occupied.get(index).and_then(|cells| cells.get(left..right));
+        if !cells(top).is_some_and(|cells| cells.iter().any(|&occupied| occupied)) {
+            return false;
+        }
+        // Each track needs its own source label, empty continuation, and clear
+        // raster at every intervening boundary. The union only proves the flanks. ~keep
+        (top + 1..=row).all(|index| {
+            cells(index).is_some_and(|cells| cells.iter().all(|&occupied| !occupied))
+                && span_boundary_geometry(self.inference, self.crop, self.bands, (index, left, right))
+                    .is_some_and(|geometry| geometry.has_visible_open_band(self.crop, self.words))
+        })
     }
 }
 
@@ -239,40 +240,59 @@ impl SpanBoundaryGeometry {
         let track = tatr_rule_track(crop, self.track);
         let shoulders = band.start.saturating_sub(1)..band.end + 1;
         let masks = word_masks(crop, words, &track, &shoulders);
-        let clear = band_matches_local_background(crop, &track, &band, &masks);
+        let near_white = band_is_near_white(crop, &track, &band, &masks);
+        if !near_white && !band_matches_local_background(crop, &track, &band, &masks) {
+            return false;
+        }
         let visibly_open = |rows: PixelRange| {
-            let rows = rows.start.saturating_sub(1)..rows.end + 1;
+            let rows = if near_white {
+                rows
+            } else {
+                rows.start.saturating_sub(1)..rows.end + 1
+            };
             let visible = track.clone().filter(|&x| column_visible(&masks, x, &rows)).count() as u32;
             has_tatr_rule_coverage(visible, track.end.saturating_sub(track.start))
         };
-        clear
-            && has_tatr_rule_run(
-                crop,
-                first,
-                band.clone(),
-                |x, rows| column_visible(&first_masks, x, rows),
-                |rows| {
-                    second.as_ref().map_or_else(
-                        || visibly_open(rows.clone()),
-                        |(second, second_masks)| {
-                            has_tatr_rule_run(
-                                crop,
-                                second.clone(),
-                                band.clone(),
-                                |x, rows| column_visible(second_masks, x, rows),
-                                |other| {
-                                    let overlap = rows.start.max(other.start)..rows.end.min(other.end);
-                                    !overlap.is_empty() && visibly_open(overlap)
-                                },
-                            )
-                        },
-                    )
-                },
-            )
+        has_tatr_rule_run(
+            crop,
+            first,
+            band.clone(),
+            |x, rows| column_visible(&first_masks, x, rows),
+            |rows| {
+                second.as_ref().map_or_else(
+                    || visibly_open(rows.clone()),
+                    |(second, second_masks)| {
+                        has_tatr_rule_run(
+                            crop,
+                            second.clone(),
+                            band.clone(),
+                            |x, rows| column_visible(second_masks, x, rows),
+                            |other| {
+                                let overlap = rows.start.max(other.start)..rows.end.min(other.end);
+                                !overlap.is_empty() && visibly_open(overlap)
+                            },
+                        )
+                    },
+                )
+            },
+        )
     }
 }
 
 type PixelRange = std::ops::Range<u32>;
+
+fn band_is_near_white(
+    crop: &TatrCrop,
+    track: &PixelRange,
+    band: &PixelRange,
+    masks: &[(PixelRange, PixelRange)],
+) -> bool {
+    band.clone().all(|y| {
+        track.clone().all(|x| {
+            !column_visible(masks, x, &(y..y + 1)) || crop.image.get_pixel(x, y).0.iter().all(|&channel| channel >= 220)
+        })
+    })
+}
 
 fn band_matches_local_background(
     crop: &TatrCrop,
