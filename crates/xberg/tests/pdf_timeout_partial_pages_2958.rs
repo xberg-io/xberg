@@ -21,10 +21,10 @@
 
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
+use serial_test::serial;
 use std::path::Path;
 use xberg::cancellation::CancellationToken;
 use xberg::core::config::{ConcurrencyConfig, ExtractionConfig, PageConfig};
-use serial_test::serial;
 use xberg::{ExtractedDocument, XbergError};
 
 /// Limits tried in turn. A loaded runner can read no page within the first one, which is
