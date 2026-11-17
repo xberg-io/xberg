@@ -215,6 +215,120 @@ class ContractsTest(unittest.TestCase):
         assert all((report_dir / f"{role}.json").is_file() for role in runner.ROLES)
 
 
+class ModelFallbackTest(unittest.TestCase):
+    """Distinguish the optional OCR retry from unavailable benchmark models."""
+
+    def test_tesseract_osd_retry_is_not_model_fallback(self):
+        """The Full-format warning is from the retained public olmOCR pilot."""
+        with patch.object(sys, "path", [str(Path(__file__).parents[1]), *sys.path]):
+            runner = importlib.import_module("olmocr_bench.runner")
+        warning = (
+            '2026-11-17T00:14:32.190193Z  WARN xberg.ocr{xberg.ocr.backend="tesseract" xberg.ocr.language="eng"}: '
+            'xberg::ocr::processor::model_context: script retry skipped or changed; bypassing result cache script="Han" '
+            "error=OCR processing failed: script retry: OSD: OCR operation failed"
+        )
+        assert not runner._model_fallback({}, warning)
+        assert not runner._model_fallback({}, warning.replace("WARN", "\x1b[33m WARN\x1b[0m"))
+        with_model_failure = warning.replace("xberg.ocr{", 'layout{error="ONNX model failed"}:xberg.ocr{')
+        assert runner._model_fallback({}, with_model_failure)
+
+        for case, failure in (
+            ("Khmer retry", warning.replace('script="Han"', 'script="Khmer"')),
+            ("trailing ONNX failure", warning + "; ONNX model failed"),
+        ):
+            with self.subTest(case=case):
+                assert runner._model_fallback({}, failure)
+
+        for failure in (
+            warning.replace("ocr::processor::model_context:", "layout::model_context:"),
+            warning.replace("script retry: OSD: OCR operation failed", "Primary Tesseract models changed during OCR"),
+            warning.replace("script retry: OSD: OCR operation failed", "script retry: OSD model initialization failed"),
+            (
+                "WARN xberg::extractors::pdf::layout_runner: layout-for-markdown: detection failed, "
+                "continuing without layout hints"
+            ),
+            "WARN xberg::extractors::pdf: pdf formula recognition failed; keeping OCR text",
+            "WARN xberg::onnx: failed to load libonnxruntime.so",
+        ):
+            with self.subTest(failure=failure):
+                assert runner._model_fallback({}, f"{warning}\n{failure}")
+
+        warnings = {
+            "processing_warnings": [
+                {
+                    "source": "pdf_tables",
+                    "message": "layout detection found table regions but the TATR table model is not available; "
+                    "table structure recognition was skipped; check that the model is downloaded",
+                }
+            ]
+        }
+        assert runner._model_fallback(warnings, warning)
+
+    def test_native_form_flate_decode_is_not_model_fallback(self):
+        """Use the paired structured warnings and ANSI trace from baseline/863bf01719."""
+        with patch.object(sys, "path", [str(Path(__file__).parents[1]), *sys.path]):
+            runner = importlib.import_module("olmocr_bench.runner")
+        error = (
+            "Layout analysis error: incomplete Form path decode: Stream decoding error: "
+            "FlateDecode: incomplete zlib stream or trailing data"
+        )
+        warnings = [
+            {
+                "source": "pdf_tables",
+                "message": f"table extraction failed for page 1: {error}; tables on this page were skipped",
+            },
+            {
+                "source": "pdf_tables",
+                "message": f"bordered table extraction failed for page 1: {error}; "
+                "bordered tables on this page were skipped",
+            },
+        ]
+        trace = (
+            "\x1b[2m2026-11-17T01:05:05.375834Z\x1b[0m \x1b[33m WARN\x1b[0m "
+            "\x1b[2mxberg::pdf::native::table\x1b[0m\x1b[2m:\x1b[0m "
+            f"xberg_native_pdf ruled table extraction failed: {error} \x1b[3mpage\x1b[0m\x1b[2m=\x1b[0m0"
+        )
+        assert not runner._model_fallback({"processing_warnings": warnings}, "")
+        assert not runner._model_fallback({}, trace)
+        assert not runner._model_fallback({"processing_warnings": warnings}, trace)
+        for case, message in (
+            ("mismatched bordered pair", warnings[1]["message"].replace("; bordered tables", "; tables")),
+            ("structured page zero", warnings[0]["message"].replace("page 1:", "page 0:")),
+        ):
+            with self.subTest(case=case):
+                document = {"processing_warnings": [{"source": "pdf_tables", "message": message}]}
+                assert runner._model_fallback(document, "")
+        plain = runner.TRACE_ANSI.sub("", trace)
+        with_span = plain.replace(
+            "xberg::pdf::native::table:", 'layout{error="ONNX model failed"}: xberg::pdf::native::table:'
+        )
+        assert runner._model_fallback({}, with_span)
+        assert not runner._model_fallback({}, with_span.replace('error="ONNX model failed"', 'model="layout"'))
+        assert not runner._model_fallback(
+            {}, with_span.replace("ONNX model failed", "decode failed").replace("layout{", "pdf{")
+        )
+
+        for warning in (
+            {"source": "layout", "message": warnings[0]["message"]},
+            {"source": "layout", "message": "layout detection failed; source raster refused by the pixel budget"},
+            {"source": "pdf_tables", "message": "TATR table model is not available; recognition was skipped"},
+            {"source": "pdf_tables", "message": warnings[1]["message"] + "; ONNX model failed to load"},
+            {"source": "pdf_tables", "message": {"error": "ONNX model failed"}},
+            {"source": "pdf_tables", "message": ["ONNX model failed"]},
+        ):
+            with self.subTest(warning=warning):
+                assert runner._model_fallback({"processing_warnings": [*warnings, warning]}, trace)
+        for failure in (
+            trace.replace("xberg::pdf::native::table", "xberg::extractors::pdf::layout_runner"),
+            trace + " model fallback was used",
+            "WARN xberg::extractors::pdf: pdf formula recognition failed; keeping OCR text",
+            "WARN xberg::onnx: failed to load libonnxruntime.so",
+            "WARN xberg::hf: failed to download model from registry",
+        ):
+            with self.subTest(failure=failure):
+                assert runner._model_fallback({"processing_warnings": warnings}, f"{trace}\n{failure}")
+
+
 class FormulaCacheTest(unittest.TestCase):
     """Only explicitly bound formula files belong in each fresh cache."""
 

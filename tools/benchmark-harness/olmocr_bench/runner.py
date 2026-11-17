@@ -33,6 +33,24 @@ TRACE_TIMESTAMP = r"(?:\d{4}-\d{2}-\d{2}T\S+[ \t]+)?[ \t]*"
 SPAN_NAME = r"[A-Za-z_][\w.-]*(?:::[A-Za-z_][\w.-]*)*"
 SPAN_FIELDS = r'\{(?:[^{}"\r\n]|"(?:\\.|[^"\\])*")*\}'
 TRACE_SPANS = rf"(?:(?:{SPAN_NAME}(?:{SPAN_FIELDS})?:)+[ \t]+)?"
+TRACE_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+TESSERACT_OSD_RETRY = re.compile(
+    rf"{TRACE_TIMESTAMP}WARN[ \t]+(?P<context>{TRACE_SPANS})xberg::ocr::processor::model_context: "
+    r'script retry skipped or changed; bypassing result cache script="Han" '
+    r"error=OCR processing failed: script retry: OSD: OCR operation failed[ \t]*"
+)
+NATIVE_FORM_FLATE_ERROR = re.escape(
+    "Layout analysis error: incomplete Form path decode: Stream decoding error: "
+    "FlateDecode: incomplete zlib stream or trailing data"
+)
+NATIVE_FORM_TABLE_WARNING = re.compile(
+    rf"(?P<bordered>bordered )?table extraction failed for page [1-9][0-9]*: {NATIVE_FORM_FLATE_ERROR}; "
+    r"(?(bordered)bordered )tables on this page were skipped"
+)
+NATIVE_FORM_TABLE_TRACE = re.compile(
+    rf"{TRACE_TIMESTAMP}WARN[ \t]+(?P<context>{TRACE_SPANS})xberg::pdf::native::table: "
+    rf"xberg_native_pdf ruled table extraction failed: {NATIVE_FORM_FLATE_ERROR} page=[0-9]+[ \t]*"
+)
 FORMULA_EVENT = re.compile(
     rf"{TRACE_TIMESTAMP}DEBUG[ \t]+{TRACE_SPANS}{re.escape(FORMULA_TRACE_TARGET)}: "
     r"native PDF formula recognition applied page=(?P<page>[1-9][0-9]*) "
@@ -119,7 +137,22 @@ def prepare(plan_path: Path, output: Path) -> None:
 def _model_fallback(document: dict, stderr: str) -> bool:
     # Native PDF formula recognition can report failure solely through tracing on stderr.
     warnings = document.get("processing_warnings", [])
-    lines = [f"{row['source']} {row['message']}" for row in warnings] + stderr.splitlines()
+    # These exact native table diagnostics describe a PDF Form stream decode, independent of model availability.
+    lines = [
+        f"{row['source']} {row['message']}"
+        for row in warnings
+        if not (
+            row["source"] == "pdf_tables"
+            and isinstance(row["message"], str)
+            and NATIVE_FORM_TABLE_WARNING.fullmatch(row["message"])
+        )
+    ]
+    # An optional Han script probe retains the primary read. Model startup and mutation warnings still count.
+    for line in stderr.splitlines():
+        plain = TRACE_ANSI.sub("", line)
+        optional = TESSERACT_OSD_RETRY.fullmatch(plain) or NATIVE_FORM_TABLE_TRACE.fullmatch(plain)
+        # Exempt the precise event only. Its enclosing spans may still report a model failure.
+        lines.append(optional["context"] if optional else line)
     for line in lines:
         text = line.lower()
         model = any(word in text for word in ("layout", "formula", "latex", "tatr", "rt-detr", "model", "onnx"))
@@ -144,7 +177,7 @@ def _formula_cache_intact(cache: Path, models: dict[str, Path]) -> bool:
 def _recognized_formula(document: dict, stderr: str) -> bool:
     # Formula rows may come from native glyph text. Require native model evidence
     # from stderr and a nonempty formula on the corresponding output page.
-    plain_stderr = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
+    plain_stderr = TRACE_ANSI.sub("", stderr)
     pages = set()
     for line in plain_stderr.splitlines():
         if event := FORMULA_EVENT.fullmatch(line):
