@@ -3232,7 +3232,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size,
             is_bold,
             is_monospace,

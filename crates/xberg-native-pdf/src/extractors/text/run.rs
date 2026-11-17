@@ -70,6 +70,7 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     fn extract_text_spans_impl(&mut self, content_stream: &[u8]) -> Result<Vec<TextSpan>> {
+        let _warnings = self.document.map(crate::PdfDocument::warning_scope);
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
@@ -210,6 +211,7 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Run the character extraction and leave the result in `self.chars`.
     fn extract_into_self(&mut self, content_stream: &[u8]) -> Result<()> {
+        let _warnings = self.document.map(crate::PdfDocument::warning_scope);
         self.extract_spans = false;
         self.chars.clear();
         self.spans.clear(); // Ensure spans are clear so they don't poison xobject_spans_cache ~keep
