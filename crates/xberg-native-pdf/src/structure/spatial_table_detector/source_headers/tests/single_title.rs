@@ -235,3 +235,43 @@ fn single_merged_title_refuses_dark_fill_extended_by_a_pale_stroke() {
         assert_eq!(single_title_roles(&mut single_title_rows(), &rules), [false; 4]);
     }
 }
+
+fn set_upper_span_overhang(row: &mut TableRow, overhang: f32) {
+    for cell in &mut row.cells {
+        let bounds = cell.bbox.expect("fixture cell bounds");
+        for span in &mut cell.spans {
+            span.bbox.height = bounds.bottom() + overhang - span.bbox.top();
+        }
+    }
+}
+
+#[test]
+fn single_merged_title_accepts_measured_upper_font_metric_overhang() {
+    let mut rows = single_title_rows();
+    for row in &mut rows[..3] {
+        set_upper_span_overhang(row, 0.36);
+    }
+    assert!(!complete_source_band(&rows[2], COLUMNS, false));
+    let original = rows.clone();
+    assert_eq!(
+        single_title_roles(&mut rows, &single_title_rules()),
+        [true, true, false, false]
+    );
+    for row in &mut rows[..2] {
+        row.is_header = false;
+        for cell in &mut row.cells {
+            cell.is_header = false;
+        }
+    }
+    assert_eq!(format!("{rows:?}"), format!("{original:?}"));
+}
+
+#[test]
+fn single_merged_title_rejects_overhang_beyond_the_upper_metric_allowance() {
+    let paths = single_title_rules();
+    for row in 0..3 {
+        let mut rows = single_title_rows();
+        set_upper_span_overhang(&mut rows[row], 0.51);
+        assert_eq!(single_title_roles(&mut rows, &paths), [false; 4], "row {row}");
+    }
+}

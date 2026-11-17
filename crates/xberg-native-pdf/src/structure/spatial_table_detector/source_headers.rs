@@ -170,18 +170,14 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
         return;
     };
     let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
-    if nearby.len() > MAX_GROUPED_HEADER_PATHS
-        || leaves.is_header
-        || first_body.is_header
-        || !complete_source_band(first_body, columns, false)
-    {
+    if nearby.len() > MAX_GROUPED_HEADER_PATHS || leaves.is_header || first_body.is_header {
         return;
     }
     if single_title::has_leaf_header(groups, leaves, first_body, &nearby, columns) {
         mark_header_bands(groups, leaves);
         return;
     }
-    if groups.is_header {
+    if groups.is_header || !complete_source_band(first_body, columns, false) {
         return;
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
@@ -249,10 +245,10 @@ fn complete_source_band(row: &TableRow, columns: usize, bold: bool) -> bool {
 }
 
 fn source_label(cell: &TableCell, bold: bool) -> bool {
-    !cell.is_header && contained_source_label(cell, bold)
+    !cell.is_header && contained_source_label(cell, bold, 0.0)
 }
 
-fn contained_source_label(cell: &TableCell, bold: bool) -> bool {
+fn contained_source_label(cell: &TableCell, bold: bool, upper_overhang: f32) -> bool {
     cell.bbox.is_some_and(|bounds| {
         cell.rowspan == 1
             && !cell.text.trim().is_empty()
@@ -261,7 +257,10 @@ fn contained_source_label(cell: &TableCell, bold: bool) -> bool {
                 span.rotation_degrees == 0.0
                     && span.wmode == 0
                     && span.font_weight.is_bold() == bold
-                    && bounds.contains_rect(&span.bbox)
+                    && span.bbox.left() >= bounds.left()
+                    && span.bbox.right() <= bounds.right()
+                    && span.bbox.top() >= bounds.top()
+                    && span.bbox.bottom() <= bounds.bottom() + upper_overhang
             })
     })
 }

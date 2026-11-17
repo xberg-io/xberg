@@ -8,6 +8,9 @@ use crate::elements::PathContent;
 use crate::geometry::Rect;
 use crate::structure::table_extractor::{TableCell, TableRow};
 
+// Native font metric boxes can extend just above the painted row in PDF coordinates. ~keep
+const MAX_UPPER_FONT_METRIC_OVERHANG: f32 = 0.5;
+
 pub(super) fn has_leaf_header(
     title_row: &TableRow,
     leaves: &TableRow,
@@ -21,11 +24,18 @@ pub(super) fn has_leaf_header(
     if columns < 3
         || title.colspan != 2
         || peers.len() != columns - 2
-        || !contained_source_label(title, true)
+        || !contained_source_label(title, true, MAX_UPPER_FONT_METRIC_OVERHANG)
         || !alphabetic_label(title)
         || leaves.cells.len() != columns
         || !leaves.cells.iter().all(|cell| {
-            cell.colspan == 1 && !cell.is_header && contained_source_label(cell, true) && alphabetic_label(cell)
+            cell.colspan == 1
+                && !cell.is_header
+                && contained_source_label(cell, true, MAX_UPPER_FONT_METRIC_OVERHANG)
+                && alphabetic_label(cell)
+        })
+        || first_body.cells.len() != columns
+        || !first_body.cells.iter().all(|cell| {
+            cell.colspan == 1 && !cell.is_header && contained_source_label(cell, false, MAX_UPPER_FONT_METRIC_OVERHANG)
         })
         || first_body
             .cells
