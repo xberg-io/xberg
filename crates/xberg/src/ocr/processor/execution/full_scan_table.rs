@@ -572,7 +572,8 @@ mod tests {
         let tsv = tsv.replace("\t42\n", "\tal\n");
         let content = content.replace("42", "al");
         let limits = SecurityLimits::default();
-        let certify_standalone = |tsv, content| certify(tsv, content, &REGION, &limits, GridProof::Standalone);
+        let certify_standalone =
+            |tsv: &str, content: &str| certify(tsv, content, &REGION, &limits, GridProof::Standalone);
         let (cells, _) = certify_standalone(&tsv, &content).unwrap();
         assert_eq!(cells[2], ["Library hours", "al", "50,406", "666.17"]);
         assert!(recover(&tsv, &content, &REGION, &limits).is_none());
