@@ -21,3 +21,6 @@ leaders from the same synthetic generator replay. SHA-256
 `58def07f2f629e801fe2abb20b64bcf303fddb9cdc60f16176933a7144285166`.
 The OCR regression checks seven source-exact rows and preserves the literal
 misread count `al` in the Code review row.
+The recognized-row TSV records the stock PSM 11 word text grouped by the
+source grid, including recognition errors. The explicit PSM 6 and 11 text
+snapshots retain the stock page transcript before row recovery.

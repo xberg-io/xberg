@@ -34,7 +34,7 @@ pub(super) fn recover(
 }
 
 #[derive(Clone, Copy)]
-enum GridProof<'a> {
+pub(super) enum GridProof<'a> {
     Strict,
     MergedHeader(&'a [Vec<String>]),
     #[cfg(not(target_arch = "wasm32"))]
@@ -92,17 +92,12 @@ pub(super) fn recover_standalone(
     bbox: &OcrTableBoundingBox,
     limits: &SecurityLimits,
     (hocr, document): (&str, &super::InternalDocument),
-    merged_header: Option<&[Vec<String>]>,
+    proof: GridProof<'_>,
 ) -> Option<Vec<Vec<String>>> {
     let page_number = document.elements.first()?.page?;
     let proof_bytes = tsv.len().checked_add(content.len())?.checked_add(hocr.len())?;
     if proof_bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size)
-        || merged_header.is_some_and(|accepted| {
-            // A four-column header and first record need at least eight source words.
-            accepted
-                .first()
-                .is_none_or(|first| first.iter().flat_map(|cell| cell.split_whitespace()).take(8).count() < 8)
-        })
+        || matches!(proof, GridProof::MergedHeader(accepted) if !has_header_and_record_words(accepted))
         || !document
             .elements
             .iter()
@@ -112,7 +107,6 @@ pub(super) fn recover_standalone(
     }
     let mut limits = limits.clone();
     limits.max_iterations = limits.max_iterations.checked_sub(hocr.len().checked_mul(4)?)?;
-    let proof = merged_header.map_or(GridProof::Standalone, GridProof::MergedHeader);
     let (cells, words) = certify(tsv, content, bbox, &limits, proof)?;
     if !super::has_table_grid(&cells) {
         return None;
@@ -125,6 +119,14 @@ pub(super) fn recover_standalone(
         words.iter().map(|(_, word)| word).collect(),
     );
     claimed.elements.is_empty().then_some(cells)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn has_header_and_record_words(accepted: &[Vec<String>]) -> bool {
+    // A four-column header and first record need at least eight source words. ~keep
+    accepted
+        .first()
+        .is_some_and(|first| first.iter().flat_map(|cell| cell.split_whitespace()).take(8).count() == 8)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -411,18 +413,26 @@ mod tests {
         let image = include_bytes!("../../../../tests/fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders.png");
         let config = TesseractConfig {
             psm: TessPageSegMode::PSM_SPARSE_TEXT as u8,
-            use_cache: false,
+            use_cache: true,
             ..Default::default()
         };
         let extract = |format, policy| {
             process_image_with_cache_and_policy(image, &config, &cache, &pool, Some(format), policy).unwrap()
         };
         for format in [OutputFormat::Plain, OutputFormat::Html] {
-            assert!(extract(format, ImageOcrPolicy::Default).tables.is_empty());
-            let result = extract(format, ImageOcrPolicy::StandaloneSparseRows);
+            assert!(
+                extract(format.clone(), ImageOcrPolicy::StandaloneSparseRows)
+                    .tables
+                    .is_empty()
+            );
+            let result = extract(format.clone(), ImageOcrPolicy::ImplicitStandaloneSparseRows);
+            let warm = extract(format.clone(), ImageOcrPolicy::ImplicitStandaloneSparseRows);
+            assert!(extract(format, ImageOcrPolicy::StandaloneSparseRows).tables.is_empty());
             let [table] = result.tables.as_slice() else {
                 panic!("expected exactly one certified standalone table");
             };
+            assert_eq!(warm.tables.len(), 1);
+            assert_eq!(warm.tables[0].cells, table.cells);
             assert_eq!(table.cells.len(), 13);
             for (index, cells) in [
                 (0, ["Item", "Count", "Budget", "Change"]),
@@ -439,6 +449,7 @@ mod tests {
             }
             assert!(result.internal_document.unwrap().ocr_text_claimed_by_tables);
         }
+        assert_eq!(cache.get_stats().unwrap().total_files, 4);
     }
 
     fn fixture() -> (String, String) {

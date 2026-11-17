@@ -390,3 +390,74 @@ fn explicit_sparse_plain_stops_without_publishing_rows() {
         }
     });
 }
+
+const TINTED_LEADERS: &[u8] = include_bytes!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders.png");
+
+#[test]
+fn implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html() {
+    let expected: Vec<Vec<_>> =
+        include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-recognized-rows.tsv")
+            .lines()
+            .map(|row| row.split('\t').collect())
+            .collect();
+    assert_eq!(expected.len(), 13);
+    assert!(expected.iter().all(|row| row.len() == 4));
+    assert_eq!(expected[6], ["Code review", "al", "822,978", "17,187"]);
+    let transcript = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    for format in [OutputFormat::Plain, OutputFormat::Html] {
+        let mut extraction = config(format.clone());
+        extraction.ocr.as_mut().unwrap().element_config = None;
+        let result = extract(TINTED_LEADERS, &extraction);
+        assert!(result.metadata.ocr_used);
+        assert_eq!(result.metadata.additional["psm"], "11");
+        let [table] = result.tables.as_slice() else {
+            panic!("expected exactly one document table");
+        };
+        assert_eq!(table.cells, expected);
+        let [page] = result.pages.as_deref().unwrap() else {
+            panic!("expected exactly one page");
+        };
+        let [page_table] = page.tables.as_slice() else {
+            panic!("expected exactly one page table");
+        };
+        assert_eq!(page_table.cells, expected);
+        assert_eq!(page.content.trim(), transcript);
+        match format {
+            OutputFormat::Html => assert_html_table(&result, &expected),
+            _ => assert_eq!(result.content.trim(), transcript),
+        }
+    }
+}
+
+#[test]
+fn explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript() {
+    const SPARSE: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm11-plain.txt");
+    const BLOCK: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm6-plain.txt");
+    for (psm, expected_page, separator) in [(11, SPARSE, "\n\n"), (6, BLOCK, "\n")] {
+        for format in [OutputFormat::Plain, OutputFormat::Html] {
+            let mut extraction = config(format.clone());
+            let ocr = extraction.ocr.as_mut().unwrap();
+            ocr.element_config = None;
+            ocr.tesseract_config.get_or_insert_default().psm = Some(psm);
+            let result = extract(TINTED_LEADERS, &extraction);
+            assert!(result.metadata.ocr_used);
+            assert_eq!(result.metadata.additional["psm"], psm.to_string());
+            assert!(result.tables.is_empty());
+            let [page] = result.pages.as_deref().unwrap() else {
+                panic!("expected exactly one page");
+            };
+            assert!(page.tables.is_empty());
+            assert_eq!(page.content.trim(), expected_page.trim());
+            let expected = match (format, psm) {
+                (OutputFormat::Html, 11) => expected_page
+                    .trim()
+                    .split(separator)
+                    .map(|cell| format!("<p>{cell}</p>\n"))
+                    .collect(),
+                (OutputFormat::Html, _) => format!("<p>{}</p>\n", expected_page.trim().replace(separator, " ")),
+                _ => expected_page.trim().to_owned(),
+            };
+            assert_eq!(result.content, expected);
+        }
+    }
+}

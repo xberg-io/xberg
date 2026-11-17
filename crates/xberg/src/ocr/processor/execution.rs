@@ -3208,8 +3208,10 @@ pub(super) fn perform_ocr(
             && hocr_for_tables.is_some()
             && full_scan_table::uses_default_table_thresholds(config);
         #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-        let can_prove_sparse_grid = policy == ImageOcrPolicy::StandaloneSparseRows
-            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+        let can_prove_sparse_grid = matches!(
+            policy,
+            ImageOcrPolicy::StandaloneSparseRows | ImageOcrPolicy::ImplicitStandaloneSparseRows
+        ) && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
             && regions.len() == 1
             && dictionary_filtered_line_count == 0
             && full_scan_table::uses_default_table_thresholds(config);
@@ -3329,13 +3331,20 @@ pub(super) fn perform_ocr(
                         .as_deref()
                         .zip(hocr_document.as_ref())
                         .and_then(|source| {
+                            use full_scan_table::GridProof;
+
+                            let proof = match cleaned.as_deref() {
+                                Some(merged_header) => GridProof::MergedHeader(merged_header),
+                                None if policy == ImageOcrPolicy::ImplicitStandaloneSparseRows => GridProof::Standalone,
+                                None => GridProof::Strict,
+                            };
                             full_scan_table::recover_standalone(
                                 tsv_data,
                                 &content,
                                 &bbox,
                                 &security_limits,
                                 source,
-                                cleaned.as_deref(),
+                                proof,
                             )
                         });
                     fully_claimed |= recovered.is_some();
@@ -3705,6 +3714,8 @@ fn process_image_resolved(
         ImageOcrPolicy::StandaloneAutoTableRows => ":standalone-auto-table-rows",
         #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
         ImageOcrPolicy::StandaloneSparseRows => ":standalone-sparse-rows",
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        ImageOcrPolicy::ImplicitStandaloneSparseRows => ":implicit-standalone-sparse-rows",
     });
 
     // `output_format` is part of the cache identity: it selects the renderer and
