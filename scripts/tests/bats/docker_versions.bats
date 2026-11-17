@@ -307,11 +307,11 @@ codec_urls = (
 )
 epel = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
 source_label = "https://github.com/xberg-io/xberg"
-# Count duplicate literal URLs too, including both Alpine CLI package-install instructions.
+# Count duplicate literal URLs, including repositories in the standalone musl builder.
 external_urls = {
     "core": (*codec_urls, *archive_urls.values(), source_label),
     "full": (*codec_urls, *archive_urls.values(), source_label),
-    "cli": (*alpine_repository_urls, rustup_urls["musl"], archive_urls["PDFIUM"], *alpine_repository_urls, source_label),
+    "cli": (rustup_urls["musl"], archive_urls["PDFIUM"], source_label),
     "musl-build": (*alpine_repository_urls, rustup_urls["musl"], archive_urls["PDFIUM"]),
     "manylinux-node": (epel, *codec_urls, archive_urls["ORT"], rustup_urls["gnu"]),
     "manylinux-rustler": (epel, *codec_urls, archive_urls["ORT"], rustup_urls["gnu"]),
@@ -325,7 +325,7 @@ apk_ort_install = re.compile(
 
 
 def is_alpine_package_install(name, instruction, urls):
-    if name not in ("cli", "musl-build") or tuple(urls) != alpine_repository_urls:
+    if name != "musl-build" or tuple(urls) != alpine_repository_urls:
         return False
     if not instruction.startswith("RUN "):
         return False
@@ -438,6 +438,7 @@ if sys.argv[2] == "negative":
     cli = variants["cli"]
     mirror = "https://mirror.invalid/pdfium-linux-x64.tgz"
     unreviewed_url_instructions = (
+        "RUN apk add --no-cache onnxruntime " + " ".join(f"--repository={url}" for url in alpine_repository_urls),
         f"ADD {mirror} /tmp/p.tgz",
         f"RUN wget -qO p.tgz {mirror} && tar -xzf p.tgz",
         f"RUN if true; then curl {mirror}; fi",
@@ -486,8 +487,8 @@ if sys.argv[2] == "negative":
 else:
     assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
     verify_rustup(variants)
-    assert sum(map(len, external_urls.values())) == 35
-    print("six Dockerfiles: 35 reviewed URLs, eight verified archive chains, four verified Rustup bootstraps")
+    assert sum(map(len, external_urls.values())) == 31
+    print("six Dockerfiles: 31 reviewed URLs, eight verified archive chains, four verified Rustup bootstraps")
 PYTHON
 }
 

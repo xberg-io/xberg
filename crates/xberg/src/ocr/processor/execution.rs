@@ -6070,6 +6070,34 @@ mod tests {
         assert_eq!(table_tsv(None, Some(&merged)), None, "no table asked for, none made");
     }
 
+    /// Whether a searched tessdata directory holds each of `models`. Prints a SKIP line naming the
+    /// missing ones, or fails instead when the `require` variable is set.
+    fn installed_models(test: &str, models: &[&str], require: &str) -> bool {
+        let directories = super::super::validation::tessdata_search_dirs(
+            None,
+            &super::super::validation::TessdataEnv::from_process(),
+        );
+        let missing: Vec<String> = models
+            .iter()
+            .map(|model| format!("{model}.traineddata"))
+            .filter(|file| {
+                !directories
+                    .iter()
+                    .any(|dir| std::path::Path::new(dir).join(file).is_file())
+            })
+            .collect();
+        if missing.is_empty() {
+            return true;
+        }
+        assert!(
+            std::env::var_os(require).is_none(),
+            "{test} requires {}",
+            missing.join(", ")
+        );
+        eprintln!("SKIP {test}: {} not installed", missing.join(", "));
+        false
+    }
+
     fn vertical_japanese_fixture(name: &str) -> Option<Vec<u8>> {
         let models = super::super::validation::tessdata_search_dirs(
             None,
@@ -6082,6 +6110,9 @@ mod tests {
         if std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_some() {
             assert!(has_model, "qualification requires jpn_vert.traineddata");
             assert!(bytes.is_some(), "qualification requires fixture {name}");
+        }
+        if !has_model || bytes.is_none() {
+            eprintln!("SKIP vertical Japanese test: jpn_vert.traineddata or fixture {name} unavailable");
         }
         bytes.filter(|_| has_model)
     }
@@ -6144,6 +6175,14 @@ mod tests {
         let Some(vertical) = vertical_japanese_fixture("images/ndl_meiji_vertical_03.jpg") else {
             return;
         };
+        // Linux CI tessdata with jpn_vert and osd but no chi_sim reads 膨盤 for 胎盤 here. ~keep
+        if !installed_models(
+            "mixed_vertical_japanese_preserves_the_horizontal_heading",
+            &["osd", "chi_sim"],
+            "XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES",
+        ) {
+            return;
+        }
         let vertical = image::load_from_memory(&vertical).unwrap().to_rgb8();
         let heading = image::load_from_memory(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -6290,8 +6329,16 @@ mod tests {
             ..Default::default()
         };
         let models = ModelContext::resolve_with_retry(&config, Some(75.0)).expect("resolve first-pass models");
-        if models.retry_models(&config, 0.0, || true).is_none() {
-            eprintln!("skipped: osd and chi_sim are not installed");
+        let horizontal_han = models
+            .retry_models(&config, 0.0, || true)
+            .and_then(|retry| retry.han)
+            .and_then(|han| han.horizontal);
+        if horizontal_han.is_none() {
+            assert!(
+                std::env::var_os("XBERG_REQUIRE_SCRIPT_RETRY_MODELS").is_none(),
+                "a_han_image_read_with_eng_is_read_again_with_chi_sim requires osd and eng+chi_sim in one directory"
+            );
+            eprintln!("SKIP a_han_image_read_with_eng_is_read_again_with_chi_sim: osd or chi_sim not installed");
             return;
         }
         cacheability::scope(async {

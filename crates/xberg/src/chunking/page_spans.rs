@@ -39,6 +39,13 @@ const MIN_NODE_TEXT_MATCH_LEN: usize = 10;
 /// instead of testing every node against every chunk.
 const TRIE_MIN_NODES: usize = 64;
 
+#[cfg(test)]
+thread_local! {
+    /// Nodes `match_page_nodes` considered on this thread: every node of a page without a trie,
+    /// only the matched ones with it. Tests read it to bound the work instead of timing it.
+    static NODES_EXAMINED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A page's body-layer nodes, with a text index when there are enough of them to need one.
 struct PageNodes<'a> {
     nodes: Vec<&'a DocumentNode>,
@@ -159,6 +166,15 @@ fn match_page_nodes<'a>(chunk_content: &str, page: &PageNodes<'a>) -> (Option<Bo
             .filter(|node| node_text_matches_chunk(node, chunk_content))
             .collect(),
     };
+    #[cfg(test)]
+    NODES_EXAMINED.with(|examined| {
+        let considered = if page.trie.is_some() {
+            matched.len()
+        } else {
+            page.nodes.len()
+        };
+        examined.set(examined.get() + considered);
+    });
 
     for node in matched {
         if let Some(bbox) = node.bbox {
