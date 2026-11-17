@@ -27,6 +27,9 @@ ffi_extern! {
     /// Allocates a new Pix with the given dimensions and bit depth.
     fn pixCreate(width: i32, height: i32, depth: i32) -> *mut c_void;
 
+    /// Copies the source pixels and metadata into a new Pix if the destination is null.
+    fn pixCopy(pixd: *mut c_void, pixs: *const c_void) -> *mut c_void;
+
     /// Releases one reference to a Pix and clears the caller's pointer slot.
     ///
     /// Leptonica frees the allocation when the final reference is released.
@@ -185,14 +188,11 @@ ffi_extern! {
 
 /// Safe wrapper around a Leptonica `PIX *` image object.
 ///
-/// Owns one reference that `Drop` releases with `pixDestroy`. Some Leptonica
-/// transforms can return a second reference to the same allocation.
+/// Owns an independent Leptonica allocation that `Drop` releases with `pixDestroy`.
 ///
-/// # Thread safety
-///
-/// Leptonica uses a non-atomic reference count and can share one allocation
-/// between wrappers. The current wrapper does not enforce thread isolation for
-/// these aliases.
+/// The typed transform and Tesseract result paths separate native clones before
+/// returning them. Raw-pointer entry points still rely on caller-side lifetime
+/// and exclusivity requirements. See #3228.
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 pub struct Pix {
     ptr: *mut c_void,
@@ -206,8 +206,9 @@ impl std::fmt::Debug for Pix {
 }
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
-// The Send invariant requires independent native allocations across threads.
-// The wrapper does not currently guarantee this for references from pixClone. ~keep
+// SAFETY: The typed API gives each Pix its own allocation and does not implement Sync.
+// Native raw-pointer entry points still require callers to keep the allocation live
+// and exclude concurrent access as documented in #3228. ~keep
 unsafe impl Send for Pix {}
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
@@ -218,12 +219,37 @@ impl Pix {
     const MINIMUM_OTSU_TILE_DIMENSION: i32 = 16;
     const STANDARD_OTSU_SCORE_FRACTION: f32 = 0.0;
 
-    /// Adopts one caller-owned reference to a live Leptonica Pix, released by
-    /// `Drop` with `pixDestroy`. The null check does not establish ownership.
-    /// Other owners may release their own references independently.
-    pub(crate) fn from_owned_ptr(ptr: *mut c_void) -> Result<Pix> {
+    /// Copies and releases a native returned reference, which may alias another owner.
+    ///
+    /// # Safety
+    ///
+    /// A non-null pointer must hold one owned reference to a valid Pix with
+    /// initialized pixels. The caller must exclude concurrent writes to the
+    /// native image until the copy and release finish.
+    pub(crate) unsafe fn copy_owned_reference(mut ptr: *mut c_void) -> Result<Pix> {
         if ptr.is_null() {
             return Err(TesseractError::NullPointerError);
+        }
+        // SAFETY: The caller guarantees a live, readable source. Null requests an independent copy.
+        let copy = unsafe { pixCopy(std::ptr::null_mut(), ptr) };
+        // SAFETY: The caller transfers one owned reference, including when the copy failed.
+        unsafe { pixDestroy(&mut ptr) };
+        if copy.is_null() {
+            Err(TesseractError::NullPointerError)
+        } else {
+            Ok(Pix { ptr: copy })
+        }
+    }
+
+    // Transform results transfer one owned reference, even for native no-op clones.
+    fn finish_transform(&self, ptr: *mut c_void) -> Result<Pix> {
+        if ptr.is_null() {
+            return Err(TesseractError::NullPointerError);
+        }
+        if ptr == self.ptr {
+            // SAFETY: The transform returned one retained reference to self. The typed API
+            // cannot share this Pix with another thread while the copy is in progress.
+            return unsafe { Self::copy_owned_reference(ptr) };
         }
         Ok(Pix { ptr })
     }
@@ -376,11 +402,7 @@ impl Pix {
         // SAFETY: self keeps the input reference alive. A non-null result owns one reference
         // even when Leptonica returns pixClone(self.ptr). ~keep
         let result = unsafe { pixDeskew(self.ptr, 0) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Estimates the skew angle in degrees and the confidence ratio.
@@ -498,10 +520,7 @@ impl Pix {
             Self::discard_transformed_ptr(result);
             return Err(TesseractError::OcrError);
         }
-        if result.is_null() {
-            return Err(TesseractError::NullPointerError);
-        }
-        Self::from_transformed_ptr(result, resolution)
+        self.finish_transform_with_resolution(result, resolution)
     }
 
     /// Removes impulse noise from an 8 bpp image with a median rank filter.
@@ -519,7 +538,7 @@ impl Pix {
         // SAFETY: `self.ptr` is an owned non-null 8 bpp Pix and the positive kernel dimensions
         // were validated above; the returned allocation is adopted exactly once below.
         let result = unsafe { pixRankFilterGray(self.ptr, width, height, Self::MEDIAN_FILTER_RANK) };
-        Self::from_transformed_ptr(result, resolution)
+        self.finish_transform_with_resolution(result, resolution)
     }
 
     /// Stretches a grayscale intensity range to 0–255 with gamma correction.
@@ -537,7 +556,7 @@ impl Pix {
         // SAFETY: `self.ptr` is an owned non-null 8 bpp Pix, the transfer parameters were
         // validated above, and a null destination requests a new allocation adopted below.
         let result = unsafe { pixGammaTRC(std::ptr::null_mut(), self.ptr, gamma, min_value, max_value) };
-        Self::from_transformed_ptr(result, resolution)
+        self.finish_transform_with_resolution(result, resolution)
     }
 
     /// Binarises an 8 bpp image using tiled Sauvola local thresholds.
@@ -590,7 +609,7 @@ impl Pix {
             Self::discard_transformed_ptr(result);
             return Err(TesseractError::OcrError);
         }
-        Self::from_transformed_ptr(result, resolution)
+        self.finish_transform_with_resolution(result, resolution)
     }
 
     fn require_grayscale(&self) -> Result<()> {
@@ -601,11 +620,8 @@ impl Pix {
         }
     }
 
-    fn from_transformed_ptr(ptr: *mut c_void, resolution: (i32, i32)) -> Result<Pix> {
-        if ptr.is_null() {
-            return Err(TesseractError::NullPointerError);
-        }
-        let mut pix = Pix { ptr };
+    fn finish_transform_with_resolution(&self, ptr: *mut c_void, resolution: (i32, i32)) -> Result<Pix> {
+        let mut pix = self.finish_transform(ptr)?;
         pix.set_resolution(resolution.0, resolution.1)?;
         Ok(pix)
     }
@@ -657,7 +673,7 @@ impl Pix {
             && (xres == 0 || yres == 0)
         {
             // SAFETY: self keeps the Pix alive and the setter updates only DPI fields.
-            // The shared receiver does not establish exclusivity across native aliases. ~keep
+            // The typed API keeps other wrappers from sharing this allocation. ~keep
             unsafe { pixSetResolution(self.ptr, 72, 72) };
         }
     }
@@ -686,11 +702,7 @@ impl Pix {
         // SAFETY: self keeps the input alive; null selects no optional image mask.
         // Leptonica checks 8/32 bpp and returns a caller-owned output on success. ~keep
         let result = unsafe { pixBackgroundNormMorph(self.ptr, std::ptr::null_mut(), 4, 15, 200) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Applies unsharp masking to sharpen this image.
@@ -717,11 +729,7 @@ impl Pix {
         // SAFETY: self keeps the input reference alive. Leptonica can return a retained
         // reference to the input for a no-op; the returned wrapper releases that reference. ~keep
         let result = unsafe { pixUnsharpMasking(self.ptr, halfwidth, fract) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Scales this image by independent x and y factors.
@@ -732,6 +740,9 @@ impl Pix {
     ///
     /// # Errors
     ///
+    /// Returns `TesseractError::InvalidParameterError` for non-finite or non-positive
+    /// factors or when rounded dimensions or smoothing kernel width exceed the
+    /// signed integer range.
     /// Returns `TesseractError::NullPointerError` if `pixScale` returns null.
     ///
     /// # Examples
@@ -745,14 +756,11 @@ impl Pix {
     /// assert_eq!(upscaled.height(), 80);
     /// ```
     pub fn scale(&self, sx: f32, sy: f32) -> Result<Pix> {
-        // SAFETY: self keeps the source live and a non-null output is caller-owned.
-        // The wrapper does not validate the scale factors or representability of the scaled dimensions. ~keep
+        validate_scale(self.width(), self.height(), self.depth(), sx, sy)?;
+        // SAFETY: self keeps the source live. The factors and native dimension and kernel
+        // conversions were checked above. A non-null result transfers one owned reference. ~keep
         let result = unsafe { pixScale(self.ptr, sx, sy) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Clips a rectangular sub-region from this image.
@@ -762,26 +770,24 @@ impl Pix {
     ///
     /// # Errors
     ///
+    /// Returns `TesseractError::InvalidParameterError` if the box endpoints overflow.
     /// Returns `TesseractError::NullPointerError` if the crop fails.
     pub fn clip_rectangle(&self, x: i32, y: i32, w: i32, h: i32) -> Result<Pix> {
-        // SAFETY: boxCreate receives only integer coordinates and returns an owned Box
-        // reference or null. ~keep
+        validate_clip_endpoints(x, y, w, h)?;
+        // SAFETY: The endpoints fit the signed arithmetic used by boxCreate.
+        // A non-null result is an owned Box reference. ~keep
         let box_ = unsafe { boxCreate(x, y, w, h) };
         if box_.is_null() {
             return Err(TesseractError::NullPointerError);
         }
         // SAFETY: both input references stay alive, and null omits the optional Box output.
-        // The wrapper does not validate that coordinate-plus-extent sums fit in C's signed type. ~keep
+        // The validated endpoints fit Leptonica's signed clipping arithmetic. ~keep
         let result = unsafe { pixClipRectangle(self.ptr, box_, std::ptr::null_mut()) };
         let mut box_mut = box_;
         // SAFETY: box_mut is a writable slot holding the owned Box reference. pixClipRectangle
         // borrows the input Box and leaves its release to this call. ~keep
         unsafe { boxDestroy(&mut box_mut) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Counts connected components in a 1 bpp (binary) image.
@@ -828,11 +834,7 @@ impl Pix {
         // SAFETY: self keeps the input alive. Zero weights select Leptonica's defaults;
         // Leptonica checks the depth and gives the caller a new output on success. ~keep
         let result = unsafe { pixConvertRGBToGray(self.ptr, 0.0, 0.0, 0.0) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Inverts the pixel values of this image (bitwise complement).
@@ -861,11 +863,7 @@ impl Pix {
         // SAFETY: self keeps the source alive. Passing a null destination requests a new
         // owned output rather than modifying the input in place. ~keep
         let result = unsafe { pixInvert(std::ptr::null_mut(), self.ptr) };
-        if result.is_null() {
-            Err(TesseractError::NullPointerError)
-        } else {
-            Ok(Pix { ptr: result })
-        }
+        self.finish_transform(result)
     }
 
     /// Returns the raw Leptonica `PIX *` pointer.
@@ -926,6 +924,34 @@ impl Pix {
         // SAFETY: self keeps the Pix alive while Leptonica reads its metadata. ~keep
         unsafe { pixGetDepth(self.ptr) }
     }
+}
+
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+fn validate_scale(width: i32, height: i32, depth: i32, sx: f32, sy: f32) -> Result<()> {
+    if !sx.is_finite() || !sy.is_finite() || sx <= 0.0 || sy <= 0.0 {
+        return Err(TesseractError::InvalidParameterError);
+    }
+    // Leptonica rounds by adding a double 0.5 to the single-precision product
+    // before truncating. The first unrepresentable positive result is 2^31. ~keep
+    let fits = |product: f32| f64::from(product) + 0.5 < f64::from(i32::MAX) + 1.0;
+    if !fits(sx * width as f32) || !fits(sy * height as f32) {
+        return Err(TesseractError::InvalidParameterError);
+    }
+    let min_scale = sx.min(sy);
+    // Nonbinary downscales in this range use pixScaleSmooth, which rounds
+    // 1/min_scale to an integer before capping the kernel width. ~keep
+    if depth != 1 && f64::from(sx.max(sy)) < 0.7 && f64::from(min_scale) < 0.02 && !fits(1.0 / min_scale) {
+        return Err(TesseractError::InvalidParameterError);
+    }
+    Ok(())
+}
+
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+fn validate_clip_endpoints(x: i32, y: i32, w: i32, h: i32) -> Result<()> {
+    if x.checked_add(w).is_none() || y.checked_add(h).is_none() {
+        return Err(TesseractError::InvalidParameterError);
+    }
+    Ok(())
 }
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]

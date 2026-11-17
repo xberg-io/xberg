@@ -82,6 +82,9 @@ fn test_scale_up() {
     let scaled = pix.scale(2.0, 2.0).expect("scale failed");
     assert_eq!(scaled.width(), 40);
     assert_eq!(scaled.height(), 20);
+
+    let rounded = make_rgb_pix(5, 7, 100).scale(1.5, 1.5).expect("rounded scale");
+    assert_eq!((rounded.width(), rounded.height()), (8, 11));
 }
 
 #[test]
@@ -90,6 +93,90 @@ fn test_unsharp_mask_returns_same_dimensions() {
     let sharpened = pix.unsharp_mask(2, 0.4).expect("unsharp_mask failed");
     assert_eq!(sharpened.width(), 32);
     assert_eq!(sharpened.height(), 32);
+}
+
+#[test]
+fn no_op_transforms_return_independent_pixels_and_resolution() {
+    let input = Pix::from_grayscale_bytes(&[220; 64 * 64], 64, 64).expect("make a flat grayscale image");
+    let unsharp = input.unsharp_mask(0, 0.0).expect("no-op sharpening");
+    let deskewed = input.deskew().expect("deskew a flat image");
+    for mut output in [unsharp, deskewed] {
+        assert_ne!(
+            output.as_ptr(),
+            input.as_ptr(),
+            "transform result must own different pixels"
+        );
+        assert_eq!(output.grayscale_bytes().unwrap(), [220; 64 * 64]);
+        assert_eq!(output.get_resolution().unwrap(), input.get_resolution().unwrap());
+        output.set_resolution(72, 96).expect("change result resolution");
+        assert_eq!(input.get_resolution().unwrap(), (300, 300));
+    }
+}
+
+#[test]
+fn typed_thresholded_images_do_not_share_engine_metadata() {
+    let api = crate::TesseractAPI::new().expect("create engine");
+    api.init_for_analyse_page()
+        .expect("initialize without recognition data");
+    api.set_image(&[128; 64 * 64], 64, 64, 1, 64)
+        .expect("set grayscale image");
+    let mut first = api.thresholded_image().expect("copy thresholded image");
+    let source_resolution = first.get_resolution().expect("read thresholded resolution");
+    let changed_resolution = (source_resolution.0 + 1, source_resolution.1 + 1);
+    first
+        .set_resolution(changed_resolution.0, changed_resolution.1)
+        .expect("change only the copied image");
+    let second = api.thresholded_image().expect("copy the same engine image again");
+    assert_ne!(first.as_ptr(), second.as_ptr());
+    assert_eq!(second.get_resolution().unwrap(), source_resolution);
+    assert_eq!((second.width(), second.height(), second.depth()), (64, 64, 1));
+}
+
+#[test]
+fn scale_validation_rejects_nonfinite_and_out_of_range_native_rounding() {
+    for factor in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0] {
+        assert!(matches!(
+            validate_scale(20, 20, 8, factor, 1.0),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            validate_scale(20, 20, 8, 1.0, factor),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    }
+    let first_unrepresentable = i32::MAX as f32;
+    let last_representable_product = first_unrepresentable.next_down();
+    assert!(validate_scale(1, 1, 8, last_representable_product, 1.0).is_ok());
+    assert!(matches!(
+        validate_scale(1, 1, 8, first_unrepresentable, 1.0),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_scale(20, 20, 8, f32::MAX, 1.0),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_scale(20, 20, 8, f32::MIN_POSITIVE, 0.01),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
+fn clip_endpoint_validation_preserves_outside_clipping_and_rejects_overflow() {
+    assert!(validate_clip_endpoints(i32::MAX - 1, 0, 1, 1).is_ok());
+    assert!(validate_clip_endpoints(-2, 0, 3, 1).is_ok());
+    assert!(matches!(
+        validate_clip_endpoints(1, 0, i32::MAX, 1),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_clip_endpoints(0, 1, 1, i32::MAX),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    let clipped = make_rgb_pix(4, 4, 128)
+        .clip_rectangle(-2, 0, 3, 1)
+        .expect("clip to positive quadrant");
+    assert_eq!((clipped.width(), clipped.height()), (1, 1));
 }
 
 #[test]
