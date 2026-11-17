@@ -208,7 +208,7 @@ mod frame_tests {
             "/../../fixtures/repros/tall-scan-strips/large-text-150.pdf"
         ));
         let base = xberg_native_pdf::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
-        assert!(super::super::certify(&base, 0, Some(154), 100 * 1024 * 1024).is_some());
+        assert!(super::super::certify(&base, 0, Some(154), 100 * 1024 * 1024, &mut None).is_some());
         for rotation in [90, 180, 270] {
             let mut pdf = lopdf::Document::load_mem(bytes).unwrap();
             let page = pdf.get_pages()[&1];
@@ -224,7 +224,7 @@ mod frame_tests {
                 rotated.get_page_rotation_status(0).unwrap(),
                 xberg_native_pdf::document::PageRotation::Valid(rotation)
             );
-            assert!(super::super::certify(&rotated, 0, Some(154), 100 * 1024 * 1024).is_none());
+            assert!(super::super::certify(&rotated, 0, Some(154), 100 * 1024 * 1024, &mut None).is_none());
         }
     }
 }

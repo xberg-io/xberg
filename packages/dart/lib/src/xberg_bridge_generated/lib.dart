@@ -4306,14 +4306,16 @@ class ContentFilterConfig {
 
   /// Include footnote bodies in extraction output.
   ///
-  /// - PDF: Prevents the layout model from treating `Footnote`-classified
-  ///   regions as furniture, so footnote bodies survive alongside the main
-  ///   text instead of being silently dropped.
-  /// - DOC: Includes footnote definitions in extracted output.
-  /// - Other formats: No effect currently.
+  /// - PDF. Includes footnotes recognized during structured extraction in
+  ///   the body, including layout-model footnotes and short native notes
+  ///   identified by a superscript reference and a tagged bottom rule. By
+  ///   default, those native notes stay on the `Footnote` content layer
+  ///   while Plain and Markdown omit them from the body. Flat Plain
+  ///   extraction does not use this classifier.
+  /// - DOC. Includes footnote definitions in extracted output.
+  /// - Other formats. No effect currently.
   ///
-  /// Default: `false` (footnotes are stripped), matching the existing
-  /// `include_headers` / `include_footers` defaults.
+  /// Defaults to `false`, like `include_headers` and `include_footers`.
   final bool includeFootnotes;
 
   /// Enable the heuristic cross-page repeating text detector.

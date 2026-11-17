@@ -9724,6 +9724,18 @@ impl PipelineXObjectRecoveryOutcome {
     }
 }
 
+/// Whether the same config without its pipeline reads each page through the synthesized
+/// Tesseract-to-Paddle pipeline. That route recovers a refused page without classifying its
+/// paragraphs, so its Plain output keeps each recovered block a paragraph, list markers or not;
+/// a single-backend route retries the page itself and lists them. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn default_route_reads_pages_through_a_pipeline(config: &ExtractionConfig) -> bool {
+    cfg!(paddle_ocr)
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            ocr.backend == "tesseract" && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        })
+}
+
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn plain_budget_recovery_list_document(
     recovery: &PipelineXObjectRecoveryOutcome,
@@ -9735,21 +9747,25 @@ fn plain_budget_recovery_list_document(
         return None;
     }
     let table_pages: ahash::AHashSet<_> = recovery.tables.iter().map(|table| table.page_number).collect();
-    let pages: Vec<_> = recovery
+    let flat: Vec<_> = recovery
         .page_texts
         .iter()
-        .enumerate()
-        .map(|(index, text)| {
-            let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
-            if !table_pages.contains(&((index + 1) as u32)) {
-                apply_ocr_text_list_fallback(&mut paragraphs);
-            }
-            paragraphs
-        })
+        .map(|text| crate::pdf::structure::adapters::ocr_text_to_paragraphs(text))
         .collect();
-    if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
+    let mut listed = flat.clone();
+    for (index, paragraphs) in listed.iter_mut().enumerate() {
+        if !table_pages.contains(&((index + 1) as u32)) {
+            apply_ocr_text_list_fallback(paragraphs);
+        }
+    }
+    if !listed.iter().flatten().any(|paragraph| paragraph.is_list_item) {
         return None;
     }
+    let pages = if default_route_reads_pages_through_a_pipeline(config) {
+        flat
+    } else {
+        listed
+    };
     let mut document =
         crate::pdf::structure::assemble_internal_document(pages, &recovery.tables, None, &[], &Default::default());
     // The assembler skips tables without Markdown, but their sidecars still belong to the result. ~keep
@@ -9761,6 +9777,39 @@ fn plain_budget_recovery_list_document(
             .cloned(),
     );
     Some(document)
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+mod plain_budget_recovery_list_document_tests {
+    use super::*;
+
+    const NOTES: &str = "GENERAL NOTES\n\n1. All lot lines are shown for\n\n1\n\nplanning purposes only.";
+
+    fn plain(backend: &str) -> String {
+        let mut recovery = PipelineXObjectRecoveryOutcome::new(1);
+        recovery.page_texts[0] = NOTES.to_owned();
+        let config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                backend: backend.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let document = plain_budget_recovery_list_document(&recovery, &config).expect("the notes hold a list item");
+        crate::extraction::derive::derive_extraction_result(document, false, crate::core::config::OutputFormat::Plain)
+            .content
+    }
+
+    /// The built-in Tesseract's default route reads each page through the synthesized
+    /// Tesseract-to-Paddle pipeline when Paddle is compiled in; that route keeps every recovered
+    /// block its own paragraph, so a numbered note is not joined to the next block.
+    #[test]
+    fn recovered_notes_keep_the_paragraphs_of_the_default_route_of_their_backend() {
+        let listed = "GENERAL NOTES\n\n1. All lot lines are shown for\n1\n\nplanning purposes only.";
+        let tesseract = if cfg!(paddle_ocr) { NOTES } else { listed };
+        assert_eq!(plain("tesseract"), tesseract);
+        assert_eq!(plain("budget-recovery-custom-backend"), listed);
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

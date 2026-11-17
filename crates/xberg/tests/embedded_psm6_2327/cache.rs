@@ -101,7 +101,7 @@ fn run_isolated_cache_test(child: &str) {
                 "--nocapture",
             ])
             .env(child, inventory)
-            .env("XBERG_TEST_2327_TESSDATA_ONLY", "1")
+            .env("XBERG_TESSDATA_SYSTEM_PATHS", "0")
             .env("TESSDATA_PREFIX", &tessdata)
             .env("XBERG_CACHE_DIR", root.path().join(inventory))
             .output()
