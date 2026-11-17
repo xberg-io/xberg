@@ -1915,6 +1915,7 @@ mod key_value_rows;
 mod objects;
 mod open;
 mod pages;
+mod pagination_separators;
 mod paths;
 mod picture_text;
 mod reading_order;
