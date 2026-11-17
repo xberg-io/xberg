@@ -229,6 +229,8 @@ class ModelFallbackTest(unittest.TestCase):
         )
         assert not runner._model_fallback({}, warning)
         assert not runner._model_fallback({}, warning.replace("WARN", "\x1b[33m WARN\x1b[0m"))
+        with_model_failure = warning.replace("xberg.ocr{", 'layout{error="ONNX model failed"}:xberg.ocr{')
+        assert runner._model_fallback({}, with_model_failure)
 
         for failure in (
             warning.replace("ocr::processor::model_context:", "layout::model_context:"),
@@ -282,12 +284,23 @@ class ModelFallbackTest(unittest.TestCase):
         assert not runner._model_fallback({"processing_warnings": warnings}, "")
         assert not runner._model_fallback({}, trace)
         assert not runner._model_fallback({"processing_warnings": warnings}, trace)
+        plain = runner.TRACE_ANSI.sub("", trace)
+        with_span = plain.replace(
+            "xberg::pdf::native::table:", 'layout{error="ONNX model failed"}: xberg::pdf::native::table:'
+        )
+        assert runner._model_fallback({}, with_span)
+        assert not runner._model_fallback({}, with_span.replace('error="ONNX model failed"', 'model="layout"'))
+        assert not runner._model_fallback(
+            {}, with_span.replace("ONNX model failed", "decode failed").replace("layout{", "pdf{")
+        )
 
         for warning in (
             {"source": "layout", "message": warnings[0]["message"]},
             {"source": "layout", "message": "layout detection failed; source raster refused by the pixel budget"},
             {"source": "pdf_tables", "message": "TATR table model is not available; recognition was skipped"},
             {"source": "pdf_tables", "message": warnings[1]["message"] + "; ONNX model failed to load"},
+            {"source": "pdf_tables", "message": {"error": "ONNX model failed"}},
+            {"source": "pdf_tables", "message": ["ONNX model failed"]},
         ):
             with self.subTest(warning=warning):
                 assert runner._model_fallback({"processing_warnings": [*warnings, warning]}, trace)
