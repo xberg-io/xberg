@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(cli): The packaged Linux musl CLI uses mimalloc with immediate memory purging and transparent huge pages disabled by default.** (#3171)
+  Set `MIMALLOC_PURGE_DELAY` or `MIMALLOC_ALLOW_THP` before launching to override either setting.
+
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)
 

@@ -111,7 +111,7 @@ use std::time::Instant;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use xberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 
-#[cfg(all(target_os = "linux", target_env = "musl"))]
+#[cfg(all(feature = "mimalloc", target_os = "linux", target_env = "musl"))]
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

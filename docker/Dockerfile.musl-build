@@ -77,7 +77,7 @@ RUN sed -i '/xberg-py/d; /xberg_rb/d; /xberg-node/d; /xberg-ffi/d; /xberg-jni/d;
 ARG XBERG_BUILD_ID
 
 RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
-    cargo build --profile release-musl --package xberg-cli --features all && \
+    cargo build --profile release-musl --package xberg-cli --features all,mimalloc && \
     cp target/release-musl/xberg /build/xberg && \
     strip /build/xberg
 
@@ -130,7 +130,7 @@ RUN set -eu; \
 
 RUN mv /build/xberg /build/xberg.bin && \
     INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \
-    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
+    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nexport MIMALLOC_PURGE_DELAY="${MIMALLOC_PURGE_DELAY-0}"\nexport MIMALLOC_ALLOW_THP="${MIMALLOC_ALLOW_THP-0}"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
         "$INTERP_NAME" > /build/xberg && \
     chmod +x /build/xberg
 
