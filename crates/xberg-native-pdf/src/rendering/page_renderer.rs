@@ -41,6 +41,8 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 #[path = "color_operators.rs"]
 mod color_operators;
+#[path = "path_operators.rs"]
+mod path_operators;
 const COLOR_OPERATOR_TRACE_TARGET: &str = module_path!();
 
 #[path = "image_budget.rs"]
@@ -1501,44 +1503,13 @@ impl PageRenderer {
                     gs_stack.current_mut().rendering_intent = intent.clone();
                 }
 
-                Operator::MoveTo { x, y } => {
-                    current_path.move_to(*x, *y);
-                }
-                Operator::LineTo { x, y } => {
-                    current_path.line_to(*x, *y);
-                }
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3);
-                }
-                Operator::CurveToV { x2, y2, x3, y3 } => {
-                    if let Some(last) = current_path.last_point() {
-                        current_path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
-                    }
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3);
-                }
-                Operator::Rectangle { x, y, width, height } => {
-                    // Normalize negative width/height per PDF spec:
-                    // re with negative dimensions means the rect extends in the opposite direction
-                    // ~keep
-                    let (nx, nw) = if *width < 0.0 {
-                        (x + width, -width)
-                    } else {
-                        (*x, *width)
-                    };
-                    let (ny, nh) = if *height < 0.0 {
-                        (y + height, -height)
-                    } else {
-                        (*y, *height)
-                    };
-                    if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
-                        current_path.push_rect(rect);
-                    }
-                }
-                Operator::ClosePath => {
-                    current_path.close();
-                }
+                Operator::MoveTo { .. }
+                | Operator::LineTo { .. }
+                | Operator::CurveTo { .. }
+                | Operator::CurveToV { .. }
+                | Operator::CurveToY { .. }
+                | Operator::Rectangle { .. }
+                | Operator::ClosePath => path_operators::construct(&mut current_path, op),
 
                 Operator::Stroke | Operator::CloseStroke => {
                     if excluded_layer_depth == 0 {
@@ -9889,33 +9860,103 @@ mod tests {
         assert_eq!([q(r), q(g), q(b)], [0x00, 0xAD, 0xEF]);
     }
 
+    fn path_pixmap(operators: &[Operator]) -> Pixmap {
+        let mut pixmap = Pixmap::new(32, 32).unwrap();
+        PageRenderer::new(RenderOptions::default())
+            .execute_operators(
+                &mut pixmap,
+                Transform::identity(),
+                operators,
+                &minimal_pdf_doc(),
+                0,
+                &Object::Dictionary(HashMap::new()),
+            )
+            .expect("render path operators");
+        pixmap
+    }
+
     #[test]
     fn test_negative_rect_normalization() {
-        // Negative height: re 100 200 50 -30 → should normalize to (100, 170, 50, 30) ~keep
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = 50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 100.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
+        let rendered = path_pixmap(&[
+            Operator::Rectangle {
+                x: 8.0,
+                y: 24.0,
+                width: 16.0,
+                height: -16.0,
+            },
+            Operator::Fill,
+        ]);
+        assert_eq!(rendered.pixel(12, 12).unwrap().alpha(), 255);
+        assert_eq!(rendered.pixel(12, 4).unwrap().alpha(), 0);
+        assert_eq!(rendered.pixel(12, 28).unwrap().alpha(), 0);
     }
 
     #[test]
     fn test_negative_rect_both_negative() {
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = -50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 50.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
+        let rendered = path_pixmap(&[
+            Operator::Rectangle {
+                x: 24.0,
+                y: 24.0,
+                width: -16.0,
+                height: -16.0,
+            },
+            Operator::Fill,
+        ]);
+        assert_eq!(rendered.pixel(12, 12).unwrap().alpha(), 255);
+        assert_eq!(rendered.pixel(4, 12).unwrap().alpha(), 0);
+        assert_eq!(rendered.pixel(28, 12).unwrap().alpha(), 0);
+    }
+
+    #[test]
+    fn shorthand_curves_match_their_full_cubic_path() {
+        let render = |curve_v, curve_y| {
+            path_pixmap(&[
+                Operator::MoveTo { x: 4.0, y: 4.0 },
+                Operator::LineTo { x: 4.0, y: 24.0 },
+                curve_v,
+                curve_y,
+                Operator::ClosePath,
+                Operator::Stroke,
+            ])
+        };
+        let shorthand = render(
+            Operator::CurveToV {
+                x2: 10.0,
+                y2: 25.0,
+                x3: 16.0,
+                y3: 16.0,
+            },
+            Operator::CurveToY {
+                x1: 22.0,
+                y1: 14.0,
+                x3: 26.0,
+                y3: 4.0,
+            },
+        );
+        let explicit = render(
+            Operator::CurveTo {
+                x1: 4.0,
+                y1: 24.0,
+                x2: 10.0,
+                y2: 25.0,
+                x3: 16.0,
+                y3: 16.0,
+            },
+            Operator::CurveTo {
+                x1: 22.0,
+                y1: 14.0,
+                x2: 26.0,
+                y2: 4.0,
+                x3: 26.0,
+                y3: 4.0,
+            },
+        );
+        assert!(
+            shorthand.pixel(16, 4).unwrap().alpha() > 0,
+            "closing edge must be stroked"
+        );
+        assert_eq!(shorthand.pixel(30, 12).unwrap().alpha(), 0);
+        assert_eq!(shorthand.data(), explicit.data());
     }
 
     /// The crux of the ET application: the accumulated glyph silhouette is
