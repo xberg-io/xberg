@@ -1,7 +1,7 @@
 //! Suppress short linked footnotes when a native bottom-pagination rule witnesses their position.
 
 use super::{HyphenWitnesses, LayoutHint, LayoutHintClass, PdfParagraph, finite_paragraph_bbox};
-use crate::types::{BoundingBox, ExtractedImage, Table, document_structure::AnnotationKind};
+use crate::types::{BoundingBox, Table, document_structure::AnnotationKind};
 use xberg_native_pdf::{PageRotation, PdfDocument, geometry::Rect};
 
 const BOTTOM_PAGE_FRACTION: f32 = 0.15;
@@ -30,7 +30,6 @@ pub(super) fn page_separator(document: &PdfDocument, page: usize) -> Option<Rect
 pub(super) struct PageRegions<'a> {
     pub(super) page_number: u32,
     pub(super) tables: &'a [Table],
-    pub(super) images: &'a [ExtractedImage],
     pub(super) hints: &'a [LayoutHint],
 }
 
@@ -40,10 +39,6 @@ impl PageRegions<'_> {
         self.tables
             .iter()
             .any(|table| table.page_number == self.page_number && table.bounding_box.is_some_and(intersects))
-            || self
-                .images
-                .iter()
-                .any(|image| image.page_number == Some(self.page_number) && image.bounding_box.is_some_and(intersects))
             || self.hints.iter().any(|hint| {
                 matches!(
                     hint.class_name,
@@ -62,6 +57,7 @@ pub(super) fn suppress(
     paragraphs: &mut Vec<PdfParagraph>,
     include_footnotes: bool,
     separator: impl FnOnce() -> Option<Rect>,
+    image_placements: impl FnOnce() -> Option<Vec<Rect>>,
     regions: PageRegions<'_>,
     hyphens: &HyphenWitnesses,
 ) {
@@ -83,7 +79,8 @@ pub(super) fn suppress(
         candidates.filter(|(_, note)| note.below_rule(rule) && !regions.overlaps_figure_or_table(note.bounds));
     if let Some((index, note)) = matching.next()
         && matching.next().is_none()
-        && exactly_one_earlier_reference(&paragraphs[..index], note.marker, rule.y, hyphens)
+        && exactly_one_reference_above_rule(paragraphs, note.marker, rule.y, hyphens)
+        && image_placements().is_some_and(|placements| !placements.iter().any(|image| note.overlaps_image(*image)))
     {
         paragraphs.remove(index);
     }
@@ -96,6 +93,11 @@ struct Note<'a> {
 }
 
 impl Note<'_> {
+    fn overlaps_image(&self, image: Rect) -> bool {
+        let (left, bottom, right, top) = self.bounds;
+        left < image.right() && right > image.left() && bottom < image.bottom() && top > image.top()
+    }
+
     fn below_rule(&self, rule: Rect) -> bool {
         let (left, bottom, right, top) = self.bounds;
         let gap = rule.y - top;
@@ -148,35 +150,57 @@ fn compact_note(paragraph: &PdfParagraph) -> Option<Note<'_>> {
     })
 }
 
-fn exactly_one_earlier_reference(
-    earlier: &[PdfParagraph],
+fn exactly_one_reference_above_rule(
+    paragraphs: &[PdfParagraph],
     marker: &str,
     rule_y: f32,
     hyphens: &HyphenWitnesses,
 ) -> bool {
-    let count = earlier
+    let mut count = 0;
+    for paragraph in paragraphs
         .iter()
-        .filter(|paragraph| {
-            !paragraph.is_page_furniture
-                && !paragraph.is_formula
-                && finite_paragraph_bbox(paragraph).is_some_and(|(_, bottom, _, _)| bottom > rule_y)
-                && paragraph
-                    .lines
-                    .iter()
-                    .any(|line| line.segments.iter().any(|segment| segment.text.trim() == marker))
-        })
-        .flat_map(|paragraph| {
-            let (text, annotations) = super::super::assembly::extract_text_and_annotations(paragraph, hyphens);
-            annotations.into_iter().filter(move |annotation| {
-                let start = annotation.start as usize;
-                annotation.kind == AnnotationKind::Superscript
-                    && text.get(start..annotation.end as usize) == Some(marker)
-                    && text
-                        .get(..start)
-                        .is_some_and(|prefix| prefix.ends_with(char::is_alphanumeric))
-            })
+        .filter(|paragraph| !paragraph.is_page_furniture && !paragraph.is_formula)
+    {
+        let mut above = false;
+        let mut other = false;
+        for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {
+            if segment.text.trim() == marker {
+                if segment.is_unrotated() && segment.baseline_y > rule_y {
+                    above = true;
+                } else {
+                    other = true;
+                }
+            }
+        }
+        if !above {
+            continue;
+        }
+        let references = count_annotated_references(paragraph, marker, hyphens);
+        // An annotation can cover text from several segments. When identical
+        // runs straddle the rule, their rendered offsets alone cannot identify the one above. ~keep
+        if references > 0 && other {
+            return false;
+        }
+        count += references;
+        if count > 1 {
+            return false;
+        }
+    }
+    count == 1
+}
+
+fn count_annotated_references(paragraph: &PdfParagraph, marker: &str, hyphens: &HyphenWitnesses) -> usize {
+    let (text, annotations) = super::super::assembly::extract_text_and_annotations(paragraph, hyphens);
+    annotations
+        .iter()
+        .filter(|annotation| {
+            let start = annotation.start as usize;
+            annotation.kind == AnnotationKind::Superscript
+                && text.get(start..annotation.end as usize) == Some(marker)
+                && text
+                    .get(..start)
+                    .is_some_and(|prefix| prefix.ends_with(char::is_alphanumeric))
         })
         .take(2)
-        .count();
-    count == 1
+        .count()
 }

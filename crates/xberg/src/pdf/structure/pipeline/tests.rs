@@ -10400,10 +10400,10 @@ fn linked_footnote_removes_only_the_witnessed_paragraph() {
         &mut page,
         false,
         || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+        || Some(vec![]),
         linked_footnote::PageRegions {
             page_number: 1,
             tables: &[],
-            images: &[],
             hints: &[],
         },
         &HyphenWitnesses::default(),
@@ -10501,10 +10501,10 @@ fn linked_footnote_preserves_opt_in_and_unproven_references() {
                 assert!(!include, "include_footnotes must avoid querying the separator");
                 separator
             },
+            || Some(vec![]),
             linked_footnote::PageRegions {
                 page_number: 1,
                 tables: &[],
-                images: &[],
                 hints: &hints,
             },
             &HyphenWitnesses::default(),
@@ -10514,5 +10514,115 @@ fn linked_footnote_preserves_opt_in_and_unproven_references() {
             before,
             "{label}"
         );
+    }
+}
+
+#[test]
+fn linked_footnote_counts_references_in_a_reordered_right_column() {
+    let mut right_column = linked_footnote_reference("2", true);
+    for segment in &mut right_column.lines[0].segments {
+        segment.x += 250.0;
+        segment.y += 20.0;
+        segment.baseline_y += 20.0;
+    }
+    for also_in_left_column in [false, true] {
+        let mut page = Vec::new();
+        if also_in_left_column {
+            page.push(linked_footnote_reference("2", true));
+        }
+        page.push(linked_footnote_text());
+        page.push(right_column.clone());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::suppress(
+            &mut page,
+            false,
+            || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        let expected = if also_in_left_column {
+            before
+        } else {
+            vec![before[1].clone()]
+        };
+        assert_eq!(page.iter().map(paragraph_text_raw).collect::<Vec<_>>(), expected);
+    }
+}
+
+fn linked_footnote_image_pdf(image_paint: &str) -> xberg_native_pdf::PdfDocument {
+    use lopdf::{Document, Stream, dictionary};
+
+    let mut doc = Document::with_version("1.4");
+    let pages = doc.new_object_id();
+    let image = doc.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+            "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+        },
+        vec![127],
+    ));
+    let content =
+        format!("/Artifact << /Type /Pagination /Attached [/Bottom] >> BDC 70 90 144 0.5 re f EMC\n{image_paint}");
+    let contents = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+    let page = doc.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "Contents" => contents,
+        "Resources" => dictionary! { "XObject" => dictionary! { "Photo" => image } },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    doc.objects.insert(
+        pages,
+        lopdf::Object::Dictionary(
+            dictionary! { "Type" => "Pages", "Kids" => vec![lopdf::Object::Reference(page)], "Count" => 1 },
+        ),
+    );
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    doc.trailer.set("Root", catalog);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    xberg_native_pdf::PdfDocument::from_bytes(bytes).unwrap()
+}
+
+#[test]
+fn linked_footnote_checks_native_figures_without_image_export() {
+    use xberg_native_pdf::geometry::Rect;
+
+    for (paint, expected_images, expected_paragraphs) in [
+        (
+            "q 100 0 0 20 68 65 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 65.0, 100.0, 20.0)]),
+            2,
+        ),
+        (
+            "q 100 0 0 20 68 150 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 150.0, 100.0, 20.0)]),
+            1,
+        ),
+        ("q 100 0 0 20 68 150 cm /Unknown Do Q", None, 2),
+    ] {
+        let pdf = linked_footnote_image_pdf(paint);
+        assert_eq!(
+            linked_footnote::page_separator(&pdf, 0),
+            Some(Rect::new(70.0, 90.0, 144.0, 0.5))
+        );
+        assert_eq!(pdf.bounded_page_image_placements(0), expected_images, "{paint}");
+        let mut page = vec![linked_footnote_reference("2", true), linked_footnote_text()];
+        linked_footnote::suppress(
+            &mut page,
+            false,
+            || linked_footnote::page_separator(&pdf, 0),
+            || pdf.bounded_page_image_placements(0),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(page.len(), expected_paragraphs, "{paint}");
     }
 }

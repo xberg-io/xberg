@@ -4532,10 +4532,10 @@ fn build_document_structure_with_native(
                 paragraphs,
                 include_footnotes,
                 || linked_footnote::page_separator(native_document, page),
+                || native_document.bounded_page_image_placements(page),
                 linked_footnote::PageRegions {
                     page_number: (page + 1) as u32,
                     tables: &emitted_tables,
-                    images: images.unwrap_or_default(),
                     hints: layout_hints
                         .and_then(|hints| hints.get(page))
                         .map(Vec::as_slice)
