@@ -20,13 +20,13 @@ UV_PROJECT_ENVIRONMENT="$venv" uv sync --locked --only-dev --no-install-project 
   "$venv/bin/maturin" build --locked --compatibility linux --interpreter "$venv/bin/python" --out "$scratch/wheels"
 )
 
-wheels=("$scratch"/wheels/*.whl)
-if [ "${#wheels[@]}" -ne 1 ] || [ ! -f "${wheels[0]}" ]; then
+set -- "$scratch"/wheels/*.whl
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
   echo "Expected exactly one Python wheel in $scratch/wheels" >&2
   exit 1
 fi
 
-uv pip install --python "$venv/bin/python" --no-deps "${wheels[0]}"
+uv pip install --python "$venv/bin/python" --no-deps "$1"
 HF_HUB_OFFLINE=1 "$venv/bin/python" -I - <<'PYTHON'
 from importlib.machinery import ExtensionFileLoader
 from pathlib import Path
