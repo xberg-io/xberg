@@ -451,7 +451,7 @@ fn run_blocking(
     let _ = rotation;
     #[cfg(feature = "sceptre-ocr-ort")]
     if config.model.backend == Backend::Ort {
-        crate::ort_discovery::ensure_ort_available();
+        crate::ort_discovery::preload_sceptre_ort_runtime().map_err(map_sceptre_error)?;
     }
     let decoded = decode_sceptre_image(image_bytes)?;
     #[cfg(auto_rotate)]

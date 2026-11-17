@@ -26,7 +26,6 @@ fn isolated(name: &str, run: impl FnOnce()) {
 }
 
 fn infer(sceptre_first: bool) {
-    super::ensure_ort_available();
     let environment = if sceptre_first {
         sceptre::ort_environment().expect("initialize Sceptre environment")
     } else {
@@ -49,12 +48,18 @@ fn infer(sceptre_first: bool) {
     assert_eq!(values, &[EXPECTED_OUTPUT]);
 }
 
+fn assert_shared_environment() {
+    let xberg = super::ort_environment().expect("initialize Xberg environment");
+    let sceptre = sceptre::ort_environment().expect("initialize Sceptre environment");
+    assert!(std::ptr::eq(xberg, sceptre));
+}
+
 #[test]
 fn should_run_sceptre_after_xberg_initialization() {
     isolated("should_run_sceptre_after_xberg_initialization", || {
         infer(false);
         infer(true);
-        infer(false);
+        assert_shared_environment();
     });
 }
 
@@ -63,7 +68,7 @@ fn should_run_xberg_after_sceptre_initialization() {
     isolated("should_run_xberg_after_sceptre_initialization", || {
         infer(true);
         infer(false);
-        infer(true);
+        assert_shared_environment();
     });
 }
 
@@ -85,5 +90,6 @@ fn should_run_concurrent_xberg_and_sceptre_inference() {
             .map(|caller| caller.join().expect("consumer must finish inference"))
             .collect();
         assert_eq!(completed.len(), CONCURRENT_CALLERS);
+        assert_shared_environment();
     });
 }
