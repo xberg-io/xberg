@@ -272,7 +272,7 @@ A stripped-down image with only the CLI binary. The CLI home is `/app` and its c
 
 Grant `10001:10001` access to writable bind mounts, for example with `chown -R 10001:10001 /path/to/cache /path/to/output`. To write to a host-owned output directory, you can run the CLI with the host's non-root UID and group 0. For example, use `docker run --user "$(id -u):0"` when the host user owns the mounted output and any mounted cache. Bind mounts take their permissions from the host.
 
-Use the same UID for every writer to a persistent cache volume, or configure shared group ownership and write permissions throughout the cache, including nested directories. If different UIDs share a group, set the setgid bit on shared directories and use a group-writable umask such as `0002` for every writer. The usual `0022` umask can leave newly created directories writable only by their owner.
+Use the same UID for every writer to a persistent cache volume.
 
 ```bash title="Terminal"
 docker build -f docker/Dockerfile.cli --build-arg XBERG_BUILD_ID="$(git rev-parse HEAD)" -t xberg-cli .

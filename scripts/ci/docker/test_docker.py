@@ -911,6 +911,7 @@ def test_cli_nonroot_paths(t: TestRunner) -> None:
 
 
 def test_cli_extract_as_arbitrary_uid(t: TestRunner) -> None:
+    """Extract a read-only mounted fixture with a UID absent from the image passwd file."""
     name = "Extract plain text as UID 12345 with group 0"
     t.start(name)
     result = t.docker_run(
