@@ -266,9 +266,16 @@ impl xberg::engine::seams::CacheBackend for CountedCache {
     }
 }
 
+const CACHED_STRIPS_CASE: &str = "cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads";
+
 #[tokio::test]
 async fn cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads() {
     use std::sync::{Arc, atomic::Ordering};
+
+    if !helpers::is_bundled_english_tessdata_child(CACHED_STRIPS_CASE) {
+        helpers::run_with_bundled_english_tessdata_only(CACHED_STRIPS_CASE);
+        return;
+    }
 
     let tessdata = tempfile::tempdir().expect("private tessdata directory");
     write_english_model(tessdata.path());
