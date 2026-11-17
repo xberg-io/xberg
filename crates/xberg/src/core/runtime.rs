@@ -29,7 +29,7 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 /// pool to 16 MB for exactly this reason; this runtime had never been given the same
 /// budget.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
 /// first call.

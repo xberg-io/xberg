@@ -520,6 +520,25 @@ const MAX_ACTIVE_PATH_PARSERS: u32 = 4;
 static PATH_PARSERS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
     std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_ACTIVE_PATH_PARSERS as usize)));
 
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn pptx_path_worker_handle() -> Option<&'static tokio::runtime::Handle> {
+    // Keep large parser allocations on a fixed set of workers without limiting unrelated blocking I/O. ~keep
+    static POOL: std::sync::LazyLock<Option<tokio::runtime::Runtime>> = std::sync::LazyLock::new(|| {
+        match tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(MAX_ACTIVE_PATH_PARSERS as usize)
+            .thread_stack_size(crate::core::runtime::GLOBAL_RUNTIME_STACK_SIZE_BYTES)
+            .build()
+        {
+            Ok(runtime) => Some(runtime),
+            Err(error) => {
+                tracing::warn!(%error, "PPTX path worker pool unavailable; parsing inline");
+                None
+            }
+        }
+    });
+    POOL.as_ref().map(tokio::runtime::Runtime::handle)
+}
+
 async fn read_pptx_path(
     path: &str,
     options: PptxExtractionOptions,
@@ -531,11 +550,17 @@ async fn read_pptx_path(
         && let Ok(runtime) = tokio::runtime::Handle::try_current()
         && crate::core::runtime::is_global_runtime(&runtime)
     {
-        let path = path.to_owned();
-        return run_pptx_path_worker(&runtime, PATH_PARSERS.clone(), cancel, move || {
-            parse_pptx_path(&path, &options)
-        })
-        .await;
+        check_pptx_parse_cancelled(cancel)?;
+        if let Some(worker) = pptx_path_worker_handle() {
+            let path = path.to_owned();
+            return run_pptx_path_worker(worker, PATH_PARSERS.clone(), cancel, move || {
+                parse_pptx_path(&path, &options)
+            })
+            .await;
+        }
+        let result = parse_pptx_path(path, &options)?;
+        check_pptx_parse_cancelled(cancel)?;
+        return Ok(result);
     }
     #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
     let _ = cancel;

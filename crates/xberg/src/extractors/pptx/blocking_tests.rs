@@ -131,6 +131,15 @@ fn direct_pptx_path_from_the_only_foreign_blocking_worker_completes() {
         .enable_time()
         .build()
         .unwrap();
+    let _permits = runtime.block_on(async {
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            PATH_PARSERS.acquire_many(MAX_ACTIVE_PATH_PARSERS),
+        )
+        .await
+        .expect("hold every dedicated PPTX path slot")
+        .unwrap()
+    });
     let handle = runtime.handle().clone();
     let parse = runtime.spawn_blocking(move || {
         handle.block_on(async {
@@ -286,12 +295,19 @@ fn single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber() {
 
     let capture = Capture(Arc::new(Mutex::new(Vec::new())));
     let writer = capture.clone();
+    let worker_ids = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&worker_ids);
     let subscriber = tracing_subscriber::fmt()
         .with_ansi(false)
         .with_max_level(tracing::Level::WARN)
-        .with_writer(move || writer.clone())
+        .with_writer(move || {
+            observed.lock().unwrap().push(tokio::runtime::Handle::current().id());
+            writer.clone()
+        })
         .finish();
     let runtime = crate::core::runtime::global_runtime().unwrap();
+    let dedicated_id = pptx_path_worker_handle().unwrap().id();
+    assert_ne!(runtime.handle().id(), dedicated_id);
     tracing::callsite::rebuild_interest_cache();
     tracing::subscriber::with_default(subscriber, || {
         let doc = runtime
@@ -307,4 +323,6 @@ fn single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber() {
     let capture = capture.0.lock().unwrap();
     let logged = std::str::from_utf8(&capture).unwrap();
     assert_eq!(logged.matches("failed to parse ppt/commentAuthors.xml").count(), 1);
+    let worker_ids = worker_ids.lock().unwrap();
+    assert!(!worker_ids.is_empty() && worker_ids.iter().all(|id| *id == dedicated_id));
 }
