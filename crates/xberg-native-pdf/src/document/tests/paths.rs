@@ -421,6 +421,36 @@ fn bottom_pagination_query_requires_explicit_attachment_and_a_filled_rule() {
 }
 
 #[test]
+fn bottom_pagination_query_declines_non_separator_paths() {
+    let bottom = "/Artifact << /Type /Pagination /Attached [/Bottom] >> BDC";
+    for (shape, operation_count, expected) in [
+        ("70 90 144 2 re f", 1, Some((144.0, 2.0))),
+        ("70 90 24 0.5 re f", 1, Some((24.0, 0.5))),
+        ("70 90 144 3 re f", 1, None),
+        ("70 90 20 0.5 re f", 1, None),
+        ("70 90 144 0.5 re 70 93 144 0.5 re f", 2, None),
+        ("70 90 144 0.5 re 200 100 l f", 2, None),
+        ("70 89 m 70 90 144 0.5 re f", 2, None),
+    ] {
+        let content = format!("{bottom} {shape} EMC");
+        let document = pagination_separator_test_doc("4 0 R", content.as_bytes(), "");
+        let paths = document.extract_paths(0).unwrap();
+        assert_eq!(paths.len(), 1, "{shape}");
+        assert_eq!(paths[0].operations.len(), operation_count, "{shape}");
+        assert!(paths[0].has_fill(), "{shape}");
+        let expected: Vec<_> = expected
+            .map(|(width, height)| crate::geometry::Rect::new(70.0, 90.0, width, height))
+            .into_iter()
+            .collect();
+        assert_eq!(
+            document.bottom_pagination_separator_bounds(0).unwrap(),
+            expected,
+            "{shape}"
+        );
+    }
+}
+
+#[test]
 fn bottom_pagination_query_requires_complete_single_content() {
     use crate::geometry::Rect;
     use std::io::Write;
@@ -450,11 +480,13 @@ fn bottom_pagination_query_requires_complete_single_content() {
         );
     }
 
-    let mut malformed = content.to_vec();
-    malformed.extend_from_slice(b" 20 Tf");
-    let document = pagination_separator_test_doc("4 0 R", &malformed, "");
-    assert_eq!(document.extract_paths(0).unwrap().len(), 1);
-    assert!(document.bottom_pagination_separator_bounds(0).unwrap().is_empty());
+    for unsupported in [b" 20 Tf".as_slice(), b" /DeviceRGB cs"] {
+        let mut incomplete = content.to_vec();
+        incomplete.extend_from_slice(unsupported);
+        let document = pagination_separator_test_doc("4 0 R", &incomplete, "");
+        assert_eq!(document.extract_paths(0).unwrap().len(), 1, "{unsupported:?}");
+        assert!(document.bottom_pagination_separator_bounds(0).unwrap().is_empty());
+    }
 }
 
 #[test]
