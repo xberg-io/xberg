@@ -71,7 +71,7 @@ jobs:
     if: github.repository == 'xberg-io/xberg' && github.event_name == 'workflow_dispatch' && inputs.python_callback_smoke
     name: Python OCR callback smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
         with:
@@ -101,10 +101,13 @@ jobs:
         shell: bash
         env:
           CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: "0"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
           CARGO_PROFILE_RELEASE_LTO: "off"
           CARGO_PROFILE_RELEASE_DEBUG: "0"
           TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
         run: |
+          set -euo pipefail
           export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
           mise run python:callback:smoke
 

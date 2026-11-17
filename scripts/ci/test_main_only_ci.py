@@ -20,6 +20,10 @@ EXPECTED_JOBS = 80
 EXPECTED_CHECKOUTS = 80
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
+PYTHON_CALLBACK_SMOKE = "python-callback-smoke"
+PYTHON_CALLBACK_SMOKE_GUARD = (
+    "github.repository == 'xberg-io/xberg' && github.event_name == 'workflow_dispatch' && inputs.python_callback_smoke"
+)
 FOCUSED_PR_GUARDS = (
     "github.event_name == 'push' && github.ref == 'refs/heads/main'",
     "github.repository == 'xberg-io/xberg'",
@@ -91,11 +95,20 @@ def focused_pr_violations(workflow: dict) -> list[str]:
         violations.append(f"missing push inputs: {sorted(missing_inputs)}")
     if workflow.get("permissions") != {"contents": "read"}:
         violations.append("permissions must stay contents: read")
-    if not keeps_latest_ci_run(workflow.get("concurrency"), Path(FOCUSED_PR_WORKFLOW).stem):
-        violations.append("superseded runs must cancel")
+    concurrency = workflow.get("concurrency", {})
+    inputs = (triggers.get("workflow_dispatch") or {}).get("inputs", {})
+    if inputs.get("python_callback_smoke", {}).get("type") != "boolean":
+        violations.append("Python callback smoke must be a boolean dispatch input")
+    expected_group = "ci-focused-pr-${{ github.ref }}-${{ inputs.python_callback_smoke && 'python' || 'regressions' }}"
+    if concurrency.get("cancel-in-progress") is not True or concurrency.get("group") != expected_group:
+        violations.append("superseded runs must cancel within their ref and dispatch mode")
     for name, job in workflow["jobs"].items():
         condition = job.get("if", "")
-        violations.extend(f"{name}: missing {guard}" for guard in FOCUSED_PR_GUARDS if guard not in condition)
+        if name == PYTHON_CALLBACK_SMOKE:
+            if condition != PYTHON_CALLBACK_SMOKE_GUARD:
+                violations.append(f"{name}: require an explicit dispatch in the upstream repository")
+        else:
+            violations.extend(f"{name}: missing {guard}" for guard in FOCUSED_PR_GUARDS if guard not in condition)
         for step in job["steps"]:
             is_checkout = str(step.get("uses", "")).startswith("actions/checkout@")
             if is_checkout and step.get("with", {}).get("persist-credentials") is not False:
@@ -107,6 +120,13 @@ class MainOnlyCiTests(unittest.TestCase):
     def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []
+
+    def test_python_callback_smoke_rejects_automatic_runs(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        workflow["jobs"][PYTHON_CALLBACK_SMOKE]["if"] = "github.repository == 'xberg-io/xberg'"
+        assert focused_pr_violations(workflow) == [
+            f"{PYTHON_CALLBACK_SMOKE}: require an explicit dispatch in the upstream repository"
+        ]
 
     def test_focused_pr_check_rejects_negated_push_path(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())

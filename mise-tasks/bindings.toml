@@ -31,7 +31,7 @@ HF_HUB_OFFLINE=1 "$venv/bin/python" -I - <<'PYTHON'
 from importlib.machinery import ExtensionFileLoader
 from pathlib import Path
 import sys
-import unittest
+import pytest
 
 import xberg._xberg as native
 
@@ -41,15 +41,27 @@ if (
 ):
     raise SystemExit("OCR callback smoke requires the native extension from the new wheel")
 
-expected = 3
-suite = unittest.defaultTestLoader.discover("packages/python/tests", pattern="test_ocr_callback_exceptions.py")
-count = suite.countTestCases()
-if count != expected:
-    raise SystemExit(f"Expected {expected} callback tests, collected {count}")
+class SmokeResults:
+    collected = 0
+    passed = 0
 
-result = unittest.TextTestRunner(verbosity=2).run(suite)
-if result.testsRun != expected or result.skipped or result.expectedFailures or not result.wasSuccessful():
-    raise SystemExit("All callback tests must execute and pass without skips or expected failures")
+    def pytest_collection_finish(self, session):
+        self.collected = session.testscollected
+
+    def pytest_runtest_logreport(self, report):
+        if report.when == "call" and report.passed and not hasattr(report, "wasxfail"):
+            self.passed += 1
+
+
+expected = 4
+results = SmokeResults()
+status = pytest.main(
+    ["-c", "e2e/python/pyproject.toml", "packages/python/tests/test_ocr_callback_exceptions.py"],
+    plugins=[results],
+)
+if status != pytest.ExitCode.OK or (results.collected, results.passed) != (expected, expected):
+    raise SystemExit(f"Expected {expected} passed callback tests, collected {results.collected}, passed {results.passed}")
+
 PYTHON
 '''
 
