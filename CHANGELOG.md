@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
 - **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
+- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
