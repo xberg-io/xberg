@@ -42,7 +42,9 @@ mod strip_certificate_tests;
 #[cfg(test)]
 mod strip_fixture;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
-use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
+use samples::{
+    GrayPacking, decode_source_gray, flate_packing, retained_gray_bytes, source_density_allowed, source_frame,
+};
 
 const MAX_TILE_SIDE: u32 = 4096;
 const MIN_STANDARD_SOURCE_DPI: f64 = 150.0;
@@ -714,10 +716,12 @@ fn certify(
         {
             None
         }
-        (Some(_), "FlateDecode") => {
-            *source_refusal = flate_refusal(&dict, (width, height, dpi), byte_limit.saturating_sub(data.len()));
-            Some(flate_packing(&dict, width)?)
-        }
+        (Some(_), "FlateDecode") => Some(flate_packing_or_refusal(
+            &dict,
+            (width, height, dpi),
+            (data.len(), byte_limit),
+            source_refusal,
+        )?),
         _ => return None,
     };
     if !source_density_allowed(dpi, packing) {
@@ -741,17 +745,34 @@ fn certify(
     })
 }
 
+fn flate_packing_or_refusal(
+    dict: &std::collections::HashMap<String, Object>,
+    frame: (u32, u32, f64),
+    (compressed_len, byte_limit): (usize, usize),
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<GrayPacking> {
+    let Some(packing) = flate_packing(dict, frame.0) else {
+        *source_refusal = flate_refusal(dict, frame, compressed_len, byte_limit);
+        return None;
+    };
+    Some(packing)
+}
+
 fn flate_refusal(
     dict: &std::collections::HashMap<String, Object>,
     (width, height, dpi): (u32, u32, f64),
-    available: usize,
+    compressed_len: usize,
+    byte_limit: usize,
 ) -> Option<Unrecovered> {
-    let packed_bytes = (width as usize).div_ceil(2).checked_mul(height as usize)?;
+    let (width, height) = (width as usize, height as usize);
+    let packed_bytes = width.div_ceil(2).checked_mul(height)?;
+    let retained_bytes = retained_gray_bytes(compressed_len, width.checked_mul(height)?)?;
+    let peak_bytes = retained_bytes.checked_add(packed_bytes)?;
     (dict.get("ColorSpace").and_then(Object::as_name) == Some("DeviceGray")
         && dict.get("BitsPerComponent").and_then(Object::as_integer) == Some(4)
         && !dict.contains_key("DecodeParms")
         && source_density_allowed(dpi, Some(GrayPacking::Byte))
-        && packed_bytes <= available)
+        && peak_bytes <= byte_limit)
         .then_some(Unrecovered::FourBitGrayFlate)
 }
 
@@ -1277,6 +1298,57 @@ mod tests {
         PdfDocument::from_bytes(bytes).expect("read valid synthetic PDF")
     }
 
+    const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
+
+    fn four_bit_gray_refusal_requires_the_full_memory_budget() {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let packed = width.div_ceil(2) as usize * height as usize;
+        let compressed = strip_fixture::flate(&vec![0xff; packed]);
+        let document = strip_fixture::scan_flate_pdf_at(
+            SMALL_GRAY_SCAN,
+            "/ColorSpace /DeviceGray /BitsPerComponent 4",
+            &compressed,
+            144.0,
+        );
+        let peak = compressed.len() + width as usize * height as usize + 1 + packed;
+        for (budget, specific) in [(peak - 1, false), (peak, true)] {
+            let mut refusal = None;
+            assert!(certify(&document, 0, Some(128), budget, &mut refusal).is_none());
+            assert_eq!(matches!(refusal, Some(Unrecovered::FourBitGrayFlate)), specific);
+            if !specific {
+                assert!(refusal.is_none());
+            }
+        }
+    }
+
+    async fn supported_blank_gray_flate_keeps_generic_warning(
+        backend: &Arc<dyn OcrBackend>,
+        config: &ExtractionConfig,
+        ocr: &OcrConfig,
+    ) {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let compressed = strip_fixture::flate(&vec![255; width as usize * height as usize]);
+        let document = strip_fixture::scan_flate_pdf_at(SMALL_GRAY_SCAN, strip_fixture::GRAY, &compressed, 144.0);
+        let mut refusal = None;
+        assert!(certify(&document, 0, Some(128), 2 * 1024 * 1024, &mut refusal).is_some());
+        assert!(refusal.is_none());
+        let raster = (0, Arc::new(Vec::new()), 128, 2050);
+        let mut original = recognized("The clean original", 1.0, 0.0, 3);
+        assert!(
+            !try_replace(&mut original, backend, config, ocr, (&document, 0), &raster)
+                .await
+                .unwrap()
+        );
+        assert_eq!(original.content, "The clean original");
+        assert_eq!(original.processing_warnings.len(), 1);
+        assert_eq!(
+            original.processing_warnings[0].message,
+            "Page 1 was read from a render downscaled to 72 DPI and its source-image strips were not used: \
+             the page is not one scan image in a supported encoding and density within the memory limit, \
+             or a strip did not read as its source lines. The text may be incomplete."
+        );
+    }
+
     #[tokio::test]
     async fn tall_scan_reports_four_bit_gray_only_after_source_certification() {
         crate::plugins::ensure_ocr_backends_initialized();
@@ -1286,6 +1358,8 @@ mod tests {
             .unwrap();
         let config = ExtractionConfig::default();
         let ocr = OcrConfig::default();
+        four_bit_gray_refusal_requires_the_full_memory_budget();
+        supported_blank_gray_flate_keeps_generic_warning(&backend, &config, &ocr).await;
         let raster = (0, Arc::new(Vec::new()), 850, 6000);
         let reason = "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support";
 
