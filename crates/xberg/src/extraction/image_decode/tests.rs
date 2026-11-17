@@ -595,7 +595,9 @@ fn decoder_audit_violations(relative: &str, source: &str) -> Vec<String> {
 
 fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<&'static str> {
     match (relative, function, path) {
-        ("extraction/image_decode.rs", "probe_standard_image", _) => Some("method::validate"),
+        ("extraction/image_decode.rs", "probe_standard_image", _)
+        | ("extraction/image_decode.rs", "probe_standard_image_with_decoder_budget", _) => Some("method::validate"),
+        ("extraction/image_decode.rs", "decode", _) => Some("image_decode_limits"),
         ("extraction/image_decode.rs", "decode_standard_image", _)
         | ("extraction/image_decode.rs", "decode_standard_rgb8", _)
         | ("extraction/image_decode.rs", "decode_standard_luma8_with_security_limits", _) => {

@@ -162,15 +162,12 @@ fn implicit_sparse_djot_keeps_plain_rows_in_the_page_snapshot() {
 }
 
 #[test]
-fn explicit_sparse_psm_keeps_the_original_page_transcript() {
+fn explicit_sparse_psm_plain_page_publishes_the_proven_table_rows() {
     let doc = extract(IMAGE, OutputFormat::Plain, Some(11));
     assert_table(&doc, "11");
     assert_plain_rows(&doc.content);
     assert_table_words(page_text(&doc));
-    assert_eq!(
-        page_text(&doc).lines().filter(|line| !line.trim().is_empty()).count(),
-        48
-    );
+    assert_plain_rows(page_text(&doc));
 }
 
 #[test]
@@ -214,15 +211,19 @@ fn accepted_table_keeps_rows_and_a_repeated_caption_in_plain_and_djot_pages() {
     let bytes = with_repeated_caption();
     let expected = format!("{}\n\nRent 14", ROWS.map(|row| row.join(" ")).join("\n"));
     for format in [OutputFormat::Plain, OutputFormat::Djot] {
-        let baseline = extract(&bytes, format.clone(), Some(11));
-        let implicit = extract(&bytes, format, None);
-        assert_table(&baseline, "11");
+        let explicit = extract(&bytes, format.clone(), Some(11));
+        let implicit = extract(&bytes, format.clone(), None);
+        assert_table(&explicit, "11");
         assert_table(&implicit, "11");
         assert_eq!(page_text(&implicit), expected);
-        assert_eq!(
-            counts(page_text(&implicit).split_whitespace()),
-            counts(page_text(&baseline).split_whitespace())
-        );
-        assert_ne!(page_text(&implicit), page_text(&baseline));
+        if format == OutputFormat::Plain {
+            assert_eq!(page_text(&explicit), expected);
+        } else {
+            assert_eq!(
+                counts(page_text(&implicit).split_whitespace()),
+                counts(page_text(&explicit).split_whitespace())
+            );
+            assert_ne!(page_text(&implicit), page_text(&explicit));
+        }
     }
 }

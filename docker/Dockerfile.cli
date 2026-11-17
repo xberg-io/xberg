@@ -19,13 +19,9 @@ WORKDIR /build
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 RUN apk add --no-cache \
-    curl musl-dev cmake make pkgconf \
-    perl linux-headers git file && \
-    apk add --no-cache \
-        gcc g++ libstdc++ libstdc++-dev \
-        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
+    curl musl-dev cmake make pkgconf perl linux-headers git file \
+    gcc g++ libstdc++ libstdc++-dev \
+    onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev
 
 # The pins come from the matching rustup-init.sha256 files in Rust's release archive. ~keep
 RUN RUSTUP_VERSION=1.29.3 && \
@@ -106,20 +102,11 @@ RUN file /build/xberg && \
 
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
-# Alpine's `onnxruntime` ships a 16.7 MB `onnx_test_runner` test harness, and pulls
-# `protoc` in transitively for its codegen executables. None of them are reachable at
-# runtime -- the CLI links `libonnxruntime.so` and `libprotoc.so`, not these binaries --
-# so they are deleted in the same layer as the install (a later `rm` would leave the
-# bytes in the lower layer and shrink nothing). Worth ~23 MB on amd64, measured. Do NOT
-# extend this to the libheif codecs: `libheif-x265`/`libheif-aom` back HEIC *encoding*,
-# which is a supported image output format (core/image_encode.rs). ~keep
-RUN apk add --no-cache libgcc && \
-    apk add --no-cache \
-        libstdc++ \
-        onnxruntime \
-        libheif libheif-libde265 libheif-aom libheif-dav1d libheif-x265 \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main && \
+# Remove unused ONNX/protobuf test and codegen executables in the install layer.
+# Keep the libheif codecs, including the HEIC encoders (core/image_encode.rs). ~keep
+RUN apk add --no-cache \
+        libgcc libstdc++ onnxruntime \
+        libheif libheif-libde265 libheif-aom libheif-dav1d libheif-x265 && \
     rm -f /usr/bin/onnx_test_runner /usr/bin/protoc /usr/bin/protoc-[0-9]* \
           /usr/bin/protoc-gen-upb-* /usr/bin/protoc-gen-upbdefs-*
 
@@ -143,5 +130,18 @@ ENV PDFIUM_DYNAMIC_LIB_PATH=/usr/local/lib
 # time and a runtime value changes nothing. Present so `docker inspect` can report which build id
 # the binary carries. ~keep
 ENV XBERG_BUILD_ID=${XBERG_BUILD_ID}
+
+RUN addgroup -S -g 10001 xberg && \
+    adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G xberg xberg && \
+    mkdir -p /app/.xberg/huggingface && \
+    chown xberg:root /app /app/.xberg /app/.xberg/huggingface && \
+    chmod 2775 /app /app/.xberg /app/.xberg/huggingface
+
+ENV HOME=/app \
+    XBERG_CACHE_DIR=/app/.xberg \
+    HF_HOME=/app/.xberg/huggingface
+
+WORKDIR /app
+USER 10001:10001
 
 ENTRYPOINT ["xberg"]

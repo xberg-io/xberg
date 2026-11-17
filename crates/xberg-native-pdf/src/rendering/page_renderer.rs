@@ -41,6 +41,8 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 #[path = "color_operators.rs"]
 mod color_operators;
+#[path = "path_operators.rs"]
+mod path_operators;
 const COLOR_OPERATOR_TRACE_TARGET: &str = module_path!();
 
 #[path = "image_budget.rs"]
@@ -1501,43 +1503,15 @@ impl PageRenderer {
                     gs_stack.current_mut().rendering_intent = intent.clone();
                 }
 
-                Operator::MoveTo { x, y } => {
-                    current_path.move_to(*x, *y);
-                }
-                Operator::LineTo { x, y } => {
-                    current_path.line_to(*x, *y);
-                }
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3);
-                }
-                Operator::CurveToV { x2, y2, x3, y3 } => {
-                    if let Some(last) = current_path.last_point() {
-                        current_path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
-                    }
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3);
-                }
-                Operator::Rectangle { x, y, width, height } => {
-                    // Normalize negative width/height per PDF spec:
-                    // re with negative dimensions means the rect extends in the opposite direction
-                    // ~keep
-                    let (nx, nw) = if *width < 0.0 {
-                        (x + width, -width)
-                    } else {
-                        (*x, *width)
-                    };
-                    let (ny, nh) = if *height < 0.0 {
-                        (y + height, -height)
-                    } else {
-                        (*y, *height)
-                    };
-                    if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
-                        current_path.push_rect(rect);
-                    }
-                }
-                Operator::ClosePath => {
-                    current_path.close();
+                Operator::MoveTo { .. }
+                | Operator::LineTo { .. }
+                | Operator::CurveTo { .. }
+                | Operator::CurveToV { .. }
+                | Operator::CurveToY { .. }
+                | Operator::Rectangle { .. }
+                | Operator::ClosePath => {
+                    let handled = path_operators::construct(&mut current_path, op);
+                    debug_assert!(handled, "only path construction operators are dispatched here");
                 }
 
                 Operator::Stroke | Operator::CloseStroke => {
@@ -9517,7 +9491,7 @@ mod tests {
         PdfDocument::from_bytes(pdf).expect("open minimal PDF")
     }
 
-    fn minimal_pdf_doc() -> PdfDocument {
+    pub(super) fn minimal_pdf_doc() -> PdfDocument {
         pdf_doc_with_extra_object(None)
     }
 
@@ -9887,35 +9861,6 @@ mod tests {
         let (r, g, b) = cmyk_to_rgb(1.0, 0.0, 0.0, 0.0);
         let q = |v: f32| (v * 255.0).round() as u8;
         assert_eq!([q(r), q(g), q(b)], [0x00, 0xAD, 0xEF]);
-    }
-
-    #[test]
-    fn test_negative_rect_normalization() {
-        // Negative height: re 100 200 50 -30 → should normalize to (100, 170, 50, 30) ~keep
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = 50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 100.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_negative_rect_both_negative() {
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = -50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 50.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
     }
 
     /// The crux of the ET application: the accumulated glyph silhouette is
@@ -10704,6 +10649,10 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "path_operators_tests.rs"]
+mod path_operators_tests;
 
 #[cfg(test)]
 #[path = "sampled_function_tests.rs"]

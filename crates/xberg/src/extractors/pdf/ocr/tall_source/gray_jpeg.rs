@@ -10,7 +10,7 @@ pub(in crate::extractors::pdf::ocr) async fn recover_after_gray_jpeg_render_fail
     ocr: &OcrConfig,
 ) -> crate::Result<Option<(ExtractedDocument, i32)>> {
     let attempt = Attempt::new(document, 0, None, config, ocr);
-    let Some((recovered, strips)) = recover(attempt, backend, ocr).await? else {
+    let Some((recovered, strips)) = recover(attempt, backend, ocr, &mut None).await? else {
         return Ok(None);
     };
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
@@ -43,10 +43,10 @@ mod tests {
         ));
         const LIMIT: usize = 100 * 1024 * 1024;
         let source = PdfDocument::from_bytes(JPEG.to_vec()).unwrap();
-        let recovered = certify(&source, 0, None, LIMIT).expect("certified original JPEG");
+        let recovered = certify(&source, 0, None, LIMIT, &mut None).expect("certified original JPEG");
         assert_eq!((recovered.width, recovered.height, recovered.dpi), (1275, 12000, 150.0));
         assert_eq!(recovered.samples.len(), 1275 * 12000);
-        assert!(certify(&source, 0, None, 16 * 1024 * 1024).is_none());
+        assert!(certify(&source, 0, None, 16 * 1024 * 1024, &mut None).is_none());
         for (key, value) in [
             ("Mask", Object::Array(vec![0.into(), 0.into()])),
             ("Filter", Object::Name(b"FlateDecode".to_vec())),
@@ -58,7 +58,10 @@ mod tests {
             let mut bytes = Vec::new();
             edited.save_to(&mut bytes).unwrap();
             let pdf = PdfDocument::from_bytes(bytes).unwrap();
-            assert!(certify(&pdf, 0, None, LIMIT).is_none(), "{key} must refuse projection");
+            assert!(
+                certify(&pdf, 0, None, LIMIT, &mut None).is_none(),
+                "{key} must refuse projection"
+            );
         }
         let mut edited = Document::load_mem(JPEG).unwrap();
         let image = edited.get_object_mut((5, 0)).unwrap().as_stream_mut().unwrap();
@@ -68,7 +71,7 @@ mod tests {
         edited.save_to(&mut bytes).unwrap();
         let pdf = PdfDocument::from_bytes(bytes).unwrap();
         assert!(
-            certify(&pdf, 0, None, LIMIT).is_none(),
+            certify(&pdf, 0, None, LIMIT, &mut None).is_none(),
             "JPEG header must match PDF dimensions"
         );
 
@@ -82,7 +85,7 @@ mod tests {
         edited.save_to(&mut bytes).unwrap();
         let pdf = PdfDocument::from_bytes(bytes).unwrap();
         assert!(
-            certify(&pdf, 0, None, LIMIT).is_none(),
+            certify(&pdf, 0, None, LIMIT, &mut None).is_none(),
             "additional paint must refuse projection"
         );
     }

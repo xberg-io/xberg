@@ -31,10 +31,7 @@
 
 #![allow(dead_code)]
 
-#[path = "common/wave5_child_test.rs"]
-mod child_test;
-
-use child_test::{child_test_root, run_child_test};
+use xberg_child_test::{child_test_root, run_child_test};
 use xberg_native_pdf::document::PdfDocument;
 use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
 

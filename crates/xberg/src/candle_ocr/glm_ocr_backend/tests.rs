@@ -642,17 +642,79 @@ fn test_checkbox_marker_for_class_none_for_non_checkbox_class() {
     assert_eq!(checkbox_marker_for_class(LayoutClass::Table), None);
 }
 
+#[tokio::test]
+async fn configured_glm_raster_budget_precedes_pixel_decode_and_model_loading() {
+    let bmp = crate::extraction::image_decode::bmp_with_declared_dimensions(32, 32);
+    let limit = 1024;
+    assert!(bmp.len() < limit);
+    let config = OcrConfig {
+        security_limits: Some(SecurityLimits {
+            max_content_size: limit,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let modes = [
+        LayoutMode::WholePage,
+        #[cfg(feature = "layout-detection")]
+        LayoutMode::Paired,
+    ];
+    for mode in modes {
+        let backend = GlmOcrBackend::new(GlmOcrTask::Ocr, mode);
+        let error = backend
+            .process_image(&bmp, &config)
+            .await
+            .expect_err("raster budget exceeded");
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+        let error = backend
+            .process_image(&bmp, &OcrConfig::default())
+            .await
+            .expect_err("admitted raster has truncated pixels");
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, source: Some(_) }
+            if message.contains("image decode failed:")),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn configured_glm_encoded_budget_rejects_the_file_before_decoding() {
+    let temp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(temp.path(), [0; 64]).unwrap();
+    let config = OcrConfig {
+        security_limits: Some(SecurityLimits {
+            max_content_size: 32,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let error = GlmOcrBackend::new(GlmOcrTask::Ocr, LayoutMode::WholePage)
+        .process_image_file(temp.path(), &config)
+        .await
+        .expect_err("encoded file exceeds the budget");
+    assert!(
+        matches!(&error, crate::XbergError::Validation { message, .. }
+        if message.contains("encoded image file exceeds security_limits.max_content_size")),
+        "{error}"
+    );
+}
+
 #[cfg(feature = "layout-detection")]
 #[tokio::test]
 async fn should_reject_invalid_paired_image_before_loading_models() {
     let cache = tempfile::tempdir().expect("create model cache directory");
     let error = process_paired(
-        Vec::new(),
+        Arc::new(Vec::new()),
         DevicePreference::Cpu,
         DType::F32,
         false,
         cache.path().to_path_buf(),
-        "main".to_string(),
+        SecurityLimits::default(),
     )
     .await
     .expect_err("invalid encoded image should fail before model loading");
@@ -671,29 +733,27 @@ async fn should_reject_invalid_paired_image_before_loading_models() {
 fn should_clip_paired_crops_to_the_image_and_preserve_pixels() {
     let img = image::RgbImage::from_fn(2, 2, |x, y| image::Rgb([x as u8, y as u8, 123]));
     let limits = crate::extractors::security::SecurityLimits::default();
-    let bytes = encode_paired_crop(&img, &crate::layout::BBox::new(-3.0, -4.0, 7.0, 8.0), &limits).unwrap();
-    let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
-    assert_eq!(decoded, img);
-    let bytes = encode_paired_crop(&img, &crate::layout::BBox::new(9.0, 9.0, 10.0, 10.0), &limits).unwrap();
-    let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
-    assert_eq!(decoded.dimensions(), (1, 1));
-    assert_eq!(decoded.get_pixel(0, 0), img.get_pixel(1, 1));
+    let crop = copy_paired_crop(&img, &crate::layout::BBox::new(-3.0, -4.0, 7.0, 8.0), &limits).unwrap();
+    assert_eq!(crop, img);
+    let crop = copy_paired_crop(&img, &crate::layout::BBox::new(9.0, 9.0, 10.0, 10.0), &limits).unwrap();
+    assert_eq!(crop.dimensions(), (1, 1));
+    assert_eq!(crop.get_pixel(0, 0), img.get_pixel(1, 1));
 }
 
 #[cfg(feature = "layout-detection")]
 #[test]
-fn should_enforce_the_paired_crop_live_memory_budget_before_encoding() {
+fn should_enforce_the_paired_crop_live_memory_budget_before_copying() {
     let img = image::RgbImage::new(2, 2);
     let limits = crate::extractors::security::SecurityLimits {
         max_content_size: 12,
         ..Default::default()
     };
-    let error = encode_paired_crop(&img, &crate::layout::BBox::new(0.0, 0.0, 2.0, 2.0), &limits).unwrap_err();
+    let error = copy_paired_crop(&img, &crate::layout::BBox::new(0.0, 0.0, 2.0, 2.0), &limits).unwrap_err();
     match error {
         crate::XbergError::Validation { message, source } => {
             assert_eq!(
                 message,
-                "Image dimensions 2x2 require 262184 live image-processing bytes, exceeding or invalid under security_limits.max_content_size (12 bytes)"
+                "Image dimensions 2x2 require 24 live image-processing bytes, exceeding or invalid under security_limits.max_content_size (12 bytes)"
             );
             assert!(source.is_none());
         }

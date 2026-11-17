@@ -1034,7 +1034,12 @@ def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
             assert "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" in result.stderr
 
 
-def test_python_manylinux_verifies_onnx_runtime_before_extraction(tmp_path: Path) -> None:
+def test_python_manylinux_verifies_onnx_runtime_before_extraction() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        _check_python_manylinux_onnx_runtime_verification(Path(directory))
+
+
+def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
     repo_root = WORKFLOW.parents[2]
     integrity_path = Path("scripts/ci/actions/setup-onnx-runtime")
     project = tmp_path / "staged project"
@@ -1658,12 +1663,6 @@ def test_dry_release_assets_verify_only_selected_groups() -> None:
                 outputs["dry_run"] = "true"
 
 
-if __name__ == "__main__":
-    for name, test in list(globals().items()):
-        if name.startswith("test_") and callable(test):
-            test()
-
-
 def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
     workflow = WORKFLOW.read_text()
     for job, libc, image in (
@@ -1781,3 +1780,9 @@ def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
     assert_thin_only_on_arm64(lto_selector(push["with"]["build-args"]), contexts)
     for dockerfile in ("Dockerfile.core", "Dockerfile.full"):
         assert_dockerfile_exports_lto_before(dockerfile, "cargo build --release --package xberg-cli")
+
+
+if __name__ == "__main__":
+    for name, test in list(globals().items()):
+        if name.startswith("test_") and callable(test):
+            test()
