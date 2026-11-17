@@ -1083,10 +1083,10 @@ pub struct OcrConfig {
 
     /// Runtime override for tessdata directory path.
     ///
-    /// When set, this directory is searched first; a language it lacks is still
-    /// looked up in the standard resolution chain that follows it. When `None`,
-    /// only that chain is searched: `TESSDATA_PREFIX`, the cache directory, then
-    /// the system paths (skipped when `XBERG_TESSDATA_SYSTEM_PATHS` is `0` or `false`).
+    /// When set, uses this path as the highest-priority tessdata location,
+    /// bypassing environment variables and cache directories. Useful for
+    /// embedding pre-installed tessdata in applications. When `None`, uses
+    /// the standard resolution chain: TESSDATA_PREFIX env, cache dir, system paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tessdata_path: Option<PathBuf>,
 
