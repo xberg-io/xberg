@@ -10,6 +10,67 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::error::{CandleOcrError, Result};
 
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
+
+#[cfg(any(feature = "paddleocr-vl", all(test, feature = "deepseek-ocr")))]
+pub(super) fn decode_image_with_budget(
+    bytes: &[u8],
+    budget: u64,
+    convert_to_rgb8: bool,
+) -> image::ImageResult<image::DynamicImage> {
+    decode_image_with_preflight(bytes, budget, convert_to_rgb8, |_, _, _| Some(0))
+}
+
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+pub(super) fn decode_image_with_preflight(
+    bytes: &[u8],
+    budget: u64,
+    convert_to_rgb8: bool,
+    preprocessing_bytes: impl FnOnce(u32, u32, u8) -> Option<u64>,
+) -> image::ImageResult<image::DynamicImage> {
+    use image::ImageDecoder as _;
+
+    let insufficient_memory = || {
+        image::ImageError::Limits(image::error::LimitError::from_kind(
+            image::error::LimitErrorKind::InsufficientMemory,
+        ))
+    };
+    let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+    // The JPEG decoder holds its own copy of the encoded input during decoding. ~keep
+    let encoded_live_bytes = if reader.format() == Some(image::ImageFormat::Jpeg) {
+        encoded_bytes.checked_mul(2).ok_or_else(insufficient_memory)?
+    } else {
+        encoded_bytes
+    };
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(budget.checked_sub(encoded_live_bytes).ok_or_else(insufficient_memory)?);
+    reader.limits(limits.clone());
+    let mut decoder = reader.into_decoder()?;
+    let (width, height) = decoder.dimensions();
+    limits.check_dimensions(width, height)?;
+    limits.reserve(decoder.total_bytes())?;
+    if convert_to_rgb8 && decoder.color_type() != image::ColorType::Rgb8 {
+        let rgb_bytes = (u64::from(width) * u64::from(height))
+            .checked_mul(u64::from(image::ColorType::Rgb8.bytes_per_pixel()))
+            .ok_or_else(insufficient_memory)?;
+        // Conversion follows decoding, so this checks a separate peak from decoder scratch space. ~keep
+        limits.clone().reserve(rgb_bytes)?;
+    }
+    let preprocessing =
+        preprocessing_bytes(width, height, decoder.color_type().bytes_per_pixel()).ok_or_else(insufficient_memory)?;
+    let preprocess_peak = encoded_bytes
+        .checked_add(decoder.total_bytes())
+        .and_then(|bytes| bytes.checked_add(preprocessing))
+        .ok_or_else(insufficient_memory)?;
+    if preprocess_peak > budget {
+        return Err(insufficient_memory());
+    }
+    decoder.set_limits(limits)?;
+    image::DynamicImage::from_decoder(decoder)
+}
+
 /// ViT-style image processor: resize to NxN, normalize to mean/std.
 ///
 /// Defaults match TrOCR / PaddleOCR-VL ViT pretraining: 384x384, mean/std `[0.5; 3]`.
@@ -71,5 +132,82 @@ impl ImageProcessor {
             .broadcast_div(&std)?;
 
         Ok(normalized.unsqueeze(0)?)
+    }
+}
+
+#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr")))]
+mod decode_tests {
+    use super::decode_image_with_budget;
+
+    #[test]
+    fn encoded_and_decoded_bytes_must_fit_standalone_decode_budget() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let budget = 4 * 1024;
+        assert!(png.get_ref().len() < usize::try_from(budget).unwrap());
+        assert!(matches!(
+            decode_image_with_budget(png.get_ref(), budget, false),
+            Err(image::ImageError::Limits(_))
+        ));
+        let image = decode_image_with_budget(png.get_ref(), 1 << 20, false).unwrap();
+        assert_eq!((image.width(), image.height()), (64, 64));
+    }
+
+    #[test]
+    fn standalone_raster_budget_rejects_before_reading_truncated_pixels() {
+        use image::ImageDecoder as _;
+
+        let mut bmp = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(32, 32)
+            .write_to(&mut bmp, image::ImageFormat::Bmp)
+            .unwrap();
+        let mut truncated = bmp.into_inner();
+        let pixel_offset = u32::from_le_bytes(truncated[10..14].try_into().unwrap());
+        truncated.truncate(usize::try_from(pixel_offset).unwrap());
+        let decoder = image::codecs::bmp::BmpDecoder::new(std::io::Cursor::new(&truncated)).unwrap();
+        assert_eq!(decoder.dimensions(), (32, 32));
+        let budget = 1024;
+        let encoded_bytes = u64::try_from(truncated.len()).unwrap();
+        assert!(encoded_bytes < budget && budget < encoded_bytes + decoder.total_bytes());
+
+        assert!(matches!(
+            decode_image_with_budget(&truncated, 1 << 20, false),
+            Err(image::ImageError::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof
+        ));
+        let Err(image::ImageError::Limits(error)) = decode_image_with_budget(&truncated, budget, false) else {
+            panic!("preflight must reject the raster before reading pixel data");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+    }
+
+    #[test]
+    fn grayscale_and_rgb_rasters_must_fit_when_standalone_decode_converts_color() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_luma8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let budget = 15 * 1024;
+        assert!(decode_image_with_budget(png.get_ref(), budget, false).is_ok());
+        assert!(matches!(
+            decode_image_with_budget(png.get_ref(), budget, true),
+            Err(image::ImageError::Limits(_))
+        ));
+        assert!(decode_image_with_budget(png.get_ref(), 1 << 20, true).is_ok());
+    }
+
+    #[test]
+    fn standalone_jpeg_decoder_copy_counts_toward_the_budget() {
+        let mut jpeg = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(1, 1)
+            .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+            .unwrap();
+        let budget = u64::try_from(jpeg.get_ref().len()).unwrap() + 3;
+        assert!(matches!(
+            decode_image_with_budget(jpeg.get_ref(), budget, false),
+            Err(image::ImageError::Limits(_))
+        ));
+        assert!(decode_image_with_budget(jpeg.get_ref(), 1 << 20, false).is_ok());
     }
 }

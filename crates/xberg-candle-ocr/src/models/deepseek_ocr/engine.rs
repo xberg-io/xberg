@@ -10,6 +10,7 @@ use tokenizers::Tokenizer;
 
 use crate::CandleOcrError;
 use crate::error::Result;
+use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_preflight};
 use crate::vendor::aha::InferenceModel;
 
 use super::{config::DeepseekOCRConfig, model::DeepseekOCRModel, processor::DeepseekOCRProcessor};
@@ -229,15 +230,9 @@ impl DeepseekOCREngine {
     ) -> Result<(Tensor, Tensor, usize)> {
         let channels = 3usize;
         match crop_grid_for(img.width(), img.height()) {
-            Some(_) => {
-                let (tiles, (w_crop, h_crop)) = crate::vendor::aha::image::dynamic_preprocess(
-                    img,
-                    CROP_MIN_TILES,
-                    CROP_MAX_TILES,
-                    CROP_TILE_SIZE,
-                    false,
-                )
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Local-crop tiling: {}", e)))?;
+            Some((w_crop, h_crop)) => {
+                let tiles = crate::vendor::aha::image::crop_img(img, h_crop, w_crop, CROP_TILE_SIZE)
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Local-crop tiling: {}", e)))?;
 
                 tracing::debug!(w_crop, h_crop, num_tiles = tiles.len(), "DeepSeek-OCR: local-crop grid");
 
@@ -380,6 +375,10 @@ impl DeepseekOCREngine {
 
     /// Process an image and return the recognized text.
     ///
+    /// The encoded input, decoding, and local-crop resize pixel buffers use a
+    /// 100 MiB budget. Global-view preprocessing, tensors, and inference allocate separately.
+    /// Use [`Self::process_decoded_image`] for a raster decoded under your own budget.
+    ///
     /// Runs the full inference pipeline:
     /// 1. Decode image bytes to DynamicImage
     /// 2. Preprocess to tensor format (images_ori, image_crop, images_seq_mask, images_spatial_crop)
@@ -395,7 +394,7 @@ impl DeepseekOCREngine {
     /// # Errors
     ///
     /// Returns [`crate::error::CandleOcrError`] if:
-    /// - Image decoding fails
+    /// - Image decoding fails or exceeds the budget ([`CandleOcrError::Image`])
     /// - Preprocessing fails
     /// - Tokenization fails
     /// - Inference fails
@@ -406,9 +405,69 @@ impl DeepseekOCREngine {
             version = self.version,
             "DeepSeek-OCR: starting inference"
         );
-        let img = image::load_from_memory(image_bytes)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {}", e)))?;
+        let img = decode_deepseek_image(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET)?;
+        self.process_decoded_image(&img, prompt)
+    }
 
+    /// Additional peak pixel-buffer bytes for the local-crop resize and tiling.
+    /// Returns no estimate when dimensions or arithmetic are invalid.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn crop_resize_working_bytes(width: u32, height: u32, bytes_per_pixel: u8) -> Option<u64> {
+        if width == 0 || height == 0 || bytes_per_pixel == 0 {
+            return None;
+        }
+        // The vendor grid search evaluates the source area as u32.
+        width.checked_mul(height)?;
+        let Some((grid_w, grid_h)) = crop_grid_for(width, height) else {
+            return Some(0);
+        };
+        let target_width = CROP_TILE_SIZE.checked_mul(grid_w)?;
+        let target_height = CROP_TILE_SIZE.checked_mul(grid_h)?;
+        let target_bytes = u64::from(target_width)
+            .checked_mul(u64::from(target_height))?
+            .checked_mul(u64::from(bytes_per_pixel))?;
+        // image's resize keeps an RGBA32F vertical intermediate beside its destination.
+        // An exact-size resize copies directly. Slicing the tiles can keep another frame's worth.
+        let intermediate = if (width, height) == (target_width, target_height) {
+            0
+        } else {
+            u64::from(width)
+                .checked_mul(u64::from(target_height))?
+                .checked_mul(16)?
+        };
+        target_bytes.checked_add(intermediate.max(target_bytes))
+    }
+
+    /// Run recognition on a decoded raster with the default local-crop resize budget.
+    pub fn process_decoded_image(&mut self, img: &image::DynamicImage, prompt: Option<&str>) -> Result<String> {
+        self.process_decoded_image_with_crop_budget(img, prompt, DEFAULT_IMAGE_DECODE_BUDGET)
+    }
+
+    /// Run recognition on a decoded raster with the caller's image-processing budget.
+    ///
+    /// # Errors
+    /// Returns a typed image limit error when the raster and local-crop buffers exceed the budget.
+    /// Propagates preprocessing and recognition errors.
+    #[doc(hidden)]
+    pub fn process_decoded_image_with_crop_budget(
+        &mut self,
+        img: &image::DynamicImage,
+        prompt: Option<&str>,
+        budget: u64,
+    ) -> Result<String> {
+        let working = Self::crop_resize_working_bytes(img.width(), img.height(), img.color().bytes_per_pixel());
+        let peak = working.and_then(|bytes| bytes.checked_add(u64::try_from(img.as_bytes().len()).ok()?));
+        if peak.is_none_or(|bytes| bytes > budget) {
+            return Err(image::ImageError::Limits(image::error::LimitError::from_kind(
+                image::error::LimitErrorKind::InsufficientMemory,
+            ))
+            .into());
+        }
+        self.recognize_preflighted_image(img, prompt)
+    }
+
+    fn recognize_preflighted_image(&mut self, img: &image::DynamicImage, prompt: Option<&str>) -> Result<String> {
         let (img_width, img_height) = (img.width(), img.height());
         tracing::debug!(width = img_width, height = img_height, "DeepSeek-OCR: image dimensions");
 
@@ -423,13 +482,14 @@ impl DeepseekOCREngine {
 
         let pad = (IMAGE_MEAN_STD * 255.0) as u8;
         let global_view =
-            crate::vendor::aha::image::resize_with_edge_padding(&img, BASE_SIZE, BASE_SIZE, [pad, pad, pad]);
+            crate::vendor::aha::image::resize_with_edge_padding(img, BASE_SIZE, BASE_SIZE, [pad, pad, pad]);
         let images_ori = crate::vendor::aha::image::img_transform(&global_view, &mean, &std, &self.device, self.dtype)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Global transform: {}", e)))?
             .unsqueeze(0)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Global batch: {}", e)))?;
 
-        let (image_crop, images_spatial_crop, num_image_tokens) = self.build_crop_tensors(&img, &mean, &std)?;
+        drop(global_view);
+        let (image_crop, images_spatial_crop, num_image_tokens) = self.build_crop_tensors(img, &mean, &std)?;
         let (input_ids, prompt_ids, images_seq_mask) =
             self.build_input_tensors(prompt, num_image_tokens, image_token_id)?;
 
@@ -496,6 +556,10 @@ impl DeepseekOCREngine {
     }
 }
 
+fn decode_deepseek_image(image_bytes: &[u8], budget: u64) -> image::ImageResult<image::DynamicImage> {
+    decode_image_with_preflight(image_bytes, budget, false, DeepseekOCREngine::crop_resize_working_bytes)
+}
+
 /// Number of image tokens the model consumes for a page whose local-crop grid is
 /// `(w_crop, h_crop)`. `(0, 0)` is the global-view-only path (no local crops), matching the
 /// `image_crop.sum_all() == 0` branch `DeepseekOCRModel::forward` takes in that case.
@@ -525,7 +589,30 @@ fn crop_grid_for(width: u32, height: u32) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod helper_tests {
-    use super::{crop_grid_for, image_token_count};
+    use super::{DeepseekOCREngine, crop_grid_for, decode_deepseek_image, image_token_count};
+
+    #[test]
+    fn crop_resize_budget_counts_the_intermediate_and_exact_size_copy() {
+        let estimate = DeepseekOCREngine::crop_resize_working_bytes;
+        assert_eq!(estimate(640, 640, 1), Some(0));
+        assert_eq!(estimate(1275, 1650, 3), Some(46_540_800));
+        assert_eq!(estimate(1280, 1920, 3), Some(14_745_600));
+    }
+
+    #[test]
+    fn deepseek_header_preflight_counts_crop_buffers_above_the_decode_budget() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_luma8(641, 480)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        assert!(641 * 480 + png.get_ref().len() < 1 << 20);
+        assert!(matches!(
+            decode_deepseek_image(png.get_ref(), 1 << 20),
+            Err(image::ImageError::Limits(_))
+        ));
+        let decoded = decode_deepseek_image(png.get_ref(), 100 << 20).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (641, 480));
+    }
 
     #[test]
     fn image_token_count_matches_global_only_path() {
