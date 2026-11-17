@@ -68,14 +68,14 @@ impl PptxContainer<std::fs::File> {
     }
 }
 
-impl<'a> PptxContainer<Cursor<&'a [u8]>> {
+impl PptxContainer<Cursor<Vec<u8>>> {
     /// `limits` is the caller's configured `SecurityLimits` (see
     /// `PptxExtractionOptions::security_limits`), not hardcoded ceilings.
     ///
     /// See `PptxContainer::open` (the file-based constructor above) for why both
     /// `check_entry_count` and `ZipBombValidator::validate` run here.
-    pub(super) fn from_bytes(data: &'a [u8], limits: &SecurityLimits) -> Result<Self> {
-        let cursor = Cursor::new(data);
+    pub(super) fn from_bytes(data: &[u8], limits: &SecurityLimits) -> Result<Self> {
+        let cursor = Cursor::new(data.to_vec());
 
         let mut archive = match ZipArchive::new(cursor) {
             Ok(arc) => arc,

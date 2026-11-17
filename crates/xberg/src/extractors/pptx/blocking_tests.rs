@@ -37,7 +37,8 @@ fn assert_expected_table(doc: &InternalDocument) {
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn assert_native_queue(file: bool) {
+#[test]
+fn single_pptx_file_queues_on_native_tokio() {
     use std::future::poll_fn;
     use std::sync::mpsc;
     use std::task::Poll;
@@ -65,11 +66,7 @@ fn assert_native_queue(file: bool) {
             ..config()
         };
         let (queued, result) = runtime.block_on(async {
-            let mut read = if file {
-                extractor.extract_path(fixture_path(), MIME, &cfg)
-            } else {
-                extractor.extract_content(DECK, MIME, &cfg)
-            };
+            let mut read = extractor.extract_path(fixture_path(), MIME, &cfg);
             let first = poll_fn(|cx| Poll::Ready(read.as_mut().poll(cx))).await;
             if cancel_while_queued {
                 cancel.cancel();
@@ -83,7 +80,7 @@ fn assert_native_queue(file: bool) {
         });
         assert_eq!(
             queued, !cancel_before_poll,
-            "native PPTX parse queues before reading; file={file}"
+            "native PPTX path parse queues before reading"
         );
         if cancel_before_poll || cancel_while_queued {
             assert!(matches!(result, Err(crate::XbergError::Cancelled)));
@@ -95,14 +92,87 @@ fn assert_native_queue(file: bool) {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
-fn single_pptx_bytes_queue_on_native_tokio() {
-    assert_native_queue(false);
+fn single_pptx_bytes_and_batch_paths_complete_with_a_busy_blocking_pool() {
+    use std::future::poll_fn;
+    use std::sync::mpsc;
+    use std::task::Poll;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    let (started_tx, started_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let blocker = runtime.spawn_blocking(move || {
+        started_tx.send(()).unwrap();
+        let _ = release_rx.recv();
+    });
+    started_rx.recv().unwrap();
+    let extractor = PptxExtractor::new();
+    let cfg = config();
+    let (bytes, batch_path) = runtime.block_on(async {
+        let bytes = poll_fn(|cx| {
+            let mut read = extractor.extract_content(DECK, MIME, &cfg);
+            Poll::Ready(read.as_mut().poll(cx))
+        })
+        .await;
+        let mut path = std::pin::pin!(crate::core::batch_mode::with_batch_mode(extractor.extract_path(
+            fixture_path(),
+            MIME,
+            &cfg
+        )));
+        let batch_path = poll_fn(|cx| Poll::Ready(path.as_mut().poll(cx))).await;
+        (bytes, batch_path)
+    });
+    release_tx.send(()).unwrap();
+    runtime.block_on(blocker).unwrap();
+    for result in [bytes, batch_path] {
+        let Poll::Ready(result) = result else {
+            panic!("PPTX byte single and path batch routes should complete inline");
+        };
+        assert_expected_table(&result.unwrap());
+    }
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
-fn single_pptx_file_queues_on_native_tokio() {
-    assert_native_queue(true);
+fn dropped_pptx_path_future_keeps_its_permit_until_the_parser_returns() {
+    use std::future::poll_fn;
+    use std::sync::Arc;
+    use std::sync::mpsc;
+    use std::task::Poll;
+    use std::time::Duration;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let admission = Arc::new(tokio::sync::Semaphore::new(1));
+    let (started_tx, started_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let parse = move || {
+        started_tx.send(()).unwrap();
+        release_rx.recv().unwrap();
+        Err(crate::XbergError::Cancelled)
+    };
+    let mut future = Box::pin(run_pptx_path_worker(
+        runtime.handle(),
+        Arc::clone(&admission),
+        None,
+        parse,
+    ));
+    let first = runtime.block_on(poll_fn(|cx| Poll::Ready(future.as_mut().poll(cx))));
+    assert!(first.is_pending());
+    started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    drop(future);
+    assert_eq!(admission.available_permits(), 0);
+    release_tx.send(()).unwrap();
+    let permit = runtime
+        .block_on(async { tokio::time::timeout(Duration::from_secs(5), admission.acquire()).await })
+        .expect("parser releases its permit")
+        .unwrap();
+    drop(permit);
+    assert_eq!(admission.available_permits(), 1);
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -204,22 +274,17 @@ fn single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber() {
     let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
     tracing::callsite::rebuild_interest_cache();
     tracing::subscriber::with_default(subscriber, || {
-        for input in [
-            PptxInput::Bytes(Cow::Borrowed(&bytes)),
-            PptxInput::Path(path.to_string_lossy()),
-        ] {
-            let (_, warnings) = runtime
-                .block_on(read_pptx(input, pptx_parse_options(&config()), None))
-                .unwrap();
-            assert!(
-                warnings
-                    .iter()
-                    .any(|warning| warning.message.contains("comment authors were not resolved"))
-            );
-        }
+        let doc = runtime
+            .block_on(PptxExtractor::new().extract_path(&path, MIME, &config()))
+            .unwrap();
+        assert!(
+            doc.processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("comment authors were not resolved"))
+        );
     });
     tracing::callsite::rebuild_interest_cache();
     let capture = capture.0.lock().unwrap();
     let logged = std::str::from_utf8(&capture).unwrap();
-    assert_eq!(logged.matches("failed to parse ppt/commentAuthors.xml").count(), 2);
+    assert_eq!(logged.matches("failed to parse ppt/commentAuthors.xml").count(), 1);
 }
