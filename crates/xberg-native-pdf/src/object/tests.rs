@@ -521,6 +521,61 @@ fn test_extract_ccitt_params_skips_unrelated_filter_dictionary() {
     assert!(result.black_is_1);
 }
 
+fn small_group4_xobject(rows: Option<i64>, array_filter: bool) -> Object {
+    let mut params = HashMap::from([
+        ("K".to_string(), Object::Integer(-1)),
+        ("Columns".to_string(), Object::Integer(8)),
+    ]);
+    if let Some(rows) = rows {
+        params.insert("Rows".to_string(), Object::Integer(rows));
+    }
+
+    let filter = Object::Name("CCITTFaxDecode".into());
+    let params = Object::Dictionary(params);
+    let (filter, params) = if array_filter {
+        (Object::Array(vec![filter]), Object::Array(vec![params]))
+    } else {
+        (filter, params)
+    };
+    Object::Stream {
+        dict: HashMap::from([
+            ("Subtype".into(), Object::Name("Image".into())),
+            ("Width".into(), Object::Integer(8)),
+            ("Height".into(), Object::Integer(3)),
+            ("BitsPerComponent".into(), Object::Integer(1)),
+            ("ColorSpace".into(), Object::Name("DeviceGray".into())),
+            ("Filter".into(), filter),
+            ("DecodeParms".into(), params),
+        ]),
+        // Two black rows, then a row with white samples at columns 3 and 4, followed by EOFB. ~keep
+        data: bytes::Bytes::from_static(&[0x26, 0xa2, 0x93, 0x51, 0x49, 0xac, 0x5e, 0x00, 0x10, 0x01]),
+    }
+}
+
+#[test]
+fn ccitt_zero_rows_use_image_height_for_direct_and_array_filters() {
+    let mut expected = [0; 24];
+    expected[19..21].fill(255);
+    for array_filter in [false, true] {
+        for rows in [Some(3), None, Some(0)] {
+            let object = small_group4_xobject(rows, array_filter);
+            let image = crate::extractors::images::extract_image_from_xobject(None, &object, None, None)
+                .unwrap_or_else(|error| panic!("decode 8x3 CCITT image, array={array_filter}, rows={rows:?}: {error}"));
+            assert_eq!(image.ccitt_params().expect("CCITT parameters").rows, Some(3));
+            let actual = image
+                .to_dynamic_image()
+                .expect("materialize decoded image")
+                .into_luma8();
+            assert_eq!(actual.dimensions(), (8, 3));
+            assert_eq!(
+                actual.as_raw().as_slice(),
+                expected,
+                "array={array_filter}, rows={rows:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn test_extract_ccitt_params_with_width_override() {
     let dict = Object::Dictionary(HashMap::new());
