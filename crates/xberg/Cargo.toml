@@ -338,8 +338,7 @@ candle-metal = ["candle-ocr", "xberg-candle-ocr/metal"]
 candle-accelerate = ["candle-ocr", "xberg-candle-ocr/accelerate"]
 candle-mkl = ["candle-ocr", "xberg-candle-ocr/mkl"]
 # PaddleOCR keeps its historical feature as the zero-config native ORT mode. The
-# explicit engine features also support native parity benchmarks and mobile tract.
-# The direct ORT dependency shares the loader with Sceptre and the macOS CoreML table. ~keep
+# explicit engine features also support native parity benchmarks and mobile tract. ~keep
 paddle-ocr = ["paddle-ocr-ort"]
 # PaddleOCR via ONNX Runtime
 # Requires 'ocr' feature for shared conversion utilities and table reconstruction

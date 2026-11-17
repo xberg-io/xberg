@@ -869,7 +869,7 @@ jobs:
   ort-discovery:
     name: Dynamic ONNX Runtime discovery
     if: >-
-      ${{ github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' }}
+      ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
