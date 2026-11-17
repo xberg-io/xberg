@@ -7,13 +7,12 @@ use crate::object::{Object, ObjectRef};
 use crate::parser::parse_object;
 use crate::parser_config::ParserOptions;
 use crate::xref::{CrossRefTable, find_xref_offset, parse_xref};
-#[cfg(not(target_arch = "wasm32"))]
-use ahash::AHashMap as ObjectCacheMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
-#[cfg(target_arch = "wasm32")]
-use std::collections::HashMap as ObjectCacheMap;
 use std::collections::HashSet;
+#[cfg(not(target_arch = "wasm32"))]
+use std::hash::BuildHasher;
+use std::hash::RandomState;
 use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
@@ -288,6 +287,11 @@ impl CachedFormSpans {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+type ObjectCacheHasher = ahash::RandomState;
+#[cfg(target_arch = "wasm32")]
+type ObjectCacheHasher = RandomState;
+
 /// Size-bounded object cache with FIFO eviction.
 ///
 /// Wraps a map of object references to shared objects with byte-size tracking. Entries
@@ -300,7 +304,7 @@ impl CachedFormSpans {
 /// insert-once-read-once — higher-level caches (font caches, xobject stream
 /// cache) serve repeated lookups, so recency is not a useful signal here.
 struct BoundedObjectCache {
-    map: ObjectCacheMap<ObjectRef, Arc<Object>>,
+    map: HashMap<ObjectRef, Arc<Object>, ObjectCacheHasher>,
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
@@ -435,8 +439,15 @@ impl BoundedObjectStreamCache {
 
 impl BoundedObjectCache {
     fn new(max_bytes: usize) -> Self {
+        let seed_state = RandomState::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        let seed_state = {
+            // Derive private aHash keys without adding a second OS entropy call. ~keep
+            let seed = |index: u8| seed_state.hash_one((b"xberg PDF object cache", index));
+            ahash::RandomState::with_seeds(seed(0), seed(1), seed(2), seed(3))
+        };
         Self {
-            map: ObjectCacheMap::new(),
+            map: HashMap::with_hasher(seed_state),
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
