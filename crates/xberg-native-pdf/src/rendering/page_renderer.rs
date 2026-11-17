@@ -39,6 +39,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
+#[path = "color_operators.rs"]
+mod color_operators;
+const COLOR_OPERATOR_TRACE_TARGET: &str = module_path!();
+
 #[path = "image_budget.rs"]
 mod image_budget;
 #[path = "knockout.rs"]
@@ -1212,142 +1216,42 @@ impl PageRenderer {
                 }
 
                 Operator::SetFillRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (*r, *g, *b);
-                    gs.fill_color_space = "DeviceRGB".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*r, *g, *b]);
-                    // Device-family fill paint: per §11.7.3 the source
-                    // covers only the process channels, so any spot ink
-                    // identity recorded by a prior /Separation or
-                    // /DeviceN paint is no longer the active source.
-                    // The sidecar's per-paint spot mirror reads this
-                    // empty list as "no spot lane writes for this paint". ~keep
-                    gs.fill_spot_inks.clear();
-                    // ISO 32000-1 §8.6.3: the fill colour and colour
-                    // space are coupled — switching to /DeviceRGB
-                    // invalidates any prior /DeviceCMYK identity. Failing
-                    // to clear `fill_color_cmyk` here means the §11.7.4.3
-                    // overprint path would still see the prior paint's
-                    // CMYK quadruple as the "current source colour",
-                    // producing wrong B(c_b, c_s) = c_s values for the
-                    // new RGB paint's region. ~keep
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_fill_rgb(gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetStrokeRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (*r, *g, *b);
-                    gs.stroke_color_space = "DeviceRGB".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*r, *g, *b]);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_stroke_rgb(gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetFillGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (g, g, g);
-                    gs.fill_color_space = "DeviceGray".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.push(g);
-                    gs.fill_spot_inks.clear();
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillGray: {}", g);
+                    color_operators::set_fill_gray(gs_stack.current_mut(), *gray);
                 }
                 Operator::SetStrokeGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (g, g, g);
-                    gs.stroke_color_space = "DeviceGray".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.push(g);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeGray: {}", g);
+                    color_operators::set_stroke_gray(gs_stack.current_mut(), *gray);
                 }
                 Operator::SetFillCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (r, g, b);
-                    gs.fill_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.fill_color_space = "DeviceCMYK".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.fill_spot_inks.clear();
-                    tracing::trace!("SetFillCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_fill_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
                 }
                 Operator::SetStrokeCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (r, g, b);
-                    gs.stroke_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.stroke_color_space = "DeviceCMYK".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.stroke_spot_inks.clear();
-                    tracing::trace!("SetStrokeCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_stroke_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
                 }
 
-                Operator::SetFillColorSpace { name } => {
-                    // ISO 32000-1 §8.6.8: the `cs` operator shall also
-                    // set the current colour to its initial value, which
-                    // depends on the colour space. For Separation /
-                    // DeviceN the initial tint is 1.0 per colorant
-                    // (§8.6.6.4 / §8.6.6.5); for DeviceCMYK the initial
-                    // colour is (0, 0, 0, 1); device-family RGB / Gray
-                    // start at all-zeros. Failing to reset the colour
-                    // here means a paint after `cs /CS_B` without an
-                    // intervening `scn` would carry the prior space's
-                    // identity and tint, including its spot ink list —
-                    // round 2 QA pinned that the spot mirror would then
-                    // write the prior /CS_A's spot lane. ~keep
-                    let resolved = self.color_spaces.get(name).cloned();
-                    // §10.7.3: the §8.6.8 initial-colour evaluation runs an
-                    // ICC retarget for DeviceN /Process /ICCBased; thread
-                    // the live gs intent through so a prior `/Perceptual ri`
-                    // / ExtGState /RI propagates into the retarget tag pick. ~keep
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                Operator::SetFillColorSpace { name } => color_operators::set_fill_color_space(
+                    gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_space = name.clone();
-                    gs.fill_color_rgb = initial.rgb;
-                    gs.fill_color_cmyk = initial.cmyk;
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&initial.components);
-                    gs.fill_spot_inks = initial.spot_inks;
-                    // Selecting a colour space clears any previously selected
-                    // fill pattern; a fresh scn must re-name it (§8.7.3). ~keep
-                    gs.fill_pattern_name = None;
-                    tracing::trace!("SetFillColorSpace: {}", name);
-                }
-                Operator::SetStrokeColorSpace { name } => {
-                    let resolved = self.color_spaces.get(name).cloned();
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
+                Operator::SetStrokeColorSpace { name } => color_operators::set_stroke_color_space(
+                    gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_space = name.clone();
-                    gs.stroke_color_rgb = initial.rgb;
-                    gs.stroke_color_cmyk = initial.cmyk;
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&initial.components);
-                    gs.stroke_spot_inks = initial.spot_inks;
-                }
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
                 Operator::SetFillColor { components } => {
                     let gs = gs_stack.current_mut();
                     let space_name = gs.fill_color_space.clone();
