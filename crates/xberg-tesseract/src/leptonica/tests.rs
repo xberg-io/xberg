@@ -1,7 +1,34 @@
+use std::cell::Cell;
+
 use super::*;
 
 const TEST_X_RESOLUTION: i32 = 240;
 const TEST_Y_RESOLUTION: i32 = 180;
+
+thread_local! {
+    static GEOMETRY_DISPATCH_BLOCKED: Cell<bool> = const { Cell::new(false) };
+}
+
+pub(super) fn check_geometry_dispatch() -> Result<()> {
+    if GEOMETRY_DISPATCH_BLOCKED.get() {
+        return Err(TesseractError::OcrError);
+    }
+    Ok(())
+}
+
+fn without_geometry_dispatch(check: impl FnOnce()) {
+    struct RestoreDispatch<'a>(&'a Cell<bool>, bool);
+    impl Drop for RestoreDispatch<'_> {
+        fn drop(&mut self) {
+            self.0.set(self.1);
+        }
+    }
+
+    GEOMETRY_DISPATCH_BLOCKED.with(|blocked| {
+        let _restore = RestoreDispatch(blocked, blocked.replace(true));
+        check();
+    });
+}
 
 fn make_rgb_pix(width: u32, height: u32, fill: u8) -> Pix {
     let data = vec![fill; (width * height * 3) as usize];
@@ -130,6 +157,44 @@ fn typed_thresholded_images_do_not_share_engine_metadata() {
     assert_ne!(first.as_ptr(), second.as_ptr());
     assert_eq!(second.get_resolution().unwrap(), source_resolution);
     assert_eq!((second.width(), second.height(), second.depth()), (64, 64, 1));
+}
+
+#[test]
+fn scale_wrapper_rejects_invalid_geometry_before_native_dispatch() {
+    let pix = make_rgb_pix(4, 4, 128);
+    without_geometry_dispatch(|| {
+        // A valid request establishes that the interlock catches the dispatch path. ~keep
+        assert!(matches!(pix.scale(1.5, 1.5), Err(TesseractError::OcrError)));
+        assert!(matches!(
+            pix.scale(0.0, 1.0),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            pix.scale(1.0, f32::NAN),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    });
+    let output = pix.scale(1.5, 1.5).expect("valid scaling after the interlock");
+    assert_eq!((output.width(), output.height()), (6, 6));
+}
+
+#[test]
+fn clip_wrapper_rejects_overflow_before_native_dispatch() {
+    let pix = make_rgb_pix(4, 4, 128);
+    without_geometry_dispatch(|| {
+        // A valid request establishes that the interlock catches the dispatch path. ~keep
+        assert!(matches!(pix.clip_rectangle(1, 1, 2, 2), Err(TesseractError::OcrError)));
+        assert!(matches!(
+            pix.clip_rectangle(1, 0, i32::MAX, 1),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            pix.clip_rectangle(0, 1, 1, i32::MAX),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    });
+    let output = pix.clip_rectangle(1, 1, 2, 2).expect("valid crop after the interlock");
+    assert_eq!((output.width(), output.height()), (2, 2));
 }
 
 #[test]

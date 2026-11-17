@@ -757,6 +757,8 @@ impl Pix {
     /// ```
     pub fn scale(&self, sx: f32, sy: f32) -> Result<Pix> {
         validate_scale(self.width(), self.height(), self.depth(), sx, sy)?;
+        #[cfg(test)]
+        tests::check_geometry_dispatch()?;
         // SAFETY: self keeps the source live. The factors and native dimension and kernel
         // conversions were checked above. A non-null result transfers one owned reference. ~keep
         let result = unsafe { pixScale(self.ptr, sx, sy) };
@@ -774,6 +776,8 @@ impl Pix {
     /// Returns `TesseractError::NullPointerError` if the crop fails.
     pub fn clip_rectangle(&self, x: i32, y: i32, w: i32, h: i32) -> Result<Pix> {
         validate_clip_endpoints(x, y, w, h)?;
+        #[cfg(test)]
+        tests::check_geometry_dispatch()?;
         // SAFETY: The endpoints fit the signed arithmetic used by boxCreate.
         // A non-null result is an owned Box reference. ~keep
         let box_ = unsafe { boxCreate(x, y, w, h) };
