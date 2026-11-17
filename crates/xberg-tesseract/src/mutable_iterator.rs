@@ -11,15 +11,27 @@ use crate::result_iterator::{
     TessResultIteratorWordRecognitionLanguage,
 };
 
-/// Wraps a native iterator allocation for result-iterator operations.
-/// The constructor takes a raw handle and cannot check its type, ownership, or lifetime.
-/// The originating API must keep the recognition data valid during iteration.
+/// Owns a native iterator allocation for result-iterator operations.
+///
+/// # Safety
+///
+/// Queries require a live, uniquely owned handle compatible with `TessResultIterator` and
+/// its original `PAGE_RES`. That data belongs to the originating `TessBaseAPI`, which
+/// must remain live and must not run Init, SetImage, Recognize, Clear, End, DetectOS
+/// or any operation that replaces or invalidates those results while the iterator is in use.
+///
+/// The raw constructor does not validate ownership, type or backing lifetime.
+/// The mutex only serializes calls through this wrapper. These requirements are not enforced
+/// by the API. See [#3228](https://github.com/xberg-io/xberg/issues/3228).
 pub struct MutableIterator {
     handle: Arc<Mutex<*mut c_void>>,
 }
 
-// The mutex serializes wrapper calls only. The backing native data must remain valid across uses. ~keep
+// SAFETY: Moving the wrapper transfers the handle and its deletion obligation without accessing native data.
+// Subsequent use or deletion still depends on the ownership and coordination in MutableIterator's Safety section (#3228). ~keep
 unsafe impl Send for MutableIterator {}
+// SAFETY: Shared methods serialize native access through this wrapper's mutex. Access through
+// other wrappers or the API must be externally coordinated as in MutableIterator's Safety section (#3228). ~keep
 unsafe impl Sync for MutableIterator {}
 
 impl MutableIterator {
@@ -41,7 +53,8 @@ impl MutableIterator {
     /// * `level` - Level of the text.
     pub fn get_utf8_text(&self, level: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The iterator is locked. The caller must pass a valid native level; a non-null result is owned. ~keep
+        // SAFETY: The iterator is locked. A non-null text result is owned.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         let text_ptr = unsafe { TessResultIteratorGetUTF8Text(*handle, level) };
         if text_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -61,7 +74,8 @@ impl MutableIterator {
     /// * `level` - Level of the confidence.
     pub fn confidence(&self, level: i32) -> Result<f32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The iterator is locked. The caller must pass a valid native level; the result is a C float. ~keep
+        // SAFETY: The iterator is locked. The confidence result is a C float.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorConfidence(*handle, level) })
     }
 
@@ -72,7 +86,8 @@ impl MutableIterator {
     /// Returns the recognition language as a `String` if successful, otherwise returns an error.
     pub fn word_recognition_language(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The iterator is locked while requesting the language string borrowed from Tesseract. ~keep
+        // SAFETY: The iterator is locked while requesting the language string borrowed from Tesseract.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         let lang_ptr = unsafe { TessResultIteratorWordRecognitionLanguage(*handle) };
         if lang_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -98,7 +113,8 @@ impl MutableIterator {
         let mut pointsize = 0;
         let mut font_id = 0;
 
-        // SAFETY: The iterator is locked and the local C int outputs match BOOL and int slots. ~keep
+        // SAFETY: The iterator is locked and the local C int outputs match BOOL and int slots.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         let result = unsafe {
             TessResultIteratorWordFontAttributes(
                 *handle,
@@ -136,7 +152,8 @@ impl MutableIterator {
     /// Returns `Ok(true)` if the current word is from the dictionary, otherwise returns `Ok(false)`.
     pub fn word_is_from_dictionary(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes the native dictionary query on the current word. ~keep
+        // SAFETY: The guard serializes the native dictionary query on the current word.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorWordIsFromDictionary(*handle) != 0 })
     }
 
@@ -147,7 +164,8 @@ impl MutableIterator {
     /// Returns `Ok(true)` if the current word is numeric, otherwise returns `Ok(false)`.
     pub fn word_is_numeric(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes the native numeric query on the current word. ~keep
+        // SAFETY: The guard serializes the native numeric query on the current word.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorWordIsNumeric(*handle) != 0 })
     }
 
@@ -158,7 +176,8 @@ impl MutableIterator {
     /// Returns `Ok(true)` if the current symbol is superscript, otherwise returns `Ok(false)`.
     pub fn symbol_is_superscript(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes the native query at the current symbol. ~keep
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsSuperscript(*handle) != 0 })
     }
 
@@ -169,7 +188,8 @@ impl MutableIterator {
     /// Returns `Ok(true)` if the current symbol is subscript, otherwise returns `Ok(false)`.
     pub fn symbol_is_subscript(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes the native query at the current symbol. ~keep
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsSubscript(*handle) != 0 })
     }
 
@@ -180,7 +200,8 @@ impl MutableIterator {
     /// Returns `Ok(true)` if the current symbol is dropcap, otherwise returns `Ok(false)`.
     pub fn symbol_is_dropcap(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes the native query at the current symbol. ~keep
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsDropcap(*handle) != 0 })
     }
 
@@ -195,7 +216,8 @@ impl MutableIterator {
     /// Returns `true` if the next iterator is successful, otherwise returns `false`.
     pub fn next(&self, level: i32) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexError)?;
-        // SAFETY: The guard serializes advancement. The caller must pass a valid native level. ~keep
+        // SAFETY: The guard serializes advancement. The raw level is passed as a C int.
+        // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         Ok(unsafe { TessResultIteratorNext(*handle, level) != 0 })
     }
 }
@@ -203,7 +225,8 @@ impl MutableIterator {
 impl Drop for MutableIterator {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
-            // SAFETY: The constructor must take ownership of an iterator compatible with this native deleter. ~keep
+            // SAFETY: The raw handle must be an owned pointer usable as a ResultIterator base.
+            // TessResultIteratorDelete deletes through that base's virtual destructor. ~keep
             unsafe { TessResultIteratorDelete(*handle) };
         }
     }

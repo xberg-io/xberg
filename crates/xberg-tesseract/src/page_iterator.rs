@@ -49,15 +49,27 @@ pub struct ParagraphExtractionOutcome {
     pub skipped_no_bbox: usize,
 }
 
-/// Owns a Tesseract page iterator but borrows the page data from its originating API.
-/// The raw handle must remain valid and uniquely owned. The mutex does not keep the API alive
-/// or prevent API calls such as SetImage, Recognize or Clear from invalidating the iterator.
+/// Owns a native Tesseract page iterator allocation.
+///
+/// # Safety
+///
+/// Queries require a live, uniquely owned `TessPageIterator` handle (or a compatible
+/// page base) and its original `PAGE_RES`. That data belongs to the originating
+/// `TessBaseAPI`, which must remain live and must not run Init, SetImage, Recognize, Clear,
+/// End, DetectOS or any operation that replaces or invalidates those results while in use.
+///
+/// The raw constructor does not validate ownership, type or backing lifetime. The public handle also permits aliasing or replacement.
+/// The mutex only serializes calls through this wrapper. These requirements are not enforced
+/// by the API. See [#3228](https://github.com/xberg-io/xberg/issues/3228).
 pub struct PageIterator {
     pub handle: Arc<Mutex<*mut c_void>>,
 }
 
-// The mutex serializes wrapper calls only. The backing native data must remain valid across uses. ~keep
+// SAFETY: Moving the wrapper transfers the handle and its deletion obligation without accessing native data.
+// Subsequent use or deletion still depends on the ownership and coordination in PageIterator's Safety section (#3228). ~keep
 unsafe impl Send for PageIterator {}
+// SAFETY: Shared methods serialize native access through this wrapper's mutex. Access through
+// other wrappers or the API must be externally coordinated as in PageIterator's Safety section (#3228). ~keep
 unsafe impl Sync for PageIterator {}
 
 impl PageIterator {
@@ -79,7 +91,8 @@ impl PageIterator {
     /// Begins the iteration.
     pub fn begin(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid. ~keep
+        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         unsafe { TessPageIteratorBegin(*handle) };
         Ok(())
     }
@@ -95,7 +108,8 @@ impl PageIterator {
     /// Returns `Result<bool>` - `Ok(true)` if the next iterator is successful, `Ok(false)` otherwise.
     pub fn next(&self, level: TessPageIteratorLevel) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The guard serializes advancement, and the level is a native iterator enum value. ~keep
+        // SAFETY: The guard serializes advancement, and the level is a native iterator enum value.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         Ok(unsafe { TessPageIteratorNext(*handle, level as c_int) != 0 })
     }
 
@@ -110,7 +124,8 @@ impl PageIterator {
     /// Returns `Result<bool>` - `Ok(true)` if at the beginning, `Ok(false)` otherwise.
     pub fn is_at_beginning_of(&self, level: TessPageIteratorLevel) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The guard serializes the position query and the level is a native enum value. ~keep
+        // SAFETY: The guard serializes the position query and the level is a native enum value.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         Ok(unsafe { TessPageIteratorIsAtBeginningOf(*handle, level as c_int) != 0 })
     }
 
@@ -126,7 +141,8 @@ impl PageIterator {
     /// Returns `Result<bool>` - `Ok(true)` if at the final element, `Ok(false)` otherwise.
     pub fn is_at_final_element(&self, level: TessPageIteratorLevel, element: TessPageIteratorLevel) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The guard serializes the query. The two levels use the native enum values. ~keep
+        // SAFETY: The guard serializes the query. The two levels use the native enum values.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         Ok(unsafe { TessPageIteratorIsAtFinalElement(*handle, level as c_int, element as c_int) != 0 })
     }
 
@@ -145,7 +161,8 @@ impl PageIterator {
         let mut right = 0;
         let mut bottom = 0;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The locked iterator is queried with four writable C int outputs on the stack. ~keep
+        // SAFETY: The locked iterator is queried with four writable C int outputs on the stack.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         let result = unsafe {
             TessPageIteratorBoundingBox(*handle, level as c_int, &mut left, &mut top, &mut right, &mut bottom)
         };
@@ -163,7 +180,8 @@ impl PageIterator {
     /// Returns the block type as a `TessPolyBlockType`.
     pub fn block_type(&self) -> Result<TessPolyBlockType> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: Read the current block type while the live iterator is locked. ~keep
+        // SAFETY: Read the current block type while the live iterator is locked.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         let block_type = unsafe { TessPageIteratorBlockType(*handle) };
         Ok(TessPolyBlockType::from_int(block_type))
     }
@@ -183,7 +201,8 @@ impl PageIterator {
         let mut x2 = 0;
         let mut y2 = 0;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The locked iterator has four writable C int outputs. The caller must pass a valid level. ~keep
+        // SAFETY: The locked iterator has four writable C int outputs. The raw level is passed as a C int.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         let result = unsafe { TessPageIteratorBaseline(*handle, level, &mut x1, &mut y1, &mut x2, &mut y2) };
         if result == 0 {
             Err(TesseractError::InvalidParameterError)
@@ -203,7 +222,8 @@ impl PageIterator {
         let mut textline_order = 0;
         let mut deskew_angle = 0.0;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: The locked call writes three enum outputs with C int layout and one C float output. ~keep
+        // SAFETY: The locked call writes three enum outputs with C int layout and one C float output.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         unsafe {
             TessPageIteratorOrientation(
                 *handle,
@@ -235,11 +255,13 @@ impl PageIterator {
         let level = TessPageIteratorLevel::RIL_BLOCK as c_int;
         let mut blocks = Vec::new();
 
-        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid. ~keep
+        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         unsafe { TessPageIteratorBegin(*handle) };
 
         loop {
-            // SAFETY: Read the current block type while the live iterator is locked. ~keep
+            // SAFETY: Read the current block type while the live iterator is locked.
+            // Requires the live handle and backing data documented on `PageIterator`. ~keep
             let block_type = unsafe { TessPageIteratorBlockType(*handle) };
 
             let mut left: c_int = 0;
@@ -247,7 +269,8 @@ impl PageIterator {
             let mut right: c_int = 0;
             let mut bottom: c_int = 0;
 
-            // SAFETY: The locked iterator is queried with four writable C int outputs on the stack. ~keep
+            // SAFETY: The locked iterator is queried with four writable C int outputs on the stack.
+            // Requires the live handle and backing data documented on `PageIterator`. ~keep
             let bbox_ok =
                 unsafe { TessPageIteratorBoundingBox(*handle, level, &mut left, &mut top, &mut right, &mut bottom) };
 
@@ -261,7 +284,8 @@ impl PageIterator {
                 });
             }
 
-            // SAFETY: The guard serializes advancement, and the level is a native iterator enum value. ~keep
+            // SAFETY: The guard serializes advancement, and the level is a native iterator enum value.
+            // Requires the live handle and backing data documented on `PageIterator`. ~keep
             let has_next = unsafe { TessPageIteratorNext(*handle, level) };
             if has_next == 0 {
                 break;
@@ -288,7 +312,8 @@ impl PageIterator {
         let mut skipped_no_para_info = 0usize;
         let mut skipped_no_bbox = 0usize;
 
-        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid. ~keep
+        // SAFETY: Reset the live iterator while holding its mutex. Its backing page must remain valid.
+        // Requires the live handle and backing data documented on `PageIterator`. ~keep
         unsafe { TessPageIteratorBegin(*handle) };
 
         loop {
@@ -299,7 +324,8 @@ impl PageIterator {
             let mut right: c_int = 0;
             let mut bottom: c_int = 0;
 
-            // SAFETY: The locked iterator is queried with four writable C int outputs on the stack. ~keep
+            // SAFETY: The locked iterator is queried with four writable C int outputs on the stack.
+            // Requires the live handle and backing data documented on `PageIterator`. ~keep
             let bbox_ok =
                 unsafe { TessPageIteratorBoundingBox(*handle, level, &mut left, &mut top, &mut right, &mut bottom) };
 
@@ -321,7 +347,8 @@ impl PageIterator {
                 skipped_no_bbox += 1;
             }
 
-            // SAFETY: The guard serializes advancement, and the level is a native iterator enum value. ~keep
+            // SAFETY: The guard serializes advancement, and the level is a native iterator enum value.
+            // Requires the live handle and backing data documented on `PageIterator`. ~keep
             let has_next = unsafe { TessPageIteratorNext(*handle, level) };
             if has_next == 0 {
                 break;
@@ -361,7 +388,8 @@ fn read_paragraph_info(handle: *mut c_void) -> Option<(TessParagraphJustificatio
     let mut is_list_item_raw: c_int = 0;
     let mut is_crown_raw: c_int = 0;
     let mut first_line_indent: c_int = NO_PARAGRAPH_MODEL;
-    // SAFETY: The caller holds the iterator lock. The four stack outputs match the C enum, BOOL and int slots. ~keep
+    // SAFETY: The caller holds the iterator lock. The four stack outputs match the C enum, BOOL and int slots.
+    // Requires the live handle and backing data documented on `PageIterator`. ~keep
     unsafe {
         TessPageIteratorParagraphInfo(
             handle,
@@ -394,7 +422,9 @@ fn decode_paragraph_info(
 impl Drop for PageIterator {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
-            // SAFETY: This wrapper must own the iterator allocation. The matching native deleter frees it. ~keep
+            // SAFETY: The handle must be an owned PageIterator pointer or its compatible base.
+            // get_page_iterator uses an unadjusted ResultIterator pointer and relies on that ABI's
+            // single-inheritance base layout. Deletion through PageIterator uses its virtual destructor. ~keep
             unsafe { TessPageIteratorDelete(*handle) };
         }
     }
