@@ -97,6 +97,9 @@ run_pdf_cases() {
   run_exact automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_khmer --test pdf_khmer_minority_2826
   run_exact mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink --test pdf_khmer_minority_2826
   run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
+  run_exact 'pdf::structure::paragraphs::tests::continuation_merge_distinguishes_zero_baseline_from_missing_geometry' --lib
+  run_exact 'pdf::structure::adapters::tests::ocr_line_baseline_requires_a_source_box' --lib
+  run_exact 'pdf::structure::pipeline::tests::native_paragraphs_retain_the_measured_zero_line_baseline' --lib
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
@@ -116,6 +119,13 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
+  expected=$((expected + 5))
+  local tall_scan_policy='extractors::pdf::ocr::tall_source::policy::tests'
+  run_exact "$tall_scan_policy::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render" --lib
+  run_exact "$tall_scan_policy::reports_the_actual_density_of_a_budgeted_pdf_read" --lib
+  run_exact "$tall_scan_policy::strip_recovery_early_returns_report_only_the_proven_density_once" --lib
+  run_exact an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm --test pdf_tall_scan_strips
+  run_exact the_mixed_route_names_the_configuration_that_blocked_strip_recovery --test pdf_tall_scan_strips
 }
 
 run_retry_timeout_cases() {
@@ -349,6 +359,11 @@ run_office_page_cases() {
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
     run_exact "extractors::docx::tests::$test_name" --lib
   done
+  run_exact 'extractors::docx::tests::should_queue_single_docx_parse_and_honor_cancellation_before_it_starts' --lib
+  run_exact 'extractors::docx::tests::should_parse_inline_without_tokio_and_check_cancellation_before_parsing' --lib
+  run_exact 'extractors::docx::tests::should_resume_a_blocking_docx_worker_panic' --lib
+  run_exact 'extractors::docx::tests::should_report_docx_worker_shutdown_as_cancellation' --lib
+  run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
@@ -406,7 +421,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=120
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
@@ -431,7 +446,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=35
+  expected=40
   run_office_page_cases
   ;;
 api-jobs)

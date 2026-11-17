@@ -1,6 +1,10 @@
 $OrtVersion = $args[0]
 if ([string]::IsNullOrWhiteSpace($OrtVersion)) { throw "Usage: windows.ps1 <ortVersion> [destDir] [archId] [strategy]" }
 
+if ($OrtVersion -cnotmatch '\A[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?\z') {
+  throw "Invalid ONNX Runtime version: $OrtVersion"
+}
+
 $DestDir = if ($args.Count -ge 2 -and -not [string]::IsNullOrWhiteSpace($args[1])) { $args[1] } else { "crates/xberg-node" }
 $ArchId = if ($args.Count -ge 3) { $args[2] } else { "" }
 $Strategy = if ($args.Count -ge 4 -and -not [string]::IsNullOrWhiteSpace($args[3])) { $args[3] } else { "system" }
@@ -19,11 +23,28 @@ $OrtLib = Join-Path $OrtRoot 'lib'
 if (-Not (Test-Path $OrtRoot)) {
   Write-Host "Cache miss: Downloading ONNX Runtime $OrtVersion"
   $Archive = "onnxruntime-win-$ArchId-$OrtVersion.zip"
+  # A custom version needs a trusted manifest with its archive's digest.
+  $Checksums = if ($env:ORT_CHECKSUMS_FILE) { $env:ORT_CHECKSUMS_FILE } else { Join-Path $PSScriptRoot 'checksums.sha256' }
+  $Pins = @(foreach ($Line in Get-Content -LiteralPath $Checksums -ErrorAction Stop) {
+    $Fields = $Line.Trim() -split '\s+'
+    if ($Fields.Count -ge 2 -and $Fields[1] -ceq $Archive) {
+      $Fields[0]
+    }
+  })
+  if ($Pins.Count -ne 1 -or $Pins[0] -cnotmatch '\A[a-f0-9]{64}\z') {
+    throw "Expected exactly one pinned SHA-256 for $Archive"
+  }
   $DownloadPath = Join-Path $env:TEMP $Archive
-  Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$OrtVersion/$Archive" -OutFile $DownloadPath -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5
+  Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$OrtVersion/$Archive" -OutFile $DownloadPath -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5 -ErrorAction Stop
+  $ActualDigest = (Get-FileHash -LiteralPath $DownloadPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+  if ($ActualDigest -cne $Pins[0]) {
+    throw "SHA-256 mismatch for ${Archive}: expected $($Pins[0]), observed $ActualDigest"
+  }
+  Write-Host "${Archive}: SHA-256 verified"
   New-Item -ItemType Directory -Path $ExtractRoot -Force | Out-Null
-  Expand-Archive -Path $DownloadPath -DestinationPath $ExtractRoot -Force
+  Expand-Archive -LiteralPath $DownloadPath -DestinationPath $ExtractRoot -Force -ErrorAction Stop
 } else {
+  # The extracted-tree cache does not retain the archive for re-verification.
   Write-Host "Cache hit: Using cached ONNX Runtime $OrtVersion"
 }
 
@@ -57,7 +78,7 @@ if ($DllDirs.Count -eq 0) {
   $AnyDll = Get-ChildItem -Path $OrtRoot -Recurse -Filter "*.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($AnyDll) { $DllDirs += $AnyDll.DirectoryName }
 }
-$DllDirs = $DllDirs | Select-Object -Unique
+$DllDirs = @($DllDirs | Select-Object -Unique)
 if ($DllDirs.Count -eq 0) {
   Write-Error "ERROR: No ONNX Runtime runtime DLLs found under $OrtRoot"
   Get-ChildItem -Path $OrtRoot -Recurse | Write-Host

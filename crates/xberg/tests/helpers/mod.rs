@@ -227,24 +227,43 @@ pub fn assert_mime_type(result: &ExtractedDocument, expected: &str) {
     );
 }
 
-/// Skip test if file doesn't exist (for optional test files).
-///
-/// Returns true if test should be skipped.
+/// Skip a missing local corpus fixture. When CI requires the corpus, an unavailable
+/// fixture fails the test with the path and the filesystem error.
 pub fn skip_if_missing(relative_path: &str) -> bool {
-    let path = get_test_file_path(relative_path);
-    if !path.exists() {
-        tracing::debug!("Skipping test: file not found at {}", path.display());
-        return true;
-    }
-    false
+    !fixture_available(&get_test_file_path(relative_path), require_test_fixtures())
 }
 
-/// Check if test documents directory exists and has files.
-///
-/// This is useful for CI environments where test_documents might
-/// be a git submodule that hasn't been initialized.
+fn require_test_fixtures() -> bool {
+    std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_some_and(|value| value == "1")
+}
+
+fn fixture_available(path: &Path, required: bool) -> bool {
+    let opened = std::fs::metadata(path).and_then(|metadata| {
+        if !metadata.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "expected a regular file",
+            ));
+        }
+        std::fs::File::open(path)
+    });
+    match opened {
+        Ok(_) => true,
+        Err(error) if required => panic!("required test fixture unavailable at {}: {error}", path.display()),
+        Err(error) => {
+            tracing::debug!("SKIP: fixture {} not available ({error})", path.display());
+            false
+        }
+    }
+}
+
+/// Check whether the corpus is present. In required runs, a missing corpus manifest
+/// fails instead of letting callers return before they reach their per-fixture checks.
 pub fn test_documents_available() -> bool {
     let dir = get_test_documents_dir();
+    if require_test_fixtures() {
+        return fixture_available(&dir.join("corpus.lock.json"), true);
+    }
     dir.exists() && dir.read_dir().map(|mut d| d.next().is_some()).unwrap_or(false)
 }
 
