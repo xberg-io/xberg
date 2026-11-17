@@ -436,7 +436,9 @@ fn render_with_pipeline_env(value: Option<&str>) -> Vec<u8> {
 #[test]
 #[ignore = "subprocess entry point for the wave-5 environment probes"]
 fn render_pipeline_env_child() {
-    let output = std::env::var_os(CHILD_OUTPUT).expect("parent supplied the render output path");
+    let Some(output) = std::env::var_os(CHILD_OUTPUT) else {
+        return;
+    };
     let expected = std::env::var_os(CHILD_EXPECTED_ENV);
     let value = std::env::var_os(PIPELINE_ENV);
     if value != expected {
@@ -494,14 +496,16 @@ fn qa_wave5_env_var_zero_is_inert() {
     );
 }
 
-/// The retired toggle ignores nonnumeric values as well.
+/// The retired toggle ignores empty and nonnumeric values as well.
 #[test]
 fn qa_wave5_env_var_arbitrary_values_inert() {
     let baseline = render_with_pipeline_env(None);
+    let with_empty = render_with_pipeline_env(Some(""));
     let with_true = render_with_pipeline_env(Some("true"));
     let with_false_caps = render_with_pipeline_env(Some("FALSE"));
     let with_garbage = render_with_pipeline_env(Some("garbage-string"));
 
+    assert_eq!(baseline, with_empty);
     assert_eq!(baseline, with_true);
     assert_eq!(baseline, with_false_caps);
     assert_eq!(baseline, with_garbage);
