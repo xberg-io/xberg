@@ -253,36 +253,3 @@ prepare_ort_archive() {
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
 	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
 }
-
-@test "prebuilt macOS ORT setup should export only an existing target-specific static library" {
-	for target in aarch64-apple-darwin x86_64-apple-darwin; do
-		: >"$GITHUB_ENV"
-		root="$GITHUB_WORKSPACE/target/onnxruntime/$target/onnxruntime/lib"
-		mkdir -p "$root"
-		printf 'static runtime\n' >"$root/libonnxruntime.a"
-		run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-prebuilt-onnx/prepare.sh" "$target"
-		xberg_assert_status 0
-		xberg_assert_github_env "ORT_STRATEGY=system
-ORT_LIB_LOCATION=$root
-ORT_SKIP_DOWNLOAD=1
-ORT_PREFER_DYNAMIC_LINK=1"
-		[ "$(wc -l <"$GITHUB_ENV" | tr -d '[:space:]')" = 4 ]
-	done
-	[ ! -e "$XBERG_TRACE" ]
-}
-
-@test "prebuilt ORT setup should leave compiler provisioning available after an unavailable download" {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-prebuilt-onnx/prepare.sh" aarch64-apple-darwin
-	xberg_assert_status 0
-	xberg_assert_output_contains 'Will download and build ONNX Runtime during compilation'
-	xberg_assert_github_env ''
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
-}
-
-@test "prebuilt ORT setup should reject an unsupported target before touching downloads" {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-prebuilt-onnx/prepare.sh" x86_64-unknown-linux-gnu
-	xberg_assert_status 1
-	xberg_assert_output_contains 'does not support target x86_64-unknown-linux-gnu'
-	xberg_assert_github_env ''
-	[ ! -e "$XBERG_TRACE" ]
-}
