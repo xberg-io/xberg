@@ -358,3 +358,51 @@ fn bounded_page_local_paths_stop_at_a_form_xobject_or_an_unknown_name() {
     assert_eq!(page_local_path_count(&page_with_xobject("/X1 Do", FORM_X1)), 0);
     assert_eq!(page_local_path_count(&page_with_xobject("/X9 Do", IMAGE_X1)), 0);
 }
+
+fn pagination_separator_test_doc(content: &str) -> PdfDocument {
+    let page = b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <<>> >>";
+    let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    PdfDocument::from_bytes(build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[(3, page.as_slice()), (4, stream.as_bytes())],
+    ))
+    .unwrap()
+}
+
+#[test]
+fn bottom_pagination_query_requires_explicit_attachment_and_a_filled_rule() {
+    use crate::geometry::Rect;
+
+    let rect = "0 g 70 90 144 0.5 re f*";
+    let bottom = "/Artifact << /Type /Pagination /Attached [/Bottom] >> BDC";
+    let cases = [
+        (
+            format!("{bottom} q 0 0 612 792 re W* n Q {rect} EMC"),
+            Some(Rect::new(70.0, 90.0, 144.0, 0.5)),
+        ),
+        (rect.to_owned(), None),
+        (
+            format!("/Artifact << /Type /Pagination /Attached [/Top] >> BDC {rect} EMC"),
+            None,
+        ),
+        (
+            format!("/Artifact << /Type /Pagination /Subtype /Footer >> BDC {rect} EMC"),
+            None,
+        ),
+        (format!("{bottom} 0 g 70 90 144 0.5 re S EMC"), None),
+        (format!("{bottom} q 0 0 20 20 re W* n {rect} Q EMC"), None),
+        (format!("{bottom} {rect}"), None),
+    ];
+    for (stream, expected) in cases {
+        let document = pagination_separator_test_doc(&stream);
+        assert_eq!(
+            document.bottom_pagination_separator_bounds(0).unwrap(),
+            expected.into_iter().collect::<Vec<_>>(),
+            "{stream}"
+        );
+        let normal_paths = document.extract_paths(0).unwrap();
+        assert_eq!(normal_paths.len(), 1, "{stream}");
+        assert!(normal_paths[0].artifact_type.is_none(), "{stream}");
+    }
+}
