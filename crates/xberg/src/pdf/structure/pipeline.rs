@@ -4528,7 +4528,7 @@ fn build_document_structure_with_native(
 
     if let Some(native_document) = native_document {
         for (page, paragraphs) in all_page_paragraphs.iter_mut().enumerate() {
-            linked_footnote::suppress(
+            linked_footnote::classify(
                 paragraphs,
                 include_footnotes,
                 || linked_footnote::page_separator(native_document, page),
@@ -7803,21 +7803,11 @@ fn retain_page_furniture_safely(paragraphs: &mut Vec<PdfParagraph>) {
         return;
     }
 
-    let total_alphanum: usize = paragraphs.iter().map(paragraph_alphanum_len).sum();
-
-    if total_alphanum > 0 {
-        let furniture_alphanum: usize = paragraphs
-            .iter()
-            .filter(|p| p.is_page_furniture)
-            .map(paragraph_alphanum_len)
-            .sum();
-
-        if furniture_alphanum * 100 > total_alphanum * 30 {
-            for para in paragraphs.iter_mut() {
-                para.is_page_furniture = false;
-            }
-            return;
+    if page_furniture_exceeds_budget(paragraphs, |_, paragraph| paragraph.is_page_furniture) {
+        for para in paragraphs.iter_mut() {
+            para.is_page_furniture = false;
         }
+        return;
     }
 
     const MIN_SUBSTANTIVE_CHARS: usize = 80;
@@ -7828,6 +7818,20 @@ fn retain_page_furniture_safely(paragraphs: &mut Vec<PdfParagraph>) {
         }
         paragraph_alphanum_len(p) > MIN_SUBSTANTIVE_CHARS
     });
+}
+
+fn page_furniture_exceeds_budget(
+    paragraphs: &[PdfParagraph],
+    is_furniture: impl Fn(usize, &PdfParagraph) -> bool,
+) -> bool {
+    let total: usize = paragraphs.iter().map(paragraph_alphanum_len).sum();
+    let furniture: usize = paragraphs
+        .iter()
+        .enumerate()
+        .filter(|(index, paragraph)| is_furniture(*index, paragraph))
+        .map(|(_, paragraph)| paragraph_alphanum_len(paragraph))
+        .sum();
+    furniture * 100 > total * 30
 }
 
 /// Count alphanumeric characters in a paragraph's text content.

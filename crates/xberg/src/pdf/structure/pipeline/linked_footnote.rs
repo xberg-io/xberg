@@ -1,4 +1,5 @@
-//! Suppress short linked footnotes when a native bottom-pagination rule witnesses their position.
+//! Classify a short footnote confirmed by a superscript reference and a native bottom-pagination rule.
+//! No hyperlink is required. ~keep
 
 use super::{HyphenWitnesses, LayoutHint, LayoutHintClass, PdfParagraph, finite_paragraph_bbox};
 use crate::types::{BoundingBox, Table, document_structure::AnnotationKind};
@@ -53,8 +54,8 @@ impl PageRegions<'_> {
     }
 }
 
-pub(super) fn suppress(
-    paragraphs: &mut Vec<PdfParagraph>,
+pub(super) fn classify(
+    paragraphs: &mut [PdfParagraph],
     include_footnotes: bool,
     separator: impl FnOnce() -> Option<Rect>,
     image_placements: impl FnOnce() -> Option<Vec<Rect>>,
@@ -75,15 +76,43 @@ pub(super) fn suppress(
     let Some(rule) = separator() else {
         return;
     };
-    let mut matching =
-        candidates.filter(|(_, note)| note.below_rule(rule) && !regions.overlaps_figure_or_table(note.bounds));
-    if let Some((index, note)) = matching.next()
-        && matching.next().is_none()
+    let matching = candidates.find(|(_, note)| note.below_rule(rule) && !regions.overlaps_figure_or_table(note.bounds));
+    if let Some((index, note)) = matching
+        && is_only_text_below_rule(paragraphs, index, rule)
         && exactly_one_reference_above_rule(paragraphs, note.marker, rule.bottom(), hyphens)
+        && !super::page_furniture_exceeds_budget(paragraphs, |i, paragraph| i == index || paragraph.is_page_furniture)
         && image_placements().is_some_and(|placements| !placements.iter().any(|image| note.overlaps_image(*image)))
     {
-        paragraphs.remove(index);
+        let paragraph = &mut paragraphs[index];
+        paragraph.layout_class = Some(LayoutHintClass::Footnote);
+        paragraph.is_page_furniture = true;
     }
+}
+
+fn is_only_text_below_rule(paragraphs: &[PdfParagraph], note_index: usize, rule: Rect) -> bool {
+    paragraphs.iter().enumerate().all(|(index, paragraph)| {
+        index == note_index
+            || paragraph.is_page_furniture
+            || !has_text(paragraph)
+            || finite_paragraph_bbox(paragraph).is_some_and(|(left, bottom, right, _)| {
+                // Path bounds use PDF y-up coordinates. A short rule cannot place indented text in another column. ~keep
+                bottom >= rule.bottom()
+                    || ((right < rule.left() || left > rule.right())
+                        && matches!(
+                            paragraph.layout_class,
+                            Some(LayoutHintClass::Caption | LayoutHintClass::Picture | LayoutHintClass::Table)
+                        ))
+            })
+    })
+}
+
+fn has_text(paragraph: &PdfParagraph) -> bool {
+    !paragraph.text.trim().is_empty()
+        || paragraph
+            .lines
+            .iter()
+            .flat_map(|line| &line.segments)
+            .any(|segment| !segment.text.trim().is_empty())
 }
 
 struct Note<'a> {

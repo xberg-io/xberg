@@ -281,6 +281,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
+- **(pdf): Keep verified footnotes in document structure while omitting them from the body of structured native PDF extraction.** Plain and Markdown body output include these footnotes when `content_filter.include_footnotes = true`. (#2331, #3219)
+
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)
 
 - **(pdf): Preserve verified decimal column headers and keep decimal records in table bodies in HTML.**
