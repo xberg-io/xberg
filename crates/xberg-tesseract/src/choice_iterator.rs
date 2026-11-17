@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
 use std::sync::{Arc, Mutex};
 
-/// Owns a native choice iterator allocation. The current choice can borrow Tesseract word data.
+/// Owns a native choice iterator allocation. Choice text borrows Tesseract data for the source word.
 /// The constructor takes a raw handle and cannot check its type, ownership, or backing lifetime.
 pub struct ChoiceIterator {
     handle: Arc<Mutex<*mut c_void>>,
@@ -43,9 +43,8 @@ impl ChoiceIterator {
     /// Returns the UTF-8 text as a `String` if successful, otherwise returns an error.
     pub fn get_utf8_text(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // The returned pointer is owned by the iterator, so it must not be passed to
-        // `TessDeleteText`. ~keep
-        // SAFETY: The locked choice iterator borrows the current string from its native storage. ~keep
+        // SAFETY: The guard prevents advancement through this wrapper. The source word must remain valid.
+        // The returned string borrows Tesseract's internal storage and requires no deallocation. ~keep
         let text_ptr = unsafe { TessChoiceIteratorGetUTF8Text(*handle) };
         if text_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
