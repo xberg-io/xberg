@@ -232,6 +232,13 @@ class ModelFallbackTest(unittest.TestCase):
         with_model_failure = warning.replace("xberg.ocr{", 'layout{error="ONNX model failed"}:xberg.ocr{')
         assert runner._model_fallback({}, with_model_failure)
 
+        for case, failure in (
+            ("Khmer retry", warning.replace('script="Han"', 'script="Khmer"')),
+            ("trailing ONNX failure", warning + "; ONNX model failed"),
+        ):
+            with self.subTest(case=case):
+                assert runner._model_fallback({}, failure)
+
         for failure in (
             warning.replace("ocr::processor::model_context:", "layout::model_context:"),
             warning.replace("script retry: OSD: OCR operation failed", "Primary Tesseract models changed during OCR"),
@@ -284,6 +291,13 @@ class ModelFallbackTest(unittest.TestCase):
         assert not runner._model_fallback({"processing_warnings": warnings}, "")
         assert not runner._model_fallback({}, trace)
         assert not runner._model_fallback({"processing_warnings": warnings}, trace)
+        for case, message in (
+            ("mismatched bordered pair", warnings[1]["message"].replace("; bordered tables", "; tables")),
+            ("structured page zero", warnings[0]["message"].replace("page 1:", "page 0:")),
+        ):
+            with self.subTest(case=case):
+                document = {"processing_warnings": [{"source": "pdf_tables", "message": message}]}
+                assert runner._model_fallback(document, "")
         plain = runner.TRACE_ANSI.sub("", trace)
         with_span = plain.replace(
             "xberg::pdf::native::table:", 'layout{error="ONNX model failed"}: xberg::pdf::native::table:'
