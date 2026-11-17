@@ -89,9 +89,10 @@ impl<'a> HeifContext<'a> {
     pub fn read_reader(&mut self, reader: Box<dyn Reader + 'a>) -> Result<()> {
         let mut reader_box = Box::new(reader);
         let user_data = reader_box.as_mut() as *mut _ as *mut c_void;
-        // SAFETY: The callback table is static and user_data points to the inner Box held in
-        // a stable allocation. The outer Box is retained in source after a successful read;
-        // the failure path assumes libheif will no longer call this reader.
+        // SAFETY requirement: The callback table is static, and user_data points to a
+        // heap-held Box. Libheif installs its reader adapter before parsing and retains it
+        // on error. The Rust error return drops the Box without clearing that adapter,
+        // leaving its user_data dangling.
         let err = unsafe { lh::heif_context_read_from_reader(self.inner, &HEIF_READER, user_data, ptr::null()) };
         HeifError::from_heif_error(err)?;
         self.source = Source::Reader(reader_box);
@@ -124,9 +125,9 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn read_bytes<'b: 'a>(&mut self, bytes: &'b [u8]) -> Result<()> {
         self.source = Source::Memory(bytes);
-        // SAFETY: The slice supplies bytes.len() readable bytes and Source::Memory keeps it
-        // borrowed while registered here. Native handles that outlive this source still need
-        // the backing bytes to remain valid.
+        // SAFETY requirement: The slice supplies bytes.len() readable bytes, and this
+        // wrapper borrows it through Source::Memory. Image handles can retain the native
+        // context after this wrapper drops, but they do not retain the Rust input borrow.
         let err = unsafe {
             lh::heif_context_read_from_memory_without_copy(self.inner, bytes.as_ptr() as _, bytes.len(), ptr::null())
         };
@@ -569,8 +570,9 @@ impl<'a> HeifContext<'a> {
 #[allow(unsafe_code)]
 impl Drop for HeifContext<'_> {
     fn drop(&mut self) {
-        // SAFETY: This wrapper owns one releasable context pointer. Its registered source is
-        // still alive during the native free because Rust drops the fields after Drop returns.
+        // SAFETY: This wrapper owns one releasable context pointer. Rust drops its source
+        // after this call. Releasing this pointer may leave the native context alive through
+        // image handles, which do not carry the Rust source's lifetime.
         unsafe { lh::heif_context_free(self.inner) };
     }
 }
