@@ -1509,7 +1509,10 @@ impl PageRenderer {
                 | Operator::CurveToV { .. }
                 | Operator::CurveToY { .. }
                 | Operator::Rectangle { .. }
-                | Operator::ClosePath => path_operators::construct(&mut current_path, op),
+                | Operator::ClosePath => {
+                    let handled = path_operators::construct(&mut current_path, op);
+                    debug_assert!(handled, "only path construction operators are dispatched here");
+                }
 
                 Operator::Stroke | Operator::CloseStroke => {
                     if excluded_layer_depth == 0 {
@@ -9488,7 +9491,7 @@ mod tests {
         PdfDocument::from_bytes(pdf).expect("open minimal PDF")
     }
 
-    fn minimal_pdf_doc() -> PdfDocument {
+    pub(super) fn minimal_pdf_doc() -> PdfDocument {
         pdf_doc_with_extra_object(None)
     }
 
@@ -9858,105 +9861,6 @@ mod tests {
         let (r, g, b) = cmyk_to_rgb(1.0, 0.0, 0.0, 0.0);
         let q = |v: f32| (v * 255.0).round() as u8;
         assert_eq!([q(r), q(g), q(b)], [0x00, 0xAD, 0xEF]);
-    }
-
-    fn path_pixmap(operators: &[Operator]) -> Pixmap {
-        let mut pixmap = Pixmap::new(32, 32).unwrap();
-        PageRenderer::new(RenderOptions::default())
-            .execute_operators(
-                &mut pixmap,
-                Transform::identity(),
-                operators,
-                &minimal_pdf_doc(),
-                0,
-                &Object::Dictionary(HashMap::new()),
-            )
-            .expect("render path operators");
-        pixmap
-    }
-
-    #[test]
-    fn test_negative_rect_normalization() {
-        let rendered = path_pixmap(&[
-            Operator::Rectangle {
-                x: 8.0,
-                y: 24.0,
-                width: 16.0,
-                height: -16.0,
-            },
-            Operator::Fill,
-        ]);
-        assert_eq!(rendered.pixel(12, 12).unwrap().alpha(), 255);
-        assert_eq!(rendered.pixel(12, 4).unwrap().alpha(), 0);
-        assert_eq!(rendered.pixel(12, 28).unwrap().alpha(), 0);
-    }
-
-    #[test]
-    fn test_negative_rect_both_negative() {
-        let rendered = path_pixmap(&[
-            Operator::Rectangle {
-                x: 24.0,
-                y: 24.0,
-                width: -16.0,
-                height: -16.0,
-            },
-            Operator::Fill,
-        ]);
-        assert_eq!(rendered.pixel(12, 12).unwrap().alpha(), 255);
-        assert_eq!(rendered.pixel(4, 12).unwrap().alpha(), 0);
-        assert_eq!(rendered.pixel(28, 12).unwrap().alpha(), 0);
-    }
-
-    #[test]
-    fn shorthand_curves_match_their_full_cubic_path() {
-        let render = |curve_v, curve_y| {
-            path_pixmap(&[
-                Operator::MoveTo { x: 4.0, y: 4.0 },
-                Operator::LineTo { x: 4.0, y: 24.0 },
-                curve_v,
-                curve_y,
-                Operator::ClosePath,
-                Operator::Stroke,
-            ])
-        };
-        let shorthand = render(
-            Operator::CurveToV {
-                x2: 10.0,
-                y2: 25.0,
-                x3: 16.0,
-                y3: 16.0,
-            },
-            Operator::CurveToY {
-                x1: 22.0,
-                y1: 14.0,
-                x3: 26.0,
-                y3: 4.0,
-            },
-        );
-        let explicit = render(
-            Operator::CurveTo {
-                x1: 4.0,
-                y1: 24.0,
-                x2: 10.0,
-                y2: 25.0,
-                x3: 16.0,
-                y3: 16.0,
-            },
-            Operator::CurveTo {
-                x1: 22.0,
-                y1: 14.0,
-                x2: 26.0,
-                y2: 4.0,
-                x3: 26.0,
-                y3: 4.0,
-            },
-        );
-        assert!(
-            shorthand.pixel(16, 4).unwrap().alpha() > 0,
-            "closing edge must be stroked"
-        );
-        assert_eq!(shorthand.pixel(30, 12).unwrap().alpha(), 0);
-        assert_eq!(shorthand.data(), explicit.data());
     }
 
     /// The crux of the ET application: the accumulated glyph silhouette is
@@ -10745,6 +10649,10 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "path_operators_tests.rs"]
+mod path_operators_tests;
 
 #[cfg(test)]
 #[path = "sampled_function_tests.rs"]

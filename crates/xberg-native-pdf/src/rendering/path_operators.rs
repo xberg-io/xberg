@@ -3,7 +3,7 @@
 use crate::content::operators::Operator;
 use tiny_skia::PathBuilder;
 
-pub(super) fn construct(current_path: &mut PathBuilder, op: &Operator) {
+pub(super) fn construct(current_path: &mut PathBuilder, op: &Operator) -> bool {
     match op {
         Operator::MoveTo { x, y } => {
             current_path.move_to(*x, *y);
@@ -43,6 +43,7 @@ pub(super) fn construct(current_path: &mut PathBuilder, op: &Operator) {
         Operator::ClosePath => {
             current_path.close();
         }
-        _ => unreachable!("only path construction operators are dispatched here"),
+        _ => return false,
     }
+    true
 }
