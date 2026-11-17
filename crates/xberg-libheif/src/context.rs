@@ -96,8 +96,10 @@ impl<'a> HeifContext<'a> {
         // FIXME(#3229): Native references can outlive this Rust source, which its type does not enforce.
         // The static table and the new reader allocation stay live through this call and on error. ~keep
         let err = unsafe { lh::heif_context_read_from_reader(self.inner, &HEIF_READER, user_data, ptr::null()) };
+        // Copy the context-borrowed message before the previous reader can run its destructor.
+        let result = HeifError::from_heif_error(err);
         drop(previous_source);
-        HeifError::from_heif_error(err)
+        result
     }
 
     /// Create a new context from the reader.
@@ -298,9 +300,8 @@ impl<'a> HeifContext<'a> {
     /// Encode the `image` as a scaled down thumbnail image.
     ///
     /// The image is scaled down to fit into a square area of width `bbox_size`.
-    /// If the input image is already so small that it fits into this bounding
-    /// box, no thumbnail image is encoded and `Ok(None)` is returned.
-    /// No error is returned in this case.
+    /// Returns `Ok(None)` when libheif succeeds without returning a thumbnail handle.
+    /// Errors reported by libheif are returned to the caller.
     ///
     /// The encoded thumbnail is automatically assigned to the
     /// `master_image_handle`. Hence, you do not have to call

@@ -1,4 +1,6 @@
-use xberg_libheif::{Channel, ColorSpace, CompressionFormat, HeifContext, Image, LibHeif, RgbChroma};
+use xberg_libheif::{
+    Channel, ColorSpace, CompressionFormat, HeifContext, HeifErrorCode, HeifErrorSubCode, Image, LibHeif, RgbChroma,
+};
 
 fn rgb_image() -> Image {
     let mut image = Image::new(64, 32, ColorSpace::Rgb(RgbChroma::Rgb)).expect("allocate synthetic RGB image");
@@ -74,4 +76,16 @@ fn a_scaled_thumbnail_returns_an_owned_image_handle() {
         .expect("encode a scaled thumbnail")
         .expect("a smaller bounding box requires a thumbnail");
     assert_eq!((thumbnail.width(), thumbnail.height()), (32, 16));
+
+    match context.encode_thumbnail(&image, &master, 128, &mut encoder, None) {
+        Ok(None) => {}
+        Ok(Some(_)) => panic!("an image already within the bounding box should yield no thumbnail"),
+        Err(error) => assert!(
+            matches!(
+                (error.code, error.sub_code),
+                (HeifErrorCode::UsageError, HeifErrorSubCode::InvalidParameterValue)
+            ),
+            "{error}"
+        ),
+    }
 }
