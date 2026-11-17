@@ -19,6 +19,8 @@ pub mod config;
 pub mod doctor;
 #[cfg(feature = "embeddings")]
 pub mod embed;
+#[cfg(test)]
+mod env_test;
 pub mod extract;
 pub mod formats;
 #[cfg(feature = "ner-onnx")]

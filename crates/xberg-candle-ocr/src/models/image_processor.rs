@@ -12,7 +12,7 @@ use crate::error::{CandleOcrError, Result};
 
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
-#[cfg(any(test, feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+#[cfg(any(test, feature = "paddleocr-vl", feature = "glm-ocr"))]
 pub(super) fn decode_image_with_budget(
     bytes: &[u8],
     budget: u64,

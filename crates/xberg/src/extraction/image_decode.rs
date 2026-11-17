@@ -435,9 +435,12 @@ fn validate_standard_rgb8_peak(
 }
 
 #[cfg(any(
-    feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
-    all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+    feature = "candle-trocr",
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
+    )
 ))]
 pub(crate) struct PreparedCandleImageDecode<'a> {
     bytes: &'a [u8],
@@ -446,9 +449,12 @@ pub(crate) struct PreparedCandleImageDecode<'a> {
 }
 
 #[cfg(any(
-    feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
-    all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+    feature = "candle-trocr",
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
+    )
 ))]
 impl<'a> PreparedCandleImageDecode<'a> {
     pub(crate) fn new(bytes: &'a [u8], limits: &SecurityLimits, convert_to_rgb8: bool) -> Result<Self> {
@@ -485,7 +491,10 @@ impl<'a> PreparedCandleImageDecode<'a> {
         (self.probe.width, self.probe.height)
     }
 
-    #[cfg(feature = "candle-trocr")]
+    #[cfg(any(
+        feature = "candle-trocr",
+        all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+    ))]
     pub(crate) fn validate_preprocessing_peak(
         &self,
         limits: &SecurityLimits,
@@ -596,16 +605,6 @@ pub(crate) fn standard_image_is_single_frame(bytes: &[u8], mime_type: &str) -> b
         }
         _ => false,
     }
-}
-
-#[cfg(feature = "candle-glm-ocr")]
-pub(crate) fn validate_standard_image_with_default_security_limits(bytes: &[u8]) -> Result<()> {
-    validate_standard_image_with_security_limits(bytes, &SecurityLimits::default())
-}
-
-#[cfg(feature = "candle-glm-ocr")]
-fn validate_standard_image_with_security_limits(bytes: &[u8], limits: &SecurityLimits) -> Result<()> {
-    probe_standard_image(bytes, ImageDecodeBudget::from_security_limits(limits), None).map(|_| ())
 }
 
 #[cfg(test)]

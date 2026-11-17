@@ -35,6 +35,7 @@ impl ImageHandle {
     #[cfg(feature = "v1_18")]
     #[allow(unsafe_code)]
     fn context(&self) -> HeifContext<'_> {
+        // FIXME(#3229): The new native wrapper shares a context and carries no Rust source.
         unsafe { HeifContext::from_ptr(lh::heif_image_handle_get_context(self.inner)) }
     }
 

@@ -326,6 +326,7 @@ impl DeepseekOcrBackend {
         };
         let (content, image_bytes) = tokio::task::spawn_blocking(move || {
             let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, false).map_err(decode_error)?;
+            decode.validate_preprocessing_peak(&limits, DeepseekOCREngine::crop_resize_working_bytes)?;
             let model_path = match options.model_path {
                 Some(path) => PathBuf::from(path),
                 None => super::model_stager::ensure_deepseek_ocr(
@@ -346,7 +347,11 @@ impl DeepseekOcrBackend {
             let mut engine_guard = engine.lock();
             let img = decode.decode().map_err(decode_error)?;
             let output = engine_guard
-                .process_decoded_image(&img, None)
+                .process_decoded_image_with_crop_budget(
+                    &img,
+                    None,
+                    u64::try_from(limits.max_content_size).unwrap_or(u64::MAX),
+                )
                 .map_err(|e| crate::XbergError::Ocr {
                     message: format!("DeepSeek-OCR inference failed: {e}"),
                     source: Some(Box::new(e)),
@@ -380,7 +385,7 @@ impl OcrBackend for DeepseekOcrBackend {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::XbergError::Validation`] if the image is empty or exceeds the decode budget. Returns
+    /// Returns [`crate::XbergError::Validation`] if the image is empty or exceeds the decode or crop resize budget. Returns
     /// [`crate::XbergError::Ocr`] if weight download, device selection, engine
     /// initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
@@ -489,6 +494,37 @@ mod tests {
         assert!(
             matches!(&error, crate::XbergError::Ocr { message, .. }
             if message.contains("engine initialisation failed")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn crop_resize_budget_rejects_valid_png_before_loading_model() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_luma8(641, 480)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 1 << 20,
+            ..Default::default()
+        };
+        assert!(PreparedCandleImageDecode::new(png.get_ref(), &limits, false).is_ok());
+
+        let temp = tempfile::tempdir().unwrap();
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({
+                "model_path": temp.path().join("missing-model"), "device": "cpu"
+            })),
+            security_limits: Some(limits),
+            ..Default::default()
+        };
+        let error = DeepseekOcrBackend::new()
+            .process_image(png.get_ref(), &config)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+                if message.contains("security_limits.max_content_size") && message.contains("641x480")),
             "{error}"
         );
     }

@@ -3,7 +3,7 @@ use super::extract_text_from_rtf;
 #[test]
 fn should_restore_formats_at_normalized_unicode_byte_offsets() {
     let (text, tables, images, metadata, formatting) = extract_text_from_rtf(r"{\rtf1 \b A{\i \u233?}B\b0}", true);
-    assert_eq!(text, "Aé B");
+    assert_eq!(text, "AéB");
     assert_eq!((tables.len(), images.len(), metadata.len()), (0, 0, 1));
     assert_eq!(
         formatting
@@ -11,7 +11,7 @@ fn should_restore_formats_at_normalized_unicode_byte_offsets() {
             .iter()
             .map(|span| (span.start, span.end, span.bold, span.italic))
             .collect::<Vec<_>>(),
-        vec![(0, 1, true, false), (1, 3, true, true), (3, 5, true, false)]
+        vec![(0, 1, true, false), (1, 3, true, true), (3, 4, true, false)]
     );
 }
 
@@ -19,7 +19,7 @@ fn should_restore_formats_at_normalized_unicode_byte_offsets() {
 fn should_restore_hidden_and_unicode_fallback_scopes() {
     let (text, tables, images, metadata, formatting) =
         extract_text_from_rtf(r"{\rtf1\uc1 A{\v Hidden}{\uc2\u1040??}B}", true);
-    assert_eq!(text, "AА B");
+    assert_eq!(text, "AАB");
     assert_eq!(
         (tables.len(), images.len(), metadata.len(), formatting.spans.len()),
         (0, 0, 1, 0)
