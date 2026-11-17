@@ -317,11 +317,11 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
         .map_err(|e| format!("formula recognition failed: {e}"))
 }
 
-/// Recognize a crop off the async executor: the recognizer holds a
-/// process-wide lock for the whole multi-step decode, so it must not park a
-/// runtime worker. The inline arm is unreachable today (the feature implies
-/// `tokio-runtime` and cannot be enabled on wasm32); it exists so the
-/// function stays total if either implication ever changes.
+/// Recognize a crop off the async executor. Wait for the shared formula worker
+/// before entering the blocking pool so queued crops leave workers free for other
+/// tasks. Admitted work can wait for its runtime's blocking pool while its
+/// caller is live. The inline arm is unreachable today (the feature implies `tokio-runtime`
+/// and cannot be enabled on wasm32).
 ///
 /// Both callers are themselves feature-gated entry points -- the PDF layout route
 /// (`extractors::pdf`, so `pdf`) and the image route (`any(ocr, ocr-wasm)`). With
@@ -335,15 +335,60 @@ pub(crate) async fn recognize_crop_blocking(
 ) -> Result<Option<String>, String> {
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
-        tokio::task::spawn_blocking(move || recognize_crop(&crop, accel.as_ref()))
-            .await
-            .map_err(|e| format!("formula recognition task failed: {e}"))?
+        use std::sync::{Arc, LazyLock};
+        use tokio::sync::Semaphore;
+        // One permit matches the single recognizer guarded by RECOGNIZER. ~keep
+        static SLOT: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(1)));
+
+        run_with_formula_slot(Arc::clone(&SLOT), move || recognize_crop(&crop, accel.as_ref())).await?
     }
     #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
     {
         recognize_crop(&crop, accel.as_ref())
     }
 }
+
+#[cfg(all(
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32"),
+    any(test, feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
+async fn run_with_formula_slot<T: Send + 'static>(
+    slot: std::sync::Arc<tokio::sync::Semaphore>,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    use std::sync::{Arc, Mutex, PoisonError};
+    use tokio::sync::OwnedSemaphorePermit;
+
+    type Admission<W> = Arc<Mutex<Option<(OwnedSemaphorePermit, W)>>>;
+    struct Pending<W>(Admission<W>);
+
+    impl<W> Drop for Pending<W> {
+        fn drop(&mut self) {
+            let withdrawn = self.0.lock().unwrap_or_else(PoisonError::into_inner).take();
+            drop(withdrawn);
+        }
+    }
+
+    let permit = slot
+        .acquire_owned()
+        .await
+        .map_err(|e| format!("formula recognition admission failed: {e}"))?;
+    let admission = Arc::new(Mutex::new(Some((permit, work))));
+    let _pending = Pending(Arc::clone(&admission));
+    tokio::task::spawn_blocking(move || {
+        // Once claimed, the actual decode holds the permit until completion. ~keep
+        let claimed = admission.lock().unwrap_or_else(PoisonError::into_inner).take();
+        let (_permit, work) = claimed?;
+        Some(work())
+    })
+    .await
+    .map_err(|e| format!("formula recognition task failed: {e}"))?
+    .ok_or_else(|| "formula recognition admission was withdrawn".to_string())
+}
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod worker_tests;
 
 /// Test-only public entry: the integration test exercises the full
 /// download-load-recognize pipeline through this.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #   ./scripts/install-system-pdfium-linux.sh [PREFIX] [PDFIUM_VERSION]
+#   Set PDFIUM_CHECKSUMS_FILE to a trusted manifest for a custom revision. ~keep
 
 set -euo pipefail
 
@@ -12,10 +13,21 @@ PREFIX="${1:-${PREFIX:-/usr/local}}"
 # succeeds regardless. ~keep
 PDFIUM_VERSION="${2:-${PDFIUM_VERSION:-7678}}"
 PDFIUM_PLATFORM="linux-x64"
-DOWNLOAD_URL="https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-${PDFIUM_PLATFORM}.tgz"
+if [[ ! "$PDFIUM_VERSION" =~ ^[0-9]+$ ]]; then
+  echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2
+  exit 1
+fi
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+VERIFY_ARCHIVE="$SCRIPT_DIR/ci/actions/setup-onnx-runtime/verify-archive.sh"
+CHECKSUMS="${PDFIUM_CHECKSUMS_FILE:-$SCRIPT_DIR/pdfium-runtime-checksums.sha256}"
+ASSET="pdfium-${PDFIUM_PLATFORM}.tgz"
+ARCHIVE_NAME="${PDFIUM_VERSION}-${ASSET}"
+DOWNLOAD_URL="https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/${ASSET}"
+bash "$VERIFY_ARCHIVE" "$ARCHIVE_NAME" "$CHECKSUMS" --known
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "${TEMP_DIR}"' EXIT
+ARCHIVE="$TEMP_DIR/$ARCHIVE_NAME"
 
 echo "Installing PDFium ${PDFIUM_VERSION} to ${PREFIX}..."
 echo "Platform: ${PDFIUM_PLATFORM}"
@@ -23,13 +35,15 @@ echo "Download URL: ${DOWNLOAD_URL}"
 echo ""
 
 echo "[1/5] Downloading PDFium ${PDFIUM_VERSION}..."
-if ! curl -f -L --progress-bar "${DOWNLOAD_URL}" -o "${TEMP_DIR}/pdfium.tgz"; then
+if ! curl -f -L --progress-bar "${DOWNLOAD_URL}" -o "$ARCHIVE"; then
   echo "Error: Failed to download PDFium ${PDFIUM_VERSION}" >&2
   exit 1
 fi
 
+bash "$VERIFY_ARCHIVE" "$ARCHIVE" "$CHECKSUMS"
+
 echo "[2/5] Extracting PDFium archive..."
-if ! tar -xzf "${TEMP_DIR}/pdfium.tgz" -C "${TEMP_DIR}"; then
+if ! tar -xzf "$ARCHIVE" -C "${TEMP_DIR}"; then
   echo "Error: Failed to extract PDFium archive" >&2
   exit 1
 fi
