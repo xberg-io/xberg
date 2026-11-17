@@ -499,18 +499,13 @@ fn neutral_rgb_120_dpi_keeps_stock_when_four_reread_calls_cannot_be_reserved() {
 
 #[test]
 fn bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
-    for source in [fixture_120!("bilevel-120.pdf"), fixture_120!("jpeg-120.pdf")] {
-        let document = extract(source, &extraction_config());
-        assert!(!strip_warning(&document));
-        assert!(
-            document
-                .processing_warnings
-                .iter()
-                .any(|warning| warning.message.contains("source-image strips were not used")),
-            "{:?}",
-            document.processing_warnings
-        );
-    }
+    let bilevel = extract(fixture_120!("bilevel-120.pdf"), &extraction_config());
+    assert_bilevel_density_warning(&bilevel, 120);
+    let jpeg = extract(fixture_120!("jpeg-120.pdf"), &extraction_config());
+    assert!(!strip_warning(&jpeg));
+    let warnings = not_used_warnings(&jpeg);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(!warnings[0].contains("one-bit grayscale"), "{warnings:?}");
 }
 
 #[test]
@@ -525,29 +520,40 @@ fn a_120_dpi_bilevel_scan_explains_the_source_density_refusal() {
     let result = extract(source, &extraction_config());
     assert!(result.metadata.ocr_used);
     assert!(!strip_warning(&result));
-    let warnings = not_used_warnings(&result);
-    assert_eq!(warnings.len(), 1, "expected one retained-read warning: {warnings:?}");
-    assert!(
-        warnings[0].contains("the 120 DPI one-bit grayscale Flate scan is below the 150 DPI strip-recovery minimum"),
-        "expected the density gate to be identified: {}",
-        warnings[0]
-    );
+    assert_bilevel_density_warning(&result, 120);
 }
 
 #[test]
 fn tall_scans_below_the_density_floor_say_recovery_was_not_used() {
-    for source in [TALL_PREDICTOR, NEUTRAL_RGB, BILEVEL] {
+    for source in [TALL_PREDICTOR, NEUTRAL_RGB] {
         let document = extract(&lower_density(source, BELOW_FLOOR_DENSITY), &extraction_config());
         assert!(!strip_warning(&document));
-        assert!(
-            document
-                .processing_warnings
-                .iter()
-                .any(|warning| warning.message.contains("source-image strips were not used")),
-            "{:?}",
-            document.processing_warnings
-        );
+        let warnings = not_used_warnings(&document);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(!warnings[0].contains("one-bit grayscale"), "{warnings:?}");
     }
+    let bilevel = extract(&lower_density(BILEVEL, BELOW_FLOOR_DENSITY), &extraction_config());
+    assert_bilevel_density_warning(&bilevel, 100);
+}
+
+#[test]
+fn fractional_bilevel_source_density_is_floored_below_the_minimum() {
+    let source = lower_density(BILEVEL, (614, 5779));
+    assert_bilevel_density_warning(&extract(&source, &extraction_config()), 149);
+}
+
+fn assert_bilevel_density_warning(document: &ExtractedDocument, dpi: u32) {
+    assert!(!strip_warning(document));
+    let warnings = not_used_warnings(document);
+    assert_eq!(warnings.len(), 1, "expected one retained-read warning: {warnings:?}");
+    let (_, reason) = warnings[0].split_once(": ").expect("a warning with a recovery reason");
+    assert_eq!(
+        reason,
+        format!(
+            "the {dpi} DPI one-bit grayscale Flate scan is below the 150 DPI strip-recovery minimum. \
+             The text may be incomplete."
+        ),
+    );
 }
 
 #[test]

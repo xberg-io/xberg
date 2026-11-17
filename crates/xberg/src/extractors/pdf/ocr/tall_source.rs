@@ -1372,6 +1372,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn bilevel_above_maximum_density_is_not_reported_as_below_minimum() {
+        let mut refusal = None;
+        let accepted = source_density_or_refusal(
+            Some(GrayPacking::Bilevel),
+            (1275, 12000, 300.01),
+            (1, 32 * 1024 * 1024),
+            &mut refusal,
+        );
+        assert!(accepted.is_none());
+        assert!(refusal.is_none());
+    }
+
     const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
 
     fn four_bit_gray_refusal_requires_the_full_memory_budget() {

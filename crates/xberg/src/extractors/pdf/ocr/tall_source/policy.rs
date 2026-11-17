@@ -136,6 +136,7 @@ pub(in super::super) fn note_unrecovered(
             "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support"
         }
         Unrecovered::BilevelBelowDensity(dpi) => {
+            let dpi = dpi.floor();
             density_reason = format!(
                 "the {dpi} DPI one-bit grayscale Flate scan is below the \
                  {MIN_STANDARD_SOURCE_DPI} DPI strip-recovery minimum"
