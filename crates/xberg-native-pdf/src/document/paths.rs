@@ -4,6 +4,7 @@
 //! `document.rs` 1.2 MiB and tripped the 500 KiB file-safety limit. A child module's
 //! `impl` is the same inherent impl and sees the parent's private items unchanged. ~keep
 
+use super::pagination_separators::BottomPaginationSeparators;
 use super::*;
 
 // Apply these totals only to Form work. Page streams retain their existing parser limits. ~keep
@@ -150,7 +151,16 @@ impl PdfDocument {
     pub(super) fn extract_paths_with_form_budget(
         &self,
         page_index: usize,
+        form_budget: FormPathBudget,
+    ) -> Result<Vec<crate::elements::PathContent>> {
+        self.walk_page_paths(page_index, form_budget, None)
+    }
+
+    pub(super) fn walk_page_paths(
+        &self,
+        page_index: usize,
         mut form_budget: FormPathBudget,
+        mut bottom_pagination: Option<&mut BottomPaginationSeparators>,
     ) -> Result<Vec<crate::elements::PathContent>> {
         use crate::content::{Operator, parse_content_stream_paths_only};
         use crate::elements::{LineCap, LineJoin};
@@ -163,23 +173,29 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        // Get content stream data — skip page on decode failure (Annex I) ~keep
-        let content_data = match self.cached_page_content(page_index) {
-            Ok(data) => data,
-            Err(error) => {
-                tracing::warn!(
-                    target: crate::LOG_TARGET_ROOT,
-                    operation = "decode_page_path_content",
-                    page_index,
-                    error_code = error.telemetry_code(),
-                    error_offset = ?error.telemetry_offset(),
-                    "returning empty paths after decode failure"
-                );
+        let parsed = if bottom_pagination.is_some() {
+            let Some(operators) = self.separator_operators(page_dict) else {
                 return Ok(Vec::new());
-            }
+            };
+            Ok(operators)
+        } else {
+            let content_data = match self.cached_page_content(page_index) {
+                Ok(data) => data,
+                Err(error) => {
+                    tracing::warn!(
+                        target: crate::LOG_TARGET_ROOT,
+                        operation = "decode_page_path_content",
+                        page_index,
+                        error_code = error.telemetry_code(),
+                        error_offset = ?error.telemetry_offset(),
+                        "returning empty paths after decode failure"
+                    );
+                    return Ok(Vec::new());
+                }
+            };
+            parse_content_stream_paths_only(&content_data)
         };
-
-        let operators = match parse_content_stream_paths_only(&content_data) {
+        let operators = match parsed {
             Ok(ops) => ops,
             Err(error) => {
                 tracing::warn!(
@@ -207,6 +223,9 @@ impl PdfDocument {
         }
 
         for op in operators {
+            if let Some(evidence) = bottom_pagination.as_deref_mut() {
+                evidence.observe(&op, &extractor);
+            }
             match op {
                 Operator::SaveState => {
                     state_stack.save();
@@ -339,6 +358,10 @@ impl PdfDocument {
                 }
 
                 Operator::Do { name } => {
+                    // The focused query observes page-local paths only. ~keep
+                    if bottom_pagination.is_some() {
+                        continue;
+                    }
                     if let Err(error) =
                         self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
                     {

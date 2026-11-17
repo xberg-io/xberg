@@ -11,6 +11,37 @@ mod formula_insertion_tests {
     use crate::types::document_structure::NodeContent;
     use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
 
+    #[test]
+    fn formula_evidence_uses_cli_full_format_for_both_outcomes() {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter("info,xberg::extractors::pdf::formula_evidence=debug")
+            .with_writer(log.reopen().unwrap())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            let _extract = tracing::info_span!("extract_file", xberg.operation = "extract_file").entered();
+            let _pipeline = tracing::info_span!("xberg.pipeline", xberg.pipeline.stage = "extraction").entered();
+            trace_formula_recognition(1, 2, 0);
+            trace_formula_recognition(2, 0, 3);
+            trace_formula_recognition(3, 0, 0);
+        });
+
+        let log = std::fs::read_to_string(log.path()).unwrap();
+        let events: Vec<_> = log.lines().map(|line| line.split_once(" DEBUG ").unwrap().1).collect();
+        let prefix = concat!(
+            "extract_file{xberg.operation=\"extract_file\"}:xberg.pipeline{xberg.pipeline.stage=\"extraction\"}: ",
+            "xberg::extractors::pdf::formula_evidence: native PDF formula recognition applied"
+        );
+        assert_eq!(
+            events,
+            [
+                format!("{prefix} page=1 replaced=2 synthesized=0"),
+                format!("{prefix} page=2 replaced=0 synthesized=3"),
+            ]
+        );
+    }
+
     fn paragraph(text: &str, page: u32) -> InternalElement {
         let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_page(page);
         element.bbox = Some(crate::types::BoundingBox {
