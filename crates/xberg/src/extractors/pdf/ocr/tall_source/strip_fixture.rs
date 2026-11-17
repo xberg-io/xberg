@@ -109,10 +109,14 @@ pub(super) fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
 
 /// One scan image of `dpi` painted over the whole page.
 pub(super) fn scan_pdf_at(color: &str, samples: &[u8], dpi: f64) -> PdfDocument {
-    let (page_width, page_height) = (f64::from(WIDTH) * 72.0 / dpi, f64::from(HEIGHT) * 72.0 / dpi);
+    scan_flate_pdf_at((WIDTH, HEIGHT), color, &flate(samples), dpi)
+}
+
+pub(super) fn scan_flate_pdf_at((width, height): (u32, u32), color: &str, compressed: &[u8], dpi: f64) -> PdfDocument {
+    let (page_width, page_height) = (f64::from(width) * 72.0 / dpi, f64::from(height) * 72.0 / dpi);
     let image = stream(
-        &format!("/Type /XObject /Subtype /Image /Width {WIDTH} /Height {HEIGHT} {color} /Filter /FlateDecode"),
-        &flate(samples),
+        &format!("/Type /XObject /Subtype /Image /Width {width} /Height {height} {color} /Filter /FlateDecode"),
+        compressed,
     );
     let objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),

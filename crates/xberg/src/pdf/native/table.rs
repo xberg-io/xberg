@@ -126,6 +126,7 @@ enum HeuristicTableRejection {
     CodeListing,
     NotWellFormed,
     EmptyMarkdown,
+    AxisTickGrid,
 }
 
 // Bound retained path geometry across the document-wide ruled and heuristic passes. ~keep
@@ -2254,6 +2255,10 @@ fn reconstruct_region_table_with_column_gap(
         return Err(HeuristicTableRejection::CodeListing);
     }
 
+    if is_axis_tick_grid(&cleaned) {
+        return Err(HeuristicTableRejection::AxisTickGrid);
+    }
+
     // Beyond the text-statistics gate, reject candidates that have no drawn
     // ruling lines AND whose inferred column boundaries are not actually
     // whitespace (xberg-io/xberg#1399): continuous prose bucketed into a wide
@@ -2614,6 +2619,42 @@ fn recurring_numeric_track_centers(
                 >= min_row_support
         })
         .collect()
+}
+
+/// Whether a grid is the tick labels under a row of plot panels rather than a table.
+///
+/// Evenly spaced ticks sit closer together than the gap between panels, so one cell holds a
+/// whole run of them (`0.35 0.4 0.45 0.5 0.55`), and the axis-name and end-tick rows leave most
+/// cells empty. A table's cell holds one value, so a cell with an arithmetic run of three
+/// numbers, in a grid of only numbers and one-letter axis names with a mostly empty row, is not
+/// a table. ~keep
+fn is_axis_tick_grid(rows: &[Vec<String>]) -> bool {
+    let is_axis_token =
+        |token: &str| is_numeric_word(token) || (token.chars().count() == 1 && token.chars().all(char::is_alphabetic));
+    let all_axis_tokens = rows
+        .iter()
+        .flatten()
+        .flat_map(|cell| cell.split_whitespace())
+        .all(is_axis_token);
+    let has_sparse_row = rows.iter().any(|row| {
+        let filled = row.iter().filter(|cell| !cell.trim().is_empty()).count();
+        filled * 2 < row.len()
+    });
+    all_axis_tokens && has_sparse_row && rows.iter().flatten().any(|cell| has_tick_run(cell))
+}
+
+/// Whether `cell` holds three consecutive numbers with one non-zero step between them.
+fn has_tick_run(cell: &str) -> bool {
+    let values: Vec<f64> = cell
+        .split_whitespace()
+        .map_while(|token| token.replace('\u{2212}', "-").parse::<f64>().ok())
+        .collect();
+    values.windows(3).any(|run| {
+        let (first, second) = (run[1] - run[0], run[2] - run[1]);
+        let scale = run.iter().fold(1.0_f64, |scale, value| scale.max(value.abs()));
+        let tolerance = scale * 1e-6;
+        first.abs() > tolerance && (first - second).abs() <= tolerance
+    })
 }
 
 fn is_numeric_word(text: &str) -> bool {
@@ -4955,6 +4996,73 @@ mod tests {
             ),
             "unexpected rejection: {rejection:?}"
         );
+    }
+
+    /// The tick labels under a row of plot panels (arxiv-2405.00569v2 p19): evenly spaced ticks
+    /// share a cell, and the end-tick and axis-name rows are mostly empty. The control replaces
+    /// every tick run with uneven values, so the same geometry reaches table emission.
+    #[test]
+    fn heuristic_axis_tick_grid_is_rejected_and_its_uneven_control_is_kept() {
+        let tick_region = |middle: [&str; 3], right: [&str; 4]| {
+            let mut words = vec![make_word("-2", 20, 100, 10), make_word("-2", 580, 100, 10)];
+            for (text, left, width) in [("15", 20, 10), ("0.3", 34, 12)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            for (text, left) in middle.into_iter().zip([160, 178, 192]) {
+                words.push(make_word(text, left, 112, 12));
+            }
+            for (text, left, width) in [("-10", 300, 12), ("0.6", 316, 10)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            for (text, left) in right.into_iter().zip([440, 452, 461, 470]) {
+                words.push(make_word(text, left, 112, 7));
+            }
+            for (text, left, width) in [("15", 580, 10), ("0.3", 594, 12)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            words.push(make_word("x", 178, 124, 5));
+            words.push(make_word("x", 455, 124, 5));
+            words
+        };
+
+        let ticks = tick_region(["0.35", "0.4", "0.45"], ["-5", "0", "5", "10"]);
+        let uneven = tick_region(["0.35", "0.7", "0.42"], ["-5", "2", "5", "11"]);
+
+        assert_eq!(
+            reconstruct_region_table_with_reason(&ticks, 792.0, 1, false, 0).unwrap_err(),
+            HeuristicTableRejection::AxisTickGrid
+        );
+        let control = reconstruct_region_table_with_reason(&uneven, 792.0, 1, false, 0);
+        assert!(control.is_ok(), "control must reach table emission: {control:?}");
+    }
+
+    #[test]
+    fn axis_tick_grid_requires_a_tick_run_numeric_cells_and_a_sparse_row() {
+        let grid = |rows: &[&[&str]]| {
+            rows.iter()
+                .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+                .collect::<Vec<Vec<String>>>()
+        };
+        let ticks: &[&[&str]] = &[
+            &["-2", "", "", "", "-2"],
+            &["15 0.3", "0.35 0.4 0.45 0.5 0.55", "-10 0.6", "-5 0 5 10", "15 0.3"],
+            &["", "x", "", "x", ""],
+        ];
+        assert!(is_axis_tick_grid(&grid(ticks)));
+
+        let labelled: &[&[&str]] = &[
+            &["Practitioner lab", "4.56", "4.79", "4.88", "5.00"],
+            &["", "", "0.35 0.4 0.45", "", ""],
+        ];
+        let calendar: &[&[&str]] = &[
+            &["M", "T", "W", "T", "F", "S", "S"],
+            &["", "", "", "", "1", "2", "3"],
+            &["4", "5", "6", "7", "8", "9", "10"],
+        ];
+        let dense: &[&[&str]] = &[&["0.35 0.4 0.45", "1"], &["2", "3"]];
+        for rows in [labelled, calendar, dense] {
+            assert!(!is_axis_tick_grid(&grid(rows)), "{rows:?}");
+        }
     }
 
     #[test]

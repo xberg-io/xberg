@@ -11,7 +11,7 @@ import { Content as Snip_docker_full_pull } from "../../../snippets/docker/full_
 import { Content as Snip_docker_build_core } from "../../../snippets/docker/build_core.md";
 import { Content as Snip_docker_build_full } from "../../../snippets/docker/build_full.md";
 
-Official Docker images built on the Rust core with Debian 13 (Trixie). Each image supports three execution modes: API server (default), command-line tool, and MCP server.
+The Core and Full images use Debian 13 (Trixie) and support API server (default), CLI, and MCP modes. The CLI image uses Alpine Linux.
 
 ## Quick Start
 
@@ -192,7 +192,9 @@ volumes:
 
 ## Security
 
-Images run as non-root user `xberg` (UID 1000). For hardened deployments:
+Core and Full run as the non-root `xberg` system user created during the image build. The CLI image runs as `10001:10001` by default. An arbitrary non-root UID with group 0 can write to the pre-created `/app`, `/app/.xberg` and `/app/.xberg/huggingface` directories in a fresh CLI container.
+
+Use filesystem ownership or permissions to grant the effective container user read access to input mounts and write access to cache and output mounts. For hardened deployments, you can make the root filesystem read-only:
 
 ```bash title="Terminal"
 docker run --security-opt no-new-privileges \
@@ -202,10 +204,10 @@ docker run --security-opt no-new-privileges \
   ghcr.io/xberg-io/xberg:latest
 ```
 
-Ensure mounted volumes have correct permissions:
+For Core and Full, check the UID and GID of the tag you deploy before assigning ownership to a writable bind mount:
 
 ```bash title="Terminal"
-chown -R 1000:1000 /path/to/mounted/directory
+docker run --rm --entrypoint /bin/sh ghcr.io/xberg-io/xberg:latest -c 'id -u; id -g'
 ```
 
 ## Resource Allocation
@@ -266,7 +268,11 @@ the build fails rather than defaulting to an empty value.
 
 ### CLI Image
 
-A stripped-down image with only the CLI binary. No server, no API — just extraction:
+A stripped-down image with only the CLI binary. The CLI home is `/app` and its cache is `/app/.xberg`. Remount an existing cache volume at `/app/.xberg` if it was mounted at `/root/.cache/xberg`.
+
+Grant `10001:10001` access to writable bind mounts, for example with `chown -R 10001:10001 /path/to/cache /path/to/output`. To write to a host-owned output directory, you can run the CLI with the host's non-root UID and group 0. For example, use `docker run --user "$(id -u):0"` when the host user owns the mounted output and any mounted cache. Bind mounts take their permissions from the host.
+
+Use the same UID for every writer to a persistent cache volume.
 
 ```bash title="Terminal"
 docker build -f docker/Dockerfile.cli --build-arg XBERG_BUILD_ID="$(git rev-parse HEAD)" -t xberg-cli .
@@ -294,7 +300,7 @@ Check logs with `docker logs <container-id>`. Common causes: port conflict (chan
 :::
 
 :::note[Permission errors on mounted volumes]
-Images run as UID 1000. Fix with: `chown -R 1000:1000 /path/to/mounted/directory`
+Check the container's effective UID and GID and the mount's ownership. Input mounts only need read access. Cache mounts and directories used with `--output-dir` need write access. See [Security](#security) for the default user of each image.
 :::
 
 :::note[Large file processing fails]

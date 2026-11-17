@@ -166,6 +166,7 @@ fn explicit_sparse_plain_page_uses_certified_rows() {
     let doc = extract(IMAGE, OutputFormat::Plain, Some(11));
     assert_table(&doc, "11");
     assert_plain_rows(&doc.content);
+    assert_table_words(page_text(&doc));
     assert_plain_rows(page_text(&doc));
 }
 
