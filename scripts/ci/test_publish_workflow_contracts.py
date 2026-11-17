@@ -1052,7 +1052,14 @@ def test_python_manylinux_verifies_onnx_runtime_before_extraction(tmp_path: Path
         }
         mkdir() { [[ "$*" == '-p /opt/msort' ]]; }
         curl() {
-          [[ "${*:1:10}" == '--proto =https --proto-redir =https --retry 5 --retry-delay 5 --retry-all-errors -fsSL' ]]
+          if [[ "$*" == '--retry-all-errors --version' ]]; then
+            return "${TEST_CURL_PROBE_STATUS:-0}"
+          fi
+          expected='--proto =https --proto-redir =https --retry 5 --retry-delay 5'
+          if [[ "${TEST_CURL_PROBE_STATUS:-0}" == 0 ]]; then
+            expected+=' --retry-all-errors'
+          fi
+          [[ "${*:1:$#-3}" == "$expected -fsSL" ]]
           [[ "${@: -3:1}" == -o ]]
           printf 'curl %s\n' "${@: -1}"
           printf '%s' "$TEST_PAYLOAD" > "${@: -2:1}"
@@ -1088,10 +1095,15 @@ def test_python_manylinux_verifies_onnx_runtime_before_extraction(tmp_path: Path
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
             fixture_manifest.write_text(f"{digest}  {archive}\n")
-            verified = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
-            assert verified.returncode == 0, (filename, uname, verified.stderr)
-            assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
-            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+            for curl_probe_status in ("0", "2"):
+                verified = run(
+                    ["bash", "-euo", "pipefail", "-c", script],
+                    tmp_path,
+                    {**env, "TEST_CURL_PROBE_STATUS": curl_probe_status},
+                )
+                assert verified.returncode == 0, (filename, uname, curl_probe_status, verified.stderr)
+                assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname, curl_probe_status)
 
             tampered = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_PAYLOAD": "tampered"})
             assert tampered.returncode == 1 and tampered.stdout.splitlines() == [f"curl {url}"], (
