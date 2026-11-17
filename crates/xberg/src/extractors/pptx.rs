@@ -1,7 +1,9 @@
 //! PowerPoint presentation extractor.
 
 use crate::Result;
+use crate::cancellation::CancellationToken;
 use crate::core::config::ExtractionConfig;
+use crate::extraction::pptx::{PptxExtractionOptions, PptxInternalExtraction};
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
@@ -502,6 +504,109 @@ impl Plugin for PptxExtractor {
     }
 }
 
+enum PptxInput<'a> {
+    Bytes(Cow<'a, [u8]>),
+    Path(Cow<'a, str>),
+}
+
+type PptxRead = (PptxInternalExtraction, Vec<crate::types::ProcessingWarning>);
+
+impl PptxInput<'_> {
+    fn parse(self, options: &PptxExtractionOptions) -> Result<PptxRead> {
+        let mut warnings = Vec::new();
+        let result = match self {
+            Self::Bytes(content) => {
+                crate::extraction::pptx::extract_pptx_from_bytes_with_slide_contents(&content, options, &mut warnings)?
+            }
+            Self::Path(path) => {
+                crate::extraction::pptx::extract_pptx_from_path_with_slide_contents(&path, options, &mut warnings)?
+            }
+        };
+        Ok((result, warnings))
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn into_owned(self) -> PptxInput<'static> {
+        match self {
+            Self::Bytes(content) => PptxInput::Bytes(Cow::Owned(content.into_owned())),
+            Self::Path(path) => PptxInput::Path(Cow::Owned(path.into_owned())),
+        }
+    }
+}
+
+fn pptx_parse_options(config: &ExtractionConfig) -> PptxExtractionOptions {
+    let security_limits = config.security_limits.clone().unwrap_or_default();
+    PptxExtractionOptions {
+        extract_images: config.needs_image_data(),
+        page_config: config.pages.clone(),
+        plain: matches!(config.output_format, crate::core::config::OutputFormat::Plain),
+        include_structure: false,
+        inject_placeholders: config.images.as_ref().is_none_or(|images| images.inject_placeholders),
+        max_pages: security_limits.max_pages,
+        security_limits,
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn check_pptx_parse_cancelled(cancel: Option<&CancellationToken>) -> Result<()> {
+    if cancel.is_some_and(CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+async fn read_pptx(
+    input: PptxInput<'_>,
+    options: PptxExtractionOptions,
+    cancel: Option<&CancellationToken>,
+) -> Result<PptxRead> {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        let batch = crate::core::batch_mode::is_batch_mode();
+        // The existing byte batch worker and inline file batch route retain their behavior. ~keep
+        if !batch || matches!(&input, PptxInput::Bytes(_)) {
+            check_pptx_parse_cancelled(cancel)?;
+            let input = input.into_owned();
+            let cancel = if batch { None } else { cancel.cloned() };
+            let span = tracing::Span::current();
+            let task = runtime.spawn_blocking(move || {
+                let _guard = span.entered();
+                check_pptx_parse_cancelled(cancel.as_ref())?;
+                let result = input.parse(&options)?;
+                check_pptx_parse_cancelled(cancel.as_ref())?;
+                Ok(result)
+            });
+            if batch {
+                return task
+                    .await
+                    .map_err(|error| crate::XbergError::parsing(format!("PPTX extraction task failed: {error}")))?;
+            }
+            return await_single_pptx_parse(task).await;
+        }
+    }
+    #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+    let _ = cancel;
+    input.parse(&options)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn await_single_pptx_parse(task: tokio::task::JoinHandle<Result<PptxRead>>) -> Result<PptxRead> {
+    struct AbortQueuedParse(tokio::task::AbortHandle);
+
+    impl Drop for AbortQueuedParse {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let _abort_queued = AbortQueuedParse(task.abort_handle());
+    match task.await {
+        Ok(result) => result,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(crate::XbergError::Cancelled),
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl InternalDocumentExtractor for PptxExtractor {
@@ -512,86 +617,14 @@ impl InternalDocumentExtractor for PptxExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         tracing::debug!(format = "pptx", size_bytes = content.len(), "extraction starting");
-        let extract_images = config.needs_image_data();
-        let inject_placeholders = config
-            .images
-            .as_ref()
-            .map(|img| img.inject_placeholders)
-            .unwrap_or(true);
-        let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
-        let security_limits = config.security_limits.clone().unwrap_or_default();
-        let max_pages = security_limits.max_pages;
-
-        let mut pptx_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
-
-        let pptx_internal = {
-            #[cfg(feature = "tokio-runtime")]
-            {
-                if crate::core::batch_mode::is_batch_mode() {
-                    if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-                        return Err(crate::error::XbergError::Cancelled);
-                    }
-                    let content_owned = content.to_vec();
-                    let options = crate::extraction::pptx::PptxExtractionOptions {
-                        extract_images,
-                        page_config: config.pages.clone(),
-                        plain,
-                        include_structure: false,
-                        inject_placeholders,
-                        security_limits: security_limits.clone(),
-                        max_pages,
-                    };
-                    let span = tracing::Span::current();
-                    let (result, warnings) = tokio::task::spawn_blocking(move || {
-                        let _guard = span.entered();
-                        let mut warnings = Vec::new();
-                        let result = crate::extraction::pptx::extract_pptx_from_bytes_with_slide_contents(
-                            &content_owned,
-                            &options,
-                            &mut warnings,
-                        );
-                        (result, warnings)
-                    })
-                    .await
-                    .map_err(|e| crate::error::XbergError::parsing(format!("PPTX extraction task failed: {}", e)))?;
-                    pptx_warnings = warnings;
-                    result?
-                } else {
-                    let options = crate::extraction::pptx::PptxExtractionOptions {
-                        extract_images,
-                        page_config: config.pages.clone(),
-                        plain,
-                        include_structure: false,
-                        inject_placeholders,
-                        security_limits: security_limits.clone(),
-                        max_pages,
-                    };
-                    crate::extraction::pptx::extract_pptx_from_bytes_with_slide_contents(
-                        content,
-                        &options,
-                        &mut pptx_warnings,
-                    )?
-                }
-            }
-
-            #[cfg(not(feature = "tokio-runtime"))]
-            {
-                let options = crate::extraction::pptx::PptxExtractionOptions {
-                    extract_images,
-                    page_config: config.pages.clone(),
-                    plain,
-                    include_structure: false,
-                    inject_placeholders,
-                    security_limits: security_limits.clone(),
-                    max_pages,
-                };
-                crate::extraction::pptx::extract_pptx_from_bytes_with_slide_contents(
-                    content,
-                    &options,
-                    &mut pptx_warnings,
-                )?
-            }
-        };
+        let options = pptx_parse_options(config);
+        let extract_images = options.extract_images;
+        let (pptx_internal, pptx_warnings) = read_pptx(
+            PptxInput::Bytes(Cow::Borrowed(content)),
+            options,
+            config.cancel_token.as_ref(),
+        )
+        .await?;
 
         let mut budget = SecurityBudget::from_config(config);
         let mut doc = Self::build_document_from_result(
@@ -636,30 +669,14 @@ impl InternalDocumentExtractor for PptxExtractor {
             .to_str()
             .ok_or_else(|| crate::XbergError::validation("Invalid file path".to_string()))?;
 
-        let extract_images = config.needs_image_data();
-        let inject_placeholders = config
-            .images
-            .as_ref()
-            .map(|img| img.inject_placeholders)
-            .unwrap_or(true);
-        let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
-        let security_limits = config.security_limits.clone().unwrap_or_default();
-
-        let options = crate::extraction::pptx::PptxExtractionOptions {
-            extract_images,
-            page_config: config.pages.clone(),
-            plain,
-            include_structure: false,
-            inject_placeholders,
-            security_limits: security_limits.clone(),
-            max_pages: security_limits.max_pages,
-        };
-        let mut pptx_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
-        let pptx_internal = crate::extraction::pptx::extract_pptx_from_path_with_slide_contents(
-            path_str,
-            &options,
-            &mut pptx_warnings,
-        )?;
+        let options = pptx_parse_options(config);
+        let extract_images = options.extract_images;
+        let (pptx_internal, pptx_warnings) = read_pptx(
+            PptxInput::Path(Cow::Borrowed(path_str)),
+            options,
+            config.cancel_token.as_ref(),
+        )
+        .await?;
 
         let mut budget = SecurityBudget::from_config(config);
         let mut doc = Self::build_document_from_result(
