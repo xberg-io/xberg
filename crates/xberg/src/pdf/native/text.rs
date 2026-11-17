@@ -1994,7 +1994,9 @@ fn snap_split_into_narrow_gutter(
     split_x: f32,
 ) -> f32 {
     let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
-    if lines_crossing(spans, lines, furniture_width, split_x) == 0 {
+    // One crossing line is a page number, footer or heading set across the gutter, and stays
+    // a band boundary as `redirect_split_out_of_content` leaves it. ~keep
+    if lines_crossing(spans, lines, furniture_width, split_x) <= MAX_GUTTER_CROSSING_LINES {
         return split_x;
     }
     let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
@@ -4468,6 +4470,52 @@ mod tests {
 
         let texts = spans.iter().map(|span| span.text.as_str()).collect::<Vec<_>>();
         let expected = left_body.iter().chain(&right_body).copied().collect::<Vec<_>>();
+        assert_eq!(texts, expected);
+    }
+
+    /// A page number centred across the gutter is the only line that crosses the split. It must
+    /// stay a trailing boundary line rather than be folded into a column by the narrow gutter
+    /// snap, which would otherwise move the split past it into the 7.5pt gap at 312.5..320.
+    #[test]
+    fn dense_split_crossed_only_by_a_page_number_is_not_snapped() {
+        const LEFT_X: f32 = 60.0;
+        const RIGHT_X: f32 = 320.0;
+        let left_rights = [296.0, 298.0, 300.0, 302.0, 304.0, 306.0];
+        let left_body = [
+            "The committee reviewed annual budget totals",
+            "and approved new funding for the coming year",
+            "after several rounds of careful review by",
+            "senior staff members from every department",
+            "who evaluated priorities across the whole",
+            "organization before reaching a final decision",
+        ];
+        let right_body = [
+            "Numerous studies have examined similar",
+            "programs across comparable institutions",
+            "using consistent methodology and controls",
+            "for measuring outcomes over multiple years",
+            "researchers found consistent positive trends",
+            "supporting continued investment going forward",
+        ];
+        let mut spans = Vec::new();
+        for (row, ((left_line, right_line), left_right)) in
+            left_body.iter().zip(right_body).zip(left_rights).enumerate()
+        {
+            let y = 816.0 - row as f32 * 14.0;
+            spans.push(span_with_width(left_line, LEFT_X, y, left_right - LEFT_X, 11.0, 11.0));
+            spans.push(span_with_width(right_line, RIGHT_X, y, 190.0, 11.0, 11.0));
+        }
+        spans.push(span_with_width("6", 308.0, 40.0, 4.5, 8.0, 8.0));
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let texts = spans.iter().map(|span| span.text.as_str()).collect::<Vec<_>>();
+        let expected = left_body
+            .iter()
+            .chain(&right_body)
+            .copied()
+            .chain(["6"])
+            .collect::<Vec<_>>();
         assert_eq!(texts, expected);
     }
 
