@@ -1,0 +1,10 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "xberg-io/*"
+      - dependency-name: "erlef/setup-beam"
+      - dependency-name: "rubygems/configure-rubygems-credentials"

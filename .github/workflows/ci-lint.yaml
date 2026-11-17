@@ -25,6 +25,8 @@ on:
       - "mise.ci.lock"
       - "package.json"
       - ".github/**"
+      - "**/action.yml"
+      - "**/action.yaml"
       - "mise-tasks/**"
       - ".gitmodules"
       - "alef.toml"
@@ -66,6 +68,19 @@ jobs:
         run: mise run governance:verify
       - name: Test that ai-rulez stays unpinned
         run: mise run governance:test
+
+  action-pins:
+    if: github.ref == 'refs/heads/main'
+    name: GitHub Actions pin policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Python and uv
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: python uv
+      - name: Verify action and reusable workflow pins
+        run: mise run ci:verify:action-pins
 
   benchmark-scripts:
     if: >-

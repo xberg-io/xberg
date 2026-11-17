@@ -15,8 +15,15 @@ enabled = true
 ttl = "6h"
 
 [update]
-mode = "latest-tag"
-exclude = ["erlef/setup-beam", "rubygems/configure-rubygems-credentials"]
+mode = "latest"
+pin_style = "preserve"
+exclude = [
+  "erlef/setup-beam",
+  "rubygems/configure-rubygems-credentials",
+  "xberg-io/actions/build-elixir-natives@97c04280c1d4acc16bdc456db188782afbe63803",
+  "xberg-io/actions/setup-mise@97c04280c1d4acc16bdc456db188782afbe63803",
+  "xberg-io/actions/setup-rust@97c04280c1d4acc16bdc456db188782afbe63803",
+]
 include_prereleases = false
 preserve_major = false
 missing_ref = "warn"
