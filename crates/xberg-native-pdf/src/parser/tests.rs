@@ -523,13 +523,14 @@ fn test_parse_dictionary_with_extra_whitespace() {
 
 #[test]
 fn stream_line_ending_preserves_declared_payload_and_reports_padding() {
-    let cases: [(&[u8], bool); 4] = [
-        (b"<< /Length 5 >> stream\n\t ABC\nendstream /Next", false),
-        (b"<< /Length 5 >> stream\r\n\t ABC\nendstream /Next", false),
-        (b"<< /Length 5 >> stream \t\n\t ABC\nendstream /Next", true),
-        (b"<< /Length 5 >> stream\t \r\n\t ABC\nendstream /Next", true),
+    let cases: [(&[u8], &[u8], bool); 5] = [
+        (b"<< /Length 5 >> stream\n\t ABC\nendstream /Next", b"\t ABC", false),
+        (b"<< /Length 5 >> stream\r\n\t ABC\nendstream /Next", b"\t ABC", false),
+        (b"<< /Length 5 >> stream \t\n\t ABC\nendstream /Next", b"\t ABC", true),
+        (b"<< /Length 5 >> stream\t \r\n\t ABC\nendstream /Next", b"\t ABC", true),
+        (b"<< /Length 5 >> stream \t\nAB   \nendstream /Next", b"AB   ", true),
     ];
-    for (input, padded) in cases {
+    for (input, expected, padded) in cases {
         let sink = WarningSink::new();
         let (remaining, object) = {
             let _scope = sink.enter();
@@ -540,7 +541,7 @@ fn stream_line_ending_preserves_declared_payload_and_reports_padding() {
         };
         assert_eq!(remaining, b" /Next");
         assert_eq!(dict["Length"], Object::Integer(5));
-        assert_eq!(data.as_ref(), b"\t ABC", "padded line {padded}, input {input:?}");
+        assert_eq!(data.as_ref(), expected, "padded line {padded}, input {input:?}");
         let warnings = sink.take();
         if padded {
             assert_eq!(warnings.len(), 1);
@@ -559,7 +560,7 @@ fn stream_line_ending_preserves_declared_payload_and_reports_padding() {
 
 #[test]
 fn stream_line_ending_keeps_legacy_payload_and_warnings_without_lf_or_crlf() {
-    let cases: [(&[u8], &[u8], &str); 3] = [
+    let cases: [(&[u8], &[u8], &str); 5] = [
         (
             b"<< /Length 5 >> stream \tABC\nendstream",
             b" \tABC",
@@ -574,6 +575,16 @@ fn stream_line_ending_keeps_legacy_payload_and_warnings_without_lf_or_crlf() {
             b"<< /Length 5 >> stream\r \tABC\nendstream",
             b" \tABC",
             "Stream keyword followed by CR alone",
+        ),
+        (
+            b"<< /Length 5 >> stream \t\nAB\nendstream",
+            b" \t\nAB",
+            "No newline after stream keyword",
+        ),
+        (
+            b"<< /Length 6 >> stream \t\r\nAB\nendstream",
+            b" \t\r\nAB",
+            "No newline after stream keyword",
         ),
     ];
     for (input, expected, warning) in cases {

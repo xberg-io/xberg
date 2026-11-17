@@ -289,6 +289,16 @@ fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[
     }
 }
 
+fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
+    let Some(remaining) = input.get(length..) else {
+        return false;
+    };
+    let Ok((remaining, _)) = crate::lexer::skip_ws(remaining.trim_ascii_start()) else {
+        return false;
+    };
+    remaining.starts_with(b"endstream") && matches!(token(remaining), Ok((_, Token::StreamEnd)))
+}
+
 /// Parse stream data after the `stream` keyword.
 ///
 /// Stream data starts after a newline following `stream` and ends with `endstream`.
@@ -308,6 +318,19 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     let payload = after_padding
         .strip_prefix(b"\r\n")
         .or_else(|| after_padding.strip_prefix(b"\n"));
+
+    // A nonstandard header can also be a missing EOL followed by whitespace in the payload. ~keep
+    let payload = payload.filter(|payload| {
+        if padding == 0 {
+            return true;
+        }
+        let declared_length = dict
+            .get("Length")
+            .and_then(Object::as_integer)
+            .and_then(|length| usize::try_from(length).ok());
+        !declared_length
+            .is_some_and(|length| !declared_stream_end_at(payload, length) && declared_stream_end_at(input, length))
+    });
 
     let (input, warning) = match payload {
         Some(payload) if padding == 0 => (payload, None),
