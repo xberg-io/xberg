@@ -424,7 +424,7 @@ sceptre-wasm = ["dep:sceptre", "sceptre/tract", "image-encode"]
 # Release links Microsoft's runtime instead (system strategy) — see publish.yaml (#1284).
 ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-bundled"]
 # Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
-# No #[cfg] gates — passed through to the `ort` crate.
+# Standalone Sceptre uses it to preload discovered native libraries. ~keep
 ort-dynamic = ["ort?/load-dynamic", "xberg-gliner?/ort-dynamic"]
 # CoreML EP opt-in. On macOS the target-specific `ort` dependency table already enables
 # `ort/coreml` unconditionally, and `ort_discovery.rs` gates the CoreML EP code behind

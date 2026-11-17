@@ -53,12 +53,12 @@ fn discovered_runtime_loads_without_overwriting_the_environment() {
     let runtime = std::env::var_os(EXPLICIT_RUNTIME).expect("set ORT_DYLIB_PATH to a verified native runtime");
     assert!(Path::new(&runtime).is_absolute() && Path::new(&runtime).is_file());
     let mut child = child_process(test);
+    child.arg("--ignored");
     child.env(CHILD_RUNTIME, runtime);
     assert_single_test_passes(&mut child);
 }
 
 #[test]
-#[ignore = "qualifies failure before any ONNX Runtime library is initialized"]
 fn broken_candidate_reports_a_typed_error_before_ort_initialization() {
     let test = "broken_candidate_reports_a_typed_error_before_ort_initialization";
     if std::env::var(CHILD_TEST).as_deref() == Ok(test) {
