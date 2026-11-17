@@ -3,15 +3,18 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
 
 from .catalog import load_catalog
 from .contracts import (
+    PLAN_SCHEMA_VERSION,
     ROLES,
     TEST_COUNT,
     digest,
+    formula_model_paths,
     schedule,
     validate_argv,
     validate_config,
@@ -21,6 +24,25 @@ from .contracts import (
 )
 from .freeze import _dependencies, create_plan
 from .official import evaluation_environment, load_official, score_candidate
+
+MATH_GROUPS = ("arxiv_math", "old_scans_math")
+FORMULA_TRACE_TARGET = "xberg::extractors::pdf::formula_evidence"
+FORMULA_LOG_FILTER = f"info,{FORMULA_TRACE_TARGET}=debug"
+TRACE_TIMESTAMP = r"(?:\d{4}-\d{2}-\d{2}T\S+[ \t]+)?[ \t]*"
+# tracing-subscriber's full formatter prints colon-delimited spans before the event target.
+SPAN_NAME = r"[A-Za-z_][\w.-]*(?:::[A-Za-z_][\w.-]*)*"
+SPAN_FIELDS = r'\{(?:[^{}"\r\n]|"(?:\\.|[^"\\])*")*\}'
+TRACE_SPANS = rf"(?:(?:{SPAN_NAME}(?:{SPAN_FIELDS})?:)+[ \t]+)?"
+FORMULA_EVENT = re.compile(
+    rf"{TRACE_TIMESTAMP}DEBUG[ \t]+{TRACE_SPANS}{re.escape(FORMULA_TRACE_TARGET)}: "
+    r"native PDF formula recognition applied page=(?P<page>[1-9][0-9]*) "
+    r"replaced=(?P<replaced>[0-9]+) synthesized=(?P<synthesized>[0-9]+)[ \t]*"
+)
+LEGACY_SYNTHESIS_EVENT = re.compile(
+    rf"{TRACE_TIMESTAMP}INFO[ \t]+{TRACE_SPANS}xberg::extractors::pdf: "
+    r"recognized formulas from layout regions with no extracted formula text "
+    r"page=(?P<page>[1-9][0-9]*) formulas=[1-9][0-9]*[ \t]*"
+)
 
 
 def _write(path: Path, value: dict) -> None:
@@ -43,6 +65,7 @@ def _verify(plan: dict, *, corpus: bool = False) -> None:
         assets.extend([producer["executable"], *producer["evidence"]])
     if corpus:
         assets.extend(plan["catalog"]["input_assets"])
+    formula_model_paths(plan["models"])
     verify_assets(assets)
     validate_argv(plan["argv"])
     validate_config(json.loads(Path(plan["config"]["file"]).read_text()))
@@ -54,6 +77,8 @@ def _verify(plan: dict, *, corpus: bool = False) -> None:
 
 def _read_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
+    if plan.get("schema_version") != PLAN_SCHEMA_VERSION:
+        raise ValueError(f"expected plan schema {PLAN_SCHEMA_VERSION}; rerun freeze")
     _verify(plan, corpus=True)
     registry = plan["catalog"]["registry"]
     catalog = load_catalog(Path(plan["data_root"]), Path(registry) if registry else None)
@@ -92,6 +117,7 @@ def prepare(plan_path: Path, output: Path) -> None:
 
 
 def _model_fallback(document: dict, stderr: str) -> bool:
+    # Native PDF formula recognition can report failure solely through tracing on stderr.
     warnings = document.get("processing_warnings", [])
     lines = [f"{row['source']} {row['message']}" for row in warnings] + stderr.splitlines()
     for line in lines:
@@ -106,17 +132,74 @@ def _model_fallback(document: dict, stderr: str) -> bool:
     return False
 
 
+def _formula_cache_intact(cache: Path, models: dict[str, Path]) -> bool:
+    if cache.is_symlink() or not cache.is_dir() or {path.name for path in cache.iterdir()} != models.keys():
+        return False
+    return all(
+        (cache / name).is_symlink() and (cache / name).readlink() == path and (cache / name).is_file()
+        for name, path in models.items()
+    )
+
+
+def _recognized_formula(document: dict, stderr: str) -> bool:
+    # Formula rows may come from native glyph text. Require native model evidence
+    # from stderr and a nonempty formula on the corresponding output page.
+    plain_stderr = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
+    pages = set()
+    for line in plain_stderr.splitlines():
+        if event := FORMULA_EVENT.fullmatch(line):
+            if int(event["replaced"]) or int(event["synthesized"]):
+                pages.add(int(event["page"]))
+        elif event := LEGACY_SYNTHESIS_EVENT.fullmatch(line):
+            pages.add(int(event["page"]))
+    return any(
+        formula.get("page") in pages and bool(formula.get("latex", "").strip())
+        for formula in document.get("formulas", [])
+    )
+
+
+def _math_coverage(rows: list[dict], pdfs: dict[str, dict]) -> dict:
+    counts = {role: {group: {"cases": 0, "recognized_cases": 0} for group in MATH_GROUPS} for role in ROLES}
+    for row in rows:
+        parts = Path(pdfs[row["pdf_id"]]["file"]).parts
+        if len(parts) < 4 or parts[:2] != ("bench_data", "pdfs") or parts[2] not in MATH_GROUPS:
+            continue
+        group = counts[row["role"]][parts[2]]
+        group["cases"] += 1
+        if row["status"] == "extracted" and row.get("recognized_formula") is True:
+            group["recognized_cases"] += 1
+    return counts
+
+
+def _missing_math_recognition(coverage: dict) -> list[str]:
+    return [
+        role
+        for role, groups in coverage.items()
+        if any(group["cases"] for group in groups.values())
+        and not any(group["recognized_cases"] for group in groups.values())
+    ]
+
+
 def _extract(plan: dict, case: dict, pdf: dict, diagnostics: Path, timeout: float) -> tuple[str, dict]:
     producer = plan["producers"][case["role"]]
     pdf_path = Path(plan["data_root"]) / pdf["file"]
     verify_assets([{"file": str(pdf_path), "sha256": pdf["sha256"]}])
     substitutions = {"pdf": str(pdf_path), "config": plan["config"]["file"]}
     argv = [producer["executable"]["file"], *(argument.format_map(substitutions) for argument in plan["argv"])]
+    formula_models = formula_model_paths(plan["models"])
     with tempfile.TemporaryDirectory(prefix="olmocr-result-cache-") as cache:
+        formula_cache = Path(cache) / "formula-recognition"
+        formula_cache.mkdir()
+        for name, model in formula_models.items():
+            if not model.is_file():
+                raise ValueError(f"missing pinned RapidLaTeXOCR file: {model}")
+            (formula_cache / name).symlink_to(model)
+
         environment = {
             "PATH": os.environ.get("PATH", ""),
             "HOME": cache,
             **plan["environment"],
+            "RUST_LOG": FORMULA_LOG_FILTER,
             "XDG_CACHE_HOME": cache,
             "XBERG_CACHE_DIR": cache,
             "TMPDIR": cache,
@@ -127,6 +210,7 @@ def _extract(plan: dict, case: dict, pdf: dict, diagnostics: Path, timeout: floa
             (diagnostics / "stdout.json").write_bytes(error.stdout or b"")
             (diagnostics / "stderr.txt").write_bytes(error.stderr or b"")
             raise
+        formula_cache_intact = _formula_cache_intact(formula_cache, formula_models)
     (diagnostics / "stdout.json").write_bytes(completed.stdout)
     (diagnostics / "stderr.txt").write_bytes(completed.stderr)
     if completed.returncode:
@@ -136,9 +220,12 @@ def _extract(plan: dict, case: dict, pdf: dict, diagnostics: Path, timeout: floa
     content = document["content"]
     if not isinstance(content, str):
         raise ValueError("native Markdown content is not a string")
+    stderr = completed.stderr.decode("utf-8", errors="replace")
     return content, {
         "processing_warnings": document.get("processing_warnings", []),
-        "model_fallback": _model_fallback(document, completed.stderr.decode("utf-8", errors="replace")),
+        "formula_cache_intact": formula_cache_intact,
+        "model_fallback": not formula_cache_intact or _model_fallback(document, stderr),
+        "recognized_formula": _recognized_formula(document, stderr),
         "extraction_time_ms": envelope.get("extraction_time_ms"),
         "peak_memory_bytes": envelope.get("peak_memory_bytes"),
     }
@@ -183,17 +270,23 @@ def generate(plan_path: Path, ready: Path, output: Path, timeout: float) -> None
             stream.write(json.dumps(row) + "\n")
     validate_results(plan["cases"], rows)
     _verify(plan, corpus=True)
+    math_coverage = _math_coverage(rows, pdfs)
+    missing_recognition = _missing_math_recognition(math_coverage)
+    rows_healthy = all(row["status"] == "extracted" for row in rows)
     _write(
         output / "generation.json",
         {
             "plan_sha256": digest(plan_path),
             "expected": 1968,
             "rows": rows,
-            "healthy": all(row["status"] == "extracted" for row in rows),
+            "math_coverage": math_coverage,
+            "healthy": rows_healthy and not missing_recognition,
         },
     )
-    if not all(row["status"] == "extracted" for row in rows):
+    if not rows_healthy:
         raise ValueError("generation completed with retained failures; scoring remains diagnostic")
+    if missing_recognition:
+        raise ValueError(f"no native formula recognition witnessed in math cases for: {', '.join(missing_recognition)}")
 
 
 def score(plan_path: Path, ready: Path, generation: Path, output: Path) -> None:
@@ -213,6 +306,8 @@ def score(plan_path: Path, ready: Path, generation: Path, output: Path) -> None:
             if Path(row["prediction"]["file"]).absolute() != expected.absolute():
                 raise ValueError("prediction path does not match scheduled PDF/producer")
     verify_predictions(generation, predictions)
+    math_coverage = _math_coverage(generated["rows"], pdfs)
+    missing_recognition = _missing_math_recognition(math_coverage)
     output.mkdir(parents=True, exist_ok=False)
     reports = {}
     with evaluation_environment(Path(plan["evaluator_root"]), Path(plan["browser_root"]), output / "home"):
@@ -229,8 +324,10 @@ def score(plan_path: Path, ready: Path, generation: Path, output: Path) -> None:
             reports[role] = score_candidate(generation / role, plan["catalog"]["tests"], tests, verify)
             _write(output / f"{role}.json", reports[role])
     _verify(plan, corpus=True)
-    healthy = all(row.get("status") == "extracted" and row.get("prediction") for row in generated["rows"]) and not any(
-        report["errors"] for report in reports.values()
+    healthy = (
+        all(row.get("status") == "extracted" and row.get("prediction") for row in generated["rows"])
+        and not any(report["errors"] for report in reports.values())
+        and not missing_recognition
     )
     _write(
         output / "coverage.json",
@@ -238,9 +335,14 @@ def score(plan_path: Path, ready: Path, generation: Path, output: Path) -> None:
             "plan_sha256": digest(plan_path),
             "generation_cases": len(generated["rows"]),
             "official_test_results": sum(len(report["tests"]) for report in reports.values()),
+            "math_coverage": math_coverage,
             "healthy": healthy,
         },
     )
+    if missing_recognition:
+        raise ValueError(
+            f"qualification invalid: no native formula recognition in math cases for: {', '.join(missing_recognition)}"
+        )
     if not healthy:
         raise ValueError("qualification invalid: retained native/evaluator errors must be resolved")
 
