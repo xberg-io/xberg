@@ -353,6 +353,7 @@ run_discarded_recovery_cases() {
 
 run_office_page_cases() {
   local test_name
+  run_exact should_preserve_source_spacing_across_inline_rtf_groups --test rtf_extractor_tests
   for test_name in \
     plain_heading_carries_no_style_note \
     plain_table_cell_keeps_link_text_and_drops_the_target \
@@ -454,7 +455,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=40
+  expected=41
   run_office_page_cases
   ;;
 api-jobs)
