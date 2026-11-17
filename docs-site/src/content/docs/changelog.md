@@ -84,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Warn when resizing a standalone tall image may leave text incomplete.** (#2502)
 
+- **(pdf): Report when a tall scanned page used a reduced-resolution OCR read and source-image strip recovery did not run or could not improve it.** (#2502)
+
 - **(math): explicit text annotations preserve LaTeX in Markdown, HTML, and Djot.**
   Rust callers can use `AnnotationKind::math(display)` and `math_display()`; other bindings can use the existing
   `Custom` representation with name `xberg.math` and value `inline` or `display`. Annotation byte ranges include
@@ -129,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/app/.xberg`. Remount caches previously mounted at `/root/.cache/xberg`. An arbitrary non-root UID
   with group 0 can write to the pre-created home and cache directories in a fresh container.
   Use the same UID for every writer to a persistent cache volume. (#3168)
+
+- **(docx): Run parsing and document assembly on a blocking worker on native Tokio.** (#3171)
+  Extraction timeouts can now return while DOCX parsing is active. Queued work can be cancelled before it starts.
+  Running work observes cancellation between parsing, rendering, table conversion, and document assembly.
 
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)
@@ -196,6 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `build-tesseract` and `build-tesseract-wasm` builds compile the signed 5.5.4 tag and need CMake 3.22 or newer.
 
 ### Security
+
+- **(install): Verify CLI release archive integrity before extraction.** The install script reads SHA-256 digests from GitHub release metadata. (#3168)
 
 - **(api, mcp): Callers can no longer choose server paths or loosen operator limits.**
   REST and MCP requests are rejected when their config names a server file, directory or model source
@@ -272,6 +280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **(pdf): Keep structured warnings with the document that produced them, including when fonts are shared across documents.** (#3172)
 
 - **(ocr): Report each page's OCR progress once, even when a fallback backend or an image retry reads it again.** The event names the backend of the page's first read. (#3174)
 

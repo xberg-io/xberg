@@ -1076,6 +1076,7 @@ impl PdfDocument {
     /// spaces but the separation renderer does not paint into them, so
     /// surfacing their inks here would create plates that stay empty.
     pub fn get_page_inks_deep(&self, page_index: usize) -> Result<Vec<String>> {
+        let _warnings = self.warning_scope();
         let resources = self.page_resources_for_inks(page_index)?;
         let content_data = self.cached_page_content(page_index)?;
         let operators = crate::content::parser::parse_content_stream(&content_data)?;

@@ -131,16 +131,24 @@ def test_publication_condition_preserves_required_artifacts(
         "cancelled": cancelled,
         "needs": {
             "prepare": {
-                "outputs": {"dry_run": dry_run, "release_python": "true", "is_tag": "true", "force_republish": "false"}
+                "result": "success",
+                "outputs": {"dry_run": dry_run, "release_python": "true", "is_tag": "true", "force_republish": "false"},
             },
             "publish_crates": {"result": "success"},
+            "validate_versions": {"result": "success"},
+            "check_cratesio": {"result": "success"},
             "check_pypi": {"outputs": {"exists": "false"}},
             "python_wheels": {"result": wheels},
             "python_wheels_musl": {"result": musl},
             "python_sdist": {"result": sdist},
         },
     }
-    assert contracts.evaluate_condition(expression, context) is expected
+    # The job runs whenever PyPI is wanted; its leading require-job-results step then fails it
+    # when a needed build did not finish as required, so publication = condition and gate.
+    assert contracts.evaluate_condition(expression, context) is (not cancelled)
+    assert (
+        contracts.evaluate_condition(expression, context) and contracts.gate_passes("publish-pypi", context)
+    ) is expected
 
 
 @pytest.mark.parametrize(

@@ -21,12 +21,13 @@ def version_sources(action: str, workflow: str) -> str:
 
 
 def main() -> None:
-    """Collect exactly five non-optimized setup checks and propagate failure."""
+    """Collect exactly six non-optimized setup checks and propagate failure."""
     if not __debug__:
         raise RuntimeError("optimized Python would remove setup test assertions")
     suite = unittest.defaultTestLoader.discover(str(PACKAGE / "tests"), pattern="test_setup_contract.py")
-    if suite.countTestCases() != 5:
-        raise RuntimeError("expected exactly five NLI native setup tests")
+    collected = suite.countTestCases()
+    if collected != 6:
+        raise RuntimeError(f"expected exactly six NLI native setup tests, collected {collected}")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         raise SystemExit(1)
