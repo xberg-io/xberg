@@ -160,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
+
 - **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
   DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
 

@@ -385,6 +385,8 @@ fn ccitt_group4_parameters_require_exact_geometry_and_grammar() {
     defaults.remove("Rows");
     defaults.remove("BlackIs1");
     assert_eq!(super::supported_group4_params(&defaults, 1275, 1650), Some(false));
+    defaults.insert("Rows".to_owned(), Object::Integer(0));
+    assert_eq!(super::supported_group4_params(&defaults, 1275, 1650), Some(false));
     let mut other_group = defaults.clone();
     other_group.insert("K".to_owned(), Object::Integer(0));
     assert_eq!(super::supported_group4_params(&other_group, 1275, 1650), None);
