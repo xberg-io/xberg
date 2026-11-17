@@ -161,14 +161,26 @@ SH
 	bash "$XBERG_WORK/step.sh"
 	export NIF_ASSETS
 	NIF_ASSETS="$(sed -n 's/^names=//p' "$GITHUB_OUTPUT")"
-	extract_run upload-elixir-release 'Require successful Elixir builds'
-	export BUILD_RESULTS='success failure success'
-	run bash "$XBERG_WORK/step.sh"
-	xberg_assert_status 1
-	xberg_assert_output_contains 'All Elixir NIF build jobs must succeed'
-	export BUILD_RESULTS='success success success'
-	run bash "$XBERG_WORK/step.sh"
+	# Failed legs are rejected by xberg-io/actions/require-job-results (tested in that repo);
+	# here the gate must be the job's first step and require every NIF build job. ~keep
+	run python3 - "$REPOSITORY_ROOT/.github/workflows/publish.yaml" <<'PYTHON'
+import re
+import sys
+text = open(sys.argv[1]).read()
+job = re.search(r"(?ms)^  upload-elixir-release:\n(.*?)(?=^  [a-z][a-z0-9-]+:\n)", text).group(1)
+needs = re.search(r"(?m)^    needs: \[(.*)\]$", job).group(1).split(", ")
+gate = re.split(r"(?m)^(?=      - )", job.split("    steps:\n", 1)[1])[1]
+assert "        uses: xberg-io/actions/require-job-results@v1\n" in gate, gate
+assert "          needs: ${{ toJSON(needs) }}\n" in gate, gate
+assert "succeeded-or-skipped" not in gate, gate
+required = gate.split("          succeeded: |\n", 1)[1].split()
+expected = ["elixir-natives", "elixir-natives-musl", "elixir-natives-manylinux"]
+assert required == expected, required
+assert set(expected) <= set(needs), needs
+print("gate requires", " ".join(required))
+PYTHON
 	xberg_assert_status 0
+	xberg_assert_output_contains 'gate requires elixir-natives elixir-natives-musl elixir-natives-manylinux'
 
 	extract_run upload-elixir-release 'Verify current-run Elixir archives'
 	mkdir -p dist/elixir
