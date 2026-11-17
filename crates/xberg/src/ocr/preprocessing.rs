@@ -172,10 +172,10 @@ fn deskew_if_enabled(pix: Pix, enabled: bool) -> Pix {
         return pix;
     }
     apply_optional(pix, "deskew", |source| {
-        let output = source.deskew();
+        let output = source.deskew_with_rotation();
         #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-        geometry_evidence::record(output.as_ref().is_ok_and(|result| result.as_ptr() == source.as_ptr()));
-        output
+        geometry_evidence::record(output.as_ref().is_ok_and(|(_, rotated)| !rotated));
+        output.map(|(image, _)| image)
     })
 }
 
@@ -688,12 +688,11 @@ pub(crate) mod geometry_evidence {
         }
     }
 
-    // Leptonica pixDeskew returns a reference-counted clone for a no-op.
-    // Any distinct Pix, error, or repeated observation is insufficient evidence.
-    pub(super) fn record(same_pix: bool) {
+    // Only a single successful read without deskew rotation establishes scale-only geometry. ~keep
+    pub(super) fn record(unrotated: bool) {
         let _ = REQUEST.try_with(|request| {
             let mut current = request.0.lock();
-            current.geometry = if same_pix && current.geometry == Observation::Absent {
+            current.geometry = if unrotated && current.geometry == Observation::Absent {
                 Observation::ScaleOnly
             } else {
                 Observation::Refused

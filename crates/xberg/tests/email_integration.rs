@@ -493,13 +493,12 @@ async fn test_msg_truncated_fat_with_attachments() {
 /// Test that a large MSG with big attachments completes in reasonable time
 /// (regression test for issue #372 — previously hung due to hex-encoding overhead).
 #[tokio::test]
+#[ignore = "requires the operator-supplied #372 fixture at test_documents/email/MSG_hang_repro.msg"]
 async fn test_msg_large_attachment_no_hang() {
-    if helpers::skip_if_missing("email/MSG_hang_repro.msg") {
-        return;
-    }
-
     let config = ExtractionConfig::default();
-    let data = std::fs::read(helpers::get_test_file_path("email/MSG_hang_repro.msg")).unwrap();
+    let path = helpers::get_test_file_path("email/MSG_hang_repro.msg");
+    let data = std::fs::read(&path)
+        .unwrap_or_else(|error| panic!("required #372 fixture unavailable at {}: {error}", path.display()));
 
     let start = std::time::Instant::now();
     let result = extract_bytes_document(&data, "application/vnd.ms-outlook", &config)

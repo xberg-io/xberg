@@ -3,7 +3,7 @@ set -euo pipefail
 archive="${1:?archive path required}"
 checksums="${2:?checksum manifest required}"
 name="${archive##*/}"
-expected="$(awk -v name="$name" '$2 == name { print $1 }' "$checksums")"
+expected="$(awk -v name="$name" '{ sub(/\r$/, "") } $2 == name { print $1 }' "$checksums")"
 if [[ ! "$expected" =~ ^[a-f0-9]{64}$ ]]; then
   printf 'Expected exactly one pinned SHA-256 for %s\n' "$name" >&2
   exit 1

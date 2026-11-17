@@ -32,6 +32,7 @@ pub struct HeifContext<'a> {
 impl HeifContext<'static> {
     /// Create a new empty context.
     pub fn new() -> Result<HeifContext<'static>> {
+        // SAFETY: Allocation takes no caller-owned pointers. A non-null result is owned by this context.
         let ctx = unsafe { lh::heif_context_alloc() };
         if ctx.is_null() {
             Err(HeifError {
@@ -56,7 +57,9 @@ impl HeifContext<'static> {
 
     /// # Safety
     ///
-    /// The given pointer must be valid.
+    /// The pointer must be non-null, live, and independently releasable with
+    /// `heif_context_free`. The caller must keep any backing Rust reader or
+    /// borrowed input alive for the native context since this wrapper stores no source.
     #[cfg(feature = "v1_18")]
     #[allow(unsafe_code)]
     pub(crate) unsafe fn from_ptr(ctx: *mut lh::heif_context) -> HeifContext<'static> {
@@ -74,6 +77,8 @@ impl<'a> HeifContext<'a> {
     pub fn read_file(&mut self, name: &str) -> Result<()> {
         self.source = Source::File;
         let c_name = ffi::CString::new(name).unwrap();
+        // SAFETY: The context is exclusively borrowed and the NUL-terminated filename lives
+        // through this call. Null requests default read options.
         let err = unsafe { lh::heif_context_read_from_file(self.inner, c_name.as_ptr(), ptr::null()) };
         HeifError::from_heif_error(err)?;
         Ok(())
@@ -82,12 +87,19 @@ impl<'a> HeifContext<'a> {
     /// Read a HEIF file from the reader.
     #[allow(unsafe_code)]
     pub fn read_reader(&mut self, reader: Box<dyn Reader + 'a>) -> Result<()> {
-        let mut reader_box = Box::new(reader);
+        // Libheif installs its reader adapter before parsing and retains it on error. ~keep
+        let previous_source = std::mem::replace(&mut self.source, Source::Reader(Box::new(reader)));
+        let Source::Reader(reader_box) = &mut self.source else {
+            unreachable!("reader source just installed");
+        };
         let user_data = reader_box.as_mut() as *mut _ as *mut c_void;
+        // FIXME(#3229): Native references can outlive this Rust source, which its type does not enforce.
+        // The static table and the new reader allocation stay live through this call and on error. ~keep
         let err = unsafe { lh::heif_context_read_from_reader(self.inner, &HEIF_READER, user_data, ptr::null()) };
-        HeifError::from_heif_error(err)?;
-        self.source = Source::Reader(reader_box);
-        Ok(())
+        // Copy the context-borrowed message before the previous reader can run its destructor.
+        let result = HeifError::from_heif_error(err);
+        drop(previous_source);
+        result
     }
 
     /// Create a new context from the reader.
@@ -116,6 +128,8 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn read_bytes<'b: 'a>(&mut self, bytes: &'b [u8]) -> Result<()> {
         self.source = Source::Memory(bytes);
+        // FIXME(#3229): Image handles retain the native context but not the Rust input borrow.
+        // Source::Memory keeps the slice available for this wrapper's lifetime. ~keep
         let err = unsafe {
             lh::heif_context_read_from_memory_without_copy(self.inner, bytes.as_ptr() as _, bytes.len(), ptr::null())
         };
@@ -123,6 +137,10 @@ impl<'a> HeifContext<'a> {
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// The native writer supplies a readable byte buffer and calls synchronously with
+    /// the exclusively borrowed output vector that `write_to_bytes` passed as userdata.
     #[allow(unsafe_code)]
     unsafe extern "C" fn vector_writer(
         _ctx: *mut lh::heif_context,
@@ -130,9 +148,14 @@ impl<'a> HeifContext<'a> {
         size: usize,
         user_data: *mut c_void,
     ) -> lh::heif_error {
+        // SAFETY: write_to_bytes passes its exclusively borrowed Vec as user_data for the
+        // synchronous writer callback.
         let vec: &mut Vec<u8> = unsafe { &mut *(user_data as *mut Vec<u8>) };
         vec.reserve(size);
+        // SAFETY: heif_context_write supplies the serialized HEIF box bytes from its own
+        // live StreamWriter_memory buffer. Reserve supplies separate writable Rust storage.
         unsafe { ptr::copy_nonoverlapping::<u8>(data as _, vec.as_mut_ptr(), size) };
+        // SAFETY: The copy initialized every byte in 0..size within the reserved capacity.
         unsafe { vec.set_len(size) };
 
         lh::heif_error {
@@ -152,6 +175,8 @@ impl<'a> HeifContext<'a> {
             write: Some(Self::vector_writer),
         };
 
+        // SAFETY: The context is live. The C writer invokes its callback during this call;
+        // the versioned table and the exclusively borrowed result remain live until it returns.
         let err = unsafe { lh::heif_context_write(self.inner, &mut writer, pointer_to_res) };
         HeifError::from_heif_error(err)?;
         Ok(res)
@@ -160,6 +185,7 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn write_to_file(&self, name: &str) -> Result<()> {
         let c_name = ffi::CString::new(name).unwrap();
+        // SAFETY: The context stays live and c_name supplies a NUL-terminated path during the call.
         let err = unsafe { lh::heif_context_write_to_file(self.inner, c_name.as_ptr()) };
         HeifError::from_heif_error(err)
     }
@@ -172,6 +198,7 @@ impl<'a> HeifContext<'a> {
     #[deprecated(since = "2.7.0", note = "use 'image_ids' method instead.")]
     #[allow(unsafe_code)]
     pub fn number_of_top_level_images(&self) -> usize {
+        // SAFETY: This query reads the live context without writing through Rust pointers.
         unsafe { lh::heif_context_get_number_of_top_level_images(self.inner) as _ }
     }
 
@@ -184,6 +211,7 @@ impl<'a> HeifContext<'a> {
         if item_ids.is_empty() {
             0
         } else {
+            // SAFETY: The exclusive slice supplies storage for the advertised entry count.
             unsafe {
                 lh::heif_context_get_list_of_top_level_image_IDs(self.inner, item_ids.as_mut_ptr(), item_ids.len() as _)
                     as usize
@@ -194,8 +222,10 @@ impl<'a> HeifContext<'a> {
     /// Returns a vector with top level image IDs.
     #[allow(unsafe_code)]
     pub fn image_ids(&self) -> Vec<ItemId> {
+        // SAFETY: The count query takes only the live context.
         let count = unsafe { lh::heif_context_get_number_of_top_level_images(self.inner) as usize };
         let mut item_ids = vec![0; count];
+        // SAFETY: The Vec has count writable entries, the bound passed to libheif.
         let real_count = unsafe {
             lh::heif_context_get_list_of_top_level_image_IDs(self.inner, item_ids.as_mut_ptr(), count as _) as usize
         };
@@ -207,6 +237,8 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn image_handle(&self, item_id: ItemId) -> Result<ImageHandle> {
         let mut handle: *mut lh::heif_image_handle = ptr::null_mut();
+        // SAFETY: The context stays live and handle is a writable out slot. On success the
+        // ImageHandle wrapper owns the returned native handle.
         let err = unsafe { lh::heif_context_get_image_handle(self.inner, item_id, &mut handle) };
         HeifError::from_heif_error(err)?;
         Ok(ImageHandle::new(handle))
@@ -219,6 +251,8 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn primary_image_handle(&self) -> Result<ImageHandle> {
         let mut handle: *mut lh::heif_image_handle = ptr::null_mut();
+        // SAFETY: The context stays live and handle is a writable out slot. On success the
+        // ImageHandle wrapper owns the returned native handle.
         let err = unsafe { lh::heif_context_get_primary_image_handle(self.inner, &mut handle) };
         HeifError::from_heif_error(err)?;
         Ok(ImageHandle::new(handle))
@@ -248,6 +282,8 @@ impl<'a> HeifContext<'a> {
         encoding_options: Option<EncodingOptions>,
     ) -> Result<ImageHandle> {
         let mut handle: *mut lh::heif_image_handle = ptr::null_mut();
+        // SAFETY: The context, image, encoder, and optional settings live through encoding.
+        // The writable handle slot receives an owned image handle on success.
         unsafe {
             let err = lh::heif_context_encode_image(
                 self.inner,
@@ -264,9 +300,8 @@ impl<'a> HeifContext<'a> {
     /// Encode the `image` as a scaled down thumbnail image.
     ///
     /// The image is scaled down to fit into a square area of width `bbox_size`.
-    /// If the input image is already so small that it fits into this bounding
-    /// box, no thumbnail image is encoded and `Ok(None)` is returned.
-    /// No error is returned in this case.
+    /// Returns `Ok(None)` when libheif succeeds without returning a thumbnail handle.
+    /// Errors reported by libheif are returned to the caller.
     ///
     /// The encoded thumbnail is automatically assigned to the
     /// `master_image_handle`. Hence, you do not have to call
@@ -281,6 +316,8 @@ impl<'a> HeifContext<'a> {
         encoding_options: Option<EncodingOptions>,
     ) -> Result<Option<ImageHandle>> {
         let mut handle: *mut lh::heif_image_handle = ptr::null_mut();
+        // SAFETY: Both source handles, the encoder and optional settings remain live for
+        // the call. The writable slot receives libheif's nullable thumbnail result.
         unsafe {
             let err = lh::heif_context_encode_thumbnail(
                 self.inner,
@@ -293,7 +330,7 @@ impl<'a> HeifContext<'a> {
             );
             HeifError::from_heif_error(err)?;
         }
-        Ok(Some(ImageHandle::new(handle)))
+        Ok(thumbnail_handle(handle))
     }
 
     /// Encodes an array of images into a grid.
@@ -321,6 +358,8 @@ impl<'a> HeifContext<'a> {
         let mut tiles_inners: Vec<*mut lh::heif_image> = tiles.iter().map(|img| img.inner).collect();
         let rows = rows.get();
         let columns = (tiles_inners.len() as u32 / rows as u32).min(u16::MAX as _) as u16;
+        // SAFETY: rows * columns fits the pointer array; libheif rejects a zero dimension.
+        // The tiles, encoder and optional settings stay live and handle is a writable out slot.
         unsafe {
             let err = lh::heif_context_encode_grid(
                 self.inner,
@@ -343,6 +382,7 @@ impl<'a> HeifContext<'a> {
         master_image_handle: &ImageHandle,
         thumbnail_image_handle: &ImageHandle,
     ) -> Result<()> {
+        // SAFETY: The referenced handles stay live during this context mutation.
         unsafe {
             let err =
                 lh::heif_context_assign_thumbnail(self.inner, master_image_handle.inner, thumbnail_image_handle.inner);
@@ -352,6 +392,7 @@ impl<'a> HeifContext<'a> {
 
     #[allow(unsafe_code)]
     pub fn set_primary_image(&mut self, image_handle: &mut ImageHandle) -> Result<()> {
+        // SAFETY: The context is exclusively borrowed and the image handle remains live.
         unsafe {
             let err = lh::heif_context_set_primary_image(self.inner, image_handle.inner);
             HeifError::from_heif_error(err)
@@ -382,7 +423,9 @@ impl<'a> HeifContext<'a> {
             Some(s) => Some(str_to_cstring(s, "content_type")?),
             None => None,
         };
-        let c_content_type_ptr = c_content_type.map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let c_content_type_ptr = c_content_type.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        // Both C strings and the data remain live through the call. ~keep
+        // TODO(#3172): Check that the byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_generic_metadata(
                 self.inner,
@@ -399,6 +442,8 @@ impl<'a> HeifContext<'a> {
     /// Add EXIF metadata to an image.
     #[allow(unsafe_code)]
     pub fn add_exif_metadata(&mut self, master_image: &ImageHandle, data: &[u8]) -> Result<()> {
+        // SAFETY requirement: The context and image handle are live and data is borrowed
+        // for the copy. The conversion assumes its byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_exif_metadata(self.inner, master_image.inner, data.as_ptr() as _, data.len() as _)
         };
@@ -408,6 +453,8 @@ impl<'a> HeifContext<'a> {
     /// Add XMP metadata to an image.
     #[allow(unsafe_code)]
     pub fn add_xmp_metadata(&mut self, master_image: &ImageHandle, data: &[u8]) -> Result<()> {
+        // SAFETY requirement: The context and image handle are live and data is borrowed
+        // for the copy. The conversion assumes its byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_XMP_metadata(self.inner, master_image.inner, data.as_ptr() as _, data.len() as _)
         };
@@ -425,6 +472,7 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn set_max_decoding_threads(&mut self, max_threads: u32) {
         let max_threads = max_threads.min(libc::c_int::MAX as u32) as libc::c_int;
+        // SAFETY: The context is exclusively borrowed and the count fits the C int parameter.
         unsafe { lh::heif_context_set_max_decoding_threads(self.inner, max_threads) };
     }
 
@@ -435,6 +483,7 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_19")]
     #[allow(unsafe_code)]
     pub fn security_limits(&self) -> SecurityLimits {
+        // SAFETY: The context stays live while its borrowed limits are copied by value.
         let inner_ptr = unsafe { lh::heif_context_get_security_limits(self.inner) };
         let inner = ptr::NonNull::new(inner_ptr).unwrap();
         SecurityLimits::from_inner(inner)
@@ -444,6 +493,7 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_19")]
     #[allow(unsafe_code)]
     pub fn set_security_limits(&mut self, limits: &SecurityLimits) -> Result<()> {
+        // SAFETY: The context is exclusively borrowed and libheif copies the live limits value.
         let err = unsafe { lh::heif_context_set_security_limits(self.inner, limits.as_inner()) };
         HeifError::from_heif_error(err)
     }
@@ -452,6 +502,7 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_20")]
     #[allow(unsafe_code)]
     pub fn has_sequence(&self) -> bool {
+        // SAFETY: This query only borrows the live context.
         unsafe { lh::heif_context_has_sequence(self.inner) != 0 }
     }
 
@@ -463,6 +514,7 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_20")]
     #[allow(unsafe_code)]
     pub fn sequence_timescale(&self) -> u32 {
+        // SAFETY: This query only borrows the live context.
         unsafe { lh::heif_context_get_sequence_timescale(self.inner) }
     }
 
@@ -474,6 +526,7 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_20")]
     #[allow(unsafe_code)]
     pub fn sequence_duration(&self) -> u64 {
+        // SAFETY: This query only borrows the live context.
         unsafe { lh::heif_context_get_sequence_duration(self.inner) }
     }
 
@@ -481,9 +534,12 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_20")]
     #[allow(unsafe_code)]
     pub fn track_ids(&self) -> Vec<u32> {
+        // SAFETY: The count query takes only the live context.
         let num_tracks = unsafe { lh::heif_context_number_of_sequence_tracks(self.inner) as usize };
         let mut track_ids = vec![0u32; num_tracks];
 
+        // SAFETY: The Vec fits the count queried above. The C fill has no capacity parameter,
+        // so the track list must remain unchanged until it returns.
         unsafe {
             lh::heif_context_get_track_ids(self.inner, track_ids.as_mut_ptr() as *mut [u32; 0]);
         }
@@ -502,6 +558,8 @@ impl<'a> HeifContext<'a> {
     #[cfg(feature = "v1_20")]
     #[allow(unsafe_code)]
     pub fn track(&self, id: u32) -> Option<Track> {
+        // SAFETY: The context stays live for lookup. Null means no track. A non-null result
+        // is transferred to Track, which frees the native track.
         unsafe {
             let heif_track = lh::heif_context_get_track(self.inner, id);
             if heif_track.is_null() {
@@ -516,9 +574,34 @@ impl<'a> HeifContext<'a> {
 #[allow(unsafe_code)]
 impl Drop for HeifContext<'_> {
     fn drop(&mut self) {
+        // SAFETY: This wrapper releases its owned native context pointer before dropping its source.
+        // FIXME(#3229): Image handles can keep the shared native context alive beyond this wrapper.
         unsafe { lh::heif_context_free(self.inner) };
     }
 }
 
 #[allow(unsafe_code)]
+// FIXME(#3229): The source can hold a Reader without a Send bound.
 unsafe impl Send for HeifContext<'_> {}
+
+fn thumbnail_handle(handle: *mut lh::heif_image_handle) -> Option<ImageHandle> {
+    ptr::NonNull::new(handle).map(|handle| ImageHandle::new(handle.as_ptr()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_thumbnail_without_a_native_handle_is_none() {
+        assert!(thumbnail_handle(ptr::null_mut()).is_none());
+    }
+
+    #[test]
+    fn read_reader_retains_its_source_after_a_native_error() {
+        let mut context = HeifContext::new().expect("allocate HEIF context");
+        let reader = crate::StreamReader::new(std::io::Cursor::new([0_u8; 0]), 0);
+        assert!(context.read_reader(Box::new(reader)).is_err());
+        assert!(matches!(&context.source, Source::Reader(_)));
+    }
+}
