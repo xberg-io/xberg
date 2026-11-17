@@ -157,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
-- **pdf:** Two-column pages with a gutter narrower than 12pt no longer interleave their columns mid-sentence.
+- **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
 - **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
