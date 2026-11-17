@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Warning when a tall scanned page was read at reduced resolution and source-image strip recovery did not run or did not improve it. (#2502)
 
 - **ocr:** Warning when resizing a standalone tall image may leave text incomplete. (#2502)
+- **ocr:** `XBERG_TESSDATA_SYSTEM_PATHS=0` (or `false`) stops tessdata resolution from searching the system Tesseract directories.
 - **math:** Explicit math text annotations (`AnnotationKind::math(display)`, `math_display()` in Rust; `Custom` annotation `xberg.math` with value `inline` or `display` in other bindings) render as LaTeX in Markdown, HTML and Djot.
 - **ocr:** Corroborated Khmer numbers are recovered on eligible English-primary PDF pages when `khm.traineddata` is installed. (#2408)
 - **layout:** Experimental `LayoutDetectionConfig.model` (`--layout-model`) selects `rt_detr` (default) or `pp_doc_layout_v3`; PP-DocLayout-V3 requires ONNX Runtime and is an error on tract or WASM builds. (#2284)
