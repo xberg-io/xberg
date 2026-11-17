@@ -8,3 +8,5 @@ updates:
       - dependency-name: "xberg-io/*"
       - dependency-name: "erlef/setup-beam"
       - dependency-name: "rubygems/configure-rubygems-credentials"
+      # Helm still uses cosign 2 legacy signatures for Artifact Hub. ~keep
+      - dependency-name: "sigstore/cosign-installer"

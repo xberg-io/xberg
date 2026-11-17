@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import unittest
 from pathlib import Path
 
@@ -92,11 +93,12 @@ class TestWorkflowMatrixValidation(unittest.TestCase):
         VALIDATOR.validate_tika_artifact(jobs)
 
     def test_tika_matrix_cannot_download_from_maven(self) -> None:
-        mutated = WORKFLOW.replace(
-            "      - name: Download Apache Tika artifact\n        uses: actions/download-artifact@v8",
-            "      - name: Download Apache Tika artifact\n        run: curl https://repo1.maven.org/tika.jar",
-            1,
+        mutated, replacements = re.subn(
+            r"(      - name: Download Apache Tika artifact\n)        uses: actions/download-artifact@[^\n]+",
+            r"\g<1>        run: curl https://repo1.maven.org/tika.jar",
+            WORKFLOW,
         )
+        assert replacements == 1
 
         with self.assertRaisesRegex(ValueError, "must not download Apache Tika independently"):
             VALIDATOR.workflow_cells(mutated)

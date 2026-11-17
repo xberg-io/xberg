@@ -20,6 +20,8 @@ pin_style = "preserve"
 exclude = [
   "erlef/setup-beam",
   "rubygems/configure-rubygems-credentials",
+  # Helm still uses cosign 2 legacy signatures for Artifact Hub. ~keep
+  "sigstore/cosign-installer",
   "xberg-io/actions/build-elixir-natives@97c04280c1d4acc16bdc456db188782afbe63803",
   "xberg-io/actions/setup-mise@97c04280c1d4acc16bdc456db188782afbe63803",
   "xberg-io/actions/setup-rust@97c04280c1d4acc16bdc456db188782afbe63803",

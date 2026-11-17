@@ -78,7 +78,7 @@ def test_php_linux_artifacts_are_floor_built_and_verified() -> None:
     stage_ort = block.index("scripts/ci/stage-php-linux-ort.sh")
     verify = block.index("scripts/ci/verify-php-linux-abi.sh")
     smoke = block.index("scripts/ci/smoke-test-php-debian12.sh")
-    upload = block.index("actions/upload-artifact@v7", verify)
+    upload = block.index("uses: actions/upload-artifact@", verify)
 
     assert (
         setup_zig < setup_ort < first_build < install_zigbuild < rebuild < package < stage_ort < verify < smoke < upload
@@ -109,7 +109,7 @@ def test_php_macos_extension_links_the_decode_only_heif_stack_statically() -> No
     package = block.index("xberg-io/actions/package-php-pie@v1")
     notices = block.index("bash .release-tools/scripts/ci/stage-php-macos-notices.sh")
     gate = block.index("bash .release-tools/scripts/ci/verify-php-macos-extension.sh")
-    upload = block.index("actions/upload-artifact@v7", gate)
+    upload = block.index("uses: actions/upload-artifact@", gate)
     smoke = block.index("bash .release-tools/scripts/ci/smoke-php-macos-heif.sh")
     assert build_stack < build < package < notices < gate < smoke < upload
     assert "scripts/ci/smoke-php-macos-heif.sh\n" in block[: block.index("Build the static HEIF stack")]
@@ -129,7 +129,7 @@ def test_elixir_macos_nif_ships_the_codec_closure_and_loads_it() -> None:
     build = block.index("xberg-io/actions/build-elixir-natives@v1")
     stage = block.index('macos_elixir_archive.py" stage')
     load = block.index("missing-x265")
-    upload = block.index("actions/upload-artifact@v7", load)
+    upload = block.index("uses: actions/upload-artifact@", load)
     assert build_stack < build < stage < load < upload
     assert "export XBERG_HEIF_PROFILE=elixir-encoders" in block
     assert block.count('macos_elixir_archive.py" verify') == 1
