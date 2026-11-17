@@ -709,12 +709,13 @@ jobs:
             # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
             ort_version=1.24.2
             case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
-            ort_integrity=/project/scripts/ci/actions/setup-onnx-runtime
+            ort_integrity="{project}/scripts/ci/actions/setup-onnx-runtime"
             ort_tmp=$(mktemp -d)
             ort_archive="$ort_tmp/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
             trap 'rm -f -- "$ort_archive"; rmdir -- "$ort_tmp"' EXIT
             bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256" --known
-            curl --proto '=https' --proto-redir '=https' -fsSL -o "$ort_archive" \
+            curl --proto '=https' --proto-redir '=https' --retry 5 --retry-delay 5 --retry-all-errors \
+              -fsSL -o "$ort_archive" \
               "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"
             bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
             mkdir -p /opt/msort
