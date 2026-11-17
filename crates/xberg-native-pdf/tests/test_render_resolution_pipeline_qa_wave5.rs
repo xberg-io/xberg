@@ -31,7 +31,10 @@
 
 #![allow(dead_code)]
 
-use std::process::Command;
+#[path = "common/wave5_child_test.rs"]
+mod child_test;
+
+use child_test::{child_test_root, run_child_test};
 use xberg_native_pdf::document::PdfDocument;
 use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
 
@@ -368,96 +371,67 @@ fn type4_magenta_content_stream() -> &'static str {
 
 const PIPELINE_ENV: &str = "NATIVE_PDF_RESOLUTION_PIPELINE";
 const CHILD_EXPECTED_ENV: &str = "XBERG_QA_WAVE5_EXPECTED_PIPELINE";
-const CHILD_OUTPUT: &str = "XBERG_QA_WAVE5_RENDER_OUTPUT";
+const CHILD_ROOT: &str = "XBERG_QA_WAVE5_RENDER_ROOT";
 const CHILD_TEST: &str = "render_pipeline_env_child";
-const CHILD_RENDERED: &str = "wave-5 child rendered RGBA";
 const CHILD_MISMATCH: &str = "wave-5 child received the wrong pipeline value";
+const CHILD_PIXELS: &str = "page.rgba";
 
-fn run_render_pipeline_child(value: Option<&str>, expected: Option<&str>) -> Option<Vec<u8>> {
-    let temp = tempfile::tempdir().expect("create scratch directory for the rendered pixels");
-    let pixels = temp.path().join("page.rgba");
-    let mut command = Command::new(std::env::current_exe().expect("find the QA test binary"));
-    command
-        .args([
-            "--exact",
-            CHILD_TEST,
-            "--ignored",
-            "--nocapture",
-            "--test-threads=1",
-            "--color",
-            "never",
-        ])
-        .env(CHILD_OUTPUT, &pixels)
-        .env_remove(PIPELINE_ENV)
-        .env_remove(CHILD_EXPECTED_ENV);
-    if let Some(value) = value {
-        command.env(PIPELINE_ENV, value);
-    }
-    if let Some(expected) = expected {
-        command.env(CHILD_EXPECTED_ENV, expected);
-    }
-
-    let output = command.output().expect("run the isolated QA render");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let should_pass = value == expected;
-    let (status, count, marker) = if should_pass {
-        ("ok", "test result: ok. 1 passed; 0 failed; 0 ignored;", CHILD_RENDERED)
-    } else {
-        (
-            "FAILED",
-            "test result: FAILED. 0 passed; 1 failed; 0 ignored;",
-            CHILD_MISMATCH,
-        )
-    };
-    let exact_test_result = format!("test {CHILD_TEST} ... {status}");
-    assert!(
-        output.status.success() == should_pass
-            && stdout.lines().any(|line| line == exact_test_result)
-            && stdout.lines().any(|line| line.starts_with(count))
-            && stderr.lines().any(|line| line == marker),
-        "unexpected render child result for {value:?} with expected {expected:?}: {}",
-        output.status,
-    );
-    if !should_pass {
-        assert!(!pixels.exists(), "a child with the wrong input must not render");
-        return None;
-    }
-
-    let rgba = std::fs::read(pixels).expect("read the isolated child's render");
-    assert_eq!(rgba.len(), 100 * 100 * 4, "expected a 100×100 RGBA render");
-    Some(rgba)
+fn run_render_pipeline_child(root: &std::path::Path, value: Option<&str>, expected: Option<&str>) {
+    run_child_test(CHILD_TEST, CHILD_ROOT, root, |command| {
+        command.env_remove(PIPELINE_ENV).env_remove(CHILD_EXPECTED_ENV);
+        if let Some(value) = value {
+            command.env(PIPELINE_ENV, value);
+        }
+        if let Some(expected) = expected {
+            command.env(CHILD_EXPECTED_ENV, expected);
+        }
+    });
 }
 
 fn render_with_pipeline_env(value: Option<&str>) -> Vec<u8> {
-    run_render_pipeline_child(value, value).expect("child rendered the image")
+    let root = tempfile::tempdir().expect("create scratch directory for the rendered pixels");
+    run_render_pipeline_child(root.path(), value, value);
+    let rgba = std::fs::read(root.path().join(CHILD_PIXELS)).expect("read the isolated child's render");
+    assert_eq!(rgba.len(), 100 * 100 * 4, "expected a 100×100 RGBA render");
+    rgba
 }
 
 #[test]
 #[ignore = "subprocess entry point for the wave-5 environment probes"]
 fn render_pipeline_env_child() {
-    let Some(output) = std::env::var_os(CHILD_OUTPUT) else {
+    let Some(root) = child_test_root(CHILD_ROOT) else {
         return;
     };
     let expected = std::env::var_os(CHILD_EXPECTED_ENV);
     let value = std::env::var_os(PIPELINE_ENV);
-    if value != expected {
-        eprintln!("{CHILD_MISMATCH}");
-        panic!("child pipeline environment did not match the parent's expectation");
-    }
+    assert!(value == expected, "{CHILD_MISMATCH}");
     let bytes = build_pdf_with_type4(
         type4_magenta_content_stream(),
         TYPE4_MAGENTA,
         type4_magenta_separation_resources(),
     );
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    std::fs::write(output, render(&doc)).expect("write the rendered pixels");
-    eprintln!("{CHILD_RENDERED}");
+    std::fs::write(root.join(CHILD_PIXELS), render(&doc)).expect("write the rendered pixels");
 }
 
 #[test]
 fn qa_wave5_render_child_rejects_a_wrong_pipeline_value() {
-    assert!(run_render_pipeline_child(Some("1"), Some("0")).is_none());
+    let root = tempfile::tempdir().expect("create scratch directory for the render check");
+    let panic = std::panic::catch_unwind(|| run_render_pipeline_child(root.path(), Some("1"), Some("0")))
+        .expect_err("the render child must reject a wrong pipeline value");
+    let diagnostic = panic
+        .downcast::<String>()
+        .expect("child helper reports an owned diagnostic");
+    assert!(
+        diagnostic.contains("test render_pipeline_env_child ... FAILED"),
+        "{diagnostic}"
+    );
+    assert!(
+        diagnostic.contains("test result: FAILED. 0 passed; 1 failed; 0 ignored;"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains(CHILD_MISMATCH), "{diagnostic}");
+    assert!(!root.path().join(CHILD_PIXELS).exists(), "the child must not render");
 }
 
 /// The retired toggle must not affect the output when set to 1.
