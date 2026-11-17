@@ -4,6 +4,8 @@ use crate::types::internal::{ElementKind, InternalElement};
 use std::collections::HashSet;
 use std::ops::Range;
 
+mod continuation;
+
 struct Line<'a> {
     words: &'a [HocrWordOccurrence],
     element: usize,
@@ -122,9 +124,8 @@ pub(super) fn join_scanned_wraps(
         compounds,
     };
 
-    let joins: Vec<_> = lines
-        .windows(2)
-        .filter_map(|pair| witnessed_join(&pair[0], &pair[1], elements, &witnesses, page_width, sparse))
+    let joins: Vec<_> = (0..lines.len().saturating_sub(1))
+        .filter_map(|index| witnessed_join(&lines, index, elements, &witnesses, page_width, sparse))
         .collect();
     let changed = !joins.is_empty();
     for join in joins.into_iter().rev() {
@@ -169,13 +170,14 @@ fn physical_lines<'a>(elements: &[InternalElement], words: &'a [HocrWordOccurren
 }
 
 fn witnessed_join(
-    prior: &Line<'_>,
-    next: &Line<'_>,
+    lines: &[Line<'_>],
+    index: usize,
     elements: &[InternalElement],
     witnesses: &SpellingWitnesses,
     page_width: u32,
     sparse: bool,
 ) -> Option<Join> {
+    let (prior, next) = (&lines[index], &lines[index + 1]);
     let former_element = elements.get(prior.element)?;
     let latter_element = elements.get(next.element)?;
     if former_element.page != latter_element.page || !can_edit(former_element) || !can_edit(latter_element) {
@@ -198,14 +200,15 @@ fn witnessed_join(
         return None;
     }
     let edit_start = witnessed_edit_start(former, lexical_core(latter), witnesses)?;
-    // A final lone fragment can end a paragraph, but may not consume a separate OCR block. ~keep
     let terminal_word = next.words.len() == 1;
-    if terminal_word
-        && (separate_elements || leading.bytes.end != latter_element.text.len() || edit_start == former.len())
-    {
+    if terminal_word && (leading.bytes.end != latter_element.text.len() || edit_start == former.len()) {
         return None;
     }
-    same_body_flow(prior, next, page_width, terminal_word)?;
+    if terminal_word && separate_elements {
+        continuation::bracketed_terminal_fragment(lines, index, elements, page_width)?;
+    } else {
+        same_body_flow(prior, next, page_width, terminal_word)?;
+    }
     plan_edits(prior, next, elements, edit_start, latter)
 }
 
