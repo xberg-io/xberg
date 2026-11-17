@@ -1350,11 +1350,11 @@ name = "xberg"
 core_import = "xberg"
 error_type = "XbergError"
 # Preserve the Python exception through OCR aggregation while keeping the error category of other
-# callbacks and Rust-only conversion failures. The C FFI bridge uses its own constructor. ~keep
+# callbacks and Rust-only conversion failures. Bridges outside Python pass no Python source. ~keep
 error_constructor = """\
-match ({trait}, {python_source}) {
-    ("OcrBackend", Some(source)) => xberg::XbergError::Ocr { message: {msg}, source: Some(source) },
-    _ => xberg::XbergError::Other({msg}),
+match ({trait}, {python_source}, {msg}) {
+    ("OcrBackend", Some(source), message) => xberg::XbergError::Ocr { message, source: Some(source) },
+    (_, _, message) => xberg::XbergError::Other(message),
 }"""
 version_from = "Cargo.toml"
 workspace_root = "."
