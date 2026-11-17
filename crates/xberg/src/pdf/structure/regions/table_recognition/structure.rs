@@ -8,6 +8,9 @@ use super::{
     tatr_rule_track,
 };
 
+#[path = "column_spans.rs"]
+mod column_spans;
+
 type SpanPlan = Vec<Vec<Option<(usize, usize)>>>;
 
 struct CellRegion {
@@ -90,6 +93,15 @@ fn apply_model_spans(
             .collect();
         if dividers.is_empty() {
             merge_span(dense, plan, (row_start, row_end, col_start, col_end));
+            continue;
+        }
+
+        if row_end - row_start == 2 && col_end - col_start == 2 && row_end <= inference.structure.header_row_count {
+            for row in row_start..row_end {
+                if paint.has_column_opening(row, col_start..col_end, row_end, dense) {
+                    merge_span(dense, plan, (row, row + 1, col_start, col_end));
+                }
+            }
             continue;
         }
 
@@ -567,7 +579,7 @@ fn cell_bbox(inference: &TatrInference, crop: &TatrCrop, page_height: f32, regio
 mod tests {
     use super::*;
 
-    fn boundary_crop(width: u32, strokes: &[(u32, u32, u32)]) -> TatrCrop {
+    pub(super) fn boundary_crop(width: u32, strokes: &[(u32, u32, u32)]) -> TatrCrop {
         let height = 30;
         let mut image = image::RgbImage::from_pixel(width, height, image::Rgb([255; 3]));
         for &(y, left, right) in strokes {
