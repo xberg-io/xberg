@@ -6540,6 +6540,18 @@ mod tests {
     }
 
     #[test]
+    fn spatial_cjk_prose_detection_includes_hangul_syllables() {
+        let mut table = Table::new();
+        table.col_count = 2;
+        table.rows.push(TableRow {
+            cells: vec![prose_cell("한국어"), prose_cell("한국어문장은표로분류되면안된다")],
+            is_header: false,
+        });
+
+        assert!(looks_like_cjk_prose(&table));
+    }
+
+    #[test]
     fn test_looks_like_cjk_prose() {
         let row = |cells: &[&str]| TableRow {
             cells: cells.iter().map(|c| prose_cell(c)).collect(),

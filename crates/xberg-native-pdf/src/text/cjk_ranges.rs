@@ -4,6 +4,7 @@ fn is_basic_kana_or_han(c: char) -> bool {
     matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF)
 }
 
+/// Includes Han compatibility ideographs and halfwidth katakana.
 fn is_kana_or_han_with_compatibility(c: char) -> bool {
     is_basic_kana_or_han(c) || matches!(c as u32, 0xF900..=0xFAFF | 0xFF66..=0xFF9F)
 }
@@ -26,6 +27,7 @@ fn is_table_spacing_operator(c: char) -> bool {
     )
 }
 
+/// Matches pdftotext by keeping ideographs and adjacent fullwidth or math operators together.
 pub(crate) fn suppress_table_cell_space(left: char, right: char) -> bool {
     let left_cjk = is_table_spacing_cjk(left);
     let right_cjk = is_table_spacing_cjk(right);
