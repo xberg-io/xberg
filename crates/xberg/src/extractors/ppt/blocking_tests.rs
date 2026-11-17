@@ -111,3 +111,63 @@ fn ppt_parses_the_same_deck_without_a_tokio_runtime() {
         futures::executor::block_on(extractor.extract_content(NATIVE_TABLES, LEGACY_POWERPOINT_MIME_TYPE, &config));
     check_native_table_deck(result.unwrap());
 }
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn single_ppt_fallback_log_reaches_the_callers_thread_local_subscriber() {
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let mut deck = cfb::CompoundFile::open(io::Cursor::new(NATIVE_TABLES.to_vec())).unwrap();
+    deck.remove_stream("/Current User").unwrap();
+    let content = deck.into_inner().into_inner();
+    let config = ExtractionConfig {
+        max_archive_depth: 0,
+        ..Default::default()
+    };
+    let extractor = PptExtractor::new();
+    let extract = || extractor.extract_content(&content, LEGACY_POWERPOINT_MIME_TYPE, &config);
+    let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    let capture = Capture(Arc::new(Mutex::new(Vec::new())));
+    let writer = capture.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .with_writer(move || writer.clone())
+        .finish();
+    let count_events = || {
+        let output = capture.0.lock().unwrap();
+        std::str::from_utf8(&output)
+            .unwrap()
+            .matches("no live slide list resolved from the persist chain; using stream order")
+            .count()
+    };
+
+    tracing::callsite::rebuild_interest_cache();
+    let (inline, offloaded) = tracing::subscriber::with_default(subscriber, || {
+        let inline = futures::executor::block_on(extract()).unwrap();
+        assert_eq!(count_events(), 1, "inline parse emits the fallback log");
+        let offloaded = runtime.block_on(extract()).unwrap();
+        (inline, offloaded)
+    });
+    tracing::callsite::rebuild_interest_cache();
+    assert_eq!(count_events(), 2, "offloaded parse emits the fallback log");
+    assert_eq!(
+        serde_json::to_value(&inline).unwrap(),
+        serde_json::to_value(&offloaded).unwrap()
+    );
+    check_native_table_deck(offloaded);
+}

@@ -92,7 +92,9 @@ async fn run_ppt_extraction(
         // Batch already checked cancellation at submission and keeps its existing join behavior. ~keep
         let cancel = if batch { None } else { cancel.cloned() };
         let span = tracing::Span::current();
+        let dispatch = (!batch).then(|| tracing::dispatcher::get_default(Clone::clone));
         let task = runtime.spawn_blocking(move || {
+            let _dispatch = dispatch.as_ref().map(tracing::dispatcher::set_default);
             let _guard = span.entered();
             check_ppt_read_cancelled(cancel.as_ref())?;
             let result =
