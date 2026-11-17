@@ -169,6 +169,8 @@ fn get_or_init_engine(
 #[cfg_attr(alef, alef(skip))]
 pub struct TrocrBackend {
     variant: TrocrVariant,
+    #[cfg(test)]
+    stop_before_model: bool,
 }
 
 struct TrocrOptions {
@@ -181,7 +183,11 @@ struct TrocrOptions {
 impl TrocrBackend {
     /// Create a new TrOCR backend with the specified variant.
     pub fn new(variant: TrocrVariant) -> Self {
-        Self { variant }
+        Self {
+            variant,
+            #[cfg(test)]
+            stop_before_model: false,
+        }
     }
 
     /// Create a TrOCR backend with the default variant (base-printed).
@@ -273,10 +279,19 @@ impl OcrBackend for TrocrBackend {
                 source: Some(Box::new(error)),
             },
         };
+        #[cfg(test)]
+        let stop_before_model = self.stop_before_model;
         let (content, image_bytes) = tokio::task::spawn_blocking(move || {
             let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, false).map_err(decode_error)?;
             admit_trocr_preprocessing(&decode, &limits)?;
             let img = decode.decode().map_err(decode_error)?;
+            #[cfg(test)]
+            if stop_before_model {
+                return Err(crate::XbergError::Ocr {
+                    message: "TrOCR reached model initialization".to_owned(),
+                    source: None,
+                });
+            }
             let engine = get_or_init_engine(variant, options.device, cache_dir, revision)?;
 
             let output = engine
@@ -438,30 +453,37 @@ mod tests {
         }
     }
 
-    #[test]
-    fn configured_resize_budget_applies_to_an_admitted_line_before_decode() {
+    #[tokio::test]
+    async fn configured_resize_budget_rejects_png_before_model_initialization() {
         let mut png = std::io::Cursor::new(Vec::new());
         image::DynamicImage::new_rgb8(64, 16)
             .write_to(&mut png, image::ImageFormat::Png)
             .unwrap();
-        let limits = SecurityLimits {
-            max_content_size: 1 << 20,
+        let backend = TrocrBackend {
+            stop_before_model: true,
+            ..TrocrBackend::default_variant()
+        };
+        let mut config = OcrConfig {
+            security_limits: Some(SecurityLimits {
+                max_content_size: 1 << 20,
+                ..Default::default()
+            }),
             ..Default::default()
         };
-        let decode = PreparedCandleImageDecode::new(png.get_ref(), &limits, false).unwrap();
-        let error = admit_trocr_preprocessing(&decode, &limits).unwrap_err();
+        let error = backend.process_image(png.get_ref(), &config).await.unwrap_err();
         assert!(
             matches!(&error, crate::XbergError::Validation { message, .. }
                 if message.contains("64x16") && message.contains("security_limits.max_content_size")),
-            "{error}"
+            "a small valid line must fail the configured resize budget: {error}"
         );
 
-        let limits = SecurityLimits {
-            max_content_size: 16 << 20,
-            ..limits
-        };
-        let decode = PreparedCandleImageDecode::new(png.get_ref(), &limits, false).unwrap();
-        admit_trocr_preprocessing(&decode, &limits).unwrap();
+        config.security_limits.as_mut().unwrap().max_content_size = 16 << 20;
+        let error = backend.process_image(png.get_ref(), &config).await.unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, source: None }
+                if message == "TrOCR reached model initialization"),
+            "{error}"
+        );
     }
 
     #[tokio::test]
