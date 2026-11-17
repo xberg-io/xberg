@@ -73,6 +73,7 @@ pub(super) fn implicit_pipeline_pages(
     if !allowed
         || config.force_ocr
         || config.force_ocr_pages.is_some()
+        || ocr.auto_rotate.is_some()
         || !matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
         || !super::uses_default_ocr_pipeline(ocr)
         || !pipeline.is_some_and(|pipeline| {
@@ -161,9 +162,7 @@ pub(super) async fn run_batch(
                 }
             }
             super::NextPageTask::Finished(Err(error)) => {
-                return Err(crate::XbergError::parsing(format!(
-                    "Sparse glyph OCR task failed: {error}"
-                )));
+                tracing::debug!(panicked = error.is_panic(), "Sparse glyph OCR task did not finish");
             }
             super::NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled),
             super::NextPageTask::Drained | super::NextPageTask::Abandoned => return Ok(accepted),
@@ -386,10 +385,12 @@ pub(super) fn accepted_pipeline_read(
     thresholds: &crate::core::config::OcrQualityThresholds,
     semantics: crate::plugins::ConfidenceSemantics,
 ) -> bool {
-    read.metadata
-        .image_preprocessing
-        .as_ref()
-        .is_some_and(|metadata| matches_trial_raster(metadata, dimensions))
+    super::super::document::resolved_ocr_correction_degrees(&read.metadata).unwrap_or(0) == 0
+        && read
+            .metadata
+            .image_preprocessing
+            .as_ref()
+            .is_some_and(|metadata| matches_trial_raster(metadata, dimensions))
         && words.accounted_for(read)
         && !rejected_by_page_quality(read, thresholds, semantics)
 }
@@ -513,14 +514,20 @@ const MISSING_WORD_CASE: usize = 0x3150_5102;
 const MARGIN_CASE: usize = 0x3150_5103;
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const NORMAL_CONTROL_CASE: usize = 0x3150_5104;
-#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const IMPLICIT_MISSING_WORD_CASE: usize = 0x3238_5101;
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
 const IMPLICIT_NORMAL_CASE: usize = 0x3238_5102;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const IMPLICIT_ROTATED_CASE: usize = 0x3238_5103;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const IMPLICIT_PANIC_CASE: usize = 0x3238_5104;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const IMPLICIT_OVERRIDE_CASE: usize = 0x3238_5105;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
-    test_case(config).is_some_and(|case| !implicit_missing_word_case(case))
+    test_case(config).is_some_and(|case| !implicit_pipeline_case(case))
         || config
             .security_limits
             .as_ref()
@@ -537,20 +544,16 @@ fn test_case(config: &OcrConfig) -> Option<usize> {
         .security_limits
         .as_ref()
         .map(|limits| limits.max_archive_size)
-        .filter(|case| {
-            matches!(*case, QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE) || implicit_missing_word_case(*case)
-        })
+        .filter(|case| matches!(*case, QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE) || implicit_pipeline_case(*case))
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
-fn implicit_missing_word_case(case: usize) -> bool {
-    #[cfg(paddle_ocr)]
-    return case == IMPLICIT_MISSING_WORD_CASE;
-    #[cfg(not(paddle_ocr))]
-    {
-        let _ = case;
-        false
-    }
+fn implicit_pipeline_case(case: usize) -> bool {
+    cfg!(paddle_ocr)
+        && matches!(
+            case,
+            IMPLICIT_MISSING_WORD_CASE | IMPLICIT_ROTATED_CASE | IMPLICIT_PANIC_CASE | IMPLICIT_OVERRIDE_CASE
+        )
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
@@ -561,10 +564,57 @@ pub(super) fn test_implicit_attempt(
     height: u32,
     words: Option<&MarkedWords>,
 ) -> ExtractedDocument {
-    if test_case(config).is_some_and(implicit_missing_word_case) {
-        return test_attempt(Ok(result), config, width, height, words).unwrap();
+    if let Some(case) = test_case(config).filter(|case| implicit_pipeline_case(*case)) {
+        let mut result = test_attempt(Ok(result), config, width, height, words).unwrap();
+        if let Some(words) = words {
+            control_pipeline_attempt(case, words, &mut result, (width, height), config);
+        }
+        return result;
     }
     result
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+static ROTATION_PROOF: std::sync::Mutex<Option<(bool, bool, bool)>> = std::sync::Mutex::new(None);
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+fn control_pipeline_attempt(
+    case: usize,
+    words: &MarkedWords,
+    result: &mut ExtractedDocument,
+    dimensions: (u32, u32),
+    config: &OcrConfig,
+) {
+    if case == IMPLICIT_PANIC_CASE {
+        panic!("intentional panic after the recorded sparse trial");
+    }
+    if case != IMPLICIT_ROTATED_CASE {
+        return;
+    }
+    use crate::ocr_metadata_keys::{
+        OCR_AUTO_ROTATED_METADATA_KEY, OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY,
+    };
+    let thresholds = config.effective_thresholds();
+    let semantics = crate::plugins::ConfidenceSemantics::None;
+    let accepted_before_rotation = accepted_pipeline_read(words, result, dimensions, &thresholds, semantics);
+    result
+        .metadata
+        .additional
+        .remove(OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY);
+    result
+        .metadata
+        .additional
+        .insert(OCR_AUTO_ROTATED_METADATA_KEY.into(), serde_json::json!(true));
+    result
+        .metadata
+        .additional
+        .insert(OCR_ORIENTATION_DEGREES_METADATA_KEY.into(), serde_json::json!(180));
+    let accepted_after_rotation = accepted_pipeline_read(words, result, dimensions, &thresholds, semantics);
+    *ROTATION_PROOF.lock().unwrap() = Some((
+        accepted_before_rotation,
+        words.accounted_for(result),
+        accepted_after_rotation,
+    ));
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
@@ -583,7 +633,7 @@ pub(super) fn test_attempt(
                 words.accounted_for(read),
                 "unmodified read must account for the marked words"
             );
-            if case == MISSING_WORD_CASE || implicit_missing_word_case(case) {
+            if matches!(case, MISSING_WORD_CASE | IMPLICIT_MISSING_WORD_CASE) {
                 remove_marked_word(read, words);
                 assert!(!words.accounted_for(read));
             }
@@ -600,7 +650,7 @@ pub(super) fn test_attempt(
             .or_default()
             .push((retry, width, height, target));
         // Exercise each trigger independently of Tesseract model confidence drift. ~keep
-        if !implicit_missing_word_case(case) {
+        if !implicit_pipeline_case(case) {
             let confidence = if case == QUALITY_CASE && !retry { 0 } else { 100 };
             read.metadata
                 .additional
@@ -662,6 +712,21 @@ fn implicit_pipeline_retries_missing_marked_words_at_normal_density() {
     });
 }
 
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[test]
+fn implicit_pipeline_preserves_normal_render_on_rotated_or_failed_trials() {
+    for case in [IMPLICIT_ROTATED_CASE, IMPLICIT_PANIC_CASE, IMPLICIT_OVERRIDE_CASE] {
+        super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, move || {
+            assert_sparse_glyph_attempts(case)
+        });
+    }
+    assert_eq!(
+        ROTATION_PROOF.lock().unwrap().take(),
+        Some((true, true, false)),
+        "an untransformed read must qualify, and adding same-size 180-degree correction must be the deciding change"
+    );
+}
+
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 async fn assert_sparse_glyph_attempts(case: usize) {
     const FIXTURE: &str = concat!(
@@ -700,8 +765,9 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         }),
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
+            auto_rotate: (case == IMPLICIT_OVERRIDE_CASE).then_some(false),
             quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
-                discard_suspected_ocr_noise: case != MISSING_WORD_CASE && !implicit_missing_word_case(case),
+                discard_suspected_ocr_noise: case != MISSING_WORD_CASE && !implicit_pipeline_case(case),
                 min_ocr_mean_confidence: 50.0,
                 ..Default::default()
             }),
@@ -741,6 +807,8 @@ fn assert_retry_equivalent(
         .map(|metadata| metadata.target_dpi);
     if case == MARGIN_CASE {
         assert_eq!(attempts, [(false, 1275, 1650, normal_target)]);
+    } else if case == IMPLICIT_OVERRIDE_CASE {
+        assert_eq!(attempts, [(true, 1275, 1650, normal_target)]);
     } else {
         assert_eq!(
             attempts,
@@ -757,7 +825,7 @@ fn assert_retry_equivalent(
         serde_json::to_value(&page.image_preprocessing).unwrap(),
         serde_json::to_value(&normal_page.image_preprocessing).unwrap(),
     );
-    if implicit_missing_word_case(case) {
+    if implicit_pipeline_case(case) {
         assert_eq!(
             serde_json::to_value(&page.ocr_confidence).unwrap(),
             serde_json::to_value(&normal_page.ocr_confidence).unwrap()
@@ -784,7 +852,7 @@ async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> Extrac
     if config
         .security_limits
         .as_ref()
-        .is_some_and(|limits| implicit_missing_word_case(limits.max_archive_size))
+        .is_some_and(|limits| implicit_pipeline_case(limits.max_archive_size))
     {
         normal_config.security_limits.as_mut().unwrap().max_archive_size = IMPLICIT_NORMAL_CASE;
         return crate::core::extractor::extract_bytes(pdf, "application/pdf", &normal_config)
