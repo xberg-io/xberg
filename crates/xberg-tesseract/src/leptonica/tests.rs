@@ -126,7 +126,8 @@ fn test_unsharp_mask_returns_same_dimensions() {
 fn no_op_transforms_return_independent_pixels_and_resolution() {
     let input = Pix::from_grayscale_bytes(&[220; 64 * 64], 64, 64).expect("make a flat grayscale image");
     let unsharp = input.unsharp_mask(0, 0.0).expect("no-op sharpening");
-    let deskewed = input.deskew().expect("deskew a flat image");
+    let (deskewed, rotated) = input.deskew_with_rotation().expect("deskew a flat image");
+    assert!(!rotated);
     for mut output in [unsharp, deskewed] {
         assert_ne!(
             output.as_ptr(),
@@ -138,6 +139,26 @@ fn no_op_transforms_return_independent_pixels_and_resolution() {
         output.set_resolution(72, 96).expect("change result resolution");
         assert_eq!(input.get_resolution().unwrap(), (300, 300));
     }
+}
+
+#[test]
+fn deskew_reports_rotation_for_slanted_rows() {
+    const WIDTH: usize = 384;
+    const HEIGHT: usize = 256;
+    let mut pixels = vec![255; WIDTH * HEIGHT];
+    for top in (18..HEIGHT - 45).step_by(25) {
+        for left in (24..WIDTH - 24).step_by(13) {
+            for row in top..top + 8 {
+                for x in left..left + 7 {
+                    pixels[(row + x / 12) * WIDTH + x] = 0;
+                }
+            }
+        }
+    }
+    let input = Pix::from_grayscale_bytes(&pixels, WIDTH as u32, HEIGHT as u32).expect("make slanted rows");
+    let (output, rotated) = input.deskew_with_rotation().expect("deskew slanted rows");
+    assert!(rotated);
+    assert_ne!(output.grayscale_bytes().unwrap(), pixels);
 }
 
 #[test]

@@ -382,7 +382,7 @@ impl Pix {
     }
 
     /// Deskews this image, binarizing internally for skew estimation as needed.
-    /// The result may share the input allocation when no rotation is applied.
+    /// The result owns an independent allocation even when no rotation is applied.
     ///
     /// # Errors
     ///
@@ -399,10 +399,23 @@ impl Pix {
     /// let deskewed = binary.deskew().unwrap();
     /// ```
     pub fn deskew(&self) -> Result<Pix> {
+        self.deskew_with_rotation().map(|(image, _)| image)
+    }
+
+    /// Deskews this image and reports whether Leptonica rotated it.
+    ///
+    /// The image always owns an independent allocation. The rotation flag reflects
+    /// Leptonica's result before an unrotated reference is copied.
+    ///
+    /// # Errors
+    ///
+    /// Returns `TesseractError::NullPointerError` if deskewing or copying returns null.
+    pub fn deskew_with_rotation(&self) -> Result<(Pix, bool)> {
         // SAFETY: self keeps the input reference alive. A non-null result owns one reference
         // even when Leptonica returns pixClone(self.ptr). ~keep
         let result = unsafe { pixDeskew(self.ptr, 0) };
-        self.finish_transform(result)
+        let rotated = result != self.ptr;
+        self.finish_transform(result).map(|image| (image, rotated))
     }
 
     /// Estimates the skew angle in degrees and the confidence ratio.
