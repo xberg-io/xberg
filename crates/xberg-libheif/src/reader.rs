@@ -102,6 +102,8 @@ where
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn get_position(user_data: *mut c_void) -> i64 {
+    // SAFETY: read_reader registers a pointer to a heap-held Box. The callback must
+    // run while that Box is live and without another simultaneous borrow of the Reader.
     let reader = unsafe { &mut *(user_data as *mut Box<dyn Reader>) };
     reader.position() as _
 }
@@ -111,13 +113,19 @@ unsafe extern "C" fn read(data: *mut c_void, size: usize, user_data: *mut c_void
     if data.is_null() || size == 0 {
         return 0;
     }
+    // SAFETY: read_reader registers a pointer to a heap-held Box. The callback must
+    // run while that Box is live and without another simultaneous borrow of the Reader.
     let reader = unsafe { &mut *(user_data as *mut Box<dyn Reader>) };
+    // SAFETY requirement: after the null and empty checks, the native buffer must
+    // have size initialized, exclusively writable bytes in one allocation.
     let buf = unsafe { slice::from_raw_parts_mut(data as *mut u8, size) };
     if reader.read_exact(buf).is_ok() { 0 } else { 1 }
 }
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn seek(position: i64, user_data: *mut c_void) -> c_int {
+    // SAFETY: read_reader registers a pointer to a heap-held Box. The callback must
+    // run while that Box is live and without another simultaneous borrow of the Reader.
     let reader = unsafe { &mut *(user_data as *mut Box<dyn Reader>) };
     match reader.seek(position as _) {
         Ok(_) => 0,
@@ -127,6 +135,8 @@ unsafe extern "C" fn seek(position: i64, user_data: *mut c_void) -> c_int {
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn wait_for_file_size(target_size: i64, user_data: *mut c_void) -> lh::heif_reader_grow_status {
+    // SAFETY: read_reader registers a pointer to a heap-held Box. The callback must
+    // run while that Box is live and without another simultaneous borrow of the Reader.
     let reader = unsafe { &mut *(user_data as *mut Box<dyn Reader>) };
     let target_size = target_size as u64;
     reader.wait_for_file_size(target_size) as _

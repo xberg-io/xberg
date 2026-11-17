@@ -28,6 +28,7 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn new() -> Self {
         let mut init_params = lh::heif_init_params { version: 0 };
+        // SAFETY: The local version-zero parameter block stays live through initialization.
         unsafe {
             lh::heif_init(&mut init_params as _);
         }
@@ -42,6 +43,7 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn new_checked() -> Result<Self> {
         let mut init_params = lh::heif_init_params { version: 0 };
+        // SAFETY: The local version-zero parameter block stays live through initialization.
         let error = unsafe { lh::heif_init(&mut init_params as _) };
         HeifError::from_heif_error(error)?;
         Ok(Self(()))
@@ -52,6 +54,8 @@ impl LibHeif {
 impl Drop for LibHeif {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: Each guard represents one initialization call and drops only once.
+        // Libheif reference-counts initialization and deinitialization.
         unsafe {
             lh::heif_deinit();
         }
@@ -73,6 +77,7 @@ impl LibHeif {
     /// `[<major>, <minor>, <maintenance>]`
     #[allow(unsafe_code)]
     pub fn version(&self) -> [u8; 3] {
+        // SAFETY: The version query takes no pointers and returns a value.
         let version: u32 = unsafe { lh::heif_get_version_number() };
         let parts = version.to_be_bytes();
         [parts[0], parts[1], parts[2]]
@@ -90,6 +95,8 @@ impl LibHeif {
     fn _load_plugins(&self, dir_path: &Path) -> Result<usize> {
         let dir_path = path_to_cstring(dir_path);
         let mut plugins_loaded: libc::c_int = 0;
+        // SAFETY: The directory CString and count out slot live for the call. Passing
+        // null with zero capacity requests no plugin-info output array.
         let err =
             unsafe { lh::heif_load_plugins(dir_path.as_ptr(), ptr::null_mut() as _, &mut plugins_loaded as _, 0) };
         HeifError::from_heif_error(err)?;
@@ -109,6 +116,8 @@ impl LibHeif {
         decoding_options: Option<DecodingOptions>,
     ) -> Result<Image> {
         let mut c_image: *mut lh::heif_image = ptr::null_mut();
+        // SAFETY: The image handle and optional decoding settings outlive the call,
+        // and c_image is a writable slot for the owned native result.
         let err = unsafe {
             lh::heif_decode_image(
                 image_handle.inner,
@@ -137,6 +146,8 @@ impl LibHeif {
         let max_count = max_count.min(libc::c_int::MAX as usize);
 
         let mut descriptors_ptr = Vec::with_capacity(max_count);
+        // SAFETY: The Vec has capacity for max_count pointers, which fits in a C int.
+        // Libheif returns the number of entries it initialized, bounded by max_count.
         unsafe {
             let count =
                 lh::heif_get_decoder_descriptors(format_filter as _, descriptors_ptr.as_mut_ptr(), max_count as _);
@@ -145,6 +156,8 @@ impl LibHeif {
 
         descriptors_ptr
             .into_iter()
+            // SAFETY: Non-null entries are library-owned descriptors. Their Rust borrows
+            // are tied to this initialization guard, which keeps the registry available.
             .filter_map(|d_ptr| unsafe { d_ptr.as_ref().map(DecoderDescriptor::new) })
             .collect()
     }
@@ -170,6 +183,9 @@ impl LibHeif {
         let name_filter_ptr = name_filter.map(|s| s.as_ptr()).unwrap_or(ptr::null());
 
         let mut descriptors_ptr = Vec::with_capacity(max_count);
+        // SAFETY requirement: Libheif writes at most max_count entries, which fits
+        // the Vec. A present name filter must also remain live, but the consuming
+        // map above drops its CString before this call.
         unsafe {
             let count = lh::heif_get_encoder_descriptors(
                 format_filter as _,
@@ -182,6 +198,8 @@ impl LibHeif {
 
         descriptors_ptr
             .into_iter()
+            // SAFETY: Non-null entries are library-owned descriptors. Their Rust borrows
+            // are tied to this initialization guard, which keeps the registry available.
             .filter_map(|d_ptr| unsafe { d_ptr.as_ref().map(EncoderDescriptor::new) })
             .collect()
     }
@@ -191,8 +209,11 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn encoder(&self, descriptor: EncoderDescriptor) -> Result<Encoder<'_>> {
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
+        // SAFETY: Libheif accepts a null context for this registry operation. The
+        // descriptor is borrowed and c_encoder is a writable out slot.
         let err = unsafe { lh::heif_context_get_encoder(ptr::null_mut(), descriptor.inner, &mut c_encoder) };
         HeifError::from_heif_error(err)?;
+        // SAFETY: Success returns a fresh encoder allocation. Encoder owns it if construction succeeds.
         let encoder = Encoder::new(unsafe { &mut *c_encoder })?;
         Ok(encoder)
     }
@@ -203,8 +224,11 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn encoder_for_format(&self, format: CompressionFormat) -> Result<Encoder<'_>> {
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
+        // SAFETY: Libheif accepts a null context for this registry operation and
+        // can initialize the caller-owned out slot.
         let err = unsafe { lh::heif_context_get_encoder_for_format(ptr::null_mut() as _, format as _, &mut c_encoder) };
         HeifError::from_heif_error(err)?;
+        // SAFETY: Success returns a fresh encoder allocation. Encoder owns it if construction succeeds.
         let encoder = Encoder::new(unsafe { &mut *c_encoder })?;
         Ok(encoder)
     }

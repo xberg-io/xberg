@@ -165,6 +165,10 @@ impl fmt::Display for HeifError {
 #[allow(unsafe_code)]
 impl HeifError {
     #[allow(unsafe_code)]
+    /// Convert a libheif error while its native message is still valid.
+    ///
+    /// The native call owns the message, whose lifetime may end on the next
+    /// call on that object. Convert it before calling libheif again.
     pub fn from_heif_error(err: lh::heif_error) -> Result<()> {
         if err.code == 0 {
             return Ok(());
@@ -173,6 +177,9 @@ impl HeifError {
         let message = if err.message.is_null() {
             ""
         } else {
+            // SAFETY requirement: a libheif-returned error carries a readable NUL-terminated
+            // message until its owning object changes or is released. The safe signature
+            // does not enforce that provenance; the message is copied into HeifError below.
             let res = unsafe { CStr::from_ptr(err.message).to_str() };
             res.unwrap_or("")
         };
