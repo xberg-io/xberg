@@ -12,7 +12,7 @@ trap 'rm -rf "$work"' EXIT
 
 mkdir "$work/bin" "$work/archive"
 export SMOKE_GNU_ARCHIVE="${4:-}" SMOKE_ARCHIVE="$archive" XBERG_VERSION="$version" XBERG_INSTALL="$work/installed"
-unset XBERG_LINUX_LIBC
+unset XBERG_LINUX_LIBC GITHUB_TOKEN
 if [ "$libc" = gnu ]; then
   export XBERG_LINUX_LIBC="$libc"
 fi
@@ -21,16 +21,39 @@ fi
 cat >"$work/bin/curl" <<'SH'
 #!/bin/sh
 set -eu
-[ "$#" = 6 ] && [ "$1" = -fsSL ] && [ "$2" = -w ] && [ "$3" = '%{http_code}' ] && [ "$5" = -o ]
+[ "$#" -ge 6 ] && [ "$1" = -q ] && [ "$3" = --proto ] && [ "$4" = '=https' ] &&
+  [ "$5" = --proto-redir ] && [ "$6" = '=https' ] || exit 91
+mode="$2"
+shift 6
+metadata="https://api.github.com/repos/xberg-io/xberg/releases/tags/v${XBERG_VERSION}"
+if [ "$1" = "$metadata" ]; then
+  [ "$mode" = -fsS ] && [ "$#" = 3 ] && [ "$2" = -o ] || exit 91
+  {
+    printf '{"assets":['
+    separator=''
+    for artifact in "$SMOKE_ARCHIVE" "$SMOKE_GNU_ARCHIVE"; do
+      [ -n "$artifact" ] || continue
+      name="${artifact##*/}"
+      case "$name" in *[!A-Za-z0-9_.-]*) exit 91 ;; esac
+      digest="$(sha256sum <"$artifact")"
+      printf '%s{"name":"%s","digest":"sha256:%s"}' "$separator" "$name" "${digest%% *}"
+      separator=,
+    done
+    printf ']}\n'
+  } >"$3"
+  exit 0
+fi
+
+[ "$mode" = -fsSL ] && [ "$#" = 5 ] && [ "$1" = -w ] && [ "$2" = '%{http_code}' ] && [ "$4" = -o ] || exit 91
 base="https://github.com/xberg-io/xberg/releases/download/v${XBERG_VERSION}"
-case "$4" in
-  "$base/${SMOKE_ARCHIVE##*/}") cp "$SMOKE_ARCHIVE" "$6" ;;
+case "$3" in
+  "$base/${SMOKE_ARCHIVE##*/}") cp "$SMOKE_ARCHIVE" "$5" ;;
   "$base/${SMOKE_GNU_ARCHIVE##*/}")
     [ -n "$SMOKE_GNU_ARCHIVE" ]
-    cp "$SMOKE_GNU_ARCHIVE" "$6"
+    cp "$SMOKE_GNU_ARCHIVE" "$5"
     ;;
   *)
-    case "${SMOKE_ARCHIVE##*/}:$4" in
+    case "${SMOKE_ARCHIVE##*/}:$3" in
       *-linux-musl.tar.gz:"$base/"*-linux-gnu.tar.gz) printf '404'; exit 22 ;;
       *) exit 91 ;;
     esac

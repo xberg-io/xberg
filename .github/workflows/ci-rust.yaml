@@ -228,6 +228,7 @@ jobs:
           # ~keep The pass count above anchors at `^test result:`; mise's prefix output mode would
           # prepend `[rust:test:ci] ` to every line and turn the sum into 0.
           MISE_TASK_OUTPUT: interleave
+          XBERG_REQUIRE_TEST_FIXTURES: "1"
           # ~keep Optimize macOS tests to shrink __eh_frame below the compact-unwind table's 16 MB offset limit.
           CARGO_PROFILE_TEST_OPT_LEVEL: "${{ runner.os == 'macOS' && '1' || '0' }}"
           LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH || '' }}

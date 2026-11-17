@@ -1,6 +1,6 @@
 //! Structured warning surface.
 //!
-//! `PdfDocument::flatten_warnings()` returns the warnings raised since
+//! `PdfDocument::structured_warnings()` returns the warnings raised since
 //! the document was opened, as a list of structured `Warning` records.
 //! Callers who want diagnostics as data (rather than stderr text from
 //! `tracing::warn!`) opt in to this surface. The existing `tracing::warn!`
@@ -10,7 +10,11 @@
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::marker::PhantomData;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// A single structured warning raised during PDF processing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,61 +88,66 @@ impl WarningCategory {
     }
 }
 
-/// Thread-safe sink for warnings raised during a single `PdfDocument`
-/// lifetime. Backed by a `Mutex<Vec<Warning>>` so multi-threaded usage
-/// (e.g. parallel-page extraction) doesn't lose warnings to a data race.
-///
-/// One sink per document. The document holds it in an `Arc` so worker
-/// threads can clone it.
-#[derive(Debug, Default)]
+/// Thread-safe sink for warnings raised during a single PDF document's lifetime.
+#[derive(Debug, Default, Clone)]
 pub struct WarningSink {
-    warnings: Mutex<Vec<Warning>>,
+    warnings: Arc<Mutex<Vec<Warning>>>,
 }
 
-/// global process-wide structured-warning sink for
-/// the seven highest-frequency `tracing::warn!` sites that live in free
-/// functions (where `&PdfDocument` is not available to push to a
-/// per-document sink). Sites currently routed through this global
-/// sink:
-///
-/// - `src/parser.rs::read_stream_data` (SPEC VIOLATION / Stream
-///   /Length mismatch)
-/// - `src/content/parser.rs::*` (operator-cap exceeded)
-/// - `src/fonts/font_dict.rs::*` (Type0 ToUnicode missing, Type 3
-///   font detected)
-///
-/// Callers retrieve via [`drain_global_warnings`] OR through
-/// `PdfDocument::flatten_warnings()` which merges global +
-/// per-document warnings.
-///
-/// Process-wide scope means warnings from concurrent extractions on
-/// different `PdfDocument` instances appear together in the snapshot.
-/// For per-document isolation, use the per-document sink directly
-/// via `PdfDocument::push_structured_warning`.
-static GLOBAL_WARNING_SINK: Mutex<Vec<Warning>> = Mutex::new(Vec::new());
+// The document owns the sink. Each synchronous parser or renderer entry point
+// binds it on the thread performing the work. Outside a scope, the tracing
+// event still fires and the warning remains unattributed. ~keep
+thread_local! {
+    static ACTIVE_SINK: RefCell<Option<WarningSink>> = const { RefCell::new(None) };
+}
 
-/// Push a structured warning into the process-wide sink. Called by
-/// free-function log sites that can't access a `&PdfDocument`.
-pub fn push_global_warning(warning: Warning) {
-    if let Ok(mut v) = GLOBAL_WARNING_SINK.lock() {
-        v.push(warning);
+#[must_use = "the warning scope ends when the guard is dropped"]
+pub(crate) struct WarningScope {
+    previous: Option<WarningSink>,
+    _thread_bound: PhantomData<Rc<()>>,
+}
+
+impl Drop for WarningScope {
+    fn drop(&mut self) {
+        ACTIVE_SINK.with(|slot| *slot.borrow_mut() = self.previous.take());
     }
 }
 
-/// Drain the process-wide structured-warning sink, returning a snapshot
-/// and clearing the underlying storage. Used by
-/// `PdfDocument::flatten_warnings` to surface free-function warnings
-/// alongside per-document ones.
+pub(crate) fn record_warning(warning: Warning) {
+    let sink = ACTIVE_SINK.with(|slot| slot.borrow().clone());
+    if let Some(sink) = sink {
+        sink.push(warning);
+    }
+}
+
+const UNSCOPED_WARNING_LIMIT: usize = 256;
+static UNSCOPED_WARNINGS: Mutex<VecDeque<Warning>> = Mutex::new(VecDeque::new());
+
+/// Explicitly push a warning into the legacy process-wide sink.
+/// It retains the 256 most recent entries, independently of document scopes.
+pub fn push_global_warning(warning: Warning) {
+    if let Ok(mut warnings) = UNSCOPED_WARNINGS.lock() {
+        if warnings.len() == UNSCOPED_WARNING_LIMIT {
+            warnings.pop_front();
+        }
+        warnings.push_back(warning);
+    }
+}
+
+/// Drain the legacy process-wide sink used by standalone operations.
 pub fn drain_global_warnings() -> Vec<Warning> {
-    GLOBAL_WARNING_SINK
+    UNSCOPED_WARNINGS
         .lock()
-        .map(|mut v| std::mem::take(&mut *v))
+        .map(|mut warnings| warnings.drain(..).collect())
         .unwrap_or_default()
 }
 
-/// Snapshot the global sink without draining (for tests / observability).
+/// Snapshot the legacy process-wide sink used by standalone operations.
 pub fn snapshot_global_warnings() -> Vec<Warning> {
-    GLOBAL_WARNING_SINK.lock().map(|v| v.clone()).unwrap_or_default()
+    UNSCOPED_WARNINGS
+        .lock()
+        .map(|warnings| warnings.iter().cloned().collect())
+        .unwrap_or_default()
 }
 
 impl WarningSink {
@@ -147,9 +156,15 @@ impl WarningSink {
         Self::default()
     }
 
-    /// Push a new warning. Inexpensive — no `log` macro fired here; the
-    /// existing `tracing::warn!` sites continue to fire on their own. Use
-    /// `push_with_log` from the migrated call sites to emit both.
+    pub(crate) fn enter(&self) -> WarningScope {
+        let previous = ACTIVE_SINK.with(|slot| slot.borrow_mut().replace(self.clone()));
+        WarningScope {
+            previous,
+            _thread_bound: PhantomData,
+        }
+    }
+
+    /// Record a warning without emitting a tracing event.
     pub fn push(&self, warning: Warning) {
         if let Ok(mut v) = self.warnings.lock() {
             v.push(warning);
@@ -181,9 +196,7 @@ impl WarningSink {
         }
     }
 
-    /// Push multiple warnings at once. Used by callers that merge a
-    /// drained external sink (e.g. the process-wide global sink) into
-    /// the per-document sink under a single lock acquisition.
+    /// Push multiple warnings under a single lock acquisition.
     pub fn extend(&self, warnings: impl IntoIterator<Item = Warning>) {
         if let Ok(mut v) = self.warnings.lock() {
             v.extend(warnings);
@@ -246,6 +259,102 @@ mod tests {
         assert_eq!(sink.len(), 1);
         sink.clear();
         assert!(sink.is_empty());
+    }
+
+    fn scope_warning(message: &str) -> Warning {
+        Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: message.into(),
+            spec_section: None,
+        }
+    }
+
+    #[test]
+    fn nested_warning_scope_restores_the_outer_sink() {
+        let outer = WarningSink::new();
+        let inner = WarningSink::new();
+        let _outer = outer.enter();
+        record_warning(scope_warning("before"));
+        {
+            let _inner = inner.enter();
+            record_warning(scope_warning("inner"));
+        }
+        record_warning(scope_warning("after"));
+        let messages: Vec<_> = outer.take().into_iter().map(|warning| warning.message).collect();
+        assert_eq!(messages, ["before", "after"]);
+        assert_eq!(inner.take()[0].message, "inner");
+        assert!(inner.is_empty());
+    }
+
+    #[test]
+    fn unwinding_restores_the_outer_warning_scope() {
+        let outer = WarningSink::new();
+        let inner = WarningSink::new();
+        let _outer = outer.enter();
+        let result = std::panic::catch_unwind(|| {
+            let _inner = inner.enter();
+            record_warning(scope_warning("during unwind"));
+            panic!("exercise warning scope cleanup");
+        });
+        assert!(result.is_err());
+        record_warning(scope_warning("after unwind"));
+        assert_eq!(
+            outer
+                .snapshot()
+                .iter()
+                .map(|warning| warning.message.as_str())
+                .collect::<Vec<_>>(),
+            ["after unwind"]
+        );
+        assert_eq!(
+            inner
+                .snapshot()
+                .iter()
+                .map(|warning| warning.message.as_str())
+                .collect::<Vec<_>>(),
+            ["during unwind"]
+        );
+    }
+
+    #[test]
+    fn overlapping_warning_scopes_keep_each_threads_warnings() {
+        let barrier = std::sync::Barrier::new(2);
+        let workers = ["first document", "second document"];
+        let sinks = std::thread::scope(|scope| {
+            let threads = workers.map(|message| {
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let sink = WarningSink::new();
+                    let guard = sink.enter();
+                    barrier.wait();
+                    record_warning(scope_warning(message));
+                    barrier.wait();
+                    drop(guard);
+                    sink
+                })
+            });
+            threads.map(|worker| worker.join().expect("warning worker"))
+        });
+
+        for (sink, expected) in sinks.into_iter().zip(workers) {
+            let messages: Vec<_> = sink.take().into_iter().map(|warning| warning.message).collect();
+            assert_eq!(messages, [expected]);
+        }
+    }
+
+    #[test]
+    fn automatic_warning_outside_a_scope_is_not_retained() {
+        let sink = WarningSink::new();
+        drop(sink.enter());
+        let message = "automatic warning without a document scope";
+        record_warning(scope_warning(message));
+        assert!(sink.is_empty());
+        assert!(
+            !snapshot_global_warnings()
+                .iter()
+                .any(|warning| warning.message == message)
+        );
     }
 
     #[test]

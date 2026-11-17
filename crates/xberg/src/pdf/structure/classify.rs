@@ -857,7 +857,7 @@ fn combined_changelog_has_multiline_geometry(paragraph: &PdfParagraph) -> bool {
     let baseline_gap = paragraph
         .lines
         .iter()
-        .map(|line| line.baseline_y)
+        .map(|line| line.baseline_or_zero())
         .fold(None, |bounds, baseline| match bounds {
             None => Some((baseline, baseline)),
             Some((minimum, maximum)) => Some((minimum.min(baseline), maximum.max(baseline))),
@@ -2440,7 +2440,7 @@ mod tests {
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: font_size,
             is_bold: false,
             is_monospace: false,
@@ -3076,7 +3076,7 @@ mod tests {
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 18.0,
             is_bold: false,
             is_monospace: false,
@@ -3571,7 +3571,7 @@ mod tests {
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: font_size,
             is_bold,
             is_monospace: false,
@@ -4113,7 +4113,7 @@ mod tests {
         let mut combined = make_text_paragraph(16.0, "Recent Change Log v0.9.1", true);
         combined.text = "Recent Change Log v0.9.1".to_string();
         let mut version_line = combined.lines[0].clone();
-        version_line.baseline_y = 680.0;
+        version_line.baseline_y = Some(680.0);
         version_line.segments[0].y = 680.0;
         version_line.segments[0].baseline_y = 680.0;
         combined.lines.push(version_line);
@@ -4410,7 +4410,7 @@ mod tests {
                     assigned_role: None,
                     ocr_heading_spans: None,
                 }],
-                baseline_y: 700.0 - i as f32 * 12.0,
+                baseline_y: Some(700.0 - i as f32 * 12.0),
                 dominant_font_size: 10.0,
                 is_bold: false,
                 is_monospace,

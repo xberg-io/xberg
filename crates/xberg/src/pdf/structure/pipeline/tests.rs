@@ -5012,6 +5012,19 @@ fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData
 }
 
 #[test]
+fn native_paragraphs_retain_the_measured_zero_line_baseline() {
+    let segments = vec![inline_seg("Native text at the page origin", 14.0, 0.0, false)];
+    let paragraphs = segments_to_paragraphs(segments, &[(12.0, None)], &[], &TextRepairWitnesses::default());
+    let [paragraph] = paragraphs.as_slice() else {
+        panic!("one native paragraph: {paragraphs:?}");
+    };
+    let [line] = paragraph.lines.as_slice() else {
+        panic!("one native line: {:?}", paragraph.lines);
+    };
+    assert_eq!(line.baseline_y, Some(0.0));
+}
+
+#[test]
 fn issue_1560_reconstructs_jittered_table_fragments_as_one_x_ordered_line() {
     let mut article = inline_seg("700004", 68.279, 623.481, false);
     article.font_size = 8.6;
@@ -5576,7 +5589,7 @@ fn line(segments: Vec<SegmentData>) -> PdfLine {
     PdfLine {
         native_scripts: Vec::new(),
         segments,
-        baseline_y: 0.0,
+        baseline_y: None,
         dominant_font_size: 12.0,
         is_bold: false,
         is_monospace: false,
