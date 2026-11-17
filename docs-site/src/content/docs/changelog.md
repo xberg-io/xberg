@@ -271,7 +271,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Bound PaddleOCR-VL and DeepSeek OCR image decoding before loading a model.**
   Xberg uses `security_limits.max_content_size` for the encoded input, decoding, and PaddleOCR-VL's immediate RGB conversion.
   The standalone `xberg-candle-ocr` byte APIs use a 100 MiB budget in place of the image library's 512 MiB decoder default and return typed image errors.
-  Supply an image decoded under your own budget via `process_rgb_image` (PaddleOCR-VL) or `process_decoded_image` (DeepSeek OCR). Model preprocessing and inference allocate separately. (#3168)
+  DeepSeek OCR also budgets the local-crop resize pixel buffers before decode. Images previously accepted can
+  now exceed the configured budget. Global-view preprocessing, tensors, and inference allocate separately.
+  PaddleOCR-VL callers can still supply an RGB image via `process_rgb_image`. (#3168)
 
 - **(ocr): Report each page's OCR progress once, even when a fallback backend or an image retry reads it again.** The event names the backend of the page's first read. (#3174)
 
