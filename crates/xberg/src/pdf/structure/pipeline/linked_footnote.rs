@@ -6,6 +6,9 @@ use crate::types::{BoundingBox, Table, document_structure::AnnotationKind};
 use xberg_native_pdf::{PageRotation, PdfDocument, geometry::Rect};
 
 const BOTTOM_PAGE_FRACTION: f32 = 0.15;
+// Spatial marker merging needs a stronger size contrast to join separate paragraphs.
+// This classifier already has a single grouped note, a painted rule and a matching reference.
+// Keep the 6.5pt marker on 8pt body text (0.8125) in the witnessed note. ~keep
 const MAX_MARKER_FONT_RATIO: f32 = 0.85;
 const MAX_MARKER_RISE_EM: f32 = 0.75;
 const MAX_RULE_GAP_EM: f32 = 2.0;
@@ -234,3 +237,7 @@ fn count_annotated_references(paragraph: &PdfParagraph, marker: &str, hyphens: &
         .take(2)
         .count()
 }
+
+#[cfg(test)]
+#[path = "linked_footnote_tests.rs"]
+mod tests;

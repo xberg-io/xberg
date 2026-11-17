@@ -7771,7 +7771,7 @@ fn seg_with_font(text: &str, font_size: f32) -> SegmentData {
     }
 }
 
-fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
+pub(super) fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
     SegmentData {
         text: text.to_string(),
         x,
@@ -10366,7 +10366,7 @@ fn most_frequent_level_prefers_the_higher_count_then_the_lower_level() {
     assert_eq!(most_frequent_level([]), None);
 }
 
-fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
+pub(super) fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
     let mut reference = seg_at(
         "The cited work is described here with enough detail to identify the source",
         70.0,
@@ -10380,7 +10380,7 @@ fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
     para(vec![line(vec![reference, marker])])
 }
 
-fn linked_footnote_text() -> PdfParagraph {
+pub(super) fn linked_footnote_text() -> PdfParagraph {
     let mut marker = seg_at("2", 70.0, 78.0, 6.5, false);
     marker.width = 3.0;
     let mut body = seg_at("A link to the cited work", 76.0, 74.0, 8.0, false);
@@ -10601,7 +10601,7 @@ fn linked_footnote_requires_the_reference_body_above_the_rule() {
     }
 }
 
-fn linked_footnote_image_pdf(page_content: &str) -> Vec<u8> {
+pub(super) fn linked_footnote_image_pdf(page_content: &str) -> Vec<u8> {
     use lopdf::{Document, Stream, dictionary};
 
     let mut doc = Document::with_version("1.4");
