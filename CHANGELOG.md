@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **pdf:** Warning when a tall scanned page was read at reduced resolution and source-image strip recovery did not run or did not improve it. (#2502)
+
 - **ocr:** Warning when resizing a standalone tall image may leave text incomplete. (#2502)
 - **math:** Explicit math text annotations (`AnnotationKind::math(display)`, `math_display()` in Rust; `Custom` annotation `xberg.math` with value `inline` or `display` in other bindings) render as LaTeX in Markdown, HTML and Djot.
 - **ocr:** Corroborated Khmer numbers are recovered on eligible English-primary PDF pages when `khm.traineddata` is installed. (#2408)
@@ -97,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **llm:** Rust `xberg::llm::usage::usage_from_error` exposes token usage of failed structured responses. (#2139)
 
 ### Changed
+
+- **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
@@ -123,6 +127,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **install:** The install script verifies CLI release archives against SHA-256 digests from GitHub release metadata before extraction. (#3168)
+- **ocr:** Runtime Tesseract language-pack downloads are verified against pinned SHA-256 digests and use bounded timeouts. (#3168)
+
 - **api, mcp:** REST and MCP requests are rejected when their config names a server file, directory or model source (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids, `concurrency`); `/extract` merges the request config over the server config, and a request can only lower security limits, archive depth, timeouts and URL caps.
 - **api:** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs run at once, separately from synchronous requests; further jobs stay `pending`.
 - **api, mcp:** Remote REST or MCP-over-HTTP configs that add or change an LLM stage are rejected unless `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1` is set, so callers cannot use the server's LLM credentials.
@@ -147,6 +154,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **excel:** ZIP-backed spreadsheets reject mismatched local headers, duplicate member names and overlapping entries.
 
 ### Fixed
+
+- **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
+- **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
 - Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.

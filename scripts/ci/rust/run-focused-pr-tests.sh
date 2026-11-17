@@ -86,6 +86,28 @@ run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  run_exact 'extractors::warnings::tests::nested_warning_scope_restores_the_outer_sink' --native-pdf --lib
+  run_exact 'extractors::warnings::tests::unwinding_restores_the_outer_warning_scope' --native-pdf --lib
+  run_exact 'extractors::warnings::tests::automatic_warning_outside_a_scope_is_not_retained' --native-pdf --lib
+  run_exact explicit_global_warnings_round_trip_with_a_bounded_backlog --native-pdf --test extraction_api_regression
+  run_exact shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_document \
+    --native-pdf --test extraction_api_regression
+  run_exact concurrent_renderers_keep_their_own_dropped_glyph_warnings --native-pdf --test test_glyph_drop_reporting
+  run_exact 'extractors::warnings::tests::overlapping_warning_scopes_keep_each_threads_warnings' --native-pdf --lib
+  run_exact a_dropped_glyph_warns_on_every_page_it_paints --native-pdf --test test_glyph_drop_reporting
+  run_exact 'rendering::text_rasterizer::tests::glyph_drop_warning_hides_font_and_preserves_details' --native-pdf --lib
+  run_exact 'render_parity::fully_mapped_fonts_render_without_drop_warnings' --native-pdf --test test_decoder_characterization
+  run_exact 'render_parity::subset_missing_glyph_raises_one_drop_warning' --native-pdf --test test_decoder_characterization
+  local jpx_test
+  for jpx_test in \
+    a_dictionary_width_half_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_width_double_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_that_agrees_with_the_codestream_extracts_with_no_size_warning \
+    an_indexed_image_extracts_at_the_codestreams_size \
+    concurrent_documents_keep_their_own_jpx_size_warnings; do
+    run_exact "$jpx_test" --native-pdf --test gh1900_jpx_dict_size_disagrees_with_codestream
+  done
+  expected=$((expected + 16))
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::located_english_word_keeps_its_place_between_khmer_occurrences' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_khmer_occurrence_is_published_inline_in_both_surfaces' --lib
@@ -94,6 +116,9 @@ run_pdf_cases() {
   run_exact automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_khmer --test pdf_khmer_minority_2826
   run_exact mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink --test pdf_khmer_minority_2826
   run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
+  run_exact 'pdf::structure::paragraphs::tests::continuation_merge_distinguishes_zero_baseline_from_missing_geometry' --lib
+  run_exact 'pdf::structure::adapters::tests::ocr_line_baseline_requires_a_source_box' --lib
+  run_exact 'pdf::structure::pipeline::tests::native_paragraphs_retain_the_measured_zero_line_baseline' --lib
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
@@ -113,6 +138,13 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
+  expected=$((expected + 5))
+  local tall_scan_policy='extractors::pdf::ocr::tall_source::policy::tests'
+  run_exact "$tall_scan_policy::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render" --lib
+  run_exact "$tall_scan_policy::reports_the_actual_density_of_a_budgeted_pdf_read" --lib
+  run_exact "$tall_scan_policy::strip_recovery_early_returns_report_only_the_proven_density_once" --lib
+  run_exact an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm --test pdf_tall_scan_strips
+  run_exact the_mixed_route_names_the_configuration_that_blocked_strip_recovery --test pdf_tall_scan_strips
 }
 
 run_retry_timeout_cases() {
@@ -321,6 +353,7 @@ run_discarded_recovery_cases() {
 
 run_office_page_cases() {
   local test_name
+  run_exact should_preserve_source_spacing_across_inline_rtf_groups --test rtf_extractor_tests
   for test_name in \
     plain_heading_carries_no_style_note \
     plain_table_cell_keeps_link_text_and_drops_the_target \
@@ -346,6 +379,11 @@ run_office_page_cases() {
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
     run_exact "extractors::docx::tests::$test_name" --lib
   done
+  run_exact 'extractors::docx::tests::should_queue_single_docx_parse_and_honor_cancellation_before_it_starts' --lib
+  run_exact 'extractors::docx::tests::should_parse_inline_without_tokio_and_check_cancellation_before_parsing' --lib
+  run_exact 'extractors::docx::tests::should_resume_a_blocking_docx_worker_panic' --lib
+  run_exact 'extractors::docx::tests::should_report_docx_worker_shutdown_as_cancellation' --lib
+  run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
@@ -403,7 +441,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=120
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
@@ -417,7 +455,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=35
+  expected=41
   run_office_page_cases
   ;;
 api-jobs)

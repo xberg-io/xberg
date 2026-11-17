@@ -162,6 +162,7 @@ impl PdfDocument {
         mut form_budget: FormPathBudget,
         mut bottom_pagination: Option<&mut BottomPaginationSeparators>,
     ) -> Result<Vec<crate::elements::PathContent>> {
+        let _warnings = self.warning_scope();
         use crate::content::{Operator, parse_content_stream_paths_only};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::{FillRule, PathExtractor, PathGraphicsStateStack};

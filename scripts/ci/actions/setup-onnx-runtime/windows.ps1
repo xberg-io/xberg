@@ -78,7 +78,7 @@ if ($DllDirs.Count -eq 0) {
   $AnyDll = Get-ChildItem -Path $OrtRoot -Recurse -Filter "*.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($AnyDll) { $DllDirs += $AnyDll.DirectoryName }
 }
-$DllDirs = $DllDirs | Select-Object -Unique
+$DllDirs = @($DllDirs | Select-Object -Unique)
 if ($DllDirs.Count -eq 0) {
   Write-Error "ERROR: No ONNX Runtime runtime DLLs found under $OrtRoot"
   Get-ChildItem -Path $OrtRoot -Recurse | Write-Host

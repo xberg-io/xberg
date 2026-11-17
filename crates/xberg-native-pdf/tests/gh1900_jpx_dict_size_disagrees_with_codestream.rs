@@ -14,7 +14,7 @@
 //! placeholder-`/ColorSpace` component-count logic covered by `gh1883_bare_cmyk_jpx_without_colorspace.rs`.
 
 use xberg_native_pdf::document::PdfDocument;
-use xberg_native_pdf::extractors::warnings::{WarningCategory, snapshot_global_warnings};
+use xberg_native_pdf::extractors::warnings::WarningCategory;
 use xberg_native_pdf::extractors::{ColorSpace, ImageData, PixelFormat};
 
 /// A 16x16 lossless four-component raw J2K codestream, one channel saturated per quadrant. Shared
@@ -81,10 +81,6 @@ fn build_pdf_with_jpx_image(codestream: &[u8], color_space: &str, dict_width: u3
 /// Assert the extracted image (from a fixture whose dictionary declared `dict_width` x
 /// `dict_height` against the 16x16 codestream) landed at the codestream's own size, with all four
 /// CMYK planes intact, and that a `JpxSizeMismatch` warning naming both sizes was recorded.
-///
-/// Reads `snapshot_global_warnings()` rather than draining: the sink is process-wide, so two
-/// tests decoding concurrently must not be able to steal each other's warning. Filtering on the
-/// exact declared-size substring (unique per test) keeps the assertion correct even so. ~keep
 fn assert_extracted_at_codestream_size_and_warned(dict_width: u32, dict_height: u32) {
     let doc = PdfDocument::from_bytes(build_pdf_with_jpx_image(
         CMYK_QUADRANTS_J2K,
@@ -125,12 +121,8 @@ fn assert_extracted_at_codestream_size_and_warned(dict_width: u32, dict_height: 
     }
     assert_eq!(*images[0].color_space(), ColorSpace::DeviceCMYK);
 
-    // ~keep "dictionary declares", not just "declares": the message names BOTH sizes, and its
-    // second half reads "SIZ marker segment declares <codestream size>". A bare "declares 16x16"
-    // therefore matches a MISMATCH warning raised by a sibling test, and the sink is process-global
-    // and shared across this binary's concurrently-running tests.
     let needle = format!("dictionary declares {dict_width}x{dict_height}");
-    let warnings = snapshot_global_warnings();
+    let warnings = doc.structured_warnings();
     assert!(
         warnings
             .iter()
@@ -165,13 +157,11 @@ fn a_dictionary_that_agrees_with_the_codestream_extracts_with_no_size_warning() 
     assert_eq!(images[0].width(), 16);
     assert_eq!(images[0].height(), 16);
 
-    let needle = "dictionary declares 16x16";
-    let warnings = snapshot_global_warnings();
     assert!(
-        !warnings
+        !doc.structured_warnings()
             .iter()
-            .any(|w| w.category == WarningCategory::JpxSizeMismatch && w.message.contains(needle)),
-        "an agreeing dictionary must not raise a size-mismatch warning naming its own size"
+            .any(|w| w.category == WarningCategory::JpxSizeMismatch),
+        "an agreeing dictionary must not raise a size-mismatch warning"
     );
 }
 
@@ -190,11 +180,16 @@ fn an_indexed_image_extracts_at_the_codestreams_size() {
         let ImageData::Raw { pixels, .. } = images[0].data() else {
             panic!("an indexed JPX image decodes to raw samples");
         };
-        (images[0].width(), images[0].height(), pixels.clone())
+        (
+            images[0].width(),
+            images[0].height(),
+            pixels.clone(),
+            doc.structured_warnings(),
+        )
     };
-    let (_, _, control) = extract(120);
+    let (_, _, control, _) = extract(120);
     for dict_width in [60, 240] {
-        let (width, height, pixels) = extract(dict_width);
+        let (width, height, pixels, warnings) = extract(dict_width);
         assert_eq!(
             (width, height),
             (120, 40),
@@ -206,10 +201,47 @@ fn an_indexed_image_extracts_at_the_codestreams_size() {
         );
         let needle = format!("dictionary declares {dict_width}x40");
         assert!(
-            snapshot_global_warnings()
+            warnings
                 .iter()
                 .any(|w| w.category == WarningCategory::JpxSizeMismatch && w.message.contains(&needle)),
             "/Width {dict_width}: the disagreement must be recorded"
+        );
+    }
+}
+
+#[test]
+fn concurrent_documents_keep_their_own_jpx_size_warnings() {
+    let widths = [37, 39];
+    let documents = std::thread::scope(|scope| {
+        let threads = widths.map(|width| {
+            scope.spawn(move || {
+                let doc =
+                    PdfDocument::from_bytes(build_pdf_with_jpx_image(CMYK_QUADRANTS_J2K, "/DeviceCMYK", width, 16))
+                        .expect("open document");
+                let images = doc.extract_images(0).expect("decode mismatched image");
+                assert_eq!(images.len(), 1);
+                assert_eq!(images[0].width(), 16);
+                doc
+            })
+        });
+        threads.map(|thread| thread.join().expect("extract document image"))
+    });
+
+    for (width, doc) in widths.into_iter().zip(documents) {
+        let warnings = doc.structured_warnings();
+        let sized_warnings: Vec<_> = warnings
+            .iter()
+            .filter(|warning| warning.category == WarningCategory::JpxSizeMismatch)
+            .collect();
+        assert_eq!(
+            sized_warnings.len(),
+            1,
+            "document with declared width {width}: {sized_warnings:?}"
+        );
+        assert!(
+            sized_warnings[0]
+                .message
+                .contains(&format!("dictionary declares {width}x16"))
         );
     }
 }

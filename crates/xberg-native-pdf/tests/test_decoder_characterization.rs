@@ -454,27 +454,13 @@ fn zero_tj_number_does_not_disable_malformed_width_repair() {
 
 mod render_parity {
     use super::*;
-    use xberg_native_pdf::extractors::warnings::{WarningCategory, drain_global_warnings};
+    use xberg_native_pdf::extractors::warnings::WarningCategory;
     use xberg_native_pdf::rendering::{RenderOptions, render_page};
 
-    /// The warning sink is process-global while cargo runs these tests as
-    /// threads of one binary, so a drain/render/drain cycle must not
-    /// interleave with another test's: each would consume the other's
-    /// warnings. The drop latch is page-scoped, so a broken font warns on
-    /// every page it paints and there is no once-per-process suppression to
-    /// hide the race.
-    static SINK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// No font-name filter: `report_drops` renders the name as the literal
-    /// `redacted`, so matching a drop warning against the fixture's font name
-    /// never fires. The `SINK` lock plus the drain-before-render below is what
-    /// makes the drained warnings attributable to this render. ~keep
     fn glyph_drop_warnings_for(pdf: Vec<u8>) -> Vec<String> {
-        let _sink = SINK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let doc = PdfDocument::from_bytes(pdf).expect("fixture parses");
-        let _ = drain_global_warnings();
         render_page(&doc, 0, &RenderOptions::default()).expect("render");
-        drain_global_warnings()
+        doc.structured_warnings()
             .into_iter()
             .filter(|w| w.category == WarningCategory::GlyphDropped)
             .map(|w| w.message)
