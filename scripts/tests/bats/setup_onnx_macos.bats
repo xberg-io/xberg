@@ -3,6 +3,7 @@
 setup() {
 	bats_load_library xberg-bats
 	xberg_setup
+	unset ORT_CHECKSUMS_FILE
 	REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 	SCRIPT="$REPO_ROOT/scripts/ci/actions/setup-onnx-runtime/macos.sh"
 	export RUNNER_TEMP="$XBERG_WORK/runner" GITHUB_WORKSPACE="$XBERG_WORK/workspace"
@@ -120,4 +121,62 @@ assert_invalid_rpath() {
 
 @test "setup_onnx_macos should_reject_case_variant_rpath_before_staging" {
 	assert_invalid_rpath TRUE
+}
+
+prepare_fresh_archive() {
+	local name="$1" version="$2" checksum
+	rm -rf "$RUNNER_TEMP/onnxruntime"
+	export ORT_FIXTURE="$XBERG_WORK/$name.tgz"
+	export ORT_CHECKSUMS_FILE="$XBERG_WORK/checksums.sha256"
+	mkdir -p "$XBERG_WORK/fixture/$name/lib"
+	printf 'verified dylib\n' >"$XBERG_WORK/fixture/$name/lib/libonnxruntime.$version.dylib"
+	command -p tar -czf "$ORT_FIXTURE" -C "$XBERG_WORK/fixture" "$name"
+	checksum="$(shasum -a 256 "$ORT_FIXTURE")"
+	printf '%s  %s.tgz\n' "${checksum%% *}" "$name" >"$ORT_CHECKSUMS_FILE"
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	rm "$XBERG_STUB_BIN/tar"
+}
+
+@test "setup_onnx_macos verifies a fresh pinned arm64 archive before staging it" {
+	prepare_fresh_archive onnxruntime-osx-arm64-1.24.2 1.24.2
+	run_setup_script 1.24.2 native arm64 system
+	xberg_assert_status 0
+	xberg_assert_output_contains 'onnxruntime-osx-arm64-1.24.2.tgz: SHA-256 verified'
+	xberg_assert_file "$DEST/libonnxruntime.1.24.2.dylib" 'verified dylib'
+	grep -Fq 'download/v1.24.2/onnxruntime-osx-arm64-1.24.2.tgz' "$XBERG_TRACE"
+}
+
+@test "setup_onnx_macos verifies the existing Intel fallback release" {
+	prepare_fresh_archive onnxruntime-osx-x86_64-1.23.2 1.23.2
+	run_setup_script 1.24.2 native x64 bundled
+	xberg_assert_status 0
+	xberg_assert_output_contains 'onnxruntime-osx-x86_64-1.23.2.tgz: SHA-256 verified'
+	xberg_assert_file "$DEST/libonnxruntime.1.23.2.dylib" 'verified dylib'
+	grep -Fq 'download/v1.23.2/onnxruntime-osx-x86_64-1.23.2.tgz' "$XBERG_TRACE"
+	[ "$(wc -l <"$GITHUB_ENV" | tr -d ' ')" -eq 3 ]
+}
+
+@test "setup_onnx_macos rejects an unpinned fresh version before curl" {
+	unset ORT_CHECKSUMS_FILE
+	run_setup_script 9.9.9 native arm64 system
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for onnxruntime-osx-arm64-9.9.9.tgz'
+	[ ! -e "$DEST" ]
+	[ ! -s "$GITHUB_ENV" ]
+	xberg_assert_trace_empty
+}
+
+@test "setup_onnx_macos rejects mismatched bytes before tar or publishing" {
+	prepare_fresh_archive onnxruntime-osx-arm64-1.24.2 1.24.2
+	printf 'tampered archive\n' >"$ORT_FIXTURE"
+	xberg_stub_exit tar 93
+	run_setup_script 1.24.2 native arm64 system
+	xberg_assert_status 1
+	xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-osx-arm64-1.24.2.tgz'
+	[ ! -e "$RUNNER_TEMP/onnxruntime" ]
+	[ ! -e "$DEST" ]
+	[ ! -s "$GITHUB_ENV" ]
 }
