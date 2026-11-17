@@ -337,6 +337,7 @@ pub(crate) async fn recognize_crop_blocking(
     {
         use std::sync::{Arc, LazyLock};
         use tokio::sync::Semaphore;
+        // One permit matches the single recognizer guarded by RECOGNIZER. ~keep
         static SLOT: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(1)));
 
         run_with_formula_slot(Arc::clone(&SLOT), move || recognize_crop(&crop, accel.as_ref())).await?

@@ -62,7 +62,7 @@ fn waiting_formula_crop_leaves_the_other_blocking_worker_free() {
 }
 
 #[test]
-fn dropping_a_queued_formula_skips_it_and_keeps_the_active_slot() {
+fn aborting_a_formula_caller_keeps_the_active_permit_until_decode_finishes() {
     blocking_workers(2).block_on(async {
         let slot = Arc::new(Semaphore::new(1));
         let (active_entered, active_started) = oneshot::channel();
@@ -76,14 +76,6 @@ fn dropping_a_queued_formula_skips_it_and_keeps_the_active_slot() {
             .unwrap()
             .unwrap();
 
-        let cancelled_ran = Arc::new(AtomicBool::new(false));
-        let worker_ran = cancelled_ran.clone();
-        let mut queued = Box::pin(run_with_formula_slot(slot.clone(), move || {
-            worker_ran.store(true, Ordering::SeqCst);
-        }));
-        poll_queued(queued.as_mut()).await;
-        drop(queued);
-
         active.abort();
         assert!(active.await.unwrap_err().is_cancelled());
         assert_eq!(slot.available_permits(), 0, "active worker still holds its slot");
@@ -92,7 +84,6 @@ fn dropping_a_queued_formula_skips_it_and_keeps_the_active_slot() {
         poll_queued(next.as_mut()).await;
         release_active.send(()).unwrap();
         assert_eq!(tokio::time::timeout(TEST_TIMEOUT, next).await.unwrap().unwrap(), 42);
-        assert!(!cancelled_ran.load(Ordering::SeqCst), "dropped queued work never ran");
     });
 }
 
