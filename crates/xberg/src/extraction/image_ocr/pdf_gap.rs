@@ -135,8 +135,7 @@ pub(crate) fn eligible(config: &ExtractionConfig) -> bool {
                 && !pdf.ocr_inline_images
                 && !pdf.reading_order
                 && pdf.hierarchy.is_none()
-                && pdf.top_margin_fraction.is_none()
-                && pdf.bottom_margin_fraction.is_none()
+                && pdf.has_unset_raw_margins()
         })
         && config.ocr.as_ref().is_some_and(eligible_tesseract)
 }

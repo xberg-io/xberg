@@ -76,8 +76,7 @@ fn preserves_requested_projection(config: &ExtractionConfig) -> bool {
         && config.images.as_ref().is_none_or(|images| !images.include_page_rasters)
         && config.ocr_near_empty_fallback != Some(false)
         && config.pdf_options.as_ref().is_none_or(|pdf| {
-            pdf.top_margin_fraction.is_none()
-                && pdf.bottom_margin_fraction.is_none()
+            pdf.has_unset_raw_margins()
                 && !pdf.reading_order
                 && pdf.backend == crate::core::config::PdfBackend::Native
                 && pdf.hierarchy.is_none()

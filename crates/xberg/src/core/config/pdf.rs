@@ -212,6 +212,16 @@ impl Default for PdfConfig {
 
 #[cfg(feature = "pdf")]
 impl PdfConfig {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) fn has_unset_raw_margins(&self) -> bool {
+        self.top_margin_fraction.is_none() && self.bottom_margin_fraction.is_none()
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) fn has_nonzero_raw_margins(&self) -> bool {
+        self.top_margin_fraction.unwrap_or_default() != 0.0 || self.bottom_margin_fraction.unwrap_or_default() != 0.0
+    }
+
     /// Validate PDF-specific extraction settings.
     ///
     /// # Errors
@@ -285,6 +295,31 @@ fn default_k_clusters() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    fn raw_margin_predicates_distinguish_unset_from_explicit_zero() {
+        for (top, bottom, expected) in [
+            (None, None, (true, false)),
+            (Some(0.0), None, (false, false)),
+            (None, Some(0.0), (false, false)),
+            (Some(-0.0), Some(0.0), (false, false)),
+            (Some(0.05), Some(0.0), (false, true)),
+            (Some(0.0), Some(0.10), (false, true)),
+            (Some(f32::NAN), None, (false, true)),
+        ] {
+            let pdf = PdfConfig {
+                top_margin_fraction: top,
+                bottom_margin_fraction: bottom,
+                ..Default::default()
+            };
+            assert_eq!(
+                (pdf.has_unset_raw_margins(), pdf.has_nonzero_raw_margins()),
+                expected,
+                "raw top and bottom margins: {top:?}, {bottom:?}"
+            );
+        }
+    }
 
     #[test]
     #[cfg(all(feature = "pdf", not(feature = "layout-detection")))]
