@@ -1007,7 +1007,6 @@ traineddata = "traineddata"
 "crates/xberg/src/layout/models/slanet.rs" = ["cyclomatic-complexity", "function-too-long"]
 "crates/xberg/src/mcp/server.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 "crates/xberg/src/model_download.rs" = ["file-too-long", "function-too-long"]
-"crates/xberg/src/ocr/conversion.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/ocr/hocr_parser.rs" = [
   "cyclomatic-complexity",
   "file-too-long",
