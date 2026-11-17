@@ -646,6 +646,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **pdf:** A margin-note column beside a justified main column is read as its own block. (GH#2109)
 - **pdf:** Prose running across a table's inner gutter is no longer split between columns. (GH#2110)
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
 - **deps:** YAML parsing moved from `serde_yaml_ng` to `yaml_serde` 0.10.7, removing the unmaintained `unsafe-libyaml` (RUSTSEC-2024-0449). (GH#2108)
 - **deps:** `ort` is pinned to `=2.0.0-rc.13`; rc.14 broke downstream builds.
 - **swift:** iOS libraries build again.
