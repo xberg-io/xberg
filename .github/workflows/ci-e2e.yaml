@@ -60,7 +60,7 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
@@ -86,7 +86,7 @@ jobs:
 
       - name: Restore FFI artifacts from cache
         id: ffi-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             target/release/libxberg_ffi.*
@@ -124,7 +124,7 @@ jobs:
           extra-cargo-args: --features all
 
       - name: Upload FFI artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ffi-${{ matrix.target }}
           path: |
@@ -215,7 +215,7 @@ jobs:
             runs-on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
@@ -231,7 +231,7 @@ jobs:
           use-sccache: "true"
 
       - name: Download FFI artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ffi-${{ matrix.target }}
           path: ffi-artifacts
@@ -351,7 +351,7 @@ jobs:
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
         if: matrix.lang == 'python'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/uv
           key: e2e-uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -383,7 +383,7 @@ jobs:
       # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - name: Setup Android SDK
         if: matrix.lang == 'kotlin-android'
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: "platforms;android-35 build-tools;35.0.0"
           accept-android-sdk-licenses: true
@@ -397,7 +397,7 @@ jobs:
       # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
       - name: Setup .NET
         if: matrix.dotnet-version
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
@@ -420,7 +420,7 @@ jobs:
       # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - name: Setup Dart
         if: matrix.dart-version
-        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b
+        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
         with:
           sdk: ${{ matrix.dart-version }}
 
@@ -510,7 +510,7 @@ jobs:
 
       - name: Upload kotlin-android diagnostics
         if: ${{ always() && matrix.lang == 'kotlin-android' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kotlin-android-diag
           path: /tmp/kotlin-diag/**
@@ -596,7 +596,7 @@ jobs:
 
       - name: Upload swift crash artifacts
         if: ${{ matrix.lang == 'swift' && failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-crash-${{ matrix.target }}
           path: |
@@ -606,7 +606,7 @@ jobs:
 
       - name: Upload e2e diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-diagnostics-${{ matrix.lang }}
           path: |

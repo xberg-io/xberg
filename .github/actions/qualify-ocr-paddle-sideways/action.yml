@@ -4,7 +4,7 @@ runs:
   using: composite
   steps:
     - name: Cache pinned OSD qualification model
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/xberg-osd-87416418657359cb
         key: explicit-sideways-osd-9cf5d576fcc47564f11265841e5ca8390

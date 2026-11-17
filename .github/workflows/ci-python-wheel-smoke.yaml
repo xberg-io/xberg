@@ -46,7 +46,7 @@ jobs:
         # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
         os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2022"]' || '["ubuntu-latest","ubuntu-24.04-arm","windows-2022","macos-26","macos-26-intel"]') }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
 
@@ -186,7 +186,7 @@ jobs:
 
       - name: Upload Windows wheel for isolated qualification
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clean-host-windows-wheel-${{ github.sha }}
           path: wheelhouse/*win_amd64.whl
@@ -205,7 +205,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           submodules: false
@@ -224,7 +224,7 @@ jobs:
           $pythonRoot = (mise where python).Trim()
           if ($LASTEXITCODE -ne 0 -or -not $pythonRoot) { throw 'Locked mise Python installation unavailable' }
           & (Join-Path $pythonRoot "python.exe") scripts/ci/resolve_windows_wheel_artifact.py
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: inputs.windows_producer_run_id != ''
         with:
           artifact-ids: ${{ steps.prior-wheel.outputs.artifact_id }}
@@ -232,7 +232,7 @@ jobs:
           run-id: ${{ inputs.windows_producer_run_id }}
           digest-mismatch: error
           path: wheelhouse
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: inputs.windows_producer_run_id == ''
         with:
           name: clean-host-windows-wheel-${{ github.sha }}
@@ -253,7 +253,7 @@ jobs:
         run: mise run python:wheel:clean-host wheelhouse "${{ github.sha }}" clean-host-receipts
       - name: Collect clean-userspace evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-clean-host-evidence-${{ github.sha }}
           path: clean-host-receipts/**/*.json
