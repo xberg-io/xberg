@@ -514,6 +514,27 @@ fn bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so
 }
 
 #[test]
+fn a_120_dpi_bilevel_scan_explains_the_source_density_refusal() {
+    use sha2::{Digest, Sha256};
+
+    let source = fixture_120!("bilevel-120.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(source)),
+        "a77555aab24bedb54f6c92142766e82e44114702609d59d04928551ce36a2b13"
+    );
+    let result = extract(source, &extraction_config());
+    assert!(result.metadata.ocr_used);
+    assert!(!strip_warning(&result));
+    let warnings = not_used_warnings(&result);
+    assert_eq!(warnings.len(), 1, "expected one retained-read warning: {warnings:?}");
+    assert!(
+        warnings[0].contains("the 120 DPI one-bit grayscale Flate scan is below the 150 DPI strip-recovery minimum"),
+        "expected the density gate to be identified: {}",
+        warnings[0]
+    );
+}
+
+#[test]
 fn tall_scans_below_the_density_floor_say_recovery_was_not_used() {
     for source in [TALL_PREDICTOR, NEUTRAL_RGB, BILEVEL] {
         let document = extract(&lower_density(source, BELOW_FLOOR_DENSITY), &extraction_config());

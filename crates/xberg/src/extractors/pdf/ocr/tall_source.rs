@@ -1298,6 +1298,44 @@ mod tests {
         PdfDocument::from_bytes(bytes).expect("read valid synthetic PDF")
     }
 
+    #[test]
+    fn existing_bilevel_scans_reach_the_source_density_gate() {
+        let low = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-120.pdf");
+        let standard = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+        const BUDGET: usize = 32 * 1024 * 1024;
+        const READ_WIDTH: Option<u32> = Some(435);
+        for (bytes, expected_dpi, allowed) in [(low.as_slice(), 120.0, false), (standard.as_slice(), 150.0, true)] {
+            let document = PdfDocument::from_bytes(bytes.to_vec()).expect("open tagged bilevel scan");
+            let (frame, Object::Stream { dict, data }) =
+                page_frame_and_contents(&document, 0).expect("single page content")
+            else {
+                panic!("expected the page's content stream");
+            };
+            assert!(!dict.contains_key("DecodeParms"));
+            let filters = stream_filters(dict.get("Filter")).expect("page stream filter");
+            let paint = decode_probe_stream(&data, filters, 4096, BUDGET).expect("certified page paint");
+            let name = image_name(&paint, frame).expect("full-page scan paint");
+            let resources = document.get_page_resources(0).unwrap();
+            let xobjects = document
+                .resolve_object(&resources.as_dict().unwrap()["XObject"])
+                .unwrap();
+            let image = document.resolve_object(&xobjects.as_dict().unwrap()[&name]).unwrap();
+            let Object::Stream { dict, data } = image else {
+                panic!("expected the painted image stream");
+            };
+            assert_eq!(dict.get("Filter").and_then(Object::as_name), Some("FlateDecode"));
+            let (width, height, dpi) = source_frame(&dict, frame, READ_WIDTH).expect("eligible source frame");
+            assert!((dpi - expected_dpi).abs() < 0.01);
+            assert!(flate_packing(&dict, width) == Some(GrayPacking::Bilevel));
+            let expanded = width as usize * height as usize;
+            let packed = (width as usize).div_ceil(8) * height as usize;
+            assert!(retained_gray_bytes(data.len(), expanded).unwrap() + packed < BUDGET);
+            assert_eq!(source_density_allowed(dpi, Some(GrayPacking::Bilevel)), allowed);
+            let accepted = certify(&document, 0, READ_WIDTH, BUDGET, &mut None).is_some();
+            assert_eq!(accepted, allowed);
+        }
+    }
+
     const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
 
     fn four_bit_gray_refusal_requires_the_full_memory_budget() {
