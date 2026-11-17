@@ -15,6 +15,8 @@ const RULE_GAP_TOLERANCE: f32 = 0.1;
 // hundreds of paths and no single rule can be told apart. ~keep
 const MAX_GROUPED_HEADER_PATHS: usize = 128;
 
+mod single_title;
+
 pub(super) fn shading_rectangles<'a>(paths: impl IntoIterator<Item = &'a PathContent>) -> Vec<Rect> {
     paths
         .into_iter()
@@ -169,11 +171,17 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
     };
     let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
     if nearby.len() > MAX_GROUPED_HEADER_PATHS
-        || [groups.is_header, leaves.is_header, first_body.is_header]
-            .into_iter()
-            .any(|header| header)
+        || leaves.is_header
+        || first_body.is_header
         || !complete_source_band(first_body, columns, false)
     {
+        return;
+    }
+    if single_title::has_leaf_header(groups, leaves, first_body, &nearby, columns) {
+        mark_header_bands(groups, leaves);
+        return;
+    }
+    if groups.is_header {
         return;
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
@@ -186,9 +194,12 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
             && (grouped_header_rules(groups, leaves, &nearby)
                 || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
     };
-    if !proven {
-        return;
+    if proven {
+        mark_header_bands(groups, leaves);
     }
+}
+
+fn mark_header_bands(groups: &mut TableRow, leaves: &mut TableRow) {
     for row in [groups, leaves] {
         row.is_header = true;
         for cell in &mut row.cells {
@@ -238,9 +249,12 @@ fn complete_source_band(row: &TableRow, columns: usize, bold: bool) -> bool {
 }
 
 fn source_label(cell: &TableCell, bold: bool) -> bool {
+    !cell.is_header && contained_source_label(cell, bold)
+}
+
+fn contained_source_label(cell: &TableCell, bold: bool) -> bool {
     cell.bbox.is_some_and(|bounds| {
-        !cell.is_header
-            && cell.rowspan == 1
+        cell.rowspan == 1
             && !cell.text.trim().is_empty()
             && !cell.spans.is_empty()
             && cell.spans.iter().all(|span| {
@@ -368,8 +382,8 @@ fn body_repeats_the_header_rule(leaves: &TableRow, first_body: &TableRow, paths:
     let Some(body) = first_body.cells.first().and_then(|cell| cell.bbox) else {
         return false;
     };
-    let header = visible_rule_styles(paths, first.left(), last.right(), first.y);
-    let below = visible_rule_styles(paths, first.left(), last.right(), body.y);
+    let header = visible_rule_styles(paths, first.left(), last.right(), first.y, false);
+    let below = visible_rule_styles(paths, first.left(), last.right(), body.y, false);
     matches!((header, below), (Some(header), Some(below)) if header == below)
 }
 
@@ -431,21 +445,29 @@ fn near_header(path: &PathContent, bounds: Rect) -> bool {
 /// (`SMask`) and blend modes (`BM`) are also unmodelled. Fills are treated as opaque, so a fill
 /// crossing a rule can withhold a header even when that fill is transparent in the PDF. ~keep
 fn visible_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
-    visible_rule_styles(paths, left, right, y).is_some()
+    visible_rule_styles(paths, left, right, y, false).is_some()
 }
 
 /// The colours and weights of the segments that together make the rule visible, or `None`.
-fn visible_rule_styles(paths: &[&PathContent], left: f32, right: f32, y: f32) -> Option<Vec<RuleStyle>> {
+fn visible_rule_styles(
+    paths: &[&PathContent],
+    left: f32,
+    right: f32,
+    y: f32,
+    accept_filled_bars: bool,
+) -> Option<Vec<RuleStyle>> {
     let mut visible: Vec<(f32, f32, RuleStyle)> = Vec::new();
     for path in paths {
         let drawn = path.rendered_bbox();
         let (low, high) = (drawn.left(), drawn.right());
-        let is_rule = path.is_horizontal_line(HEADER_RULE_TOLERANCE)
-            && path.stroke_color.is_some()
-            && same_rule_position(path.bbox.center().y, y);
-        if is_rule && dark_solid_stroke(path) {
+        let on_axis = path.is_horizontal_line(HEADER_RULE_TOLERANCE) && same_rule_position(path.bbox.center().y, y);
+        let stroked_rule = on_axis && path.stroke_color.is_some();
+        let filled_rule = on_axis && accept_filled_bars && fill_only_bar(path);
+        if stroked_rule && dark_solid_stroke(path) {
             visible.push((low, high, rule_style(path)));
-        } else if is_rule || covering_fill(path, y) {
+        } else if filled_rule && dark_fill(path) {
+            visible.push((path.bbox.left(), path.bbox.right(), rule_style(path)));
+        } else if stroked_rule || filled_rule || covering_fill(path, y) {
             visible = visible
                 .into_iter()
                 .flat_map(|(start, end, style)| {
@@ -474,6 +496,18 @@ fn visible_rule_styles(paths: &[&PathContent], left: f32, right: f32, y: f32) ->
         }
     }
     None
+}
+
+fn fill_only_bar(path: &PathContent) -> bool {
+    path.is_rectangle() && path.stroke_color.is_none() && path.has_fill()
+}
+
+fn dark_fill(path: &PathContent) -> bool {
+    path.fill_color.is_some_and(|color| {
+        [color.r, color.g, color.b]
+            .into_iter()
+            .all(|component| (0.0..=MAX_HEADER_RULE_CHANNEL).contains(&component))
+    })
 }
 
 fn rule_style(path: &PathContent) -> RuleStyle {
