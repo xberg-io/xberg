@@ -8436,7 +8436,6 @@ transformer, CLIP projection, and language decoder for multimodal OCR.
 ##### Configuration
 
 DeepSeek-OCR accepts backend options for weight source, device, version, and dtype:
-
 ```json
 {
   "device": "auto",
@@ -12857,7 +12856,6 @@ test. Use `GlmOcrBackend::with_dtype` to override.
 ##### Configuration
 
 GLM-OCR accepts backend options for task, device, and layout mode selection:
-
 ```json
 {
   "task": "ocr",
@@ -20324,7 +20322,6 @@ Supports 109+ languages through the PaddlePaddle pretrained models.
 ##### Configuration
 
 PaddleOCR-VL accepts backend options for task selection, device, and weight source:
-
 ```json
 {
   "task": "ocr",
@@ -24946,14 +24943,14 @@ This model is NMS-free (transformer-based end-to-end detection).
 
 Input tensors:
 
-- `images`:            f32 [batch, 3, 640, 640]  (preprocessed pixel data)
-- `orig_target_sizes`: i64 [batch, 2]            ([height, width] of source image)
+  - `images`:            f32 [batch, 3, 640, 640]  (preprocessed pixel data)
+  - `orig_target_sizes`: i64 [batch, 2]            ([height, width] of source image)
 
 Output tensors:
 
-- `labels`: i64 [batch, num_queries]   (class IDs, 0-16)
-- `boxes`:  f32 [batch, num_queries, 4] (bounding boxes in original image coordinates)
-- `scores`: f32 [batch, num_queries]   (confidence scores)
+  - `labels`: i64 [batch, num_queries]   (class IDs, 0-16)
+  - `boxes`:  f32 [batch, num_queries, 4] (bounding boxes in original image coordinates)
+  - `scores`: f32 [batch, num_queries]   (confidence scores)
 
 ##### Methods
 
@@ -28653,7 +28650,6 @@ VLM OCR use `PaddleOcrVlBackend` instead.
 ##### Configuration
 
 TrOCR accepts backend options for runtime tuning:
-
 ```json
 {
   "variant": "base-printed",
