@@ -48,12 +48,19 @@ impl FormPathBudget {
     }
 }
 
+const MAX_SEPARATOR_OBJECT_WORK: usize = 16 * 1024 * 1024;
 const MAX_SEPARATOR_CONTENT_BYTES: usize = 1024 * 1024;
 const MAX_SEPARATOR_OPERATORS: usize = 8192;
 
+#[derive(Clone, Copy, Default)]
+struct SeparatorMarkedContent {
+    bottom_attached: bool,
+    optional: bool,
+}
+
 #[derive(Default)]
 struct BottomPaginationSeparators {
-    attachment_stack: Vec<bool>,
+    marked_content: Vec<SeparatorMarkedContent>,
     clip_stack: Vec<bool>,
     clipped: bool,
     invalid: bool,
@@ -71,7 +78,7 @@ impl BottomPaginationSeparators {
                 self.enter_content(tag, has_explicit_bottom_pagination_attachment(properties));
             }
             Operator::EndMarkedContent => {
-                self.invalid |= self.attachment_stack.pop().is_none();
+                self.invalid |= self.marked_content.pop().is_none();
                 self.attached_rectangle = false;
             }
             Operator::SaveState => self.clip_stack.push(self.clipped),
@@ -83,9 +90,13 @@ impl BottomPaginationSeparators {
                 }
             }
             Operator::ClipNonZero | Operator::ClipEvenOdd => self.clipped = true,
+            Operator::Tr { render: 4..=7 } => self.invalid = true,
             Operator::Rectangle { .. } => {
-                self.attached_rectangle =
-                    !extractor.has_current_path() && self.attachment_stack.last().copied() == Some(true);
+                self.attached_rectangle = !extractor.has_current_path()
+                    && self
+                        .marked_content
+                        .last()
+                        .is_some_and(|scope| scope.bottom_attached && !scope.optional);
             }
             Operator::Fill | Operator::FillEvenOdd => {
                 if std::mem::take(&mut self.attached_rectangle) && !self.clipped && extractor.has_current_path() {
@@ -98,17 +109,20 @@ impl BottomPaginationSeparators {
     }
 
     fn enter_content(&mut self, tag: &str, bottom_pagination: bool) {
-        let attached = if tag == "Artifact" {
-            bottom_pagination
-        } else {
-            self.attachment_stack.last().copied().unwrap_or_default()
-        };
-        self.attachment_stack.push(attached);
+        let parent = self.marked_content.last().copied().unwrap_or_default();
+        self.marked_content.push(SeparatorMarkedContent {
+            bottom_attached: if tag == "Artifact" {
+                bottom_pagination
+            } else {
+                parent.bottom_attached
+            },
+            optional: parent.optional || tag == "OC",
+        });
         self.attached_rectangle = false;
     }
 
     fn finish(self, paths: &[crate::elements::PathContent]) -> Vec<crate::geometry::Rect> {
-        if self.invalid || !self.attachment_stack.is_empty() || !self.clip_stack.is_empty() {
+        if self.invalid || !self.marked_content.is_empty() || !self.clip_stack.is_empty() {
             return Vec::new();
         }
         self.filled_paths
@@ -259,6 +273,19 @@ impl PdfDocument {
         Ok(evidence.finish(&paths))
     }
 
+    fn complete_separator_content(&self, page: &HashMap<String, Object>) -> Option<Vec<u8>> {
+        let contents = page.get("Contents")?;
+        let reference = contents.as_reference()?;
+        // The ordinary cache can recover partial streams and omit corrupt array members. ~keep
+        let mut remaining = MAX_SEPARATOR_OBJECT_WORK;
+        let stream = self.resolve_density_object(contents, &mut remaining)?;
+        let Object::Stream { .. } = stream else {
+            return None;
+        };
+        self.decode_form_stream_with_limit(&stream, reference, MAX_SEPARATOR_CONTENT_BYTES)
+            .ok()
+    }
+
     fn walk_page_paths(
         &self,
         page_index: usize,
@@ -276,28 +303,12 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        // Get content stream data — skip page on decode failure (Annex I) ~keep
-        let content_data = match self.cached_page_content(page_index) {
-            Ok(data) => data,
-            Err(error) => {
-                tracing::warn!(
-                    target: crate::LOG_TARGET_ROOT,
-                    operation = "decode_page_path_content",
-                    page_index,
-                    error_code = error.telemetry_code(),
-                    error_offset = ?error.telemetry_offset(),
-                    "returning empty paths after decode failure"
-                );
-                return Ok(Vec::new());
-            }
-        };
-
         let parsed = if bottom_pagination.is_some() {
-            if content_data.len() > MAX_SEPARATOR_CONTENT_BYTES {
+            let Some(content) = self.complete_separator_content(page_dict) else {
                 return Ok(Vec::new());
-            }
+            };
             let mut operators = Vec::new();
-            match crate::content::parser::visit_complete_content_stream(&content_data, MAX_SEPARATOR_OPERATORS, |op| {
+            match crate::content::parser::visit_strict_content_stream(&content, MAX_SEPARATOR_OPERATORS, |op| {
                 operators.push(op);
                 true
             }) {
@@ -306,6 +317,20 @@ impl PdfDocument {
                 Err(error) => Err(error),
             }
         } else {
+            let content_data = match self.cached_page_content(page_index) {
+                Ok(data) => data,
+                Err(error) => {
+                    tracing::warn!(
+                        target: crate::LOG_TARGET_ROOT,
+                        operation = "decode_page_path_content",
+                        page_index,
+                        error_code = error.telemetry_code(),
+                        error_offset = ?error.telemetry_offset(),
+                        "returning empty paths after decode failure"
+                    );
+                    return Ok(Vec::new());
+                }
+            };
             parse_content_stream_paths_only(&content_data)
         };
         let operators = match parsed {

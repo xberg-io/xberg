@@ -2339,12 +2339,13 @@ fn parse_operator(input: &[u8], strict: bool) -> IResult<&[u8], Operator> {
     }
 }
 
-// The audit supports the operators whose effects the density probe can account for.
+// Strict visitors decide whether supported graphics operators invalidate their evidence.
 fn strict_operands(name: &str, operands: &[Object]) -> bool {
     let signature = match name {
         "q" | "Q" | "BT" | "ET" | "T*" | "EMC" | "h" | "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => {
             ""
         }
+        "W" | "W*" => "",
         "Tf" => "an",
         "Tr" => "r",
         "Tj" | "'" => "s",
