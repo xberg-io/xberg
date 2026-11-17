@@ -45,18 +45,18 @@ PYTHON
 
 make_inert_bootstrap() {
 	local fixture_sha
-	checked_bootstrap > "$BATS_TEST_TMPDIR/bootstrap"
+	checked_bootstrap >"$BATS_TEST_TMPDIR/bootstrap"
 	mkdir "$BATS_TEST_TMPDIR/bin"
-	cat > "$BATS_TEST_TMPDIR/fixture" <<'FIXTURE'
+	cat >"$BATS_TEST_TMPDIR/fixture" <<'FIXTURE'
 #!/bin/sh
 printf '%s\n' "$@" > "$XBERG_FIXTURE_DIR/executed"
 FIXTURE
-	cat > "$BATS_TEST_TMPDIR/bin/uname" <<'UNAME'
+	cat >"$BATS_TEST_TMPDIR/bin/uname" <<'UNAME'
 #!/bin/sh
 test "$1" = -m || exit 2
 printf '%s\n' "$XBERG_FIXTURE_ARCH"
 UNAME
-	cat > "$BATS_TEST_TMPDIR/bin/curl" <<'CURL'
+	cat >"$BATS_TEST_TMPDIR/bin/curl" <<'CURL'
 #!/bin/sh
 expected_url="https://static.rust-lang.org/rustup/archive/1.29.3/${XBERG_FIXTURE_ARCH}-unknown-linux-musl/rustup-init"
 if [ "$#" -ne 9 ] || [ "$1" != --proto ] || [ "$2" != '=https' ] ||
@@ -75,7 +75,7 @@ CURL
 	chmod +x "$BATS_TEST_TMPDIR/bin/uname" "$BATS_TEST_TMPDIR/bin/curl"
 	fixture_sha="$(sha256sum "$BATS_TEST_TMPDIR/fixture")"
 	sed -E "s/(RUSTUP_SHA256=)[0-9a-f]{64}/\\1${fixture_sha%% *}/g" \
-		"$BATS_TEST_TMPDIR/bootstrap" > "$BATS_TEST_TMPDIR/bootstrap-inert"
+		"$BATS_TEST_TMPDIR/bootstrap" >"$BATS_TEST_TMPDIR/bootstrap-inert"
 }
 
 run_inert_bootstrap() (
@@ -104,7 +104,7 @@ run_inert_bootstrap() (
 	[ ! -e "$BATS_TEST_TMPDIR/executed" ]
 	[ ! -x "$BATS_TEST_TMPDIR/rustup-init" ]
 
-	sed '/sha256sum -c - &&$/d' "$BATS_TEST_TMPDIR/bootstrap-inert" > "$BATS_TEST_TMPDIR/bootstrap-unverified"
+	sed '/sha256sum -c - &&$/d' "$BATS_TEST_TMPDIR/bootstrap-inert" >"$BATS_TEST_TMPDIR/bootstrap-unverified"
 	run run_inert_bootstrap aarch64 yes bootstrap-unverified
 	[ "$status" -eq 0 ]
 	[ -f "$BATS_TEST_TMPDIR/executed" ]
