@@ -213,7 +213,8 @@ fn single_ppt_fallback_log_reaches_the_callers_thread_local_subscriber() {
         .with_max_level(tracing::Level::DEBUG)
         .with_writer(move || writer.clone())
         .finish();
-    let caller_thread = format!("{:?}", std::thread::current().id());
+    // Match the width used by tracing-subscriber's thread-ID formatter. ~keep
+    let caller_thread = format!("{:0>2?}", std::thread::current().id());
     let event_threads = || {
         let output = capture.0.lock().unwrap();
         std::str::from_utf8(&output)
