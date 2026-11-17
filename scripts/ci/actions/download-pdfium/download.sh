@@ -42,17 +42,36 @@ if [ -z "$version" ]; then
   exit 2
 fi
 
+if [[ ! "$version" =~ ^[0-9]+$ ]]; then
+  echo "Invalid PDFium Chromium revision: $version" >&2
+  exit 1
+fi
+if [[ ! "$platform_id" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ || ! "$arch_id" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+  echo "Invalid PDFium platform or architecture: $platform_id/$arch_id" >&2
+  exit 1
+fi
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+asset="pdfium-${platform_id}-${arch_id}.tgz"
+archive_name="${version}-${asset}"
+verify_archive="$repo_root/scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
+# Supply a trusted manifest containing the revision and asset when overriding the version. ~keep
+checksums="${PDFIUM_CHECKSUMS_FILE:-$repo_root/scripts/pdfium-runtime-checksums.sha256}"
+bash "$verify_archive" "$archive_name" "$checksums" --known
+
 tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+archive="$tmpdir/$archive_name"
 curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
-  -o "$tmpdir/pdfium.tgz" \
-  "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/pdfium-${platform_id}-${arch_id}.tgz"
+  -o "$archive" \
+  "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/${asset}"
+bash "$verify_archive" "$archive" "$checksums"
 
 mkdir -p "$tmpdir/extracted"
-tar -xzf "$tmpdir/pdfium.tgz" -C "$tmpdir/extracted"
+tar -xzf "$archive" -C "$tmpdir/extracted"
 
 dest="$RUNNER_TEMP/pdfium-prebuilt"
 rm -rf "$dest"
 mv "$tmpdir/extracted" "$dest"
-rm -rf "$tmpdir"
 
 echo "pdfium_path=$dest" >>"$GITHUB_OUTPUT"
