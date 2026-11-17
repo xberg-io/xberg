@@ -303,34 +303,48 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     // We accept CR alone in lenient mode for compatibility with malformed PDFs,
     // but log a warning. In strict mode, this should be an error (requires ParserOptions). ~keep
 
-    let input = if input.starts_with(b"\r\n") {
-        &input[2..]
-    } else if input.starts_with(b"\n") {
-        &input[1..]
-    } else if input.starts_with(b"\r") {
-        let msg = "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
-            Accepting in lenient mode for compatibility. \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        &input[1..]
-    } else {
-        let msg = "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        input
+    let padding = input.iter().take_while(|&&byte| matches!(byte, b' ' | b'\t')).count();
+    let after_padding = &input[padding..];
+    let payload = after_padding
+        .strip_prefix(b"\r\n")
+        .or_else(|| after_padding.strip_prefix(b"\n"));
+
+    let (input, warning) = match payload {
+        Some(payload) if padding == 0 => (payload, None),
+        Some(payload) => (
+            payload,
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by horizontal whitespace before its line ending \
+                 (should be immediate CRLF or LF). Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None if input.starts_with(b"\r") => (
+            &input[1..],
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
+                 Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None => (
+            input,
+            Some(
+                "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
     };
+
+    if let Some(msg) = warning {
+        tracing::warn!("{}", msg);
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
+            category: crate::extractors::warnings::WarningCategory::SpecViolation,
+            page: None,
+            message: msg.to_string(),
+            spec_section: Some("7.3.8.1"),
+        });
+    }
 
     if let Some(length_obj) = dict.get("Length")
         && let Some(length) = length_obj.as_integer()
