@@ -52,50 +52,82 @@ pub(super) fn build_stage_timings(
 mod tests {
     use super::*;
 
-    /// Lock around `STAGE_TIMING_ENV_VAR` to keep these tests deterministic in the
-    /// multi-threaded test runner, following the same pattern as
-    /// `commands::overrides::tests::with_env_var`.
-    static STAGE_TIMING_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    use crate::commands::env_test;
 
-    #[allow(unsafe_code)]
-    fn with_stage_timing_env<R>(value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        let _guard = STAGE_TIMING_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = std::env::var(STAGE_TIMING_ENV_VAR).ok();
-        unsafe {
-            match value {
-                Some(v) => std::env::set_var(STAGE_TIMING_ENV_VAR, v),
-                None => std::env::remove_var(STAGE_TIMING_ENV_VAR),
+    const CHILD: &str = "commands::extract::timing::tests::stage_timing_env_child";
+    const LLM_API_KEY_VAR: &str = "XBERG_LLM_API_KEY";
+
+    fn run_timing_case(case: &str, value: Option<&str>) {
+        env_test::run_child_test(CHILD, env_test::CASE, case, |command| {
+            command.env_remove(LLM_API_KEY_VAR).env_remove(STAGE_TIMING_ENV_VAR);
+            if let Some(value) = value {
+                command.env(STAGE_TIMING_ENV_VAR, value);
             }
-        }
-        let result = f();
-        unsafe {
-            match previous {
-                Some(v) => std::env::set_var(STAGE_TIMING_ENV_VAR, v),
-                None => std::env::remove_var(STAGE_TIMING_ENV_VAR),
-            }
-        }
-        result
+        });
     }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_unset() {
-        with_stage_timing_env(None, || {
-            assert!(!stage_timing_requested());
-        });
+        run_timing_case("unset", None);
     }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_empty() {
-        with_stage_timing_env(Some(""), || {
-            assert!(!stage_timing_requested());
-        });
+        run_timing_case("empty", Some(""));
     }
 
     #[test]
     fn stage_timing_requested_is_true_when_env_var_set() {
-        with_stage_timing_env(Some("1"), || {
-            assert!(stage_timing_requested());
+        run_timing_case("enabled", Some("1"));
+    }
+
+    #[test]
+    #[should_panic(expected = "stage timing expectation failed")]
+    fn stage_timing_child_reports_a_wrong_expectation() {
+        run_timing_case("wrong-expectation", Some("1"));
+    }
+
+    #[test]
+    #[should_panic(expected = "returned early because it did not read XBERG_CLI_ENV_TEST_CASE")]
+    fn stage_timing_child_without_case_fails_the_parent() {
+        env_test::run_child_test(CHILD, env_test::CASE, "unset", |command| {
+            command.env_remove(LLM_API_KEY_VAR).env_remove(env_test::CASE);
         });
+    }
+
+    #[test]
+    #[should_panic(expected = "did not run exactly one passing test")]
+    fn stage_timing_child_with_wrong_test_name_fails_the_parent() {
+        env_test::run_child_test(
+            "commands::extract::timing::tests::no_such_child",
+            env_test::CASE,
+            "unset",
+            |command| {
+                command.env_remove(LLM_API_KEY_VAR);
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "run with an isolated environment by its parent test"]
+    fn stage_timing_env_child() {
+        let Some(case) = env_test::child_test_root(env_test::CASE) else {
+            return;
+        };
+        let (expected_input, expected_timing) = match case.to_str().expect("non-UTF-8 case selector") {
+            "unset" => (None, false),
+            "empty" => (Some(""), false),
+            "enabled" => (Some("1"), true),
+            "wrong-expectation" => (Some("1"), false),
+            _ => panic!("unknown stage timing test case"),
+        };
+        let input = std::env::var_os(STAGE_TIMING_ENV_VAR);
+        assert_eq!(input.as_deref(), expected_input.map(std::ffi::OsStr::new));
+        assert_eq!(
+            stage_timing_requested(),
+            expected_timing,
+            "stage timing expectation failed"
+        );
     }
 
     #[test]

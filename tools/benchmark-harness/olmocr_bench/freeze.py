@@ -12,7 +12,9 @@ from pathlib import Path
 from .catalog import file_binding, load_catalog
 from .contracts import (
     EVALUATOR_REVISION,
+    PLAN_SCHEMA_VERSION,
     ROLES,
+    formula_model_paths,
     schedule,
     snapshot,
     validate_argv,
@@ -110,6 +112,7 @@ def create_plan(root: Path, specification: Path, destination: Path) -> None:
     models = [dict(row, **file_binding(Path(row["file"]))) for row in spec["models"]]
     if not models or any(not row.get("revision") or not row.get("license") for row in models):
         raise ValueError("actual model revisions and licenses required")
+    formula_model_paths(models)
     evaluator = Path(spec["evaluator_root"]).resolve(strict=True)
     git = shutil.which("git")
     if git is None:
@@ -139,7 +142,7 @@ def create_plan(root: Path, specification: Path, destination: Path) -> None:
     lock = snapshot(lock_path, assets, "requirements")
     producers = {role: _producer(spec[role], role, config, ort, models, assets=assets) for role in ROLES}
     plan = {
-        "schema_version": 1,
+        "schema_version": PLAN_SCHEMA_VERSION,
         "data_root": str(root.resolve()),
         "catalog": catalog,
         "config": config,

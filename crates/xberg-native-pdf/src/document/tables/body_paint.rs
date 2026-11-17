@@ -61,6 +61,7 @@ fn page_paint(document: &crate::PdfDocument, page: usize) -> Option<Vec<Paint>> 
     if data.len() > MAX_CONTENT {
         return None;
     }
+    let _warnings = document.warning_scope();
     let operators = parse_content_stream(&data).ok()?;
     if operators.len() > MAX_OPERATORS {
         return None;

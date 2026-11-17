@@ -37,18 +37,17 @@ class OfficialControlsTest(unittest.TestCase):
 
     def test_full_real_catalog_freezes_984_pdfs_and_6090_tests(self):
         """Raw baselines preserve official group assignment and exact coverage."""
-        catalog = _module("catalog").load_catalog(Path(os.environ["OLMOCR_DATA_ROOT"]))
+        root = Path(os.environ["OLMOCR_DATA_ROOT"])
+        registry = os.environ.get("OLMOCR_REGISTRY")
+        load_catalog = _module("catalog").load_catalog
+        catalog = load_catalog(root, Path(registry) if registry else None)
         assert len(catalog["pdfs"]) == 984
         assert len(catalog["tests"]) == 6090
         assert sum(row["group"] == "baseline" for row in catalog["tests"]) == 977
         assert sum(row["group"] == "headers_footers" for row in catalog["tests"]) == 760
-        registry = os.environ.get("OLMOCR_REGISTRY")
-        if registry:
-            public = _module("catalog").load_catalog(Path(os.environ["OLMOCR_DATA_ROOT"]), Path(registry))
-            assert len(public["pdfs"]) == 984
-            assert public["tests"] == catalog["tests"] or {row["id"]: row for row in public["tests"]} == {
-                row["id"]: row for row in catalog["tests"]
-            }
+        if registry and (root / "stage.json").exists():
+            legacy = load_catalog(root)
+            assert {row["id"]: row for row in legacy["tests"]} == {row["id"]: row for row in catalog["tests"]}
 
     def test_official_positive_and_empty_prediction_controls(self):
         """A real present-text rule scores one then zero through official scoring."""

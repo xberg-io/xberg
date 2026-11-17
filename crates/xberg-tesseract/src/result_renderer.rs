@@ -9,7 +9,9 @@ pub struct TessResultRenderer {
     handle: Arc<Mutex<*mut c_void>>,
 }
 
+// SAFETY: The native renderer has no thread affinity. Calls use the lock or an exclusively owned renderer. ~keep
 unsafe impl Send for TessResultRenderer {}
+// SAFETY: The native renderer has no thread affinity. Calls use the lock or an exclusively owned renderer. ~keep
 unsafe impl Sync for TessResultRenderer {}
 
 impl TessResultRenderer {
@@ -24,6 +26,7 @@ impl TessResultRenderer {
     /// Returns the new instance of the TessResultRenderer.
     pub fn new_text_renderer(outputbase: &str) -> Result<Self> {
         let outputbase = CString::new(outputbase).map_err(|_| TesseractError::NullByteInString)?;
+        // SAFETY: The constructor reads a live NUL-terminated path during the call and returns an owned renderer. ~keep
         let handle = unsafe { TessTextRendererCreate(outputbase.as_ptr()) };
         if handle.is_null() {
             Err(TesseractError::NullPointerError)
@@ -45,6 +48,7 @@ impl TessResultRenderer {
     /// Returns the new instance of the TessResultRenderer.
     pub fn new_hocr_renderer(outputbase: &str) -> Result<Self> {
         let outputbase = CString::new(outputbase).map_err(|_| TesseractError::NullByteInString)?;
+        // SAFETY: The constructor reads a live NUL-terminated path during the call and returns an owned renderer. ~keep
         let handle = unsafe { TessHOcrRendererCreate(outputbase.as_ptr()) };
         if handle.is_null() {
             Err(TesseractError::NullPointerError)
@@ -69,6 +73,7 @@ impl TessResultRenderer {
     pub fn new_pdf_renderer(outputbase: &str, datadir: &str, textonly: bool) -> Result<Self> {
         let outputbase = CString::new(outputbase).map_err(|_| TesseractError::NullByteInString)?;
         let datadir = CString::new(datadir).map_err(|_| TesseractError::NullByteInString)?;
+        // SAFETY: The native constructor consumes the path contents during the call and expects an integer BOOL. ~keep
         let handle = unsafe { TessPDFRendererCreate(outputbase.as_ptr(), datadir.as_ptr(), textonly as c_int) };
         if handle.is_null() {
             Err(TesseractError::NullPointerError)
@@ -79,6 +84,7 @@ impl TessResultRenderer {
         }
     }
 
+    // The caller must exclude simultaneous renderer access after this lock is released. ~keep
     pub(crate) fn raw_handle(&self) -> Result<*mut c_void> {
         Ok(*self.handle.lock().map_err(|_| TesseractError::MutexLockError)?)
     }
@@ -99,6 +105,7 @@ impl TessResultRenderer {
     pub fn begin_document(&self, title: &str) -> Result<bool> {
         let title = CString::new(title).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The owned renderer is locked and the native call copies the live NUL-terminated title. ~keep
         Ok(unsafe { TessResultRendererBeginDocument(*handle, title.as_ptr()) != 0 })
     }
 
@@ -118,6 +125,8 @@ impl TessResultRenderer {
     pub fn add_image(&self, api: &TesseractAPI) -> Result<bool> {
         let api_handle = api.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Both guards are held. The call borrows the renderer and requires a live, initialized TessBaseAPI.
+        // ~keep
         Ok(unsafe { TessResultRendererAddImage(*handle, *api_handle) != 0 })
     }
 
@@ -132,6 +141,7 @@ impl TessResultRenderer {
     /// Returns a `TesseractError::MutexLockError` if the mutex lock fails.
     pub fn end_document(&self) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The guard provides serialized access to the owned native renderer. ~keep
         Ok(unsafe { TessResultRendererEndDocument(*handle) != 0 })
     }
 
@@ -148,10 +158,12 @@ impl TessResultRenderer {
     /// or `TesseractError::Utf8Error` if the extension contains invalid UTF-8.
     pub fn get_extension(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The owned renderer is locked while obtaining its borrowed extension pointer. ~keep
         let ext_ptr = unsafe { TessResultRendererExtention(*handle) };
         if ext_ptr.is_null() {
             Err(TesseractError::NullPointerError)
         } else {
+            // SAFETY: The non-null extension points to NUL-terminated native storage; copy it under the lock. ~keep
             let c_str = unsafe { CStr::from_ptr(ext_ptr) };
             Ok(c_str.to_str()?.to_owned())
         }
@@ -170,10 +182,13 @@ impl TessResultRenderer {
     /// or `TesseractError::Utf8Error` if the title contains invalid UTF-8.
     pub fn get_title(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The owned renderer is locked while obtaining the pointer to its internal title string. ~keep
         let title_ptr = unsafe { TessResultRendererTitle(*handle) };
         if title_ptr.is_null() {
             Err(TesseractError::NullPointerError)
         } else {
+            // SAFETY: The non-null title is NUL-terminated and the lock prevents another wrapper call from replacing
+            // it. ~keep
             let c_str = unsafe { CStr::from_ptr(title_ptr) };
             Ok(c_str.to_str()?.to_owned())
         }
@@ -190,6 +205,7 @@ impl TessResultRenderer {
     /// Returns a `TesseractError::MutexLockError` if the mutex lock fails.
     pub fn get_image_num(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The guard serializes reading the image count from the owned native renderer. ~keep
         Ok(unsafe { TessResultRendererImageNum(*handle) })
     }
 }
@@ -197,6 +213,8 @@ impl TessResultRenderer {
 impl Drop for TessResultRenderer {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
+            // SAFETY: The wrapper owns the renderer allocated by a native constructor; this is its matching deleter.
+            // ~keep
             unsafe { TessDeleteResultRenderer(*handle) };
         }
     }

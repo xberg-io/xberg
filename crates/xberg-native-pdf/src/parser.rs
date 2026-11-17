@@ -312,10 +312,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
             Accepting in lenient mode for compatibility. \
             PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
         tracing::warn!("{}", msg);
-        // push into the process-wide structured sink
-        // so callers can retrieve via `flatten_warnings()` instead of
-        // parsing stderr from `tracing::warn`. ~keep
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
             category: crate::extractors::warnings::WarningCategory::SpecViolation,
             page: None,
             message: msg.to_string(),
@@ -326,7 +323,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
         let msg = "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
             PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
         tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
             category: crate::extractors::warnings::WarningCategory::SpecViolation,
             page: None,
             message: msg.to_string(),
@@ -355,7 +352,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
         // /Length was wrong — fall back to scanning for 'endstream' ~keep
         let msg = format!("Stream /Length {} is incorrect, falling back to endstream scan", length);
         tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
             category: crate::extractors::warnings::WarningCategory::SpecViolation,
             page: None,
             message: msg,

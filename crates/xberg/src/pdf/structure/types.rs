@@ -7,7 +7,8 @@ use crate::pdf::hierarchy::SegmentData;
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
     pub native_scripts: Vec<crate::pdf::native::hierarchy::script_evidence::ScriptOwner>,
-    pub baseline_y: f32,
+    /// The source baseline, including a measured zero. Text without a position has no baseline.
+    pub baseline_y: Option<f32>,
     #[allow(dead_code)]
     pub dominant_font_size: f32,
     #[allow(dead_code)]
@@ -16,6 +17,11 @@ pub(crate) struct PdfLine {
 }
 
 impl PdfLine {
+    /// Keep the origin fallback for heuristics that historically gave unpositioned lines a coordinate.
+    pub(crate) fn baseline_or_zero(&self) -> f32 {
+        self.baseline_y.unwrap_or(0.0)
+    }
+
     pub(crate) fn valid_native_scripts(&self) -> Vec<&crate::pdf::native::hierarchy::script_evidence::ScriptOwner> {
         self.native_scripts
             .iter()
