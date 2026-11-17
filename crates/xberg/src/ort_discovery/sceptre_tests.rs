@@ -59,6 +59,7 @@ fn should_run_sceptre_after_xberg_initialization() {
     isolated("should_run_sceptre_after_xberg_initialization", || {
         infer(false);
         infer(true);
+        infer(false);
         assert_shared_environment();
     });
 }
@@ -68,6 +69,7 @@ fn should_run_xberg_after_sceptre_initialization() {
     isolated("should_run_xberg_after_sceptre_initialization", || {
         infer(true);
         infer(false);
+        infer(true);
         assert_shared_environment();
     });
 }

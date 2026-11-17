@@ -32,12 +32,25 @@ fn main() {
         println!("cargo::rustc-cfg=sceptre_ocr");
     }
 
-    if std::env::var_os("CARGO_FEATURE_ORT_BUNDLED").is_some()
-        && std::env::var_os("CARGO_FEATURE_ORT_DYNAMIC").is_some()
+    println!("cargo::rustc-check-cfg=cfg(ort_dynamic_discovery)");
+    // Several consumers enable ort-bundled transitively. ort/load-dynamic enables
+    // ort-sys/disable-linking, which takes precedence over download-binaries. ~keep
+    if std::env::var_os("CARGO_FEATURE_ORT_DYNAMIC").is_some()
+        && [
+            "SCEPTRE_OCR_ORT",
+            "LAYOUT_DETECTION",
+            "EMBEDDINGS",
+            "PADDLE_OCR_ORT",
+            "AUTO_ROTATE",
+            "RERANKER",
+            "ONNX_RUNTIME",
+            "TRANSCRIPTION",
+            "NER_ONNX",
+        ]
+        .iter()
+        .any(|feature| std::env::var_os(format!("CARGO_FEATURE_{feature}")).is_some())
     {
-        println!(
-            "cargo::warning=features 'ort-bundled' and 'ort-dynamic' are both enabled; bundled ORT remains the default unless dynamic ORT is explicitly selected at runtime"
-        );
+        println!("cargo::rustc-cfg=ort_dynamic_discovery");
     }
 
     println!("cargo::rustc-check-cfg=cfg(layout_detection)");

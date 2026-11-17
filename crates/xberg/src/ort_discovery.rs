@@ -1,6 +1,6 @@
 //! ONNX Runtime library auto-discovery and execution provider configuration.
 //!
-//! Preloads a discovered native runtime for standalone dynamic Sceptre without
+//! Preloads a discovered native runtime for dynamic ONNX consumers without
 //! changing the process environment.
 //!
 //! Also provides `apply_execution_providers` for configuring GPU acceleration
@@ -39,18 +39,21 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
 /// Prepare the runtime before callers that may create their own session builders.
 #[allow(dead_code)]
 pub(crate) fn ensure_ort_available() {
-    #[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
-    if let Err(error) = preload_sceptre_ort_runtime() {
+    #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
+    tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
+
+    #[cfg(ort_dynamic_discovery)]
+    if let Err(error) = preload_ort_runtime() {
         tracing::warn!(%error, "Could not preload the discovered ONNX Runtime");
     }
 }
 
-#[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
-pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), ort::LoadDynamicError> {
+#[cfg(ort_dynamic_discovery)]
+pub(crate) fn preload_ort_runtime() -> Result<(), ort::LoadDynamicError> {
     static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
     INIT.get_or_try_init(|| {
         let explicit = std::env::var("ORT_DYLIB_PATH").ok();
-        preload_sceptre_ort_runtime_from(
+        preload_ort_runtime_from(
             explicit.as_deref().map(std::path::Path::new),
             platform_candidates().iter().map(std::path::Path::new),
         )
@@ -58,8 +61,8 @@ pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), ort::LoadDynamicError>
     .copied()
 }
 
-#[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
-fn preload_sceptre_ort_runtime_from<'a>(
+#[cfg(ort_dynamic_discovery)]
+fn preload_ort_runtime_from<'a>(
     explicit: Option<&std::path::Path>,
     mut candidates: impl Iterator<Item = &'a std::path::Path>,
 ) -> Result<(), ort::LoadDynamicError> {
@@ -69,19 +72,13 @@ fn preload_sceptre_ort_runtime_from<'a>(
         return Ok(());
     }
     if let Some(path) = candidates.find(|path| path.exists()) {
-        // Load the library without building an environment. Sceptre still owns it. ~keep
+        // Load the library and leave environment creation to the caller. ~keep
         let _builder = ort::init_from(path)?;
-        tracing::debug!(path = %path.display(), "Auto-discovered ONNX Runtime");
     }
     Ok(())
 }
 
-#[cfg(all(
-    feature = "sceptre-ocr-ort",
-    feature = "ort-dynamic",
-    not(feature = "ort-bundled"),
-    target_os = "macos"
-))]
+#[cfg(all(ort_dynamic_discovery, target_os = "macos"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "/opt/homebrew/lib/libonnxruntime.dylib",
@@ -89,12 +86,7 @@ fn platform_candidates() -> &'static [&'static str] {
     ]
 }
 
-#[cfg(all(
-    feature = "sceptre-ocr-ort",
-    feature = "ort-dynamic",
-    not(feature = "ort-bundled"),
-    target_os = "linux"
-))]
+#[cfg(all(ort_dynamic_discovery, target_os = "linux"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "/usr/lib/libonnxruntime.so",
@@ -104,12 +96,7 @@ fn platform_candidates() -> &'static [&'static str] {
     ]
 }
 
-#[cfg(all(
-    feature = "sceptre-ocr-ort",
-    feature = "ort-dynamic",
-    not(feature = "ort-bundled"),
-    target_os = "windows"
-))]
+#[cfg(all(ort_dynamic_discovery, target_os = "windows"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "C:\\Program Files\\onnxruntime\\bin\\onnxruntime.dll",
@@ -118,9 +105,7 @@ fn platform_candidates() -> &'static [&'static str] {
 }
 
 #[cfg(all(
-    feature = "sceptre-ocr-ort",
-    feature = "ort-dynamic",
-    not(feature = "ort-bundled"),
+    ort_dynamic_discovery,
     not(any(target_os = "macos", target_os = "linux", target_os = "windows"))
 ))]
 fn platform_candidates() -> &'static [&'static str] {
@@ -241,6 +226,7 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
     if let Some(environment) = ENVIRONMENT.get() {
         return Ok(environment);
     }
+    ensure_ort_available();
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
     #[cfg(feature = "sceptre-ocr-ort")]
@@ -786,11 +772,14 @@ mod shared_environment_tests {
 #[path = "ort_discovery/sceptre_tests.rs"]
 mod sceptre_tests;
 
-#[cfg(all(
-    test,
-    feature = "sceptre-ocr-ort",
-    feature = "ort-dynamic",
-    not(feature = "ort-bundled")
-))]
+#[cfg(all(test, feature = "sceptre-ocr-ort", ort_dynamic_discovery))]
 #[path = "ort_discovery/dynamic_sceptre_tests.rs"]
 mod dynamic_sceptre_tests;
+
+#[cfg(all(
+    test,
+    feature = "ort-dynamic",
+    any(feature = "sceptre-ocr-ort", feature = "auto-rotate")
+))]
+#[path = "ort_discovery/runtime_route_tests.rs"]
+mod runtime_route_tests;

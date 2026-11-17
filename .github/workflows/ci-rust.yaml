@@ -866,6 +866,34 @@ jobs:
           fi
         shell: bash
 
+  ort-discovery:
+    name: Dynamic ONNX Runtime discovery
+    if: >-
+      ${{ github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-ort-discovery
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+
+      - name: Setup mise
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+
+      - name: Test staged runtime through the production routes
+        run: mise run rust:test:ort-discovery
+        shell: bash
+
   # #702: `PdfBackend::Pdfium` (crates/xberg/src/extractors/pdf/pdfium_engine.rs) had zero
   # executed CI coverage. Its regression test,
   # `pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available`, is gated
