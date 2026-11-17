@@ -257,6 +257,12 @@ fn single_merged_title_accepts_measured_upper_font_metric_overhang() {
         single_title_roles(&mut rows, &single_title_rules()),
         [true, true, false, false]
     );
+    for (index, row) in rows.iter().enumerate() {
+        assert!(
+            row.cells.iter().all(|cell| cell.is_header == (index < 2)),
+            "row {index}"
+        );
+    }
     for row in &mut rows[..2] {
         row.is_header = false;
         for cell in &mut row.cells {
@@ -274,4 +280,33 @@ fn single_merged_title_rejects_overhang_beyond_the_upper_metric_allowance() {
         set_upper_span_overhang(&mut rows[row], 0.51);
         assert_eq!(single_title_roles(&mut rows, &paths), [false; 4], "row {row}");
     }
+}
+
+#[test]
+fn single_merged_title_rejects_small_overhang_on_each_other_edge() {
+    let paths = single_title_rules();
+    for row in 0..3 {
+        for edge in ["left", "right", "lower"] {
+            let mut rows = single_title_rows();
+            let cell = &mut rows[row].cells[0];
+            let bounds = cell.bbox.expect("fixture cell bounds");
+            let span = &mut cell.spans[0].bbox;
+            match edge {
+                "left" => span.x = bounds.left() - 0.36,
+                "right" => span.width = bounds.right() + 0.36 - span.left(),
+                "lower" => span.y = bounds.top() - 0.36,
+                _ => unreachable!(),
+            }
+            assert_eq!(single_title_roles(&mut rows, &paths), [false; 4], "row {row}, {edge}");
+        }
+    }
+}
+
+#[test]
+fn single_merged_title_allowance_does_not_change_the_legacy_grouped_proof() {
+    let paths = standard_rules();
+    let mut rows = standard_rows();
+    assert!(retained(rows.clone(), &paths));
+    set_upper_span_overhang(&mut rows[2], 0.36);
+    assert!(!retained(rows, &paths));
 }
