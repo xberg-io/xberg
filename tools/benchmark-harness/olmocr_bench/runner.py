@@ -39,6 +39,18 @@ TESSERACT_OSD_RETRY = re.compile(
     r'script retry skipped or changed; bypassing result cache script="Han" '
     r"error=OCR processing failed: script retry: OSD: OCR operation failed[ \t]*"
 )
+NATIVE_FORM_FLATE_ERROR = re.escape(
+    "Layout analysis error: incomplete Form path decode: Stream decoding error: "
+    "FlateDecode: incomplete zlib stream or trailing data"
+)
+NATIVE_FORM_TABLE_WARNING = re.compile(
+    rf"(?P<bordered>bordered )?table extraction failed for page [1-9][0-9]*: {NATIVE_FORM_FLATE_ERROR}; "
+    r"(?(bordered)bordered )tables on this page were skipped"
+)
+NATIVE_FORM_TABLE_TRACE = re.compile(
+    rf"{TRACE_TIMESTAMP}WARN[ \t]+{TRACE_SPANS}xberg::pdf::native::table: "
+    rf"xberg_native_pdf ruled table extraction failed: {NATIVE_FORM_FLATE_ERROR} page=[0-9]+[ \t]*"
+)
 FORMULA_EVENT = re.compile(
     rf"{TRACE_TIMESTAMP}DEBUG[ \t]+{TRACE_SPANS}{re.escape(FORMULA_TRACE_TARGET)}: "
     r"native PDF formula recognition applied page=(?P<page>[1-9][0-9]*) "
@@ -125,10 +137,17 @@ def prepare(plan_path: Path, output: Path) -> None:
 def _model_fallback(document: dict, stderr: str) -> bool:
     # Native PDF formula recognition can report failure solely through tracing on stderr.
     warnings = document.get("processing_warnings", [])
-    lines = [f"{row['source']} {row['message']}" for row in warnings]
-    # A failed optional Han script probe retains the primary OCR read. Other model-context
-    # warnings can mean that a model changed or failed to start and still need classification.
-    lines.extend(line for line in stderr.splitlines() if not TESSERACT_OSD_RETRY.fullmatch(TRACE_ANSI.sub("", line)))
+    # These exact native table diagnostics describe a PDF Form stream decode, independent of model availability.
+    lines = [
+        f"{row['source']} {row['message']}"
+        for row in warnings
+        if not (row["source"] == "pdf_tables" and NATIVE_FORM_TABLE_WARNING.fullmatch(row["message"]))
+    ]
+    # An optional Han script probe retains the primary read. Model startup and mutation warnings still count.
+    for line in stderr.splitlines():
+        plain = TRACE_ANSI.sub("", line)
+        if not (TESSERACT_OSD_RETRY.fullmatch(plain) or NATIVE_FORM_TABLE_TRACE.fullmatch(plain)):
+            lines.append(line)
     for line in lines:
         text = line.lower()
         model = any(word in text for word in ("layout", "formula", "latex", "tatr", "rt-detr", "model", "onnx"))
