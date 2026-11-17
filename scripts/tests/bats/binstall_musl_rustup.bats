@@ -58,11 +58,15 @@ printf '%s\n' "$XBERG_FIXTURE_ARCH"
 UNAME
 	cat > "$BATS_TEST_TMPDIR/bin/curl" <<'CURL'
 #!/bin/sh
-test "$#" = 10 || exit 2
-test "$7" = -fsSL || exit 2
-test "$8" = "https://static.rust-lang.org/rustup/archive/1.29.3/${XBERG_FIXTURE_ARCH}-unknown-linux-musl/rustup-init" || exit 2
-test "$9" = -o && test "${10}" = rustup-init || exit 2
-printf '%s\n' "$8" > "$XBERG_FIXTURE_DIR/downloaded"
+expected_url="https://static.rust-lang.org/rustup/archive/1.29.3/${XBERG_FIXTURE_ARCH}-unknown-linux-musl/rustup-init"
+if [ "$#" -ne 9 ] || [ "$1" != --proto ] || [ "$2" != '=https' ] ||
+	[ "$3" != --proto-redir ] || [ "$4" != '=https' ] || [ "$5" != --tlsv1.2 ] ||
+	[ "$6" != -fsSL ] || [ "$7" != "$expected_url" ] || [ "$8" != -o ] || [ "$9" != rustup-init ]; then
+	printf 'unexpected curl arguments for %s (%s arguments):\n' "$XBERG_FIXTURE_ARCH" "$#" >&2
+	printf '  <%s>\n' "$@" >&2
+	exit 2
+fi
+printf '%s\n' "$7" > "$XBERG_FIXTURE_DIR/downloaded"
 cp "$XBERG_FIXTURE_DIR/fixture" rustup-init || exit 2
 if test "$XBERG_FIXTURE_TAMPERED" = yes; then
 	printf '# modified bytes\n' >> rustup-init
@@ -85,7 +89,10 @@ run_inert_bootstrap() (
 	make_inert_bootstrap
 	for arch in x86_64 aarch64; do
 		run run_inert_bootstrap "$arch" no bootstrap-inert
-		[ "$status" -eq 0 ]
+		if [ "$status" -ne 0 ]; then
+			printf 'verified %s bootstrap failed (%s):\n%s\n' "$arch" "$status" "$output" >&2
+			return 1
+		fi
 		[ "$(cat "$BATS_TEST_TMPDIR/executed")" = "$(printf '%s\n' -y --default-toolchain fixture-toolchain --component rust-src)" ]
 		[ ! -e "$BATS_TEST_TMPDIR/rustup-init" ]
 		rm "$BATS_TEST_TMPDIR/executed"
