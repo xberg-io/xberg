@@ -180,12 +180,11 @@ impl LibHeif {
         let format_filter = format_filter.unwrap_or(CompressionFormat::Undefined);
         let max_count = max_count.min(libc::c_int::MAX as usize);
         let name_filter = name_filter.map(|s| CString::new(s).ok()).unwrap_or_default();
-        let name_filter_ptr = name_filter.map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let name_filter_ptr = name_filter.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
 
         let mut descriptors_ptr = Vec::with_capacity(max_count);
-        // SAFETY requirement: Libheif writes at most max_count entries, which fits
-        // the Vec. A present name filter must also remain live, but the consuming
-        // map above drops its CString before this call.
+        // SAFETY: The Vec has capacity for the supplied count, and a present CString
+        // stays live while libheif compares the filter to plugin IDs.
         unsafe {
             let count = lh::heif_get_encoder_descriptors(
                 format_filter as _,

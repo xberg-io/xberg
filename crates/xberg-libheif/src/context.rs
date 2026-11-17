@@ -87,16 +87,17 @@ impl<'a> HeifContext<'a> {
     /// Read a HEIF file from the reader.
     #[allow(unsafe_code)]
     pub fn read_reader(&mut self, reader: Box<dyn Reader + 'a>) -> Result<()> {
-        let mut reader_box = Box::new(reader);
+        // Libheif installs its reader adapter before parsing and retains it on error. ~keep
+        let previous_source = std::mem::replace(&mut self.source, Source::Reader(Box::new(reader)));
+        let Source::Reader(reader_box) = &mut self.source else {
+            unreachable!("reader source just installed");
+        };
         let user_data = reader_box.as_mut() as *mut _ as *mut c_void;
-        // SAFETY requirement: The callback table is static, and user_data points to a
-        // heap-held Box. Libheif installs its reader adapter before parsing and retains it
-        // on error. The Rust error return drops the Box without clearing that adapter,
-        // leaving its user_data dangling.
+        // FIXME(#3229): Native references can outlive this Rust source, which its type does not enforce.
+        // The static table and the new reader allocation stay live through this call and on error. ~keep
         let err = unsafe { lh::heif_context_read_from_reader(self.inner, &HEIF_READER, user_data, ptr::null()) };
-        HeifError::from_heif_error(err)?;
-        self.source = Source::Reader(reader_box);
-        Ok(())
+        drop(previous_source);
+        HeifError::from_heif_error(err)
     }
 
     /// Create a new context from the reader.
@@ -125,9 +126,8 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn read_bytes<'b: 'a>(&mut self, bytes: &'b [u8]) -> Result<()> {
         self.source = Source::Memory(bytes);
-        // SAFETY requirement: The slice supplies bytes.len() readable bytes, and this
-        // wrapper borrows it through Source::Memory. Image handles can retain the native
-        // context after this wrapper drops, but they do not retain the Rust input borrow.
+        // FIXME(#3229): Image handles retain the native context but not the Rust input borrow.
+        // Source::Memory keeps the slice available for this wrapper's lifetime. ~keep
         let err = unsafe {
             lh::heif_context_read_from_memory_without_copy(self.inner, bytes.as_ptr() as _, bytes.len(), ptr::null())
         };
@@ -135,6 +135,10 @@ impl<'a> HeifContext<'a> {
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// The native writer supplies a readable byte buffer and calls synchronously with
+    /// the exclusively borrowed output vector that `write_to_bytes` passed as userdata.
     #[allow(unsafe_code)]
     unsafe extern "C" fn vector_writer(
         _ctx: *mut lh::heif_context,
@@ -146,8 +150,8 @@ impl<'a> HeifContext<'a> {
         // synchronous writer callback.
         let vec: &mut Vec<u8> = unsafe { &mut *(user_data as *mut Vec<u8>) };
         vec.reserve(size);
-        // SAFETY: The native callback must supply a non-null buffer readable for size bytes,
-        // even for an empty copy. Reserve makes size bytes available in the separate Vec.
+        // SAFETY: heif_context_write supplies the serialized HEIF box bytes from its own
+        // live StreamWriter_memory buffer. Reserve supplies separate writable Rust storage.
         unsafe { ptr::copy_nonoverlapping::<u8>(data as _, vec.as_mut_ptr(), size) };
         // SAFETY: The copy initialized every byte in 0..size within the reserved capacity.
         unsafe { vec.set_len(size) };
@@ -325,7 +329,7 @@ impl<'a> HeifContext<'a> {
             );
             HeifError::from_heif_error(err)?;
         }
-        Ok(Some(ImageHandle::new(handle)))
+        Ok(thumbnail_handle(handle))
     }
 
     /// Encodes an array of images into a grid.
@@ -418,10 +422,9 @@ impl<'a> HeifContext<'a> {
             Some(s) => Some(str_to_cstring(s, "content_type")?),
             None => None,
         };
-        let c_content_type_ptr = c_content_type.map(|s| s.as_ptr()).unwrap_or(ptr::null());
-        // SAFETY requirement: libheif reads both C strings during the call. The item type
-        // and data are live, but the consuming map drops a present content-type CString
-        // before this call. The byte count also needs to fit libheif's signed int.
+        let c_content_type_ptr = c_content_type.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        // Both C strings and the data remain live through the call. ~keep
+        // TODO(#3172): Check that the byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_generic_metadata(
                 self.inner,
@@ -570,14 +573,34 @@ impl<'a> HeifContext<'a> {
 #[allow(unsafe_code)]
 impl Drop for HeifContext<'_> {
     fn drop(&mut self) {
-        // SAFETY: This wrapper owns one releasable context pointer. Rust drops its source
-        // after this call. Releasing this pointer may leave the native context alive through
-        // image handles, which do not carry the Rust source's lifetime.
+        // SAFETY: This wrapper releases its owned native context pointer before dropping its source.
+        // FIXME(#3229): Image handles can keep the shared native context alive beyond this wrapper.
         unsafe { lh::heif_context_free(self.inner) };
     }
 }
 
 #[allow(unsafe_code)]
-// SAFETY requirement: moving the context also moves its backing source. Source::Reader stores
-// a dyn Reader without a Send bound, so the current type does not uphold this for all sources.
+// FIXME(#3229): The source can hold a Reader without a Send bound.
 unsafe impl Send for HeifContext<'_> {}
+
+fn thumbnail_handle(handle: *mut lh::heif_image_handle) -> Option<ImageHandle> {
+    ptr::NonNull::new(handle).map(|handle| ImageHandle::new(handle.as_ptr()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_thumbnail_without_a_native_handle_is_none() {
+        assert!(thumbnail_handle(ptr::null_mut()).is_none());
+    }
+
+    #[test]
+    fn read_reader_retains_its_source_after_a_native_error() {
+        let mut context = HeifContext::new().expect("allocate HEIF context");
+        let reader = crate::StreamReader::new(std::io::Cursor::new([0_u8; 0]), 0);
+        assert!(context.read_reader(Box::new(reader)).is_err());
+        assert!(matches!(&context.source, Source::Reader(_)));
+    }
+}
