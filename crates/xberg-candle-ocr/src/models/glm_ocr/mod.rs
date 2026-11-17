@@ -748,16 +748,99 @@ mod tests {
         assert_eq!(size, (PNG_SIDE, PNG_SIDE));
     }
 
+    pub(super) fn assert_uses_default_image_budget<T>(run: impl FnOnce() -> crate::error::Result<T>) {
+        use crate::models::image_processor::decode_probe;
+
+        let (result, dispatch) = decode_probe::intercept(run);
+        assert_eq!(dispatch, Some((104_857_600, true)));
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) = result else {
+            panic!("the public entry point must return the decoder's typed refusal");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+    }
+
+    #[test]
+    fn standalone_glm_public_encoded_task_uses_the_default_decode_budget() {
+        let (png, _) = small_rgb_png();
+        let engine = cpu_engine_with_zero_weights();
+        assert_uses_default_image_budget(|| engine.process_image_with_task(&png, super::GlmOcrTask::Table));
+    }
+
+    fn cpu_engine_with_zero_weights() -> super::GlmOcrEngine {
+        use std::sync::Arc;
+
+        use candle_core::{DType, Device};
+        use candle_nn::VarBuilder;
+        use parking_lot::Mutex;
+        use tokenizers::{Tokenizer, models::bpe::BPE};
+
+        use super::{GlmOcrConfig, GlmOcrEngine, GlmOcrTask, connector, decoder, tokenizer, vision};
+
+        const WIDTH: usize = 8;
+        let device = Device::Cpu;
+        let weights = VarBuilder::zeros(DType::F32, &device);
+        let config = GlmOcrConfig {
+            vision_config: vision::VisionConfig {
+                hidden_size: WIDTH,
+                out_hidden_size: WIDTH,
+                intermediate_size: WIDTH,
+                num_attention_heads: 1,
+                num_hidden_layers: 0,
+                ..Default::default()
+            },
+            text_config: decoder::DecoderConfig {
+                hidden_size: WIDTH,
+                intermediate_size: WIDTH,
+                num_attention_heads: 1,
+                num_key_value_heads: 1,
+                num_hidden_layers: 0,
+                vocab_size: WIDTH,
+                max_position_embeddings: WIDTH,
+                head_dim: WIDTH,
+                rope_parameters: decoder::RopeParameters {
+                    mrope_section: Vec::new(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            connector_config: connector::ConnectorConfig {
+                vision_hidden_size: WIDTH,
+                text_hidden_size: WIDTH,
+                merger_intermediate_size: WIDTH,
+                spatial_merge_size: 2,
+            },
+            mtp_config: Default::default(),
+            max_new_tokens: 0,
+            image_token_id: 3,
+            image_start_token_id: 1,
+            image_end_token_id: 2,
+        };
+        let vision = vision::CogVit::new(&config.vision_config, weights.clone(), device.clone()).unwrap();
+        let connector = connector::VisionConnector::new(&config.connector_config, weights.clone()).unwrap();
+        let decoder = decoder::Glm4Decoder::new(&config.text_config, weights.clone(), weights).unwrap();
+        GlmOcrEngine {
+            vision: Arc::new(Mutex::new(vision)),
+            connector: Arc::new(Mutex::new(connector)),
+            decoder: Arc::new(Mutex::new(decoder)),
+            tokenizer: Tokenizer::new(BPE::default()),
+            config,
+            task: GlmOcrTask::Ocr,
+            device,
+            dtype: DType::F32,
+            special: tokenizer::SpecialTokens {
+                eos: 0,
+                eos_token_ids: vec![0],
+                image_start: 1,
+                image_end: 2,
+                image_token: 3,
+            },
+        }
+    }
+
     #[test]
     fn standalone_glm_default_decode_budget_is_100_mib() {
         const MIB: u64 = 1024 * 1024;
-        let rgb_pixel_bytes = u64::from(image::ColorType::Rgb8.bytes_per_pixel());
-        let maximum_pixels = (DEFAULT_IMAGE_DECODE_BUDGET - MIB) / rgb_pixel_bytes;
-
         assert_eq!(DEFAULT_IMAGE_DECODE_BUDGET, 100 * MIB);
-        assert_eq!(maximum_pixels, 34_603_008);
-        assert_eq!(MIB + maximum_pixels * rgb_pixel_bytes, DEFAULT_IMAGE_DECODE_BUDGET);
-        assert!(MIB + (maximum_pixels + 1) * rgb_pixel_bytes > DEFAULT_IMAGE_DECODE_BUDGET);
     }
 
     #[test]

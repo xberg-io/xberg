@@ -207,6 +207,15 @@ mod tests {
     }
 
     #[test]
+    fn standalone_glm_public_preprocess_uses_the_default_decode_budget() {
+        use crate::models::glm_ocr::tests::{assert_uses_default_image_budget, small_rgb_png};
+
+        let (png, _) = small_rgb_png();
+        let config = PreprocessConfig::default();
+        assert_uses_default_image_budget(|| preprocess(&png, &config, &Device::Cpu, DType::F32));
+    }
+
+    #[test]
     fn encoded_and_decoded_inputs_produce_equal_visual_tensors() {
         let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(28, 28, |x, y| {
             image::Rgba([x as u8, y as u8, 100, 128])
