@@ -1,0 +1,11 @@
+# Source: GitHub release asset digest fields, bblanchon/pdfium-binaries chromium/7678.
+# https://api.github.com/repos/bblanchon/pdfium-binaries/releases/tags/chromium%2F7678
+# Local archive names include the Chromium revision so a pin covers one tag and asset.
+2e8a639a3c80e19d61b193177d588069f05c8d91724f5ca53b8a3abd12dea11a  7678-pdfium-linux-arm64.tgz
+fd07ed20a0031442e3603dec6f5df2f5594ae0757969262a8a284beea67a0ce1  7678-pdfium-linux-musl-arm64.tgz
+1f4758cadcb483ba5643a1a88220bd911533c89715b2f3792b5756e368e24f06  7678-pdfium-linux-musl-x64.tgz
+80ff74fda755237de1df2feda6972aafbd82828be23836093c5708063c815af8  7678-pdfium-linux-x64.tgz
+80bf5fe0317b06c6ac771125d57a404c4f196d507287fecff63584900ef4953f  7678-pdfium-mac-arm64.tgz
+a980b335850cc18be60f410777e3ca154b6ad03e701fbc0ef296d5a3f4d8dd84  7678-pdfium-mac-x64.tgz
+28d9213490497c99d27082e015fa754eb61daba41b0e592978ba280bf379adae  7678-pdfium-win-arm64.tgz
+5a08f71d73165bcf4fe9261e5cf2106855b460d12845654b78e5c6be2c6a5f90  7678-pdfium-win-x64.tgz
