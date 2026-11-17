@@ -8651,6 +8651,80 @@ async fn test_ocr_inline_images_uses_configured_backend() {
     }
 }
 
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[tokio::test]
+#[serial]
+async fn inline_image_ocr_backend_cancellation_stops_pdf_extraction() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const BACKEND_NAME: &str = "pdf-inline-image-ocr-cancel";
+
+    #[derive(Default)]
+    struct CancelInlineImage(AtomicUsize);
+
+    impl crate::plugins::Plugin for CancelInlineImage {
+        fn name(&self) -> &str {
+            BACKEND_NAME
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for CancelInlineImage {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _: &[u8],
+            _: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(crate::XbergError::Cancelled)
+        }
+    }
+
+    let backend = Arc::new(CancelInlineImage::default());
+    crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+    let _guard = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+    let config = ExtractionConfig {
+        use_cache: false,
+        // With no requested OCR pages, only the inline-image route can call the backend. ~keep
+        force_ocr_pages: Some(Vec::new()),
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: BACKEND_NAME.to_string(),
+            ..Default::default()
+        }),
+        pdf_options: Some(crate::core::config::pdf::PdfConfig {
+            extract_images: true,
+            ocr_inline_images: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = PdfExtractor::new()
+        .extract_content(SCANNED_HELLO_PDF, "application/pdf", &config)
+        .await;
+    assert_eq!(
+        backend.0.load(Ordering::SeqCst),
+        1,
+        "the embedded image must reach OCR exactly once"
+    );
+    assert!(
+        matches!(result, Err(crate::XbergError::Cancelled)),
+        "inline-image backend cancellation must survive the warning fallback: {result:?}"
+    );
+}
+
 /// Verifies that the extraction-level output_format is forwarded to the backend
 /// via OcrConfig.output_format. This mirrors the standalone image extractor
 /// (image.rs) and allows backends that produce format-aware output (e.g. Markdown

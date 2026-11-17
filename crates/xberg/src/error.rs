@@ -352,20 +352,41 @@ impl XbergError {
     error_constructor!(transcription, Transcription);
 }
 
-/// Identifies the PDF OCR aggregate for legacy classification while retaining the backend
-/// error itself as the next link in the source chain. ~keep
+/// Marks a PDF OCR aggregate's private diagnostic cause while preserving the backend error
+/// itself as the next link in the typed source chain. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[derive(Debug, Error)]
-#[error("{0}")]
-struct AllPageOcrFailure(#[source] XbergError);
+#[error("PDF OCR backend failure")]
+struct PdfOcrFailureCause {
+    #[source]
+    backend: XbergError,
+    // Constructed from aggregate counts and fixed text. ~keep
+    cli_message: String,
+}
 
 impl XbergError {
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[cfg_attr(alef, alef(skip))]
-    pub(crate) fn all_page_ocr_failure(message: String, first_error: Self) -> Self {
+    pub(crate) fn all_page_ocr_failure(message: String, cli_message: String, first_error: Self) -> Self {
         Self::Ocr {
             message,
-            source: Some(Box::new(AllPageOcrFailure(first_error))),
+            source: Some(Box::new(PdfOcrFailureCause {
+                backend: first_error,
+                cli_message,
+            })),
+        }
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    pub(crate) fn ocr_pipeline_failure(message: String, cli_message: &str, first_error: Option<Self>) -> Self {
+        Self::Parsing {
+            message,
+            source: first_error.map(|backend| {
+                Box::new(PdfOcrFailureCause {
+                    backend,
+                    cli_message: cli_message.to_owned(),
+                }) as _
+            }),
         }
     }
 
@@ -373,12 +394,46 @@ impl XbergError {
     pub(crate) fn is_all_page_ocr_failure(&self) -> bool {
         #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
         {
-            matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<AllPageOcrFailure>())
+            matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<PdfOcrFailureCause>())
         }
         #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
         {
             false
         }
+    }
+
+    /// Prepare an extraction error for the CLI renderer using the aggregate's safe summary.
+    #[doc(hidden)]
+    #[cfg_attr(alef, alef(skip))]
+    pub fn into_cli_extraction_diagnostic(self) -> Self {
+        #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+        {
+            let mut error = self;
+            if let Self::Ocr { message, source } | Self::Parsing { message, source } = &mut error
+                && let Some(cause) = source
+                    .as_ref()
+                    .and_then(|cause| cause.downcast_ref::<PdfOcrFailureCause>())
+            {
+                use std::error::Error as _;
+
+                let category = cause.backend.extraction_error_type();
+                let io_error = match &cause.backend {
+                    Self::Io(error) => Some(error),
+                    backend => backend
+                        .source()
+                        .and_then(|source| source.downcast_ref::<std::io::Error>()),
+                };
+                let headline = &cause.cli_message;
+                *message = match io_error {
+                    Some(error) => format!("{headline}; first failure category: {category} ({:?})", error.kind()),
+                    None => format!("{headline}; first failure category: {category}"),
+                };
+                *source = None;
+            }
+            error
+        }
+        #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+        self
     }
 }
 
@@ -547,6 +602,48 @@ impl XbergError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug() {
+        use std::error::Error as _;
+
+        const PATH: &str = "/tmp/PATH_SENTINEL/model.onnx";
+        const SECRET: &str = "SECRET_SENTINEL";
+        let backend_failure =
+            || XbergError::ocr_with_source("page read failed", std::io::Error::other(format!("{PATH} {SECRET}")));
+        let ordinary_failure =
+            XbergError::parsing_with_source("ordinary failure", std::io::Error::other("invalid header"));
+        let ordinary_debug = format!("{ordinary_failure:?}");
+        assert_eq!(
+            format!("{:?}", ordinary_failure.into_cli_extraction_diagnostic()),
+            ordinary_debug
+        );
+        assert!(ordinary_debug.contains("invalid header"));
+
+        let raw_message = format!("backend failed opening {PATH}");
+        for (error, raw_prefix, safe_message) in [
+            (
+                XbergError::all_page_ocr_failure(raw_message.clone(), "every page failed".into(), backend_failure()),
+                "OCR error",
+                "OCR error: every page failed; first failure category: ocr (Other)",
+            ),
+            (
+                XbergError::ocr_pipeline_failure(raw_message.clone(), "every stage failed", Some(backend_failure())),
+                "Parsing error",
+                "Parsing error: every stage failed; first failure category: ocr (Other)",
+            ),
+        ] {
+            let raw = format!("{error:?}");
+            assert!(raw.contains(PATH) && raw.contains(SECRET), "{raw}");
+            assert_eq!(error.to_string(), format!("{raw_prefix}: {raw_message}"));
+            let diagnostic = error.into_cli_extraction_diagnostic();
+            assert_eq!(diagnostic.to_string(), safe_message);
+            assert!(diagnostic.source().is_none());
+            let rendered = format!("{diagnostic:?}");
+            assert!(!rendered.contains(PATH) && !rendered.contains(SECRET), "{rendered}");
+        }
+    }
 
     #[test]
     fn test_io_error_from() {

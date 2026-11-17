@@ -425,12 +425,9 @@ async fn a_pipeline_whose_stages_all_fail_carries_every_page_record() {
         "error: {}",
         failed_run.error
     );
-    let page_error = failed_run
-        .error
-        .source()
-        .and_then(std::error::Error::source)
-        .and_then(std::error::Error::source)
-        .and_then(|source| source.downcast_ref::<crate::XbergError>());
+    let page_error = std::iter::successors(failed_run.error.source(), |&source| source.source())
+        .filter_map(|source| source.downcast_ref::<crate::XbergError>())
+        .find(|error| matches!(error, crate::XbergError::Ocr { message, .. } if message == "all-fail-first-stage failure"));
     assert!(matches!(
         page_error,
         Some(crate::XbergError::Ocr { message, .. }) if message == "all-fail-first-stage failure"
