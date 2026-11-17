@@ -79,7 +79,7 @@ pub(super) fn suppress(
         candidates.filter(|(_, note)| note.below_rule(rule) && !regions.overlaps_figure_or_table(note.bounds));
     if let Some((index, note)) = matching.next()
         && matching.next().is_none()
-        && exactly_one_reference_above_rule(paragraphs, note.marker, rule.y, hyphens)
+        && exactly_one_reference_above_rule(paragraphs, note.marker, rule.bottom(), hyphens)
         && image_placements().is_some_and(|placements| !placements.iter().any(|image| note.overlaps_image(*image)))
     {
         paragraphs.remove(index);
@@ -157,10 +157,11 @@ fn exactly_one_reference_above_rule(
     hyphens: &HyphenWitnesses,
 ) -> bool {
     let mut count = 0;
-    for paragraph in paragraphs
-        .iter()
-        .filter(|paragraph| !paragraph.is_page_furniture && !paragraph.is_formula)
-    {
+    for paragraph in paragraphs.iter().filter(|paragraph| {
+        !paragraph.is_page_furniture
+            && !paragraph.is_formula
+            && finite_paragraph_bbox(paragraph).is_some_and(|(_, bottom, _, _)| bottom > rule_y)
+    }) {
         let mut above = false;
         let mut other = false;
         for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {

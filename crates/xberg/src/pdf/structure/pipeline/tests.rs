@@ -10554,6 +10554,48 @@ fn linked_footnote_counts_references_in_a_reordered_right_column() {
     }
 }
 
+#[test]
+fn linked_footnote_requires_the_reference_body_above_the_rule() {
+    use crate::types::document_structure::AnnotationKind;
+    use xberg_native_pdf::geometry::Rect;
+
+    for (reference_baseline, expected_remaining) in [(93.0, 1), (88.0, 2)] {
+        let mut reference = linked_footnote_reference("2", true);
+        let shift = reference_baseline - reference.lines[0].segments[0].baseline_y;
+        for segment in &mut reference.lines[0].segments {
+            segment.y += shift;
+            segment.baseline_y += shift;
+        }
+        let hyphens = HyphenWitnesses::default();
+        let (text, annotations) = super::super::assembly::extract_text_and_annotations(&reference, &hyphens);
+        assert!(annotations.iter().any(|annotation| {
+            annotation.kind == AnnotationKind::Superscript
+                && text.get(annotation.start as usize..annotation.end as usize) == Some("2")
+        }));
+        let rule = Rect::new(70.0, 90.0, 144.0, 0.5);
+        assert!(reference.lines[0].segments[1].baseline_y > rule.bottom());
+
+        let mut page = vec![reference, linked_footnote_text()];
+        linked_footnote::suppress(
+            &mut page,
+            false,
+            || Some(rule),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &hyphens,
+        );
+        assert_eq!(
+            page.len(),
+            expected_remaining,
+            "reference baseline: {reference_baseline}"
+        );
+    }
+}
+
 fn linked_footnote_image_pdf(image_paint: &str) -> xberg_native_pdf::PdfDocument {
     use lopdf::{Document, Stream, dictionary};
 
