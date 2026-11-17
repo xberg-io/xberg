@@ -444,6 +444,16 @@ where
     future
 }
 
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
+mod sparse_ocr_stop_tests;
+
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod tests {
     use std::sync::Mutex;
