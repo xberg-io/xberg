@@ -53,7 +53,17 @@ mod imp {
         device: &Device,
         dtype: DType,
     ) -> Result<(Tensor, Tensor)> {
-        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, true)?.into_rgb8();
+        preprocess_with_budget(image_bytes, config, device, dtype, DEFAULT_IMAGE_DECODE_BUDGET)
+    }
+
+    pub(super) fn preprocess_with_budget(
+        image_bytes: &[u8],
+        config: &PreprocessConfig,
+        device: &Device,
+        dtype: DType,
+        decode_budget: u64,
+    ) -> Result<(Tensor, Tensor)> {
+        let img = decode_image_with_budget(image_bytes, decode_budget, true)?.into_rgb8();
         preprocess_rgb(&img, config, device, dtype)
     }
 
@@ -175,6 +185,26 @@ pub(super) use imp::preprocess_rgb;
 mod tests {
     use super::*;
     use candle_core::{DType, Device};
+
+    #[test]
+    fn standalone_glm_preprocessing_enforces_the_decode_budget() {
+        use crate::CandleOcrError;
+        use crate::models::glm_ocr::tests::small_rgb_png;
+
+        let (png, budget) = small_rgb_png();
+        let config = PreprocessConfig::default();
+
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) =
+            imp::preprocess_with_budget(&png, &config, &Device::Cpu, DType::F32, budget)
+        else {
+            panic!("valid PNG must exceed the test budget with a typed image limit");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+
+        let (pixels, grid) = preprocess(&png, &config, &Device::Cpu, DType::F32).unwrap();
+        assert_eq!(pixels.dims(), &[1, 3, 112, 112]);
+        assert_eq!(grid.to_vec2::<u32>().unwrap(), vec![vec![1, 8, 8]]);
+    }
 
     #[test]
     fn encoded_and_decoded_inputs_produce_equal_visual_tensors() {

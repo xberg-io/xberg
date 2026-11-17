@@ -268,6 +268,15 @@ mod engine {
         Ok((config, tokenizer, vb))
     }
 
+    pub(super) fn process_encoded_image<T>(
+        image_bytes: &[u8],
+        decode_budget: u64,
+        process_rgb: impl FnOnce(&image::RgbImage) -> Result<T>,
+    ) -> Result<T> {
+        let img = decode_image_with_budget(image_bytes, decode_budget, true)?.into_rgb8();
+        process_rgb(&img)
+    }
+
     impl GlmOcrEngine {
         /// Immutable Hugging Face revision covered by the built-in checksums.
         pub fn revision() -> &'static str {
@@ -361,8 +370,9 @@ mod engine {
         /// instead of `self.task`. Encoded input, decoding and RGB conversion share a 100 MiB
         /// budget. Image decode failures return [`CandleOcrError::Image`].
         pub fn process_image_with_task(&self, image_bytes: &[u8], task: GlmOcrTask) -> Result<CandleOcrOutput> {
-            let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, true)?.into_rgb8();
-            self.process_rgb_image_with_task(&img, task)
+            process_encoded_image(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, |img| {
+                self.process_rgb_image_with_task(img, task)
+            })
         }
 
         /// Run inference over a single image and return the recognised content.
@@ -701,6 +711,54 @@ pub use engine::GlmOcrEngine;
 #[cfg(test)]
 mod tests {
     use super::engine;
+    use crate::CandleOcrError;
+    use crate::models::image_processor::DEFAULT_IMAGE_DECODE_BUDGET;
+
+    const PNG_SIDE: u32 = 16;
+    const PIXEL: image::Rgb<u8> = image::Rgb([60, 110, 190]);
+
+    pub(super) fn small_rgb_png() -> (Vec<u8>, u64) {
+        let image = image::RgbImage::from_pixel(PNG_SIDE, PNG_SIDE, PIXEL);
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        let png = encoded.into_inner();
+        let encoded_bytes = u64::try_from(png.len()).unwrap();
+        let raster_bytes = u64::from(PNG_SIDE).pow(2) * u64::from(image::ColorType::Rgb8.bytes_per_pixel());
+        (png, encoded_bytes + raster_bytes - 1)
+    }
+
+    #[test]
+    fn standalone_glm_encoded_engine_checks_budget_before_inference() {
+        let (png, budget) = small_rgb_png();
+        let result = engine::process_encoded_image(&png, budget, |_| -> crate::error::Result<()> {
+            panic!("the inference continuation ran after a failed budget check")
+        });
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) = result else {
+            panic!("valid PNG must exceed the test budget with a typed image limit");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+
+        let size = engine::process_encoded_image(&png, DEFAULT_IMAGE_DECODE_BUDGET, |img| {
+            assert_eq!(*img.get_pixel(0, 0), PIXEL);
+            Ok(img.dimensions())
+        })
+        .unwrap();
+        assert_eq!(size, (PNG_SIDE, PNG_SIDE));
+    }
+
+    #[test]
+    fn standalone_glm_default_decode_budget_is_100_mib() {
+        const MIB: u64 = 1024 * 1024;
+        let rgb_pixel_bytes = u64::from(image::ColorType::Rgb8.bytes_per_pixel());
+        let maximum_pixels = (DEFAULT_IMAGE_DECODE_BUDGET - MIB) / rgb_pixel_bytes;
+
+        assert_eq!(DEFAULT_IMAGE_DECODE_BUDGET, 100 * MIB);
+        assert_eq!(maximum_pixels, 34_603_008);
+        assert_eq!(MIB + maximum_pixels * rgb_pixel_bytes, DEFAULT_IMAGE_DECODE_BUDGET);
+        assert!(MIB + (maximum_pixels + 1) * rgb_pixel_bytes > DEFAULT_IMAGE_DECODE_BUDGET);
+    }
 
     #[test]
     fn detect_structured_markdown_recognises_table() {
