@@ -2249,8 +2249,12 @@ async fn recognize_pdf_formula_page_inputs(
                         }
                     }
                     Ok(None) => {}
-                    Err(error) => {
-                        tracing::warn!(error = %error, page = page_number, "pdf formula recognition failed; keeping OCR text");
+                    Err(_) => {
+                        tracing::warn!(
+                            error = "formula_recognition",
+                            page = page_number,
+                            "pdf formula recognition failed; keeping OCR text"
+                        );
                     }
                 }
             }
@@ -3181,7 +3185,7 @@ impl PdfExtractor {
                         tracing::warn!(
                             page = img.page_number,
                             image_index = img.image_index,
-                            error = %e,
+                            error = %e.pdf_ocr_trace_category(),
                             "inline image OCR failed; image returned without OCR result"
                         );
                     }
@@ -3529,7 +3533,7 @@ impl PdfExtractor {
                     Err(e @ crate::XbergError::Cancelled) => return Err(e),
                     Err(e) => {
                         tracing::warn!(
-                            error = %e,
+                            error = %e.pdf_ocr_trace_category(),
                             candidate_pages = ?scanned_pages,
                             "Automatic OCR of detected scanned pages failed; using native text extraction result"
                         );
@@ -3855,7 +3859,7 @@ impl PdfExtractor {
                         Some(Err(error @ crate::XbergError::Cancelled)) => return Err(error),
                         Some(Err(error)) => {
                             tracing::warn!(
-                                error = %error,
+                                error = %error.pdf_ocr_trace_category(),
                                 failing_pages = ?decision.failing_pages,
                                 "Targeted OCR of the pages that dropped their native script failed; \
                                  using the whole-document read"
@@ -3990,7 +3994,7 @@ impl PdfExtractor {
                                     return Err(failed_run.error);
                                 }
                                 tracing::warn!(
-                                    error = %failed_run.error,
+                                    error = %failed_run.error.pdf_ocr_trace_category(),
                                     "OCR fallback failed; using native text extraction result"
                                 );
                                 if failed_ocr_fallback_is_total_loss(&native_text) {
@@ -4067,7 +4071,7 @@ impl PdfExtractor {
                             Err(e @ crate::XbergError::Cancelled) => return Err(e),
                             Err(e) => {
                                 tracing::warn!(
-                                    error = %e,
+                                    error = %e.pdf_ocr_trace_category(),
                                     failing_pages = ?pages,
                                     "Targeted OCR fallback failed; using native text extraction result"
                                 );
