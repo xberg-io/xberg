@@ -18,24 +18,24 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+      - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.17"
           otp-version: "27"
           install-hex: "false"
           install-rebar: "false"
 
-      - uses: xberg-io/actions/setup-mise@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+      - uses: xberg-io/actions/setup-mise@v1
         with:
           tools: python
           cache: "false"
 
-      - uses: xberg-io/actions/setup-rust@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+      - uses: xberg-io/actions/setup-rust@v1
         with:
           target: aarch64-apple-darwin
           disable-cache: "true"
@@ -72,7 +72,7 @@ jobs:
 
       - name: Build the Rustler archive against workspace dependencies
         id: nif
-        uses: xberg-io/actions/build-elixir-natives@97c04280c1d4acc16bdc456db188782afbe63803 # v1
+        uses: xberg-io/actions/build-elixir-natives@v1
         with:
           target: aarch64-apple-darwin
           nif-crate-name: xberg_nif
