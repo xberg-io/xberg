@@ -895,7 +895,7 @@ traineddata = "traineddata"
   "nesting-too-deep",
   "too-many-parameters",
 ]
-"crates/xberg/src/extractors/email.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
+"crates/xberg/src/extractors/email.rs" = ["cyclomatic-complexity", "function-too-long"]
 "crates/xberg/src/extractors/epub/mod.rs" = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/excel.rs" = ["file-too-long", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/fictionbook.rs" = [
