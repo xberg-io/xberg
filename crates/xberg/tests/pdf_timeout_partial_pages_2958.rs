@@ -109,7 +109,9 @@ fn pages_read(result: &ExtractedDocument) -> usize {
     pages.iter().filter(|page| !page.content.trim().is_empty()).count()
 }
 
-fn assert_cut_short(result: &ExtractedDocument, total: usize) {
+/// `full` is the same document read without a limit, or `None` when every page is known to
+/// carry text; it tells a blank page before the stop from one the stop skipped.
+fn assert_cut_short(result: &ExtractedDocument, total: usize, full: Option<&ExtractedDocument>) {
     let warning = result
         .processing_warnings
         .iter()
@@ -133,12 +135,36 @@ fn assert_cut_short(result: &ExtractedDocument, total: usize) {
         pages_read < total,
         "the document must not have finished: the limit exists to cut it short"
     );
-    assert_eq!(
-        first_unread,
-        pages_read + 1,
-        "the warning must name the page after the last page read: {}",
+    assert!(
+        (2..=total).contains(&first_unread),
+        "the named page must follow a read page: {}",
         warning.message
     );
+    let (read, unread) = pages.split_at(first_unread - 1);
+    assert!(
+        unread.iter().all(|page| page.content.trim().is_empty()),
+        "no page from the named one on may have been read: {}",
+        warning.message
+    );
+    match full {
+        Some(full) => {
+            let full_pages = full.pages.as_deref().expect("page contents were requested");
+            for (index, (partial, complete)) in read.iter().zip(full_pages).enumerate() {
+                assert_eq!(
+                    partial.content.trim().is_empty(),
+                    complete.content.trim().is_empty(),
+                    "page {} before the named page {first_unread} must have been read",
+                    index + 1
+                );
+            }
+        }
+        None => assert_eq!(
+            first_unread,
+            pages_read + 1,
+            "the warning must name the page after the last page read: {}",
+            warning.message
+        ),
+    }
     assert!(!result.content.trim().is_empty());
 }
 
@@ -151,7 +177,7 @@ async fn test_scanned_pdf_at_the_time_limit_returns_finished_pages_and_names_the
         .await
         .unwrap_or_else(|| panic!("no page was read within any of the limits tried: {SCAN_LIMITS_SECS:?}"));
 
-    assert_cut_short(&result, total);
+    assert_cut_short(&result, total, None);
 }
 
 /// Cut short in the native text loop. A machine that reads a whole fixture within the 1 s
@@ -170,7 +196,10 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
             eprintln!("{name}: read all {total} pages within the limit, trying a larger fixture");
             continue;
         }
-        assert_cut_short(&result, total);
+        let full = extract_uri_document(&path, None, &timed_config(600))
+            .await
+            .expect("an unlimited extraction must read the whole document");
+        assert_cut_short(&result, total, Some(&full));
         return;
     }
     unexercised("no native fixture was cut short by a 1 s limit, so the stop was not exercised");
@@ -181,29 +210,33 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
 /// the token of the attempt that returned its pages is reused.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
-    let path = fixture(NATIVE_FIXTURES[0]);
-    let total = page_count(&path);
-
     let mut cut_short = None;
-    for secs in NATIVE_LIMITS_SECS {
-        let token = CancellationToken::new();
-        let config = ExtractionConfig {
-            cancel_token: Some(token.clone()),
-            ..timed_config(secs)
-        };
-        match extract_uri_document(&path, None, &config).await {
-            Err(XbergError::Timeout { .. }) => continue,
-            other => {
-                cut_short = Some((token, other.expect("a limited extraction returns its pages")));
-                break;
+    'fixtures: for name in NATIVE_FIXTURES {
+        let path = fixture(name);
+        for secs in NATIVE_LIMITS_SECS {
+            let token = CancellationToken::new();
+            let config = ExtractionConfig {
+                cancel_token: Some(token.clone()),
+                ..timed_config(secs)
+            };
+            match extract_uri_document(&path, None, &config).await {
+                Err(XbergError::Timeout { .. }) => continue,
+                other => {
+                    let result = other.expect("a limited extraction returns its pages");
+                    if has_timeout_warning(&result) {
+                        cut_short = Some((path, token, result));
+                        break 'fixtures;
+                    }
+                    continue 'fixtures;
+                }
             }
         }
     }
-    let Some((token, first)) = cut_short.filter(|(_, result)| has_timeout_warning(result)) else {
+    let Some((path, token, first)) = cut_short else {
         unexercised("the first extraction was not cut short on this machine, so there is no stop to carry over");
         return;
     };
-    assert!(pages_read(&first) < total);
+    assert!(pages_read(&first) < page_count(&path));
     assert!(
         !token.is_cancelled(),
         "a partial result must leave the caller's token usable"
