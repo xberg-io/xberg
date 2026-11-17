@@ -330,6 +330,8 @@ fn extract_page_texts_until(
             break;
         }
         let page = extract_one_page_text(doc, page_idx, &excluded_layers, options)?;
+        #[cfg(test)]
+        hold_after_marked_page(&page.text, cancel_token, || stop(page_idx + 1));
         texts.push(page.text);
         if let Some(collected) = evidence.provenance_counts.as_mut() {
             collected.push(
@@ -343,6 +345,31 @@ fn extract_page_texts_until(
     }
 
     Ok((texts, evidence))
+}
+
+/// A page carrying this token holds the text loop after it until the loop is asked to stop, so a
+/// test sees the loop still running when the extraction time limit passes, at any build speed.
+#[cfg(test)]
+const HOLD_PAGE_LOOP_MARKER: &str = "HOLDLOOP3029";
+
+#[cfg(test)]
+fn hold_after_marked_page(
+    text: &str,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
+    stop_next: impl Fn() -> bool,
+) {
+    const FAILSAFE: std::time::Duration = std::time::Duration::from_secs(60);
+    const POLL: std::time::Duration = std::time::Duration::from_millis(5);
+    if !text.contains(HOLD_PAGE_LOOP_MARKER) {
+        return;
+    }
+    let started = std::time::Instant::now();
+    while !stop_next()
+        && !cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+        && started.elapsed() < FAILSAFE
+    {
+        std::thread::sleep(POLL);
+    }
 }
 
 /// Fast path: extract text without page tracking.
@@ -3300,6 +3327,10 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
 #[cfg(test)]
 #[path = "text/span_carrier_tests.rs"]
 mod span_carrier_tests;
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "text/time_limit_tests.rs"]
+mod time_limit_tests;
 
 #[cfg(test)]
 mod tests {
