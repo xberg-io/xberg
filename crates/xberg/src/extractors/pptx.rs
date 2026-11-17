@@ -512,19 +512,25 @@ fn parse_pptx_path(path: &str, options: &PptxExtractionOptions) -> Result<PptxRe
     Ok((document, warnings))
 }
 
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+const MAX_ACTIVE_PATH_PARSERS: u32 = 4;
+
+// Bound simultaneous single-file parsers without limiting the shared blocking pool. ~keep
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+static PATH_PARSERS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_ACTIVE_PATH_PARSERS as usize)));
+
 async fn read_pptx_path(
     path: &str,
     options: PptxExtractionOptions,
     cancel: Option<&CancellationToken>,
 ) -> Result<PptxRead> {
+    // A foreign caller may occupy its runtime's only blocking worker. ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     if !crate::core::batch_mode::is_batch_mode()
         && let Ok(runtime) = tokio::runtime::Handle::try_current()
+        && crate::core::runtime::is_global_runtime(&runtime)
     {
-        // Bound simultaneous single-file parsers without limiting the shared blocking pool. ~keep
-        const MAX_ACTIVE_PATH_PARSERS: usize = 4;
-        static PATH_PARSERS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
-            std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_ACTIVE_PATH_PARSERS)));
         let path = path.to_owned();
         return run_pptx_path_worker(&runtime, PATH_PARSERS.clone(), cancel, move || {
             parse_pptx_path(&path, &options)
