@@ -82,6 +82,14 @@ pub(super) fn implicit_pipeline_pages(
     {
         return Default::default();
     }
+    #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+    if config
+        .security_limits
+        .as_ref()
+        .is_some_and(|limits| limits.max_archive_size == IMPLICIT_NORMAL_CASE)
+    {
+        return Default::default();
+    }
     crate::plugins::ensure_ocr_backends_initialized();
     let backend = crate::plugins::registry::get_ocr_backend_registry()
         .read()
@@ -91,15 +99,13 @@ pub(super) fn implicit_pipeline_pages(
 }
 
 #[cfg(paddle_ocr)]
-pub(super) struct PipelineTrial<'a> {
-    pub pdf: &'a Arc<PdfDocument>,
-    pub index: usize,
-    pub rotation: u32,
-    pub config: &'a ExtractionConfig,
-    pub pipeline: &'a crate::core::config::OcrPipelineConfig,
-    pub hints: super::PageOcrHints,
-    pub words: MarkedWords,
-    pub normal_preprocessing_dpi: Option<i32>,
+struct PipelineTrial {
+    pdf: Arc<PdfDocument>,
+    index: usize,
+    config: ExtractionConfig,
+    pipeline: crate::core::config::OcrPipelineConfig,
+    hints: super::PageOcrHints,
+    words: MarkedWords,
 }
 
 #[cfg(paddle_ocr)]
@@ -109,9 +115,60 @@ type Dpi = crate::pdf::render::OcrRasterDpi;
 type Warnings = Vec<crate::types::ProcessingWarning>;
 
 #[cfg(paddle_ocr)]
-pub(super) enum Trial {
-    Accepted(Box<super::OcrPipelineOutput>, (u32, u32), Dpi, Warnings),
-    Normal(image::DynamicImage, Dpi, Warnings),
+pub(super) struct AcceptedTrial {
+    pub output: Box<super::OcrPipelineOutput>,
+    pub dimensions: (u32, u32),
+    pub dpi: Dpi,
+}
+
+#[cfg(paddle_ocr)]
+pub(super) async fn run_batch(
+    pdf: &Arc<PdfDocument>,
+    config: &ExtractionConfig,
+    pipeline: Option<&crate::core::config::OcrPipelineConfig>,
+    indices: &[usize],
+    eligible: &ahash::AHashMap<usize, MarkedWords>,
+    hints: impl Fn(usize) -> super::PageOcrHints,
+) -> crate::Result<std::collections::BTreeMap<usize, AcceptedTrial>> {
+    let mut accepted = std::collections::BTreeMap::new();
+    let Some(pipeline) = pipeline.filter(|_| !eligible.is_empty()) else {
+        return Ok(accepted);
+    };
+    let mut tasks = tokio::task::JoinSet::new();
+    for &index in indices {
+        let Some(words) = eligible.get(&index) else {
+            continue;
+        };
+        let trial = PipelineTrial {
+            pdf: Arc::clone(pdf),
+            index,
+            config: config.clone(),
+            pipeline: pipeline.clone(),
+            hints: hints(index),
+            words: words.clone(),
+        };
+        let task = async move { (index, trial.run().await) };
+        #[cfg(test)]
+        let task = crate::plugins::registry::inherit_test_ocr_backend(task);
+        tasks.spawn(crate::core::extractor::cacheability::inherit(task));
+    }
+    let mut abandon_at = None;
+    loop {
+        match super::next_page_task(&mut tasks, config.cancel_token.as_ref(), &mut abandon_at).await {
+            super::NextPageTask::Finished(Ok((index, result))) => {
+                if let Some(result) = result? {
+                    accepted.insert(index, result);
+                }
+            }
+            super::NextPageTask::Finished(Err(error)) => {
+                return Err(crate::XbergError::parsing(format!(
+                    "Sparse glyph OCR task failed: {error}"
+                )));
+            }
+            super::NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled),
+            super::NextPageTask::Drained | super::NextPageTask::Abandoned => return Ok(accepted),
+        }
+    }
 }
 
 #[cfg(paddle_ocr)]
@@ -124,26 +181,16 @@ pub(super) fn declined() -> super::FailedOcrRun {
 }
 
 #[cfg(paddle_ocr)]
-impl PipelineTrial<'_> {
-    async fn render(&self, sparse: bool) -> crate::Result<(image::DynamicImage, Dpi, Warnings)> {
+impl PipelineTrial {
+    async fn render(&self) -> crate::Result<(image::DynamicImage, Dpi, Warnings)> {
         self.check_stop()?;
-        let pdf = Arc::clone(self.pdf);
+        let pdf = Arc::clone(&self.pdf);
         let limits = self.config.security_limits.clone().unwrap_or_default();
-        let (idx, rotation) = (self.index, self.rotation);
-        let preprocessing = if sparse { None } else { self.normal_preprocessing_dpi };
-        let ((_, image), dpi, warnings) = super::super::super::spawn_pdf_blocking(move || {
-            let config = sparse.then(images_config);
-            let (((idx, image), dpi), warnings) = crate::pdf::render::capture_render_warnings(|| {
-                super::super::rendering::render_one_selected_page(
-                    &pdf,
-                    rotation,
-                    idx,
-                    &limits,
-                    config.as_ref(),
-                    preprocessing,
-                )
-            })?;
-            Ok(((idx, image), dpi, warnings))
+        let idx = self.index;
+        let (((_, image), dpi), warnings) = super::super::super::spawn_pdf_blocking(move || {
+            crate::pdf::render::capture_render_warnings(|| {
+                super::super::rendering::render_one_selected_page(&pdf, 0, idx, &limits, Some(&images_config()), None)
+            })
         })
         .await?;
         self.check_stop()?;
@@ -151,7 +198,7 @@ impl PipelineTrial<'_> {
     }
 
     fn check_stop(&self) -> crate::Result<()> {
-        super::super::super::ensure_pdf_not_cancelled(self.config)?;
+        super::super::super::ensure_pdf_not_cancelled(&self.config)?;
         if self
             .config
             .cancel_token
@@ -166,13 +213,13 @@ impl PipelineTrial<'_> {
     async fn read(&self, image: &image::DynamicImage) -> super::OcrRunResult<super::OcrPipelineOutput> {
         let mut hints = self.hints.clone();
         hints.sparse_glyph_trial = Some(self.words.clone());
-        hints.source_dpi = super::rendered_page_source_dpi(self.pdf, self.index, image.width());
+        hints.source_dpi = super::rendered_page_source_dpi(&self.pdf, self.index, image.width());
         hints.number_source = None;
         hints.probe_reads = None;
-        let (_, height_pt) = super::page_dimensions_pt(self.pdf, self.index);
+        let (_, height_pt) = super::page_dimensions_pt(&self.pdf, self.index);
         let points_per_pixel = (image.height() > 0).then(|| height_pt / image.height() as f32);
         let detached = super::DetachedOcrPage {
-            document: self.pdf,
+            document: &self.pdf,
             stored_scan: None,
             orientation_retry: None,
         };
@@ -181,10 +228,10 @@ impl PipelineTrial<'_> {
             Some(std::slice::from_ref(image)),
             #[cfg(feature = "layout-detection")]
             None,
-            self.config,
-            self.pipeline,
+            &self.config,
+            &self.pipeline,
             None,
-            self.rotation,
+            0,
             true,
             points_per_pixel,
             Some(hints),
@@ -194,9 +241,12 @@ impl PipelineTrial<'_> {
         .await
     }
 
-    pub(super) async fn run(self) -> crate::Result<Trial> {
-        if let Ok((image, dpi, warnings)) = self.render(true).await
-            && super::rendered_page_source_dpi(self.pdf, self.index, image.width())
+    async fn run(self) -> crate::Result<Option<AcceptedTrial>> {
+        if let Ok((image, dpi, warnings)) = self.render().await
+            // Failed and warning-bearing trials are retried by the ordinary renderer, so the
+            // result only reports warnings from the selected normal render in batch order.
+            && warnings.is_empty()
+            && super::rendered_page_source_dpi(&self.pdf, self.index, image.width())
                 .is_some_and(|source| (source - f64::from(READ_DPI)).abs() < 1.0)
         {
             let dimensions = (image.width(), image.height());
@@ -207,8 +257,12 @@ impl PipelineTrial<'_> {
                         .get(&((self.index + 1) as u32))
                         .is_some_and(|metadata| matches_trial_raster(metadata, dimensions)) =>
                 {
-                    self.check_stop()?;
-                    return Ok(Trial::Accepted(Box::new(result), dimensions, dpi, warnings));
+                    super::super::super::ensure_pdf_not_cancelled(&self.config)?;
+                    return Ok(Some(AcceptedTrial {
+                        output: Box::new(result),
+                        dimensions,
+                        dpi,
+                    }));
                 }
                 Err(error) if matches!(error.error, crate::XbergError::Cancelled) => {
                     return Err(crate::XbergError::Cancelled);
@@ -216,8 +270,8 @@ impl PipelineTrial<'_> {
                 Ok(_) | Err(_) => tracing::debug!(page = self.index + 1, "Retrying sparse glyph OCR at normal density"),
             }
         }
-        let (image, dpi, warnings) = self.render(false).await?;
-        Ok(Trial::Normal(image, dpi, warnings))
+        super::super::super::ensure_pdf_not_cancelled(&self.config)?;
+        Ok(None)
     }
 }
 
@@ -461,6 +515,8 @@ const MARGIN_CASE: usize = 0x3150_5103;
 const NORMAL_CONTROL_CASE: usize = 0x3150_5104;
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
 const IMPLICIT_MISSING_WORD_CASE: usize = 0x3238_5101;
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+const IMPLICIT_NORMAL_CASE: usize = 0x3238_5102;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
@@ -544,10 +600,12 @@ pub(super) fn test_attempt(
             .or_default()
             .push((retry, width, height, target));
         // Exercise each trigger independently of Tesseract model confidence drift. ~keep
-        let confidence = if case == QUALITY_CASE && !retry { 0 } else { 100 };
-        read.metadata
-            .additional
-            .insert("mean_text_conf".into(), serde_json::json!(confidence));
+        if !implicit_missing_word_case(case) {
+            let confidence = if case == QUALITY_CASE && !retry { 0 } else { 100 };
+            read.metadata
+                .additional
+                .insert("mean_text_conf".into(), serde_json::json!(confidence));
+        }
     }
     result
 }
@@ -665,6 +723,17 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         )
     });
     let normal = normal_density_control(pdf, &config).await;
+    assert_retry_equivalent(&result, &normal, &attempts, case, expected);
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn assert_retry_equivalent(
+    result: &ExtractedDocument,
+    normal: &ExtractedDocument,
+    attempts: &[Attempt],
+    case: usize,
+    expected: Vec<&str>,
+) {
     let normal_page = &normal.pages.as_ref().unwrap()[0];
     let normal_target = normal_page
         .image_preprocessing
@@ -688,7 +757,18 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         serde_json::to_value(&page.image_preprocessing).unwrap(),
         serde_json::to_value(&normal_page.image_preprocessing).unwrap(),
     );
-    assert_eq!(page.ocr_confidence.as_ref().unwrap().score, Some(1.0));
+    if implicit_missing_word_case(case) {
+        assert_eq!(
+            serde_json::to_value(&page.ocr_confidence).unwrap(),
+            serde_json::to_value(&normal_page.ocr_confidence).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&result.processing_warnings).unwrap(),
+            serde_json::to_value(&normal.processing_warnings).unwrap()
+        );
+    } else {
+        assert_eq!(page.ocr_confidence.as_ref().unwrap().score, Some(1.0));
+    }
     assert!(
         result
             .processing_warnings
@@ -700,6 +780,17 @@ async fn assert_sparse_glyph_attempts(case: usize) {
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     let mut normal_config = config.clone();
+    #[cfg(paddle_ocr)]
+    if config
+        .security_limits
+        .as_ref()
+        .is_some_and(|limits| implicit_missing_word_case(limits.max_archive_size))
+    {
+        normal_config.security_limits.as_mut().unwrap().max_archive_size = IMPLICIT_NORMAL_CASE;
+        return crate::core::extractor::extract_bytes(pdf, "application/pdf", &normal_config)
+            .await
+            .unwrap();
+    }
     normal_config.security_limits.as_mut().unwrap().max_archive_size = NORMAL_CONTROL_CASE;
     normal_config.images = Some(ImageExtractionConfig {
         target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
