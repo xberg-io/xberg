@@ -162,7 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configured budget. The standalone API exposes typed image errors and accepts decoded rasters through `process_decoded_image`.
   The dimensions helper reads the header without validating pixels. (#3168)
 
-- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. (#3168)
+- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
 
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
