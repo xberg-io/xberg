@@ -11,21 +11,7 @@ use std::fs;
 #[cfg(paddle_ocr)]
 use super::error::OcrError;
 #[cfg(paddle_ocr)]
-use super::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES;
-
-#[cfg(paddle_ocr)]
-const TESSDATA_FAST_BASE_URL: &str = "https://github.com/tesseract-ocr/tessdata_fast/raw/main";
-
-/// All language codes to download (supported languages + osd for script detection).
-#[cfg(paddle_ocr)]
-fn all_download_codes() -> Vec<&'static str> {
-    let mut codes: Vec<&str> = TESSERACT_SUPPORTED_LANGUAGE_CODES.iter().copied().collect();
-    if !codes.contains(&"osd") {
-        codes.push("osd");
-    }
-    codes.sort();
-    codes
-}
+use super::tessdata_download::{TESSDATA_FAST_PACKS, download_missing_language_pack, pinned_source_url};
 
 /// Manages tessdata file downloading, caching, and manifest generation.
 #[derive(Debug, Clone)]
@@ -61,13 +47,13 @@ impl TessdataManager {
     #[cfg(paddle_ocr)]
     #[cfg_attr(alef, alef(skip))]
     pub fn manifest() -> Vec<crate::paddle_ocr::ModelManifestEntry> {
-        all_download_codes()
-            .into_iter()
-            .map(|lang| crate::paddle_ocr::ModelManifestEntry {
+        TESSDATA_FAST_PACKS
+            .iter()
+            .map(|&(lang, sha256, size_bytes)| crate::paddle_ocr::ModelManifestEntry {
                 relative_path: format!("tessdata/{lang}.traineddata"),
-                sha256: String::new(),
-                size_bytes: 0,
-                source_url: format!("{TESSDATA_FAST_BASE_URL}/{lang}.traineddata"),
+                sha256: sha256.to_string(),
+                size_bytes,
+                source_url: pinned_source_url(lang),
             })
             .collect()
     }
@@ -97,73 +83,21 @@ impl TessdataManager {
             ))
         })?;
 
-        let codes = all_download_codes();
-        let total = codes.len();
-        let mut downloaded = 0usize;
+        let total = TESSDATA_FAST_PACKS.len();
+        let mut downloaded = 0;
 
-        for (i, lang) in codes.iter().enumerate() {
-            let dest = self.cache_dir.join(format!("{lang}.traineddata"));
-            if dest.exists() {
+        for (i, &(lang, _, _)) in TESSDATA_FAST_PACKS.iter().enumerate() {
+            if self.is_language_cached(lang) {
                 continue;
             }
-
-            let url = format!("{TESSDATA_FAST_BASE_URL}/{lang}.traineddata");
             tracing::info!(lang, progress = format!("{}/{}", i + 1, total), "Downloading tessdata");
-
-            download_traineddata(&url, &dest).map_err(|e| {
-                OcrError::TesseractInitializationFailed(format!("Failed to download {lang}.traineddata: {e}"))
-            })?;
-
-            downloaded += 1;
+            downloaded += usize::from(download_missing_language_pack(lang, &self.cache_dir)?);
         }
 
         tracing::info!(downloaded, total, "Tessdata download complete");
 
         Ok(downloaded)
     }
-}
-
-/// Download a single traineddata file with retries.
-#[cfg(paddle_ocr)]
-fn download_traineddata(url: &str, dest: &Path) -> Result<(), String> {
-    const MAX_ATTEMPTS: u32 = 3;
-
-    let mut last_error = String::new();
-
-    for attempt in 1..=MAX_ATTEMPTS {
-        let result = (|| -> Result<Vec<u8>, String> {
-            let agent = ureq::Agent::new_with_defaults();
-            let response = agent.get(url).call().map_err(|e| format!("HTTP request failed: {e}"))?;
-
-            let status = response.status();
-            if status != 200 {
-                return Err(format!("HTTP {status}"));
-            }
-
-            let body = response
-                .into_body()
-                .with_config()
-                .limit(50 * 1024 * 1024)
-                .read_to_vec()
-                .map_err(|e| format!("Failed to read response body: {e}"))?;
-
-            Ok(body)
-        })();
-
-        match result {
-            Ok(bytes) => {
-                fs::write(dest, &bytes).map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
-                return Ok(());
-            }
-            Err(e) => {
-                tracing::warn!(attempt, max_attempts = MAX_ATTEMPTS, error = %e, "Download failed, retrying...");
-                std::thread::sleep(std::time::Duration::from_secs(2u64.pow((attempt - 1).min(3))));
-                last_error = e;
-            }
-        }
-    }
-
-    Err(format!("Failed after {MAX_ATTEMPTS} attempts: {last_error}"))
 }
 
 #[cfg(test)]
@@ -195,31 +129,27 @@ mod tests {
 
     #[cfg(paddle_ocr)]
     #[test]
-    fn test_all_download_codes_includes_osd() {
-        let codes = all_download_codes();
-        assert!(codes.contains(&"osd"));
-        assert!(codes.contains(&"eng"));
-        assert!(codes.contains(&"fra"));
-    }
-
-    #[cfg(paddle_ocr)]
-    #[test]
-    fn test_all_download_codes_sorted() {
-        let codes = all_download_codes();
-        let mut sorted = codes.clone();
-        sorted.sort();
-        assert_eq!(codes, sorted);
-    }
-
-    #[cfg(paddle_ocr)]
-    #[test]
-    fn test_manifest_returns_entries() {
+    fn manifest_contains_pinned_english_and_orientation_models() {
         let entries = TessdataManager::manifest();
-        assert!(!entries.is_empty());
-
-        let paths: Vec<&str> = entries.iter().map(|e| e.relative_path.as_str()).collect();
-        assert!(paths.contains(&"tessdata/eng.traineddata"));
-        assert!(paths.contains(&"tessdata/osd.traineddata"));
+        let english = entries
+            .iter()
+            .find(|entry| entry.relative_path == "tessdata/eng.traineddata")
+            .unwrap();
+        assert_eq!(
+            english.sha256,
+            "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+        );
+        assert_eq!(english.size_bytes, 4_113_088);
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.relative_path == "tessdata/osd.traineddata")
+        );
+        let fraktur = entries
+            .iter()
+            .find(|entry| entry.relative_path == "tessdata/frk.traineddata")
+            .unwrap();
+        assert!(fraktur.source_url.ends_with("/deu_latf.traineddata"));
     }
 
     #[cfg(paddle_ocr)]
@@ -247,7 +177,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let manager = TessdataManager::new(Some(temp_dir.path().to_path_buf()));
 
-        for code in all_download_codes() {
+        for &(code, _, _) in TESSDATA_FAST_PACKS {
             fs::write(temp_dir.path().join(format!("{code}.traineddata")), "fake").unwrap();
         }
 

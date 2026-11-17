@@ -318,6 +318,7 @@ impl PdfDocument {
     /// # Ok::<(), xberg_native_pdf::error::Error>(())
     /// ```
     pub fn page_image_handles(&self, page_index: usize) -> Result<Vec<crate::extractors::images::PdfImageHandle<'_>>> {
+        let _warnings = self.warning_scope();
         use crate::content::Operator;
         use crate::content::parse_content_stream_images_only;
         use crate::extractors::images::image_handle_from_inline;
@@ -723,6 +724,7 @@ impl PdfDocument {
         page_index: usize,
         filter: &ImageExtractFilter,
     ) -> Result<Vec<crate::extractors::PdfImage>> {
+        let _warnings = self.warning_scope();
         use crate::content::Operator;
         use crate::content::parse_content_stream_images_only;
 

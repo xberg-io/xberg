@@ -5012,6 +5012,19 @@ fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData
 }
 
 #[test]
+fn native_paragraphs_retain_the_measured_zero_line_baseline() {
+    let segments = vec![inline_seg("Native text at the page origin", 14.0, 0.0, false)];
+    let paragraphs = segments_to_paragraphs(segments, &[(12.0, None)], &[], &TextRepairWitnesses::default());
+    let [paragraph] = paragraphs.as_slice() else {
+        panic!("one native paragraph: {paragraphs:?}");
+    };
+    let [line] = paragraph.lines.as_slice() else {
+        panic!("one native line: {:?}", paragraph.lines);
+    };
+    assert_eq!(line.baseline_y, Some(0.0));
+}
+
+#[test]
 fn issue_1560_reconstructs_jittered_table_fragments_as_one_x_ordered_line() {
     let mut article = inline_seg("700004", 68.279, 623.481, false);
     article.font_size = 8.6;
@@ -5576,7 +5589,7 @@ fn line(segments: Vec<SegmentData>) -> PdfLine {
     PdfLine {
         native_scripts: Vec::new(),
         segments,
-        baseline_y: 0.0,
+        baseline_y: None,
         dominant_font_size: 12.0,
         is_bold: false,
         is_monospace: false,
@@ -7771,7 +7784,7 @@ fn seg_with_font(text: &str, font_size: f32) -> SegmentData {
     }
 }
 
-fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
+pub(super) fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
     SegmentData {
         text: text.to_string(),
         x,
@@ -10364,4 +10377,456 @@ fn most_frequent_level_prefers_the_higher_count_then_the_lower_level() {
     assert_eq!(most_frequent_level([1, 4, 4, 1, 3, 3]), Some((1, 2)));
     assert_eq!(most_frequent_level([2, 5, 5]), Some((5, 2)));
     assert_eq!(most_frequent_level([]), None);
+}
+
+pub(super) fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
+    let mut reference = seg_at(
+        "The cited work is described here with enough detail to identify the source",
+        70.0,
+        330.0,
+        10.0,
+        false,
+    );
+    reference.width = 128.0;
+    let mut marker = seg_at(number, 198.0, if raised { 333.0 } else { 330.0 }, 6.5, false);
+    marker.width = 3.0;
+    para(vec![line(vec![reference, marker])])
+}
+
+pub(super) fn linked_footnote_text() -> PdfParagraph {
+    let mut marker = seg_at("2", 70.0, 78.0, 6.5, false);
+    marker.width = 3.0;
+    let mut body = seg_at("A link to the cited work", 76.0, 74.0, 8.0, false);
+    body.width = 85.0;
+    para(vec![line(vec![marker, body])])
+}
+
+#[test]
+fn linked_footnote_marks_only_the_witnessed_paragraph() {
+    let mut figure = positioned_footnote_paragraph("Figure label", (230.0, 74.0, 290.0, 82.0), 8.0, false);
+    figure.layout_class = Some(LayoutHintClass::Caption);
+    let mut table = positioned_footnote_paragraph("Table cell", (230.0, 62.0, 290.0, 70.0), 8.0, false);
+    table.layout_class = Some(LayoutHintClass::Table);
+    let mut page = vec![
+        linked_footnote_reference("2", true),
+        positioned_footnote_paragraph("Ordinary low body", (70.0, 95.0, 170.0, 103.0), 8.0, false),
+        linked_footnote_text(),
+        figure,
+        table,
+    ];
+    let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+    linked_footnote::classify(
+        &mut page,
+        false,
+        || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+        || Some(vec![]),
+        linked_footnote::PageRegions {
+            page_number: 1,
+            tables: &[],
+            hints: &[],
+        },
+        &HyphenWitnesses::default(),
+    );
+    assert_eq!(page.iter().map(paragraph_text_raw).collect::<Vec<_>>(), before);
+    assert_eq!(page[2].layout_class, Some(LayoutHintClass::Footnote));
+    assert_eq!(page.iter().filter(|paragraph| paragraph.is_page_furniture).count(), 1);
+    assert!(page[2].is_page_furniture);
+}
+
+#[test]
+fn linked_footnote_preserves_opt_in_and_unproven_references() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let rule = Some(Rect::new(70.0, 90.0, 144.0, 0.5));
+    for (label, references, separator, include, hints) in [
+        (
+            "include",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            true,
+            vec![],
+        ),
+        (
+            "no rule",
+            vec![linked_footnote_reference("2", true)],
+            None,
+            false,
+            vec![],
+        ),
+        (
+            "wrong number",
+            vec![linked_footnote_reference("12", true)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "same baseline",
+            vec![linked_footnote_reference("2", false)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "off axis",
+            vec![linked_footnote_reference("2", true)],
+            Some(Rect::new(74.0, 90.0, 144.0, 0.5)),
+            false,
+            vec![],
+        ),
+        (
+            "ambiguous reference",
+            vec![linked_footnote_reference("2", true); 2],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "figure overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Picture,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+        (
+            "table overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Table,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+    ] {
+        let mut page = references;
+        page.push(linked_footnote_text());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::classify(
+            &mut page,
+            include,
+            || {
+                assert!(!include, "include_footnotes must avoid querying the separator");
+                separator
+            },
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &hints,
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(
+            page.iter().map(paragraph_text_raw).collect::<Vec<_>>(),
+            before,
+            "{label}"
+        );
+        assert!(page.iter().all(|paragraph| !paragraph.is_page_furniture), "{label}");
+    }
+}
+
+#[test]
+fn linked_footnote_counts_references_in_a_reordered_right_column() {
+    let mut right_column = linked_footnote_reference("2", true);
+    for segment in &mut right_column.lines[0].segments {
+        segment.x += 250.0;
+        segment.y += 20.0;
+        segment.baseline_y += 20.0;
+    }
+    for also_in_left_column in [false, true] {
+        let mut page = Vec::new();
+        if also_in_left_column {
+            page.push(linked_footnote_reference("2", true));
+        }
+        page.push(linked_footnote_text());
+        page.push(right_column.clone());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(page.iter().map(paragraph_text_raw).collect::<Vec<_>>(), before);
+        assert_eq!(
+            page[usize::from(also_in_left_column)].is_page_furniture,
+            !also_in_left_column
+        );
+    }
+}
+
+#[test]
+fn linked_footnote_requires_the_reference_body_above_the_rule() {
+    use crate::types::document_structure::AnnotationKind;
+    use xberg_native_pdf::geometry::Rect;
+
+    for (reference_baseline, marked) in [(93.0, true), (88.0, false)] {
+        let mut reference = linked_footnote_reference("2", true);
+        let shift = reference_baseline - reference.lines[0].segments[0].baseline_y;
+        for segment in &mut reference.lines[0].segments {
+            segment.y += shift;
+            segment.baseline_y += shift;
+        }
+        let hyphens = HyphenWitnesses::default();
+        let (text, annotations) = super::super::assembly::extract_text_and_annotations(&reference, &hyphens);
+        assert!(annotations.iter().any(|annotation| {
+            annotation.kind == AnnotationKind::Superscript
+                && text.get(annotation.start as usize..annotation.end as usize) == Some("2")
+        }));
+        let rule = Rect::new(70.0, 90.0, 144.0, 0.5);
+        assert!(reference.lines[0].segments[1].baseline_y > rule.bottom());
+
+        let mut page = vec![reference, linked_footnote_text()];
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || Some(rule),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &hyphens,
+        );
+        assert_eq!(
+            page[1].is_page_furniture, marked,
+            "reference baseline: {reference_baseline}"
+        );
+    }
+}
+
+pub(super) fn linked_footnote_image_pdf(page_content: &str) -> Vec<u8> {
+    use lopdf::{Document, Stream, dictionary};
+
+    let mut doc = Document::with_version("1.4");
+    let pages = doc.new_object_id();
+    let image = doc.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+            "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+        },
+        vec![127],
+    ));
+    let helvetica = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let content =
+        format!("/Artifact << /Type /Pagination /Attached [/Bottom] >> BDC 70 90 144 0.5 re f EMC\n{page_content}");
+    let contents = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+    let page = doc.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "Contents" => contents,
+        "Resources" => dictionary! {
+            "XObject" => dictionary! { "Photo" => image },
+            "Font" => dictionary! { "F1" => helvetica },
+        },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    doc.objects.insert(
+        pages,
+        lopdf::Object::Dictionary(
+            dictionary! { "Type" => "Pages", "Kids" => vec![lopdf::Object::Reference(page)], "Count" => 1 },
+        ),
+    );
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    doc.trailer.set("Root", catalog);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn linked_footnote_checks_native_figures_without_image_export() {
+    use xberg_native_pdf::geometry::Rect;
+
+    for (paint, expected_images, marked) in [
+        (
+            "q 100 0 0 20 68 65 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 65.0, 100.0, 20.0)]),
+            false,
+        ),
+        (
+            "q 100 0 0 20 68 150 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 150.0, 100.0, 20.0)]),
+            true,
+        ),
+        ("q 100 0 0 20 68 150 cm /Unknown Do Q", None, false),
+    ] {
+        let pdf = xberg_native_pdf::PdfDocument::from_bytes(linked_footnote_image_pdf(paint)).unwrap();
+        assert_eq!(
+            linked_footnote::page_separator(&pdf, 0),
+            Some(Rect::new(70.0, 90.0, 144.0, 0.5))
+        );
+        assert_eq!(pdf.bounded_page_image_placements(0), expected_images, "{paint}");
+        let mut page = vec![linked_footnote_reference("2", true), linked_footnote_text()];
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || linked_footnote::page_separator(&pdf, 0),
+            || pdf.bounded_page_image_placements(0),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(page[1].is_page_furniture, marked, "{paint}");
+    }
+}
+
+#[test]
+fn linked_footnote_abstains_when_other_text_could_share_the_separator_column() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let wrapped = positioned_footnote_paragraph(
+        "A continuation beneath the first note",
+        (75.0, 62.0, 169.0, 69.0),
+        8.0,
+        false,
+    );
+    let wide = positioned_footnote_paragraph(
+        "A second note extends beyond the rule",
+        (70.0, 43.0, 270.0, 57.0),
+        8.0,
+        false,
+    );
+    let straddling = positioned_footnote_paragraph(
+        "A body line crosses the separator",
+        (68.0, 88.0, 240.0, 99.0),
+        8.0,
+        false,
+    );
+    let indented = positioned_footnote_paragraph(
+        "An indented continuation starts past the rule",
+        (220.0, 60.0, 310.0, 69.0),
+        8.0,
+        false,
+    );
+    for other in [wrapped, wide, straddling, indented, linked_footnote_text()] {
+        let mut paragraphs = [linked_footnote_reference("2", true), linked_footnote_text(), other];
+        linked_footnote::classify(
+            &mut paragraphs,
+            false,
+            || Some(Rect::new(70.0, 90.0, 144.0, 0.5)),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert!(paragraphs.iter().all(|paragraph| !paragraph.is_page_furniture));
+    }
+}
+
+#[test]
+fn linked_footnote_abstains_when_the_furniture_budget_would_be_exceeded() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let mut reference = linked_footnote_reference("2", true);
+    reference.lines[0].segments[0].text = "Cited work".to_string();
+    let mut paragraphs = [reference, linked_footnote_text()];
+    linked_footnote::classify(
+        &mut paragraphs,
+        false,
+        || Some(Rect::new(70.0, 90.0, 144.0, 0.5)),
+        || Some(vec![]),
+        linked_footnote::PageRegions {
+            page_number: 1,
+            tables: &[],
+            hints: &[],
+        },
+        &HyphenWitnesses::default(),
+    );
+    assert!(paragraphs.iter().all(|paragraph| !paragraph.is_page_furniture));
+    assert!(paragraphs.iter().all(|paragraph| paragraph.layout_class.is_none()));
+}
+
+#[tokio::test]
+async fn linked_footnote_preserves_structure_and_respects_body_output_filter() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    use crate::types::{ContentLayer, ExtractionMethod};
+    use crate::{ExtractInput, ExtractionConfig, PdfBackend, PdfConfig, extract};
+
+    const NOTE: &str = "A link to the cited work";
+    let bytes = linked_footnote_image_pdf(concat!(
+        "BT /F1 10 Tf 1 0 0 1 70 480 Tm (This page has ordinary body content before the citation.) Tj ET\n",
+        "BT /F1 10 Tf 1 0 0 1 70 455 Tm (The paragraph continues with more context about the topic.) Tj ET\n",
+        "BT /F1 10 Tf 1 0 0 1 70 330 Tm (The cited work is described here) Tj /F1 6.5 Tf 3 Ts (2) Tj ET\n",
+        "BT /F1 6.5 Tf 1 0 0 1 70 74 Tm 4 Ts (2) Tj 0 Ts /F1 8 Tf 1 0 0 1 76 74 Tm (A link to the cited work) Tj ET\n",
+    ));
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        for include in [false, true] {
+            let config = ExtractionConfig {
+                output_format: format.clone(),
+                include_document_structure: true,
+                disable_ocr: true,
+                use_cache: false,
+                pdf_options: Some(PdfConfig {
+                    backend: PdfBackend::Native,
+                    ..Default::default()
+                }),
+                content_filter: include.then(|| ContentFilterConfig {
+                    include_footnotes: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let result = extract(
+                ExtractInput::from_bytes(bytes.clone(), "application/pdf", None),
+                &config,
+            )
+            .await
+            .expect("unified extraction succeeds");
+            assert!(
+                result.errors.is_empty(),
+                "{format:?}, include={include}: {:?}",
+                result.errors
+            );
+            let [document] = result.results.as_slice() else {
+                panic!("expected one extracted PDF")
+            };
+            assert_eq!(document.extraction_method, Some(ExtractionMethod::Native));
+            assert!(document.content.contains("The cited work is described here"));
+            assert_eq!(
+                document.content.contains(NOTE),
+                include,
+                "{format:?}: {}",
+                document.content
+            );
+            let structure = document.document.as_ref().expect("structured PDF output");
+            let note_nodes = structure
+                .nodes
+                .iter()
+                .filter(|node| node.content.text().is_some_and(|text| text.contains(NOTE)))
+                .collect::<Vec<_>>();
+            let [note] = note_nodes.as_slice() else {
+                panic!("wanted one retained note for {format:?}, include={include}")
+            };
+            let expected = if include {
+                ContentLayer::Body
+            } else {
+                ContentLayer::Footnote
+            };
+            assert_eq!(note.content_layer, expected, "{format:?}");
+        }
+    }
 }

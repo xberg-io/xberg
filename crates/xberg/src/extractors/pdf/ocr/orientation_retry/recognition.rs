@@ -1074,6 +1074,7 @@ mod tests {
         let environment = TessdataEnv {
             tessdata_prefix: Some(fallback.to_str().unwrap().into()),
             cache_dir: None,
+            system_paths: true,
         };
         assert!(existing_osd_directory_in(&config, &environment).is_none());
         assert_eq!(
