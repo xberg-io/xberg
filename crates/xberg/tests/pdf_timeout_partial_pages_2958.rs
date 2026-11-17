@@ -6,6 +6,9 @@
 //! build: an optimized build finishes the fixtures first and would fail them. They are compiled
 //! out of such a build, so their outcome does not depend on the machine's speed; the unit tests
 //! that request the stop on the token cover every profile.
+//!
+//! The cases run one at a time: run side by side they slow each other past the grace, and every
+//! limit then ends in `Timeout` with nothing to check.
 
 #![cfg(all(
     feature = "pdf",
@@ -21,6 +24,7 @@ use helpers::{extract_uri_document, get_test_documents_dir};
 use std::path::Path;
 use xberg::cancellation::CancellationToken;
 use xberg::core::config::{ConcurrencyConfig, ExtractionConfig, PageConfig};
+use serial_test::serial;
 use xberg::{ExtractedDocument, XbergError};
 
 /// Limits tried in turn. A loaded runner can read no page within the first one, which is
@@ -110,7 +114,9 @@ fn pages_read(result: &ExtractedDocument) -> usize {
 }
 
 /// `full` is the same document read without a limit, or `None` when every page is known to
-/// carry text; it tells a blank page before the stop from one the stop skipped.
+/// carry text; it tells a blank page before the stop from one the stop skipped. Pages are read
+/// concurrently, so a page after the named one may already be finished; the warning only
+/// promises that every page before it was read and that it was not.
 fn assert_cut_short(result: &ExtractedDocument, total: usize, full: Option<&ExtractedDocument>) {
     let warning = result
         .processing_warnings
@@ -140,10 +146,10 @@ fn assert_cut_short(result: &ExtractedDocument, total: usize, full: Option<&Extr
         "the named page must follow a read page: {}",
         warning.message
     );
-    let (read, unread) = pages.split_at(first_unread - 1);
+    let read = &pages[..first_unread - 1];
     assert!(
-        unread.iter().all(|page| page.content.trim().is_empty()),
-        "no page from the named one on may have been read: {}",
+        pages[first_unread - 1].content.trim().is_empty(),
+        "the named page must not have been read: {}",
         warning.message
     );
     match full {
@@ -158,10 +164,9 @@ fn assert_cut_short(result: &ExtractedDocument, total: usize, full: Option<&Extr
                 );
             }
         }
-        None => assert_eq!(
-            first_unread,
-            pages_read + 1,
-            "the warning must name the page after the last page read: {}",
+        None => assert!(
+            read.iter().all(|page| !page.content.trim().is_empty()),
+            "every page before the named page {first_unread} must have been read: {}",
             warning.message
         ),
     }
@@ -169,6 +174,7 @@ fn assert_cut_short(result: &ExtractedDocument, total: usize, full: Option<&Extr
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_scanned_pdf_at_the_time_limit_returns_finished_pages_and_names_the_first_unread() {
     let path = fixture("pdf_scanned/nougat_008_scanned.pdf");
     let total = page_count(&path);
@@ -184,6 +190,7 @@ async fn test_scanned_pdf_at_the_time_limit_returns_finished_pages_and_names_the
 /// minimum limit moves on to the next, larger one; if every fixture finishes in time there is
 /// nothing to cut short and the test says so instead of passing without having checked anything.
 #[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
     for name in NATIVE_FIXTURES {
         let path = fixture(name);
@@ -209,6 +216,7 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
 /// attempt gets a fresh token because a hard timeout cancels the caller's token for good; only
 /// the token of the attempt that returned its pages is reused.
 #[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
     let mut cut_short = None;
     'fixtures: for name in NATIVE_FIXTURES {
