@@ -388,6 +388,7 @@ paddle-ocr-tract = [
 sceptre-ocr = ["sceptre-ocr-ort"]
 sceptre-ocr-ort = [
     "dep:sceptre",
+    "dep:ort",
     "sceptre/ort-bundled",
     "sceptre/download",
     "ocr-pipeline",
@@ -424,7 +425,7 @@ sceptre-wasm = ["dep:sceptre", "sceptre/tract", "image-encode"]
 ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-bundled"]
 # Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
 # No #[cfg] gates — passed through to the `ort` crate.
-ort-dynamic = ["ort?/load-dynamic", "sceptre?/ort-dynamic", "xberg-gliner?/ort-dynamic"]
+ort-dynamic = ["ort?/load-dynamic", "xberg-gliner?/ort-dynamic"]
 # CoreML EP opt-in. On macOS the target-specific `ort` dependency table already enables
 # `ort/coreml` unconditionally, and `ort_discovery.rs` gates the CoreML EP code behind
 # `target_os = "macos"`; this feature exists for parity with `cuda`/`tensorrt` below and to

@@ -46,7 +46,7 @@ pub(crate) fn ensure_ort_available() {
 }
 
 #[cfg(feature = "sceptre-ocr-ort")]
-pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), sceptre::OcrError> {
+pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), ort::Error> {
     #[cfg(all(feature = "ort-dynamic", not(feature = "ort-bundled")))]
     {
         static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
@@ -65,14 +65,16 @@ pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), sceptre::OcrError> {
 fn preload_sceptre_ort_runtime_from<'a>(
     explicit: Option<&std::path::Path>,
     mut candidates: impl Iterator<Item = &'a std::path::Path>,
-) -> Result<(), sceptre::OcrError> {
+) -> Result<(), ort::Error> {
     // Leave explicit existing paths and the default search to ort. A bare library
     // name may resolve through the executable directory or the system loader. ~keep
     if explicit.is_some_and(std::path::Path::exists) {
         return Ok(());
     }
     if let Some(path) = candidates.find(|path| path.exists()) {
-        sceptre::preload_ort_runtime(path)?;
+        // Load the library without building an environment. Sceptre still owns it. ~keep
+        let _builder = ort::init_from(path)
+            .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
         tracing::debug!(path = %path.display(), "Auto-discovered ONNX Runtime");
     }
     Ok(())
@@ -246,9 +248,11 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
     #[cfg(feature = "sceptre-ocr-ort")]
-    let environment = preload_sceptre_ort_runtime()
-        .and_then(|()| sceptre::ort_environment())
-        .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
+    let environment = {
+        preload_sceptre_ort_runtime()?;
+        sceptre::ort_environment()
+            .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?
+    };
     let environment = ENVIRONMENT.get_or_init(|| environment);
     #[cfg(feature = "paddle-ocr-ort")]
     if !xberg_paddle_ocr::adopt_ort_environment(environment) {

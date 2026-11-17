@@ -451,7 +451,8 @@ fn run_blocking(
     let _ = rotation;
     #[cfg(feature = "sceptre-ocr-ort")]
     if config.model.backend == Backend::Ort {
-        crate::ort_discovery::preload_sceptre_ort_runtime().map_err(map_sceptre_error)?;
+        crate::ort_discovery::preload_sceptre_ort_runtime()
+            .map_err(|error| XbergError::ocr_with_source("Could not preload the discovered ONNX Runtime", error))?;
     }
     let decoded = decode_sceptre_image(image_bytes)?;
     #[cfg(auto_rotate)]
