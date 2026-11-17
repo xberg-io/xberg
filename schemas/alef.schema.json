@@ -5993,7 +5993,7 @@
         },
         "error_constructor": {
           "default": null,
-          "description": "Pattern for constructing error values from a String in trait bridges.\n`{msg}` is replaced with the format!(...) expression.",
+          "description": "Rust expression for trait bridge errors. `{msg}` is a `String`. `{trait}` is the trait name as a string literal.\n`{source}` is an `Option<Box<dyn std::error::Error + Send + Sync>>` (ADR-0031).\nUse `{python_source}` to carry a host exception only in PyO3. It expands to `None` elsewhere.",
           "type": [
             "string",
             "null"
@@ -8741,7 +8741,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.9/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.130.4/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8873,6 +8873,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.129.9",
-  "x-alef-version": "0.129.9"
+  "version": "0.130.4",
+  "x-alef-version": "0.130.4"
 }

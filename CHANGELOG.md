@@ -161,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
+- **python:** A custom OCR backend's original exception reaches the caller for standalone images and when OCR fails on every page of a PDF. Other all-page PDF OCR failures raise `OcrError`. (#3175, #3194)
 - **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
 - Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
 - **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
