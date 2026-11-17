@@ -411,9 +411,26 @@ mod tests {
         let cache = OcrCache::new(Some(directory.path().to_path_buf())).unwrap();
         let pool = TesseractApiPool::new();
         let image = include_bytes!("../../../../tests/fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders.png");
+        let bundled_models = tempfile::tempdir().unwrap();
+        let model_path = if let Some(english) = xberg_tesseract::bundled_eng_traineddata() {
+            std::fs::write(bundled_models.path().join("eng.traineddata"), english).unwrap();
+            bundled_models.path().to_path_buf()
+        } else {
+            crate::ocr::processor::validation::resolve_tessdata_path(&["eng".into()], None)
+                .expect("provide pinned eng.traineddata through TESSDATA_PREFIX")
+                .into()
+        };
+        use sha2::{Digest, Sha256};
+        assert_eq!(
+            hex::encode(Sha256::digest(
+                std::fs::read(model_path.join("eng.traineddata")).unwrap()
+            )),
+            "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+        );
         let config = TesseractConfig {
             psm: TessPageSegMode::PSM_SPARSE_TEXT as u8,
             use_cache: true,
+            tessdata_path: Some(model_path),
             ..Default::default()
         };
         let extract = |format, policy| {

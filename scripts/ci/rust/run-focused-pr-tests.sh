@@ -98,6 +98,9 @@ run_pdf_cases() {
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
     --test ocr_standalone_row_layout_2432
+  run_exact implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript \
+    --test ocr_sparse_table_html_2503
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
@@ -403,7 +406,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=119
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases

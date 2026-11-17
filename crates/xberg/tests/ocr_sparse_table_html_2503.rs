@@ -22,6 +22,19 @@ fn config(format: OutputFormat) -> ExtractionConfig {
     .unwrap()
 }
 
+fn pinned_english_model() -> tempfile::TempDir {
+    use sha2::{Digest, Sha256};
+
+    let models = tempfile::tempdir().unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    models
+}
+
 fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     extract_with_mime(bytes, "image/png", config)
 }
@@ -275,17 +288,9 @@ fn html_modes_escape_literal_table_cells() {
 
 #[test]
 fn explicit_sparse_mode_publishes_stock_rows_in_plain_page_text() {
-    use sha2::{Digest, Sha256};
-
     const CLEAN: &[u8] = include_bytes!("fixtures/ocr_explicit_sparse_pages_2503/img_20_plain_nolead.png");
     const ROWS: &str = include_str!("fixtures/ocr_explicit_sparse_pages_2503/rows.tsv");
-    let models = tempfile::tempdir().unwrap();
-    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
-    assert_eq!(
-        hex::encode(Sha256::digest(english)),
-        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
-    );
-    std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    let models = pinned_english_model();
     let cases = [
         (CLEAN, ROWS.lines().map(|line| line.split('\t').collect()).collect()),
         (IMAGE, expected_rows(false)),
@@ -404,9 +409,12 @@ fn implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html() {
     assert!(expected.iter().all(|row| row.len() == 4));
     assert_eq!(expected[6], ["Code review", "al", "822,978", "17,187"]);
     let transcript = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    let models = pinned_english_model();
     for format in [OutputFormat::Plain, OutputFormat::Html] {
         let mut extraction = config(format.clone());
-        extraction.ocr.as_mut().unwrap().element_config = None;
+        let ocr = extraction.ocr.as_mut().unwrap();
+        ocr.element_config = None;
+        ocr.tessdata_path = Some(models.path().to_path_buf());
         let result = extract(TINTED_LEADERS, &extraction);
         assert!(result.metadata.ocr_used);
         assert_eq!(result.metadata.additional["psm"], "11");
@@ -433,11 +441,13 @@ fn implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html() {
 fn explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript() {
     const SPARSE: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm11-plain.txt");
     const BLOCK: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm6-plain.txt");
+    let models = pinned_english_model();
     for (psm, expected_page, separator) in [(11, SPARSE, "\n\n"), (6, BLOCK, "\n")] {
         for format in [OutputFormat::Plain, OutputFormat::Html] {
             let mut extraction = config(format.clone());
             let ocr = extraction.ocr.as_mut().unwrap();
             ocr.element_config = None;
+            ocr.tessdata_path = Some(models.path().to_path_buf());
             ocr.tesseract_config.get_or_insert_default().psm = Some(psm);
             let result = extract(TINTED_LEADERS, &extraction);
             assert!(result.metadata.ocr_used);
