@@ -6,6 +6,10 @@ on:
     paths:
       - "vendored/**"
       - "docker/**"
+      - ".dockerignore"
+      - "scripts/pdfium-runtime-checksums.sha256"
+      - "scripts/ci/actions/setup-onnx-runtime/checksums.sha256"
+      - "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
       - "scripts/ci/docker/**"
       - "scripts/test/test-docker-config-local.sh"
       - "crates/xberg/Cargo.toml"

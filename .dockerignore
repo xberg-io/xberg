@@ -31,6 +31,9 @@
 !packages/elixir/native/xberg_nif/
 !docker/
 !scripts/ci/vendor-native-closure.sh
+!scripts/ci/actions/setup-onnx-runtime/checksums.sha256
+!scripts/ci/actions/setup-onnx-runtime/verify-archive.sh
+!scripts/pdfium-runtime-checksums.sha256
 !scripts/ci/install-system-deps/build-ocr-linux.sh
 !scripts/ci/install-system-deps/verify-ocr-linux.py
 !scripts/ci/install-system-deps/verify-ocr-fixture.sh
