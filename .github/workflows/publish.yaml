@@ -124,7 +124,7 @@ jobs:
       release_kotlin: ${{ steps.meta.outputs.release_kotlin }}
       release_kotlin_android: ${{ steps.meta.outputs.release_kotlin_android }}
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -133,7 +133,7 @@ jobs:
 
       - name: Checkout
         id: release-source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ (inputs.republish == true && (inputs.ref || github.event.repository.default_branch)) || inputs.ref || inputs.tag || ((inputs.dry_run == true || inputs.dry_run == 'true' || github.event.client_payload.dry_run == true || github.event.client_payload.dry_run == 'true') && github.sha) || github.ref }}
           fetch-depth: 0
@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -650,7 +650,7 @@ jobs:
         # ~keep Runtime staging requires the reviewed Visual Studio 2022 redistributable.
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-2022, macos-26, macos-26-intel]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -806,7 +806,7 @@ jobs:
             scripts/ci/fixtures/musl-python-smoke.pdf "XBERG MUSL SMOKE 490"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: python-wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
@@ -829,7 +829,7 @@ jobs:
           - { os: ubuntu-latest, arch: x86_64, target: x86_64-unknown-linux-musl }
           - { os: ubuntu-24.04-arm, arch: aarch64, target: aarch64-unknown-linux-musl }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -874,7 +874,7 @@ jobs:
           wheel="$(find build-output -name '*.whl' | head -n1)"
           bash scripts/ci/smoke-test-musl-python-wheel.sh "$wheel"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: python-wheels-musl-${{ matrix.arch }}
           path: build-output/*.whl
@@ -893,7 +893,7 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -913,7 +913,7 @@ jobs:
           output-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: python-sdist
           path: dist/*.tar.gz
@@ -937,7 +937,7 @@ jobs:
           # sync with alef's [crates.node].exclude_platforms=["darwin-x64"]. ~keep
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1049,7 +1049,7 @@ jobs:
           tar -czf "node-bindings-${{ matrix.target }}.tar.gz" -C crates/xberg-node "${members[@]}"
           python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/$(basename "$platform_dir")"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: node-bindings-${{ matrix.target }}
           path: node-bindings-${{ matrix.target }}.tar.gz
@@ -1070,7 +1070,7 @@ jobs:
           - { os: ubuntu-latest, arch: x86_64, napi_arch: x64, target: x86_64-unknown-linux-musl }
           - { os: ubuntu-24.04-arm, arch: aarch64, napi_arch: arm64, target: aarch64-unknown-linux-musl }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1131,7 +1131,7 @@ jobs:
           python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
 
       - name: Check out Node smoke launcher from the workflow revision
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -1152,7 +1152,7 @@ jobs:
           platform="linux-${{ matrix.napi_arch }}-musl"
           bash .release-tools/scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}" "$GITHUB_WORKSPACE"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: node-bindings-${{ matrix.target }}
           path: node-bindings-${{ matrix.target }}.tar.gz
@@ -1186,7 +1186,7 @@ jobs:
               image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f,
             }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1254,7 +1254,7 @@ jobs:
           python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
       - name: Verify glibc floor
         run: bash scripts/ci/verify-glibc-floor.sh "staging/npm/linux-${{ matrix.napi_arch }}-gnu" "$GLIBC_FLOOR"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: node-bindings-${{ matrix.target }}
           path: node-bindings-${{ matrix.target }}.tar.gz
@@ -1277,7 +1277,7 @@ jobs:
     env:
       CARGO_BUILD_JOBS: 1
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1405,7 +1405,7 @@ jobs:
             console.log("wasm web glue loaded; exports present:", Object.keys(wasm).length);
           '
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: wasm-bundle
           path: |
@@ -1462,7 +1462,7 @@ jobs:
             # here too whenever `windows-gnu-target` (or its core feature) also carries it. ~keep
             ruby_cargo_args: --no-default-features --features api,api-types,auto-rotate-types,captioning,chunking,chunking-tokenizers,classification,diff,embedding-presets,heuristics,html,keywords-rake,keywords-yake,late-interaction-presets,layout-types,liter-llm,markdown-footnotes,mcp,ocr,office,paddle-ocr-types,pdf,presets,quality,redaction,redaction-rehydrate,reranker-presets,sparse-embedding-presets,svg,tokio-runtime,transcription-types,tree-sitter,url-config-types,url-ingestion,xml
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1495,7 +1495,7 @@ jobs:
 
       # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
       # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199
         if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"
@@ -1510,7 +1510,7 @@ jobs:
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
       - name: Checkout Ruby packaging verifier
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           path: .release-tools
@@ -1533,7 +1533,7 @@ jobs:
           fi
           ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: rubygems-${{ matrix.label }}
           path: packages/ruby/pkg/*.gem
@@ -1565,7 +1565,7 @@ jobs:
           - { os: macos-26, label: macos-arm64, target: aarch64-apple-darwin }
           - { os: windows-2022, label: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.php_checkout_sha }}
           fetch-depth: 0
@@ -1590,7 +1590,7 @@ jobs:
       # PIE would drop (#2547). Tagged source retries use this workflow revision's tools. ~keep
       - name: Checkout macOS HEIF tools
         if: runner.os == 'macOS'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -1785,7 +1785,7 @@ jobs:
       # Tagged source retries must use the verification fixes from this workflow revision. ~keep
       - name: Checkout release verification tools
         if: contains(matrix.platform.target, '-linux-gnu') || runner.os == 'Windows'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -1859,7 +1859,7 @@ jobs:
             }
           }
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: php-package-${{ matrix.platform.label }}-php${{ matrix.php }}
           path: |
@@ -1893,7 +1893,7 @@ jobs:
             }
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -1954,7 +1954,7 @@ jobs:
       # Retries of older source tags must use closure tools from this workflow revision. ~keep
       - name: Checkout Windows release closure tools
         if: runner.os == 'Windows'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -2057,7 +2057,7 @@ jobs:
 
       - name: Checkout Linux CLI installer verification tools
         if: endsWith(matrix.target, '-unknown-linux-gnu')
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .cli-release-tools
@@ -2082,7 +2082,7 @@ jobs:
           docker run --rm --network none -v "$PWD:/src:ro" ubuntu:24.04 \
             bash /src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh "/src/xberg-cli-${TARGET}.tar.gz" "$VERSION" gnu
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cli-${{ matrix.target }}
           path: |
@@ -2104,7 +2104,7 @@ jobs:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-musl }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2143,7 +2143,7 @@ jobs:
           tar -czf "${STAGE}.tar.gz" "$STAGE"
 
       - name: Checkout Linux CLI installer verification tools
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .cli-release-tools
@@ -2167,7 +2167,7 @@ jobs:
           docker run --rm --network none -v "$PWD:/src:ro" debian:12-slim \
             bash /src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh "/src/xberg-cli-${TARGET}.tar.gz" "$VERSION" musl
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cli-${{ matrix.target }}
           path: xberg-cli-${{ matrix.target }}.tar.gz
@@ -2194,7 +2194,7 @@ jobs:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, features: binstall-ocr }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, features: binstall }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2232,7 +2232,7 @@ jobs:
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cli-binstall-${{ matrix.target }}
           path: xberg-cli-binstall-${{ matrix.target }}.tar.gz
@@ -2259,7 +2259,7 @@ jobs:
           - { os: ubuntu-latest, platform: linux-x86_64-musl, target: x86_64-unknown-linux-musl, musl: true }
           - { os: ubuntu-24.04-arm, platform: linux-aarch64-musl, target: aarch64-unknown-linux-musl, musl: true }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2331,7 +2331,7 @@ jobs:
           done
           [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: go-ffi-${{ matrix.platform }}
           path: dist/go-ffi/*.tar.gz
@@ -2354,7 +2354,7 @@ jobs:
           # CRT staging requires a reviewed Visual Studio 2022 installation. ~keep
           - { os: windows-2022, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2406,7 +2406,7 @@ jobs:
       # Retries of older source tags must use closure tools from this workflow revision. ~keep
       - name: Checkout Windows release closure tools
         if: runner.os == 'Windows'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -2491,7 +2491,7 @@ jobs:
           done
           [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: c-ffi-${{ matrix.platform }}
           path: dist/c-ffi/*.tar.gz
@@ -2513,7 +2513,7 @@ jobs:
           - { os: macos-26, classifier: macos-arm64, target: aarch64-apple-darwin }
           - { os: windows-latest, classifier: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2573,7 +2573,7 @@ jobs:
             echo "::notice::no java natives produced (dry-run stub); skipping ship+verify"
           fi
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: java-natives-${{ matrix.classifier }}
           path: dist/java-natives
@@ -2593,7 +2593,7 @@ jobs:
           - { os: ubuntu-latest, arch: x86_64, classifier: linux-musl-x86_64 }
           - { os: ubuntu-24.04-arm, arch: aarch64, classifier: linux-musl-aarch64 }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2639,7 +2639,7 @@ jobs:
         run: |
           bash scripts/ci/smoke-test-musl-java-ffi.sh build-output
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: java-natives-${{ matrix.classifier }}
           path: dist/java-natives
@@ -2663,7 +2663,7 @@ jobs:
           - { abi: arm64-v8a }
           - { abi: x86_64 }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2682,7 +2682,7 @@ jobs:
           # --features/--no-default-features flags are passed here. ~keep
           crate-name: xberg-jni
           abis: ${{ matrix.abi }}
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: kotlin-android-${{ matrix.abi }}
           path: dist/android-natives
@@ -2704,7 +2704,7 @@ jobs:
           - { os: macos-26, rid: osx-arm64, target: aarch64-apple-darwin }
           - { os: windows-latest, rid: win-x64, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2773,7 +2773,7 @@ jobs:
           bash scripts/ci/vendor-native-closure.sh dist/csharp-natives
           bash scripts/ci/verify-glibc-floor.sh dist/csharp-natives "$GLIBC_FLOOR"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: csharp-natives-${{ matrix.rid }}
           path: dist/csharp-natives
@@ -2793,7 +2793,7 @@ jobs:
           - { os: ubuntu-latest, arch: x64, rid: linux-musl-x64 }
           - { os: ubuntu-24.04-arm, arch: arm64, rid: linux-musl-arm64 }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -2842,7 +2842,7 @@ jobs:
         run: |
           bash scripts/ci/smoke-test-musl-csharp-ffi.sh "dist/csharp-natives/runtimes/${{ matrix.rid }}/native"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: csharp-natives-${{ matrix.rid }}
           path: dist/csharp-natives
@@ -2869,14 +2869,14 @@ jobs:
             label: windows-x86_64
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
 
           submodules: false
       # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
         with:
           elixir-version: "1.17"
           otp-version: "27"
@@ -2899,7 +2899,7 @@ jobs:
       # tools. ~keep
       - name: Checkout macOS closure tools
         if: runner.os == 'macOS'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -2999,7 +2999,7 @@ jobs:
       # Retries of older source tags must use closure tools from this workflow revision. ~keep
       - name: Checkout Windows release closure tools
         if: runner.os == 'Windows'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -3060,7 +3060,7 @@ jobs:
       # as a "dry-run stub". Sibling actions emit a stub and so do not hit this.
       # Gate on dry_run, NOT on is_tag: publish.yaml synthesizes a dry-run tag,
       # so `is_tag` is true on a dry run and would not skip anything. ~keep
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         with:
           name: elixir-${{ matrix.label }}-nif-${{ matrix.nif }}
@@ -3091,7 +3091,7 @@ jobs:
             arch: aarch64
             target: aarch64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3163,7 +3163,7 @@ jobs:
           archive="$ARCHIVE_DIR/${RENAMED}.tar.gz"
           bash scripts/ci/smoke-test-musl-elixir-nif.sh "$archive" "$archive.sha256"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: elixir-musl-${{ matrix.arch }}-nif-${{ matrix.nif }}
           path: dist/elixir-natives/*.tar.gz
@@ -3192,7 +3192,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f
             nif: "2.16"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3285,7 +3285,7 @@ jobs:
       # Gate on dry_run, NOT on is_tag: publish.yaml synthesizes a dry-run tag,
       # so `is_tag` is true on a dry run and would not skip anything. Matches
       # the equivalent gate in the elixir-natives job. ~keep
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         with:
           name: elixir-${{ matrix.label }}-nif-${{ matrix.nif }}
@@ -3316,7 +3316,7 @@ jobs:
             }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, blob: windows-x86_64, lib: xberg_dart.dll }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3423,7 +3423,7 @@ jobs:
               ;;
           esac
           ls -l "$STAGE"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: dart-server-${{ matrix.blob }}
           path: dist/server-natives
@@ -3445,21 +3445,21 @@ jobs:
           succeeded: |
             dart-server-natives
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
           submodules: false
           persist-credentials: false
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: dart-server-*
           path: dart-server-artifacts
@@ -3526,7 +3526,7 @@ jobs:
           - aarch64-unknown-linux-gnu
           - x86_64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3566,7 +3566,7 @@ jobs:
           targets: ${{ matrix.target }}
           zig-version: "0.17.0"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: swift-lib-${{ matrix.target }}
           path: ${{ steps.libs.outputs.libs-dir }}
@@ -3585,13 +3585,13 @@ jobs:
     # neither Rust nor the system deps are installed here. ~keep
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
           submodules: false
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: swift-lib-*
           merge-multiple: true
@@ -3613,13 +3613,13 @@ jobs:
             LICENSE
             THIRD_PARTY_LICENSES.md
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: swift-artifactbundle
           path: ${{ steps.bundle.outputs.bundle-zip }}
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: swift-checksum
           path: ${{ steps.bundle.outputs.checksum-file }}
@@ -3633,7 +3633,7 @@ jobs:
       ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true') }}
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3651,7 +3651,7 @@ jobs:
           package-dir: packages/swift
           crate-name: xberg-swift
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: swift-package
           path: packages/swift
@@ -3670,21 +3670,21 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_swift == 'true' && (needs.upload-swift-bundle.result == 'success' || (needs.upload-swift-bundle.result == 'skipped' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
         with:
           name: swift-artifactbundle
@@ -3778,7 +3778,7 @@ jobs:
       ${{ !inputs.plugins-only && (needs.prepare.outputs.release_zig == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3819,7 +3819,7 @@ jobs:
           - { target: x86_64-unknown-linux-musl }
           - { target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -3830,7 +3830,7 @@ jobs:
           config-ref: ${{ github.sha }}
 
       - name: Download CLI binaries
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: cli-${{ matrix.target }}
           path: dist-cli-binaries
@@ -3946,7 +3946,7 @@ jobs:
           echo "Wheel smoke test passed for ${TARGET}: $(basename "${wheels[0]}")"
 
       - name: Upload wheel
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cli-proxy-wheel-${{ matrix.target }}
           path: cli-proxy/pypi/dist/*.whl
@@ -3967,14 +3967,14 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.assets_exist != 'true' || needs.prepare.outputs.force_republish == 'true') && (needs.cli-binaries.result == 'success' || needs.cli-binaries-musl.result == 'success' || needs.cli-binaries-binstall.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: cli-*
           path: dist/cli
@@ -4071,14 +4071,14 @@ jobs:
           succeeded: |
             go-ffi-libraries
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: go-ffi-*
           path: dist/go-ffi
@@ -4124,14 +4124,14 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.upload-go-release.result == 'success' || (needs.upload-go-release.result == 'skipped' && needs.check-go.outputs.exists == 'true')) && (needs.update-swift-package-manifest.result == 'success' || needs.update-swift-package-manifest.result == 'skipped')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # Pin to the tag by name so checkout takes its CURRENT commit rather
           # than asserting the triggering `github.sha`. update-swift-package-manifest
@@ -4170,14 +4170,14 @@ jobs:
           succeeded: |
             c-ffi-libraries
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: c-ffi-*
           path: dist/c-ffi
@@ -4210,14 +4210,14 @@ jobs:
             elixir-natives-musl
             elixir-natives-manylinux
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: elixir-*
           path: dist/elixir
@@ -4262,14 +4262,14 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && needs.php-extension.result != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: php-package-*
           path: dist/php-package
@@ -4302,14 +4302,14 @@ jobs:
           succeeded: |
             swift-artifactbundle
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: swift-artifactbundle
           path: dist/swift-bundle
@@ -4347,7 +4347,7 @@ jobs:
       # with finalize and the other release-writing jobs. Without it the lookup
       # failed every retry with "release not found", skipping finalize and
       # cascading into a skipped Homebrew bottle build (issue #1247). ~keep
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         with:
@@ -4411,21 +4411,21 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           expected-assets: ${{ needs.prepare.outputs.elixir_assets_multiline }}
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_cli == 'true' }}
         with:
           pattern: cli-*
           path: dist/verify-assets/cli
           merge-multiple: true
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_go == 'true' }}
         with:
           pattern: go-ffi-*
           path: dist/verify-assets/go-ffi
           merge-multiple: true
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_c_ffi == 'true' }}
         with:
           pattern: c-ffi-*
@@ -4495,7 +4495,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
@@ -4551,12 +4551,12 @@ jobs:
             ${{ needs.prepare.outputs.dry_run == 'true' && 'python-sdist' || '' }}
 
       - name: Checkout publication helpers
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
       - name: Checkout pinned shared publication verifier
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: xberg-io/actions
           ref: v1
@@ -4566,12 +4566,12 @@ jobs:
         uses: xberg-io/actions/setup-mise@v1
         with:
           install: "false"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: python-wheels-*
           path: dist
           merge-multiple: true
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: needs.prepare.outputs.dry_run != 'true'
         with:
           name: python-sdist
@@ -4588,7 +4588,7 @@ jobs:
       - name: Create central archive token
         if: needs.prepare.outputs.dry_run != 'true'
         id: archive-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
@@ -4645,7 +4645,7 @@ jobs:
           succeeded: |
             cli-proxy-wheels
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -4656,7 +4656,7 @@ jobs:
           config-ref: ${{ github.sha }}
 
       - name: Download CLI proxy wheels
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: cli-proxy-wheel-*
           path: dist
@@ -4705,7 +4705,7 @@ jobs:
             publish-crates
 
       # Only the mise config, so setup-mise installs the locked Ruby. ~keep
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -4715,7 +4715,7 @@ jobs:
             mise*.lock
             mise-tasks
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: rubygems-*
           path: dist
@@ -4727,7 +4727,7 @@ jobs:
       - name: Update RubyGems for OIDC trusted publishing
         run: gem update --system
 
-      - uses: rubygems/configure-rubygems-credentials@v2.1.0
+      - uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a
 
       - name: Verify Ruby gem package contents
         uses: xberg-io/actions/verify-package-contents@v1
@@ -4761,12 +4761,12 @@ jobs:
             node-bindings-musl
             node-bindings-manylinux
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.checkout_ref || needs.prepare.outputs.ref }}
 
           submodules: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: node-bindings-*
           path: node-artifacts
@@ -4867,7 +4867,7 @@ jobs:
 
       - name: Checkout Node dry-run verification tools
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           path: .release-tools
@@ -4886,7 +4886,7 @@ jobs:
           npm pack ./crates/xberg-node --ignore-scripts --pack-destination dist/node-dry-run
           python3 .release-tools/scripts/ci/verify-node-dry-run.py
           cp crates/xberg-node/npm/*.tgz dist/node-dry-run/
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
         with:
           name: node-dry-run-packages
@@ -5006,12 +5006,12 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: wasm-bundle
           path: crates/xberg-wasm
@@ -5139,12 +5139,12 @@ jobs:
             java-natives
             java-natives-musl
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: java-natives-*
           path: artifacts/java-natives
@@ -5190,19 +5190,19 @@ jobs:
           succeeded: |
             kotlin-android-natives
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.ref }}
 
           submodules: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: kotlin-android-*
           path: kotlin-android-artifacts
           merge-multiple: true
 
       - name: Check out Android release guards from the workflow revision
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -5218,7 +5218,7 @@ jobs:
             kotlin-android-artifacts packages/kotlin-android/src/main/jniLibs
 
       # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
-      - uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
         with:
           packages: "platforms;android-36 build-tools;36.0.0"
 
@@ -5261,12 +5261,12 @@ jobs:
             csharp-natives
             csharp-natives-musl
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: csharp-natives-*
           path: csharp-natives
@@ -5283,7 +5283,7 @@ jobs:
         shell: bash
 
       # dotnet stays on its setup action: mise.lock cannot lock it (toolchain-management rule). ~keep
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73
         with:
           dotnet-version: "8.0.x"
 
@@ -5347,7 +5347,7 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.verify-assets.result == 'success' && needs.upload-cli-release.result != 'failure' && needs.upload-go-release.result != 'failure' && needs.upload-c-ffi-release.result != 'failure' && needs.upload-elixir-release.result != 'failure') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5382,20 +5382,20 @@ jobs:
             upload-elixir-release
             publish-crates
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: false
       - uses: xberg-io/actions/setup-rust@v1
       # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
         with:
           elixir-version: "1.17"
           otp-version: "27"
 
       - name: Checkout Elixir release tools
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
@@ -5468,7 +5468,7 @@ jobs:
           succeeded: |
             upload-dart-release
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5510,12 +5510,12 @@ jobs:
             c-ffi-libraries
             upload-c-ffi-release
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
           submodules: false
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.c-ffi-libraries.result == 'success' }}
         with:
           pattern: c-ffi-*
@@ -5609,7 +5609,7 @@ jobs:
       # Mint the app token immediately before the upload. GitHub App installation
       # tokens have a hard 1h TTL; laying out the multi-platform FFI bundle (>1GB)
       # can outlast a token minted at job start, causing the release upload to 401. ~keep
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5656,14 +5656,14 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-homebrew.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: tap-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5672,14 +5672,14 @@ jobs:
           repositories: homebrew-tap
 
       - name: Checkout source repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: xberg-io/homebrew-tap
           token: ${{ steps.tap-token.outputs.token }}
@@ -5760,7 +5760,7 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.upload-cli-release.result == 'success' || (needs.upload-cli-release.result == 'skipped' && needs.prepare.outputs.dry_run != 'true' && needs.check-cli.outputs.assets_exist == 'true'))) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: bucket-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5768,18 +5768,18 @@ jobs:
           owner: xberg-io
           repositories: scoop-bucket
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: source-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: xberg-io/scoop-bucket
           token: ${{ steps.bucket-token.outputs.token }}
@@ -5827,7 +5827,7 @@ jobs:
           - { os: ubuntu-latest, bottle_tag: x86_64_linux, install_brew: true }
           - { os: ubuntu-24.04-arm, bottle_tag: arm64_linux, install_brew: true }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -5851,7 +5851,7 @@ jobs:
           github-repo: xberg-io/xberg
           upload: false
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5883,7 +5883,7 @@ jobs:
             done
           done
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: homebrew-bottle-json-${{ matrix.bottle_tag }}
           path: ${{ github.workspace }}/bottle-json/*.json
@@ -5903,7 +5903,7 @@ jobs:
       ${{ !inputs.plugins-only && (always() && needs.publish-homebrew-formula.result == 'success' && (needs.homebrew-bottles.result == 'success' || needs.homebrew-bottles.result == 'failure') && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: tap-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -5911,20 +5911,20 @@ jobs:
           owner: xberg-io
           repositories: homebrew-tap
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
           submodules: false
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: xberg-io/homebrew-tap
           token: ${{ steps.tap-token.outputs.token }}
           path: homebrew-tap
           persist-credentials: true
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           path: ${{ github.workspace }}/bottle-json
           pattern: homebrew-bottle-json-*
@@ -6006,7 +6006,7 @@ jobs:
       ${{ !inputs.plugins-only && (always() && !cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.finalize-github-release-after-uploads.result == 'success' && needs.publish-crates.result != 'failure' && needs.publish-pypi.result != 'failure' && needs.publish-rubygems.result != 'failure' && needs.publish-node.result != 'failure' && needs.publish-wasm.result != 'failure' && needs.publish-packagist.result != 'failure' && needs.publish-maven.result != 'failure' && needs.publish-kotlin-android.result != 'failure' && needs.publish-nuget.result != 'failure' && needs.publish-hex.result != 'failure' && needs.publish-zig.result != 'failure') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -6054,7 +6054,7 @@ jobs:
       ${{ !inputs.plugins-only && (always() && !cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_prerelease != 'true' && needs.prepare.outputs.release_targets == 'all' && !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
@@ -6087,7 +6087,7 @@ jobs:
           succeeded: ${{ needs.check-cli.outputs.assets_exist != 'true' && 'upload-cli-release' || '' }}
           succeeded-or-skipped: ${{ needs.check-cli.outputs.assets_exist == 'true' && 'upload-cli-release' || '' }}
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - uses: xberg-io/actions/setup-mise@v1
@@ -6131,7 +6131,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Install Python and uv
@@ -6144,7 +6144,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -6181,7 +6181,7 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.publish-maven.result != 'failure' && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.is_tag == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
       - uses: xberg-io/actions/setup-mise@v1
@@ -6246,7 +6246,7 @@ jobs:
           - langchain-xberg
           - llamaindex-xberg
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - uses: xberg-io/actions/setup-mise@v1
@@ -6314,7 +6314,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Install Node and pnpm
@@ -6374,7 +6374,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Install Python and uv
@@ -6389,7 +6389,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -6416,7 +6416,7 @@ jobs:
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_targets == 'all' && needs.prepare.outputs.dry_run != 'true' && needs.release-finalize.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
@@ -6486,7 +6486,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
       - name: Install Node and pnpm
@@ -6557,7 +6557,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
       - name: Install Python and uv
@@ -6571,7 +6571,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}

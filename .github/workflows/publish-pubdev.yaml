@@ -43,13 +43,13 @@ jobs:
       # platform library from the GitHub release into the versioned user cache on
       # first use. Publishing from a git checkout guarantees only tracked source
       # is uploaded (~300KB), never stray build output. ~keep
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.ref || github.ref_name }}
           submodules: recursive
 
       # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
-      - uses: dart-lang/setup-dart@v1
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b
 
       - uses: xberg-io/actions/publish-pub@v1
         with:

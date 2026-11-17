@@ -46,7 +46,7 @@ runs:
 
     - name: Restore HuggingFace fastembed cache
       id: restore
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: ${{ steps.resolve.outputs.cache-dir }}
         key: hf-fastembed-${{ runner.os }}-${{ hashFiles('crates/xberg/src/reranking/mod.rs', 'crates/xberg/src/embeddings/mod.rs', 'crates/xberg/src/sparse_embeddings/mod.rs', 'crates/xberg/src/late_interaction/mod.rs') }}-${{ inputs.cache-key-suffix }}
