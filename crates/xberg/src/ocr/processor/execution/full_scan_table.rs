@@ -30,7 +30,15 @@ pub(super) fn recover(
     region: &OcrTableBoundingBox,
     limits: &SecurityLimits,
 ) -> Option<Vec<Vec<String>>> {
-    certify(tsv, content, region, limits, None).map(|(cells, _)| cells)
+    certify(tsv, content, region, limits, GridProof::Strict).map(|(cells, _)| cells)
+}
+
+#[derive(Clone, Copy)]
+enum GridProof<'a> {
+    Strict,
+    MergedHeader(&'a [Vec<String>]),
+    #[cfg(not(target_arch = "wasm32"))]
+    Standalone,
 }
 
 fn certify(
@@ -38,13 +46,15 @@ fn certify(
     content: &str,
     region: &OcrTableBoundingBox,
     limits: &SecurityLimits,
-    merged_header: Option<&[Vec<String>]>,
+    proof: GridProof<'_>,
 ) -> Option<(Vec<Vec<String>>, Vec<Word>)> {
     let (mut words, _) = bounded_words(tsv, content, region, limits)?;
     words.sort_unstable_by_key(|(_, word)| word.top);
     let rows = disjoint_rows(&mut words)?;
-    let grid = build_grid(&rows, limits.max_table_cells, merged_header.is_some())?;
-    if merged_header.is_some_and(|accepted| !only_header_row_was_merged(accepted, &grid)) {
+    let grid = build_grid(&rows, limits.max_table_cells, proof)?;
+    if let GridProof::MergedHeader(accepted) = proof
+        && !only_header_row_was_merged(accepted, &grid)
+    {
         return None;
     }
     let cleaned = post_process_table(grid.clone(), false, false)?;
@@ -102,7 +112,8 @@ pub(super) fn recover_standalone(
     }
     let mut limits = limits.clone();
     limits.max_iterations = limits.max_iterations.checked_sub(hocr.len().checked_mul(4)?)?;
-    let (cells, words) = certify(tsv, content, bbox, &limits, merged_header)?;
+    let proof = merged_header.map_or(GridProof::Standalone, GridProof::MergedHeader);
+    let (cells, words) = certify(tsv, content, bbox, &limits, proof)?;
     if !super::has_table_grid(&cells) {
         return None;
     }
@@ -254,7 +265,7 @@ impl Track {
     }
 }
 
-fn build_grid(rows: &[&mut [Word]], max_cells: usize, allow_first_reading_error: bool) -> Option<Vec<Vec<String>>> {
+fn build_grid(rows: &[&mut [Word]], max_cells: usize, proof: GridProof<'_>) -> Option<Vec<Vec<String>>> {
     let (header, body) = rows.split_first()?;
     // The independent evidence consists of a named label and at least three recurring values. ~keep
     if header.len() < 4
@@ -282,9 +293,13 @@ fn build_grid(rows: &[&mut [Word]], max_cells: usize, allow_first_reading_error:
             }
         }
     }
+    let mut remaining_reading_errors = usize::from(!matches!(proof, GridProof::Strict));
     for (index, row) in body.iter().enumerate() {
-        let allowed_reading_errors = usize::from(allow_first_reading_error && index == 0);
-        grid.push(body_cells(row, &mut tracks, allowed_reading_errors)?);
+        // The merged-header path only permits an anomaly in the separated first record. ~keep
+        if index == 1 && matches!(proof, GridProof::MergedHeader(_)) {
+            remaining_reading_errors = 0;
+        }
+        grid.push(body_cells(row, &mut tracks, &mut remaining_reading_errors)?);
     }
     tracks
         .windows(2)
@@ -292,16 +307,17 @@ fn build_grid(rows: &[&mut [Word]], max_cells: usize, allow_first_reading_error:
         .then_some(grid)
 }
 
-fn body_cells(row: &[Word], tracks: &mut [Track], allowed_reading_errors: usize) -> Option<Vec<String>> {
+fn body_cells(row: &[Word], tracks: &mut [Track], remaining_reading_errors: &mut usize) -> Option<Vec<String>> {
     let (label, values) = row.split_at(row.len().checked_sub(tracks.len() - 1)?);
     let line = label.first()?.0?;
     if !label
         .iter()
         .all(|(key, word)| *key == Some(line) && alphabetic(&word.text))
-        || values.iter().filter(|(_, word)| !literal_number(&word.text)).count() > allowed_reading_errors
     {
         return None;
     }
+    let reading_errors = values.iter().filter(|(_, word)| !literal_number(&word.text)).count();
+    *remaining_reading_errors = remaining_reading_errors.checked_sub(reading_errors)?;
     let (left, right) = (&label.first()?.1, &label.last()?.1);
     tracks[0].admit(left.left..right.left + right.width)?;
     let label = label
@@ -381,6 +397,50 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn standalone_sparse_grid_preserves_one_non_numeric_value_below_first_row() {
+        use super::super::{ImageOcrPolicy, TessPageSegMode, process_image_with_cache_and_policy};
+        use crate::core::config::OutputFormat;
+        use crate::ocr::cache::OcrCache;
+        use crate::ocr::processor::api_pool::TesseractApiPool;
+
+        let directory = tempfile::tempdir().unwrap();
+        let cache = OcrCache::new(Some(directory.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!("../../../../tests/fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders.png");
+        let config = TesseractConfig {
+            psm: TessPageSegMode::PSM_SPARSE_TEXT as u8,
+            use_cache: false,
+            ..Default::default()
+        };
+        let extract = |format, policy| {
+            process_image_with_cache_and_policy(image, &config, &cache, &pool, Some(format), policy).unwrap()
+        };
+        for format in [OutputFormat::Plain, OutputFormat::Html] {
+            assert!(extract(format, ImageOcrPolicy::Default).tables.is_empty());
+            let result = extract(format, ImageOcrPolicy::StandaloneSparseRows);
+            let [table] = result.tables.as_slice() else {
+                panic!("expected exactly one certified standalone table");
+            };
+            assert_eq!(table.cells.len(), 13);
+            for (index, cells) in [
+                (0, ["Item", "Count", "Budget", "Change"]),
+                (1, ["Library hours", "76", "425,826", "(5,071)"]),
+                (2, ["Fleet fuel", "32", "785,722", "687.35"]),
+                (3, ["Bridge paint", "13", "255,393", "42,606"]),
+                (5, ["Transit passes", "27", "833,810", "164.90"]),
+                (6, ["Code review", "al", "822,978", "17,187"]),
+                (8, ["Signal timing", "91", "615,145", "842.64"]),
+                (10, ["Snow removal", "55", "52,982", "(7,919)"]),
+                (11, ["Field lights", "61", "245,119", "228.31"]),
+            ] {
+                assert_eq!(table.cells[index], cells);
+            }
+            assert!(result.internal_document.unwrap().ocr_text_claimed_by_tables);
+        }
+    }
+
     fn fixture() -> (String, String) {
         let mut tsv = HEADER.to_owned();
         let mut content = HEADER_CELLS.join(" ");
@@ -444,19 +504,59 @@ mod tests {
             ["Fleet fuel", "", "69", "8,534", "21,958"],
         ]
         .map(|row| row.into_iter().map(str::to_owned).collect());
-        let (cells, _) = certify(&tsv, &content, &REGION, &limits, Some(&accepted)).unwrap();
+        let (cells, _) = certify(&tsv, &content, &REGION, &limits, GridProof::MergedHeader(&accepted)).unwrap();
         assert_eq!(cells[0], HEADER_CELLS);
         assert_eq!(cells[1], ["Street repair", "BY)", "828,296", "(592)"]);
-        assert!(certify(&tsv, &content, &REGION, &limits, None).is_none());
+        assert!(certify(&tsv, &content, &REGION, &limits, GridProof::Strict).is_none());
 
         let conflicting_tsv = tsv.replace("\t190\t358\t109\t28\t", "\t190\t300\t109\t86\t");
         assert_ne!(conflicting_tsv, tsv);
-        assert!(certify(&conflicting_tsv, &content, &REGION, &limits, Some(&accepted)).is_none());
+        assert!(
+            certify(
+                &conflicting_tsv,
+                &content,
+                &REGION,
+                &limits,
+                GridProof::MergedHeader(&accepted)
+            )
+            .is_none()
+        );
         let outside_prose = format!("{content}\nOutside prose");
-        assert!(certify(&tsv, &outside_prose, &REGION, &limits, Some(&accepted)).is_none());
+        assert!(
+            certify(
+                &tsv,
+                &outside_prose,
+                &REGION,
+                &limits,
+                GridProof::MergedHeader(&accepted)
+            )
+            .is_none()
+        );
         accepted[1][0] = "Library".into();
         accepted[1][1] = "hours".into();
-        assert!(certify(&tsv, &content, &REGION, &limits, Some(&accepted)).is_none());
+        assert!(certify(&tsv, &content, &REGION, &limits, GridProof::MergedHeader(&accepted)).is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn standalone_value_exception_requires_exact_inventory_and_independent_tracks() {
+        let (tsv, content) = fixture();
+        let tsv = tsv.replace("\t42\n", "\tal\n");
+        let content = content.replace("42", "al");
+        let limits = SecurityLimits::default();
+        let certify_standalone = |tsv, content| certify(tsv, content, &REGION, &limits, GridProof::Standalone);
+        let (cells, _) = certify_standalone(&tsv, &content).unwrap();
+        assert_eq!(cells[2], ["Library hours", "al", "50,406", "666.17"]);
+        assert!(recover(&tsv, &content, &REGION, &limits).is_none());
+
+        // A second anomaly elsewhere exceeds the grid-wide budget. ~keep
+        let two_anomalies = tsv.replace("\t69\n", "\too\n");
+        assert_ne!(two_anomalies, tsv);
+        assert!(certify_standalone(&two_anomalies, &content.replace("69", "oo")).is_none());
+        assert!(certify_standalone(&tsv, &format!("{content}\nOutside prose")).is_none());
+        let misplaced = tsv.replace("\t788\t430\t43\t", "\t860\t430\t43\t");
+        assert_ne!(misplaced, tsv);
+        assert!(certify_standalone(&misplaced, &content).is_none());
     }
 
     #[test]
