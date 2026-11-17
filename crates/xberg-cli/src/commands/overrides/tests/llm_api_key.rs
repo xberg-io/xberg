@@ -1,61 +1,70 @@
 use super::super::*;
 use xberg::ExtractionConfig;
 
-/// Lock around the `XBERG_LLM_API_KEY` env var to keep the resolution
-/// tests deterministic in the multi-threaded test runner. Tests that touch
-/// the environment must hold this guard for their full duration.
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+use crate::commands::env_test;
 
-#[allow(unsafe_code)]
-fn with_env_var<R>(key: &str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let previous = std::env::var(key).ok();
-    unsafe {
-        match value {
-            Some(v) => std::env::set_var(key, v),
-            None => std::env::remove_var(key),
+const CHILD: &str = "commands::overrides::tests::llm_api_key::llm_api_key_env_child";
+const ENV_TEST_VALUE: &str = "env-value";
+const LLM_API_KEY_VAR: &str = "XBERG_LLM_API_KEY";
+
+fn run_key_case(case: &str, value: Option<&str>) {
+    env_test::run_child_test(CHILD, env_test::CASE, case, |command| {
+        command.env_remove(LLM_API_KEY_VAR);
+        if let Some(value) = value {
+            command.env(LLM_API_KEY_VAR, value);
         }
-    }
-    let result = f();
-    unsafe {
-        match previous {
-            Some(v) => std::env::set_var(key, v),
-            None => std::env::remove_var(key),
-        }
-    }
-    result
+    });
 }
 
 #[test]
 fn cli_flag_takes_precedence_over_env_var() {
-    with_env_var("XBERG_LLM_API_KEY", Some("env-value"), || {
-        let resolved = resolve_llm_api_key(Some("cli-value"));
-        assert_eq!(resolved.as_deref(), Some("cli-value"));
-    });
+    run_key_case("cli-wins", Some(ENV_TEST_VALUE));
 }
 
 #[test]
 fn env_var_used_when_cli_flag_absent() {
-    with_env_var("XBERG_LLM_API_KEY", Some("env-value"), || {
-        let resolved = resolve_llm_api_key(None);
-        assert_eq!(resolved.as_deref(), Some("env-value"));
-    });
+    run_key_case("env-fallback", Some(ENV_TEST_VALUE));
 }
 
 #[test]
 fn returns_none_when_neither_source_is_set() {
-    with_env_var("XBERG_LLM_API_KEY", None, || {
-        let resolved = resolve_llm_api_key(None);
-        assert!(resolved.is_none());
-    });
+    run_key_case("absent", None);
 }
 
 #[test]
 fn empty_cli_flag_does_not_count() {
-    with_env_var("XBERG_LLM_API_KEY", Some("env-value"), || {
-        let resolved = resolve_llm_api_key(Some("   "));
-        assert_eq!(resolved.as_deref(), Some("env-value"));
-    });
+    run_key_case("empty-cli", Some(ENV_TEST_VALUE));
+}
+
+#[test]
+#[should_panic(expected = "LLM API key expectation failed")]
+fn llm_api_key_child_reports_a_wrong_expectation() {
+    run_key_case("wrong-expectation", None);
+}
+
+#[test]
+#[ignore = "run with an isolated environment by its parent test"]
+fn llm_api_key_env_child() {
+    let Some(case) = env_test::child_test_root(env_test::CASE) else {
+        return;
+    };
+    let (cli_value, expected_input, expected_key) = match case.to_str().expect("non-UTF-8 case selector") {
+        "cli-wins" => (Some("cli-value"), Some(ENV_TEST_VALUE), Some("cli-value")),
+        "env-fallback" => (None, Some(ENV_TEST_VALUE), Some(ENV_TEST_VALUE)),
+        "absent" => (None, None, None),
+        "empty-cli" => (Some("   "), Some(ENV_TEST_VALUE), Some(ENV_TEST_VALUE)),
+        "wrong-expectation" => (None, None, Some(ENV_TEST_VALUE)),
+        _ => panic!("unknown LLM API key test case"),
+    };
+    let input = std::env::var_os(LLM_API_KEY_VAR);
+    assert!(
+        input.as_deref() == expected_input.map(std::ffi::OsStr::new),
+        "expected synthetic LLM API key input was not installed"
+    );
+    assert!(
+        resolve_llm_api_key(cli_value).as_deref() == expected_key,
+        "LLM API key expectation failed"
+    );
 }
 
 #[test]

@@ -1034,8 +1034,8 @@ fn make_ocr_line_paragraph(
         (left, line_top - line_height, right, line_top)
     });
     let (x, baseline_y, width) = line_bbox
-        .map(|(left, bottom, right, _)| (left, bottom, right - left))
-        .unwrap_or((0.0, 0.0, DEFAULT_LINE_WIDTH));
+        .map(|(left, bottom, right, _)| (left, Some(bottom), right - left))
+        .unwrap_or((0.0, None, DEFAULT_LINE_WIDTH));
     let lines = if text.trim().is_empty() {
         Vec::new()
     } else {
@@ -1897,24 +1897,25 @@ fn make_ocr_paragraph(
 fn make_ocr_pdf_line(
     text: &str,
     x: f32,
-    baseline_y: f32,
+    baseline_y: Option<f32>,
     width: f32,
     line_height: f32,
     font_size: f32,
     is_bold: bool,
     is_italic: bool,
 ) -> types::PdfLine {
+    let segment_y = baseline_y.unwrap_or(0.0);
     let segment = crate::pdf::hierarchy::SegmentData {
         text: text.to_string(),
         x,
-        y: baseline_y,
+        y: segment_y,
         width,
         height: line_height,
         font_size,
         is_bold,
         is_italic,
         is_monospace: false,
-        baseline_y,
+        baseline_y: segment_y,
         rotation_degrees: 0.0,
         assigned_role: None,
         ocr_heading_spans: None,
@@ -2480,6 +2481,16 @@ mod tests {
         assert_eq!(paragraphs[0].text, "real content");
     }
 
+    #[test]
+    fn ocr_line_baseline_requires_a_source_box() {
+        let located = make_ocr_line_paragraph("at the origin", 0, 1, Some((8.0, 0.0, 40.0, 12.0)), 12.0, false, false);
+        let boxless = make_ocr_line_paragraph("with no box", 0, 1, None, 12.0, false, false);
+        assert_eq!(located.lines[0].baseline_y, Some(0.0));
+        assert_eq!(boxless.lines[0].baseline_y, None);
+        assert_eq!(boxless.lines[0].segments[0].baseline_y, 0.0);
+        assert_eq!(boxless.lines[0].segments[0].width, 100.0);
+    }
+
     /// Test that whitespace-only lines and their exact text remain in the OCR block.
     #[test]
     fn test_ocr_doc_whitespace_lines_text_preserved() {
@@ -2508,11 +2519,11 @@ mod tests {
         let para_1_y = 1000.0 - 10.0 - line_height;
         let para_2_y = 1000.0 - 10.0 - 3.0 * line_height;
         assert!(
-            (paragraphs[0].lines[0].baseline_y - para_1_y).abs() < 0.1,
+            (paragraphs[0].lines[0].baseline_y.unwrap() - para_1_y).abs() < 0.1,
             "Line 1 Y position incorrect"
         );
         assert!(
-            (paragraphs[0].lines[1].baseline_y - para_2_y).abs() < 0.1,
+            (paragraphs[0].lines[1].baseline_y.unwrap() - para_2_y).abs() < 0.1,
             "Line 2 Y position incorrect"
         );
     }
@@ -2547,16 +2558,16 @@ mod tests {
         let expected_line_height = 80.0 / 3.0;
 
         assert!(
-            (paragraphs[0].lines[0].baseline_y - (990.0 - expected_line_height)).abs() < 0.1,
+            (paragraphs[0].lines[0].baseline_y.unwrap() - (990.0 - expected_line_height)).abs() < 0.1,
             "Line1 baseline is incorrect: {}",
-            paragraphs[0].lines[0].baseline_y
+            paragraphs[0].lines[0].baseline_y.unwrap()
         );
         let first_segment = &paragraphs[0].lines[0].segments[0];
         assert!((first_segment.y + first_segment.height - 990.0).abs() < 0.1);
         assert!(
-            (paragraphs[0].lines[1].baseline_y - (990.0 - 3.0 * expected_line_height)).abs() < 0.1,
+            (paragraphs[0].lines[1].baseline_y.unwrap() - (990.0 - 3.0 * expected_line_height)).abs() < 0.1,
             "Line3 baseline is incorrect: {}",
-            paragraphs[0].lines[1].baseline_y
+            paragraphs[0].lines[1].baseline_y.unwrap()
         );
     }
 
@@ -3459,7 +3470,7 @@ mod tests {
         let line = make_ocr_pdf_line(
             text,
             left,
-            bottom,
+            Some(bottom),
             right - left,
             top - bottom,
             DEFAULT_OCR_FONT_SIZE_PT,
@@ -3613,7 +3624,7 @@ mod tests {
         height: f32,
         font_size: f32,
     ) -> types::PdfParagraph {
-        let line = make_ocr_pdf_line(text, x, y, width, height, font_size, false, false);
+        let line = make_ocr_pdf_line(text, x, Some(y), width, height, font_size, false, false);
         make_ocr_paragraph(
             text.to_string(),
             vec![line],

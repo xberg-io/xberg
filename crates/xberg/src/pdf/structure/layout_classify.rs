@@ -652,7 +652,7 @@ mod tests {
         PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,

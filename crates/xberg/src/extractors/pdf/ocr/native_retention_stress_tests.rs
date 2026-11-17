@@ -821,7 +821,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
         .map(|(text, row, rows)| PdfLine {
             segments: vec![tall_segment(text, row, 0.0, 500.0, rows)],
             native_scripts: Vec::new(),
-            baseline_y: row as f32 * 12.0,
+            baseline_y: Some(row as f32 * 12.0),
             dominant_font_size: 10.0,
             is_bold: false,
             is_monospace: false,

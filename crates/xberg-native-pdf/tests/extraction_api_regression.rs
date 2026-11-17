@@ -39,6 +39,8 @@
 
 #![allow(clippy::needless_return)]
 
+mod common;
+
 use std::sync::Mutex;
 use xberg_native_pdf::converters::text_post_processor::TextPostProcessor;
 use xberg_native_pdf::encryption::PdfPermissions;
@@ -699,65 +701,113 @@ fn descendant_fonts_inline_dict_accepted() {
     );
 }
 
-/// Global warning sink wired into five
-/// log::warn sites in src/parser.rs (SPEC VIOLATION + Stream
-/// /Length mismatch) and src/fonts/font_dict.rs (Type 3 detected +
-/// Type0 ToUnicode missing) and src/content/parser.rs (4 operator-
-/// cap sites). Verify by source inspection that the wire-ups are
-/// in place.
 #[test]
-fn global_warning_sink_wired_into_log_warn_sites() {
-    let parser_src = include_str!("../src/parser.rs");
-    assert!(
-        parser_src.contains("push_global_warning"),
-        "src/parser.rs SPEC VIOLATION sites must push to global sink",
+fn explicit_global_warnings_round_trip_with_a_bounded_backlog() {
+    use xberg_native_pdf::extractors::warnings::{
+        drain_global_warnings, push_global_warning, snapshot_global_warnings,
+    };
+    let _ = drain_global_warnings();
+    for index in 0..=256 {
+        push_global_warning(Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: format!("explicit warning {index}"),
+            spec_section: Some("7.3.8.1"),
+        });
+    }
+
+    let snapshot = snapshot_global_warnings();
+    let drained = drain_global_warnings();
+    assert_eq!(snapshot.len(), 256);
+    assert_eq!(snapshot[0].message, "explicit warning 1");
+    assert_eq!(snapshot[255].message, "explicit warning 256");
+    assert_eq!(
+        snapshot.iter().map(|warning| &warning.message).collect::<Vec<_>>(),
+        drained.iter().map(|warning| &warning.message).collect::<Vec<_>>(),
     );
-    let fonts_src = include_str!("../src/fonts/font_dict.rs");
-    assert!(
-        fonts_src.contains("push_global_warning") && fonts_src.contains("Type3Font"),
-        "src/fonts/font_dict.rs Type3 site must push to global sink",
+    assert!(snapshot_global_warnings().is_empty());
+}
+
+fn pdf_with_shared_type0_font(base_font: &str, tounicode: &str) -> Vec<u8> {
+    const CMAP: &str = concat!(
+        "/CIDInit /ProcSet findresource begin\n",
+        "12 dict begin\nbegincmap\n",
+        "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n",
+        "/CMapName /SharedWarningTestUCS def\n/CMapType 2 def\n",
+        "1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n",
+        "1 beginbfchar\n<0041> <03A9>\nendbfchar\n",
+        "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n",
     );
-    assert!(
-        fonts_src.contains("ToUnicodeMissing"),
-        "src/fonts/font_dict.rs Type0-ToUnicode-missing site must push",
+    let cmap_stream = format!("<< /Length {} >>\nstream\n{CMAP}endstream", CMAP.len());
+    let font = format!(
+        "<< /Type /Font /Subtype /Type0 /BaseFont /{base_font} /Encoding /Identity-H \
+         /DescendantFonts [5 0 R] {tounicode} >>"
     );
-    let content_src = include_str!("../src/content/parser.rs");
-    assert!(
-        content_src.contains("OperatorCapExceeded"),
-        "src/content/parser.rs op-cap site must push to global sink",
+    let descendant = format!(
+        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{base_font} \
+         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>"
     );
-    // The 4 op-cap call sites are now wired through the shared
-    // `push_operator_cap_warning()` helper (refactored 2026-05-28 to
-    // collapse the four duplicated op-cap blocks and eliminate the
-    // exceeded-N-operators message divergence when the cap is
-    // overridden). Verify the helper exists and is invoked at least
-    // 4× across the module. ~keep
-    let helper_calls = content_src.matches("push_operator_cap_warning()").count();
-    assert!(
-        helper_calls >= 4,
-        "all 4 content-parser op-cap sites must call push_operator_cap_warning() (found {})",
-        helper_calls,
-    );
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![0];
+    for (index, body) in [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> >>",
+        &font,
+        &descendant,
+        &cmap_stream,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+    }
+    common::finalize_pdf(pdf, &offsets)
 }
 
 #[test]
-fn global_warning_sink_drain_round_trips() {
-    use xberg_native_pdf::extractors::warnings::{
-        Warning, WarningCategory, drain_global_warnings, push_global_warning, snapshot_global_warnings,
+fn shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_document() {
+    use std::sync::Arc;
+    use xberg_native_pdf::PdfDocument;
+    use xberg_native_pdf::extractors::TextExtractor;
+
+    let load_font = |doc: &PdfDocument| {
+        let mut extractor = TextExtractor::new();
+        let resources = doc.get_page_resources(0).expect("page resources");
+        doc.load_fonts_public(&resources, &mut extractor).expect("load font");
+        let mut fonts = extractor.get_font_set();
+        assert_eq!(fonts.len(), 1);
+        assert_eq!(fonts[0].0, "F1");
+        fonts.pop().unwrap().1
     };
-    let _ = drain_global_warnings();
-    push_global_warning(Warning {
-        category: WarningCategory::SpecViolation,
-        page: None,
-        message: "test_v0356".into(),
-        spec_section: Some("7.3.8.1"),
-    });
-    let snap = snapshot_global_warnings();
-    assert!(snap.iter().any(|w| w.message == "test_v0356"));
-    let drained = drain_global_warnings();
-    assert!(drained.iter().any(|w| w.message == "test_v0356"));
-    let after = snapshot_global_warnings();
-    assert!(!after.iter().any(|w| w.message == "test_v0356"));
+
+    for (base_font, tounicode, expected_count) in [
+        ("SharedWarningTestMissing", "", 1),
+        ("SharedWarningTestNull", "/ToUnicode null", 1),
+        ("SharedWarningTestMapped", "/ToUnicode 6 0 R", 0),
+    ] {
+        let pdf = pdf_with_shared_type0_font(base_font, tounicode);
+        let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold document");
+        let cold_font = load_font(&cold);
+        assert_eq!(cold_font.base_font, base_font);
+        if expected_count == 0 {
+            assert_eq!(cold_font.char_to_unicode(0x41).as_deref(), Some("Ω"));
+        }
+        let warm = PdfDocument::from_bytes(pdf).expect("open warm document");
+        assert!(warm.structured_warnings().is_empty());
+        for _ in 0..2 {
+            assert!(Arc::ptr_eq(&cold_font, &load_font(&warm)), "the font must be shared");
+        }
+        for doc in [&cold, &warm] {
+            let warnings: Vec<_> = doc
+                .structured_warnings()
+                .into_iter()
+                .filter(|warning| warning.category == WarningCategory::ToUnicodeMissing)
+                .collect();
+            assert_eq!(warnings.len(), expected_count, "{tounicode}: {warnings:?}");
+        }
+    }
 }
 
 /// The `starts_with_agl_ligature` helper detects AGL ligature codepoints
@@ -826,8 +876,15 @@ fn max_ops_setter_affects_parse_runtime() {
     // With cap=1, only the first operator parses. extract_text
     // succeeds but may produce very little output (the API doesn't
     // error on truncation). ~keep
-    let _ = doc.extract_text(0);
+    let capped = doc.extract_text(0);
     xberg_native_pdf::content::parser::set_max_ops_per_stream(original);
+    capped.expect("cap truncation must leave an extractable page");
+    assert!(
+        doc.take_structured_warnings()
+            .iter()
+            .any(|warning| warning.category == WarningCategory::OperatorCapExceeded),
+        "truncating a page stream must record an operator-cap warning on its document"
+    );
     let doc2 = xberg_native_pdf::document::PdfDocument::open(path).expect("re-open simple.pdf");
     let text = doc2.extract_text(0).expect("normal extract_text");
     assert!(

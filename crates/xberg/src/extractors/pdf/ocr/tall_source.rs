@@ -126,24 +126,26 @@ pub(super) async fn try_replace(
     (_, png, width, height): &super::rendering::EncodedPage,
 ) -> crate::Result<bool> {
     let source = (document, page);
+    let raster = (*width, *height);
     if !original.tables.is_empty() || !original.formulas.is_empty() {
-        note_unrecovered(original, ocr, source, *height, Unrecovered::TablesOrFormulas);
+        note_unrecovered(original, ocr, source, raster, Unrecovered::TablesOrFormulas);
         return Ok(false);
     }
-    let Some(quality) = RecognitionQuality::from_result(original) else {
+    let (Some(quality), Some(read_width)) = (
+        RecognitionQuality::from_result(original),
+        read_geometry::select_read_width(original, raster),
+    ) else {
+        note_unrecovered(original, ocr, source, raster, Unrecovered::InsufficientReadEvidence);
         return Ok(false);
     };
     let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
-    let Some(read_width) = read_geometry::select_read_width(original, (*width, *height)) else {
-        return Ok(false);
-    };
     attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let why = match recover(attempt, backend, ocr).await? {
         Some((recovered, strips))
             if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
         {
-            read_geometry::record_original_frame(original, (*width, *height), page);
+            read_geometry::record_original_frame(original, raster, page);
             apply_recovery(original, recovered, page, strips);
             note_flat_structure(original, config, page);
             return Ok(true);
@@ -152,7 +154,7 @@ pub(super) async fn try_replace(
         None if indexed::is_indexed_rgb_scan(&attempt) => Unrecovered::IndexedRgb,
         None => Unrecovered::Uncertified,
     };
-    note_unrecovered(original, ocr, source, *height, why);
+    note_unrecovered(original, ocr, source, raster, why);
     Ok(false)
 }
 
