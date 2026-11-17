@@ -5,6 +5,7 @@
 //! plumbing; model code itself lives in `xberg-candle-ocr::models`.
 
 #[cfg(any(
+    feature = "candle-trocr",
     feature = "candle-paddleocr-vl",
     all(
         not(target_arch = "wasm32"),

@@ -436,6 +436,7 @@ fn validate_standard_rgb8_peak(
 
 #[cfg(any(
     feature = "candle-paddleocr-vl",
+    feature = "candle-trocr",
     all(
         not(target_arch = "wasm32"),
         any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
@@ -449,6 +450,7 @@ pub(crate) struct PreparedCandleImageDecode<'a> {
 
 #[cfg(any(
     feature = "candle-paddleocr-vl",
+    feature = "candle-trocr",
     all(
         not(target_arch = "wasm32"),
         any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
@@ -484,7 +486,15 @@ impl<'a> PreparedCandleImageDecode<'a> {
         })
     }
 
-    #[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
+    #[cfg(feature = "candle-trocr")]
+    pub(crate) fn dimensions(&self) -> (u32, u32) {
+        (self.probe.width, self.probe.height)
+    }
+
+    #[cfg(any(
+        feature = "candle-trocr",
+        all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+    ))]
     pub(crate) fn validate_preprocessing_peak(
         &self,
         limits: &SecurityLimits,
