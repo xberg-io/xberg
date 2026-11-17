@@ -569,7 +569,9 @@ async fn read_pptx(
             let input = input.into_owned();
             let cancel = if batch { None } else { cancel.cloned() };
             let span = tracing::Span::current();
+            let dispatch = (!batch).then(|| tracing::dispatcher::get_default(Clone::clone));
             let task = runtime.spawn_blocking(move || {
+                let _dispatch = dispatch.as_ref().map(tracing::dispatcher::set_default);
                 let _guard = span.entered();
                 check_pptx_parse_cancelled(cancel.as_ref())?;
                 let result = input.parse(&options)?;

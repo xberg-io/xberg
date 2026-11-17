@@ -163,3 +163,63 @@ async fn pptx_keeps_archive_limit_and_missing_path_errors() {
         .await;
     assert!(matches!(result, Err(crate::XbergError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound));
 }
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber() {
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    #[derive(Clone)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let mut deck = ZipWriter::new_append(io::Cursor::new(DECK.to_vec())).unwrap();
+    deck.start_file("ppt/commentAuthors.xml", SimpleFileOptions::default())
+        .unwrap();
+    deck.write_all(b"<commentAuthors>").unwrap();
+    let bytes = deck.finish().unwrap().into_inner();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("comment-authors.pptx");
+    std::fs::write(&path, &bytes).unwrap();
+
+    let capture = Capture(Arc::new(Mutex::new(Vec::new())));
+    let writer = capture.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::WARN)
+        .with_writer(move || writer.clone())
+        .finish();
+    let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    tracing::callsite::rebuild_interest_cache();
+    tracing::subscriber::with_default(subscriber, || {
+        for input in [
+            PptxInput::Bytes(Cow::Borrowed(&bytes)),
+            PptxInput::Path(path.to_string_lossy()),
+        ] {
+            let (_, warnings) = runtime
+                .block_on(read_pptx(input, pptx_parse_options(&config()), None))
+                .unwrap();
+            assert!(
+                warnings
+                    .iter()
+                    .any(|warning| warning.message.contains("comment authors were not resolved"))
+            );
+        }
+    });
+    tracing::callsite::rebuild_interest_cache();
+    let capture = capture.0.lock().unwrap();
+    let logged = std::str::from_utf8(&capture).unwrap();
+    assert_eq!(logged.matches("failed to parse ppt/commentAuthors.xml").count(), 2);
+}
