@@ -40,7 +40,7 @@ jobs:
       matrix:
         variant: [core, full, cli]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -75,7 +75,7 @@ jobs:
         uses: xberg-io/actions/free-disk-space-linux@v1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        uses: docker/setup-buildx-action@v4
 
       # The image builder cannot derive this itself: `.dockerignore` excludes `**/.git/`, so
       # build.rs falls back to `""` and every image at one crate version shares a cache key
@@ -90,7 +90,7 @@ jobs:
           echo "value=$id" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile.${{ matrix.variant }}

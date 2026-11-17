@@ -25,8 +25,6 @@ on:
       - "mise.ci.lock"
       - "package.json"
       - ".github/**"
-      - "**/action.yml"
-      - "**/action.yaml"
       - "mise-tasks/**"
       - ".gitmodules"
       - "alef.toml"
@@ -51,7 +49,7 @@ jobs:
     name: Toolchain baseline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - uses: xberg-io/actions/check-toolchain@v1
 
   governance-validation:
@@ -59,7 +57,7 @@ jobs:
     name: AI governance validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - name: Install Python and Node
         uses: xberg-io/actions/setup-mise@v1
         with:
@@ -68,19 +66,6 @@ jobs:
         run: mise run governance:verify
       - name: Test that ai-rulez stays unpinned
         run: mise run governance:test
-
-  action-pins:
-    if: github.ref == 'refs/heads/main'
-    name: GitHub Actions pin policy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Python and uv
-        uses: xberg-io/actions/setup-mise@v1
-        with:
-          install-args: python uv
-      - name: Verify action and reusable workflow pins
-        run: mise run ci:verify:action-pins
 
   benchmark-scripts:
     if: >-
@@ -91,7 +76,7 @@ jobs:
       # uv must use the interpreter mise installed, not download its own. ~keep
       UV_PYTHON_PREFERENCE: only-system
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Python and uv
@@ -103,7 +88,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -136,7 +121,7 @@ jobs:
       # uv must use the interpreter mise installed, not download its own. ~keep
       UV_PYTHON_PREFERENCE: only-system
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - name: Install Python, uv and Node
         uses: xberg-io/actions/setup-mise@v1
         with:
@@ -148,7 +133,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -200,7 +185,7 @@ jobs:
       # fetch of the submodule to run here. If a gitlink is unreachable, checkout
       # would die with a cryptic "not our ref" fatal; this job instead runs the
       # same check standalone so it can report the path, the SHA, and the fix. ~keep
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           submodules: false
       # CI has a reliable network, so unlike the local pre-push hook (which warns
@@ -216,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # submodules: false -- this job reads three manifests and a workflow file, no fixtures. ~keep
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           submodules: false
       # The Windows gem's binding features and the core features it compiles against are two
@@ -234,7 +219,7 @@ jobs:
     steps:
       # submodules: false -- reads the committed header, NativeMethods.cs, NativeLib.java
       # and the RID template; no fixtures. ~keep
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - name: Install mise
@@ -260,7 +245,7 @@ jobs:
       # uv must use the interpreter mise installed, not download its own. ~keep
       UV_PYTHON_PREFERENCE: only-system
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - name: Install Python and uv
         uses: xberg-io/actions/setup-mise@v1
         with:
@@ -270,7 +255,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -324,7 +309,7 @@ jobs:
     name: Alef-generated bindings freshness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       # `alef verify` hashes the same alef.toml [[crates.source_crates]] entries
       # the e2e-freshness job below does, and those point at sibling polyrepo
       # checkouts. Without them it dies on `failed to compute sources hash:
@@ -345,12 +330,12 @@ jobs:
           fi
           echo "crawlberg=v$crawlberg" >>"$GITHUB_OUTPUT"
           echo "html_to_markdown=v$html_to_markdown" >>"$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           repository: xberg-io/crawlberg
           ref: ${{ steps.siblings.outputs.crawlberg }}
           path: .polyrepo-siblings/crawlberg
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           repository: xberg-io/html-to-markdown
           ref: ${{ steps.siblings.outputs.html_to_markdown }}
@@ -421,7 +406,7 @@ jobs:
           echo "$clang_venv/bin" >>"$GITHUB_PATH"
           "$clang_venv/bin/clang-format" --version
       - name: Install poly
-        uses: Goldziher/poly@62b8022b2598b8dbcb15e439db00a25f6dfcc401 # v0.35.0
+        uses: Goldziher/poly@v0
         with:
           version: "0.34.2"
       # `alef verify` (aliased as `mise run alef:verify`) is a purpose-built freshness
@@ -475,7 +460,7 @@ jobs:
       # uv must use the interpreter mise installed, not download its own. ~keep
       UV_PYTHON_PREFERENCE: only-system
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       # alef.toml's [[crates.source_crates]] entries hash Rust sources living in
       # sibling polyrepo checkouts (`../crawlberg`, `../html-to-markdown`), so
       # `alef e2e generate` cannot even compute its input hashes without them --
@@ -502,12 +487,12 @@ jobs:
           fi
           echo "crawlberg=v$crawlberg" >>"$GITHUB_OUTPUT"
           echo "html_to_markdown=v$html_to_markdown" >>"$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           repository: xberg-io/crawlberg
           ref: ${{ steps.siblings.outputs.crawlberg }}
           path: .polyrepo-siblings/crawlberg
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           repository: xberg-io/html-to-markdown
           ref: ${{ steps.siblings.outputs.html_to_markdown }}
@@ -532,7 +517,7 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
       - name: Cache uv downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ steps.mise-python.outputs.version }}-${{ hashFiles('uv.lock') }}
@@ -544,7 +529,7 @@ jobs:
       # this job needs the same SDK the dart e2e leg and the snippet gate below use. ~keep
       # Dart/Flutter stay on their setup action (toolchain-management rule). ~keep
       - name: Setup Dart
-        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        uses: dart-lang/setup-dart@v1
         with:
           sdk: "3.13.7"
       # Dart infers formatting language rules from package_config.json, created by pub get. ~keep
@@ -565,7 +550,7 @@ jobs:
       # formatted files. The bindings job deliberately omits them because `alef verify`
       # recomputes hashes without writing or formatting generated files. ~keep
       - name: Install poly
-        uses: Goldziher/poly@62b8022b2598b8dbcb15e439db00a25f6dfcc401 # v0.35.0
+        uses: Goldziher/poly@v0
         with:
           version: "0.34.2"
       # `mise run e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
@@ -582,7 +567,7 @@ jobs:
     name: Docs snippets gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       # Java is the one preinstalled toolchain that is not usable as shipped: the
       # ubuntu-latest image's default JRE is 17 (`class file versions up to 61.0`), and
       # the java validator runs maven against packages/java, whose checkstyle plugin
@@ -622,7 +607,7 @@ jobs:
       # swift instead -- see the `~keep` comment on `docs:snippets:all` in
       # `mise-tasks/docs.toml` for the full accounting. ~keep
       - name: Setup Dart
-        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        uses: dart-lang/setup-dart@v1
         with:
           # packages/dart's freezed ^4.0.1 resolves to freezed >=4.0.0, which needs
           # SDK >=3.13.0; every dart snippet fails pub version-solving before it

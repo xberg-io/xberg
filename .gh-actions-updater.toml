@@ -15,17 +15,10 @@ enabled = true
 ttl = "6h"
 
 [update]
-mode = "latest"
-pin_style = "preserve"
-exclude = [
-  "erlef/setup-beam",
-  "rubygems/configure-rubygems-credentials",
-  # Helm still uses cosign 2 legacy signatures for Artifact Hub. ~keep
-  "sigstore/cosign-installer",
-  "xberg-io/actions/build-elixir-natives@97c04280c1d4acc16bdc456db188782afbe63803",
-  "xberg-io/actions/setup-mise@97c04280c1d4acc16bdc456db188782afbe63803",
-  "xberg-io/actions/setup-rust@97c04280c1d4acc16bdc456db188782afbe63803",
-]
+mode = "latest-tag"
+pin_style = "major"
+# These actions publish full version tags without major aliases.
+allow_full = ["rubygems/configure-rubygems-credentials", "sigstore/cosign-installer"]
 include_prereleases = false
 preserve_major = false
 missing_ref = "warn"

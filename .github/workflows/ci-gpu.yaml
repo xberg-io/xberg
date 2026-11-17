@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -39,7 +39,7 @@ jobs:
         run: rustup toolchain install
 
       - name: Cache Cargo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -58,7 +58,7 @@ jobs:
           output-name: gpu-acceleration-test
 
       - name: Upload test binary
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7
         with:
           name: gpu-test-binary
           path: gpu-acceleration-test
@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -94,7 +94,7 @@ jobs:
           nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
       - name: Download test binary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8
         with:
           name: gpu-test-binary
 
@@ -137,7 +137,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -197,7 +197,7 @@ jobs:
           output-name: candle-test-${{ matrix.model.name }}
 
       - name: Upload test binary
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7
         with:
           name: candle-test-${{ matrix.model.name }}
           path: candle-test-${{ matrix.model.name }}
@@ -240,7 +240,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -297,7 +297,7 @@ jobs:
       - name: Restore cached model weights
         if: matrix.model.hf_repo != ''
         id: model-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
           key: hf-weights-${{ matrix.model.name }}-v1
@@ -322,7 +322,7 @@ jobs:
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
       - name: Download candle test binary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8
         with:
           name: candle-test-${{ matrix.model.name }}
 
@@ -350,7 +350,7 @@ jobs:
         if: >-
           always() && steps.model-cache.outputs.cache-hit != 'true' &&
           steps.download-hf.outcome == 'success'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
           key: hf-weights-${{ matrix.model.name }}-v1

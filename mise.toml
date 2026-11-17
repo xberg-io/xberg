@@ -123,13 +123,6 @@ run = "uv run --locked --extra dev pytest -q"
 
 # ---- Verification gates ------------------------------------------------------------------------
 
-[tasks."ci:verify:action-pins"]
-description = "Test and enforce the GitHub Actions pin policy"
-run = [
-  "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_check_action_pins.py",
-  "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/check-action-pins.py",
-]
-
 [tasks."ci:verify:main-only"]
 description = "Reject CI jobs and PR triggers that allow non-main execution"
 run = "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_main_only_ci.py"

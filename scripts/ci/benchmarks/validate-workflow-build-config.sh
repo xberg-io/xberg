@@ -216,7 +216,7 @@ require_step "$validate_harness_job" '^[[:space:]]+runs-on: ubuntu-latest$' \
   "standalone harness validation must use a fresh x86 Linux runner"
 require_step "$validate_harness_job" '^[[:space:]]+timeout-minutes: 360$' \
   "standalone harness validation must retain the long build timeout"
-require_step "$validate_harness_job" '^[[:space:]]+- uses: actions/checkout@[^[:space:]#]+([[:space:]]+#.*)?$' \
+require_step "$validate_harness_job" '^[[:space:]]+- uses: actions/checkout@v7$' \
   "standalone harness validation must check out the benchmark source"
 require_step "$validate_harness_job" '^[[:space:]]+ref: \$\{\{ github\.sha \}\}$' \
   "standalone harness validation must check out the immutable workflow revision"

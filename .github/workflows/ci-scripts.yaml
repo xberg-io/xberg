@@ -43,7 +43,7 @@ jobs:
     # The locked Linux Torch distribution includes CUDA dependencies; these CPU tests use the macOS wheel. ~keep
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
 
       - name: Setup pinned Python tooling
         uses: xberg-io/actions/setup-mise@v1
@@ -69,7 +69,7 @@ jobs:
         # Linux arm sets LD_LIBRARY_PATH. A Linux-only job would never execute half the code.
         os: [ubuntu-latest, macos-26]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
 
       - name: Install Bats
         uses: xberg-io/actions/install-bats@v1
@@ -94,7 +94,7 @@ jobs:
     # about the behaviour this job exists to cover. ~keep
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
 
       - name: Setup pinned Python for Windows closure contracts
         uses: xberg-io/actions/setup-mise@v1
@@ -123,7 +123,7 @@ jobs:
     name: Shell formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
 
       - name: Install mise
         uses: xberg-io/actions/setup-mise@v1

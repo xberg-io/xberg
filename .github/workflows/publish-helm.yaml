@@ -57,7 +57,7 @@ jobs:
       # The release publisher advances the tag to its checksum commit while Docker is still
       # running, so a caller-provided tag must override the stale workflow-call SHA. ~keep
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || inputs.tag || github.event.client_payload.tag || github.ref }}
 
@@ -145,14 +145,14 @@ jobs:
         if: steps.meta.outputs.dry_run != 'true'
         # cosign-installer has no v4 major tag. v4 defaults to cosign 3, whose bundle-format signatures the Artifact Hub
         # "Signed" label has not been verified against, so stay on cosign 2 (legacy .sig format). ~keep
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@v4.1.2
         with:
           cosign-release: v2.6.5
 
       # oras stays on its setup action: the toolchains baseline carries no oras tool. ~keep
       - name: Install oras
         if: steps.meta.outputs.dry_run != 'true'
-        uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63 # v2.0.3
+        uses: oras-project/setup-oras@v2
 
       - name: Registry login
         if: steps.meta.outputs.dry_run != 'true'
