@@ -79,6 +79,22 @@ fn keyword_boundary(input: &[u8]) -> bool {
         .is_some_and(|byte| matches!(byte, 0 | 9 | 10 | 12 | 13 | 32 | b'<' | b'[' | b'%'))
 }
 
+/// A read-only view holds a cache hit without deep-copying it. A miss keeps
+/// the existing owned parse result and does not allocate a second shared object.
+pub(super) enum LoadedObject {
+    Cached(Arc<Object>),
+    Owned(Object),
+}
+
+impl AsRef<Object> for LoadedObject {
+    fn as_ref(&self) -> &Object {
+        match self {
+            Self::Cached(object) => object.as_ref(),
+            Self::Owned(object) => object,
+        }
+    }
+}
+
 impl PdfDocument {
     /// Resolve an object whose copy or ordinary uncompressed read fits a proof work budget.
     /// Returns `None` for opaque recovery paths or work without a certified bound.
@@ -634,6 +650,13 @@ impl PdfDocument {
     /// # Ok::<(), xberg_native_pdf::error::Error>(())
     /// ```
     pub fn load_object(&self, obj_ref: ObjectRef) -> Result<Object> {
+        self.load_object_for_read(obj_ref).map(|loaded| match loaded {
+            LoadedObject::Cached(object) => Object::clone(&object),
+            LoadedObject::Owned(object) => object,
+        })
+    }
+
+    pub(super) fn load_object_for_read(&self, obj_ref: ObjectRef) -> Result<LoadedObject> {
         tracing::trace!(target: LOG_TARGET,
             object_id = obj_ref.id,
             generation = obj_ref.generation,
@@ -669,7 +692,7 @@ impl PdfDocument {
         // Check cache first (warm path: fully parallel, no serialization). ~keep
         let cached_opt = self.object_cache.lock_or_recover().get_shared(&obj_ref);
         if let Some(cached) = cached_opt {
-            return Ok(Object::clone(&cached));
+            return Ok(LoadedObject::Cached(cached));
         }
 
         let entry = match self.xref.get(obj_ref.id) {
@@ -711,7 +734,7 @@ impl PdfDocument {
                             s.borrow_mut().remove(&obj_ref);
                         });
 
-                        return result;
+                        return result.map(LoadedObject::Owned);
                     }
                     Err(_) => {
                         // PDF Spec §7.3.10: missing object reference "shall be treated as null"
@@ -758,7 +781,7 @@ impl PdfDocument {
                             });
                         }
                         self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-                        return Ok(Object::Null);
+                        return Ok(LoadedObject::Owned(Object::Null));
                     }
                 }
             }
@@ -807,7 +830,7 @@ impl PdfDocument {
                 RESOLVING_STACK.with(|s| {
                     s.borrow_mut().remove(&obj_ref);
                 });
-                return result;
+                return result.map(LoadedObject::Owned);
             }
 
             // Recovery path 2 — the object may be compressed inside a
@@ -820,7 +843,7 @@ impl PdfDocument {
                 && !matches!(*obj, Object::Null)
             {
                 tracing::warn!(target: LOG_TARGET, "Object {} recovered from object-stream sweep", obj_ref.id);
-                return Ok(Object::clone(&obj));
+                return Ok(LoadedObject::Cached(obj));
             }
 
             // PDF Spec §7.3.10: free object treated as null ~keep
@@ -830,7 +853,7 @@ impl PdfDocument {
                 obj_ref.generation
             );
             self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-            return Ok(Object::Null);
+            return Ok(LoadedObject::Owned(Object::Null));
         }
 
         RESOLVING_STACK.with(|s| {
@@ -871,7 +894,7 @@ impl PdfDocument {
             s.borrow_mut().remove(&obj_ref);
         });
 
-        result
+        result.map(LoadedObject::Owned)
     }
 
     /// Resolve references within an object recursively.

@@ -124,6 +124,55 @@ fn test_load_object_from_cache() {
 }
 
 #[test]
+fn warm_object_reads_share_the_cache_and_owned_loads_stay_independent() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.object_cache.lock_or_recover().clear();
+    let cold = document.load_object_for_read(reference).unwrap();
+    assert!(matches!(cold, super::super::objects::LoadedObject::Owned(_)));
+
+    let first = document.load_object_for_read(reference).unwrap();
+    let second = document.load_object_for_read(reference).unwrap();
+    assert!(std::ptr::eq(first.as_ref(), second.as_ref()));
+
+    let mut owned = document.load_object(reference).unwrap();
+    assert!(!std::ptr::eq(first.as_ref(), &owned));
+    let Object::Dictionary(ref mut entries) = owned else {
+        panic!("the catalogue must be a dictionary");
+    };
+    entries.remove("Type");
+    assert_eq!(owned.as_dict().unwrap().get("Type"), None);
+    assert_eq!(first.as_ref().as_dict().unwrap()["Type"].as_name(), Some("Catalog"));
+    assert_eq!(document.load_object(reference).unwrap(), *first.as_ref());
+}
+
+#[test]
+fn warm_object_reads_keep_depth_and_cycle_guards() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.load_object(reference).unwrap();
+
+    let depth_error = RECURSION_DEPTH.with(|depth| {
+        let saved = depth.replace(MAX_RECURSION_DEPTH);
+        let result = document.load_object_for_read(reference);
+        depth.replace(saved);
+        result
+    });
+    assert!(matches!(
+        depth_error,
+        Err(Error::RecursionLimitExceeded(MAX_RECURSION_DEPTH))
+    ));
+
+    RESOLVING_STACK.with(|stack| {
+        assert!(stack.borrow_mut().insert(reference));
+        let result = document.load_object_for_read(reference);
+        stack.borrow_mut().remove(&reference);
+        assert!(matches!(result, Err(Error::CircularReference(object)) if object == reference));
+    });
+    assert!(document.load_object_for_read(reference).is_ok());
+}
+
+#[test]
 fn shifted_xref_subsection_recovers_requested_objects_by_header() {
     let valid = build_shifted_xref_pdf(0);
     let malformed = build_shifted_xref_pdf(1);
