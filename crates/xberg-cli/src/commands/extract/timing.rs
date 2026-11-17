@@ -55,34 +55,66 @@ mod tests {
     use crate::commands::env_test;
 
     const CHILD: &str = "commands::extract::timing::tests::stage_timing_env_child";
+    const LLM_API_KEY_VAR: &str = "XBERG_LLM_API_KEY";
+
+    fn run_timing_case(case: &str, value: Option<&str>) {
+        env_test::run_child_test(CHILD, env_test::CASE, case, |command| {
+            command.env_remove(LLM_API_KEY_VAR).env_remove(STAGE_TIMING_ENV_VAR);
+            if let Some(value) = value {
+                command.env(STAGE_TIMING_ENV_VAR, value);
+            }
+        });
+    }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_unset() {
-        env_test::run_case(CHILD, "unset", STAGE_TIMING_ENV_VAR, None, true);
+        run_timing_case("unset", None);
     }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_empty() {
-        env_test::run_case(CHILD, "empty", STAGE_TIMING_ENV_VAR, Some(""), true);
+        run_timing_case("empty", Some(""));
     }
 
     #[test]
     fn stage_timing_requested_is_true_when_env_var_set() {
-        env_test::run_case(CHILD, "enabled", STAGE_TIMING_ENV_VAR, Some("1"), true);
+        run_timing_case("enabled", Some("1"));
     }
 
     #[test]
+    #[should_panic(expected = "stage timing expectation failed")]
     fn stage_timing_child_reports_a_wrong_expectation() {
-        env_test::run_case(CHILD, "wrong-expectation", STAGE_TIMING_ENV_VAR, Some("1"), false);
+        run_timing_case("wrong-expectation", Some("1"));
+    }
+
+    #[test]
+    #[should_panic(expected = "returned early because it did not read XBERG_CLI_ENV_TEST_CASE")]
+    fn stage_timing_child_without_case_fails_the_parent() {
+        env_test::run_child_test(CHILD, env_test::CASE, "unset", |command| {
+            command.env_remove(LLM_API_KEY_VAR).env_remove(env_test::CASE);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "did not run exactly one passing test")]
+    fn stage_timing_child_with_wrong_test_name_fails_the_parent() {
+        env_test::run_child_test(
+            "commands::extract::timing::tests::no_such_child",
+            env_test::CASE,
+            "unset",
+            |command| {
+                command.env_remove(LLM_API_KEY_VAR);
+            },
+        );
     }
 
     #[test]
     #[ignore = "run with an isolated environment by its parent test"]
     fn stage_timing_env_child() {
-        let Ok(case) = std::env::var(env_test::CASE) else {
+        let Some(case) = env_test::child_test_root(env_test::CASE) else {
             return;
         };
-        let (expected_input, expected_timing) = match case.as_str() {
+        let (expected_input, expected_timing) = match case.to_str().expect("non-UTF-8 case selector") {
             "unset" => (None, false),
             "empty" => (Some(""), false),
             "enabled" => (Some("1"), true),
@@ -91,10 +123,11 @@ mod tests {
         };
         let input = std::env::var_os(STAGE_TIMING_ENV_VAR);
         assert_eq!(input.as_deref(), expected_input.map(std::ffi::OsStr::new));
-        assert!(std::env::var_os(env_test::LLM_API_KEY_VAR).is_none());
-        let actual = stage_timing_requested();
-        eprintln!("{}", env_test::OBSERVED);
-        assert!(actual == expected_timing, "{}", env_test::MISMATCH);
+        assert_eq!(
+            stage_timing_requested(),
+            expected_timing,
+            "stage timing expectation failed"
+        );
     }
 
     #[test]
