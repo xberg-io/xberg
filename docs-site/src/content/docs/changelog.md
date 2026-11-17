@@ -105,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
-- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source, use Rust `XbergError::Ocr` and change the raw FFI code from 1008 (Plugin) to 1002 (OCR). REST and batch retain their previous plugin classification. (#3175)
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
 
 - **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
 

@@ -1122,7 +1122,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
         Ok(run) if !run.output.1.is_empty() => Ok(Some(run)),
         Ok(_) => Ok(None),
         Err(failure) => {
-            tracing::debug!(error = %failure.error, "Hidden PDF text layer probe preserved native text");
+            tracing::debug!(error = %failure.error.pdf_ocr_trace_category(), "Hidden PDF text layer probe preserved native text");
             Ok(None)
         }
     }
