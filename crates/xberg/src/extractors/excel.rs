@@ -1081,7 +1081,7 @@ mod tests {
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
     fn single_excel_reads_queue_and_return_typed_cancellation() {
-        use std::future::{Future, poll_fn};
+        use std::future::poll_fn;
         use std::sync::mpsc;
         use std::task::Poll;
 
