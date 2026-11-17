@@ -1,8 +1,8 @@
 //! Safe Leptonica Pix wrapper for image preprocessing before OCR.
 //!
 //! Provides a safe Rust wrapper around the Leptonica image-processing library.
-//! `Pix` is the core Leptonica image type. All methods return `Result<Pix>`,
-//! and the wrapper takes care of proper memory management via `Drop`.
+//! `Pix` is the core Leptonica image type. The wrapper releases its native
+//! reference through `Drop`.
 //!
 //! ## Pixel format
 //!
@@ -14,12 +14,10 @@
 //! big- and little-endian hosts.  Do **not** call `pixEndianByteSwap` after
 //! writing pixels this way — doing so inverts the channel order.
 //!
-//! ## `pixDeskew` requires a binary (1 bpp) image
+//! ## Deskew and skew estimation
 //!
-//! Call `to_grayscale()` followed by `adaptive_threshold()` before `deskew()`.
-//! `pixDeskew` internally calls `pixFindSkewSweepAndSearchScorePivot` which
-//! operates on 1-bit images only; passing a colour image will return a null
-//! pointer.
+//! Leptonica binarizes as needed during `pixDeskew`. Skew estimation through
+//! `pixFindSkew` requires a 1 bpp image.
 
 use crate::error::{Result, TesseractError};
 use std::ffi::c_void;
@@ -29,10 +27,9 @@ ffi_extern! {
     /// Allocates a new Pix with the given dimensions and bit depth.
     fn pixCreate(width: i32, height: i32, depth: i32) -> *mut c_void;
 
-    /// Frees a Pix and sets the caller's pointer to null.
+    /// Releases one reference to a Pix and clears the caller's pointer slot.
     ///
-    /// Leptonica uses a double-pointer convention: `*ppix` is set to null
-    /// after the call so that accidental double-frees are a no-op.
+    /// Leptonica frees the allocation when the final reference is released.
     fn pixDestroy(ppix: *mut *mut c_void);
 
     /// Sets the horizontal and vertical resolution (DPI) on a Pix.
@@ -57,17 +54,16 @@ ffi_extern! {
     /// The data is stored as rows of 32-bit words; each word covers 32/depth pixels.
     fn pixGetData(pix: *mut c_void) -> *mut u32;
 
-    /// Deskews a 1 bpp image using a sweep-and-search algorithm.
+    /// Deskews an image using a sweep-and-search algorithm.
     ///
-    /// `redsearch` is the reduction factor used during the search; pass 0 for
-    /// the Leptonica default (2x reduction). Returns a new deskewed Pix on
-    /// success, or null on failure. The input Pix is **not** consumed.
+    /// Pass 0 for the default search reduction. A non-null result owns a
+    /// reference, which may point to the input when no rotation is performed.
     fn pixDeskew(pixs: *mut c_void, redsearch: i32) -> *mut c_void;
 
     /// Estimates the skew angle and confidence for a 1 bpp image.
     ///
     /// Writes the angle (degrees, positive = counter-clockwise) into `*pangle`
-    /// and a confidence score (0–1) into `*pconf`. Returns 0 on success.
+    /// and a confidence ratio into `*pconf`. Returns 0 on success.
     fn pixFindSkew(pixs: *mut c_void, pangle: *mut f32, pconf: *mut f32) -> i32;
 
     /// Applies Otsu adaptive thresholding to produce a binarised Pix.
@@ -126,7 +122,8 @@ ffi_extern! {
     /// Applies unsharp masking to sharpen a grayscale or colour Pix.
     ///
     /// `halfwidth` is the half-size of the blur kernel; `fract` controls the
-    /// sharpening strength (0.0–1.0 typical). Returns a new Pix, or null on failure.
+    /// sharpening strength (0.0–1.0 typical). A non-null result owns a
+    /// reference, which Leptonica may take to the input for a no-op.
     fn pixUnsharpMasking(pixs: *mut c_void, halfwidth: i32, fract: f32) -> *mut c_void;
 
     /// Scales a Pix by independent x and y factors using the best available method.
@@ -137,7 +134,7 @@ ffi_extern! {
     /// Converts an RGB (32 bpp) Pix to 8 bpp grayscale.
     ///
     /// `rwt`, `gwt`, `bwt` are the red, green, and blue channel weights; pass
-    /// 0.0 for all three to use Leptonica's default equal weights. Returns a new
+    /// 0.0 for all three to use Leptonica's default weights. Returns a new
     /// 8 bpp Pix, or null on failure.
     fn pixConvertRGBToGray(pixs: *mut c_void, rwt: f32, gwt: f32, bwt: f32) -> *mut c_void;
 
@@ -188,14 +185,14 @@ ffi_extern! {
 
 /// Safe wrapper around a Leptonica `PIX *` image object.
 ///
-/// Owns the underlying allocation and frees it in `Drop`. All methods that
-/// return a new image allocate a fresh `Pix`; the receiver is never consumed.
+/// Owns one reference that `Drop` releases with `pixDestroy`. Some Leptonica
+/// transforms can return a second reference to the same allocation.
 ///
 /// # Thread safety
 ///
-/// `Pix` is `Send` because Leptonica image objects are independent heap
-/// allocations with no shared mutable state. Concurrent mutation from multiple
-/// threads is **not** safe (no `Sync`).
+/// Leptonica uses a non-atomic reference count and can share one allocation
+/// between wrappers. The current wrapper does not enforce thread isolation for
+/// these aliases.
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 pub struct Pix {
     ptr: *mut c_void,
@@ -209,6 +206,8 @@ impl std::fmt::Debug for Pix {
 }
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+// The Send invariant requires independent native allocations across threads.
+// The wrapper does not currently guarantee this for references from pixClone. ~keep
 unsafe impl Send for Pix {}
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
@@ -219,8 +218,9 @@ impl Pix {
     const MINIMUM_OTSU_TILE_DIMENSION: i32 = 16;
     const STANDARD_OTSU_SCORE_FRACTION: f32 = 0.0;
 
-    /// Takes ownership of a Pix that Leptonica or Tesseract allocated for the caller, so that
-    /// `Drop` frees it with `pixDestroy`. `ptr` must not be null and must not be freed elsewhere.
+    /// Adopts one caller-owned reference to a live Leptonica Pix, released by
+    /// `Drop` with `pixDestroy`. The null check does not establish ownership.
+    /// Other owners may release their own references independently.
     pub(crate) fn from_owned_ptr(ptr: *mut c_void) -> Result<Pix> {
         if ptr.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -261,18 +261,25 @@ impl Pix {
             return Err(TesseractError::InvalidImageData);
         }
 
+        // SAFETY: only scalar arguments cross FFI. Leptonica rejects nonpositive signed
+        // dimensions, including u32 values that cast to negative, and allocates a 32 bpp Pix. ~keep
         let pix_ptr = unsafe { pixCreate(width as i32, height as i32, 32) };
         if pix_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
 
+        // SAFETY: the checked pixCreate result is live. This pointer borrows its pixel
+        // allocation and stays local to initialization. ~keep
         let data_ptr = unsafe { pixGetData(pix_ptr) };
         if data_ptr.is_null() {
             let mut ptr = pix_ptr;
+            // SAFETY: this local slot holds the sole new Pix reference and is writable. ~keep
             unsafe { pixDestroy(&mut ptr) };
             return Err(TesseractError::NullPointerError);
         }
 
+        // SAFETY: this live Pix was created at 32 bpp, with one u32 word per pixel.
+        // pixGetWpl supplies the stride in words for its Leptonica allocation. ~keep
         let wpl = unsafe { pixGetWpl(pix_ptr) } as usize;
 
         for row in 0..(height as usize) {
@@ -282,12 +289,16 @@ impl Pix {
                 let g = data[src + 1] as u32;
                 let b = data[src + 2] as u32;
                 let word: u32 = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+                // SAFETY: the fresh Pix owns aligned storage of height * wpl words. Row and
+                // column are bounded by the accepted dimensions, and width <= wpl at 32 bpp.
+                // No aliases have been published, and word is packed in Leptonica RGBA order. ~keep
                 unsafe {
                     *data_ptr.add(row * wpl + col) = word;
                 }
             }
         }
 
+        // SAFETY: pix_ptr holds a live, unpublished Pix, and the setter updates its DPI fields. ~keep
         unsafe { pixSetResolution(pix_ptr, 300, 300) };
 
         Ok(Pix { ptr: pix_ptr })
@@ -316,6 +327,8 @@ impl Pix {
             return Err(TesseractError::InvalidImageData);
         }
 
+        // SAFETY: only scalar arguments cross FFI. Leptonica rejects nonpositive signed
+        // dimensions, including u32 values that cast to negative, and allocates an 8 bpp Pix. ~keep
         let pix_ptr = unsafe { pixCreate(width as i32, height as i32, 8) };
         if pix_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -324,30 +337,30 @@ impl Pix {
         for row in 0..(height as i32) {
             for col in 0..(width as i32) {
                 let value = data[(row as usize) * (width as usize) + col as usize] as u32;
+                // SAFETY: row and column are in bounds for this new 8 bpp Pix; the u8 sample
+                // fits its depth. Leptonica handles packed storage and row stride. ~keep
                 let status = unsafe { pixSetPixel(pix_ptr, col, row, value) };
                 if status != 0 {
                     let mut ptr = pix_ptr;
+                    // SAFETY: the writable slot holds the sole reference to the unfinished Pix. ~keep
                     unsafe { pixDestroy(&mut ptr) };
                     return Err(TesseractError::InvalidImageData);
                 }
             }
         }
 
+        // SAFETY: pix_ptr holds a live, unpublished Pix, and the setter updates its DPI fields. ~keep
         unsafe { pixSetResolution(pix_ptr, 300, 300) };
 
         Ok(Pix { ptr: pix_ptr })
     }
 
-    /// Deskews this image, returning a new corrected Pix.
-    ///
-    /// **Note:** `pixDeskew` requires a 1 bpp (binary) image. Call
-    /// `to_grayscale()` followed by `adaptive_threshold()` before invoking
-    /// this method on a colour or grayscale Pix.
+    /// Deskews this image, binarizing internally for skew estimation as needed.
+    /// The result may share the input allocation when no rotation is applied.
     ///
     /// # Errors
     ///
-    /// Returns `TesseractError::NullPointerError` if Leptonica returns null
-    /// (typically because the input is not 1 bpp or the image is too small).
+    /// Returns `TesseractError::NullPointerError` if Leptonica returns null.
     ///
     /// # Examples
     ///
@@ -360,6 +373,8 @@ impl Pix {
     /// let deskewed = binary.deskew().unwrap();
     /// ```
     pub fn deskew(&self) -> Result<Pix> {
+        // SAFETY: self keeps the input reference alive. A non-null result owns one reference
+        // even when Leptonica returns pixClone(self.ptr). ~keep
         let result = unsafe { pixDeskew(self.ptr, 0) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -368,12 +383,10 @@ impl Pix {
         }
     }
 
-    /// Estimates the skew angle (degrees) and confidence (0–1) for this image.
+    /// Estimates the skew angle in degrees and the confidence ratio.
     ///
-    /// A positive angle indicates counter-clockwise skew. Confidence near 1.0
-    /// means a clear dominant skew direction was found.
-    ///
-    /// **Note:** Like `deskew`, this operates on 1 bpp images.
+    /// A positive angle indicates counter-clockwise skew. This function requires
+    /// a 1 bpp image; Leptonica checks the depth.
     ///
     /// # Errors
     ///
@@ -394,6 +407,8 @@ impl Pix {
     pub fn find_skew(&self) -> Result<(f32, f32)> {
         let mut angle: f32 = 0.0;
         let mut conf: f32 = 0.0;
+        // SAFETY: self keeps the Pix alive and both outputs are distinct writable f32
+        // locals. Leptonica rejects unsupported depth before estimating skew. ~keep
         let status = unsafe { pixFindSkew(self.ptr, &mut angle, &mut conf) };
         if status != 0 {
             Err(TesseractError::OcrError)
@@ -607,6 +622,7 @@ impl Pix {
     pub fn get_resolution(&self) -> Result<(i32, i32)> {
         let mut xres: i32 = 0;
         let mut yres: i32 = 0;
+        // SAFETY: self holds a live reference and both outputs are writable i32 locals. ~keep
         let status = unsafe { pixGetResolution(self.ptr, &mut xres, &mut yres) };
         if status != 0 {
             Err(TesseractError::OcrError)
@@ -621,6 +637,8 @@ impl Pix {
     ///
     /// Returns `TesseractError::OcrError` if `pixSetResolution` fails.
     pub fn set_resolution(&mut self, xres: i32, yres: i32) -> Result<()> {
+        // SAFETY: self holds a live reference and the setter only updates DPI fields.
+        // The mutable borrow excludes other Rust access through this wrapper. ~keep
         let status = unsafe { pixSetResolution(self.ptr, xres, yres) };
         if status != 0 {
             Err(TesseractError::OcrError)
@@ -631,13 +649,15 @@ impl Pix {
 
     /// Ensures the image has a valid (non-zero) DPI resolution.
     ///
-    /// If both x and y resolution are zero, sets them to 72 DPI as a
+    /// If either x or y resolution is zero, sets both to 72 DPI as a
     /// safe fallback. This prevents Leptonica operations that depend on
     /// resolution metadata from producing incorrect results.
     fn ensure_valid_resolution(&self) {
         if let Ok((xres, yres)) = self.get_resolution()
             && (xres == 0 || yres == 0)
         {
+            // SAFETY: self keeps the Pix alive and the setter updates only DPI fields.
+            // The shared receiver does not establish exclusivity across native aliases. ~keep
             unsafe { pixSetResolution(self.ptr, 72, 72) };
         }
     }
@@ -663,6 +683,8 @@ impl Pix {
     /// ```
     pub fn background_normalize(&self) -> Result<Pix> {
         self.ensure_valid_resolution();
+        // SAFETY: self keeps the input alive; null selects no optional image mask.
+        // Leptonica checks 8/32 bpp and returns a caller-owned output on success. ~keep
         let result = unsafe { pixBackgroundNormMorph(self.ptr, std::ptr::null_mut(), 4, 15, 200) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -692,6 +714,8 @@ impl Pix {
     /// ```
     pub fn unsharp_mask(&self, halfwidth: i32, fract: f32) -> Result<Pix> {
         self.ensure_valid_resolution();
+        // SAFETY: self keeps the input reference alive. Leptonica can return a retained
+        // reference to the input for a no-op; the returned wrapper releases that reference. ~keep
         let result = unsafe { pixUnsharpMasking(self.ptr, halfwidth, fract) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -721,6 +745,8 @@ impl Pix {
     /// assert_eq!(upscaled.height(), 80);
     /// ```
     pub fn scale(&self, sx: f32, sy: f32) -> Result<Pix> {
+        // SAFETY: self keeps the source live and a non-null output is caller-owned.
+        // The wrapper does not validate the scale factors or representability of the scaled dimensions. ~keep
         let result = unsafe { pixScale(self.ptr, sx, sy) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -738,12 +764,18 @@ impl Pix {
     ///
     /// Returns `TesseractError::NullPointerError` if the crop fails.
     pub fn clip_rectangle(&self, x: i32, y: i32, w: i32, h: i32) -> Result<Pix> {
+        // SAFETY: boxCreate receives only integer coordinates and returns an owned Box
+        // reference or null. ~keep
         let box_ = unsafe { boxCreate(x, y, w, h) };
         if box_.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: both input references stay alive, and null omits the optional Box output.
+        // The wrapper does not validate that coordinate-plus-extent sums fit in C's signed type. ~keep
         let result = unsafe { pixClipRectangle(self.ptr, box_, std::ptr::null_mut()) };
         let mut box_mut = box_;
+        // SAFETY: box_mut is a writable slot holding the owned Box reference. pixClipRectangle
+        // borrows the input Box and leaves its release to this call. ~keep
         unsafe { boxDestroy(&mut box_mut) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -762,6 +794,8 @@ impl Pix {
     /// (e.g., wrong bit depth — image must be 1 bpp).
     pub fn count_connected_components(&self, connectivity: i32) -> Result<i32> {
         let mut count: i32 = 0;
+        // SAFETY: self owns a live Pix reference and count is a writable i32 local.
+        // Leptonica checks source depth and connectivity and reports failure via status. ~keep
         let status = unsafe { pixCountConnComp(self.ptr, connectivity, &mut count) };
         if status != 0 {
             Err(TesseractError::OcrError)
@@ -791,6 +825,8 @@ impl Pix {
     /// ```
     pub fn to_grayscale(&self) -> Result<Pix> {
         self.ensure_valid_resolution();
+        // SAFETY: self keeps the input alive. Zero weights select Leptonica's defaults;
+        // Leptonica checks the depth and gives the caller a new output on success. ~keep
         let result = unsafe { pixConvertRGBToGray(self.ptr, 0.0, 0.0, 0.0) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -822,6 +858,8 @@ impl Pix {
     /// let back = inverted.invert().unwrap();
     /// ```
     pub fn invert(&self) -> Result<Pix> {
+        // SAFETY: self keeps the source alive. Passing a null destination requests a new
+        // owned output rather than modifying the input in place. ~keep
         let result = unsafe { pixInvert(std::ptr::null_mut(), self.ptr) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
@@ -863,6 +901,8 @@ impl Pix {
             let mut x = 0;
             while x < width {
                 let mut value: u32 = 0;
+                // SAFETY: self keeps the Pix live and value is a writable u32 local.
+                // Leptonica reads the depth-specific packing and checks the coordinates. ~keep
                 let status = unsafe { pixGetPixel(self.ptr, x, y, &mut value) };
                 if status != 0 {
                     return Err(TesseractError::OcrError);
@@ -900,7 +940,8 @@ impl Pix {
     ///
     /// Unlike [`Pix::grayscale_stats`], this reads every pixel (no sampling
     /// stride), because per-region operations such as shaded-row normalization
-    /// need the full-resolution raster, not a sampled estimate.
+    /// need the full-resolution raster, not a sampled estimate. The wrapper
+    /// does not check depth before narrowing each raw value to a byte.
     ///
     /// # Errors
     ///
@@ -917,6 +958,8 @@ impl Pix {
         for y in 0..height {
             for x in 0..width {
                 let mut value: u32 = 0;
+                // SAFETY: self keeps the Pix live and value is a writable u32 local.
+                // Leptonica reads the depth-specific packing and checks the coordinates. ~keep
                 let status = unsafe { pixGetPixel(self.ptr, x, y, &mut value) };
                 if status != 0 {
                     return Err(TesseractError::OcrError);
@@ -933,12 +976,13 @@ impl Pix {
     ///
     /// # Safety
     ///
-    /// The caller must ensure the `Pix` remains alive while the returned
-    /// pointer is used. `TessBaseAPISetImage2` synchronously deep-copies the
-    /// image, so the `Pix` only needs to outlive that call.
+    /// The pointer borrows the Pix reference; the caller must keep the wrapper
+    /// alive for the call and exclude concurrent access if the callee mutates
+    /// the image. `TessBaseAPISetImage2` takes an internal copy synchronously,
+    /// and it can modify the input while handling PNG alpha.
     ///
-    /// The caller must **not** free the returned pointer; `Pix::drop` is
-    /// solely responsible for deallocation via `pixDestroy`.
+    /// This pointer carries no owned reference. `Pix::drop` releases the
+    /// reference owned by this wrapper.
     pub fn as_ptr(&self) -> *mut c_void {
         self.ptr
     }
@@ -953,6 +997,7 @@ impl Pix {
     /// assert_eq!(pix.width(), 8);
     /// ```
     pub fn width(&self) -> i32 {
+        // SAFETY: self keeps the Pix alive while Leptonica reads its metadata. ~keep
         unsafe { pixGetWidth(self.ptr) }
     }
 
@@ -966,6 +1011,7 @@ impl Pix {
     /// assert_eq!(pix.height(), 6);
     /// ```
     pub fn height(&self) -> i32 {
+        // SAFETY: self keeps the Pix alive while Leptonica reads its metadata. ~keep
         unsafe { pixGetHeight(self.ptr) }
     }
 
@@ -979,6 +1025,7 @@ impl Pix {
     /// assert_eq!(pix.depth(), 32);
     /// ```
     pub fn depth(&self) -> i32 {
+        // SAFETY: self keeps the Pix alive while Leptonica reads its metadata. ~keep
         unsafe { pixGetDepth(self.ptr) }
     }
 }
@@ -987,6 +1034,8 @@ impl Pix {
 impl Drop for Pix {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
+            // SAFETY: this writable field holds one owned Pix reference. pixDestroy releases
+            // that reference and clears the field; other retained references are counted by C. ~keep
             unsafe { pixDestroy(&mut self.ptr) };
         }
     }
