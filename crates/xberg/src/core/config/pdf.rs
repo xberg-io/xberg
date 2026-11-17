@@ -213,11 +213,6 @@ impl Default for PdfConfig {
 #[cfg(feature = "pdf")]
 impl PdfConfig {
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    pub(crate) fn has_unset_raw_margins(&self) -> bool {
-        self.top_margin_fraction.is_none() && self.bottom_margin_fraction.is_none()
-    }
-
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) fn has_nonzero_raw_margins(&self) -> bool {
         self.top_margin_fraction.unwrap_or_default() != 0.0 || self.bottom_margin_fraction.unwrap_or_default() != 0.0
     }
@@ -298,15 +293,16 @@ mod tests {
 
     #[test]
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-    fn raw_margin_predicates_distinguish_unset_from_explicit_zero() {
+    fn only_nonzero_raw_margins_require_projection() {
         for (top, bottom, expected) in [
-            (None, None, (true, false)),
-            (Some(0.0), None, (false, false)),
-            (None, Some(0.0), (false, false)),
-            (Some(-0.0), Some(0.0), (false, false)),
-            (Some(0.05), Some(0.0), (false, true)),
-            (Some(0.0), Some(0.10), (false, true)),
-            (Some(f32::NAN), None, (false, true)),
+            (None, None, false),
+            (Some(0.0), None, false),
+            (None, Some(0.0), false),
+            (Some(-0.0), Some(0.0), false),
+            (Some(0.05), Some(0.0), true),
+            (Some(0.0), Some(0.10), true),
+            (None, Some(0.10), true),
+            (Some(f32::EPSILON), None, true),
         ] {
             let pdf = PdfConfig {
                 top_margin_fraction: top,
@@ -314,9 +310,9 @@ mod tests {
                 ..Default::default()
             };
             assert_eq!(
-                (pdf.has_unset_raw_margins(), pdf.has_nonzero_raw_margins()),
+                pdf.has_nonzero_raw_margins(),
                 expected,
-                "raw top and bottom margins: {top:?}, {bottom:?}"
+                "raw margins: {top:?}, {bottom:?}"
             );
         }
     }

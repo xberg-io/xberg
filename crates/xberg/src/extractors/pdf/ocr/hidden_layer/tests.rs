@@ -4,6 +4,9 @@ use super::{
 };
 use xberg_native_pdf::content::parser::visit_complete_content_stream;
 
+#[path = "projection_tests.rs"]
+mod projection_tests;
+
 #[test]
 fn visible_native_line_audit_rejects_hidden_or_unowned_paint() {
     let prove = |stream: &str, text| super::painted_literal_image(stream.as_bytes(), text, |font| font == "F");

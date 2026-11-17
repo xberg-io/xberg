@@ -171,6 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
 - **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
 
+- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
+
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
 - **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
 - **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
