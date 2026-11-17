@@ -12,11 +12,6 @@ on:
       - "crates/xberg-cli/Cargo.toml"
       - ".github/workflows/ci-docker.yaml"
   workflow_dispatch:
-    inputs:
-      cli_only:
-        description: Build and test only the CLI image on amd64 and arm64
-        type: boolean
-        default: false
 
 concurrency:
   group: ci-docker-${{ github.ref }}
@@ -31,27 +26,19 @@ permissions:
 
 jobs:
   docker:
-    name: Docker (${{ matrix.variant }}${{ matrix.architecture == 'arm64' && ', arm64' || '' }})
+    name: Docker (${{ matrix.variant }})
     if: >-
-      ${{ github.repository == 'xberg-io/xberg'
-      && github.actor != 'dependabot[bot]'
-      && github.event.pull_request.draft != true
-      && (github.ref == 'refs/heads/main'
-      || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && inputs.cli_only == true)) }}
-    runs-on: ${{ matrix.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 360
-    env:
-      CACHE_SCOPE: ci-docker-${{ matrix.variant }}${{ matrix.architecture == 'arm64' && '-arm64' || '' }}
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(inputs.cli_only == true && '["cli"]' || '["core","full","cli"]') }}
-        architecture: ${{ fromJSON(inputs.cli_only == true && '["amd64","arm64"]' || '["amd64"]') }}
+        variant: [core, full, cli]
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-          persist-credentials: false
 
       # scripts/ci/docker/test_docker.py mounts test_documents/ as /data:ro inside the
       # container. Without this the submodule is an empty directory, /data is empty, and
@@ -69,8 +56,14 @@ jobs:
             pdf/**
             text/**
 
-      # The fetch action copies fixtures with mode 0600. Make the bind mount
-      # readable by each image's unprivileged container user. ~keep
+      # fetch-test-documents stages every object through `mktemp` (mode 0600) and
+      # copies it into place with plain `cp`, so the corpus lands readable only by
+      # the runner user. The core and full images run as the unprivileged `xberg`
+      # user (`USER xberg`), which then cannot read the /data:ro mount at all --
+      # both failed with `Cache error: Failed to open file for hashing: Permission
+      # denied (os error 13)` while the cli image, which has no USER directive and
+      # so runs as root, passed. The durable fix belongs upstream in
+      # xberg-io/actions/fetch-test-documents; this keeps the mount readable meanwhile.
       - name: Make fetched fixtures readable inside the container
         run: chmod -R a+rX test_documents
 
@@ -97,15 +90,14 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.${{ matrix.variant }}
-          platforms: linux/${{ matrix.architecture }}
           push: false
           load: true
           tags: xberg:${{ matrix.variant }}
           build-args: |
             ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
             XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
-          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
-          cache-to: type=gha,mode=max,scope=${{ env.CACHE_SCOPE }}
+          cache-from: type=gha,scope=ci-docker-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=ci-docker-${{ matrix.variant }}
 
       - name: Check image size
         if: matrix.variant != 'cli'
