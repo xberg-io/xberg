@@ -84,11 +84,7 @@ fn broken_candidate_reports_a_typed_error_before_ort_initialization() {
 fn child_process(test: &str) -> Command {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
-        .args([
-            "--exact",
-            &format!("ort_discovery::dynamic_sceptre_tests::{test}"),
-            "--ignored",
-        ])
+        .args(["--exact", &format!("ort_discovery::dynamic_sceptre_tests::{test}")])
         .env(EXPLICIT_RUNTIME, MISSING_LIBRARY)
         .env(CHILD_TEST, test);
     command
