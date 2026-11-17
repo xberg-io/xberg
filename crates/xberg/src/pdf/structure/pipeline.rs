@@ -33,6 +33,8 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod linked_footnote;
+
 const SPARSE_REPEATED_TIER_MIN_PAGES: usize = 2;
 const SPARSE_FONT_TIER_CLUSTER_COUNT: usize = 2;
 const MIN_BODY_SIZE_BOLD_SIGNALS: usize = 3;
@@ -3811,6 +3813,7 @@ fn build_document_structure(
     build_document_structure_with_native(
         all_page_segments,
         None,
+        None,
         NativeTableInputs::default(),
         config,
         #[cfg(feature = "layout-detection")]
@@ -3819,6 +3822,7 @@ fn build_document_structure(
 }
 
 pub(crate) fn extract_document_structure_from_native_pages(
+    native_document: &xberg_native_pdf::PdfDocument,
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     ruled_table_count: usize,
@@ -3829,6 +3833,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     build_document_structure_with_native(
         segments,
         Some(native_pages),
+        Some(native_document),
         NativeTableInputs {
             sources: table_sources,
             ruled_count: ruled_table_count,
@@ -3843,6 +3848,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
 fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
+    native_document: Option<&xberg_native_pdf::PdfDocument>,
     native_tables: NativeTableInputs<'_>,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
@@ -4519,6 +4525,26 @@ fn build_document_structure_with_native(
         &witnesses.hyphens,
         if inject_placeholders { image_positions } else { &[] },
     );
+
+    if let Some(native_document) = native_document {
+        for (page, paragraphs) in all_page_paragraphs.iter_mut().enumerate() {
+            linked_footnote::suppress(
+                paragraphs,
+                include_footnotes,
+                || linked_footnote::page_separator(native_document, page),
+                linked_footnote::PageRegions {
+                    page_number: (page + 1) as u32,
+                    tables: &emitted_tables,
+                    images: images.unwrap_or_default(),
+                    hints: layout_hints
+                        .and_then(|hints| hints.get(page))
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
+                },
+                &witnesses.hyphens,
+            );
+        }
+    }
 
     #[cfg(feature = "formula-recognition")]
     let inline_math_bounds: Vec<Vec<_>> = all_page_paragraphs

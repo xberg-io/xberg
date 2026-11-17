@@ -10365,3 +10365,154 @@ fn most_frequent_level_prefers_the_higher_count_then_the_lower_level() {
     assert_eq!(most_frequent_level([2, 5, 5]), Some((5, 2)));
     assert_eq!(most_frequent_level([]), None);
 }
+
+fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
+    let mut reference = seg_at("The cited work is described here", 70.0, 330.0, 10.0, false);
+    reference.width = 128.0;
+    let mut marker = seg_at(number, 198.0, if raised { 333.0 } else { 330.0 }, 6.5, false);
+    marker.width = 3.0;
+    para(vec![line(vec![reference, marker])])
+}
+
+fn linked_footnote_text() -> PdfParagraph {
+    let mut marker = seg_at("2", 70.0, 78.0, 6.5, false);
+    marker.width = 3.0;
+    let mut body = seg_at("A link to the cited work", 76.0, 74.0, 8.0, false);
+    body.width = 85.0;
+    para(vec![line(vec![marker, body])])
+}
+
+#[test]
+fn linked_footnote_removes_only_the_witnessed_paragraph() {
+    let mut figure = positioned_footnote_paragraph("Figure label", (230.0, 74.0, 290.0, 82.0), 8.0, false);
+    figure.layout_class = Some(LayoutHintClass::Caption);
+    let mut table = positioned_footnote_paragraph("Table cell", (230.0, 62.0, 290.0, 70.0), 8.0, false);
+    table.layout_class = Some(LayoutHintClass::Table);
+    let mut page = vec![
+        linked_footnote_reference("2", true),
+        positioned_footnote_paragraph("Ordinary low body", (70.0, 95.0, 170.0, 103.0), 8.0, false),
+        linked_footnote_text(),
+        figure,
+        table,
+    ];
+    let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+    linked_footnote::suppress(
+        &mut page,
+        false,
+        || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+        linked_footnote::PageRegions {
+            page_number: 1,
+            tables: &[],
+            images: &[],
+            hints: &[],
+        },
+        &HyphenWitnesses::default(),
+    );
+    assert_eq!(
+        page.iter().map(paragraph_text_raw).collect::<Vec<_>>(),
+        [&before[0], &before[1], &before[3], &before[4]].map(String::as_str),
+    );
+}
+
+#[test]
+fn linked_footnote_preserves_opt_in_and_unproven_references() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let rule = Some(Rect::new(70.0, 90.0, 144.0, 0.5));
+    for (label, references, separator, include, hints) in [
+        (
+            "include",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            true,
+            vec![],
+        ),
+        (
+            "no rule",
+            vec![linked_footnote_reference("2", true)],
+            None,
+            false,
+            vec![],
+        ),
+        (
+            "wrong number",
+            vec![linked_footnote_reference("12", true)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "same baseline",
+            vec![linked_footnote_reference("2", false)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "off axis",
+            vec![linked_footnote_reference("2", true)],
+            Some(Rect::new(74.0, 90.0, 144.0, 0.5)),
+            false,
+            vec![],
+        ),
+        (
+            "ambiguous reference",
+            vec![linked_footnote_reference("2", true); 2],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "figure overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Picture,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+        (
+            "table overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Table,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+    ] {
+        let mut page = references;
+        page.push(linked_footnote_text());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::suppress(
+            &mut page,
+            include,
+            || {
+                assert!(!include, "include_footnotes must avoid querying the separator");
+                separator
+            },
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                images: &[],
+                hints: &hints,
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(
+            page.iter().map(paragraph_text_raw).collect::<Vec<_>>(),
+            before,
+            "{label}"
+        );
+    }
+}
