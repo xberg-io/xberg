@@ -59,6 +59,18 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
     })
 }
 
+/// Check ownership without initializing the shared runtime from a foreign context.
+#[cfg(all(
+    any(feature = "excel", feature = "excel-wasm"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) fn is_global_runtime(handle: &tokio::runtime::Handle) -> bool {
+    GLOBAL_RUNTIME
+        .get()
+        .is_some_and(|runtime| runtime.handle().id() == handle.id())
+}
+
 /// Run `future` as a task on the shared 16 MiB-stack runtime and await its result.
 ///
 /// The caller's own thread may be a host thread of about 1 to 2 MB (an FFI caller) or a default tokio

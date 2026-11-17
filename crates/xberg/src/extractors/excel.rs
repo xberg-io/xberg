@@ -442,10 +442,14 @@ impl InternalDocumentExtractor for ExcelExtractor {
 
         let cancel = config.cancel_token.as_ref();
         check_excel_read_cancelled(cancel)?;
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let batch = crate::core::batch_mode::is_batch_mode();
         let (workbook, read_warnings) = {
+            // A direct caller may occupy its foreign runtime's only blocking worker. ~keep
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-                let batch = crate::core::batch_mode::is_batch_mode();
+            if let Ok(runtime) = tokio::runtime::Handle::try_current()
+                && (batch || crate::core::runtime::is_global_runtime(&runtime))
+            {
                 let content = content.to_vec();
                 // Existing batch reads only check cancellation before submission. ~keep
                 let cancel = if batch { None } else { cancel.cloned() };
@@ -501,6 +505,7 @@ impl InternalDocumentExtractor for ExcelExtractor {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if !crate::core::batch_mode::is_batch_mode()
                 && let Ok(runtime) = tokio::runtime::Handle::try_current()
+                && crate::core::runtime::is_global_runtime(&runtime)
             {
                 let cancel = config.cancel_token.as_ref();
                 check_excel_read_cancelled(cancel)?;
@@ -1081,28 +1086,14 @@ mod tests {
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
     fn single_excel_reads_queue_and_return_typed_cancellation() {
-        use std::future::poll_fn;
-        use std::sync::mpsc;
-        use std::task::Poll;
-
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .max_blocking_threads(1)
-            .build()
-            .unwrap();
         let data = build_test_xlsx(&[]);
         let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
         std::fs::write(path.path(), &data).unwrap();
         let extractor = ExcelExtractor::new();
+        let runtime = crate::core::runtime::global_runtime().unwrap();
 
         for file in [false, true] {
             for (before_poll, while_queued) in [(false, false), (false, true), (true, false)] {
-                let (started_tx, started_rx) = mpsc::sync_channel(1);
-                let (release_tx, release_rx) = mpsc::sync_channel(1);
-                let blocker = runtime.spawn_blocking(move || {
-                    started_tx.send(()).unwrap();
-                    let _ = release_rx.recv();
-                });
-                started_rx.recv().unwrap();
                 let cancel = CancellationToken::new();
                 if before_poll {
                     cancel.cancel();
@@ -1112,33 +1103,154 @@ mod tests {
                     max_archive_depth: 0,
                     ..Default::default()
                 };
+                let read = if file {
+                    extractor.extract_path(path.path(), XLSX_MIME, &config)
+                } else {
+                    extractor.extract_content(&data, XLSX_MIME, &config)
+                };
+                let (queued, worker_entered, result) = poll_with_excel_worker_held(runtime, read, || {
+                    if while_queued {
+                        cancel.cancel();
+                    }
+                });
+                assert_eq!(queued, !before_poll, "file input {file}, pre-cancelled {before_poll}");
+                assert_eq!(
+                    worker_entered, !before_poll,
+                    "file input {file}, pre-cancelled {before_poll}"
+                );
+                if before_poll || while_queued {
+                    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+                } else {
+                    assert_hello_workbook(result.unwrap());
+                }
+            }
+        }
+    }
 
-                let (queued, result) = runtime.block_on(async {
-                    let mut read = if file {
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn poll_with_excel_worker_held(
+        runtime: &tokio::runtime::Runtime,
+        read: impl std::future::Future<Output = Result<InternalDocument>>,
+        after_first_poll: impl FnOnce(),
+    ) -> (bool, bool, Result<InternalDocument>) {
+        use std::future::poll_fn;
+        use std::sync::{Mutex, mpsc};
+        use std::task::Poll;
+        use std::thread::{self, ThreadId};
+        use std::time::Duration;
+        use tracing::Instrument as _;
+        use tracing_subscriber::prelude::*;
+        use tracing_subscriber::{Layer, layer::Context};
+
+        struct Gate {
+            caller: ThreadId,
+            reached: mpsc::Sender<()>,
+            release: Mutex<mpsc::Receiver<()>>,
+        }
+
+        impl<S: tracing::Subscriber> Layer<S> for Gate {
+            fn on_enter(&self, _id: &tracing::span::Id, _context: Context<'_, S>) {
+                if thread::current().id() != self.caller {
+                    self.reached.send(()).unwrap();
+                    self.release
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap();
+                }
+            }
+        }
+
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let (reached_tx, reached_rx) = mpsc::channel();
+        let subscriber = tracing_subscriber::registry().with(Gate {
+            caller: thread::current().id(),
+            reached: reached_tx,
+            release: Mutex::new(release_rx),
+        });
+        let (queued, result) = tracing::subscriber::with_default(subscriber, || {
+            runtime.block_on(async {
+                let mut read = std::pin::pin!(read.instrument(tracing::info_span!("excel_shared_runtime_test")));
+                let first = poll_fn(|context| Poll::Ready(read.as_mut().poll(context))).await;
+                after_first_poll();
+                release_tx.send(()).unwrap();
+                match first {
+                    Poll::Pending => (true, read.await),
+                    Poll::Ready(result) => (false, result),
+                }
+            })
+        });
+        (queued, reached_rx.try_recv().is_ok(), result)
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn assert_hello_workbook(document: InternalDocument) {
+        let pages = document.prebuilt_pages.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].content.contains("Hello"), "{:?}", pages[0].content);
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn direct_excel_reads_from_the_only_foreign_blocking_worker_complete() {
+        use std::time::Duration;
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .enable_time()
+            .build()
+            .unwrap();
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let handle = runtime.handle().clone();
+        let task = runtime.spawn_blocking(move || {
+            handle.block_on(async {
+                let extractor = ExcelExtractor::new();
+                let config = ExtractionConfig {
+                    max_archive_depth: 0,
+                    ..Default::default()
+                };
+                for file in [false, true] {
+                    let read = if file {
                         extractor.extract_path(path.path(), XLSX_MIME, &config)
                     } else {
                         extractor.extract_content(&data, XLSX_MIME, &config)
                     };
-                    let first_poll = poll_fn(|context| Poll::Ready(read.as_mut().poll(context))).await;
-                    if while_queued {
-                        cancel.cancel();
-                    }
-                    release_tx.send(()).unwrap();
-                    blocker.await.unwrap();
-                    match first_poll {
-                        Poll::Pending => (true, read.await),
-                        Poll::Ready(result) => (false, result),
-                    }
-                });
-                assert_eq!(queued, !before_poll, "file input {file}, pre-cancelled {before_poll}");
-                if before_poll || while_queued {
-                    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
-                } else {
-                    let pages = result.unwrap().prebuilt_pages.unwrap();
-                    assert_eq!(pages.len(), 1);
-                    assert!(pages[0].content.contains("Hello"), "{:?}", pages[0].content);
+                    let document = tokio::time::timeout(Duration::from_secs(5), read)
+                        .await
+                        .unwrap_or_else(|_| panic!("direct Excel read waited on its own worker; file input {file}"))
+                        .unwrap();
+                    assert_hello_workbook(document);
                 }
-            }
+            });
+        });
+        runtime.block_on(task).unwrap();
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn excel_batch_keeps_bytes_on_a_worker_and_paths_inline() {
+        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let extractor = ExcelExtractor::new();
+        let config = ExtractionConfig {
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        for file in [false, true] {
+            let read = if file {
+                extractor.extract_path(path.path(), XLSX_MIME, &config)
+            } else {
+                extractor.extract_content(&data, XLSX_MIME, &config)
+            };
+            let batch_read = crate::core::batch_mode::with_batch_mode(read);
+            let (queued, worker_entered, result) = poll_with_excel_worker_held(&runtime, batch_read, || {});
+            assert_eq!(queued, !file, "file input {file}");
+            assert_eq!(worker_entered, !file, "file input {file}");
+            assert_hello_workbook(result.unwrap());
         }
     }
 
@@ -1159,30 +1271,32 @@ mod tests {
     }
 
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    #[tokio::test]
-    async fn single_excel_shape_matches_legacy_batch_for_bytes_and_paths() {
-        let data = build_test_xlsx(&[]);
-        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
-        std::fs::write(path.path(), &data).unwrap();
-        let config = ExtractionConfig {
-            include_document_structure: true,
-            ..Default::default()
-        };
-        let extractor = ExcelExtractor::new();
-        let make_json = |doc| serde_json::to_value(doc).unwrap();
+    #[test]
+    fn single_excel_shape_matches_legacy_batch_for_bytes_and_paths() {
+        crate::core::runtime::global_runtime().unwrap().block_on(async {
+            let data = build_test_xlsx(&[]);
+            let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+            std::fs::write(path.path(), &data).unwrap();
+            let config = ExtractionConfig {
+                include_document_structure: true,
+                ..Default::default()
+            };
+            let extractor = ExcelExtractor::new();
+            let make_json = |doc| serde_json::to_value(doc).unwrap();
 
-        let bytes = || extractor.extract_content(&data, XLSX_MIME, &config);
-        let file = || extractor.extract_path(path.path(), XLSX_MIME, &config);
-        let single_content = make_json(bytes().await.unwrap());
-        let single_path = make_json(file().await.unwrap());
-        assert_eq!(
-            single_content,
-            make_json(crate::core::batch_mode::with_batch_mode(bytes()).await.unwrap())
-        );
-        assert_eq!(
-            single_path,
-            make_json(crate::core::batch_mode::with_batch_mode(file()).await.unwrap())
-        );
+            let bytes = || extractor.extract_content(&data, XLSX_MIME, &config);
+            let file = || extractor.extract_path(path.path(), XLSX_MIME, &config);
+            let single_content = make_json(bytes().await.unwrap());
+            let single_path = make_json(file().await.unwrap());
+            assert_eq!(
+                single_content,
+                make_json(crate::core::batch_mode::with_batch_mode(bytes()).await.unwrap())
+            );
+            assert_eq!(
+                single_path,
+                make_json(crate::core::batch_mode::with_batch_mode(file()).await.unwrap())
+            );
+        });
     }
 
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
