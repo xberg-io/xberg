@@ -3,6 +3,7 @@
 //! Extracts text directly from OLE/CFB compound documents without LibreOffice.
 
 use crate::Result;
+use crate::cancellation::CancellationToken;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::LEGACY_POWERPOINT_MIME_TYPE;
 use crate::extraction::ppt::PptSlideText;
@@ -67,37 +68,66 @@ fn leading_lines_matching(body: &str, title: &str) -> usize {
     0
 }
 
-/// Run the blocking PPT/OLE extraction, offloading to `spawn_blocking` under batch mode
-/// (tokio-runtime feature) so it does not block the async runtime; otherwise runs inline.
+fn check_ppt_read_cancelled(cancel: Option<&CancellationToken>) -> Result<()> {
+    if cancel.is_some_and(CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+/// Run the blocking PPT/OLE parse on native Tokio when available.
 async fn run_ppt_extraction(
     content: &[u8],
     config: &ExtractionConfig,
     include_master_slides: bool,
     extract_images: bool,
 ) -> Result<crate::extraction::ppt::PptExtractionResult> {
-    #[cfg(feature = "tokio-runtime")]
-    if crate::core::batch_mode::is_batch_mode() {
-        if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-            return Err(crate::error::XbergError::Cancelled);
-        }
-        let content_owned = content.to_vec();
+    let cancel = config.cancel_token.as_ref();
+    check_ppt_read_cancelled(cancel)?;
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        let batch = crate::core::batch_mode::is_batch_mode();
+        let content = content.to_vec();
+        // Batch already checked cancellation at submission and keeps its existing join behavior. ~keep
+        let cancel = if batch { None } else { cancel.cloned() };
         let span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || -> crate::error::Result<_> {
+        let task = runtime.spawn_blocking(move || {
             let _guard = span.entered();
-            crate::extraction::ppt::extract_ppt_text_with_options(&content_owned, include_master_slides, extract_images)
-        })
-        .await
-        .map_err(|e| crate::error::XbergError::parsing(format!("PPT extraction task failed: {e}")))?
-    } else {
-        crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+            check_ppt_read_cancelled(cancel.as_ref())?;
+            let result =
+                crate::extraction::ppt::extract_ppt_text_with_options(&content, include_master_slides, extract_images)?;
+            check_ppt_read_cancelled(cancel.as_ref())?;
+            Ok(result)
+        });
+        if batch {
+            return task
+                .await
+                .map_err(|error| crate::XbergError::parsing(format!("PPT extraction task failed: {error}")))?;
+        }
+        return await_single_ppt_read(task).await;
     }
 
-    #[cfg(not(feature = "tokio-runtime"))]
-    {
-        if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-            return Err(crate::error::XbergError::Cancelled);
+    crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn await_single_ppt_read(
+    task: tokio::task::JoinHandle<Result<crate::extraction::ppt::PptExtractionResult>>,
+) -> Result<crate::extraction::ppt::PptExtractionResult> {
+    struct AbortQueuedRead(tokio::task::AbortHandle);
+
+    impl Drop for AbortQueuedRead {
+        fn drop(&mut self) {
+            self.0.abort();
         }
-        crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+    }
+
+    let _abort_queued = AbortQueuedRead(task.abort_handle());
+    match task.await {
+        Ok(result) => result,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(crate::XbergError::Cancelled),
     }
 }
 

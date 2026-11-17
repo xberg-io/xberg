@@ -85,6 +85,18 @@ async fn ppt_single_and_batch_keep_exact_native_table_deck_shape() {
         serde_json::to_value(&single).unwrap(),
         serde_json::to_value(&batch).unwrap()
     );
+    let fixture = std::path::Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/ppt/native_tables.ppt"
+    ));
+    let file = extractor
+        .extract_path(fixture, LEGACY_POWERPOINT_MIME_TYPE, &config)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&single).unwrap(),
+        serde_json::to_value(&file).unwrap()
+    );
     check_native_table_deck(single);
 }
 
