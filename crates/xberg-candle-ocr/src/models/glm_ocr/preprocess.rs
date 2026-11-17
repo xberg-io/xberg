@@ -38,9 +38,11 @@ mod imp {
     use super::PreprocessConfig;
     use crate::CandleOcrError;
     use crate::error::Result;
+    use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
 
     /// Preprocess image bytes into a `(pixel_values, grid_thw)` pair compatible
-    /// with the CogViT encoder.
+    /// with the CogViT encoder. Encoded input, decode and RGB conversion share a
+    /// 100 MiB budget. The resize and tensor allocations are separate.
     ///
     /// Returns:
     /// - `pixel_values`: `(1, 3, H, W)` tensor in the specified dtype, normalized
@@ -51,17 +53,33 @@ mod imp {
         device: &Device,
         dtype: DType,
     ) -> Result<(Tensor, Tensor)> {
-        let img = image::load_from_memory(image_bytes)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {}", e)))?;
+        preprocess_with_budget(image_bytes, config, device, dtype, DEFAULT_IMAGE_DECODE_BUDGET)
+    }
 
-        let img = img.to_rgb8();
+    pub(super) fn preprocess_with_budget(
+        image_bytes: &[u8],
+        config: &PreprocessConfig,
+        device: &Device,
+        dtype: DType,
+        decode_budget: u64,
+    ) -> Result<(Tensor, Tensor)> {
+        let img = decode_image_with_budget(image_bytes, decode_budget, true)?.into_rgb8();
+        preprocess_rgb(&img, config, device, dtype)
+    }
+
+    pub fn preprocess_rgb(
+        img: &image::RgbImage,
+        config: &PreprocessConfig,
+        device: &Device,
+        dtype: DType,
+    ) -> Result<(Tensor, Tensor)> {
         let (width, height) = (img.width() as usize, img.height() as usize);
 
         let factor = config.patch_size * config.t_patch_size;
         let (new_height, new_width) = smart_resize(height, width, factor, config.min_pixels, config.max_pixels)?;
 
         let resized = image::imageops::resize(
-            &img,
+            img,
             new_width as u32,
             new_height as u32,
             image::imageops::FilterType::CatmullRom,
@@ -159,3 +177,61 @@ mod imp {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use imp::preprocess;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) use imp::preprocess_rgb;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use candle_core::{DType, Device};
+
+    #[test]
+    fn standalone_glm_preprocessing_enforces_the_decode_budget() {
+        use crate::CandleOcrError;
+        use crate::models::glm_ocr::tests::small_rgb_png;
+
+        let (png, budget) = small_rgb_png();
+        let config = PreprocessConfig::default();
+
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) =
+            imp::preprocess_with_budget(&png, &config, &Device::Cpu, DType::F32, budget)
+        else {
+            panic!("valid PNG must exceed the test budget with a typed image limit");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+
+        let (pixels, grid) = preprocess(&png, &config, &Device::Cpu, DType::F32).unwrap();
+        assert_eq!(pixels.dims(), &[1, 3, 112, 112]);
+        assert_eq!(grid.to_vec2::<u32>().unwrap(), vec![vec![1, 8, 8]]);
+    }
+
+    #[test]
+    fn standalone_glm_public_preprocess_uses_the_default_decode_budget() {
+        use crate::models::glm_ocr::tests::{assert_uses_default_image_budget, small_rgb_png};
+
+        let (png, _) = small_rgb_png();
+        let config = PreprocessConfig::default();
+        assert_uses_default_image_budget(|| preprocess(&png, &config, &Device::Cpu, DType::F32));
+    }
+
+    #[test]
+    fn encoded_and_decoded_inputs_produce_equal_visual_tensors() {
+        let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(28, 28, |x, y| {
+            image::Rgba([x as u8, y as u8, 100, 128])
+        }));
+        let mut png = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let config = PreprocessConfig::default();
+        let (encoded, encoded_grid) = preprocess(png.get_ref(), &config, &Device::Cpu, DType::F32).unwrap();
+        let (rgb, rgb_grid) = preprocess_rgb(&img.to_rgb8(), &config, &Device::Cpu, DType::F32).unwrap();
+        assert_eq!(
+            encoded.flatten_all().unwrap().to_vec1::<f32>().unwrap(),
+            rgb.flatten_all().unwrap().to_vec1::<f32>().unwrap()
+        );
+        assert_eq!(
+            encoded_grid.to_vec2::<u32>().unwrap(),
+            rgb_grid.to_vec2::<u32>().unwrap()
+        );
+    }
+}

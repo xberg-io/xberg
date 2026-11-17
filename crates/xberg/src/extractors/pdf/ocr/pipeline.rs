@@ -330,8 +330,8 @@ fn repair_numeric_tokens_in_table(table: &mut crate::types::Table) {
 /// Page-failure text for `error`: its display plus the variant names of its `source()` chain.
 ///
 /// Only leading identifiers of each source's `Debug` output are kept, so the typed cause stays
-/// distinguishable while source messages, paths and secrets never reach a warning, a failure
-/// record, the run error or a trace. ~keep
+/// distinguishable in the returned error and failure record.
+/// The outer error message is supplied by the backend. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn describe_page_failure(error: &crate::XbergError) -> String {
     use std::error::Error as _;
@@ -2923,7 +2923,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             extraction_result,
                             &ocr_config_resolved,
                             (&render_doc, page_idx),
-                            raster.3,
+                            (raster.2, raster.3),
                             super::tall_source::Unrecovered::Config(reason),
                         );
                     }
@@ -6798,11 +6798,12 @@ pub(super) async fn extract_with_ocr_for_page(
                             .map(|(pdf, _, _)| (pdf.as_ref(), page_idx))
                             .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
                     {
+                        let (_, _, raster_width, raster_height) = &encoded_batch[page_idx - batch_start];
                         super::tall_source::note_unrecovered(
                             document,
                             base_ocr_config,
                             source,
-                            encoded_batch[page_idx - batch_start].3,
+                            (*raster_width, *raster_height),
                             super::tall_source::Unrecovered::Config(reason),
                         );
                     }
@@ -6835,7 +6836,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
                         batch_page_errors[page_idx - batch_start] = Some((error, described));
@@ -6978,7 +6979,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
                         batch_page_errors[page_idx - batch_start] = Some((error, described));
@@ -9593,6 +9594,18 @@ impl PipelineXObjectRecoveryOutcome {
     }
 }
 
+/// Whether the same config without its pipeline reads each page through the synthesized
+/// Tesseract-to-Paddle pipeline. That route recovers a refused page without classifying its
+/// paragraphs, so its Plain output keeps each recovered block a paragraph, list markers or not;
+/// a single-backend route retries the page itself and lists them. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn default_route_reads_pages_through_a_pipeline(config: &ExtractionConfig) -> bool {
+    cfg!(paddle_ocr)
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            ocr.backend == "tesseract" && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        })
+}
+
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn plain_budget_recovery_list_document(
     recovery: &PipelineXObjectRecoveryOutcome,
@@ -9604,21 +9617,25 @@ fn plain_budget_recovery_list_document(
         return None;
     }
     let table_pages: ahash::AHashSet<_> = recovery.tables.iter().map(|table| table.page_number).collect();
-    let pages: Vec<_> = recovery
+    let flat: Vec<_> = recovery
         .page_texts
         .iter()
-        .enumerate()
-        .map(|(index, text)| {
-            let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
-            if !table_pages.contains(&((index + 1) as u32)) {
-                apply_ocr_text_list_fallback(&mut paragraphs);
-            }
-            paragraphs
-        })
+        .map(|text| crate::pdf::structure::adapters::ocr_text_to_paragraphs(text))
         .collect();
-    if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
+    let mut listed = flat.clone();
+    for (index, paragraphs) in listed.iter_mut().enumerate() {
+        if !table_pages.contains(&((index + 1) as u32)) {
+            apply_ocr_text_list_fallback(paragraphs);
+        }
+    }
+    if !listed.iter().flatten().any(|paragraph| paragraph.is_list_item) {
         return None;
     }
+    let pages = if default_route_reads_pages_through_a_pipeline(config) {
+        flat
+    } else {
+        listed
+    };
     let mut document =
         crate::pdf::structure::assemble_internal_document(pages, &recovery.tables, None, &[], &Default::default());
     // The assembler skips tables without Markdown, but their sidecars still belong to the result. ~keep
@@ -9630,6 +9647,39 @@ fn plain_budget_recovery_list_document(
             .cloned(),
     );
     Some(document)
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+mod plain_budget_recovery_list_document_tests {
+    use super::*;
+
+    const NOTES: &str = "GENERAL NOTES\n\n1. All lot lines are shown for\n\n1\n\nplanning purposes only.";
+
+    fn plain(backend: &str) -> String {
+        let mut recovery = PipelineXObjectRecoveryOutcome::new(1);
+        recovery.page_texts[0] = NOTES.to_owned();
+        let config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                backend: backend.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let document = plain_budget_recovery_list_document(&recovery, &config).expect("the notes hold a list item");
+        crate::extraction::derive::derive_extraction_result(document, false, crate::core::config::OutputFormat::Plain)
+            .content
+    }
+
+    /// The built-in Tesseract's default route reads each page through the synthesized
+    /// Tesseract-to-Paddle pipeline when Paddle is compiled in; that route keeps every recovered
+    /// block its own paragraph, so a numbered note is not joined to the next block.
+    #[test]
+    fn recovered_notes_keep_the_paragraphs_of_the_default_route_of_their_backend() {
+        let listed = "GENERAL NOTES\n\n1. All lot lines are shown for\n1\n\nplanning purposes only.";
+        let tesseract = if cfg!(paddle_ocr) { NOTES } else { listed };
+        assert_eq!(plain("tesseract"), tesseract);
+        assert_eq!(plain("budget-recovery-custom-backend"), listed);
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -11087,7 +11137,7 @@ async fn run_ocr_pipeline_stages(
                 }
                 tracing::warn!(
                     backend = %stage.backend,
-                    error = %failed_stage.error,
+                    error = %failed_stage.error.pdf_ocr_trace_category(),
                     "Pipeline: backend failed, trying next"
                 );
                 stage_failures.push((stage.backend.clone(), failed_stage.error));

@@ -1055,6 +1055,7 @@ pub(crate) fn extract_all_from_native_document(
         let inject_placeholders = images_extraction_enabled && image_anchor != ImageAnchor::None;
 
         match crate::pdf::structure::pipeline::extract_document_structure_from_native_pages(
+            &doc.doc,
             native_pages,
             &native_table_grids
                 .iter()

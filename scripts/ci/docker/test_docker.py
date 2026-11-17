@@ -883,6 +883,56 @@ def test_security_nonroot(t: TestRunner) -> None:
         t.fail_test("Non-root user", f"Container running as: {user} (expected: xberg)")
 
 
+def test_cli_nonroot_paths(t: TestRunner) -> None:
+    checks = """
+        test "${HOME:?}" = /app
+        test "${XBERG_CACHE_DIR:?}" = /app/.xberg
+        test "${HF_HOME:?}" = /app/.xberg/huggingface
+        touch "$HOME/.xberg-ci"
+        touch "$XBERG_CACHE_DIR/.xberg-ci"
+        mkdir -p "$HF_HOME"
+        touch "$HF_HOME/.xberg-ci"
+        test -x /usr/local/bin/xberg
+        test ! -w /usr/local/bin/xberg
+        test ! -w /usr/local/bin
+        test ! -w /usr/local/lib
+        """
+    for identity, user_args in (("the default user", ()), ("12345:0", ("--user", "12345:0"))):
+        t.start(f"CLI home and caches are writable as {identity}")
+        result = t.docker_run(
+            "--name", t.container_name(), *user_args, "--entrypoint", "/bin/sh", t.image, "-exc", checks
+        )
+        if result.returncode == 0:
+            t.pass_test()
+        else:
+            t.fail_test(
+                f"CLI filesystem access as {identity}", f"Exit code {result.returncode}: {result.stderr.strip()}"
+            )
+
+
+def test_cli_extract_as_arbitrary_uid(t: TestRunner) -> None:
+    """Extract a read-only mounted fixture with a UID absent from the image passwd file."""
+    name = "Extract plain text as UID 12345 with group 0"
+    t.start(name)
+    result = t.docker_run(
+        "--name",
+        t.container_name(),
+        "--user",
+        "12345:0",
+        "-v",
+        f"{TEST_DOCS_DIR}:/data:ro",
+        t.image,
+        "extract",
+        "/data/text/contract.txt",
+    )
+    if result.returncode != 0:
+        t.fail_test(name, f"Exit code {result.returncode}: {result.stderr.strip()[:300]}")
+    elif "Test content for contract.txt file" in result.stdout:
+        t.pass_test()
+    else:
+        t.fail_test(name, f"Expected fixture text in stdout, got: {result.stdout[:300]}")
+
+
 def test_security_readonly(t: TestRunner) -> None:
     t.start("Security: Read-only volume enforcement")
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -983,6 +1033,9 @@ def run_cli_tests(t: TestRunner) -> None:
     test_batch_cli(t)
     test_readonly_mount(t)
     test_nonexistent_file(t)
+    test_security_nonroot(t)
+    test_cli_nonroot_paths(t)
+    test_cli_extract_as_arbitrary_uid(t)
 
 
 def run_core_full_tests(t: TestRunner) -> None:

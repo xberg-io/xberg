@@ -3,8 +3,7 @@
 //!
 //! Fixtures required (relative to `test_documents/`):
 //! - `pdf/multi_page.pdf`  — any native-text PDF with ≥ 2 pages
-//! - `pdf/single_page.pdf` — any native-text PDF with exactly 1 page; place the
-//!   reporter's `single-page.pdf` from issue #1105 here to keep the regression locked
+//! - `pdf/searchable.pdf` — a single-page PDF with native text
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 #![cfg(all(feature = "pdf", feature = "chunking"))]
@@ -111,16 +110,11 @@ fn chunks_from_multi_page_pdf_have_monotonic_page_numbers() {
 ///
 /// Regression test for issue #1105 (Problem 2): a one-page PDF with extracted text
 /// returned `chunks: null` instead of a populated chunk list when chunking was
-/// configured. The root cause was a `recomputed_boundaries = Some([])` (empty)
-/// result silently shadowing the `metadata.pages.boundaries` fallback path before
-/// the `.filter(|s| !s.is_empty())` guard was added.
-///
-/// Place the reporter's `single-page.pdf` from issue #1105 at
-/// `test_documents/pdf/single_page.pdf` to keep this regression locked in CI.
+/// configured. An empty recomputed boundary list could shadow the metadata fallback.
 #[test]
 fn chunks_from_single_page_pdf_are_not_null() {
-    if skip_if_missing("pdf/single_page.pdf") {
-        eprintln!("skipping: fixture pdf/single_page.pdf not found — add from issue #1105 to lock in regression");
+    const FIXTURE: &str = "pdf/searchable.pdf";
+    if skip_if_missing(FIXTURE) {
         return;
     }
 
@@ -133,8 +127,8 @@ fn chunks_from_single_page_pdf_are_not_null() {
         ..Default::default()
     };
 
-    let result = extract_uri_document_blocking(get_test_file_path("pdf/single_page.pdf"), None, &config)
-        .expect("single_page.pdf extraction should succeed");
+    let result = extract_uri_document_blocking(get_test_file_path(FIXTURE), None, &config)
+        .expect("single-page fixture extraction should succeed");
 
     let chunks = result
         .chunks

@@ -250,6 +250,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 tempfile = { workspace = true }
 ureq = { version = "3.5", features = ["json"] }
+xberg-child-test = { workspace = true }
 
 [lints]
 workspace = true

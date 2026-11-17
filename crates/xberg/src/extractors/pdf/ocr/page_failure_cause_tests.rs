@@ -1,5 +1,5 @@
-//! #2149: a failed OCR page keeps the typed variant chain of its backend error, and none of the
-//! source text in formatted diagnostics. The in-process chain retains the original errors.
+//! PDF OCR failures retain typed backend sources in process. Operator traces use fixed error
+//! categories and ordinary I/O kinds.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber::layer::{Context, SubscriberExt as _};
 use tracing_subscriber::{Layer, Registry};
 
-use super::pipeline::{describe_page_failure, extract_with_ocr_with_page_hints};
+use super::pipeline::{describe_page_failure, extract_with_ocr_with_page_hints, run_ocr_pipeline};
 use super::tests::tests::build_minimal_two_page_pdf_with_sizes;
-use crate::core::config::{ExtractionConfig, OcrConfig};
+use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 
 const PATH_SENTINEL: &str = "/Users/sentinel-home/PATH_SENTINEL/model.onnx";
@@ -55,6 +55,7 @@ fn nested_error() -> crate::XbergError {
 struct NestedFailureBackend {
     name: &'static str,
     fail_square_only: bool,
+    error: fn() -> crate::XbergError,
     calls: Arc<AtomicUsize>,
 }
 
@@ -75,7 +76,7 @@ impl OcrBackend for NestedFailureBackend {
                 ..Default::default()
             });
         }
-        Err(nested_error())
+        Err((self.error)())
     }
 }
 
@@ -122,6 +123,7 @@ async fn run(
     crate::plugins::register_ocr_backend(Arc::new(NestedFailureBackend {
         name,
         fail_square_only,
+        error: nested_error,
         calls: calls.clone(),
     }))
     .unwrap();
@@ -235,9 +237,8 @@ async fn all_pages_failing_keeps_the_cause_chain_everywhere() {
         typed_operation && typed_io,
         "the in-process chain must retain both typed sources"
     );
-    let traced = events.join("\n");
-    assert!(traced.contains(CHAIN), "{traced}");
-    assert_clean("trace", &traced);
+    assert_backend_failure_events(&events, "OCR backend failed for page", "ocr", 2);
+    assert_clean("trace", &events.join("\n"));
 }
 
 #[tokio::test]
@@ -257,7 +258,64 @@ async fn a_partly_failing_run_keeps_the_cause_chain_in_the_warning_and_record() 
         .unwrap_or_else(|| panic!("no page 2 warning: {:?}", document.processing_warnings));
     assert!(warning.message.contains(CHAIN), "{}", warning.message);
     assert_clean("warning", &warning.message);
-    let traced = events.join("\n");
-    assert!(traced.contains(CHAIN), "{traced}");
-    assert_clean("trace", &traced);
+    assert_backend_failure_events(&events, "OCR backend failed for page", "ocr", 1);
+    assert_clean("trace", &events.join("\n"));
+}
+
+fn assert_backend_failure_events(events: &[String], message: &str, category: &str, count: usize) {
+    let captured: Vec<_> = events.iter().filter(|event| event.contains(message)).collect();
+    assert_eq!(captured.len(), count, "captured events: {events:?}");
+    let field = format!("error={category} ");
+    assert!(captured.iter().all(|event| event.contains(&field)), "{captured:?}");
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[serial_test::serial]
+async fn pdf_ocr_trace_keeps_error_categories_without_backend_text() {
+    let name = "pdf-ocr-trace-sentinel";
+    let calls = Arc::new(AtomicUsize::new(0));
+    crate::plugins::register_ocr_backend(Arc::new(NestedFailureBackend {
+        name,
+        fail_square_only: false,
+        error: || crate::XbergError::ocr_with_source(PATH_SENTINEL, std::io::Error::other(SECRET_SENTINEL)),
+        calls: calls.clone(),
+    }))
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: name.into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let pipeline = OcrPipelineConfig {
+        stages: vec![serde_json::from_value(serde_json::json!({"backend": name, "priority": 100})).unwrap()],
+        quality_thresholds: Default::default(),
+    };
+    let pdf = build_minimal_two_page_pdf_with_sizes((612.0, 792.0), (504.0, 504.0));
+    let capture = EventCapture::default();
+    let guard = tracing::subscriber::set_default(Registry::default().with(capture.clone()));
+    let failed = run_ocr_pipeline(
+        Some(&pdf),
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+        &config,
+        &pipeline,
+        None,
+        None,
+    )
+    .await;
+    drop(guard);
+    crate::plugins::unregister_ocr_backend(name).unwrap();
+    let failed = failed.expect_err("the registered backend refuses both pages");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert!(failed.error.to_string().contains(PATH_SENTINEL));
+    let raw = format!("{:?}", failed.error);
+    assert!(raw.contains(PATH_SENTINEL) && raw.contains(SECRET_SENTINEL), "{raw}");
+    let events = capture.0.lock().unwrap();
+    assert_backend_failure_events(&events, "OCR backend failed for page", "ocr (Other)", 2);
+    assert_backend_failure_events(&events, "Pipeline: backend failed, trying next", "ocr (Other)", 1);
+    assert_clean("trace", &events.join("\n"));
 }

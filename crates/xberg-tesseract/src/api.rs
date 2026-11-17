@@ -651,7 +651,8 @@ impl TesseractAPI {
     ///
     /// # Returns
     ///
-    /// Returns a pointer to the thresholded image.
+    /// Returns a caller-owned reference that may share the engine's native image.
+    /// Use `thresholded_image` for an independent typed allocation.
     pub fn get_thresholded_image(&self) -> Result<*mut c_void> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let pix = unsafe { TessBaseAPIGetThresholdedImage(*handle) };
@@ -666,7 +667,10 @@ impl TesseractAPI {
     /// the same pixels with `set_image_2` after the source image is gone.
     #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
     pub fn thresholded_image(&self) -> Result<crate::Pix> {
-        crate::Pix::from_owned_ptr(self.get_thresholded_image()?)
+        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The locked engine returns null or one owned clone of its binary image.
+        // Keep the lock held while copying and releasing that reference.
+        unsafe { crate::Pix::copy_owned_reference(TessBaseAPIGetThresholdedImage(*handle)) }
     }
 
     /// Gets the box text for the specified page.
@@ -1377,6 +1381,9 @@ impl TesseractAPI {
     /// # Returns
     ///
     /// Returns `Ok(())` after Tesseract has synchronously copied the image.
+    ///
+    /// The caller must also exclude concurrent access while Tesseract can mutate
+    /// the input. This raw-pointer contract is tracked in #3228.
     pub fn set_image_2(&self, pix: *mut c_void) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         unsafe { TessBaseAPISetImage2(*handle, pix) };
