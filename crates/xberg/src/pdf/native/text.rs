@@ -1373,6 +1373,11 @@ const MAX_REDIRECT_DISTANCE_FRACTION: f32 = 0.25;
 // inside a table. Consulted only for a split that `MIN_DENSE_COLUMN_SPLIT_LINES` lines already
 // run through, i.e. one that demonstrably sits inside a column. ~keep
 const MAX_GUTTER_CROSSING_LINES: usize = 1;
+// A gutter narrower than `min_gutter` that no line crosses: the USGS two-column pages
+// set 9.5pt and 10.7pt between the left column's longest line and the right column. A
+// word space at body sizes is 2.5-3.5pt, and a corridor must also stay empty across a
+// column's worth of rows on each side, so 6pt cannot be met by aligned word gaps. ~keep
+const MIN_NARROW_GUTTER_PTS: f32 = 6.0;
 
 /// The largest share of the lines *outside* the band the corridor search is scoped to that may
 /// disagree with the incoming split and still leave it read as the page's own gutter.
@@ -1970,6 +1975,42 @@ fn redirect_split_out_of_content(
     .filter(qualifies)
     .collect();
     widest_within_reach(corridors).unwrap_or(split_x)
+}
+
+/// Move a split that cuts text into the empty gutter beside it when that gutter is narrower
+/// than `min_gutter`.
+///
+/// Each vote in `detect_split_x` is the midpoint between one line's left-column end and the
+/// right column's start, so their median sits half a ragged edge inside the left column, and
+/// every left-column line longer than it becomes a band boundary that interleaves the columns.
+/// `redirect_split_out_of_content` only searches corridors at least `min_gutter` wide, so it
+/// cannot find a gutter this narrow. The corridor must touch the split within `min_gutter`,
+/// be empty on every non-furniture line, and pass the same column tests the other corridor
+/// searches apply. ~keep
+fn snap_split_into_narrow_gutter(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    page_width: f32,
+    split_x: f32,
+) -> f32 {
+    let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
+    if lines_crossing(spans, lines, furniture_width, split_x) == 0 {
+        return split_x;
+    }
+    let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
+    let max_label_width = page_width * MAX_DENSE_COLUMN_SPLIT_SNAP_SPAN_FRACTION;
+    let distance = |(left, right): (f32, f32)| (left - split_x).max(split_x - right).max(0.0);
+    page_whitespace_corridors(spans, lines, furniture_width, MIN_NARROW_GUTTER_PTS)
+        .into_iter()
+        .filter(|&(left, right)| right - left < min_gutter && distance((left, right)) <= min_gutter)
+        .filter(|&corridor| {
+            let mid = (corridor.0 + corridor.1) / 2.0;
+            both_sides_fill_column_rows(spans, lines, furniture_width, mid)
+                && !corridor_is_hanging_label_indent(spans, lines, max_label_width, corridor)
+                && both_sides_are_columns(spans, lines, furniture_width, mid)
+        })
+        .min_by(|&a, &b| distance(a).total_cmp(&distance(b)))
+        .map_or(split_x, |(left, right)| (left + right) / 2.0)
 }
 
 /// True if a split at `x` is one `reorder_band_columns` would actually accept once it
@@ -2809,6 +2850,7 @@ pub(crate) fn reorder_dense_two_column_page(spans: &mut [xberg_native_pdf::layou
     };
     let split_x = snap_split_left_of_hanging_labels(spans, &lines, page_width, detected_split_x);
     let split_x = redirect_split_out_of_content(spans, &lines, page_width, split_x);
+    let split_x = snap_split_into_narrow_gutter(spans, &lines, page_width, split_x);
 
     let bands = build_bands(spans, &lines, NO_WIDTH_FURNITURE, split_x);
     let Some(final_order) = emit_band_order(spans, bands, split_x) else {
@@ -4382,6 +4424,51 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// The per-line votes put the split at 310.5, inside the left column's ragged edge, so the
+    /// two longest left lines (ending at 311 and 312) would cross it and interleave the columns.
+    /// The 8pt gutter at 312..320 is narrower than `min_gutter` (12.24pt), so only the narrow
+    /// gutter snap finds it.
+    #[test]
+    fn dense_split_inside_a_ragged_column_edge_moves_into_the_narrow_gutter() {
+        const LEFT_X: f32 = 60.0;
+        const RIGHT_X: f32 = 320.0;
+        let left_rights = [296.0, 298.0, 300.0, 302.0, 304.0, 306.0, 311.0, 312.0];
+        let left_body = [
+            "The committee reviewed annual budget totals",
+            "and approved new funding for the coming year",
+            "after several rounds of careful review by",
+            "senior staff members from every department",
+            "who evaluated priorities across the whole",
+            "organization before reaching a final decision",
+            "that reflected both short and long term goals",
+            "for sustainable growth across all programs",
+        ];
+        let right_body = [
+            "Numerous studies have examined similar",
+            "programs across comparable institutions",
+            "using consistent methodology and controls",
+            "for measuring outcomes over multiple years",
+            "researchers found consistent positive trends",
+            "supporting continued investment going forward",
+            "additional citations appear in the appendix",
+            "for readers seeking further detail here",
+        ];
+        let mut spans = Vec::new();
+        for (row, ((left_line, right_line), left_right)) in
+            left_body.iter().zip(right_body).zip(left_rights).enumerate()
+        {
+            let y = 816.0 - row as f32 * 14.0;
+            spans.push(span_with_width(left_line, LEFT_X, y, left_right - LEFT_X, 11.0, 11.0));
+            spans.push(span_with_width(right_line, RIGHT_X, y, 190.0, 11.0, 11.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let texts = spans.iter().map(|span| span.text.as_str()).collect::<Vec<_>>();
+        let expected = left_body.iter().chain(&right_body).copied().collect::<Vec<_>>();
+        assert_eq!(texts, expected);
     }
 
     const GH1484_PAGE_WIDTH: f32 = 595.0;
