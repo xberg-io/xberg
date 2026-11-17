@@ -215,6 +215,47 @@ class ContractsTest(unittest.TestCase):
         assert all((report_dir / f"{role}.json").is_file() for role in runner.ROLES)
 
 
+class ModelFallbackTest(unittest.TestCase):
+    """Distinguish the optional OCR retry from unavailable benchmark models."""
+
+    def test_tesseract_osd_retry_is_not_model_fallback(self):
+        """The Full-format warning is from the retained public olmOCR pilot."""
+        with patch.object(sys, "path", [str(Path(__file__).parents[1]), *sys.path]):
+            runner = importlib.import_module("olmocr_bench.runner")
+        warning = (
+            '2026-11-17T00:14:32.190193Z  WARN xberg.ocr{xberg.ocr.backend="tesseract" xberg.ocr.language="eng"}: '
+            'xberg::ocr::processor::model_context: script retry skipped or changed; bypassing result cache script="Han" '
+            "error=OCR processing failed: script retry: OSD: OCR operation failed"
+        )
+        assert not runner._model_fallback({}, warning)
+        assert not runner._model_fallback({}, warning.replace("WARN", "\x1b[33m WARN\x1b[0m"))
+
+        for failure in (
+            warning.replace("ocr::processor::model_context:", "layout::model_context:"),
+            warning.replace("script retry: OSD: OCR operation failed", "Primary Tesseract models changed during OCR"),
+            warning.replace("script retry: OSD: OCR operation failed", "script retry: OSD model initialization failed"),
+            (
+                "WARN xberg::extractors::pdf::layout_runner: layout-for-markdown: detection failed, "
+                "continuing without layout hints"
+            ),
+            "WARN xberg::extractors::pdf: pdf formula recognition failed; keeping OCR text",
+            "WARN xberg::onnx: failed to load libonnxruntime.so",
+        ):
+            with self.subTest(failure=failure):
+                assert runner._model_fallback({}, f"{warning}\n{failure}")
+
+        warnings = {
+            "processing_warnings": [
+                {
+                    "source": "pdf_tables",
+                    "message": "layout detection found table regions but the TATR table model is not available; "
+                    "table structure recognition was skipped; check that the model is downloaded",
+                }
+            ]
+        }
+        assert runner._model_fallback(warnings, warning)
+
+
 class FormulaCacheTest(unittest.TestCase):
     """Only explicitly bound formula files belong in each fresh cache."""
 

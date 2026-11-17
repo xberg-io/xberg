@@ -33,6 +33,12 @@ TRACE_TIMESTAMP = r"(?:\d{4}-\d{2}-\d{2}T\S+[ \t]+)?[ \t]*"
 SPAN_NAME = r"[A-Za-z_][\w.-]*(?:::[A-Za-z_][\w.-]*)*"
 SPAN_FIELDS = r'\{(?:[^{}"\r\n]|"(?:\\.|[^"\\])*")*\}'
 TRACE_SPANS = rf"(?:(?:{SPAN_NAME}(?:{SPAN_FIELDS})?:)+[ \t]+)?"
+TRACE_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+TESSERACT_OSD_RETRY = re.compile(
+    rf"{TRACE_TIMESTAMP}WARN[ \t]+{TRACE_SPANS}xberg::ocr::processor::model_context: "
+    r'script retry skipped or changed; bypassing result cache script="Han" '
+    r"error=OCR processing failed: script retry: OSD: OCR operation failed[ \t]*"
+)
 FORMULA_EVENT = re.compile(
     rf"{TRACE_TIMESTAMP}DEBUG[ \t]+{TRACE_SPANS}{re.escape(FORMULA_TRACE_TARGET)}: "
     r"native PDF formula recognition applied page=(?P<page>[1-9][0-9]*) "
@@ -119,7 +125,10 @@ def prepare(plan_path: Path, output: Path) -> None:
 def _model_fallback(document: dict, stderr: str) -> bool:
     # Native PDF formula recognition can report failure solely through tracing on stderr.
     warnings = document.get("processing_warnings", [])
-    lines = [f"{row['source']} {row['message']}" for row in warnings] + stderr.splitlines()
+    lines = [f"{row['source']} {row['message']}" for row in warnings]
+    # A failed optional Han script probe retains the primary OCR read. Other model-context
+    # warnings can mean that a model changed or failed to start and still need classification.
+    lines.extend(line for line in stderr.splitlines() if not TESSERACT_OSD_RETRY.fullmatch(TRACE_ANSI.sub("", line)))
     for line in lines:
         text = line.lower()
         model = any(word in text for word in ("layout", "formula", "latex", "tatr", "rt-detr", "model", "onnx"))
@@ -144,7 +153,7 @@ def _formula_cache_intact(cache: Path, models: dict[str, Path]) -> bool:
 def _recognized_formula(document: dict, stderr: str) -> bool:
     # Formula rows may come from native glyph text. Require native model evidence
     # from stderr and a nonempty formula on the corresponding output page.
-    plain_stderr = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
+    plain_stderr = TRACE_ANSI.sub("", stderr)
     pages = set()
     for line in plain_stderr.splitlines():
         if event := FORMULA_EVENT.fullmatch(line):
