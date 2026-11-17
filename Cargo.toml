@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/xberg",
+    "crates/xberg/tests/support/child-process",
     "crates/xberg-candle-ocr",
     "crates/xberg-cli",
     "crates/xberg-ffi",
@@ -162,6 +163,8 @@ xberg-gliner = { path = "./crates/xberg-gliner", version = "1.4.1", default-feat
 # hiding a different lib name is what cost twelve days of dropped font warnings in GH#697.
 # Path dependency inside the workspace; needs no [patch.crates-io] entry.
 xberg-native-pdf = { path = "./crates/xberg-native-pdf", version = "1.4.1" }
+# A versionless path dev-dependency is omitted from published Cargo manifests. ~keep
+xberg-child-test = { path = "crates/xberg/tests/support/child-process" }
 
 [patch.crates-io]
 # Out-of-tree overrides are forbidden here: CI and standalone documentation snippets

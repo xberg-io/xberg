@@ -139,6 +139,7 @@ jpeg-encoder = "0.7.1"
 sha2 = "0.11"
 tempfile = "3.27"
 tracing-subscriber = "0.3"
+xberg-child-test = { workspace = true }
 
 [[bench]]
 name = "text_extraction"
