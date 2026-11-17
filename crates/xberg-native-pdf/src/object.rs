@@ -507,7 +507,7 @@ fn parse_predictor_params(dict: &std::collections::HashMap<String, Object>) -> c
 /// CCITT parameters:
 /// - /K: Group indicator (-1=Group 4, 0=Group 3 1-D, >0=Group 3 2-D)
 /// - /Columns: Image width in pixels
-/// - /Rows: Image height in pixels (optional)
+/// - /Rows: Number of encoded rows (0 or absent leaves it unspecified)
 /// - /BlackIs1: Pixel interpretation (false=white is 0, true=white is 1)
 /// - /EndOfLine: Include EOL code (default false)
 /// - /EncodedByteAlign: Byte-aligned encoding (default false)
@@ -566,7 +566,11 @@ fn ccitt_params_from_dict(
         .or(image_width)
         .unwrap_or(1);
 
-    let rows = dict.get("Rows").and_then(|obj| obj.as_integer()).map(|v| v as u32);
+    let rows = dict
+        .get("Rows")
+        .and_then(|obj| obj.as_integer())
+        .filter(|&rows| rows != 0)
+        .map(|v| v as u32);
 
     let black_is_1 = dict.get("BlackIs1").and_then(|obj| obj.as_bool()).unwrap_or(false);
 
