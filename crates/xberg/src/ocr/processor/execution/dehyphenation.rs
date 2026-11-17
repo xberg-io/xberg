@@ -509,3 +509,6 @@ No independent witness here",
         }
     }
 }
+
+#[cfg(test)]
+mod continuation_tests;
