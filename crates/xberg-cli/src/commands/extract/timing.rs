@@ -52,50 +52,44 @@ pub(super) fn build_stage_timings(
 mod tests {
     use super::*;
 
-    /// Lock around `STAGE_TIMING_ENV_VAR` to keep these tests deterministic in the
-    /// multi-threaded test runner, following the same pattern as
-    /// `commands::overrides::tests::with_env_var`.
-    static STAGE_TIMING_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    use crate::commands::env_test;
 
-    #[allow(unsafe_code)]
-    fn with_stage_timing_env<R>(value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        let _guard = STAGE_TIMING_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = std::env::var(STAGE_TIMING_ENV_VAR).ok();
-        unsafe {
-            match value {
-                Some(v) => std::env::set_var(STAGE_TIMING_ENV_VAR, v),
-                None => std::env::remove_var(STAGE_TIMING_ENV_VAR),
-            }
-        }
-        let result = f();
-        unsafe {
-            match previous {
-                Some(v) => std::env::set_var(STAGE_TIMING_ENV_VAR, v),
-                None => std::env::remove_var(STAGE_TIMING_ENV_VAR),
-            }
-        }
-        result
-    }
+    const CHILD: &str = "commands::extract::timing::tests::stage_timing_env_child";
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_unset() {
-        with_stage_timing_env(None, || {
-            assert!(!stage_timing_requested());
-        });
+        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, None, true);
     }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_empty() {
-        with_stage_timing_env(Some(""), || {
-            assert!(!stage_timing_requested());
-        });
+        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, Some(""), true);
     }
 
     #[test]
     fn stage_timing_requested_is_true_when_env_var_set() {
-        with_stage_timing_env(Some("1"), || {
-            assert!(stage_timing_requested());
-        });
+        env_test::run_case(CHILD, "enabled", STAGE_TIMING_ENV_VAR, Some("1"), true);
+    }
+
+    #[test]
+    fn stage_timing_child_reports_a_wrong_expectation() {
+        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, Some("1"), false);
+    }
+
+    #[test]
+    #[ignore = "run with an isolated environment by its parent test"]
+    fn stage_timing_env_child() {
+        let Ok(case) = std::env::var(env_test::CASE) else {
+            return;
+        };
+        let expected = match case.as_str() {
+            "enabled" => true,
+            "disabled" => false,
+            _ => panic!("unknown stage timing test case"),
+        };
+        let actual = stage_timing_requested();
+        eprintln!("{}", env_test::OBSERVED);
+        assert!(actual == expected, "{}", env_test::MISMATCH);
     }
 
     #[test]
