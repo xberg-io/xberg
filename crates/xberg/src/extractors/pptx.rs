@@ -689,6 +689,10 @@ impl InternalDocumentExtractor for PptxExtractor {
 }
 
 #[cfg(test)]
+#[path = "pptx/blocking_tests.rs"]
+mod blocking_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
