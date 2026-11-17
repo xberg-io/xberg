@@ -390,6 +390,52 @@ impl xberg::plugins::Renderer for PageWritingRenderer {
     }
 }
 
+const BUNDLED_ENGLISH_CHILD: &str = "XBERG_TEST_BUNDLED_ENGLISH_CHILD";
+
+/// Whether this process is the child [`run_with_bundled_english_tessdata_only`] started for `test`.
+pub fn is_bundled_english_tessdata_child(test: &str) -> bool {
+    std::env::var(BUNDLED_ENGLISH_CHILD).as_deref() == Ok(test)
+}
+
+/// Run `test`, given by its exact libtest name, in a child of this test binary whose tessdata
+/// search sees only the bundled English model, and fail unless that one test ran and passed.
+///
+/// The languages installed on the host decide whether script retry may run, and a possible retry
+/// bypasses the outer extraction cache, so a cache assertion is only deterministic with the system
+/// tessdata directories switched off. The caller runs its body when
+/// [`is_bundled_english_tessdata_child`] holds and calls this otherwise.
+#[cfg(all(feature = "ocr", feature = "bundle-tessdata-eng", not(target_arch = "wasm32")))]
+pub fn run_with_bundled_english_tessdata_only(test: &str) {
+    use sha2::{Digest, Sha256};
+
+    let root = tempfile::tempdir().expect("isolated OCR data and cache");
+    let tessdata = root.path().join("tessdata");
+    std::fs::create_dir(&tessdata).expect("create isolated tessdata");
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English fixture");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(tessdata.join("eng.traineddata"), english).expect("write bundled English fixture");
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args(["--exact", test, "--nocapture"])
+        .env(BUNDLED_ENGLISH_CHILD, test)
+        .env("TESSDATA_PREFIX", &tessdata)
+        .env("XBERG_CACHE_DIR", root.path().join("cache"))
+        .env("XBERG_TESSDATA_SYSTEM_PATHS", "0")
+        .output()
+        .expect("run isolated OCR test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success()
+            && stdout
+                .lines()
+                .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed; 0 ignored;")),
+        "isolated OCR test {test} failed: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
