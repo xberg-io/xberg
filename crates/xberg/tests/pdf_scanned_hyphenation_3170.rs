@@ -66,6 +66,15 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
     let result = extract_uri_document_blocking(path, Some("application/pdf"), &scan_config(psm))
         .expect("OCR of the public image-only PDF must succeed");
     let pages = result.pages.expect("page extraction requested");
+    if psm.is_none() {
+        let second_page = pages.get(1).expect("the scan's second page");
+        let page_text = second_page.content.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            page_text.contains("locates figures and recovers table structures"),
+            "join the independently witnessed last word of the list item: {page_text}"
+        );
+        assert!(page_text.contains("such as layout and table structures"), "{page_text}");
+    }
     let first_page = pages.first().expect("the scan must have a first page");
     let page_text = first_page.content.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(

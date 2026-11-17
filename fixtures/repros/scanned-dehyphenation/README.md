@@ -15,3 +15,17 @@ uv run --no-project --python 3.13 --with pillow==11.3.0 python \
   fixtures/repros/scanned-dehyphenation/lexical-wrap.pdf \
   crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf
 ```
+
+
+The companion integration test uses the corpus-pinned Docling scan at
+`pdf_scanned/docling_scanned.pdf`. On page 2, the list item ends with
+“struc-” on a full-width line and “tures” alone on its final line. The same
+page independently spells “structures”. The shorter continuation must stay
+inside the same OCR block and follow its left edge at the usual line spacing.
+
+This scanned-text path uses exact ASCII spellings from the selected Tesseract
+hOCR page. The hOCR stage has word boxes for just that page and can confirm
+that an unbroken token exists independently of the two fragments. Native PDF
+text has document-wide segments and uses a broader compound collector. The
+scanned path leaves cross-page spellings, ambiguous word boundaries, and soft
+hyphens unchanged.

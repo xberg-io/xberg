@@ -93,11 +93,10 @@ pub(super) fn join_scanned_wraps(
     page_width: u32,
     sparse: bool,
 ) -> bool {
-    if !elements.iter().any(|element| {
-        element.text.contains("-\n")
-            || element.text.contains("\u{00ad}\n")
-            || (sparse && element.text.ends_with(['-', '\u{00ad}']))
-    }) {
+    if !elements
+        .iter()
+        .any(|element| element.text.contains("-\n") || (sparse && element.text.ends_with('-')))
+    {
         return false;
     }
     let page = elements.first().and_then(|element| element.page);
@@ -179,11 +178,7 @@ fn witnessed_join(
 ) -> Option<Join> {
     let former_element = elements.get(prior.element)?;
     let latter_element = elements.get(next.element)?;
-    if next.words.len() < 2
-        || former_element.page != latter_element.page
-        || !can_edit(former_element)
-        || !can_edit(latter_element)
-    {
+    if former_element.page != latter_element.page || !can_edit(former_element) || !can_edit(latter_element) {
         return None;
     }
     let separate_elements = prior.element != next.element;
@@ -203,7 +198,14 @@ fn witnessed_join(
         return None;
     }
     let edit_start = witnessed_edit_start(former, lexical_core(latter), witnesses)?;
-    same_full_width_body(prior, next, page_width)?;
+    // A final lone fragment can end a paragraph, but may not consume a separate OCR block. ~keep
+    let terminal_word = next.words.len() == 1;
+    if terminal_word
+        && (separate_elements || leading.bytes.end != latter_element.text.len() || edit_start == former.len())
+    {
+        return None;
+    }
+    same_body_flow(prior, next, page_width, terminal_word)?;
     plan_edits(prior, next, elements, edit_start, latter)
 }
 
@@ -219,10 +221,15 @@ fn plan_edits(
     let trailing = prior.words.last()?;
     let leading = next.words.first()?;
     let start = trailing.bytes.start + edit_start;
-    let end = next.words.get(1)?.bytes.start;
-    if latter_element.text.get(leading.bytes.end..end)? != " " {
-        return None;
-    }
+    let end = if let Some(following) = next.words.get(1) {
+        let end = following.bytes.start;
+        if latter_element.text.get(leading.bytes.end..end)? != " " {
+            return None;
+        }
+        end
+    } else {
+        leading.bytes.end
+    };
     if prior.element != next.element {
         return (trailing.bytes.end == former_element.text.len() && leading.bytes.start == 0).then(|| Join {
             trailing: Edit {
@@ -259,16 +266,21 @@ fn can_edit(element: &InternalElement) -> bool {
         && matches!(element.kind, ElementKind::OcrText { .. })
 }
 
-fn same_full_width_body(prior: &Line<'_>, next: &Line<'_>, page_width: u32) -> Option<()> {
+fn same_body_flow(prior: &Line<'_>, next: &Line<'_>, page_width: u32, terminal_word: bool) -> Option<()> {
     let before = LineBounds::from_words(prior.words)?;
     let after = LineBounds::from_words(next.words)?;
+    let right_edge_matches = if terminal_word {
+        after.left >= before.left && after.right <= before.right
+    } else {
+        after.full_width(page_width)
+            && before.right.abs_diff(after.right) <= before.height().max(after.height()).saturating_mul(2)
+    };
     (prior.words.last()?.bounds[2] == before.right
         && next.words.first()?.bounds[0] == after.left
         && before.full_width(page_width)
-        && after.full_width(page_width)
         && after.follows(before)
-        && before.right.abs_diff(after.right) <= before.height().max(after.height()).saturating_mul(2))
-    .then_some(())
+        && right_edge_matches)
+        .then_some(())
 }
 
 fn lexical_core(word: &str) -> &str {
@@ -280,11 +292,11 @@ fn ascii_word_part(word: &str) -> bool {
 }
 
 fn witnessed_edit_start(former: &str, continuation: &str, witnesses: &SpellingWitnesses) -> Option<usize> {
-    let prefix = former.strip_suffix(['-', '\u{00ad}'])?;
+    let prefix = former.strip_suffix('-')?;
     if !ascii_word_part(prefix) || !ascii_word_part(continuation) {
         return None;
     }
-    if former.ends_with('-') && should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
+    if should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
         return Some(former.len());
     }
 
@@ -402,18 +414,67 @@ mod tests {
     }
 
     #[test]
-    fn joins_a_soft_hyphen_when_the_page_proves_the_closed_spelling() {
-        for (witness, expected_change) in [("well-known and wellknown", true), ("well-known", false)] {
-            let text = format!("This is a well\u{00ad}\nknown comparison with it\nThe page also shows {witness}");
-            let (mut elements, words) = scan(&text, &[(160, 840); 3]);
-            assert_eq!(join_scanned_wraps(&mut elements, &words, 1000, false), expected_change);
-            let expected = if expected_change {
-                format!("This is a wellknown\ncomparison with it\nThe page also shows {witness}")
-            } else {
-                text
-            };
-            assert_eq!(elements[0].text, expected);
+    fn a_soft_hyphen_is_outside_the_scanned_wrap_policy() {
+        let text = "A passage ends with recog\u{00ad}\nnition and explanatory text\nEarlier recognition supports it";
+        let (mut elements, words) = scan(text, &[(160, 840); 3]);
+        assert!(!join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(elements[0].text, text);
+    }
+
+    #[test]
+    fn repairs_only_a_witnessed_terminal_word_within_the_same_block() {
+        let line = "The earlier structures support the table struc-";
+        let text = format!("{line}\ntures");
+        let full = (160, 840);
+        let tail = (178, 223);
+        let (mut elements, words) = scan(&text, &[full, tail]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(
+            elements[0].text,
+            "The earlier structures support the table structures\n"
+        );
+
+        for (control, spans) in [
+            (text.as_str(), [full, (187, 232), full]),
+            (text.as_str(), [full, (159, 204), full]),
+            (text.as_str(), [(160, 500), tail, full]),
+            (
+                "The earlier tables explain the method struc-\ntures",
+                [full, tail, full],
+            ),
+            (
+                "The earlier structures support the table struc-\ntures\nAnother line",
+                [full, tail, full],
+            ),
+            (
+                "An opensource project can also say open-source or open-\nsource",
+                [full, tail, full],
+            ),
+        ] {
+            let (mut elements, words) = scan(control, &spans);
+            assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{control}");
+            assert_eq!(elements[0].text, control);
         }
+    }
+
+    #[test]
+    fn sparse_lines_do_not_consume_an_entire_following_block() {
+        let line = "The earlier structures support the table struc-";
+        let text = format!("{line}\ntures");
+        let (mut elements, mut words) = scan(&text, &[(160, 840), (178, 223)]);
+        elements[0].text.truncate(line.len());
+        let last = words.last_mut().unwrap();
+        last.element = 1;
+        last.bytes = 0.."tures".len();
+        elements.push(InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Block,
+            },
+            "tures",
+            0,
+        ));
+        assert!(!join_scanned_wraps(&mut elements, &words, 1000, true));
+        assert_eq!([elements[0].text.as_str(), elements[1].text.as_str()], [line, "tures"]);
     }
 
     #[test]
