@@ -58,12 +58,12 @@ mod tests {
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_unset() {
-        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, None, true);
+        env_test::run_case(CHILD, "unset", STAGE_TIMING_ENV_VAR, None, true);
     }
 
     #[test]
     fn stage_timing_requested_is_false_when_env_var_empty() {
-        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, Some(""), true);
+        env_test::run_case(CHILD, "empty", STAGE_TIMING_ENV_VAR, Some(""), true);
     }
 
     #[test]
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn stage_timing_child_reports_a_wrong_expectation() {
-        env_test::run_case(CHILD, "disabled", STAGE_TIMING_ENV_VAR, Some("1"), false);
+        env_test::run_case(CHILD, "wrong-expectation", STAGE_TIMING_ENV_VAR, Some("1"), false);
     }
 
     #[test]
@@ -82,14 +82,19 @@ mod tests {
         let Ok(case) = std::env::var(env_test::CASE) else {
             return;
         };
-        let expected = match case.as_str() {
-            "enabled" => true,
-            "disabled" => false,
+        let (expected_input, expected_timing) = match case.as_str() {
+            "unset" => (None, false),
+            "empty" => (Some(""), false),
+            "enabled" => (Some("1"), true),
+            "wrong-expectation" => (Some("1"), false),
             _ => panic!("unknown stage timing test case"),
         };
+        let input = std::env::var_os(STAGE_TIMING_ENV_VAR);
+        assert_eq!(input.as_deref(), expected_input.map(std::ffi::OsStr::new));
+        assert!(std::env::var_os(env_test::LLM_API_KEY_VAR).is_none());
         let actual = stage_timing_requested();
         eprintln!("{}", env_test::OBSERVED);
-        assert!(actual == expected, "{}", env_test::MISMATCH);
+        assert!(actual == expected_timing, "{}", env_test::MISMATCH);
     }
 
     #[test]

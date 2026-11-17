@@ -4,32 +4,43 @@ use xberg::ExtractionConfig;
 use crate::commands::env_test;
 
 const CHILD: &str = "commands::overrides::tests::llm_api_key::llm_api_key_env_child";
-const API_KEY_ENV_VAR: &str = "XBERG_LLM_API_KEY";
 const ENV_TEST_VALUE: &str = "env-value";
 
 #[test]
 fn cli_flag_takes_precedence_over_env_var() {
-    env_test::run_case(CHILD, "cli-wins", API_KEY_ENV_VAR, Some(ENV_TEST_VALUE), true);
+    env_test::run_case(CHILD, "cli-wins", env_test::LLM_API_KEY_VAR, Some(ENV_TEST_VALUE), true);
 }
 
 #[test]
 fn env_var_used_when_cli_flag_absent() {
-    env_test::run_case(CHILD, "env-fallback", API_KEY_ENV_VAR, Some(ENV_TEST_VALUE), true);
+    env_test::run_case(
+        CHILD,
+        "env-fallback",
+        env_test::LLM_API_KEY_VAR,
+        Some(ENV_TEST_VALUE),
+        true,
+    );
 }
 
 #[test]
 fn returns_none_when_neither_source_is_set() {
-    env_test::run_case(CHILD, "absent", API_KEY_ENV_VAR, None, true);
+    env_test::run_case(CHILD, "absent", env_test::LLM_API_KEY_VAR, None, true);
 }
 
 #[test]
 fn empty_cli_flag_does_not_count() {
-    env_test::run_case(CHILD, "empty-cli", API_KEY_ENV_VAR, Some(ENV_TEST_VALUE), true);
+    env_test::run_case(
+        CHILD,
+        "empty-cli",
+        env_test::LLM_API_KEY_VAR,
+        Some(ENV_TEST_VALUE),
+        true,
+    );
 }
 
 #[test]
 fn llm_api_key_child_reports_a_wrong_expectation() {
-    env_test::run_case(CHILD, "env-fallback", API_KEY_ENV_VAR, None, false);
+    env_test::run_case(CHILD, "env-fallback", env_test::LLM_API_KEY_VAR, None, false);
 }
 
 #[test]

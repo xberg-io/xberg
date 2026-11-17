@@ -1,6 +1,7 @@
 use std::process::Command;
 
 pub(super) const CASE: &str = "XBERG_CLI_ENV_TEST_CASE";
+pub(super) const LLM_API_KEY_VAR: &str = "XBERG_LLM_API_KEY";
 pub(super) const OBSERVED: &str = "CLI environment assertion ran";
 pub(super) const MISMATCH: &str = "CLI environment assertion failed";
 
@@ -17,6 +18,7 @@ pub(super) fn run_case(test: &str, case: &str, variable: &str, value: Option<&st
             "never",
         ])
         .env(CASE, case)
+        .env_remove(LLM_API_KEY_VAR)
         .env_remove(variable);
     if let Some(value) = value {
         command.env(variable, value);
