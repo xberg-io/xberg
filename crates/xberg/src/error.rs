@@ -402,6 +402,36 @@ impl XbergError {
         }
     }
 
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn pdf_ocr_trace_category(&self) -> String {
+        use std::error::Error as _;
+
+        match self
+            .source()
+            .and_then(|source| source.downcast_ref::<PdfOcrFailureCause>())
+        {
+            Some(cause) => cause.backend.extraction_diagnostic_category(),
+            None => self.extraction_diagnostic_category(),
+        }
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[cfg_attr(alef, alef(skip))]
+    fn extraction_diagnostic_category(&self) -> String {
+        use std::error::Error as _;
+
+        let category = self.extraction_error_type();
+        let io_error = match self {
+            Self::Io(error) => Some(error),
+            _ => self.source().and_then(|source| source.downcast_ref::<std::io::Error>()),
+        };
+        match io_error {
+            Some(error) => format!("{category} ({:?})", error.kind()),
+            None => category.to_owned(),
+        }
+    }
+
     /// Prepare an extraction error for the CLI renderer using the aggregate's safe summary.
     #[doc(hidden)]
     #[cfg_attr(alef, alef(skip))]
@@ -414,20 +444,9 @@ impl XbergError {
                     .as_ref()
                     .and_then(|cause| cause.downcast_ref::<PdfOcrFailureCause>())
             {
-                use std::error::Error as _;
-
-                let category = cause.backend.extraction_error_type();
-                let io_error = match &cause.backend {
-                    Self::Io(error) => Some(error),
-                    backend => backend
-                        .source()
-                        .and_then(|source| source.downcast_ref::<std::io::Error>()),
-                };
                 let headline = &cause.cli_message;
-                *message = match io_error {
-                    Some(error) => format!("{headline}; first failure category: {category} ({:?})", error.kind()),
-                    None => format!("{headline}; first failure category: {category}"),
-                };
+                let category = cause.backend.extraction_diagnostic_category();
+                *message = format!("{headline}; first failure category: {category}");
                 *source = None;
             }
             error

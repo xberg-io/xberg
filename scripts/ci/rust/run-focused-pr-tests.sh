@@ -458,12 +458,13 @@ pdf-ocr)
   run_exact 'extractors::pdf::tests::automatic_ocr_failure_with_no_native_text_returns_an_error' --lib
   run_exact 'extractors::pdf::ocr::failed_page_record_tests::a_pipeline_whose_stages_all_fail_carries_every_page_record' --lib
   run_exact 'extractors::pdf::ocr::page_failure_cause_tests::all_pages_failing_keeps_the_cause_chain_everywhere' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::pdf_ocr_trace_keeps_error_categories_without_backend_text' --lib
   run_exact 'error::tests::cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug' --lib
   run_exact 'extractors::pdf::tests::inline_image_ocr_backend_cancellation_stops_pdf_extraction' --lib
   run_exact a_targeted_retry_backend_cancellation_discards_the_successful_whole_read --test pdf_marked_page_retry_fallback_2833
   run_exact 'commands::extract::ocr_diagnostic_tests::cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats' --cli
   run_exact 'commands::extract::tests::uri_extraction_failure_does_not_assert_a_false_readability_diagnosis' --cli
-  expected=$((expected + 10))
+  expected=$((expected + 11))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases

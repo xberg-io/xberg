@@ -330,8 +330,8 @@ fn repair_numeric_tokens_in_table(table: &mut crate::types::Table) {
 /// Page-failure text for `error`: its display plus the variant names of its `source()` chain.
 ///
 /// Only leading identifiers of each source's `Debug` output are kept, so the typed cause stays
-/// distinguishable while source messages, paths and secrets never reach a warning, a failure
-/// record, the run error or a trace. ~keep
+/// distinguishable in the returned error and failure record.
+/// The outer error message is supplied by the backend. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn describe_page_failure(error: &crate::XbergError) -> String {
     use std::error::Error as _;
@@ -6836,7 +6836,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
                         batch_page_errors[page_idx - batch_start] = Some((error, described));
@@ -6979,7 +6979,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
                         batch_page_errors[page_idx - batch_start] = Some((error, described));
@@ -11088,7 +11088,7 @@ async fn run_ocr_pipeline_stages(
                 }
                 tracing::warn!(
                     backend = %stage.backend,
-                    error = %failed_stage.error,
+                    error = %failed_stage.error.pdf_ocr_trace_category(),
                     "Pipeline: backend failed, trying next"
                 );
                 stage_failures.push((stage.backend.clone(), failed_stage.error));

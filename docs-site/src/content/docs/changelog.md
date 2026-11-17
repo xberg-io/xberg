@@ -102,8 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking (ocr):** All-page PDF OCR failures use `XbergError::Ocr` in Rust and change the raw FFI code from 1008 (Plugin) to 1002 (OCR). Bindings use their OCR error class, including Python's `OcrError`. REST retains `PluginError` and HTTP 500. Batch retains kind `plugin` and code 1008. (#3175)
-  All-page and PDF OCR pipeline failures retain their typed backend sources in Rust. Aggregate entries in `ocr_page_failures[].error` now start with `OCR error:`. The single-document `xberg extract` CLI reports the first failure category and any I/O error kind without backend messages or source details.
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source, use Rust `XbergError::Ocr` and change the raw FFI code from 1008 (Plugin) to 1002 (OCR). REST and batch retain their previous plugin classification. (#3175)
 
 - **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
 
