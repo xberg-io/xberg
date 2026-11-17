@@ -75,7 +75,7 @@ fn check_ppt_read_cancelled(cancel: Option<&CancellationToken>) -> Result<()> {
     Ok(())
 }
 
-/// Run the blocking PPT/OLE parse on native Tokio when available.
+/// Offload single-call PPT/OLE reads only on Xberg's shared runtime.
 async fn run_ppt_extraction(
     content: &[u8],
     config: &ExtractionConfig,
@@ -84,10 +84,18 @@ async fn run_ppt_extraction(
 ) -> Result<crate::extraction::ppt::PptExtractionResult> {
     let cancel = config.cancel_token.as_ref();
     check_ppt_read_cancelled(cancel)?;
+    let parse_inline =
+        || crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images);
 
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
         let batch = crate::core::batch_mode::is_batch_mode();
+        if !batch && !crate::core::runtime::is_global_runtime(&runtime) {
+            // A direct call can already occupy the foreign runtime's only blocking worker. ~keep
+            let result = parse_inline()?;
+            check_ppt_read_cancelled(cancel)?;
+            return Ok(result);
+        }
         let content = content.to_vec();
         // Batch already checked cancellation at submission and keeps its existing join behavior. ~keep
         let cancel = if batch { None } else { cancel.cloned() };
@@ -110,7 +118,7 @@ async fn run_ppt_extraction(
         return await_single_ppt_read(task).await;
     }
 
-    crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+    parse_inline()
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]

@@ -15,64 +15,63 @@ fn check_native_table_deck(doc: InternalDocument) {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
-fn single_ppt_parse_queues_on_native_tokio_and_honors_cancellation() {
-    use crate::cancellation::CancellationToken;
-    use std::future::poll_fn;
-    use std::sync::mpsc;
-    use std::task::Poll;
-
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .max_blocking_threads(1)
-        .build()
-        .unwrap();
-    let extractor = PptExtractor::new();
-
-    for (before_submit, while_queued) in [(false, false), (false, true), (true, false)] {
-        let (started_tx, started_rx) = mpsc::sync_channel(1);
-        let (release_tx, release_rx) = mpsc::sync_channel(1);
-        let blocker = runtime.spawn_blocking(move || {
-            started_tx.send(()).unwrap();
-            let _ = release_rx.recv();
-        });
-        started_rx.recv().unwrap();
-        let cancel = CancellationToken::new();
-        if before_submit {
-            cancel.cancel();
-        }
-        let config = ExtractionConfig {
-            max_archive_depth: 0,
-            cancel_token: Some(cancel.clone()),
-            ..Default::default()
-        };
-        let (queued, result) = runtime.block_on(async {
-            let mut extraction = extractor.extract_content(NATIVE_TABLES, LEGACY_POWERPOINT_MIME_TYPE, &config);
-            let first = poll_fn(|context| Poll::Ready(extraction.as_mut().poll(context))).await;
-            if while_queued {
-                cancel.cancel();
-            }
-            release_tx.send(()).unwrap();
-            blocker.await.unwrap();
-            match first {
-                Poll::Pending => (true, extraction.await),
-                Poll::Ready(result) => (false, result),
-            }
-        });
-
-        assert_eq!(
-            queued, !before_submit,
-            "native PPT read must queue unless already cancelled"
-        );
-        if before_submit || while_queued {
-            assert!(matches!(result, Err(crate::XbergError::Cancelled)));
-        } else {
-            check_native_table_deck(result.unwrap());
-        }
-    }
+fn single_ppt_shared_runtime_honors_already_cancelled_request() {
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let config = ExtractionConfig {
+        max_archive_depth: 0,
+        cancel_token: Some(cancel),
+        ..Default::default()
+    };
+    let err = crate::core::runtime::global_runtime()
+        .unwrap()
+        .block_on(PptExtractor::new().extract_content(NATIVE_TABLES, LEGACY_POWERPOINT_MIME_TYPE, &config))
+        .unwrap_err();
+    assert!(matches!(err, crate::XbergError::Cancelled));
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-#[tokio::test]
-async fn ppt_single_and_batch_keep_exact_native_table_deck_shape() {
+#[test]
+fn direct_ppt_from_the_only_foreign_blocking_worker_completes() {
+    use std::time::Duration;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .enable_time()
+        .build()
+        .unwrap();
+    let handle = runtime.handle().clone();
+    let parse = runtime.spawn_blocking(move || {
+        let config = ExtractionConfig {
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        handle.block_on(async {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                PptExtractor::new().extract_content(NATIVE_TABLES, LEGACY_POWERPOINT_MIME_TYPE, &config),
+            )
+            .await
+        })
+    });
+    let document = runtime
+        .block_on(parse)
+        .unwrap()
+        .expect("direct PPT extraction cannot wait on its own blocking worker")
+        .unwrap();
+    check_native_table_deck(document);
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn ppt_single_and_batch_keep_exact_native_table_deck_shape() {
+    crate::core::runtime::global_runtime()
+        .unwrap()
+        .block_on(assert_ppt_route_parity());
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn assert_ppt_route_parity() {
     let extractor = PptExtractor::new();
     let config = ExtractionConfig {
         include_document_structure: true,
@@ -140,31 +139,39 @@ fn single_ppt_fallback_log_reaches_the_callers_thread_local_subscriber() {
     };
     let extractor = PptExtractor::new();
     let extract = || extractor.extract_content(&content, LEGACY_POWERPOINT_MIME_TYPE, &config);
-    let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    let runtime = crate::core::runtime::global_runtime().unwrap();
     let capture = Capture(Arc::new(Mutex::new(Vec::new())));
     let writer = capture.clone();
     let subscriber = tracing_subscriber::fmt()
         .with_ansi(false)
+        .with_thread_ids(true)
         .with_max_level(tracing::Level::DEBUG)
         .with_writer(move || writer.clone())
         .finish();
-    let count_events = || {
+    let caller_thread = format!("{:?}", std::thread::current().id());
+    let event_threads = || {
         let output = capture.0.lock().unwrap();
         std::str::from_utf8(&output)
             .unwrap()
-            .matches("no live slide list resolved from the persist chain; using stream order")
-            .count()
+            .lines()
+            .filter(|line| line.contains("no live slide list resolved from the persist chain; using stream order"))
+            .map(|line| line.contains(&caller_thread))
+            .collect::<Vec<_>>()
     };
 
     tracing::callsite::rebuild_interest_cache();
     let (inline, offloaded) = tracing::subscriber::with_default(subscriber, || {
         let inline = futures::executor::block_on(extract()).unwrap();
-        assert_eq!(count_events(), 1, "inline parse emits the fallback log");
+        assert_eq!(event_threads(), [true], "inline parse logs on the caller thread");
         let offloaded = runtime.block_on(extract()).unwrap();
         (inline, offloaded)
     });
     tracing::callsite::rebuild_interest_cache();
-    assert_eq!(count_events(), 2, "offloaded parse emits the fallback log");
+    assert_eq!(
+        event_threads(),
+        [true, false],
+        "offloaded parse logs on a different thread"
+    );
     assert_eq!(
         serde_json::to_value(&inline).unwrap(),
         serde_json::to_value(&offloaded).unwrap()
