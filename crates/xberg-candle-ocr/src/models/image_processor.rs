@@ -13,11 +13,21 @@ use crate::error::{CandleOcrError, Result};
 #[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
+#[cfg(any(feature = "paddleocr-vl", feature = "glm-ocr", all(test, feature = "deepseek-ocr")))]
 pub(super) fn decode_image_with_budget(
     bytes: &[u8],
     budget: u64,
     convert_to_rgb8: bool,
+) -> image::ImageResult<image::DynamicImage> {
+    decode_image_with_preflight(bytes, budget, convert_to_rgb8, |_, _, _| Some(0))
+}
+
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
+pub(super) fn decode_image_with_preflight(
+    bytes: &[u8],
+    budget: u64,
+    convert_to_rgb8: bool,
+    preprocessing_bytes: impl FnOnce(u32, u32, u8) -> Option<u64>,
 ) -> image::ImageResult<image::DynamicImage> {
     use image::ImageDecoder as _;
 
@@ -51,6 +61,15 @@ pub(super) fn decode_image_with_budget(
             .ok_or_else(insufficient_memory)?;
         // Conversion follows decoding, so this checks a separate peak from decoder scratch space. ~keep
         limits.clone().reserve(rgb_bytes)?;
+    }
+    let preprocessing =
+        preprocessing_bytes(width, height, decoder.color_type().bytes_per_pixel()).ok_or_else(insufficient_memory)?;
+    let preprocess_peak = encoded_bytes
+        .checked_add(decoder.total_bytes())
+        .and_then(|bytes| bytes.checked_add(preprocessing))
+        .ok_or_else(insufficient_memory)?;
+    if preprocess_peak > budget {
+        return Err(insufficient_memory());
     }
     decoder.set_limits(limits)?;
     image::DynamicImage::from_decoder(decoder)

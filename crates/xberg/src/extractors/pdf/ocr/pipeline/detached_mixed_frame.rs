@@ -210,7 +210,9 @@ pub(super) fn scale_paragraph_geometry(
             paragraph.block_bbox = Some((left * sx, bottom * sy, right * sx, top * sy));
         }
         for line in &mut paragraph.lines {
-            line.baseline_y *= sy;
+            if let Some(baseline) = line.baseline_y.as_mut() {
+                *baseline *= sy;
+            }
             for segment in &mut line.segments {
                 segment.x *= sx;
                 segment.width *= sx;

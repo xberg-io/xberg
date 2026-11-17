@@ -2923,7 +2923,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             extraction_result,
                             &ocr_config_resolved,
                             (&render_doc, page_idx),
-                            raster.3,
+                            (raster.2, raster.3),
                             super::tall_source::Unrecovered::Config(reason),
                         );
                     }
@@ -6804,11 +6804,12 @@ pub(super) async fn extract_with_ocr_for_page(
                             .map(|(pdf, _, _)| (pdf.as_ref(), page_idx))
                             .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
                     {
+                        let (_, _, raster_width, raster_height) = &encoded_batch[page_idx - batch_start];
                         super::tall_source::note_unrecovered(
                             document,
                             base_ocr_config,
                             source,
-                            encoded_batch[page_idx - batch_start].3,
+                            (*raster_width, *raster_height),
                             super::tall_source::Unrecovered::Config(reason),
                         );
                     }
