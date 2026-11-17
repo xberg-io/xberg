@@ -438,6 +438,10 @@ impl InternalDocumentExtractor for PptExtractor {
 }
 
 #[cfg(test)]
+#[path = "ppt/blocking_tests.rs"]
+mod blocking_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::types::internal::ElementKind;
