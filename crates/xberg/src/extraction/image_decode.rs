@@ -510,8 +510,9 @@ impl<'a> PreparedCandleImageDecode<'a> {
     }
 
     pub(crate) fn decode(self) -> Result<image::DynamicImage> {
+        let limits = image_decode_limits(self.decoder_budget);
         let mut reader = ImageReader::with_format(Cursor::new(self.bytes), self.probe.format);
-        reader.limits(image_decode_limits(self.decoder_budget));
+        reader.limits(limits);
         reader.decode().map_err(map_image_decode_error)
     }
 }
