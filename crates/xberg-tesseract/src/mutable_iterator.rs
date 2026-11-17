@@ -8,7 +8,7 @@ use crate::result_iterator::{
     TessResultIteratorConfidence, TessResultIteratorGetUTF8Text, TessResultIteratorNext,
     TessResultIteratorSymbolIsDropcap, TessResultIteratorSymbolIsSubscript, TessResultIteratorSymbolIsSuperscript,
     TessResultIteratorWordFontAttributes, TessResultIteratorWordIsFromDictionary, TessResultIteratorWordIsNumeric,
-    TessResultIteratorWordRecognitionLanguage,
+    TessResultIteratorWordRecognitionLanguage, copy_and_delete_tess_text,
 };
 
 /// Owns a native iterator allocation for result-iterator operations.
@@ -56,15 +56,8 @@ impl MutableIterator {
         // SAFETY: The iterator is locked. A non-null text result is owned.
         // Requires the live handle and backing data documented on `MutableIterator`. ~keep
         let text_ptr = unsafe { TessResultIteratorGetUTF8Text(*handle, level) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::NullPointerError);
-        }
-        // SAFETY: The non-null text allocation returned by Tesseract is NUL-terminated and still owned here. ~keep
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        // SAFETY: The Rust String owns its copy. TessDeleteText releases the original native allocation. ~keep
-        unsafe { TessDeleteText(text_ptr as *mut c_char) };
-        Ok(result)
+        // SAFETY: Tesseract returns an owned NUL-terminated allocation or null. ~keep
+        unsafe { copy_and_delete_tess_text(text_ptr, |pointer| TessDeleteText(pointer)) }
     }
 
     /// Gets the confidence of the current iterator.
