@@ -3,116 +3,193 @@
 //! Provides functions to download `.traineddata` files from the official Tesseract
 //! tessdata_fast repository on GitHub, with fallback URLs for redundancy.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use crate::ocr::error::OcrError;
+use sha2::{Digest as _, Sha256};
+use std::io::{ErrorKind, Write as _};
 use std::path::Path;
+use std::time::Duration;
 
-/// Download a language pack from the tessdata_fast repository.
-///
-/// Attempts to download `{lang}.traineddata` from GitHub with fallback URLs
-/// for redundancy. Skips download if the file already exists. Uses `ureq`
-/// with rustls + platform-verifier for HTTPS (OS trust store; respects SSL_CERT_FILE).
-///
-/// # Arguments
-///
-/// * `lang` - Language code (e.g., "eng", "fra", "deu")
-/// * `output_dir` - Directory to write the traineddata file
-///
-/// # Returns
-///
-/// `Ok(())` if download succeeds or file already exists, `Err(OcrError)` on failure.
-///
-/// # Panics
-///
-/// Does not panic. All errors are returned as `OcrError`.
-#[cfg(not(target_arch = "wasm32"))]
+mod pins;
+
+pub(super) use pins::TESSDATA_FAST_PACKS;
+use pins::{PinnedPack, TESSDATA_FAST_REVISION};
+
+const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
+const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+
+#[derive(Debug, thiserror::Error)]
+enum DownloadError {
+    #[error("HTTP transfer failed: {0}")]
+    Request(#[from] ureq::Error),
+    #[error("SHA-256 mismatch: expected {expected}, got {actual}")]
+    Integrity { expected: String, actual: String },
+    #[error("language pack could not be published: {0}")]
+    Publish(#[from] std::io::Error),
+}
+
+impl DownloadError {
+    fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::Request(
+                ureq::Error::StatusCode(408 | 429 | 500..=599)
+                    | ureq::Error::ConnectionFailed
+                    | ureq::Error::HostNotFound
+                    | ureq::Error::Io(_)
+                    | ureq::Error::Timeout(_)
+            )
+        )
+    }
+
+    fn can_try_mirror(&self) -> bool {
+        matches!(self, Self::Request(error) if !matches!(error, ureq::Error::BodyExceedsLimit(_)))
+    }
+}
+
+fn pinned_pack(lang: &str) -> Option<&'static PinnedPack> {
+    let index = TESSDATA_FAST_PACKS.binary_search_by(|entry| entry.0.cmp(lang)).ok()?;
+    Some(&TESSDATA_FAST_PACKS[index])
+}
+
+fn source_language(lang: &str) -> &str {
+    // ~keep Upstream frk.traineddata is a Git symlink. Fetch its actual model bytes.
+    if lang == "frk" { "deu_latf" } else { lang }
+}
+
+pub(super) fn pinned_source_url(lang: &str) -> String {
+    format!(
+        "https://github.com/tesseract-ocr/tessdata_fast/raw/{TESSDATA_FAST_REVISION}/{}.traineddata",
+        source_language(lang)
+    )
+}
+
 pub(crate) fn download_language_pack(lang: &str, output_dir: &Path) -> Result<(), OcrError> {
-    let traineddata_path = output_dir.join(format!("{}.traineddata", lang));
+    download_missing_language_pack(lang, output_dir).map(|_| ())
+}
 
-    if traineddata_path.exists() {
-        tracing::debug!(
-            "Language pack '{}' already exists at {}",
-            lang,
-            traineddata_path.display()
-        );
-        return Ok(());
+/// Returns whether this call published a newly downloaded pack.
+pub(super) fn download_missing_language_pack(lang: &str, output_dir: &Path) -> Result<bool, OcrError> {
+    let &(_, sha256, size) = pinned_pack(lang)
+        .ok_or_else(|| OcrError::InvalidLanguageCode(format!("No pinned tessdata_fast language pack for '{lang}'")))?;
+    let output_path = output_dir.join(format!("{lang}.traineddata"));
+    if output_path.is_file() {
+        return Ok(false);
     }
 
     let urls = [
+        pinned_source_url(lang),
         format!(
-            "https://github.com/tesseract-ocr/tessdata_fast/raw/main/{}.traineddata",
-            lang
-        ),
-        format!(
-            "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/{}.traineddata",
-            lang
+            "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/{TESSDATA_FAST_REVISION}/{}.traineddata",
+            source_language(lang)
         ),
     ];
-
-    tracing::info!(
-        "Downloading Tesseract language pack '{}' to {} (source: tessdata_fast)",
-        lang,
-        traineddata_path.display()
-    );
-
-    for url in &urls {
-        tracing::info!("Fetching language pack '{}' from {}", lang, url);
-        match download_file(url, &traineddata_path) {
-            Ok(_) => {
-                tracing::info!(
-                    "Successfully downloaded language pack '{}' to {}",
-                    lang,
-                    traineddata_path.display()
-                );
-                return Ok(());
-            }
-            Err(e) => {
-                tracing::warn!("Failed to download from {}: {}", url, e);
-                continue;
-            }
-        }
-    }
-
-    Err(OcrError::TesseractInitializationFailed(format!(
-        "Failed to download language pack '{}' from tessdata_fast repository. \
-         Tried URLs: {}. Check your network connection and verify the language code is valid.",
-        lang,
-        urls.join(", ")
-    )))
+    download_with_retries(
+        &download_agent(),
+        [&urls[0], &urls[1]],
+        &output_path,
+        sha256,
+        size,
+        std::thread::sleep,
+    )
+    .map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!(
+            "Failed to download pinned tessdata_fast language pack '{lang}': {error}"
+        ))
+    })
 }
 
-/// Maximum traineddata download size (64 MB). The largest `tessdata_fast`
-/// language packs are well under this; it guards against pathological responses.
-#[cfg(not(target_arch = "wasm32"))]
-const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+fn download_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_resolve(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_connect(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_recv_response(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_per_read(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_global(Some(DOWNLOAD_TIMEOUT))
+        .build()
+        .into()
+}
 
-/// Download a file from a URL and write it atomically to the specified path.
-///
-/// Writes to a sibling temp file first, then renames into place so an
-/// interrupted download never leaves a partial `.traineddata` behind.
-#[cfg(not(target_arch = "wasm32"))]
-fn download_file(url: &str, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let response = ureq::get(url).call()?;
-
-    if response.status() != 200 {
-        return Err(format!("HTTP {}", response.status()).into());
+fn download_with_retries(
+    agent: &ureq::Agent,
+    [primary, mirror]: [&str; 2],
+    output_path: &Path,
+    sha256: &str,
+    size: u64,
+    mut sleep: impl FnMut(Duration),
+) -> Result<bool, DownloadError> {
+    let mut url = primary;
+    for (attempt, delay) in RETRY_BACKOFF.into_iter().enumerate() {
+        match download_file(agent, url, output_path, sha256, size) {
+            Ok(created) => return Ok(created),
+            Err(error) if error.is_transient() => {
+                tracing::warn!(url, attempt = attempt + 1, %error, "Retrying tessdata download");
+                sleep(delay);
+            }
+            Err(error) if attempt == 0 && error.can_try_mirror() => {
+                tracing::warn!(url, %error, "Trying the alternate tessdata endpoint");
+            }
+            Err(error) => return Err(error),
+        }
+        url = mirror;
     }
+    download_file(agent, mirror, output_path, sha256, size)
+}
 
+/// Verify the response before atomically publishing it without replacing an existing pack.
+fn download_file(
+    agent: &ureq::Agent,
+    url: &str,
+    output_path: &Path,
+    expected_sha256: &str,
+    max_bytes: u64,
+) -> Result<bool, DownloadError> {
+    let response = agent.get(url).call()?;
+    if response.status() != 200 {
+        return Err(ureq::Error::StatusCode(response.status().as_u16()).into());
+    }
     let bytes = response
         .into_body()
         .with_config()
-        .limit(MAX_TRAINEDDATA_BYTES)
+        .limit(max_bytes.min(MAX_TRAINEDDATA_BYTES))
         .read_to_vec()?;
+    let actual_sha256 = hex::encode(Sha256::digest(&bytes));
+    if actual_sha256 != expected_sha256 {
+        return Err(DownloadError::Integrity {
+            expected: expected_sha256.to_owned(),
+            actual: actual_sha256,
+        });
+    }
 
-    let tmp_path = output_path.with_extension("traineddata.partial");
-    std::fs::write(&tmp_path, bytes)?;
-    std::fs::rename(&tmp_path, output_path)?;
+    let directory = output_path
+        .parent()
+        .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing language pack directory"))?;
+    #[cfg(unix)]
+    let mut temporary = {
+        use std::os::unix::fs::PermissionsExt as _;
 
-    Ok(())
+        // ~keep Match normal file creation so a shared tessdata cache respects the caller's umask.
+        tempfile::Builder::new()
+            .permissions(std::fs::Permissions::from_mode(0o666))
+            .tempfile_in(directory)?
+    };
+    #[cfg(not(unix))]
+    let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
+    temporary.write_all(&bytes)?;
+    match temporary.persist_noclobber(output_path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.error.kind() == ErrorKind::AlreadyExists && output_path.is_file() => Ok(false),
+        Err(error) => Err(error.error.into()),
+    }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(test)]
 mod tests {
-    use super::download_file;
+    use super::{download_agent, download_file};
+    use sha2::{Digest as _, Sha256};
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::process::{Child, Command, ExitStatus};
@@ -127,17 +204,247 @@ mod tests {
     const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
     #[test]
+    fn pinned_packs_cover_all_supported_languages() {
+        use super::{TESSDATA_FAST_PACKS, pinned_pack};
+        use crate::core::config_validation::TESSERACT_LANGUAGE_CODES;
+
+        let extra = ["chi_sim_vert", "chi_tra_vert", "deu_latf", "jpn_vert", "kor_vert"];
+        assert!(TESSDATA_FAST_PACKS.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        for lang in TESSERACT_LANGUAGE_CODES.iter().copied().chain(extra) {
+            let (_, digest, size) = pinned_pack(lang).unwrap_or_else(|| panic!("missing pinned pack for {lang}"));
+            assert_eq!(digest.len(), 64, "{lang}");
+            assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()), "{lang}");
+            assert!(*size > 0 && *size <= super::MAX_TRAINEDDATA_BYTES, "{lang}");
+        }
+        assert_eq!(
+            pinned_pack("eng"),
+            Some(&(
+                "eng",
+                "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+                4_113_088
+            ))
+        );
+    }
+
+    #[test]
+    fn a_cached_vertical_model_is_kept_without_reverification() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("jpn_vert.traineddata");
+        std::fs::write(&output, b"locally supplied vertical model").unwrap();
+        assert!(!super::download_missing_language_pack("jpn_vert", directory.path()).unwrap());
+        assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn transport_timeouts_allow_a_slow_bounded_transfer() {
+        let agent = download_agent();
+        let timeouts = agent.config().timeouts();
+        assert_eq!(timeouts.resolve, Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.connect, Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.recv_response, Some(Duration::from_secs(30)));
+        assert_eq!(agent.config().timeout_per_read(), Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.global, Some(Duration::from_secs(600)));
+    }
+
+    #[test]
+    fn transient_statuses_back_off_and_stop_after_three_attempts() {
+        for final_status in [200, 503] {
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("eng.traineddata");
+            let (primary, first) = serve_test_statuses(&[503]);
+            let (mirror, retries) = serve_test_statuses(&[503, final_status]);
+            let mut backoffs = Vec::new();
+            let result = super::download_with_retries(
+                &local_agent(TIMEOUT),
+                [&primary, &mirror],
+                &output,
+                &payload_digest(),
+                PAYLOAD.len() as u64,
+                |delay| backoffs.push(delay),
+            );
+            first.join().unwrap();
+            retries.join().unwrap();
+            assert_eq!(backoffs, [Duration::from_secs(1), Duration::from_secs(2)]);
+            if final_status == 200 {
+                assert!(result.unwrap());
+                assert_eq!(std::fs::read(output).unwrap(), PAYLOAD);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(super::DownloadError::Request(ureq::Error::StatusCode(503)))
+                ));
+                assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_checksum_mismatch_never_reaches_the_mirror_or_backoff() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let (primary, server) = serve_test_payload(PAYLOAD);
+        let result = super::download_with_retries(
+            &local_agent(TIMEOUT),
+            [&primary, &primary],
+            &output,
+            &"0".repeat(64),
+            PAYLOAD.len() as u64,
+            |_| panic!("checksum mismatches cannot be retried"),
+        );
+        server.join().unwrap();
+        assert!(matches!(result, Err(super::DownloadError::Integrity { .. })));
+        assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+    }
+
+    #[test]
+    fn refuses_bad_checksum_before_publishing_download() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let (url, server) = serve_test_payload(PAYLOAD);
+        let result = download_file(
+            &local_agent(TIMEOUT),
+            &url,
+            &output,
+            &"0".repeat(64),
+            PAYLOAD.len() as u64,
+        );
+        server.join().unwrap();
+        let error = result.expect_err("digest mismatch must fail");
+        assert!(matches!(error, super::DownloadError::Integrity { .. }), "{error}");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+    }
+
+    #[test]
+    fn does_not_replace_existing_pack_when_publishing_download() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        std::fs::write(&output, b"locally supplied pack").unwrap();
+        let (url, server) = serve_test_payload(PAYLOAD);
+        let created = download_file(
+            &local_agent(TIMEOUT),
+            &url,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64,
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert!(!created);
+        assert_eq!(std::fs::read(output).unwrap(), b"locally supplied pack");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn stalled_response_body_times_out_without_publishing() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let (url, server) = serve_test_response(PAYLOAD.len(), move |_| {
+            let _ = wait.recv_timeout(TIMEOUT);
+        });
+        let result = download_file(
+            &local_agent(Duration::from_millis(500)),
+            &url,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64,
+        );
+        drop(release);
+        server.join().unwrap();
+        let error = result.expect_err("stalled body must time out");
+        assert!(
+            matches!(
+                error,
+                super::DownloadError::Request(ureq::Error::Timeout(ureq::Timeout::PerRead))
+            ),
+            "{error}"
+        );
+        assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+    }
+
+    fn local_agent(timeout: Duration) -> ureq::Agent {
+        ureq::Agent::config_builder()
+            .proxy(None)
+            .timeout_per_read(Some(timeout))
+            .timeout_global(Some(TIMEOUT))
+            .build()
+            .into()
+    }
+
+    fn payload_digest() -> String {
+        hex::encode(Sha256::digest(PAYLOAD))
+    }
+
+    fn serve_test_statuses(statuses: &[u16]) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/eng.traineddata", listener.local_addr().unwrap());
+        let statuses = statuses.to_vec();
+        let server = std::thread::spawn(move || {
+            for status in statuses {
+                let mut stream = accept_with_deadline(&listener);
+                let _request = read_request(&stream);
+                let payload = if status == 200 { PAYLOAD } else { b"" };
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    payload.len()
+                )
+                .unwrap();
+                stream.write_all(payload).unwrap();
+            }
+        });
+        (url, server)
+    }
+
+    fn serve_test_payload(payload: &'static [u8]) -> (String, std::thread::JoinHandle<()>) {
+        serve_test_response(payload.len(), |stream| stream.write_all(payload).unwrap())
+    }
+
+    fn serve_test_response(
+        payload_size: usize,
+        send_body: impl FnOnce(&mut std::net::TcpStream) + Send + 'static,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/eng.traineddata", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let mut stream = accept_with_deadline(&listener);
+            let _request = read_request(&stream);
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {payload_size}\r\nConnection: close\r\n\r\n"
+            )
+            .unwrap();
+            send_body(&mut stream);
+        });
+        (url, server)
+    }
+
+    #[test]
     fn should_decode_percent_encoded_proxy_credentials_when_downloading() {
         if let Some(output_path) = std::env::var_os(CHILD_OUTPUT) {
             let output_path = std::path::PathBuf::from(output_path);
-            download_file(DOWNLOAD_URL, &output_path).expect("download through authenticated proxy");
+            let created = download_file(
+                &download_agent(),
+                DOWNLOAD_URL,
+                &output_path,
+                &payload_digest(),
+                PAYLOAD.len() as u64,
+            )
+            .expect("download through authenticated proxy");
+            assert!(created);
             assert_eq!(std::fs::read(&output_path).unwrap(), PAYLOAD);
-            assert!(!output_path.with_extension("traineddata.partial").exists());
+            assert_eq!(output_path.parent().unwrap().read_dir().unwrap().count(), 1);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+
+                assert_eq!(output_path.metadata().unwrap().permissions().mode() & 0o777, 0o640);
+            }
             return;
         }
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
         let directory = tempfile::tempdir().unwrap();
         let output_path = directory.path().join("eng.traineddata");
         let proxy = format!("http://user%25name:p%25ass%3Aword@{}", listener.local_addr().unwrap());
@@ -160,8 +467,17 @@ mod tests {
     }
 
     fn proxy_child(proxy: &str, output_path: &std::path::Path) -> Child {
-        // ~keep A child isolates proxy environment changes from concurrently running tests.
-        let mut command = Command::new(std::env::current_exe().unwrap());
+        // ~keep A child isolates proxy environment and umask changes from other tests.
+        let test_binary = std::env::current_exe().unwrap();
+        #[cfg(unix)]
+        let mut command = {
+            let mut shell = Command::new("sh");
+            shell.args(["-c", r#"umask 027 && exec "$@""#, "tessdata-proxy-test"]);
+            shell.arg(test_binary);
+            shell
+        };
+        #[cfg(not(unix))]
+        let mut command = Command::new(test_binary);
         command.args(["--exact", TEST_NAME, "--nocapture"]);
         for name in ["HTTP_PROXY", "http_proxy"] {
             command.env(name, proxy);
@@ -173,13 +489,14 @@ mod tests {
         command.env(CHILD_OUTPUT, output_path).spawn().unwrap()
     }
 
-    fn serve_proxy(listener: &TcpListener) -> (Vec<String>, Vec<String>) {
+    fn accept_with_deadline(listener: &TcpListener) -> std::net::TcpStream {
+        listener.set_nonblocking(true).unwrap();
         let deadline = Instant::now() + TIMEOUT;
-        let mut stream = loop {
+        let stream = loop {
             match listener.accept() {
                 Ok((stream, _)) => break stream,
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    assert!(Instant::now() < deadline, "downloader did not reach proxy");
+                    assert!(Instant::now() < deadline, "downloader did not connect");
                     std::thread::sleep(POLL_INTERVAL);
                 }
                 Err(error) => panic!("accept proxy connection: {error}"),
@@ -188,6 +505,11 @@ mod tests {
         stream.set_nonblocking(false).unwrap();
         stream.set_read_timeout(Some(TIMEOUT)).unwrap();
         stream.set_write_timeout(Some(TIMEOUT)).unwrap();
+        stream
+    }
+
+    fn serve_proxy(listener: &TcpListener) -> (Vec<String>, Vec<String>) {
+        let mut stream = accept_with_deadline(listener);
         let request = read_request(&stream);
         stream
             .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
