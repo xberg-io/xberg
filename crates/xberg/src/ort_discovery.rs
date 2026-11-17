@@ -39,33 +39,30 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
 /// Prepare the runtime before callers that may create their own session builders.
 #[allow(dead_code)]
 pub(crate) fn ensure_ort_available() {
-    #[cfg(feature = "sceptre-ocr-ort")]
+    #[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
     if let Err(error) = preload_sceptre_ort_runtime() {
         tracing::warn!(%error, "Could not preload the discovered ONNX Runtime");
     }
 }
 
-#[cfg(feature = "sceptre-ocr-ort")]
-pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), ort::Error> {
-    #[cfg(all(feature = "ort-dynamic", not(feature = "ort-bundled")))]
-    {
-        static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
-        INIT.get_or_try_init(|| {
-            let explicit = std::env::var("ORT_DYLIB_PATH").ok();
-            preload_sceptre_ort_runtime_from(
-                explicit.as_deref().map(std::path::Path::new),
-                platform_candidates().iter().map(std::path::Path::new),
-            )
-        })?;
-    }
-    Ok(())
+#[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
+pub(crate) fn preload_sceptre_ort_runtime() -> Result<(), ort::LoadDynamicError> {
+    static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
+    INIT.get_or_try_init(|| {
+        let explicit = std::env::var("ORT_DYLIB_PATH").ok();
+        preload_sceptre_ort_runtime_from(
+            explicit.as_deref().map(std::path::Path::new),
+            platform_candidates().iter().map(std::path::Path::new),
+        )
+    })
+    .copied()
 }
 
 #[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
 fn preload_sceptre_ort_runtime_from<'a>(
     explicit: Option<&std::path::Path>,
     mut candidates: impl Iterator<Item = &'a std::path::Path>,
-) -> Result<(), ort::Error> {
+) -> Result<(), ort::LoadDynamicError> {
     // Leave explicit existing paths and the default search to ort. A bare library
     // name may resolve through the executable directory or the system loader. ~keep
     if explicit.is_some_and(std::path::Path::exists) {
@@ -73,8 +70,7 @@ fn preload_sceptre_ort_runtime_from<'a>(
     }
     if let Some(path) = candidates.find(|path| path.exists()) {
         // Load the library without building an environment. Sceptre still owns it. ~keep
-        let _builder = ort::init_from(path)
-            .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
+        let _builder = ort::init_from(path)?;
         tracing::debug!(path = %path.display(), "Auto-discovered ONNX Runtime");
     }
     Ok(())
@@ -248,11 +244,8 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
     #[cfg(feature = "sceptre-ocr-ort")]
-    let environment = {
-        preload_sceptre_ort_runtime()?;
-        sceptre::ort_environment()
-            .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?
-    };
+    let environment = sceptre::ort_environment()
+        .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
     let environment = ENVIRONMENT.get_or_init(|| environment);
     #[cfg(feature = "paddle-ocr-ort")]
     if !xberg_paddle_ocr::adopt_ort_environment(environment) {

@@ -449,7 +449,7 @@ fn run_blocking(
 ) -> Result<BlockingOutput> {
     #[cfg(not(auto_rotate))]
     let _ = rotation;
-    #[cfg(feature = "sceptre-ocr-ort")]
+    #[cfg(all(feature = "sceptre-ocr-ort", feature = "ort-dynamic", not(feature = "ort-bundled")))]
     if config.model.backend == Backend::Ort {
         crate::ort_discovery::preload_sceptre_ort_runtime()
             .map_err(|error| XbergError::ocr_with_source("Could not preload the discovered ONNX Runtime", error))?;
