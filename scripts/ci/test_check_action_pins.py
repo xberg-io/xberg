@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 SCRIPT = Path(__file__).with_name("check-action-pins.py")
 SPEC = importlib.util.spec_from_file_location("check_action_pins", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -150,6 +152,20 @@ runs:
             completed = self.run_checker(root)
             assert completed.returncode == 1
             assert "checked no remote uses references" in completed.stderr
+
+    def test_dependabot_covers_workflows_and_every_tracked_action_directory(self) -> None:
+        root = SCRIPT.parents[2]
+        config = yaml.safe_load((root / ".github/dependabot.yml").read_text(encoding="utf-8"))
+        [updates] = [entry for entry in config["updates"] if entry["package-ecosystem"] == "github-actions"]
+        configured = set(updates.get("directories", [updates.get("directory")]))
+        action_directories = {
+            "/" + "/".join(path.parent.parts)
+            for path in CHECKER.tracked_manifests(root)
+            if path.parent != CHECKER.WORKFLOWS
+        }
+        assert action_directories - {"/"}, "no nested action manifests were checked"
+        missing = ({"/"} | action_directories) - configured
+        assert not missing, f"Dependabot misses action manifests in {sorted(missing)}"
 
     @staticmethod
     def git(root: Path, *arguments: str) -> None:

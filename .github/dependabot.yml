@@ -1,7 +1,20 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/cache-benchmark-harness"
+      - "/.github/actions/cache-hf-fastembed"
+      - "/.github/actions/cache-pdfium"
+      - "/.github/actions/download-pdfium"
+      - "/.github/actions/install-system-deps"
+      - "/.github/actions/qualify-ocr-orientation"
+      - "/.github/actions/qualify-ocr-paddle-sideways"
+      - "/.github/actions/setup-layout-models"
+      - "/.github/actions/setup-onnx-runtime"
+      - "/.github/actions/setup-paddle-ocr-models"
+      - "/.github/actions/setup-tesseract-cache"
+      - "/.github/actions/stage-pdfium-runtime"
     schedule:
       interval: weekly
     ignore:
