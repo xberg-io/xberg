@@ -11425,6 +11425,7 @@ name = "xberg-native-pdf"
 version = "1.4.1"
 dependencies = [
  "aes",
+ "ahash",
  "base64 0.23.1",
  "brotli",
  "byteorder",

@@ -7,8 +7,12 @@ use crate::object::{Object, ObjectRef};
 use crate::parser::parse_object;
 use crate::parser_config::ParserOptions;
 use crate::xref::{CrossRefTable, find_xref_offset, parse_xref};
+#[cfg(not(target_arch = "wasm32"))]
+use ahash::AHashMap as ObjectCacheMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
+#[cfg(target_arch = "wasm32")]
+use std::collections::HashMap as ObjectCacheMap;
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 #[cfg(not(target_arch = "wasm32"))]
@@ -286,7 +290,7 @@ impl CachedFormSpans {
 
 /// Size-bounded object cache with FIFO eviction.
 ///
-/// Wraps a `HashMap<ObjectRef, Arc<Object>>` with byte-size tracking. Entries
+/// Wraps a map of object references to shared objects with byte-size tracking. Entries
 /// are shared so a reader takes an `Arc` under the lock and deep-copies after
 /// releasing it. When an
 /// insertion would push total estimated size past `max_bytes`, the oldest
@@ -296,7 +300,7 @@ impl CachedFormSpans {
 /// insert-once-read-once — higher-level caches (font caches, xobject stream
 /// cache) serve repeated lookups, so recency is not a useful signal here.
 struct BoundedObjectCache {
-    map: HashMap<ObjectRef, Arc<Object>>,
+    map: ObjectCacheMap<ObjectRef, Arc<Object>>,
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
@@ -432,7 +436,7 @@ impl BoundedObjectStreamCache {
 impl BoundedObjectCache {
     fn new(max_bytes: usize) -> Self {
         Self {
-            map: HashMap::new(),
+            map: ObjectCacheMap::new(),
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,

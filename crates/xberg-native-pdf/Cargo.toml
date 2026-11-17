@@ -129,6 +129,7 @@ fontconfig-parser = { version = "0.5", default-features = false }
 # version matches the xberg crate's, whose peak model `tests/bounded_jpeg_peak.rs` measures. ~keep
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 jpeg-decoder = { version = "0.3.2", default-features = false, features = ["rayon"] }
+ahash = { workspace = true, features = ["runtime-rng"] }
 
 [dev-dependencies]
 aes = "0.9"
