@@ -6,7 +6,10 @@
 
 #[cfg(any(
     feature = "candle-paddleocr-vl",
-    all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32"))
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
+    )
 ))]
 async fn read_image_file(
     path: &std::path::Path,

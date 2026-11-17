@@ -10,10 +10,10 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::error::{CandleOcrError, Result};
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
 pub(super) const DEFAULT_IMAGE_DECODE_BUDGET: u64 = 100 * 1024 * 1024;
 
-#[cfg(any(feature = "paddleocr-vl", all(test, feature = "deepseek-ocr")))]
+#[cfg(any(feature = "paddleocr-vl", feature = "glm-ocr", all(test, feature = "deepseek-ocr")))]
 pub(super) fn decode_image_with_budget(
     bytes: &[u8],
     budget: u64,
@@ -22,7 +22,7 @@ pub(super) fn decode_image_with_budget(
     decode_image_with_preflight(bytes, budget, convert_to_rgb8, |_, _, _| Some(0))
 }
 
-#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr"))]
+#[cfg(any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr"))]
 pub(super) fn decode_image_with_preflight(
     bytes: &[u8],
     budget: u64,
@@ -36,6 +36,10 @@ pub(super) fn decode_image_with_preflight(
             image::error::LimitErrorKind::InsufficientMemory,
         ))
     };
+    #[cfg(all(test, feature = "glm-ocr"))]
+    if decode_probe::reject(budget, convert_to_rgb8) {
+        return Err(insufficient_memory());
+    }
     let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
     // The JPEG decoder holds its own copy of the encoded input during decoding. ~keep
@@ -69,6 +73,56 @@ pub(super) fn decode_image_with_preflight(
     }
     decoder.set_limits(limits)?;
     image::DynamicImage::from_decoder(decoder)
+}
+
+#[cfg(all(test, feature = "glm-ocr"))]
+pub(super) mod decode_probe {
+    use std::cell::Cell;
+
+    #[derive(Clone, Copy)]
+    enum Dispatch {
+        Inactive,
+        Waiting,
+        Observed(u64, bool),
+    }
+
+    thread_local! {
+        static DISPATCH: Cell<Dispatch> = const { Cell::new(Dispatch::Inactive) };
+    }
+
+    // Intercept one request at the actual decode seam, before reader construction. ~keep
+    pub(in super::super) fn reject(budget: u64, convert_to_rgb8: bool) -> bool {
+        DISPATCH.with(|dispatch| match dispatch.get() {
+            Dispatch::Inactive => false,
+            Dispatch::Waiting => {
+                dispatch.set(Dispatch::Observed(budget, convert_to_rgb8));
+                true
+            }
+            Dispatch::Observed(..) => panic!("unexpected second image decode"),
+        })
+    }
+
+    pub(in super::super) fn intercept<T>(run: impl FnOnce() -> T) -> (T, Option<(u64, bool)>) {
+        struct Reset<'a>(&'a Cell<Dispatch>);
+
+        impl Drop for Reset<'_> {
+            fn drop(&mut self) {
+                self.0.set(Dispatch::Inactive);
+            }
+        }
+
+        DISPATCH.with(|dispatch| {
+            assert!(matches!(dispatch.get(), Dispatch::Inactive));
+            dispatch.set(Dispatch::Waiting);
+            let _reset = Reset(dispatch);
+            let result = run();
+            let observed = match dispatch.get() {
+                Dispatch::Observed(budget, rgb) => Some((budget, rgb)),
+                _ => None,
+            };
+            (result, observed)
+        })
+    }
 }
 
 /// ViT-style image processor: resize to NxN, normalize to mean/std.
@@ -135,7 +189,7 @@ impl ImageProcessor {
     }
 }
 
-#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr")))]
+#[cfg(all(test, any(feature = "paddleocr-vl", feature = "deepseek-ocr", feature = "glm-ocr")))]
 mod decode_tests {
     use super::decode_image_with_budget;
 
