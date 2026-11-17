@@ -96,6 +96,7 @@ pub(in super::super) enum Unrecovered {
     TablesOrFormulas,
     InsufficientReadEvidence,
     Uncertified,
+    FourBitGrayFlate,
     IndexedRgb,
     Rejected,
 }
@@ -129,6 +130,9 @@ pub(in super::super) fn note_unrecovered(
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
         Unrecovered::InsufficientReadEvidence => "the OCR read did not supply enough evidence to compare the strips",
+        Unrecovered::FourBitGrayFlate => {
+            "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support"
+        }
         Unrecovered::IndexedRgb => "the general strip route declined the 8-bit Indexed RGB scan",
         Unrecovered::Uncertified => {
             "the page is not one scan image in a supported encoding and density within the memory limit, \
