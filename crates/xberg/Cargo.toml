@@ -1817,6 +1817,7 @@ tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = "1"
 wiremock = "0.6"
+xberg-child-test = { workspace = true }
 zip = { version = "9.6.0", default-features = false, features = ["deflate-flate2"] }
 
 [[test]]

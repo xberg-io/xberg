@@ -42,7 +42,9 @@ mod strip_certificate_tests;
 #[cfg(test)]
 mod strip_fixture;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
-use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
+use samples::{
+    GrayPacking, decode_source_gray, flate_packing, retained_gray_bytes, source_density_allowed, source_frame,
+};
 
 const MAX_TILE_SIDE: u32 = 4096;
 const MIN_STANDARD_SOURCE_DPI: f64 = 150.0;
@@ -141,7 +143,8 @@ pub(super) async fn try_replace(
     let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
     attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
-    let why = match recover(attempt, backend, ocr).await? {
+    let mut source_refusal = None;
+    let why = match recover(attempt, backend, ocr, &mut source_refusal).await? {
         Some((recovered, strips))
             if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
         {
@@ -152,7 +155,7 @@ pub(super) async fn try_replace(
         }
         Some(_) => Unrecovered::Rejected,
         None if indexed::is_indexed_rgb_scan(&attempt) => Unrecovered::IndexedRgb,
-        None => Unrecovered::Uncertified,
+        None => source_refusal.unwrap_or(Unrecovered::Uncertified),
     };
     note_unrecovered(original, ocr, source, raster, why);
     Ok(false)
@@ -434,6 +437,7 @@ async fn recover(
     attempt: Attempt<'_>,
     backend: &Arc<dyn OcrBackend>,
     config: &OcrConfig,
+    source_refusal: &mut Option<Unrecovered>,
 ) -> crate::Result<Option<(TextAccumulator, usize)>> {
     let cancelled = || attempt.cancel.is_some_and(CancellationToken::is_cancelled);
     if cancelled() {
@@ -451,7 +455,7 @@ async fn recover(
     if cancelled() {
         return Err(crate::XbergError::Cancelled);
     }
-    let Some(StripPlan { source, rows, ink_rows }) = prepare(&attempt, cancelled) else {
+    let Some(StripPlan { source, rows, ink_rows }) = prepare(&attempt, cancelled, source_refusal) else {
         return if cancelled() {
             Err(crate::XbergError::Cancelled)
         } else {
@@ -591,7 +595,11 @@ async fn wait_for_cancel(cancel: Option<&CancellationToken>) {
     }
 }
 
-fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripPlan> {
+fn prepare(
+    attempt: &Attempt<'_>,
+    cancelled: impl Fn() -> bool,
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<StripPlan> {
     if attempt.max_strips < 2 {
         return None;
     }
@@ -607,7 +615,13 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
         .byte_limit
         .checked_sub(normal_bytes)?
         .checked_sub(FIXED_WORK_BYTES)?;
-    let source = certify(attempt.document, attempt.page, attempt.read_width, available)?;
+    let source = certify(
+        attempt.document,
+        attempt.page,
+        attempt.read_width,
+        available,
+        source_refusal,
+    )?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
     let mut bands = source.blank_bands(&cancelled, if source.certify_rows { 1 } else { MIN_BLANK_ROWS })?;
     let ink_rows = if source.certify_rows
@@ -650,7 +664,13 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     })
 }
 
-fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_limit: usize) -> Option<Source> {
+fn certify(
+    doc: &PdfDocument,
+    page: usize,
+    rendered_width: Option<u32>,
+    byte_limit: usize,
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<Source> {
     let (frame, content) = page_frame_and_contents(doc, page)?;
     let Object::Stream { dict, data } = content else {
         return None;
@@ -696,7 +716,12 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         {
             None
         }
-        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width)?),
+        (Some(_), "FlateDecode") => Some(flate_packing_or_refusal(
+            &dict,
+            (width, height, dpi),
+            (data.len(), byte_limit),
+            source_refusal,
+        )?),
         _ => return None,
     };
     if !source_density_allowed(dpi, packing) {
@@ -718,6 +743,37 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         certify_rows: dpi < MIN_STANDARD_SOURCE_DPI || packing.is_none_or(GrayPacking::requires_line_certificate),
         reread_split_row: dpi < MIN_STANDARD_SOURCE_DPI && packing == Some(GrayPacking::NeutralRgb),
     })
+}
+
+fn flate_packing_or_refusal(
+    dict: &std::collections::HashMap<String, Object>,
+    frame: (u32, u32, f64),
+    (compressed_len, byte_limit): (usize, usize),
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<GrayPacking> {
+    let Some(packing) = flate_packing(dict, frame.0) else {
+        *source_refusal = flate_refusal(dict, frame, compressed_len, byte_limit);
+        return None;
+    };
+    Some(packing)
+}
+
+fn flate_refusal(
+    dict: &std::collections::HashMap<String, Object>,
+    (width, height, dpi): (u32, u32, f64),
+    compressed_len: usize,
+    byte_limit: usize,
+) -> Option<Unrecovered> {
+    let (width, height) = (width as usize, height as usize);
+    let packed_bytes = width.div_ceil(2).checked_mul(height)?;
+    let retained_bytes = retained_gray_bytes(compressed_len, width.checked_mul(height)?)?;
+    let peak_bytes = retained_bytes.checked_add(packed_bytes)?;
+    (dict.get("ColorSpace").and_then(Object::as_name) == Some("DeviceGray")
+        && dict.get("BitsPerComponent").and_then(Object::as_integer) == Some(4)
+        && !dict.contains_key("DecodeParms")
+        && source_density_allowed(dpi, Some(GrayPacking::Byte))
+        && peak_bytes <= byte_limit)
+        .then_some(Unrecovered::FourBitGrayFlate)
 }
 
 pub(super) fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
@@ -1203,7 +1259,138 @@ mod tests {
     fn non_indexed_image_certificate_keeps_scalar_filters_while_content_probes_accept_singletons() {
         for (content, image, admitted) in [(false, false, true), (true, false, true), (true, true, false)] {
             let document = source_with_filter_spellings(content, image);
-            assert_eq!(certify(&document, 0, Some(1100), 100 * 1024 * 1024).is_some(), admitted);
+            assert_eq!(
+                certify(&document, 0, Some(1100), 100 * 1024 * 1024, &mut None).is_some(),
+                admitted
+            );
+        }
+    }
+
+    fn four_bit_gray_source(extra_paint: bool) -> PdfDocument {
+        let mut pdf = lopdf::Document::load_mem(TALL_FIXTURE).expect("ordinary grayscale text fixture");
+        let image = pdf.get_object_mut((5, 0)).unwrap().as_stream_mut().unwrap();
+        let width = image.dict.get(b"Width").unwrap().as_i64().unwrap() as usize;
+        let height = image.dict.get(b"Height").unwrap().as_i64().unwrap() as usize;
+        assert_eq!((width, height), (1275, 9000));
+        let samples = image.get_plain_content_with_limit(width * height).unwrap();
+        assert_eq!(samples.len(), width * height);
+        let mut packed = Vec::with_capacity(width.div_ceil(2) * height);
+        for row in samples.chunks_exact(width) {
+            packed.extend(
+                row.chunks(2)
+                    .map(|pair| (pair[0] & 0xf0) | (pair.get(1).copied().unwrap_or(255) >> 4)),
+            );
+        }
+        assert_eq!(packed.len(), width.div_ceil(2) * height);
+        image.set_plain_content(packed);
+        image.dict.set("BitsPerComponent", 4i64);
+        image.compress().expect("compress the valid four-bit scan");
+        assert_eq!(image.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+
+        if extra_paint {
+            let content = pdf.get_object_mut((4, 0)).unwrap().as_stream_mut().unwrap();
+            let mut paint = content.decompressed_content().unwrap();
+            paint.extend_from_slice(b"\n0 0 2 2 re f\n");
+            content.set_plain_content(paint);
+        }
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).expect("read valid synthetic PDF")
+    }
+
+    const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
+
+    fn four_bit_gray_refusal_requires_the_full_memory_budget() {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let packed = width.div_ceil(2) as usize * height as usize;
+        let compressed = strip_fixture::flate(&vec![0xff; packed]);
+        let document = strip_fixture::scan_flate_pdf_at(
+            SMALL_GRAY_SCAN,
+            "/ColorSpace /DeviceGray /BitsPerComponent 4",
+            &compressed,
+            144.0,
+        );
+        let peak = compressed.len() + width as usize * height as usize + 1 + packed;
+        for (budget, specific) in [(peak - 1, false), (peak, true)] {
+            let mut refusal = None;
+            assert!(certify(&document, 0, Some(128), budget, &mut refusal).is_none());
+            assert_eq!(matches!(refusal, Some(Unrecovered::FourBitGrayFlate)), specific);
+            if !specific {
+                assert!(refusal.is_none());
+            }
+        }
+    }
+
+    async fn supported_blank_gray_flate_keeps_generic_warning(
+        backend: &Arc<dyn OcrBackend>,
+        config: &ExtractionConfig,
+        ocr: &OcrConfig,
+    ) {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let compressed = strip_fixture::flate(&vec![255; width as usize * height as usize]);
+        let document = strip_fixture::scan_flate_pdf_at(SMALL_GRAY_SCAN, strip_fixture::GRAY, &compressed, 144.0);
+        let mut refusal = None;
+        assert!(certify(&document, 0, Some(128), 2 * 1024 * 1024, &mut refusal).is_some());
+        assert!(refusal.is_none());
+        let raster = (0, Arc::new(Vec::new()), 128, 2050);
+        let mut original = recognized("The clean original", 1.0, 0.0, 3);
+        assert!(
+            !try_replace(&mut original, backend, config, ocr, (&document, 0), &raster)
+                .await
+                .unwrap()
+        );
+        assert_eq!(original.content, "The clean original");
+        assert_eq!(original.processing_warnings.len(), 1);
+        assert_eq!(
+            original.processing_warnings[0].message,
+            "Page 1 was read from a render downscaled to 72 DPI and its source-image strips were not used: \
+             the page is not one scan image in a supported encoding and density within the memory limit, \
+             or a strip did not read as its source lines. The text may be incomplete."
+        );
+    }
+
+    #[tokio::test]
+    async fn tall_scan_reports_four_bit_gray_only_after_source_certification() {
+        crate::plugins::ensure_ocr_backends_initialized();
+        let backend = crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .get("tesseract")
+            .unwrap();
+        let config = ExtractionConfig::default();
+        let ocr = OcrConfig::default();
+        four_bit_gray_refusal_requires_the_full_memory_budget();
+        supported_blank_gray_flate_keeps_generic_warning(&backend, &config, &ocr).await;
+        let raster = (0, Arc::new(Vec::new()), 850, 6000);
+        let reason = "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support";
+
+        for (extra_paint, confidence, specific_warning, total_warnings) in
+            [(false, 1.0, 1, 1), (true, 1.0, 0, 1), (false, 99.0, 0, 0)]
+        {
+            let document = four_bit_gray_source(extra_paint);
+            let mut original = recognized("The clean original", confidence, 0.0, 3);
+            assert!(
+                !try_replace(&mut original, &backend, &config, &ocr, (&document, 0), &raster)
+                    .await
+                    .unwrap()
+            );
+            assert_eq!(original.content, "The clean original");
+            assert_eq!(original.processing_warnings.len(), total_warnings);
+            assert_eq!(
+                original
+                    .processing_warnings
+                    .iter()
+                    .filter(|warning| warning.message.contains(reason))
+                    .count(),
+                specific_warning
+            );
+            if specific_warning == 1 {
+                assert_eq!(
+                    original.processing_warnings[0].message,
+                    format!(
+                        "Page 1 was read from a render downscaled to 100 DPI and its source-image strips were not used: {reason}. The text may be incomplete."
+                    )
+                );
+            }
         }
     }
 
@@ -1221,7 +1408,7 @@ mod tests {
         };
         let StripPlan {
             source, rows: strips, ..
-        } = prepare(&attempt, || false).expect("admitted bounded strips");
+        } = prepare(&attempt, || false, &mut None).expect("admitted bounded strips");
         assert_eq!(source.height, 9000);
         assert_eq!(strips.first().unwrap().start, 0);
         assert_eq!(strips.last().unwrap().end, 8812);
@@ -1234,7 +1421,7 @@ mod tests {
             + strips.iter().map(|rows| rows.len()).max().unwrap() * source.width as usize * TILE_BYTES_PER_PIXEL;
         assert!(peak <= attempt.byte_limit);
         attempt.byte_limit = 32 * 1024 * 1024;
-        assert!(prepare(&attempt, || false).is_none());
+        assert!(prepare(&attempt, || false, &mut None).is_none());
     }
 
     #[tokio::test]
@@ -1261,8 +1448,9 @@ mod tests {
             tokio::task::yield_now().await;
             token.cancel();
         };
+        let mut source_refusal = None;
         let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            tokio::join!(recover(attempt, &backend, &config), cancel)
+            tokio::join!(recover(attempt, &backend, &config, &mut source_refusal), cancel)
         })
         .await
         .expect("waiting caller observes cancellation");

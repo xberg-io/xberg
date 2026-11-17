@@ -24,6 +24,8 @@ use crate::candle_ocr::config::{
 };
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
+use crate::extraction::image_decode::{ImageDecodeBudget, PreparedCandleImageDecode};
+use crate::extractors::security::SecurityLimits;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::CandleOcrError;
@@ -489,7 +491,18 @@ impl Plugin for GlmOcrBackend {
 #[async_trait]
 impl OcrBackend for GlmOcrBackend {
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
+        let limits = config.security_limits.clone().unwrap_or_default();
+        ImageDecodeBudget::from_security_limits(&limits).validate(
+            1,
+            1,
+            u64::try_from(image_bytes.len()).unwrap_or(u64::MAX),
+        )?;
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
+
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
         let opts = self.parse_options(config)?;
+        let limits = config.security_limits.clone().unwrap_or_default();
 
         if image_bytes.is_empty() {
             return Err(crate::XbergError::Validation {
@@ -498,26 +511,25 @@ impl OcrBackend for GlmOcrBackend {
             });
         }
 
-        let image_bytes_owned = image_bytes.to_vec();
         let dtype = self.dtype;
         let cache_dir = opts.cache_dir.unwrap_or_else(hf_hub::resolve_cache_dir);
-        let revision = GlmOcrEngine::revision().to_string();
 
         let (content, formulas, table_bboxes) = match opts.layout_mode {
             LayoutMode::WholePage => {
                 let task = opts.task;
                 let device = opts.device;
-                crate::extraction::image_decode::validate_standard_image_with_default_security_limits(
-                    &image_bytes_owned,
-                )?;
+                let image_bytes = Arc::clone(&image_bytes);
                 let content = tokio::task::spawn_blocking(move || {
+                    let img = decode_glm_rgb(&image_bytes, &limits, "GLM-OCR")?;
+                    let revision = GlmOcrEngine::revision().to_string();
                     let engine = get_or_init_engine(device, dtype, cache_dir, revision)?;
-                    let output = engine.process_image_with_task(&image_bytes_owned, task).map_err(|e| {
-                        crate::XbergError::Ocr {
-                            message: format!("GLM-OCR inference failed: {e}"),
-                            source: Some(Box::new(e)),
-                        }
-                    })?;
+                    let output =
+                        engine
+                            .process_rgb_image_with_task(&img, task)
+                            .map_err(|e| crate::XbergError::Ocr {
+                                message: format!("GLM-OCR inference failed: {e}"),
+                                source: Some(Box::new(e)),
+                            })?;
                     Ok::<String, crate::XbergError>(output.content)
                 })
                 .await
@@ -532,12 +544,12 @@ impl OcrBackend for GlmOcrBackend {
             LayoutMode::Paired => {
                 let enable_chart_understanding = opts.enable_chart_understanding;
                 process_paired(
-                    image_bytes_owned,
+                    Arc::clone(&image_bytes),
                     opts.device,
                     dtype,
                     enable_chart_understanding,
                     cache_dir,
-                    revision,
+                    limits,
                 )
                 .await?
             }
@@ -552,7 +564,7 @@ impl OcrBackend for GlmOcrBackend {
         let mut document = super::ocr_result::build_ocr_document(
             content,
             formulas,
-            image_bytes,
+            &image_bytes,
             config,
             super::ocr_result::OcrDocumentContext {
                 mime_type: Cow::Borrowed("text/markdown"),
@@ -568,8 +580,9 @@ impl OcrBackend for GlmOcrBackend {
     }
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
-        let bytes = crate::core::io::read_file_async(path).await?;
-        self.process_image(&bytes, config).await
+        let limits = config.security_limits.clone().unwrap_or_default();
+        let bytes = super::read_image_file(path, &limits).await?;
+        self.process_image_owned(Arc::new(bytes), config).await
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
@@ -659,20 +672,28 @@ impl PairedPage {
     }
 }
 
+fn decode_glm_rgb(image_bytes: &[u8], limits: &SecurityLimits, context: &str) -> Result<image::RgbImage> {
+    PreparedCandleImageDecode::new(image_bytes, limits, true)
+        .and_then(PreparedCandleImageDecode::decode)
+        .map(image::DynamicImage::into_rgb8)
+        .map_err(|error| match error {
+            error @ crate::XbergError::Validation { .. } => error,
+            error => crate::XbergError::Ocr {
+                message: format!("{context}: image decode failed: {error}"),
+                source: Some(Box::new(error)),
+            },
+        })
+}
+
 #[cfg(feature = "layout-detection")]
 fn detect_paired_regions(
     image_bytes: &[u8],
     device: DevicePreference,
-    limits: &crate::extractors::security::SecurityLimits,
+    limits: &SecurityLimits,
 ) -> crate::Result<(image::RgbImage, Vec<crate::layout::LayoutDetection>)> {
     use crate::layout::models::LayoutModel;
 
-    let img = crate::extraction::image_decode::decode_standard_rgb8_with_default_security_limits(image_bytes).map_err(
-        |error| crate::XbergError::Ocr {
-            message: format!("GLM-OCR paired: image decode failed: {error}"),
-            source: Some(Box::new(error)),
-        },
-    )?;
+    let img = decode_glm_rgb(image_bytes, limits, "GLM-OCR paired")?;
     crate::layout::engine::validate_layout_batch_peak(&[&img], limits)?;
     let model_path = ensure_layout_model_path()?;
     let layout_model = get_or_init_layout_model(model_path.as_path(), device).map_err(|e| crate::XbergError::Ocr {
@@ -689,14 +710,11 @@ fn detect_paired_regions(
 }
 
 #[cfg(feature = "layout-detection")]
-fn encode_paired_crop(
+fn copy_paired_crop(
     img: &image::RgbImage,
     bbox: &crate::layout::BBox,
-    limits: &crate::extractors::security::SecurityLimits,
-) -> crate::Result<Vec<u8>> {
-    const CROP_PNG_ENCODE_BYTES_PER_PIXEL: u64 = 4;
-    const CROP_PNG_ENCODE_FIXED_BYTES: u64 = 256 * 1024;
-
+    limits: &SecurityLimits,
+) -> crate::Result<image::RgbImage> {
     let img_width = img.width();
     let img_height = img.height();
     let x = (bbox.x1.max(0.0) as u32).min(img_width.saturating_sub(1));
@@ -706,33 +724,21 @@ fn encode_paired_crop(
     let current_bytes = u64::try_from(img.as_raw().len()).map_err(|_| {
         crate::extraction::image_decode::image_dimension_error(img_width, img_height, u64::MAX, u64::MAX)
     })?;
-    let crop_and_encode_bytes =
-        crate::extraction::image_decode::decoded_byte_count(w, h, 3 + CROP_PNG_ENCODE_BYTES_PER_PIXEL)?
-            .checked_add(CROP_PNG_ENCODE_FIXED_BYTES)
-            .ok_or_else(|| {
-                crate::extraction::image_decode::image_dimension_error(img_width, img_height, u64::MAX, u64::MAX)
-            })?;
+    let crop_bytes = crate::extraction::image_decode::decoded_byte_count(w, h, 3)?;
     crate::extraction::image_decode::validate_image_live_bytes(
         img_width,
         img_height,
         current_bytes,
-        crop_and_encode_bytes,
+        crop_bytes,
         limits,
     )?;
-    let crop = image::imageops::crop_imm(img, x, y, w, h).to_image();
-    let mut crop_bytes: Vec<u8> = Vec::new();
-    crop.write_to(&mut std::io::Cursor::new(&mut crop_bytes), image::ImageFormat::Png)
-        .map_err(|e| crate::XbergError::Ocr {
-            message: format!("GLM-OCR paired: crop encode failed: {e}"),
-            source: Some(Box::new(e)),
-        })?;
-    Ok(crop_bytes)
+    Ok(image::imageops::crop_imm(img, x, y, w, h).to_image())
 }
 
 #[cfg(feature = "layout-detection")]
 fn infer_paired_region(
     engine: &GlmOcrEngine,
-    crop_bytes: &[u8],
+    crop: &image::RgbImage,
     task: GlmOcrTask,
     detection: &crate::layout::LayoutDetection,
 ) -> crate::Result<Option<String>> {
@@ -743,7 +749,7 @@ fn infer_paired_region(
         bbox = ?bbox,
         "GLM-OCR paired: processing region"
     );
-    match engine.process_image_with_task(crop_bytes, task) {
+    match engine.process_rgb_image_with_task(crop, task) {
         Ok(output) => Ok(Some(output.content)),
         Err(CandleOcrError::UnsupportedConfig(ref msg)) => {
             tracing::warn!(
@@ -765,25 +771,26 @@ fn infer_paired_region(
 /// Formula page numbers are filled in by the caller. ~keep
 #[cfg(feature = "layout-detection")]
 async fn process_paired(
-    image_bytes: Vec<u8>,
+    image_bytes: Arc<Vec<u8>>,
     device: DevicePreference,
     dtype: DType,
     enable_chart_understanding: bool,
     cache_dir: PathBuf,
-    revision: String,
+    security_limits: SecurityLimits,
 ) -> crate::Result<PairedResult> {
     tokio::task::spawn_blocking(move || -> crate::Result<PairedResult> {
-        let security_limits = crate::extractors::security::SecurityLimits::default();
         let (img, sorted) = detect_paired_regions(&image_bytes, device, &security_limits)?;
+        let revision = GlmOcrEngine::revision().to_string();
         let engine = get_or_init_engine(device, dtype, cache_dir, revision)?;
         if sorted.is_empty() {
             tracing::debug!("GLM-OCR paired: no layout regions detected, falling back to whole-page inference");
-            let output = engine
-                .process_image_with_task(&image_bytes, GlmOcrTask::Ocr)
-                .map_err(|e| crate::XbergError::Ocr {
-                    message: format!("GLM-OCR paired (fallback): whole-page inference failed: {e}"),
-                    source: Some(Box::new(e)),
-                })?;
+            let output =
+                engine
+                    .process_rgb_image_with_task(&img, GlmOcrTask::Ocr)
+                    .map_err(|e| crate::XbergError::Ocr {
+                        message: format!("GLM-OCR paired (fallback): whole-page inference failed: {e}"),
+                        source: Some(Box::new(e)),
+                    })?;
             return Ok((output.content, Vec::new(), Vec::new()));
         }
         let mut page = PairedPage::new(sorted.len());
@@ -793,9 +800,9 @@ async fn process_paired(
                 page.parts.push(marker.to_string());
                 continue;
             }
-            let crop_bytes = encode_paired_crop(&img, &detection.bbox, &security_limits)?;
+            let crop = copy_paired_crop(&img, &detection.bbox, &security_limits)?;
             let region_task = task_for_label(detection.class_name, enable_chart_understanding);
-            if let Some(content) = infer_paired_region(&engine, &crop_bytes, region_task, detection)? {
+            if let Some(content) = infer_paired_region(&engine, &crop, region_task, detection)? {
                 page.push_output(detection, region_task, &content);
             }
         }
