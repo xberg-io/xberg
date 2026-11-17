@@ -111,6 +111,22 @@ fn sparse_terminal_wrap_rejects_unproved_body_geometry() {
 }
 
 #[test]
+fn sparse_terminal_wrap_stops_at_a_right_lane_overrun() {
+    for line in [PRECEDING, BETWEEN] {
+        let (mut elements, mut words) = sparse_body();
+        let last = words.iter_mut().rfind(|word| word.element == line).unwrap();
+        last.bounds[2] = 1550;
+        let expected = elements.clone();
+
+        assert!(
+            !join_scanned_wraps(&mut elements, &words, 1700, true),
+            "line {line} overruns the body lane"
+        );
+        assert_eq!(elements, expected);
+    }
+}
+
+#[test]
 fn sparse_terminal_wrap_requires_spelling_and_unclaimed_ownership() {
     for control in [
         "missing spelling",
