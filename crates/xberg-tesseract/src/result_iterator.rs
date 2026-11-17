@@ -106,7 +106,10 @@ impl<D: FnMut(*mut c_char)> Drop for TessTextGuard<D> {
 /// A non-null `pointer` must reference a valid NUL-terminated allocation that remains readable
 /// until `deleter` releases it. A null pointer represents no allocation and is rejected without
 /// calling `deleter`. `deleter` must accept a non-null allocation exactly once. ~keep
-unsafe fn copy_and_delete_tess_text(pointer: *mut c_char, deleter: impl FnMut(*mut c_char)) -> Result<String> {
+pub(super) unsafe fn copy_and_delete_tess_text(
+    pointer: *mut c_char,
+    deleter: impl FnMut(*mut c_char),
+) -> Result<String> {
     if pointer.is_null() {
         return Err(TesseractError::NullPointerError);
     }
