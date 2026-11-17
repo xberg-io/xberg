@@ -1126,9 +1126,9 @@ pub(super) fn valid_page_indices(page_indices: &[usize], page_count: usize) -> V
 /// parallel across the thread pool or sequentially on `wasm32` (which has no OS threads for
 /// rayon's work-stealing pool to use).
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn render_one_selected_page(
+pub(super) fn render_one_selected_page(
     doc: &xberg_native_pdf::PdfDocument,
-    page_rotations: &[u32],
+    rotation: u32,
     idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
@@ -1152,7 +1152,6 @@ fn render_one_selected_page(
             source: Some(render_error_source(error, exceeded)),
         }
     })?;
-    let rotation = page_rotations.get(idx).copied().unwrap_or(0);
     let (data, _, _) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
         rendered.data,
         rendered.width,
@@ -1230,7 +1229,7 @@ pub(super) fn render_selected_pages_with_image_config<'a>(
         let outcomes = crate::pdf::render::par_render_pages_collecting_results(page_indices.to_vec(), |idx| {
             render_one_selected_page(
                 doc,
-                page_rotations,
+                page_rotations.get(idx).copied().unwrap_or(0),
                 idx,
                 security_limits,
                 images_config(idx),
@@ -1248,7 +1247,7 @@ pub(super) fn render_selected_pages_with_image_config<'a>(
                     idx,
                     render_one_selected_page(
                         doc,
-                        page_rotations,
+                        page_rotations.get(idx).copied().unwrap_or(0),
                         idx,
                         security_limits,
                         images_config(idx),

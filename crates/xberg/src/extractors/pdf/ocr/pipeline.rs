@@ -1656,6 +1656,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         sparse_glyph_read::eligible_pages(config, &render_doc, native_coverage_layers.as_deref(), backend.as_ref());
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let sparse_glyph_images = sparse_glyph_read::images_config();
+    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+    let implicit_sparse_glyph_pages = sparse_glyph_read::implicit_pipeline_pages(
+        config,
+        &ocr_config_owned,
+        effective_pipeline.as_ref(),
+        &render_doc,
+        native_coverage_layers.as_deref(),
+        !probing_hidden_layer && !mixed_route_layout_active && !capture_rasters,
+    );
     let images_for_page = |page_index: usize| {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         if sparse_glyph_pages.contains_key(&page_index) {
@@ -1739,11 +1748,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let batch_end = (batch_start + batch_size).min(total);
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
+        let batch_pages = &page_indices[batch_start..batch_end];
+        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        let (deferred, rendered): (_, Option<Vec<_>>) = if implicit_sparse_glyph_pages.is_empty() {
+            (Vec::new(), None)
+        } else {
+            // Keep only one raster per sparse page slot, including when the normal read is needed.
+            let (deferred, remaining) = batch_pages
+                .iter()
+                .copied()
+                .partition(|idx| implicit_sparse_glyph_pages.contains_key(idx));
+            (deferred, Some(remaining))
+        };
+        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        let batch_pages = rendered.as_deref().unwrap_or(batch_pages);
         #[cfg(feature = "layout-detection")]
         let (page_images, render_failures, batch_raster_dpis) = if let Some(images) = layout_images_for_mixed {
             let mut page_images = Vec::with_capacity(batch_end - batch_start);
             let mut render_failures = Vec::new();
-            for &page_idx in &page_indices[batch_start..batch_end] {
+            for &page_idx in batch_pages {
                 match images.get(page_idx) {
                     Some(image) => page_images.push((page_idx, image.clone())),
                     None => render_failures.push((
@@ -1760,7 +1783,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             render_selected_pages_with_image_config(
                 &render_doc,
                 &page_rotations,
-                &page_indices[batch_start..batch_end],
+                batch_pages,
                 security_limits,
                 images_for_page,
                 preprocessing_render_dpi,
@@ -1770,7 +1793,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_image_config(
             &render_doc,
             &page_rotations,
-            &page_indices[batch_start..batch_end],
+            batch_pages,
             security_limits,
             images_for_page,
             preprocessing_render_dpi,
@@ -1929,10 +1952,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 let mut join_set = tokio::task::JoinSet::new();
                 let mut pending_pages: ahash::AHashSet<usize> = ahash::AHashSet::new();
-                let dimensions: ahash::AHashMap<_, _> = page_images
-                    .iter()
-                    .map(|(index, image)| (*index, (image.width(), image.height())))
-                    .collect();
+                let page_images = page_images.into_iter().map(|(idx, image)| (idx, Some(image)));
+                #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                let page_images = page_images.chain(deferred.into_iter().map(|idx| (idx, None)));
                 for (page_idx, image_arc) in page_images {
                     if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         break;
@@ -1977,7 +1999,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }),
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         probe_reads: pages.probe_reads.clone(),
-                        source_dpi: rendered_page_source_dpi(&render_doc, page_idx, image_arc.width()),
+                        source_dpi: None,
                         known_full_page_scan: whole_page_raster,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         detached_recognition_recovery: Some(if whole_document_scan {
@@ -2007,17 +2029,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .map(std::sync::Arc::from),
                         ..Default::default()
                     };
-                    // See `extract_with_ocr_for_page`'s doc comment on
-                    // `points_per_pixel_override`: this call hands the stage a single
-                    // detached image with `content: None`, so its own pixel -> point lookup
-                    // cannot resolve this page's real MediaBox height and would silently fall
-                    // back to `1.0`. Computed from the same `render_doc` / raster height the
-                    // sibling single-backend route below rescales bboxes with.
-                    let points_per_pixel_override = {
-                        let (_, page_height_pt) = page_dimensions_pt(&render_doc, page_idx);
-                        let image_height_px = image_arc.height();
-                        (image_height_px > 0).then(|| page_height_pt / image_height_px as f32)
-                    };
                     // This page's own pixel-space detection from the whole-document layout
                     // pass above (#665), cloned out here because the spawned task below must
                     // own everything it captures. `extract_with_ocr_for_page` (reached through
@@ -2033,9 +2044,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && !mixed_route_layout_active
                         && page_ocr_hints.known_full_page_scan
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
+                    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                    let sparse_words = implicit_sparse_glyph_pages.get(&idx).cloned();
                     let task = crate::engine::seams::inherit_progress(async move {
-                        if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, (Err(crate::XbergError::Cancelled), None));
+                        let token = config_clone.cancel_token.as_ref();
+                        if token.is_some_and(|t| t.is_cancelled()) {
+                            return (idx, (Err(crate::XbergError::Cancelled), None), (0, 0), None, Vec::new());
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2046,6 +2060,53 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                             orientation_retry: orientation_retry.as_ref(),
                         };
+                        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                        let (image_arc, rerendered_dpi, warnings) = if let Some(words) = sparse_words {
+                            let trial = sparse_glyph_read::PipelineTrial {
+                                pdf: &render_doc_clone,
+                                index: idx,
+                                rotation: page_rotation_degrees,
+                                config: &config_clone,
+                                pipeline: &pipeline_clone,
+                                hints: page_ocr_hints.clone(),
+                                words,
+                                normal_preprocessing_dpi: preprocessing_render_dpi,
+                            };
+                            match trial.run().await {
+                                Ok(sparse_glyph_read::Trial::Accepted(result, dimensions, dpi, warnings)) => {
+                                    return (
+                                        idx,
+                                        capture_ocr_completion(Ok(*result), token),
+                                        dimensions,
+                                        Some(dpi),
+                                        warnings,
+                                    );
+                                }
+                                Ok(sparse_glyph_read::Trial::Normal(image, dpi, warnings)) => {
+                                    (Arc::new(image), Some(dpi), warnings)
+                                }
+                                Err(error) => {
+                                    return (idx, capture_ocr_completion(Err(error), token), (0, 0), None, Vec::new());
+                                }
+                            }
+                        } else {
+                            (image_arc.expect("rendered pipeline input"), None, Vec::new())
+                        };
+                        #[cfg(not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32"))))]
+                        let (image_arc, rerendered_dpi, warnings) =
+                            (image_arc.expect("rendered pipeline input"), None, Vec::new());
+                        let dimensions = (image_arc.width(), image_arc.height());
+                        let mut page_ocr_hints = page_ocr_hints;
+                        page_ocr_hints.source_dpi = rendered_page_source_dpi(source.document, idx, dimensions.0);
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        if let Some(number_source) = page_ocr_hints.number_source.as_mut()
+                            && let Some(dpi) = rerendered_dpi
+                        {
+                            number_source.raster = Some(dpi);
+                        }
+                        let (_, page_height_pt) = page_dimensions_pt(source.document, idx);
+                        let points_per_pixel_override =
+                            (dimensions.1 > 0).then(|| page_height_pt / dimensions.1 as f32);
                         let result = Box::pin(run_ocr_pipeline_for_page(
                             None,
                             Some(std::slice::from_ref(image_arc.as_ref())),
@@ -2074,10 +2135,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .await;
                         (
                             idx,
-                            capture_ocr_completion(
-                                result.map_err(crate::XbergError::from),
-                                config_clone.cancel_token.as_ref(),
-                            ),
+                            capture_ocr_completion(result.map_err(crate::XbergError::from), token),
+                            dimensions,
+                            rerendered_dpi,
+                            warnings,
                         )
                     });
                     #[cfg(test)]
@@ -2103,11 +2164,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 break;
                             }
                         };
-                    let (page_idx, (result, expired)) = join_result.map_err(|e| crate::XbergError::Plugin {
-                        message: format!("OCR pipeline task panicked: {}", e),
-                        plugin_name: "ocr".to_string(),
-                    })?;
+                    let (page_idx, (result, expired), page_dims, dpi, warnings) =
+                        join_result.map_err(|e| crate::XbergError::Plugin {
+                            message: format!("OCR pipeline task panicked: {}", e),
+                            plugin_name: "ocr".to_string(),
+                        })?;
                     pending_pages.remove(&page_idx);
+                    accumulated_warnings.extend(warnings);
                     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
                         || matches!(&result, Err(crate::XbergError::Cancelled))
                     {
@@ -2217,12 +2280,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
                     }
-                    let page_dims = dimensions.get(&page_idx).copied();
+                    if let Some(dpi) = dpi {
+                        raster_dpis.insert(page_idx, dpi);
+                    }
                     for mut formula in formulas {
                         formula.page = Some(page_number);
-                        if let Some((w, h)) = page_dims {
-                            formula_bbox_to_page_points(&mut formula, &render_doc, page_idx, None, w, h);
-                        }
+                        formula_bbox_to_page_points(
+                            &mut formula,
+                            &render_doc,
+                            page_idx,
+                            None,
+                            page_dims.0,
+                            page_dims.1,
+                        );
                         accumulated_formulas.push(formula);
                     }
                     // `run_ocr_pipeline`/`extract_with_ocr` assemble `text` as if this
@@ -2236,7 +2306,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // This route also skipped the pixel -> point bbox conversion entirely,
                     // so its bboxes stayed in raster pixels after #1423 fixed the
                     // single-backend route; `build_pipeline_ocr_page_document` applies it.
-                    let raster_size_px = page_dims.unwrap_or((0, 0));
+                    let raster_size_px = page_dims;
                     if !paragraphs_in_points && let Some(raster_px) = paragraph_page.raster_px {
                         ocr_raster_by_page.insert(page_number, raster_px);
                     }
@@ -5086,6 +5156,8 @@ pub(super) struct DetachedOcrPage<'a> {
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Clone, Default)]
 pub(crate) struct PageOcrHints {
+    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) sparse_glyph_trial: Option<sparse_glyph_read::MarkedWords>,
     #[cfg(all(
         feature = "pdf",
         feature = "ocr",
@@ -5522,6 +5594,14 @@ pub(super) async fn extract_with_ocr_for_page(
         {
             builtin_tesseract = registry.is_builtin_tesseract(&backend);
             can_retry_orientation = !has_layout_detections && builtin_tesseract;
+        }
+        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        if !builtin_tesseract
+            && page_ocr_hints
+                .as_ref()
+                .is_some_and(|hints| hints.sparse_glyph_trial.is_some())
+        {
+            return Err(sparse_glyph_read::declined());
         }
         backend
     };
@@ -6998,7 +7078,45 @@ pub(super) async fn extract_with_ocr_for_page(
             let page_idx = batch_start + offset;
             let document_page_idx = page_index_offset + page_idx;
             let document_page_number = (document_page_idx + 1) as u32;
-            let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+            let ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+            #[cfg(all(
+                test,
+                paddle_ocr,
+                feature = "ocr",
+                feature = "bundle-tessdata-eng",
+                not(target_arch = "wasm32")
+            ))]
+            let mut ocr_result = sparse_glyph_read::test_implicit_attempt(
+                ocr_result,
+                base_ocr_config,
+                encoded_batch[offset].2,
+                encoded_batch[offset].3,
+                page_ocr_hints
+                    .as_ref()
+                    .and_then(|hints| hints.sparse_glyph_trial.as_ref()),
+            );
+            #[cfg(not(all(
+                test,
+                paddle_ocr,
+                feature = "ocr",
+                feature = "bundle-tessdata-eng",
+                not(target_arch = "wasm32")
+            )))]
+            let mut ocr_result = ocr_result;
+            #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+            if let Some(words) = page_ocr_hints
+                .as_ref()
+                .and_then(|hints| hints.sparse_glyph_trial.as_ref())
+                && !sparse_glyph_read::accepted_pipeline_read(
+                    words,
+                    &ocr_result,
+                    (encoded_batch[offset].2, encoded_batch[offset].3),
+                    &base_ocr_config.effective_thresholds(),
+                    backend.confidence_semantics(),
+                )
+            {
+                return Err(sparse_glyph_read::declined());
+            }
 
             #[cfg(all(
                 feature = "pdf",
@@ -10843,7 +10961,19 @@ async fn run_ocr_pipeline_stages(
         && matches!(available_stages.as_slice(), [first, second]
             if first.backend == "tesseract" && second.backend == "paddleocr");
 
+    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+    let sparse_trial = inputs
+        .page_ocr_hints
+        .as_ref()
+        .is_some_and(|hints| hints.sparse_glyph_trial.is_some());
+    #[cfg(not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32"))))]
+    let sparse_trial = false;
+
     for stage in &available_stages {
+        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        if sparse_trial && (!automatic_paddle || stage.backend != "tesseract") {
+            return Err(sparse_glyph_read::declined());
+        }
         let mut stage_ocr = ocr_config.clone();
         super::stage_model_inputs::StageModelInputs::new(ocr_config, stage).apply_to(&mut stage_ocr);
         if stage.paddle_ocr_config.is_some() || stage.paddle_ocr_settings.is_some() {
@@ -10853,6 +10983,8 @@ async fn run_ocr_pipeline_stages(
         stage_ocr.quality_thresholds = Some(pipeline.quality_thresholds.clone());
         stage_ocr.vlm_config = stage.vlm_config.clone();
         stage_ocr.backend_options = stage.backend_options.clone();
+        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        let stage_ocr = sparse_glyph_read::ocr_config(stage_ocr, sparse_trial);
 
         let stage_config = ExtractionConfig {
             ocr: Some(stage_ocr),
@@ -10995,7 +11127,13 @@ async fn run_ocr_pipeline_stages(
                         ..Default::default()
                     }
                 };
-                if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
+                #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                if sparse_trial && (score < pipeline.quality_thresholds.pipeline_min_quality || text.trim().is_empty())
+                {
+                    return Err(sparse_glyph_read::declined());
+                }
+                if score >= pipeline.quality_thresholds.pipeline_min_quality || (skip_automatic_paddle && !sparse_trial)
+                {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(
                         run_layers,
                         RunLayerSources {
@@ -11081,7 +11219,8 @@ async fn run_ocr_pipeline_stages(
                 }
             }
             Err(failed_stage) => {
-                if matches!(failed_stage.error, crate::XbergError::Cancelled)
+                if sparse_trial
+                    || matches!(failed_stage.error, crate::XbergError::Cancelled)
                     || crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error)
                 {
                     return Err(failed_stage);

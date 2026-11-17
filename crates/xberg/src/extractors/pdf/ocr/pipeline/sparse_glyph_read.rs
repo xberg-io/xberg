@@ -19,7 +19,7 @@ const MAX_READ_ELEMENTS: usize = 4096;
 const MIN_MARKED_WIDTH_PT: f32 = 2.4;
 
 #[derive(Clone)]
-pub(super) struct MarkedWords {
+pub(crate) struct MarkedWords {
     media: xberg_native_pdf::geometry::Rect,
     words: Vec<(String, LineBox)>,
 }
@@ -59,6 +59,166 @@ pub(super) fn eligible_pages(
             marked_words(pdf, index, layer).map(|words| (index, words))
         })
         .collect()
+}
+
+#[cfg(paddle_ocr)]
+pub(super) fn implicit_pipeline_pages(
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+    pipeline: Option<&crate::core::config::OcrPipelineConfig>,
+    pdf: &PdfDocument,
+    layers: Option<&ahash::AHashMap<u32, String>>,
+    allowed: bool,
+) -> ahash::AHashMap<usize, MarkedWords> {
+    if !allowed
+        || config.force_ocr
+        || config.force_ocr_pages.is_some()
+        || !matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
+        || !super::uses_default_ocr_pipeline(ocr)
+        || !pipeline.is_some_and(|pipeline| {
+            matches!(pipeline.stages.as_slice(), [first, second]
+                if first.backend == "tesseract" && second.backend == "paddleocr")
+        })
+    {
+        return Default::default();
+    }
+    crate::plugins::ensure_ocr_backends_initialized();
+    let backend = crate::plugins::registry::get_ocr_backend_registry()
+        .read()
+        .get(&ocr.backend)
+        .ok();
+    eligible_pages(config, pdf, layers, backend.as_ref())
+}
+
+#[cfg(paddle_ocr)]
+pub(super) struct PipelineTrial<'a> {
+    pub pdf: &'a Arc<PdfDocument>,
+    pub index: usize,
+    pub rotation: u32,
+    pub config: &'a ExtractionConfig,
+    pub pipeline: &'a crate::core::config::OcrPipelineConfig,
+    pub hints: super::PageOcrHints,
+    pub words: MarkedWords,
+    pub normal_preprocessing_dpi: Option<i32>,
+}
+
+#[cfg(paddle_ocr)]
+type Dpi = crate::pdf::render::OcrRasterDpi;
+
+#[cfg(paddle_ocr)]
+type Warnings = Vec<crate::types::ProcessingWarning>;
+
+#[cfg(paddle_ocr)]
+pub(super) enum Trial {
+    Accepted(Box<super::OcrPipelineOutput>, (u32, u32), Dpi, Warnings),
+    Normal(image::DynamicImage, Dpi, Warnings),
+}
+
+#[cfg(paddle_ocr)]
+pub(super) fn declined() -> super::FailedOcrRun {
+    crate::XbergError::Ocr {
+        message: "Sparse glyph OCR trial did not recover reliable text".to_owned(),
+        source: None,
+    }
+    .into()
+}
+
+#[cfg(paddle_ocr)]
+impl PipelineTrial<'_> {
+    async fn render(&self, sparse: bool) -> crate::Result<(image::DynamicImage, Dpi, Warnings)> {
+        self.check_stop()?;
+        let pdf = Arc::clone(self.pdf);
+        let limits = self.config.security_limits.clone().unwrap_or_default();
+        let (idx, rotation) = (self.index, self.rotation);
+        let preprocessing = if sparse { None } else { self.normal_preprocessing_dpi };
+        let ((_, image), dpi, warnings) = super::super::super::spawn_pdf_blocking(move || {
+            let config = sparse.then(images_config);
+            let (((idx, image), dpi), warnings) = crate::pdf::render::capture_render_warnings(|| {
+                super::super::rendering::render_one_selected_page(
+                    &pdf,
+                    rotation,
+                    idx,
+                    &limits,
+                    config.as_ref(),
+                    preprocessing,
+                )
+            })?;
+            Ok(((idx, image), dpi, warnings))
+        })
+        .await?;
+        self.check_stop()?;
+        Ok((image, dpi, warnings))
+    }
+
+    fn check_stop(&self) -> crate::Result<()> {
+        super::super::super::ensure_pdf_not_cancelled(self.config)?;
+        if self
+            .config
+            .cancel_token
+            .as_ref()
+            .is_some_and(|token| token.time_limit_reached())
+        {
+            return Err(declined().into());
+        }
+        Ok(())
+    }
+
+    async fn read(&self, image: &image::DynamicImage) -> super::OcrRunResult<super::OcrPipelineOutput> {
+        let mut hints = self.hints.clone();
+        hints.sparse_glyph_trial = Some(self.words.clone());
+        hints.source_dpi = super::rendered_page_source_dpi(self.pdf, self.index, image.width());
+        hints.number_source = None;
+        hints.probe_reads = None;
+        let (_, height_pt) = super::page_dimensions_pt(self.pdf, self.index);
+        let points_per_pixel = (image.height() > 0).then(|| height_pt / image.height() as f32);
+        let detached = super::DetachedOcrPage {
+            document: self.pdf,
+            stored_scan: None,
+            orientation_retry: None,
+        };
+        Box::pin(super::run_ocr_pipeline_for_page(
+            None,
+            Some(std::slice::from_ref(image)),
+            #[cfg(feature = "layout-detection")]
+            None,
+            self.config,
+            self.pipeline,
+            None,
+            self.rotation,
+            true,
+            points_per_pixel,
+            Some(hints),
+            self.index,
+            Some(detached),
+        ))
+        .await
+    }
+
+    pub(super) async fn run(self) -> crate::Result<Trial> {
+        if let Ok((image, dpi, warnings)) = self.render(true).await
+            && super::rendered_page_source_dpi(self.pdf, self.index, image.width())
+                .is_some_and(|source| (source - f64::from(READ_DPI)).abs() < 1.0)
+        {
+            let dimensions = (image.width(), image.height());
+            match self.read(&image).await {
+                Ok(result)
+                    if result
+                        .9
+                        .get(&((self.index + 1) as u32))
+                        .is_some_and(|metadata| matches_trial_raster(metadata, dimensions)) =>
+                {
+                    self.check_stop()?;
+                    return Ok(Trial::Accepted(Box::new(result), dimensions, dpi, warnings));
+                }
+                Err(error) if matches!(error.error, crate::XbergError::Cancelled) => {
+                    return Err(crate::XbergError::Cancelled);
+                }
+                Ok(_) | Err(_) => tracing::debug!(page = self.index + 1, "Retrying sparse glyph OCR at normal density"),
+            }
+        }
+        let (image, dpi, warnings) = self.render(false).await?;
+        Ok(Trial::Normal(image, dpi, warnings))
+    }
 }
 
 fn margin_filtering_active(config: &ExtractionConfig) -> bool {
@@ -162,6 +322,30 @@ pub(super) fn rejected_by_page_quality(
         .and_then(serde_json::Value::as_f64);
     ocr_recognition_noise_decision(&read.content, thresholds, semantics, mean_text_conf_of(metadata)).suspected()
         || is_dictionary_invalid_noise(dictionary_ratio, thresholds)
+}
+
+#[cfg(paddle_ocr)]
+pub(super) fn accepted_pipeline_read(
+    words: &MarkedWords,
+    read: &ExtractedDocument,
+    dimensions: (u32, u32),
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    semantics: crate::plugins::ConfidenceSemantics,
+) -> bool {
+    read.metadata
+        .image_preprocessing
+        .as_ref()
+        .is_some_and(|metadata| matches_trial_raster(metadata, dimensions))
+        && words.accounted_for(read)
+        && !rejected_by_page_quality(read, thresholds, semantics)
+}
+
+#[cfg(paddle_ocr)]
+fn matches_trial_raster(metadata: &crate::types::ImagePreprocessingMetadata, dimensions: (u32, u32)) -> bool {
+    metadata.target_dpi == READ_DPI
+        && (metadata.original_dimensions.width, metadata.original_dimensions.height)
+            == (dimensions.0 as usize, dimensions.1 as usize)
+        && metadata.new_dimensions.is_none()
 }
 
 fn matches_marked_word(native: &str, recognized: &str) -> bool {
@@ -275,10 +459,12 @@ const MISSING_WORD_CASE: usize = 0x3150_5102;
 const MARGIN_CASE: usize = 0x3150_5103;
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const NORMAL_CONTROL_CASE: usize = 0x3150_5104;
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+const IMPLICIT_MISSING_WORD_CASE: usize = 0x3238_5101;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
-    test_case(config).is_some()
+    test_case(config).is_some_and(|case| !implicit_missing_word_case(case))
         || config
             .security_limits
             .as_ref()
@@ -295,7 +481,34 @@ fn test_case(config: &OcrConfig) -> Option<usize> {
         .security_limits
         .as_ref()
         .map(|limits| limits.max_archive_size)
-        .filter(|case| matches!(*case, QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE))
+        .filter(|case| {
+            matches!(*case, QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE) || implicit_missing_word_case(*case)
+        })
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn implicit_missing_word_case(case: usize) -> bool {
+    #[cfg(paddle_ocr)]
+    return case == IMPLICIT_MISSING_WORD_CASE;
+    #[cfg(not(paddle_ocr))]
+    {
+        let _ = case;
+        false
+    }
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+pub(super) fn test_implicit_attempt(
+    result: ExtractedDocument,
+    config: &OcrConfig,
+    width: u32,
+    height: u32,
+    words: Option<&MarkedWords>,
+) -> ExtractedDocument {
+    if test_case(config).is_some_and(implicit_missing_word_case) {
+        return test_attempt(Ok(result), config, width, height, words).unwrap();
+    }
+    result
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
@@ -314,7 +527,7 @@ pub(super) fn test_attempt(
                 words.accounted_for(read),
                 "unmodified read must account for the marked words"
             );
-            if case == MISSING_WORD_CASE {
+            if case == MISSING_WORD_CASE || implicit_missing_word_case(case) {
                 remove_marked_word(read, words);
                 assert!(!words.accounted_for(read));
             }
@@ -383,6 +596,14 @@ fn active_pdf_margin_uses_one_normal_density_read() {
     });
 }
 
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[test]
+fn implicit_pipeline_retries_missing_marked_words_at_normal_density() {
+    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || {
+        assert_sparse_glyph_attempts(IMPLICIT_MISSING_WORD_CASE)
+    });
+}
+
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 async fn assert_sparse_glyph_attempts(case: usize) {
     const FIXTURE: &str = concat!(
@@ -422,7 +643,7 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
             quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
-                discard_suspected_ocr_noise: case != MISSING_WORD_CASE,
+                discard_suspected_ocr_noise: case != MISSING_WORD_CASE && !implicit_missing_word_case(case),
                 min_ocr_mean_confidence: 50.0,
                 ..Default::default()
             }),

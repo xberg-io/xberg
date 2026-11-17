@@ -49,6 +49,7 @@ fn automatic_ocr_keeps_overprinted_separation_text_and_native_sibling() {
         assert_eq!(ocr.content.split_whitespace().collect::<Vec<_>>(), expected, "{label}");
         let raster = ocr.image_preprocessing.as_ref().expect("OCR raster provenance");
         assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+        assert_eq!(raster.original_dimensions.height, 1320, "{label}");
         assert_eq!(raster.target_dpi, 120, "{label}");
         assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
         assert_eq!(
@@ -180,6 +181,7 @@ fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method:
     if method == ExtractionMethod::Mixed {
         let raster = page.image_preprocessing.as_ref().expect("OCR raster provenance");
         assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+        assert_eq!(raster.original_dimensions.height, 1320, "{label}");
         assert_eq!(raster.target_dpi, 120, "{label}");
         assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
     }
