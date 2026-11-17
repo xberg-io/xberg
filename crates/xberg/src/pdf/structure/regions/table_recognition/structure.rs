@@ -11,6 +11,16 @@ use super::{
 #[path = "column_spans.rs"]
 mod column_spans;
 
+#[path = "row_span_closure.rs"]
+mod row_span_closure;
+
+pub(super) use row_span_closure::SourceOwnership;
+
+pub(super) struct StructureWords<'a> {
+    pub(super) words: &'a [&'a HocrWord],
+    pub(super) ownership: Option<SourceOwnership<'a>>,
+}
+
 type SpanPlan = Vec<Vec<Option<(usize, usize)>>>;
 
 struct CellRegion {
@@ -20,6 +30,7 @@ struct CellRegion {
     col_span: usize,
 }
 
+#[cfg(test)]
 pub(super) fn apply_structure(
     dense: &mut [Vec<String>],
     source_row_bands: &[Option<(f32, f32)>],
@@ -28,10 +39,22 @@ pub(super) fn apply_structure(
     crop: &TatrCrop,
     page_height: f32,
 ) -> TableGrid {
+    let source = StructureWords { words, ownership: None };
+    apply_structure_with_source(dense, source_row_bands, source, inference, crop, page_height)
+}
+
+pub(super) fn apply_structure_with_source(
+    dense: &mut [Vec<String>],
+    source_row_bands: &[Option<(f32, f32)>],
+    source: StructureWords<'_>,
+    inference: &TatrInference,
+    crop: &TatrCrop,
+    page_height: f32,
+) -> TableGrid {
     let rows = dense.len();
     let cols = dense.first().map_or(0, Vec::len);
     let mut plan = vec![vec![Some((1, 1)); cols]; rows];
-    apply_model_spans(dense, &mut plan, source_row_bands, words, inference, crop);
+    apply_model_spans(dense, &mut plan, source_row_bands, source, inference, crop);
     let header_rows = header_row_count(dense, &plan, inference.structure.header_row_count);
     let mut cells = Vec::new();
     for (row, columns) in plan.into_iter().enumerate() {
@@ -64,7 +87,7 @@ fn apply_model_spans(
     dense: &mut [Vec<String>],
     plan: &mut SpanPlan,
     bands: &[Option<(f32, f32)>],
-    words: &[&HocrWord],
+    source: StructureWords<'_>,
     inference: &TatrInference,
     crop: &TatrCrop,
 ) {
@@ -78,7 +101,7 @@ fn apply_model_spans(
     let mut paint = SpanPaint {
         occupied: &occupied,
         bands,
-        words,
+        words: source.words,
         inference,
         crop,
         dividers: BTreeMap::new(),
@@ -102,6 +125,18 @@ fn apply_model_spans(
                     merge_span(dense, plan, (row, row + 1, col_start, col_end));
                 }
             }
+            continue;
+        }
+
+        let body = row_start + 1;
+        if let Some(source) = source.ownership
+            && col_end - col_start == 1
+            && body == inference.structure.header_row_count
+            && dividers.as_slice() == [body]
+            && row_end - body > 1
+            && paint.closed_body_cell(body..row_end, col_start, source).is_some()
+            && merge_span(dense, plan, (body, row_end, col_start, col_end))
+        {
             continue;
         }
 
@@ -515,16 +550,16 @@ fn merge_span(
     dense: &mut [Vec<String>],
     plan: &mut SpanPlan,
     (row_start, row_end, col_start, col_end): (usize, usize, usize, usize),
-) {
+) -> bool {
     let cols = dense.first().map_or(0, Vec::len);
     if row_start >= row_end || col_start >= col_end || row_end > dense.len() || col_end > cols {
-        return;
+        return false;
     }
     if plan[row_start..row_end]
         .iter()
         .any(|row| row[col_start..col_end].iter().any(|cell| *cell != Some((1, 1))))
     {
-        return;
+        return false;
     }
     let mut fragments = Vec::new();
     for row in row_start..row_end {
@@ -538,6 +573,7 @@ fn merge_span(
     }
     dense[row_start][col_start] = fragments.join(" ");
     plan[row_start][col_start] = Some((row_end - row_start, col_end - col_start));
+    true
 }
 
 fn grid_cell(

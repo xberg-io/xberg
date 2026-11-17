@@ -415,10 +415,18 @@ fn assemble_tatr_table(
         .iter()
         .map(|local_id| indexed_table_words[*local_id].0)
         .collect();
-    let grid = structure::apply_structure(
+    let ownership = (allowed_word_ids.is_none()
+        && recovered.is_none()
+        && grid_output.grid.len() == grid_output.source_row_bands.len())
+    .then(|| structure::SourceOwnership::new(&grid_output.source_placements, context.words));
+    let source = structure::StructureWords {
+        words: &table_words,
+        ownership,
+    };
+    let grid = structure::apply_structure_with_source(
         &mut grid_output.grid,
         &grid_output.source_row_bands,
-        &table_words,
+        source,
         inference,
         crop,
         context.page_height,
@@ -967,6 +975,7 @@ struct TatrGridOutput {
     consumed_word_indices: Vec<usize>,
     model_grid_cell_count: usize,
     source_row_bands: Vec<Option<(f32, f32)>>,
+    source_placements: Vec<Option<(usize, usize)>>,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -986,6 +995,7 @@ fn build_tatr_grid_table(
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
     }
 
@@ -999,6 +1009,7 @@ fn build_tatr_grid_table(
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
     }
 
@@ -1058,7 +1069,8 @@ fn build_tatr_grid_table(
         })
         .collect();
     let mut grid: Vec<Vec<String>> = Vec::with_capacity(num_rows);
-    for row_cells in &cell_words {
+    let mut source_placements = vec![None; words.len()];
+    for (ri, row_cells) in cell_words.iter().enumerate() {
         let mut grid_row = vec![String::new(); num_cols];
         for (ci, cell_word_indices) in row_cells.iter().enumerate() {
             if cell_word_indices.is_empty() {
@@ -1068,7 +1080,10 @@ fn build_tatr_grid_table(
             sorted.sort_by(|a, b| a.2.total_cmp(&b.2).then_with(|| a.1.total_cmp(&b.1)));
             let text: String = sorted
                 .iter()
-                .map(|(wi, _, _)| words[*wi].text.trim())
+                .map(|(wi, _, _)| {
+                    source_placements[*wi] = Some((ri, ci));
+                    words[*wi].text.trim()
+                })
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -1092,6 +1107,7 @@ fn build_tatr_grid_table(
         consumed_word_indices,
         model_grid_cell_count: num_rows * num_cols,
         source_row_bands,
+        source_placements,
     }
 }
 
@@ -2661,6 +2677,7 @@ mod tests {
             consumed_word_indices: vec![0, 1, 2, 3, 4],
             model_grid_cell_count: 20,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2677,6 +2694,7 @@ mod tests {
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(!tatr_grid_is_credible(&output, 0, false));
@@ -2691,6 +2709,7 @@ mod tests {
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, true));
@@ -2711,6 +2730,7 @@ mod tests {
             consumed_word_indices: (0..4).collect(),
             model_grid_cell_count: 15,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2728,6 +2748,7 @@ mod tests {
             consumed_word_indices: (0..3).collect(),
             model_grid_cell_count: 6,
             source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
