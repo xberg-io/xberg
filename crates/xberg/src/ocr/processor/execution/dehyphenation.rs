@@ -4,6 +4,7 @@ use crate::types::internal::{ElementKind, InternalElement};
 use std::collections::HashSet;
 use std::ops::Range;
 
+#[path = "dehyphenation/continuation.rs"]
 mod continuation;
 
 struct Line<'a> {
@@ -514,4 +515,5 @@ No independent witness here",
 }
 
 #[cfg(test)]
+#[path = "dehyphenation/continuation_tests.rs"]
 mod continuation_tests;
