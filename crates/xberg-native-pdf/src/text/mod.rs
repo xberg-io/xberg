@@ -5,6 +5,7 @@
 
 pub mod bidi;
 pub mod cjk_punctuation;
+pub(crate) mod cjk_ranges;
 pub mod complex_script_detector;
 pub mod document_classifier;
 pub mod hyphenation;
