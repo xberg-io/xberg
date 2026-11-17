@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, ImageProcessor, decode_image_with_budget};
+use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, ImageProcessor};
 use crate::{CandleOcrError, CandleOcrOutput, ModelKind};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -345,17 +345,31 @@ impl TrocrEngine {
 
         tracing::debug!(image_size = image_bytes.len(), "TrOCR: preprocessing image");
 
-        let img = decode_image_with_budget(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, false)?;
-        self.process_decoded_image(&img)
+        let tensor = ImageProcessor::default()
+            .process(image_bytes, &self.device)
+            .map_err(trocr_preprocessing_error)?;
+        self.recognize_tensor(&tensor)
     }
 
-    /// Recognize text from a raster already decoded and budgeted by the caller.
+    /// Recognize text from a decoded raster using the default 100 MiB preprocessing budget.
     pub fn process_decoded_image(&self, img: &image::DynamicImage) -> Result<CandleOcrOutput> {
-        let processor = ImageProcessor::default();
-        let image_tensor = processor
-            .process_decoded_image(img, &self.device)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Image preprocessing failed: {}", e)))?;
+        self.process_decoded_image_with_budget(img, DEFAULT_IMAGE_DECODE_BUDGET)
+    }
 
+    /// Recognize text from a decoded raster using the caller's preprocessing budget.
+    ///
+    /// # Errors
+    /// Returns a typed image limit error if the preprocessing buffers exceed the budget.
+    /// Propagates other preprocessing and inference errors.
+    #[doc(hidden)]
+    pub fn process_decoded_image_with_budget(&self, img: &image::DynamicImage, budget: u64) -> Result<CandleOcrOutput> {
+        let tensor = ImageProcessor::default()
+            .process_decoded_image_with_budget(img, &self.device, budget)
+            .map_err(trocr_preprocessing_error)?;
+        self.recognize_tensor(&tensor)
+    }
+
+    fn recognize_tensor(&self, image_tensor: &Tensor) -> Result<CandleOcrOutput> {
         tracing::debug!(tensor_shape = ?image_tensor.shape().dims(), "TrOCR: image tensor shape after preprocessing");
 
         let mut model_guard = self.model.lock();
@@ -364,7 +378,7 @@ impl TrocrEngine {
         tracing::debug!("TrOCR: running encoder forward pass");
         let encoder_hidden_states = model_guard
             .encoder()
-            .forward(&image_tensor)
+            .forward(image_tensor)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Encoder forward failed: {}", e)))?;
 
         tracing::debug!(encoder_shape = ?encoder_hidden_states.shape().dims(), "TrOCR: encoder hidden states shape");
@@ -401,6 +415,14 @@ impl TrocrEngine {
     /// Get model kind identifier for telemetry.
     pub fn model_kind(&self) -> ModelKind {
         ModelKind::Trocr
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn trocr_preprocessing_error(error: CandleOcrError) -> CandleOcrError {
+    match error {
+        error @ CandleOcrError::Image(_) => error,
+        other => CandleOcrError::InferenceFailed(format!("Image preprocessing failed: {other}")),
     }
 }
 

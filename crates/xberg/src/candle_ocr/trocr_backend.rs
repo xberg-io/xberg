@@ -15,9 +15,11 @@ use crate::candle_ocr::config::{
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
 use crate::extraction::image_decode::{ImageDecodeBudget, PreparedCandleImageDecode};
+use crate::extractors::security::SecurityLimits;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::DevicePreference;
+use xberg_candle_ocr::models::image_processor::ImageProcessor;
 use xberg_candle_ocr::models::{TrocrEngine, TrocrVariant};
 
 /// Parse and check the TrOCR `backend_options`.
@@ -83,6 +85,14 @@ fn reject_whole_page_input((width, height): (u32, u32)) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn admit_trocr_preprocessing(decode: &PreparedCandleImageDecode<'_>, limits: &SecurityLimits) -> Result<()> {
+    reject_whole_page_input(decode.dimensions())?;
+    let processor = ImageProcessor::default();
+    decode.validate_preprocessing_peak(limits, |width, height, bpp| {
+        processor.resize_working_bytes(width, height, bpp)
+    })
 }
 
 /// Process-wide engine cache keyed by `(variant_discriminant, device_preference, cache_dir, revision)`.
@@ -265,14 +275,16 @@ impl OcrBackend for TrocrBackend {
         };
         let (content, image_bytes) = tokio::task::spawn_blocking(move || {
             let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, false).map_err(decode_error)?;
-            reject_whole_page_input(decode.dimensions())?;
+            admit_trocr_preprocessing(&decode, &limits)?;
             let img = decode.decode().map_err(decode_error)?;
             let engine = get_or_init_engine(variant, options.device, cache_dir, revision)?;
 
-            let output = engine.process_decoded_image(&img).map_err(|e| crate::XbergError::Ocr {
-                message: format!("TrOCR inference failed: {}", e),
-                source: Some(Box::new(e)),
-            })?;
+            let output = engine
+                .process_decoded_image_with_budget(&img, u64::try_from(limits.max_content_size).unwrap_or(u64::MAX))
+                .map_err(|e| crate::XbergError::Ocr {
+                    message: format!("TrOCR inference failed: {e}"),
+                    source: Some(Box::new(e)),
+                })?;
 
             Ok::<_, crate::XbergError>((output.content, image_bytes))
         })
@@ -424,6 +436,32 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn configured_resize_budget_applies_to_an_admitted_line_before_decode() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 16)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let limits = SecurityLimits {
+            max_content_size: 1 << 20,
+            ..Default::default()
+        };
+        let decode = PreparedCandleImageDecode::new(png.get_ref(), &limits, false).unwrap();
+        let error = admit_trocr_preprocessing(&decode, &limits).unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+                if message.contains("64x16") && message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+
+        let limits = SecurityLimits {
+            max_content_size: 16 << 20,
+            ..limits
+        };
+        let decode = PreparedCandleImageDecode::new(png.get_ref(), &limits, false).unwrap();
+        admit_trocr_preprocessing(&decode, &limits).unwrap();
     }
 
     #[tokio::test]

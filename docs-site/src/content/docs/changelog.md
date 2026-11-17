@@ -269,8 +269,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(ocr): Bound TrOCR image decoding and read line-crop dimensions from image headers.**
-  Xberg checks `security_limits.max_content_size` before allocating the decoded raster and reuses it for inference.
-  The standalone byte APIs use a 100 MiB budget for encoded input and decoding, and report typed image errors. Resize and inference allocate separately. (#3168)
+  Xberg checks `security_limits.max_content_size` before allocating the decoded raster and returns a validation error
+  when decoding or preprocessing exceeds the limit.
+  The standalone byte APIs return typed image errors and apply a 100 MiB budget to decoding, resize, and tensor preprocessing.
+  TrOCR may reject images accepted previously. Standalone recognition also accepts a decoded raster via
+  `TrocrEngine::process_decoded_image`, and the dimensions helper reads the header without validating pixels. (#3168)
 
 - **(ocr): Bound PaddleOCR-VL and DeepSeek OCR image decoding before loading a model.**
   Xberg uses `security_limits.max_content_size` for the encoded input, decoding, and PaddleOCR-VL's immediate RGB conversion.

@@ -441,9 +441,7 @@ fn validate_standard_rgb8_peak(
 ))]
 pub(crate) struct PreparedCandleImageDecode<'a> {
     bytes: &'a [u8],
-    #[cfg(feature = "candle-trocr")]
-    dimensions: (u32, u32),
-    format: ImageFormat,
+    probe: StandardImageProbe,
     decoder_budget: ImageDecodeBudget,
 }
 
@@ -477,20 +475,33 @@ impl<'a> PreparedCandleImageDecode<'a> {
         }
         Ok(Self {
             bytes,
-            #[cfg(feature = "candle-trocr")]
-            dimensions: (probe.width, probe.height),
-            format: probe.format,
+            probe,
             decoder_budget,
         })
     }
 
     #[cfg(feature = "candle-trocr")]
     pub(crate) fn dimensions(&self) -> (u32, u32) {
-        self.dimensions
+        (self.probe.width, self.probe.height)
+    }
+
+    #[cfg(feature = "candle-trocr")]
+    pub(crate) fn validate_preprocessing_peak(
+        &self,
+        limits: &SecurityLimits,
+        working_bytes: impl FnOnce(u32, u32, u8) -> Option<u64>,
+    ) -> Result<()> {
+        let probe = self.probe;
+        let budget = ImageDecodeBudget::from_security_limits(limits);
+        let peak = working_bytes(probe.width, probe.height, probe.color_type.bytes_per_pixel())
+            .and_then(|working| working.checked_add(probe.decoded_bytes))
+            .and_then(|live| live.checked_add(u64::try_from(self.bytes.len()).ok()?))
+            .ok_or_else(|| image_dimension_error(probe.width, probe.height, u64::MAX, budget.max_decoded_bytes))?;
+        budget.validate(probe.width, probe.height, peak)
     }
 
     pub(crate) fn decode(self) -> Result<image::DynamicImage> {
-        let mut reader = ImageReader::with_format(Cursor::new(self.bytes), self.format);
+        let mut reader = ImageReader::with_format(Cursor::new(self.bytes), self.probe.format);
         reader.limits(image_decode_limits(self.decoder_budget));
         reader.decode().map_err(map_image_decode_error)
     }
