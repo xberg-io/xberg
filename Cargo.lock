@@ -11273,6 +11273,7 @@ dependencies = [
  "whatlang",
  "wiremock",
  "xberg-candle-ocr",
+ "xberg-child-test",
  "xberg-gliner",
  "xberg-libheif",
  "xberg-libwpd",
@@ -11306,6 +11307,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "xberg-child-test"
+version = "0.0.0"
+
+[[package]]
 name = "xberg-cli"
 version = "1.4.1"
 dependencies = [
@@ -11326,6 +11331,7 @@ dependencies = [
  "tree-sitter-language-pack",
  "ureq 3.5.2",
  "xberg",
+ "xberg-child-test",
 ]
 
 [[package]]
@@ -11468,6 +11474,7 @@ dependencies = [
  "unicode-normalization",
  "uuid",
  "weezl 0.2.1",
+ "xberg-child-test",
 ]
 
 [[package]]

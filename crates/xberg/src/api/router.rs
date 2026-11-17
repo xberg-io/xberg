@@ -465,39 +465,53 @@ mod tests {
         let _router = create_router_with_limits_and_server_config(extraction_config, limits, server_config);
     }
 
+    const MAX_CONCURRENCY_CASE: &str = "XBERG_API_MAX_CONCURRENCY_TEST_CASE";
+    const MAX_CONCURRENCY_CHILD: &str = "api::router::tests::resolve_max_concurrent_requests_child";
+
     #[test]
-    #[serial_test::serial]
-    #[allow(unsafe_code)]
     fn resolve_max_concurrent_requests_honors_env_and_defaults() {
-        let original = std::env::var(MAX_CONCURRENT_REQUESTS_ENV).ok();
-
-        unsafe {
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "7");
-            assert_eq!(resolve_max_concurrent_requests(), 7, "explicit value must be honored");
-
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "0");
-            assert_eq!(resolve_max_concurrent_requests(), 0, "0 must disable the limit");
-
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "not-a-number");
-            let fallback = resolve_max_concurrent_requests();
-            assert!(
-                (4..=32).contains(&fallback),
-                "invalid value must fall back to the bounded default"
-            );
-
-            std::env::remove_var(MAX_CONCURRENT_REQUESTS_ENV);
-            let default = resolve_max_concurrent_requests();
-            assert!(
-                (4..=32).contains(&default),
-                "unset default must be bounded (not unlimited), got {default}"
-            );
+        for (case, value) in [
+            ("explicit", Some("7")),
+            ("disabled", Some("0")),
+            ("invalid", Some("not-a-number")),
+            ("unset", None),
+        ] {
+            crate::utils::test_support::run_child_test(MAX_CONCURRENCY_CHILD, MAX_CONCURRENCY_CASE, case, |command| {
+                match value {
+                    Some(value) => command.env(MAX_CONCURRENT_REQUESTS_ENV, value),
+                    None => command.env_remove(MAX_CONCURRENT_REQUESTS_ENV),
+                };
+            });
         }
+    }
 
-        unsafe {
-            match original {
-                Some(value) => std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, value),
-                None => std::env::remove_var(MAX_CONCURRENT_REQUESTS_ENV),
-            }
+    #[test]
+    #[ignore = "run in an isolated subprocess by the max-concurrency test"]
+    fn resolve_max_concurrent_requests_child() {
+        let Some(case) = crate::utils::test_support::child_test_root(MAX_CONCURRENCY_CASE) else {
+            return;
+        };
+        let (value, expected) = match case.to_str() {
+            Some("explicit") => (Some("7"), Some(7)),
+            Some("disabled") => (Some("0"), Some(0)),
+            Some("invalid") => (Some("not-a-number"), None),
+            Some("unset") => (None, None),
+            _ => panic!("unknown max-concurrency test case"),
+        };
+        let actual_env = std::env::var_os(MAX_CONCURRENT_REQUESTS_ENV);
+        assert!(
+            actual_env.as_deref() == value.map(std::ffi::OsStr::new),
+            "wrong input for {case:?}"
+        );
+
+        let actual = resolve_max_concurrent_requests();
+        if let Some(expected) = expected {
+            assert_eq!(actual, expected, "wrong limit for {case:?}");
+        } else {
+            assert!(
+                (4..=32).contains(&actual),
+                "fallback for {case:?} must be bounded, got {actual}"
+            );
         }
     }
 }
