@@ -399,6 +399,8 @@ async fn an_accepted_stage_keeps_only_the_failure_of_the_page_it_left_blank() {
 #[tokio::test]
 #[serial_test::serial]
 async fn a_pipeline_whose_stages_all_fail_carries_every_page_record() {
+    use std::error::Error as _;
+
     let failed_run = run_two_stage_pipeline(
         PageShapeBackend {
             name: "all-fail-first-stage",
@@ -423,6 +425,13 @@ async fn a_pipeline_whose_stages_all_fail_carries_every_page_record() {
         "error: {}",
         failed_run.error
     );
+    let page_error = std::iter::successors(failed_run.error.source(), |&source| source.source())
+        .filter_map(|source| source.downcast_ref::<crate::XbergError>())
+        .find(|error| matches!(error, crate::XbergError::Ocr { message, .. } if message == "all-fail-first-stage failure"));
+    assert!(matches!(
+        page_error,
+        Some(crate::XbergError::Ocr { message, .. }) if message == "all-fail-first-stage failure"
+    ));
     assert_eq!(
         failed_run.page_failures,
         vec![
