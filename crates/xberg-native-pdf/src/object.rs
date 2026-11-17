@@ -569,8 +569,8 @@ fn ccitt_params_from_dict(
     let rows = dict
         .get("Rows")
         .and_then(|obj| obj.as_integer())
-        .filter(|&rows| rows != 0)
-        .map(|v| v as u32);
+        .and_then(|rows| u32::try_from(rows).ok())
+        .filter(|&rows| rows > 0);
 
     let black_is_1 = dict.get("BlackIs1").and_then(|obj| obj.as_bool()).unwrap_or(false);
 

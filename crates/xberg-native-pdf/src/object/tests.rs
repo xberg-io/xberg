@@ -483,6 +483,15 @@ fn test_extract_ccitt_params_custom_values() {
 }
 
 #[test]
+fn ccitt_params_discard_rows_outside_the_positive_u32_range() {
+    for rows in [-1, i64::from(u32::MAX) + 2] {
+        let params = Object::Dictionary(HashMap::from([("Rows".to_owned(), Object::Integer(rows))]));
+
+        assert_eq!(extract_ccitt_params(Some(&params)).unwrap().rows, None, "/Rows {rows}");
+    }
+}
+
+#[test]
 fn test_extract_ccitt_params_invalid_type() {
     let obj = Object::Integer(42);
     let result = extract_ccitt_params(Some(&obj));
