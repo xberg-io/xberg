@@ -4,6 +4,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
+PLAN_SCHEMA_VERSION = 2
 PDF_COUNT = 984
 RAW_TEST_COUNT = 5113
 TEST_COUNT = 6090
@@ -18,6 +19,26 @@ GROUP_COUNTS = {
 ROLES = ("baseline", "candidate")
 DATASET_REVISION = "54a96a6fb6a2bd3b297e59869491db4d3625b711"
 EVALUATOR_REVISION = "f7cfe4c22098b154c76b6ec950d1c0a464eecf8d"
+
+# RapidLaTeXOCR v0.0.0 pins enforced by the native formula recognizer.
+FORMULA_MODEL_SHA256 = {
+    "image_resizer.onnx": "e0b075c39700f64d50400f39c8fc186bbb3b5d84d31864008313f376603aca9d",
+    "encoder.onnx": "01bf5dc25539ca0cd5b1bd29296ea495977a6ba5f629dc4178277809d26e5e7d",
+    "decoder.onnx": "bd695497bf1b22279b7626f5916c79226e1e244c84355f8da7edfd2d921d0072",
+    "tokenizer.json": "1dc27b18d6a518d0d5ff3f4bb7bd98521fe80ad39e5b2a246d4109f1bb9d5019",
+}
+
+
+def formula_model_paths(models: list[dict]) -> dict[str, Path]:
+    """Identify exactly one integrity-bound path for each native formula asset."""
+    paths = [(Path(row["file"]), row["sha256"]) for row in models]
+    selected = {}
+    for name, sha256 in FORMULA_MODEL_SHA256.items():
+        matches = [path for path, digest in paths if path.name == name and digest == sha256]
+        if len(matches) != 1 or not matches[0].is_absolute():
+            raise ValueError(f"expected exactly one pinned RapidLaTeXOCR {name} at an absolute path")
+        selected[name] = matches[0]
+    return selected
 
 
 def digest(path: Path) -> str:

@@ -14,11 +14,14 @@ pub struct SecurityLimits {
 impl Default for SecurityLimits {
     #[allow(unsafe_code)]
     fn default() -> Self {
+        // SAFETY: This takes no Rust pointers and returns libheif's immutable global limits.
         let inner_ptr = unsafe { lh::heif_get_global_security_limits() };
         if inner_ptr.is_null() {
             panic!("heif_get_global_security_limits returned the null pointer");
         }
         Self {
+            // SAFETY: The checked non-null pointer refers to the library's initialized
+            // global value. Copy it without retaining a pointer into libheif.
             inner: unsafe { *inner_ptr },
         }
     }
@@ -34,6 +37,8 @@ impl SecurityLimits {
 
     pub(crate) fn from_inner(inner_ptr: NonNull<lh::heif_security_limits>) -> Self {
         Self {
+            // SAFETY: The sole caller obtains this pointer from an initialized context
+            // that is still borrowed, and we retain only a copy of its limits.
             inner: unsafe { *inner_ptr.as_ref() },
         }
     }

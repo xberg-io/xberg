@@ -44,12 +44,26 @@ arm64 | aarch64) arch_id="arm64" ;;
   ;;
 esac
 
+if [[ ! "$version" =~ ^[0-9]+$ ]]; then
+  echo "Invalid PDFium Chromium revision: $version" >&2
+  exit 1
+fi
+
+asset="pdfium-${platform_id}-${arch_id}.tgz"
+archive_name="${version}-${asset}"
+verify_archive="$root_dir/scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
+# Supply a trusted manifest with a matching revision and asset for a custom version. ~keep
+checksums="${PDFIUM_CHECKSUMS_FILE:-$root_dir/scripts/pdfium-runtime-checksums.sha256}"
+bash "$verify_archive" "$archive_name" "$checksums" --known
+
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
+archive="$tmpdir/$archive_name"
 echo "Downloading Pdfium ${version} for ${platform_id}/${arch_id}..."
-curl -fsSL -o "$tmpdir/pdfium.tgz" "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/pdfium-${platform_id}-${arch_id}.tgz"
+curl -fsSL -o "$archive" "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/${asset}"
+bash "$verify_archive" "$archive" "$checksums"
 mkdir -p "$tmpdir/extracted"
-tar -xzf "$tmpdir/pdfium.tgz" -C "$tmpdir/extracted"
+tar -xzf "$archive" -C "$tmpdir/extracted"
 
 src_lib="$tmpdir/extracted/lib"
 if [[ ! -d "$src_lib" ]]; then

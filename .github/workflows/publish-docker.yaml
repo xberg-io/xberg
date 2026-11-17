@@ -165,8 +165,9 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     # cli/amd64 (cross-compiled Rust+ONNX from source) hit the 90m ceiling in rc.36 and was
     # CANCELLED; give the from-source builds headroom. merge-docker is decoupled below so even
-    # a timed-out leg no longer suppresses the core manifest publish (#1299). ~keep
-    timeout-minutes: 120
+    # a timed-out leg no longer suppresses the core manifest publish (#1299). v1.4.1 legs were
+    # cancelled at 120m while still in their final cargo build. ~keep
+    timeout-minutes: 240
     permissions:
       contents: read
       packages: write

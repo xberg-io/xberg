@@ -310,12 +310,12 @@ fn should_preserve_existing_subscript_when_a_native_suffix_enters_its_lookback()
 
     let mut base = super::super::blocks_to_paragraphs(vec![page.segments[0].clone()], &[], &[]).remove(0);
     let mut next_line = base.lines[0].clone();
-    next_line.baseline_y = 700.0;
+    next_line.baseline_y = Some(700.0);
     next_line.segments = page.segments[1..3].to_vec();
     base.lines.push(next_line);
     let mut suffix = base.clone();
     suffix.lines.truncate(1);
-    suffix.lines[0].baseline_y = 704.5;
+    suffix.lines[0].baseline_y = Some(704.5);
     suffix.lines[0].segments = vec![page.segments[3].clone()];
     let mut paragraphs = vec![base, suffix];
     let assemble = |paragraphs| {
@@ -377,7 +377,7 @@ fn literal_prime_paragraphs() -> (NativePageSegments, Vec<PdfParagraph>) {
     assert_eq!(page.valid_owners(&page.segments).len(), 1);
     let mut left = super::super::blocks_to_paragraphs(vec![page.segments[1].clone()], &[], &[]).remove(0);
     let mut prime = left.clone();
-    prime.lines[0].baseline_y = 704.5;
+    prime.lines[0].baseline_y = Some(704.5);
     prime.lines[0].segments = vec![page.segments[0].clone()];
     left.lines[0].segments.push(page.segments[2].clone());
     (page, vec![prime, left])
