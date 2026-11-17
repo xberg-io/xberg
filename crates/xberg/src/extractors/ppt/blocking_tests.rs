@@ -32,6 +32,71 @@ fn single_ppt_shared_runtime_honors_already_cancelled_request() {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
+fn cancelled_shared_ppt_worker_skips_parsing() {
+    use std::future::poll_fn;
+    use std::sync::{Mutex, mpsc};
+    use std::task::Poll;
+    use std::thread::{self, ThreadId};
+    use std::time::Duration;
+    use tracing::Instrument as _;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{Layer, layer::Context};
+
+    const DEADLINE: Duration = Duration::from_secs(5);
+    const INVALID_DECK: &[u8] = b"broken OLE file";
+
+    struct WorkerGate {
+        caller: ThreadId,
+        entered: mpsc::Sender<()>,
+        resume: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl<S: tracing::Subscriber> Layer<S> for WorkerGate {
+        fn on_enter(&self, _id: &tracing::span::Id, _context: Context<'_, S>) {
+            if thread::current().id() != self.caller {
+                self.entered.send(()).unwrap();
+                self.resume.lock().unwrap().recv_timeout(DEADLINE).unwrap();
+            }
+        }
+    }
+
+    let extractor = PptExtractor::new();
+    let mut config = ExtractionConfig {
+        max_archive_depth: 0,
+        ..Default::default()
+    };
+    let control =
+        futures::executor::block_on(extractor.extract_content(INVALID_DECK, LEGACY_POWERPOINT_MIME_TYPE, &config));
+    assert!(matches!(control, Err(crate::XbergError::Parsing { .. })));
+
+    let cancel = CancellationToken::new();
+    config.cancel_token = Some(cancel.clone());
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::sync_channel(1);
+    let subscriber = tracing_subscriber::registry().with(WorkerGate {
+        caller: thread::current().id(),
+        entered: entered_tx,
+        resume: Mutex::new(resume_rx),
+    });
+    let runtime = crate::core::runtime::global_runtime().unwrap();
+    let result = tracing::subscriber::with_default(subscriber, || {
+        runtime.block_on(async {
+            let parse = extractor.extract_content(INVALID_DECK, LEGACY_POWERPOINT_MIME_TYPE, &config);
+            let mut parse = std::pin::pin!(parse.instrument(tracing::info_span!("ppt_cancel_before_parse")));
+            assert!(poll_fn(|cx| Poll::Ready(parse.as_mut().poll(cx))).await.is_pending());
+            entered_rx
+                .recv_timeout(DEADLINE)
+                .expect("PPT worker entered before cancellation");
+            cancel.cancel();
+            resume_tx.send(()).unwrap();
+            tokio::time::timeout(DEADLINE, parse).await.expect("PPT worker resumed")
+        })
+    });
+    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
 fn direct_ppt_from_the_only_foreign_blocking_worker_completes() {
     use std::time::Duration;
 
