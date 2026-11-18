@@ -503,11 +503,11 @@ impl PdfDocument {
     ) -> Result<()> {
         use crate::fonts::FontInfo;
 
-        let resources_obj = if let Some(res_ref) = resources.as_reference() {
-            self.load_object(res_ref)?
-        } else {
-            resources.clone()
-        };
+        let resolved_resources = resources
+            .as_reference()
+            .map(|reference| self.load_object_for_read(reference))
+            .transpose()?;
+        let resources_obj = resolved_resources.as_ref().map_or(resources, AsRef::as_ref);
 
         let resources_dict = match resources_obj.as_dict() {
             Some(d) => d,
@@ -524,11 +524,10 @@ impl PdfDocument {
             // Existing fonts can change the winning donor in this scope. ~keep
             let reuse_donations = !extractor.has_fonts();
             let font_dict_ref = font_obj.as_reference();
-            let font_dict_obj = if let Some(font_ref) = font_dict_ref {
-                self.load_object(font_ref)?
-            } else {
-                font_obj.clone()
-            };
+            let resolved_fonts = font_dict_ref
+                .map(|reference| self.load_object_for_read(reference))
+                .transpose()?;
+            let font_dict_obj = resolved_fonts.as_ref().map_or(font_obj, AsRef::as_ref);
 
             // Layer 2: Check font set cache for the /Font dictionary.
             // Pages sharing the same /Font dict skip the entire per-font loop. ~keep

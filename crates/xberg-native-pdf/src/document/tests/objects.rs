@@ -124,6 +124,82 @@ fn test_load_object_from_cache() {
 }
 
 #[test]
+fn warm_object_reads_share_the_cache_and_owned_loads_stay_independent() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.object_cache.lock_or_recover().clear();
+    let cold = document.load_object_for_read(reference).unwrap();
+    assert!(matches!(cold, super::super::objects::LoadedObject::Owned(_)));
+
+    let super::super::objects::LoadedObject::Cached(first) = document.load_object_for_read(reference).unwrap() else {
+        panic!("the warm object must share the cached allocation");
+    };
+    let super::super::objects::LoadedObject::Cached(second) = document.load_object_for_read(reference).unwrap() else {
+        panic!("a second warm read must share the cached allocation");
+    };
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+
+    let count = std::sync::Arc::strong_count(&first);
+    let owned = document.load_object(reference).unwrap();
+    assert_eq!(std::sync::Arc::strong_count(&first), count);
+    assert_eq!(owned, *first);
+}
+
+#[test]
+fn warm_object_reads_keep_depth_and_cycle_guards() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.load_object(reference).unwrap();
+
+    let depth_error = RECURSION_DEPTH.with(|depth| {
+        let saved = depth.replace(MAX_RECURSION_DEPTH);
+        let result = document.load_object_for_read(reference);
+        depth.replace(saved);
+        result
+    });
+    assert!(matches!(
+        depth_error,
+        Err(Error::RecursionLimitExceeded(MAX_RECURSION_DEPTH))
+    ));
+
+    RESOLVING_STACK.with(|stack| {
+        assert!(stack.borrow_mut().insert(reference));
+        let result = document.load_object_for_read(reference);
+        stack.borrow_mut().remove(&reference);
+        assert!(matches!(result, Err(Error::CircularReference(object)) if object == reference));
+    });
+    assert!(document.load_object_for_read(reference).is_ok());
+}
+
+#[test]
+fn load_fonts_borrows_cached_resources_and_font_dictionaries() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let resources_ref = ObjectRef::new(900, 0);
+    let fonts_ref = ObjectRef::new(901, 0);
+    {
+        let mut cache = document.object_cache.lock_or_recover();
+        cache.insert(
+            resources_ref,
+            Object::Dictionary(std::collections::HashMap::from([(
+                "Font".to_string(),
+                Object::Reference(fonts_ref),
+            )])),
+        );
+        cache.insert(fonts_ref, Object::Dictionary(std::collections::HashMap::new()));
+    }
+
+    let resources = Object::Reference(resources_ref);
+    for _ in 0..2 {
+        let mut extractor = crate::extractors::TextExtractor::new();
+        document.load_fonts(&resources, &mut extractor).unwrap();
+    }
+    assert_eq!(document.cached_object_clone_count(), 0);
+
+    document.load_object(fonts_ref).unwrap();
+    assert_eq!(document.cached_object_clone_count(), 1);
+}
+
+#[test]
 fn shifted_xref_subsection_recovers_requested_objects_by_header() {
     let valid = build_shifted_xref_pdf(0);
     let malformed = build_shifted_xref_pdf(1);

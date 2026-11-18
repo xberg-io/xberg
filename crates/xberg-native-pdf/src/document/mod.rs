@@ -760,6 +760,10 @@ pub struct PdfDocument {
     /// carries a donated cmap does not redo that mutation. ~keep
     #[cfg(test)]
     donation_apply_count: AtomicUsize,
+    /// Cache hits that `load_object` deep-copied for its owned result.
+    /// Test-only: proves the font-loading borrow path never clones. ~keep
+    #[cfg(test)]
+    cached_object_clone_count: AtomicUsize,
     /// Per-font identity cache keyed by the resolved semantic content consumed by
     /// `FontInfo::from_dict`. Skips expensive parsing when a structurally identical
     /// font was already parsed.

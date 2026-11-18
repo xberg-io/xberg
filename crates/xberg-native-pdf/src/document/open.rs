@@ -289,6 +289,8 @@ impl PdfDocument {
             donation_call_count: AtomicUsize::new(0),
             #[cfg(test)]
             donation_apply_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            cached_object_clone_count: AtomicUsize::new(0),
             font_identity_cache: Mutex::new(BoundedEntryCache::new(512)),
             font_id_hash_cache: Mutex::new(HashMap::new()),
             font_reference_hash_cache: Mutex::new(BoundedEntryCache::new(FONT_IDENTITY_MAX_RESOLVED_REFERENCES)),
