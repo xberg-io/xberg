@@ -354,12 +354,12 @@ fn public_contract_flat_alphabetic_clauses_are_paragraphs_beside_the_decimal_cla
     assert!(
         paragraphs[0]
             .descendants()
-            .any(|node| matches!(node.data.borrow().value, NodeValue::Strong))
+            .any(|node| matches!(node.data.borrow().value, NodeValue::Strong(..)))
     );
     let duty_item = paragraphs[0].parent().unwrap();
     assert!(matches!(duty_item.data.borrow().value, NodeValue::Item(_)));
     assert!(
-        matches!(duty_item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == comrak::nodes::ListType::Ordered && list.start == 1)
+        matches!(&duty_item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == comrak::nodes::ListType::Ordered && list.start == 1)
     );
     for paragraph in &paragraphs[1..] {
         assert!(

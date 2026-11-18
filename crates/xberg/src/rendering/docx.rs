@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, Write};
 
 use comrak::arena_tree::NodeEdge;
-use comrak::nodes::{ListType, NodeValue, TableAlignment};
+use comrak::nodes::{ListType, NodeTableRow, NodeValue, TableAlignment};
 use comrak::{Arena, parse_document};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
@@ -161,7 +161,7 @@ impl BodyWriter {
             NodeValue::CodeBlock(block) => self.literal_block(&block.literal, ParagraphKind::Code),
             NodeValue::FrontMatter(text) => self.literal_block(text, ParagraphKind::Code),
             NodeValue::HtmlBlock(block) => self.literal_block(&block.literal, ParagraphKind::Body),
-            NodeValue::ThematicBreak => {
+            NodeValue::ThematicBreak(..) => {
                 self.close_paragraph();
                 self.xml.push_str(r#"<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr></w:pPr></w:p>"#);
                 self.last_block_was_table = false;
@@ -210,7 +210,7 @@ impl BodyWriter {
                 self.flush_item_marker();
                 self.open_table(table.alignments.clone(), table.num_columns);
             }
-            NodeValue::TableRow(header) => {
+            NodeValue::TableRow(NodeTableRow { header, .. }) => {
                 self.xml.push_str("<w:tr>");
                 if *header {
                     self.xml.push_str("<w:trPr><w:tblHeader/></w:trPr>");
@@ -245,9 +245,9 @@ impl BodyWriter {
                 self.text(&reference.name);
                 self.run.superscript -= 1;
             }
-            NodeValue::Emph => self.run.italic += 1,
-            NodeValue::Strong => self.run.bold += 1,
-            NodeValue::Strikethrough => self.run.strike += 1,
+            NodeValue::Emph(..) => self.run.italic += 1,
+            NodeValue::Strong(..) => self.run.bold += 1,
+            NodeValue::Strikethrough(..) => self.run.strike += 1,
             NodeValue::Underline | NodeValue::Insert => self.run.underline += 1,
             NodeValue::Highlight => self.run.highlight += 1,
             NodeValue::Superscript => self.run.superscript += 1,
@@ -290,7 +290,7 @@ impl BodyWriter {
                 self.xml.push_str("</w:tbl>");
                 self.last_block_was_table = true;
             }
-            NodeValue::TableRow(_) => {
+            NodeValue::TableRow(..) => {
                 self.pad_row();
                 self.xml.push_str("</w:tr>");
             }
@@ -302,9 +302,9 @@ impl BodyWriter {
                     table.column += 1;
                 }
             }
-            NodeValue::Emph => self.run.italic -= 1,
-            NodeValue::Strong => self.run.bold -= 1,
-            NodeValue::Strikethrough => self.run.strike -= 1,
+            NodeValue::Emph(..) => self.run.italic -= 1,
+            NodeValue::Strong(..) => self.run.bold -= 1,
+            NodeValue::Strikethrough(..) => self.run.strike -= 1,
             NodeValue::Underline | NodeValue::Insert => self.run.underline -= 1,
             NodeValue::Highlight => self.run.highlight -= 1,
             NodeValue::Superscript => self.run.superscript -= 1,

@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use comrak::nodes::{
     Ast, AstNode, LineColumn, NodeAlert, NodeCode, NodeCodeBlock, NodeFootnoteDefinition, NodeFootnoteReference,
-    NodeHeading, NodeLink, NodeList, NodeMath, NodeTable, NodeValue, TableAlignment,
+    NodeHeading, NodeLink, NodeList, NodeMath, NodeTable, NodeTableRow, NodeValue, TableAlignment,
 };
 
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
@@ -221,10 +221,10 @@ fn opens_with_text<'a>(paragraph: &'a AstNode<'a>) -> bool {
 }
 
 fn flatten_nested_strong<'a>(node: &'a AstNode<'a>) {
-    let nested = matches!(node.data.borrow().value, NodeValue::Strong)
+    let nested = matches!(node.data.borrow().value, NodeValue::Strong(..))
         && node
             .parent()
-            .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Strong));
+            .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Strong(..)));
     if !nested {
         return;
     }
@@ -260,6 +260,22 @@ fn in_tight_item(node: &AstNode<'_>) -> bool {
             .is_some_and(|list| matches!(&list.data.borrow().value, NodeValue::List(list) if list.tight))
 }
 
+/// Comrak marks its node payloads `#[non_exhaustive]`, so they are built from a constructor or default and then adjusted.
+fn configured<T>(mut value: T, adjust: impl FnOnce(&mut T)) -> T {
+    adjust(&mut value);
+    value
+}
+
+fn code_span(literal: String) -> NodeCode {
+    configured(NodeCode::new(literal), |code| code.num_backticks = 1)
+}
+
+fn footnote_definition(name: impl Into<String>) -> NodeFootnoteDefinition {
+    configured(NodeFootnoteDefinition::new(name), |definition| {
+        definition.total_references = 1
+    })
+}
+
 fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
     if math.literal.trim().is_empty() {
         node.detach();
@@ -271,10 +287,7 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
         write_backtick_math_as_code(node, math, alone);
         return;
     }
-    node.data.borrow_mut().value = NodeValue::Math(NodeMath {
-        dollar_math: true,
-        ..math
-    });
+    node.data.borrow_mut().value = NodeValue::Math(configured(math, |math| math.dollar_math = true));
 }
 
 /// Make each remaining math node safe between its dollars, once prose dollars are settled.
@@ -311,10 +324,7 @@ fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
                 write_escaped_math(node, "$$", &tex);
             }
             None => {
-                let math = NodeMath {
-                    literal: tex,
-                    ..std::mem::take(math)
-                };
+                let math = configured(std::mem::take(math), |math| math.literal = tex);
                 drop(data);
                 write_backtick_math_as_code(node, math, true);
             }
@@ -393,21 +403,11 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
         for child in paragraph.children().collect::<Vec<_>>() {
             child.detach();
         }
-        paragraph.data.borrow_mut().value = NodeValue::CodeBlock(Box::new(NodeCodeBlock {
-            fenced: true,
-            fence_char: b'`',
-            fence_length: 3,
-            fence_offset: 0,
-            info: "math".to_string(),
-            literal: unix_lines(&math.literal),
-            closed: true,
-        }));
+        paragraph.data.borrow_mut().value =
+            NodeValue::CodeBlock(Box::new(NodeCodeBlock::fenced("math", unix_lines(&math.literal))));
         return;
     }
-    node.data.borrow_mut().value = NodeValue::Code(NodeCode {
-        num_backticks: 1,
-        literal: join_tex_lines(&math.literal),
-    });
+    node.data.borrow_mut().value = NodeValue::Code(code_span(join_tex_lines(&math.literal)));
 }
 
 /// How display TeX alone in a paragraph is written.
@@ -519,10 +519,7 @@ fn escape_dollars<'a>(node: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>, math_
     match &mut data.value {
         NodeValue::Math(math) if math_as_code => {
             let literal = join_tex_lines(&std::mem::take(&mut math.literal));
-            data.value = NodeValue::Code(NodeCode {
-                num_backticks: 1,
-                literal,
-            });
+            data.value = NodeValue::Code(code_span(literal));
         }
         NodeValue::Text(text) if text.contains('$') => {
             let prose = std::mem::take(text).into_owned();
@@ -848,14 +845,7 @@ fn append_annotated_span<'a>(
     inner: &[TextAnnotation],
 ) {
     if let Some((literal, display_math)) = annotated_math(span, kind) {
-        parent.append(mk(
-            arena,
-            NodeValue::Math(NodeMath {
-                dollar_math: true,
-                display_math,
-                literal: literal.to_string(),
-            }),
-        ));
+        parent.append(mk(arena, NodeValue::Math(NodeMath::new(literal, display_math))));
         return;
     }
 
@@ -908,29 +898,23 @@ fn append_annotated_span<'a>(
 
     match kind {
         AnnotationKind::Bold => {
-            let strong = mk(arena, NodeValue::Strong);
+            let strong = mk(arena, NodeValue::Strong(Default::default()));
             build_inlines(arena, strong, trimmed, inner_for_node);
             parent.append(strong);
         }
         AnnotationKind::Italic => {
-            let emph = mk(arena, NodeValue::Emph);
+            let emph = mk(arena, NodeValue::Emph(Default::default()));
             build_inlines(arena, emph, trimmed, inner_for_node);
             parent.append(emph);
         }
         AnnotationKind::Code => {
             if !trimmed.is_empty() {
-                let code = mk(
-                    arena,
-                    NodeValue::Code(NodeCode {
-                        num_backticks: 1,
-                        literal: normalize_text(trimmed),
-                    }),
-                );
+                let code = mk(arena, NodeValue::Code(code_span(normalize_text(trimmed))));
                 parent.append(code);
             }
         }
         AnnotationKind::Strikethrough => {
-            let strike = mk(arena, NodeValue::Strikethrough);
+            let strike = mk(arena, NodeValue::Strikethrough(Default::default()));
             build_inlines(arena, strike, trimmed, inner_for_node);
             parent.append(strike);
         }
@@ -957,10 +941,7 @@ fn append_annotated_span<'a>(
         AnnotationKind::Link { url, title } => {
             let link = mk(
                 arena,
-                NodeValue::Link(Box::new(NodeLink {
-                    url: url.clone(),
-                    title: title.as_deref().unwrap_or("").to_string(),
-                })),
+                NodeValue::Link(Box::new(NodeLink::new(url.clone(), title.as_deref().unwrap_or("")))),
             );
             build_inlines(arena, link, trimmed, inner);
             parent.append(link);
@@ -1029,16 +1010,18 @@ fn build_table<'a>(
 
     let table_node = mk(
         arena,
-        NodeValue::Table(Box::new(NodeTable {
-            alignments: vec![TableAlignment::None; num_cols],
-            num_columns: num_cols,
-            num_rows: cells.len() + synthetic_header_rows,
-            num_nonempty_cells: cells.iter().flat_map(|r| r.iter()).filter(|c| !c.is_empty()).count(),
-        })),
+        NodeValue::Table(Box::new(configured(
+            NodeTable::new(vec![TableAlignment::None; num_cols]),
+            |table| {
+                table.num_columns = num_cols;
+                table.num_rows = cells.len() + synthetic_header_rows;
+                table.num_nonempty_cells = cells.iter().flat_map(|r| r.iter()).filter(|c| !c.is_empty()).count();
+            },
+        ))),
     );
 
     if synthetic_header_rows > 0 {
-        let header_row = mk(arena, NodeValue::TableRow(true));
+        let header_row = mk(arena, NodeValue::TableRow(NodeTableRow::new(true)));
         for _ in 0..num_cols {
             header_row.append(mk(arena, NodeValue::TableCell));
         }
@@ -1047,7 +1030,7 @@ fn build_table<'a>(
 
     for (row_idx, row) in cells.iter().enumerate() {
         let is_header = has_header && row_idx == 0;
-        let row_node = mk(arena, NodeValue::TableRow(is_header));
+        let row_node = mk(arena, NodeValue::TableRow(NodeTableRow::new(is_header)));
 
         for col in 0..num_cols {
             let cell_node = mk(arena, NodeValue::TableCell);
@@ -1097,13 +1080,7 @@ fn build_retained_grid_html<'a>(
         html.push_str("</tr>\n");
     }
     html.push_str("</tbody>\n</table>\n");
-    Some(mk(
-        arena,
-        NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock {
-            literal: html,
-            ..Default::default()
-        }),
-    ))
+    Some(mk(arena, NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock::new(html))))
 }
 
 #[cfg(any(
@@ -1316,7 +1293,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 Some(item) => item,
                 None => {
                     let list_meta = match parent.data.borrow().value {
-                        NodeValue::List(ref m) => *m,
+                        NodeValue::List(ref m) => m.clone(),
                         // The outer `matches!(parent.data.borrow().value, NodeValue::List(..))`
                         // check above already confirmed `parent` holds `NodeValue::List`, and
                         // `parent` is not reassigned and its `data` is never mutated between
@@ -1334,14 +1311,7 @@ fn build_comrak_ast_with_table_mode<'a>(
 
         match elem_kind {
             ElementKind::Title => {
-                let heading = mk(
-                    arena,
-                    NodeValue::Heading(NodeHeading {
-                        level: 1,
-                        setext: false,
-                        closed: false,
-                    }),
-                );
+                let heading = mk(arena, NodeValue::Heading(NodeHeading::new(1)));
                 build_inlines(arena, heading, elem_text, elem_annotations);
                 parent.append(heading);
             }
@@ -1349,11 +1319,7 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::Heading { level } => {
                 let heading = mk(
                     arena,
-                    NodeValue::Heading(NodeHeading {
-                        level: level.clamp(MIN_HEADING_LEVEL, MAX_HEADING_LEVEL),
-                        setext: false,
-                        closed: false,
-                    }),
+                    NodeValue::Heading(NodeHeading::new(level.clamp(MIN_HEADING_LEVEL, MAX_HEADING_LEVEL))),
                 );
                 build_inlines(arena, heading, elem_text, elem_annotations);
                 parent.append(heading);
@@ -1384,17 +1350,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                     list_item_source_label_from_attributes(elem_attributes).filter(|label| !label.is_empty());
                 let ordinal = source_label.filter(|_| ordered).and_then(source_lists::decimal_ordinal);
                 let numbered = ordered && (source_label.is_none() || ordinal.is_some());
-                let item_list = NodeList {
-                    list_type: if numbered {
+                let item_list = configured(NodeList::default(), |list| {
+                    list.list_type = if numbered {
                         comrak::nodes::ListType::Ordered
                     } else {
                         comrak::nodes::ListType::Bullet
-                    },
-                    bullet_char: b'-',
-                    start: ordinal.unwrap_or(1),
-                    tight: true,
-                    ..Default::default()
-                };
+                    };
+                    list.bullet_char = b'-';
+                    list.start = ordinal.unwrap_or(1);
+                    list.tight = true;
+                });
                 let (item, item_para, list_parent) = if orig_idx.is_some_and(|index| paragraph_items.contains(&index)) {
                     (None, source_lists::paragraph(arena, parent, &mut container_stack), None)
                 } else {
@@ -1423,28 +1388,13 @@ fn build_comrak_ast_with_table_mode<'a>(
                     .unwrap_or("");
                 let code_block = mk(
                     arena,
-                    NodeValue::CodeBlock(Box::new(NodeCodeBlock {
-                        fenced: true,
-                        fence_char: b'`',
-                        fence_length: 3,
-                        fence_offset: 0,
-                        info: lang.to_string(),
-                        literal: elem_text.to_string(),
-                        closed: true,
-                    })),
+                    NodeValue::CodeBlock(Box::new(NodeCodeBlock::fenced(lang, elem_text))),
                 );
                 parent.append(code_block);
             }
 
             ElementKind::Formula => {
-                let math = mk(
-                    arena,
-                    NodeValue::Math(NodeMath {
-                        dollar_math: true,
-                        display_math: true,
-                        literal: elem_text.to_string(),
-                    }),
-                );
+                let math = mk(arena, NodeValue::Math(NodeMath::new(elem_text, true)));
                 let para = mk(arena, NodeValue::Paragraph);
                 para.append(math);
                 parent.append(para);
@@ -1526,13 +1476,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     append_image_ocr(arena, parent, &ocr_result.content, elem_attributes);
                 } else {
                     let para = mk(arena, NodeValue::Paragraph);
-                    let img_node = mk(
-                        arena,
-                        NodeValue::Image(Box::new(NodeLink {
-                            url,
-                            title: String::new(),
-                        })),
-                    );
+                    let img_node = mk(arena, NodeValue::Image(Box::new(NodeLink::new(url, ""))));
                     img_node.append(mk_text(arena, desc));
                     para.append(img_node);
                     parent.append(para);
@@ -1552,12 +1496,13 @@ fn build_comrak_ast_with_table_mode<'a>(
                     let label = n.to_string();
                     let fnref = mk(
                         arena,
-                        NodeValue::FootnoteReference(Box::new(NodeFootnoteReference {
-                            name: label.clone(),
-                            texts: Vec::new(),
-                            ref_num: n,
-                            ix: n,
-                        })),
+                        NodeValue::FootnoteReference(Box::new(configured(
+                            NodeFootnoteReference::new(label.clone()),
+                            |reference| {
+                                reference.ref_num = n;
+                                reference.ix = n;
+                            },
+                        ))),
                     );
                     // A reference follows the block that cites it, so it joins that block when
                     // the block holds inline text.
@@ -1589,16 +1534,9 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::PageBreak => {}
 
             ElementKind::Slide { .. } => {
-                parent.append(mk(arena, NodeValue::ThematicBreak));
+                parent.append(mk(arena, NodeValue::ThematicBreak(Default::default())));
                 if !elem_text.is_empty() {
-                    let heading = mk(
-                        arena,
-                        NodeValue::Heading(NodeHeading {
-                            level: 2,
-                            setext: false,
-                            closed: false,
-                        }),
-                    );
+                    let heading = mk(arena, NodeValue::Heading(NodeHeading::new(2)));
                     build_inlines(arena, heading, elem_text, elem_annotations);
                     parent.append(heading);
                 }
@@ -1628,13 +1566,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 if let Some(at) = alert_type {
                     let alert = mk(
                         arena,
-                        NodeValue::Alert(Box::new(NodeAlert {
-                            alert_type: at,
-                            title: title.map(|s| s.to_string()),
-                            multiline: false,
-                            fence_length: 0,
-                            fence_offset: 0,
-                        })),
+                        NodeValue::Alert(Box::new(NodeAlert::new(at, title.map(|s| s.to_string())))),
                     );
                     if !elem_text.is_empty() {
                         let para = mk(arena, NodeValue::Paragraph);
@@ -1646,7 +1578,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     let bq = mk(arena, NodeValue::BlockQuote);
                     let title_display = title.unwrap_or(kind_str);
                     let title_para = mk(arena, NodeValue::Paragraph);
-                    let strong = mk(arena, NodeValue::Strong);
+                    let strong = mk(arena, NodeValue::Strong(Default::default()));
                     strong.append(mk_text(arena, title_display));
                     title_para.append(strong);
                     bq.append(title_para);
@@ -1690,7 +1622,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 if !entries.is_empty() {
                     for (key, value) in &entries {
                         let para = mk(arena, NodeValue::Paragraph);
-                        let strong = mk(arena, NodeValue::Strong);
+                        let strong = mk(arena, NodeValue::Strong(Default::default()));
                         strong.append(mk_text(arena, key));
                         para.append(strong);
                         para.append(mk_text(arena, &format!(": {}", value)));
@@ -1714,18 +1646,17 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::ListStart { ordered } => {
                 state.push_container(NestingKind::List { ordered, item_count: 0 }, elem_depth);
 
-                let list_meta = NodeList {
-                    list_type: if ordered {
+                let list_meta = configured(NodeList::default(), |list| {
+                    list.list_type = if ordered {
                         comrak::nodes::ListType::Ordered
                     } else {
                         comrak::nodes::ListType::Bullet
-                    },
-                    bullet_char: b'-',
-                    start: 1,
-                    tight: true,
-                    ..Default::default()
-                };
-                let list_node = mk(arena, NodeValue::List(list_meta));
+                    };
+                    list.bullet_char = b'-';
+                    list.start = 1;
+                    list.tight = true;
+                });
+                let list_node = mk(arena, NodeValue::List(list_meta.clone()));
 
                 let target = if matches!(parent.data.borrow().value, NodeValue::List(..)) {
                     let last_item = parent
@@ -1783,13 +1714,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     let defs = footnotes.definitions();
     for entry in defs {
         let label = entry.number.to_string();
-        let fndef = mk(
-            arena,
-            NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                name: label,
-                total_references: 1,
-            }),
-        );
+        let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(label)));
         let para = mk(arena, NodeValue::Paragraph);
         build_inlines(arena, para, &entry.text, &entry.annotations);
         fndef.append(para);
@@ -1799,13 +1724,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     for elem in &doc.elements {
         if elem.kind == ElementKind::Citation {
             let key = elem.anchor.as_deref().unwrap_or("?");
-            let fndef = mk(
-                arena,
-                NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                    name: key.to_string(),
-                    total_references: 1,
-                }),
-            );
+            let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(key)));
             let para = mk(arena, NodeValue::Paragraph);
             para.append(mk_text(arena, &elem.text));
             fndef.append(para);
@@ -1819,13 +1738,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     for elem in &doc.elements {
         if elem.kind == ElementKind::CommentDefinition {
             let key = elem.anchor.as_deref().unwrap_or("?");
-            let fndef = mk(
-                arena,
-                NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                    name: key.to_string(),
-                    total_references: 1,
-                }),
-            );
+            let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(key)));
             let para = mk(arena, NodeValue::Paragraph);
             build_inlines(arena, para, &elem.text, &elem.annotations);
             fndef.append(para);
@@ -2966,7 +2879,7 @@ mod tests {
         assert_eq!(math.len(), 2);
         assert!(
             math.iter()
-                .all(|node| matches!(node.parent().unwrap().data.borrow().value, NodeValue::Strong))
+                .all(|node| matches!(node.parent().unwrap().data.borrow().value, NodeValue::Strong(..)))
         );
         assert_eq!(crate::rendering::render_markdown(&doc).matches(r"\alpha").count(), 2);
         let html = crate::rendering::render_html(&doc);
@@ -3140,7 +3053,7 @@ mod tests {
                 }
                 assert!(matches!(
                     nodes[0].parent().unwrap().data.borrow().value,
-                    NodeValue::Strong
+                    NodeValue::Strong(..)
                 ));
                 assert_eq!(
                     crate::rendering::render_markdown(&doc).trim(),

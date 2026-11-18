@@ -608,10 +608,10 @@ fn structural(value: &NodeValue) -> Option<bool> {
         | NodeValue::DescriptionTerm
         | NodeValue::DescriptionDetails
         | NodeValue::Table(_)
-        | NodeValue::TableRow(_)
-        | NodeValue::Emph
-        | NodeValue::Strong
-        | NodeValue::Strikethrough
+        | NodeValue::TableRow(..)
+        | NodeValue::Emph(..)
+        | NodeValue::Strong(..)
+        | NodeValue::Strikethrough(..)
         | NodeValue::Underline
         | NodeValue::Insert
         | NodeValue::Highlight
@@ -619,7 +619,7 @@ fn structural(value: &NodeValue) -> Option<bool> {
         | NodeValue::Subscript
         | NodeValue::Link(_)
         | NodeValue::Image(_)
-        | NodeValue::ThematicBreak => Some(false),
+        | NodeValue::ThematicBreak(..) => Some(false),
         _ => None,
     }
 }
