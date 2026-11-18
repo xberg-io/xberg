@@ -84,7 +84,7 @@ zip = { version = "9.6.0", default-features = false, features = ["deflate-flate2
 # The exit cleanup tests load the bundled English model, so cargo builds them only with
 # `bundle-tessdata-eng`. Without it they are not compiled and `cargo test` lists them as absent
 # instead of counting a run of zero tests as a pass. CI runs them in the all-features workspace leg, and
-# scripts/ci/rust/run-tesseract-exit-tests.sh fails that leg unless all four run and pass. ~keep
+# scripts/ci/rust/run-tesseract-exit-tests.sh fails that leg unless all six run and pass. ~keep
 [[test]]
 name = "exit_cleanup_leak"
 required-features = ["build-tesseract", "bundle-tessdata-eng"]

@@ -63,9 +63,9 @@ env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
 ["rust:test:focused-pr"]
-description = "Run the exact PDF/OCR, office page or API jobs checks used on pull requests"
+description = "Run the exact PDF, OCR, office page or API jobs checks used on pull requests"
 depends = ["os:require linux darwin"]
-usage = 'arg "<suite>" help="Fixed suite: pdf-ocr, office-pages or api-jobs"'
+usage = 'arg "<suite>" help="Fixed suite: pdf-ocr, pdf-sparse-paddle, office-pages, api-jobs or pdf-table-paint"'
 run = 'bash scripts/ci/rust/run-focused-pr-tests.sh "$usage_suite"'
 
 ["rust:test:ort-discovery"]

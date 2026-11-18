@@ -18,20 +18,9 @@
 #![cfg(feature = "office")]
 
 mod helpers;
-use helpers::extract_bytes_document;
+use helpers::{extract_bytes_document, get_test_file_path, skip_if_missing};
 
-use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
-
-/// Helper to resolve workspace root and construct test file paths
-fn get_test_orgmode_path(filename: &str) -> PathBuf {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed");
-    workspace_root.join(format!("test_documents/org/{}", filename))
-}
 
 /// Helper to validate that content contains expected text
 fn assert_contains_ci(content: &str, needle: &str, description: &str) {
@@ -62,11 +51,11 @@ fn assert_not_contains_ci(content: &str, needle: &str, description: &str) {
 /// - Basic document structure is preserved
 #[tokio::test]
 async fn test_orgmode_basic_extraction() {
-    let test_file = get_test_orgmode_path("tables.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/tables.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -172,11 +161,11 @@ Deep nested content.
 /// - Multiple tables in document are all extracted
 #[tokio::test]
 async fn test_orgmode_tables() {
-    let test_file = get_test_orgmode_path("tables.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/tables.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -208,11 +197,11 @@ async fn test_orgmode_tables() {
 /// - Table captions are extracted
 #[tokio::test]
 async fn test_orgmode_tables_complex() {
-    let test_file = get_test_orgmode_path("tables.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/tables.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -354,11 +343,11 @@ This is content after properties.
 /// - Link text is preserved (description when available)
 #[tokio::test]
 async fn test_orgmode_links() {
-    let test_file = get_test_orgmode_path("links.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/links.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -380,14 +369,14 @@ async fn test_orgmode_links() {
 /// - #+BEGIN_SRC blocks are recognized
 /// - #+BEGIN_SRC language blocks are identified
 /// - Code content is preserved
-/// - Multiple code blocks are extracted
+/// - The fixture's single bash block survives with its command and URL
 #[tokio::test]
 async fn test_orgmode_code_blocks() {
-    let test_file = get_test_orgmode_path("../misc/readme.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/readme.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -395,8 +384,14 @@ async fn test_orgmode_code_blocks() {
         .expect("Should extract code blocks from Org Mode");
 
     assert!(
-        result.content.contains("curl") || result.content.contains("bash") || result.content.contains("bash"),
-        "Should contain code block content or language specification"
+        result.content.contains("curl -O"),
+        "Code block command should be preserved, got: {}",
+        result.content
+    );
+    assert!(
+        result.content.contains("sec.gov/Archives/edgar"),
+        "Code block URL should be preserved, got: {}",
+        result.content
     );
 
     println!("✅ Org Mode code blocks test passed!");
@@ -410,11 +405,11 @@ async fn test_orgmode_code_blocks() {
 /// - Language syntax is preserved
 #[tokio::test]
 async fn test_orgmode_code_blocks_multilang() {
-    let test_file = get_test_orgmode_path("code-blocks.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/code-blocks.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -516,11 +511,11 @@ Backslash: \ and other symbols: | ~ `
 /// - Content doesn't contain raw markup
 #[tokio::test]
 async fn test_orgmode_content_quality() {
-    let test_file = get_test_orgmode_path("tables.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/tables.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -592,11 +587,11 @@ Content here.
 /// - No unprocessed Org Mode syntax remains
 #[tokio::test]
 async fn test_orgmode_content_compliance() {
-    let test_file = get_test_orgmode_path("tables.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/tables.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -718,11 +713,11 @@ Text at level 6
 /// - Output is coherent and complete
 #[tokio::test]
 async fn test_orgmode_comprehensive_document() {
-    let test_file = get_test_orgmode_path("comprehensive.org");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "org/comprehensive.org";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read Org Mode file");
     let result = extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default())
@@ -752,22 +747,24 @@ async fn test_orgmode_comprehensive_document() {
 /// for validation and debugging purposes.
 #[tokio::test]
 async fn test_orgmode_extraction_statistics() {
-    let test_files = vec!["tables.org", "../misc/readme.org"];
+    let test_files = vec!["org/tables.org", "org/readme.org"];
+    let expected_files = test_files.len();
 
     println!("\n╔════════════════════════════════════════════════════════════╗");
     println!("║        Org Mode Extraction Statistics Report              ║");
     println!("╚════════════════════════════════════════════════════════════╝\n");
 
     let mut total_files = 0;
+    let mut skipped_files = 0;
     let mut total_content_bytes = 0;
     let mut total_metadata_fields = 0;
 
     for orgmode_file in test_files {
-        let test_file = get_test_orgmode_path(orgmode_file);
-        if !test_file.exists() {
-            println!("⚠ SKIP: {} (not found)", orgmode_file);
+        if skip_if_missing(orgmode_file) {
+            skipped_files += 1;
             continue;
         }
+        let test_file = get_test_file_path(orgmode_file);
 
         match std::fs::read(&test_file) {
             Ok(content) => match extract_bytes_document(&content, "text/x-org", &ExtractionConfig::default()).await {
@@ -797,17 +794,17 @@ async fn test_orgmode_extraction_statistics() {
 
                     println!();
                 }
-                Err(e) => {
-                    println!("✗ {} - Error: {:?}", orgmode_file, e);
-                    println!();
-                }
+                Err(e) => panic!("{orgmode_file} extraction failed: {e:?}"),
             },
-            Err(e) => {
-                println!("✗ {} - Read error: {:?}", orgmode_file, e);
-                println!();
-            }
+            Err(e) => panic!("{orgmode_file} read failed: {e:?}"),
         }
     }
+
+    assert_eq!(
+        total_files + skipped_files,
+        expected_files,
+        "every listed Org fixture should be extracted"
+    );
 
     println!("╔════════════════════════════════════════════════════════════╗");
     println!("║                    Summary Statistics                      ║");

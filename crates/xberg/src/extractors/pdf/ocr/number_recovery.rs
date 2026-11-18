@@ -141,7 +141,7 @@ impl PreparedPage<'_> {
     }
 }
 
-fn has_bounded_numbers(layer: &str) -> bool {
+pub(super) fn has_bounded_numbers(layer: &str) -> bool {
     let count = layer
         .chars()
         .filter(|character| is_khmer_digit(*character))

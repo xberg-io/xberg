@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::cancellation::check_cancelled;
 use crate::core::config::OcrConfig;
 use crate::plugins::OcrBackend;
 use crate::types::ExtractedDocument;
@@ -183,13 +184,6 @@ where
         return Ok(document);
     }
     Ok(document)
-}
-
-fn check_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 async fn key(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey> {

@@ -1,8 +1,8 @@
 //! Excel spreadsheet extractor.
 
 use crate::Result;
+use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
-use crate::core::runtime::check_blocking_cancelled;
 use crate::extraction::excel::{read_excel_bytes, read_excel_file};
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -418,7 +418,7 @@ impl InternalDocumentExtractor for ExcelExtractor {
         let security_limits = config.security_limits.clone().unwrap_or_default();
 
         let cancel = config.cancel_token.as_ref();
-        check_blocking_cancelled(cancel)?;
+        check_cancelled(cancel)?;
         let (workbook, read_warnings) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if let Some(runtime) = crate::core::runtime::current_global_runtime() {
@@ -472,7 +472,7 @@ impl InternalDocumentExtractor for ExcelExtractor {
 
         let security_limits = config.security_limits.clone().unwrap_or_default();
         let cancel = config.cancel_token.as_ref();
-        check_blocking_cancelled(cancel)?;
+        check_cancelled(cancel)?;
         let (workbook, read_warnings) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if let Some(runtime) = crate::core::runtime::current_global_runtime() {
@@ -1285,6 +1285,24 @@ mod tests {
             ..Default::default()
         };
         let read = || extractor.extract_path(path.path(), XLSX_MIME, &config);
+        let foreign_runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for result in [futures::executor::block_on(read()), foreign_runtime.block_on(read())] {
+            assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+        }
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn pre_cancelled_excel_bytes_return_cancellation_before_parsing() {
+        let extractor = ExcelExtractor::new();
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(token),
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        let read = || extractor.extract_content(b"not a workbook", XLSX_MIME, &config);
         let foreign_runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
         for result in [futures::executor::block_on(read()), foreign_runtime.block_on(read())] {
             assert!(matches!(result, Err(crate::XbergError::Cancelled)));

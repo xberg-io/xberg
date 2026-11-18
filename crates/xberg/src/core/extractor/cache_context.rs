@@ -1,6 +1,6 @@
 //! Mutable model dependencies of OSD recognition, script retry and optional PDF recovery.
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
 
 #[derive(Clone, Default)]
@@ -163,14 +163,6 @@ fn script_retry_cache_context(
         return Ok(Some(String::new()));
     }
     Ok(Some(format!(":script-retry-outer-v2:{}", vertical.finalize().to_hex())))
-}
-
-fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        Err(crate::XbergError::Cancelled)
-    } else {
-        Ok(())
-    }
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

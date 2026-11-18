@@ -400,11 +400,10 @@ impl Deref for TesseractApiLease {
 }
 
 impl Drop for TesseractApiLease {
+    /// Clears the engine and parks it idle for reuse, also after an extraction stop. A page the
+    /// time limit abandoned ends on a thread that can outlive the extraction, so it returns its
+    /// engine instead of freeing it there, unless the model check discards it.
     fn drop(&mut self) {
-        if crate::core::extractor::cacheability::ocr_stop_requested() {
-            self.inner.release_with(|_| false);
-            return;
-        }
         self.inner
             .release_for_models(&self.models, |api| match api.primary.clear() {
                 Ok(()) => {
@@ -486,6 +485,42 @@ mod tests {
             every_handle_is(&lease.inner, false),
             "a lease must hold its primary and secondary handles in use"
         );
+    }
+
+    #[tokio::test]
+    async fn a_lease_that_ends_after_a_stop_parks_its_handles_for_reuse() {
+        use crate::core::extractor::cacheability;
+        let token = crate::cancellation::CancellationToken::new();
+        token.request_stop();
+        cacheability::with_ocr_cancellation(Some(&token), async {
+            tokio::task::spawn_blocking(cacheability::blocking(|| {
+                assert!(cacheability::ocr_stop_requested(), "the lease must end under a stop");
+                let directory = tempfile::tempdir().unwrap();
+                let models =
+                    super::super::model_context::ModelContext::for_path(directory.path().to_str().unwrap().into(), 3)
+                        .unwrap();
+                let pool = ResourcePool::new(1);
+                let lease = pool
+                    .checkout(ApiKey::for_models(&models, "eng+deu", 1), || {
+                        Ok::<_, OcrError>(bare_handles())
+                    })
+                    .unwrap();
+                drop(TesseractApiLease::begin(lease, &models).unwrap());
+                let state = pool.state.lock().unwrap();
+                assert_eq!(
+                    (state.checked_out, state.idle.len()),
+                    (0, 1),
+                    "a lease that ends after a stop must return its handles to the pool"
+                );
+                assert!(
+                    every_handle_is(&state.idle[0].1, true),
+                    "the returned handles must be parked as idle"
+                );
+            }))
+            .await
+            .unwrap();
+        })
+        .await;
     }
 
     #[test]

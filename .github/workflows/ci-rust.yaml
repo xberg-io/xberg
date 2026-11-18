@@ -904,7 +904,7 @@ jobs:
   # `libpdfium`, which is true on every runner today because nothing provisions the library.
   # This job closes both gaps: it builds the crate with `pdf,pdf-pdfium` explicitly and
   # provisions a real pdfium runtime via the existing `download-pdfium` composite action
-  # (rather than a third bespoke download script), then runs only that one test.
+  # before running the concurrent and pre-cancelled extraction tests.
   #
   # Version pin: 7678, the release the checked-in bindings were generated against
   # (crates/xberg-pdfium-render/src/lib.rs includes bindgen/pdfium_7678.rs, the only binding set
@@ -957,16 +957,19 @@ jobs:
         with:
           pdfium-version: "7678"
 
-      - name: Run pdfium engine test (real library required, not skip-on-absence)
+      - name: Run Pdfium engine tests (real library required)
         run: |
           set -euo pipefail
-          cargo test --locked -p xberg --features "pdf,pdf-pdfium" --lib \
+          for test_name in \
             extractors::pdf::tests::pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available \
-            -- --exact --nocapture 2>&1 | tee /tmp/pdfium-engine-test.log
-          if ! grep -qE '^test result: ok\. 1 passed' /tmp/pdfium-engine-test.log; then
-            echo "::error::pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available did not run -- this is the sole CI execution of PdfBackend::Pdfium; a renamed/moved/re-gated test would silently go green here" >&2
-            exit 1
-          fi
+            extractors::pdf::pdfium_engine::tests::should_stop_pdfium_extraction_before_opening_the_document_when_cancelled; do
+            cargo test --locked -p xberg --features "pdf,pdf-pdfium" --lib \
+              -- --exact "$test_name" --nocapture 2>&1 | tee /tmp/pdfium-engine-test.log
+            if ! grep -qE '^test result: ok\. 1 passed; 0 failed; 0 ignored;' /tmp/pdfium-engine-test.log; then
+              echo "::error::Expected exactly one passed Pdfium test: $test_name" >&2
+              exit 1
+            fi
+          done
         shell: bash
         env:
           PDFIUM_DYNAMIC_LIB_PATH: ${{ env.XBERG_PDFIUM_PREBUILT }}/lib

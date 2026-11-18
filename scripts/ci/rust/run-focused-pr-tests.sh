@@ -2,11 +2,13 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
+suite="${1:?expected pdf-ocr, pdf-sparse-paddle, office-pages, api-jobs or pdf-table-paint}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
+pdf-sparse-paddle) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract" ;;
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
+pdf-table-paint) features="pdf,layout-detection" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
   exit 2
@@ -69,9 +71,15 @@ for route, loop, page in (
 ):
     loop_start = mixed.index(loop)
     branch = mixed[loop_start:].split("let result = match result.map_err", 1)[0]
-    hints = re.search(handoff, branch, re.S)
+    if route == "Tokio":
+        hints = re.search(r"\blet mut page_ocr_hints = hints_for_pipeline_page\(idx, [^\n]+;", branch)
+        builder = mixed.split("let hints_for_pipeline_page =", 1)[1].split("let images_for_page =", 1)[0]
+        fields = builder
+    else:
+        hints = re.search(handoff, branch, re.S)
+        fields = hints["fields"] if hints is not None else ""
     assert hints is not None, f"{route} mixed OCR must construct page hints"
-    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", hints["fields"], re.M), (
+    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", fields, re.M), (
         f"{route} mixed OCR must supply the decision layers"
     )
     invocation = re.search(call, branch[hints.end():], re.S)
@@ -79,6 +87,10 @@ for route, loop, page in (
         rf"Some\(page_ocr_hints\),\s*{re.escape(page)},\s*Some\(source\),", invocation["args"]
     ), f"{route} mixed OCR must pass the hints and the page index to detached OCR"
     print(f"{route} mixed OCR decision-layer handoff verified")
+
+assert re.search(r"hints:\s*hints_for_pipeline_page\(idx, None\)", mixed), (
+    "the sparse trial must use the same page hints as regular detached OCR"
+)
 PYTHON
 }
 
@@ -107,6 +119,31 @@ run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  local single_title='structure::spatial_table_detector::source_headers::tests::single_title'
+  expected=$((expected + 19))
+  local single_title_case
+  for single_title_case in \
+    single_merged_title_promotes_bold_native_leaf_labels_without_changing_cells \
+    single_merged_title_keeps_dark_rules_when_filled_dividers_are_painted_last \
+    single_merged_title_requires_two_numeric_body_cells \
+    single_merged_title_requires_empty_title_peers \
+    single_merged_title_requires_the_upper_leaf_rule \
+    single_merged_title_does_not_promote_regular_leaves \
+    single_merged_title_refuses_a_divider_running_through_the_title \
+    single_merged_title_requires_a_continuous_lower_leaf_rule \
+    single_merged_title_refuses_a_divider_with_later_pale_or_dashed_stroke \
+    single_merged_title_refuses_ink_that_stays_in_the_first_track \
+    single_merged_title_refuses_dark_fill_extended_by_a_pale_stroke \
+    single_merged_title_accepts_measured_upper_font_metric_overhang \
+    single_merged_title_rejects_overhang_beyond_the_upper_metric_allowance \
+    single_merged_title_rejects_small_overhang_on_each_other_edge \
+    single_merged_title_allowance_does_not_change_the_legacy_grouped_proof \
+    single_merged_title_requires_at_least_three_columns \
+    single_merged_title_requires_a_title_declared_over_two_columns \
+    single_merged_title_requires_alphabetic_title_and_leaves \
+    single_merged_title_accepts_overhang_at_exactly_the_upper_metric_allowance; do
+    run_exact "$single_title::$single_title_case" --native-pdf --lib
+  done
   run_exact 'extractors::warnings::tests::nested_warning_scope_restores_the_outer_sink' --native-pdf --lib
   run_exact 'extractors::warnings::tests::unwinding_restores_the_outer_warning_scope' --native-pdf --lib
   run_exact 'extractors::warnings::tests::automatic_warning_outside_a_scope_is_not_retained' --native-pdf --lib
@@ -486,6 +523,22 @@ run_mixed_plain_cases() {
   fi
 }
 
+run_cancellation_cases() {
+  local thresholds='extractors::image::image_color_threshold::tests'
+  local cache='core::extractor::cache_context'
+  run_exact 'cancellation::tests::check_cancelled_only_rejects_a_cancelled_token' --lib
+  run_exact "$thresholds::cancellation_before_the_probe_prevents_all_retry_work" --lib
+  run_exact "$thresholds::cancellation_during_the_probe_prevents_ocr" --lib
+  run_exact "$thresholds::cancellation_during_ocr_discards_the_candidate" --lib
+  run_exact "$cache::tests::cancellation_precedes_model_lookup_and_invalidates_cache_work" --lib
+  run_exact "$cache::explicit_mode_tests::outer_cache_rejects_legacy_retry_entry_after_model_removal" --lib
+  run_exact "$cache::explicit_mode_tests::image_osd_identity_observes_equal_length_revisions_without_pdf_support" --lib
+  run_exact "$cache::explicit_mode_tests::non_osd_image_modes_keep_empty_context_without_model_io" --lib
+  run_exact "$cache::explicit_mode_tests::explicit_osd_modes_apply_to_pdf_and_images_but_not_other_backends" --lib
+  run_exact 'extractors::pdf::ocr::orientation_retry::tests::recognition_cancellation_and_exhaustion_precede_the_cache_probe' --lib
+  run_exact 'extractors::pdf::tests::native_pdf_blocking_phase_stops_when_cancelled' --lib
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -523,6 +576,43 @@ pdf-ocr)
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
+  expected=$((expected + 11))
+  run_cancellation_cases
+  run_exact psm6_html_preserves_scan_rows_only_with_owned_columns --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_leaves_each_page_of_a_two_page_scan_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_document_structure_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_a_detached_scan_flattened_beside_native_text --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_element_output_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_markdown_keeps_scan_rows_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact 'extractors::pdf::ocr::document::tests::certified_scan_html_rows_require_each_admission_condition' --lib
+  run_exact 'rendering::comrak_bridge::tests::marked_paragraph_rows_escape_html_text_in_each_row' --lib
+  expected=$((expected + 8))
+  ;;
+pdf-sparse-paddle)
+  expected=16
+  for name in \
+    automatic_ocr_keeps_overprinted_separation_text_and_native_sibling \
+    reporter_folio_keeps_the_exact_transcript_with_automatic_ocr \
+    mixed_size_type0_text_keeps_the_exact_transcript_at_normal_density; do
+    run_exact "$name" --test pdf_separation_overprint_2817
+  done
+  sparse_module="extractors::pdf::ocr::pipeline::sparse_glyph_read"
+  for name in \
+    tests::a_marked_word_requires_a_letter_or_digit_at_each_missing_position \
+    page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing \
+    missing_marked_word_retries_sparse_glyphs_with_normal_raster_and_preprocessing \
+    active_pdf_margin_uses_one_normal_density_read \
+    implicit_pipeline_retries_missing_marked_words_at_normal_density \
+    implicit_pipeline_preserves_normal_render_on_rotated_or_failed_trials \
+    implicit_trial_renderer_uses_the_resolved_page_rotation \
+    implicit_trial_skips_pages_that_khmer_number_recovery_may_claim \
+    review_tests::implicit_tesseract_paddle_pipeline_reads_at_trial_density \
+    review_tests::explicit_tesseract_paddle_pipeline_keeps_the_normal_raster \
+    review_tests::explicit_vlm_fallback_keeps_the_normal_raster \
+    review_tests::explicit_paddle_backend_receives_the_normal_raster \
+    review_tests::sparse_preview_preserves_the_detached_recovery_context; do
+    run_exact "$sparse_module::$name" --lib
+  done
   ;;
 office-pages)
   expected=53
@@ -531,6 +621,40 @@ office-pages)
 api-jobs)
   expected=4
   run_api_cases
+  ;;
+pdf-table-paint)
+  expected=24
+  table_module="pdf::structure::regions::table_recognition"
+  run_exact "$table_module::structure::row_span_closure::tests::closed_native_rowspan_preserves_heading_and_rejects_incomplete_evidence" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_rowspan_retains_only_column_spans_with_open_source_rules" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_header_rejects_a_displaced_rule_between_native_words" --lib
+  for name in \
+    native_tatr_vertical_span_stops_at_a_painted_rule \
+    native_tatr_vertical_span_survives_a_rule_outside_the_merged_track \
+    native_tatr_three_row_span_retains_only_the_source_supported_merge \
+    native_tatr_preserves_adjacent_source_supported_rowspans \
+    native_tatr_preserves_three_adjacent_rowspans_across_empty_continuations \
+    native_tatr_preserves_a_tinted_open_track \
+    native_tatr_resolves_open_and_divided_tracks_on_full_width_tints \
+    native_tatr_requires_continuous_flank_rule_on_a_tint \
+    native_tatr_preserves_a_noisy_near_white_open_track \
+    native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor; do
+    run_exact "$table_module::metadata_tests::$name" --lib
+  done
+  run_exact "$table_module::adjacent_span_tests::native_tatr_preserves_adjacent_spans_with_vertically_aligned_labels" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_span_stops_expanding_at_a_contradicted_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_opening_accepts_a_shorter_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_opening_checks_only_the_neighbor_prefix_at_the_boundary" --lib
+  for name in \
+    narrow_track_glyph_ink_does_not_count_as_a_divider \
+    staggered_flank_rules_do_not_prove_an_opening \
+    masked_divider_does_not_prove_an_opening \
+    glyph_ink_in_either_flank_does_not_prove_an_opening \
+    near_white_opening_requires_visible_band_columns \
+    near_white_opening_checks_word_masks_on_rule_shoulders \
+    aligned_flank_rules_require_at_least_eighteen_of_twenty_visible_columns; do
+    run_exact "$table_module::structure::tests::$name" --lib
+  done
   ;;
 esac
 if [ "$passed" -ne "$expected" ]; then

@@ -712,6 +712,23 @@ impl TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        if tess_config.known_full_page_scan
+            && tess_config.psm == crate::ocr::types::PSMMode::SingleBlock as u8
+            && ocr_result.tables.is_empty()
+            && processing_warnings.is_empty()
+            && let Some(elements) = ocr_result.ocr_elements.as_deref()
+            && let Some(document) = ocr_result.internal_document.as_mut()
+            && let [element] = document.elements.as_mut_slice()
+            && matches!(element.kind, crate::types::internal::ElementKind::OcrText { .. })
+            && element.annotations.is_empty()
+            && crate::extraction::image_ocr::embedded_rows::proved_scan_rows(&element.text, elements).is_some()
+        {
+            element.attributes.get_or_insert_with(Default::default).insert(
+                crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(),
+                String::new(),
+            );
+        }
         let ocr_elements = if defer_element_selection {
             ocr_result.ocr_elements.take()
         } else {

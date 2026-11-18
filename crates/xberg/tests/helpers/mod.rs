@@ -233,7 +233,7 @@ pub fn skip_if_missing(relative_path: &str) -> bool {
     !fixture_available(&get_test_file_path(relative_path), require_test_fixtures())
 }
 
-fn require_test_fixtures() -> bool {
+pub fn require_test_fixtures() -> bool {
     std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_some_and(|value| value == "1")
 }
 

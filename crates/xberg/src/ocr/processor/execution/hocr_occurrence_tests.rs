@@ -1,4 +1,5 @@
 use super::*;
+use crate::ocr::hocr_parser::parse_hocr_to_internal_document_with_page_offset_and_stats;
 
 #[test]
 fn hocr_receipts_use_selected_tags_and_exact_utf8_byte_ranges() {

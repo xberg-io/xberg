@@ -33,6 +33,7 @@
 !scripts/ci/vendor-native-closure.sh
 !scripts/ci/actions/setup-onnx-runtime/checksums.sha256
 !scripts/ci/actions/setup-onnx-runtime/verify-archive.sh
+!scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh
 !scripts/pdfium-runtime-checksums.sha256
 !scripts/ci/install-system-deps/build-ocr-linux.sh
 !scripts/ci/install-system-deps/verify-ocr-linux.py

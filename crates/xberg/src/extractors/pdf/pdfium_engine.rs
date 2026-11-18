@@ -51,6 +51,7 @@ use pdfium_render::prelude::*;
 use std::sync::Mutex;
 
 use crate::Result;
+use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
 use crate::error::XbergError;
 use crate::pdf::metadata::PdfMetadata as PdfSpecificMetadata;
@@ -211,13 +212,6 @@ fn unsupported_content_filter_warnings(config: &ExtractionConfig) -> Vec<Process
     warnings
 }
 
-fn ensure_not_cancelled(cancel_token: Option<&crate::cancellation::CancellationToken>) -> Result<()> {
-    if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
-        return Err(XbergError::Cancelled);
-    }
-    Ok(())
-}
-
 /// CPU-bound pdfium work, run inside `spawn_blocking` by [`extract`]. Builds the
 /// `InternalDocument` directly rather than returning intermediate pieces --
 /// there is no OCR/layout/table stage downstream of this backend (yet) that
@@ -230,12 +224,12 @@ fn extract_blocking(
     margins: PageMarginFractions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<InternalDocument> {
-    ensure_not_cancelled(cancel_token)?;
+    check_cancelled(cancel_token)?;
     let _operation_guard = PDFIUM_OPERATION_LOCK
         .lock()
         .map_err(|_| XbergError::parsing("pdfium operation lock was poisoned by an earlier extraction panic"))?;
 
-    ensure_not_cancelled(cancel_token)?;
+    check_cancelled(cancel_token)?;
     extract_blocking_serialized(content, mime_type, passwords, extract_metadata, margins, cancel_token)
 }
 
@@ -250,7 +244,7 @@ fn collect_page_text(
     let mut boundaries: Vec<PageBoundary> = Vec::with_capacity(page_count as usize);
 
     for (index, page) in document.pages().iter().enumerate() {
-        ensure_not_cancelled(cancel_token)?;
+        check_cancelled(cancel_token)?;
         let page_number = (index + 1) as u32;
         let content_rect = page_content_rect(page.width(), page.height(), margins);
         let page_text = page
@@ -281,7 +275,7 @@ fn extract_blocking_serialized(
     margins: PageMarginFractions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<InternalDocument> {
-    ensure_not_cancelled(cancel_token)?;
+    check_cancelled(cancel_token)?;
     let pdfium = Pdfium;
     let document = open_document(&pdfium, content, passwords)?;
 
@@ -393,13 +387,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_stop_pdfium_page_work_when_cancelled() {
+    fn should_stop_pdfium_extraction_before_opening_the_document_when_cancelled() {
         let token = crate::cancellation::CancellationToken::new();
         token.cancel();
 
-        let error = ensure_not_cancelled(Some(&token)).expect_err("cancelled pdfium work must stop");
-
-        assert!(matches!(error, XbergError::Cancelled));
+        let result = extract_blocking(
+            b"",
+            "application/pdf",
+            &[],
+            false,
+            PageMarginFractions::default(),
+            Some(&token),
+        );
+        assert!(matches!(result, Err(XbergError::Cancelled)));
     }
 
     #[test]

@@ -43,12 +43,17 @@ on:
       - "scripts/ci/rust/run-focused-pr-tests.sh"
       - "test_documents"
   workflow_dispatch:
+    inputs:
+      python_callback_smoke:
+        description: Build a Python wheel and test OCR callback exceptions
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-focused-pr-${{ github.ref }}
+  group: ci-focused-pr-${{ github.ref }}-${{ inputs.python_callback_smoke && 'python' || 'regressions' }}
   cancel-in-progress: true
 
 env:
@@ -62,11 +67,55 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  python-callback-smoke:
+    if: github.repository == 'xberg-io/xberg' && github.event_name == 'workflow_dispatch' && inputs.python_callback_smoke
+    name: Python OCR callback smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "true"
+          install-args: python uv
+          cache: "false"
+
+      - uses: ./.github/actions/install-system-deps
+
+      - name: Set up ONNX Runtime for the Python wheel
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          dest-dir: crates/xberg-py
+          verify-linux-archive: true
+
+      - name: Build and test the wheel
+        shell: bash
+        env:
+          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: "0"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_DEBUG: "0"
+          TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
+          mise run python:callback:smoke
+
   regressions:
     if: >-
       ${{ github.repository == 'xberg-io/xberg' &&
           ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-           github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'workflow_dispatch' && !inputs.python_callback_smoke) ||
            (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
     name: Focused ${{ matrix.suite }}
     runs-on: ubuntu-latest
@@ -74,7 +123,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [pdf-ocr, office-pages, api-jobs, nli]
+        suite: [pdf-ocr, office-pages, api-jobs, nli, pdf-table-paint]
         # ~keep The public test documents a suite reads. A suite that names some gets the test_documents
         # submodule, because the fetch action reads test_documents/corpus.lock.json from it.
         include:
@@ -135,6 +184,12 @@ jobs:
         with:
           verify-linux-archive: "true"
 
+      - name: Setup ONNX Runtime for PDF table paint tests
+        if: matrix.suite == 'pdf-table-paint'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+
       - name: Install OCR build dependencies and pinned English data
         if: matrix.suite == 'pdf-ocr'
         shell: bash
@@ -161,6 +216,10 @@ jobs:
           else
             mise run rust:test:focused-pr "$FOCUSED_SUITE"
           fi
+
+      - name: Verify sparse glyph OCR with the implicit Paddle fallback enabled
+        if: matrix.suite == 'pdf-ocr'
+        run: mise run rust:test:focused-pr pdf-sparse-paddle
 
       - name: Verify Khmer recovery with the implicit Paddle fallback enabled
         if: matrix.suite == 'pdf-ocr'

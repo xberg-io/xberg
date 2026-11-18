@@ -232,7 +232,7 @@ pub mod doctor;
 ))]
 pub mod ort_discovery;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), any(test, model_download)))]
 pub(crate) mod model_download;
 
 /// Engine-neutral inference seam (issue #1275): backend/session traits over ONNX

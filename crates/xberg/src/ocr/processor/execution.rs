@@ -6,9 +6,12 @@
 #[path = "execution/fragmented_tables.rs"]
 mod fragmented_tables;
 
+#[path = "execution/primary_output.rs"]
+mod primary_output;
+
 use fragmented_tables::{
-    FragmentedTablePolicy, RetainedTableLeaders, apply_fragmented_reconciliation, fragmented_hocr_budget,
-    reconcile_fragmented_hocr_table_rows, reconcile_retained_table_leaders,
+    FragmentedTablePolicy, RetainedTableLeaders, apply_fragmented_reconciliation, reconcile_fragmented_hocr_table_rows,
+    reconcile_retained_table_leaders,
 };
 
 #[cfg(feature = "pdf")]
@@ -47,7 +50,7 @@ use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tesseract_element
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_preserving_rejected_table_words,
-    parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_claimed_table_rows,
+    parse_hocr_without_claimed_table_rows,
 };
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
@@ -2583,6 +2586,8 @@ fn read_native_word_confidence_stats(api: &TesseractAPI, output_format: &str) ->
     }
 }
 
+mod primary_read_metadata;
+
 /// Perform OCR on an image using Tesseract.
 ///
 /// This function handles the complete OCR pipeline:
@@ -2913,12 +2918,6 @@ pub(super) fn perform_ocr(
         _ => Vec::new(),
     };
 
-    let mut hocr_document: Option<InternalDocument> = None;
-    let mut hocr_for_tables = None;
-    let mut dictionary_filtered_line_count = 0usize;
-    let mut dictionary_kept_numeral_line_count = 0usize;
-    let mut retained_hocr_confidence_stats = None;
-
     let capture_requested = super::CAPTURE_REGION_HOCR
         .try_with(|&requested| requested)
         .unwrap_or(false);
@@ -2927,9 +2926,6 @@ pub(super) fn perform_ocr(
         tracing::trace!(capture_region_hocr, format = %config.output_format, merged = merged_read.is_some(),
             "hOCR region capture requested");
     }
-    let mut retained_hocr_read = None;
-    #[cfg(feature = "pdf")]
-    let mut dehyphenation_words = None;
     // Region receipts keep the exact selected hOCR bytes for later source replay. ~keep
     let observe_hyphens = cfg!(feature = "pdf") && config.known_full_page_scan && !capture_requested;
 
@@ -2937,206 +2933,41 @@ pub(super) fn perform_ocr(
         is_valid_word: &|text| dictionary.is_valid_word(text),
         max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
     };
-    let (mut raw_content, mime_type) = match config.output_format.as_str() {
-        "text" => {
-            let text = api
-                .get_utf8_text()
-                .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract text: {}", e)))?;
-            (text, "text/plain".to_string())
-        }
-        "markdown" => {
-            let hocr = api
-                .get_hocr_text(0)
-                .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
-
-            let (parse_result, mut occurrences) = if (capture_region_hocr || observe_hyphens) && merged_read.is_none() {
-                crate::ocr::hocr_parser::parse_hocr_with_occurrences(
-                    &hocr,
-                    Some(&dictionary_filter),
-                    config.page_number,
-                )
-            } else {
-                (
-                    parse_hocr_to_internal_document_with_page_offset_and_stats(
-                        &hocr,
-                        Some(&dictionary_filter),
-                        config.page_number,
-                    ),
-                    None,
-                )
-            };
-            if capture_region_hocr {
-                tracing::trace!(parsed_occurrences = ?occurrences.as_ref().map(Vec::len),
-                    elements = parse_result.document.elements.len(), "parsed selected hOCR occurrences");
-            }
-            if capture_region_hocr {
-                retained_hocr_read = occurrences.take().and_then(|words| {
-                    capture_retained_hocr_read(
-                        &parse_result.document.elements,
-                        words,
-                        (ocr_image_width, ocr_image_height),
-                    )
-                });
-            }
-            #[cfg(feature = "pdf")]
-            {
-                dehyphenation_words = occurrences;
-            }
-            dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
-            dictionary_kept_numeral_line_count = parse_result.dictionary_kept_numeral_line_count;
-            if config.enable_table_detection
-                && (dictionary_filtered_line_count > 0
-                    || parse_result
-                        .document
-                        .elements
-                        .iter()
-                        .any(|element| element.text.contains('\n'))
-                    || tsv_data_for_tables
-                        .as_deref()
-                        .and_then(|tsv| fragmented_hocr_budget(&hocr, tsv, &security_limits))
-                        .is_some())
-            {
-                hocr_for_tables = Some(hocr);
-            }
-            let content = flatten_hocr_elements_to_text(&parse_result.document.elements);
-            retained_hocr_confidence_stats = Some(parse_result.retained_word_confidence_stats);
-            hocr_document = Some(parse_result.document);
-
-            let mime_type = extraction_config
-                .map(|c| match c.output_format {
-                    crate::core::config::OutputFormat::Djot => "text/djot",
-                    _ => "text/markdown",
-                })
-                .unwrap_or("text/markdown");
-
-            (content, mime_type.to_string())
-        }
-        "hocr" => {
-            let hocr = api
-                .get_hocr_text(0)
-                .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
-            (hocr, "text/html".to_string())
-        }
-        "tsv" => {
-            let tsv = tsv_data_for_tables
-                .as_ref()
-                .ok_or_else(|| OcrError::ProcessingFailed("TSV data not available".to_string()))?
-                .clone();
-            (tsv, "text/plain".to_string())
-        }
-        _ => {
-            return Err(OcrError::InvalidConfiguration(format!(
-                "Unsupported output format: {}",
-                config.output_format
-            )));
-        }
-    };
-
-    if let Some(merged) = merged_read {
-        // The merged page has no hOCR: its lines come from two engines, so the text is rebuilt
-        // from the merged word table and the hOCR-only steps (dictionary filter, table repair
-        // from hOCR) do not run for it. ~keep
-        raw_content = merged.text();
-        hocr_document = None;
-        hocr_for_tables = None;
-        dictionary_filtered_line_count = 0;
-        dictionary_kept_numeral_line_count = 0;
-        retained_hocr_confidence_stats = None;
-    }
-
-    let mut metadata = HashMap::new();
-    if let Some(image_preprocessing) = image_preprocessing {
-        let value = serde_json::to_value(image_preprocessing).map_err(|error| {
-            OcrError::ProcessingFailed(format!("Failed to serialize image preprocessing metadata: {error}"))
-        })?;
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_IMAGE_PREPROCESSING_METADATA_KEY.to_string(),
-            value,
-        );
-    }
-    metadata.insert(
-        crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.to_string(),
-        serde_json::Value::Number(ocr_image_width.into()),
-    );
-    metadata.insert(
-        crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.to_string(),
-        serde_json::Value::Number(ocr_image_height.into()),
-    );
-    metadata.insert(
-        "language".to_string(),
-        serde_json::Value::String(config.language.clone()),
-    );
-    metadata.insert("psm".to_string(), serde_json::Value::String(config.psm.to_string()));
-    metadata.insert("table_count".to_string(), serde_json::Value::Number(0.into()));
-    metadata.insert("tables_detected".to_string(), serde_json::Value::Number(0.into()));
-    if config.output_format == "markdown" {
-        metadata.insert(
-            "source_format".to_string(),
-            serde_json::Value::String("hocr".to_string()),
-        );
-    }
-    if auto_rotate_unavailable {
-        metadata.insert("auto_rotate_unavailable".to_string(), serde_json::Value::Bool(true));
-    }
-    insert_dictionary_line_counts(
-        &mut metadata,
+    let primary_output::Output {
+        raw_content,
+        mime_type,
+        mut hocr_document,
+        hocr_for_tables,
         dictionary_filtered_line_count,
         dictionary_kept_numeral_line_count,
-    );
+        retained_hocr_confidence_stats,
+        mut retained_hocr_read,
+        #[cfg(feature = "pdf")]
+        dehyphenation_words,
+    } = primary_output::read(primary_output::Request {
+        api: &api,
+        config,
+        extraction_config,
+        dictionary_filter: &dictionary_filter,
+        merged_read,
+        tsv_data_for_tables: tsv_data_for_tables.as_deref(),
+        security_limits: &security_limits,
+        dimensions: (ocr_image_width, ocr_image_height),
+        capture_region_hocr,
+        observe_hyphens,
+    })?;
 
-    if let Some(stats) = retained_hocr_confidence_stats.as_ref() {
-        insert_retained_word_confidence_metadata(&mut metadata, stats);
-    } else if config.output_format != "text" {
-        if mean_text_conf >= 0 {
-            metadata.insert(
-                "mean_text_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(mean_text_conf)),
-            );
-        }
-
-        if let Some((median_conf, p10_conf, word_count, low_conf_count)) = word_confidence_stats {
-            metadata.insert(
-                "median_word_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(median_conf)),
-            );
-            metadata.insert(
-                "p10_word_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(p10_conf)),
-            );
-            metadata.insert(
-                "word_count".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(word_count)),
-            );
-            metadata.insert(
-                "low_conf_word_count".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(low_conf_count)),
-            );
-        }
-    }
-
-    // No `script_name`/`script_confidence` metadata: the ONNX PP-LCNet
-    // orientation classifier used here has no script-detection capability,
-    // unlike Tesseract's own `DetectOrientationScript()`/OSD (which this crate
-    // does not call). Emitting a placeholder script name would misrepresent
-    // real detection as having happened (#184). ~keep
-    if let Some((orient_deg, orient_conf)) = detected_orientation {
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY.to_string(),
-            serde_json::Value::Number(serde_json::Number::from(orient_deg)),
-        );
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_ORIENTATION_CONFIDENCE_METADATA_KEY.to_string(),
-            serde_json::Value::Number(
-                serde_json::Number::from_f64(orient_conf as f64).unwrap_or(serde_json::Number::from(0)),
-            ),
-        );
-        if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
-            metadata.insert(
-                crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY.to_string(),
-                serde_json::Value::Bool(true),
-            );
-        }
-    }
+    let mut metadata = primary_read_metadata::build(primary_read_metadata::PrimaryRead {
+        config,
+        dimensions: (ocr_image_width, ocr_image_height),
+        image_preprocessing,
+        auto_rotate_unavailable,
+        dictionary_line_counts: (dictionary_filtered_line_count, dictionary_kept_numeral_line_count),
+        retained_hocr_confidence_stats: retained_hocr_confidence_stats.as_ref(),
+        mean_text_conf,
+        word_confidence_stats,
+        detected_orientation,
+    })?;
 
     if let Some(outcome) = script_retry.as_ref() {
         // After the first read's confidence metadata, so the merged page reports its own. ~keep

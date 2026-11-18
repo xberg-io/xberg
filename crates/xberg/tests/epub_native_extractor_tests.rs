@@ -9,20 +9,18 @@
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 #![cfg(feature = "office")]
 
+mod helpers;
+
+use helpers::{get_test_file_path, skip_if_missing};
 use std::path::PathBuf;
 use xberg::ExtractInput;
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 use xberg::extractors::EpubExtractor;
 use xberg::plugins::DocumentExtractor;
 
-/// Helper to resolve workspace root and construct test file paths
-fn get_test_epub_path(filename: &str) -> PathBuf {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed");
-    workspace_root.join(format!("test_documents/epub/{}", filename))
+fn get_test_epub_path(filename: &str) -> Option<PathBuf> {
+    let relative = format!("epub/{filename}");
+    (!skip_if_missing(&relative)).then(|| get_test_file_path(&relative))
 }
 
 /// Test 1: Basic EPUB extraction - wasteland.epub
@@ -34,11 +32,9 @@ fn get_test_epub_path(filename: &str) -> PathBuf {
 /// - Metadata is extracted correctly
 #[tokio::test]
 async fn test_native_epub_wasteland_extraction() {
-    let test_file = get_test_epub_path("wasteland.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("wasteland.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read wasteland.epub");
     let extractor = EpubExtractor;
@@ -80,11 +76,9 @@ async fn test_native_epub_wasteland_extraction() {
 /// - Metadata is extracted
 #[tokio::test]
 async fn test_native_epub_images_extraction() {
-    let test_file = get_test_epub_path("img.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("img.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read img.epub");
     let extractor = EpubExtractor;
@@ -114,11 +108,9 @@ async fn test_native_epub_images_extraction() {
 /// - Substantial content is present (>1000 bytes)
 #[tokio::test]
 async fn test_native_epub_features_extraction() {
-    let test_file = get_test_epub_path("features.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("features.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read features.epub");
     let extractor = EpubExtractor;
@@ -196,11 +188,9 @@ async fn test_native_epub_features_extraction() {
 /// - Content and metadata extracted
 #[tokio::test]
 async fn test_native_epub2_cover_extraction() {
-    let test_file = get_test_epub_path("epub2_cover.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("epub2_cover.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read epub2_cover.epub");
     let extractor = EpubExtractor;
@@ -233,11 +223,9 @@ async fn test_native_epub2_cover_extraction() {
 /// - Extraction is stable and reproducible
 #[tokio::test]
 async fn test_native_epub_deterministic_extraction() {
-    let test_file = get_test_epub_path("features.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("features.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read features.epub");
     let extractor = EpubExtractor;
@@ -288,11 +276,9 @@ async fn test_native_epub_no_content_loss() {
     let config = ExtractionConfig::default();
 
     for (epub_file, min_bytes) in epub_files {
-        let test_file = get_test_epub_path(epub_file);
-        if !test_file.exists() {
-            println!("⚠ Skipping {}: not found", epub_file);
+        let Some(test_file) = get_test_epub_path(epub_file) else {
             continue;
-        }
+        };
 
         let bytes = std::fs::read(&test_file).unwrap_or_else(|_| panic!("Failed to read {}", epub_file));
         let input = ExtractInput::from_bytes(bytes, "application/epub+zip", None);
@@ -320,11 +306,9 @@ async fn test_native_epub_no_content_loss() {
 /// mangled into raw concatenated symbol text or leaking tag names.
 #[tokio::test]
 async fn test_native_epub_features_mathml_converts_to_latex() {
-    let test_file = get_test_epub_path("features.epub");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let Some(test_file) = get_test_epub_path("features.epub") else {
         return;
-    }
+    };
 
     let bytes = std::fs::read(&test_file).expect("Failed to read features.epub");
     let extractor = EpubExtractor;

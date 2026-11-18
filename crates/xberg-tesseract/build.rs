@@ -37,6 +37,11 @@ mod source_cache;
 #[cfg(all(feature = "dynamic-linking", not(feature = "build-tesseract-wasm")))]
 use {reqwest as _, sha2 as _, tempfile as _, zip as _};
 
+// A workspace build unifies `build-tesseract-wasm` with `dynamic-linking`, which compiles out the
+// system shim, the only user of these build dependencies. ~keep
+#[cfg(all(feature = "dynamic-linking", feature = "build-tesseract-wasm"))]
+use {pkg_config as _, vcpkg as _};
+
 #[cfg(any(
     feature = "build-tesseract-wasm",
     all(feature = "build-tesseract", not(feature = "dynamic-linking"))

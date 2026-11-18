@@ -22,6 +22,8 @@ pub struct DecodingOptions {
 #[allow(unsafe_code)]
 impl DecodingOptions {
     pub fn new() -> Option<Self> {
+        // SAFETY: The allocator returns a `new` struct filled with defaults, including
+        // `version`, which this wrapper owns until Drop once the result is non-null.
         let inner_ptr = unsafe { lh::heif_decoding_options_alloc() };
         ptr::NonNull::new(inner_ptr).map(|inner| Self {
             inner,
@@ -38,10 +40,18 @@ impl Drop for DecodingOptions {
         {
             let inner_mut = self.inner_mut();
             if !inner_mut.color_conversion_options_ext.is_null() {
+                // SAFETY: The only write of a non-null extension is set_alpha_composition_mode,
+                // which stores heif_color_conversion_options_ext_alloc's result, so these options
+                // own it. heif_decoding_options_free does not free it, and the pointer is cleared
+                // after this free, so it is freed exactly once.
                 unsafe { lh::heif_color_conversion_options_ext_free(inner_mut.color_conversion_options_ext) };
                 inner_mut.color_conversion_options_ext = ptr::null_mut();
             }
         }
+        // SAFETY: These options are the sole owner of the allocation, and
+        // heif_decoding_options_free is the `delete` matching the alloc's `new`. Under v1_20
+        // the block above has freed the extension; without v1_20 the field is not in the
+        // bindings and stays null, because the alloc sets it and this code never writes it.
         unsafe {
             lh::heif_decoding_options_free(self.inner.as_ptr());
         }
@@ -53,12 +63,21 @@ impl DecodingOptions {
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_ref(&self) -> &lh::heif_decoding_options {
+        // SAFETY: The pointer is the initialized allocation from heif_decoding_options_alloc,
+        // which self keeps alive for this shared borrow. The reference is sized to the
+        // bindings for the highest enabled `v1_*` feature, so the runtime libheif must have
+        // allocated at least that struct version. libheif-sys's pkg-config floor checks the
+        // libheif version only at build time, libheif only appends fields, and nothing checks
+        // `version` at runtime: a runtime older than the build floor is unsupported.
         unsafe { self.inner.as_ref() }
     }
 
     #[inline(always)]
     #[allow(unsafe_code)]
     pub(crate) fn inner_mut(&mut self) -> &mut lh::heif_decoding_options {
+        // SAFETY: The pointer is the initialized allocation from heif_decoding_options_alloc,
+        // which self owns, and &mut self grants exclusive access. The layout holds only for
+        // a runtime libheif at or above the build floor, as inner_ref explains.
         unsafe { self.inner.as_mut() }
     }
 
@@ -140,6 +159,8 @@ impl DecodingOptions {
     pub fn set_alpha_composition_mode(&mut self, v: AlphaCompositionMode) {
         let inner = self.inner_mut();
         if inner.color_conversion_options_ext.is_null() {
+            // SAFETY: The allocator returns a `new` extension filled with defaults, or null.
+            // A non-null result is owned by these options and freed in Drop.
             inner.color_conversion_options_ext = unsafe { lh::heif_color_conversion_options_ext_alloc() };
         }
         v.fill_libheif_cc_options_ext(inner.color_conversion_options_ext);
@@ -234,6 +255,8 @@ impl Default for ColorConversionOptions {
         };
         #[cfg(feature = "v1_19")]
         {
+            // SAFETY: cc_options is a writable, initialized version-1 structure that
+            // stays live while libheif sets its default fields.
             unsafe { lh::heif_color_conversion_options_set_defaults(&mut cc_options) };
         }
         Self::from_cc_options(&cc_options)
@@ -282,6 +305,9 @@ impl<'a> DecoderDescriptor<'a> {
     /// This name should stay constant over different decoder versions.
     #[allow(unsafe_code)]
     pub fn id(&self) -> &str {
+        // SAFETY: The descriptor is a plugin registered with libheif, and the borrow of
+        // LibHeif behind 'a keeps libheif initialized, so the plugin stays loaded. The call
+        // returns the plugin's static id_name, or null for plugin API versions below 3.
         let name = unsafe { lh::heif_decoder_descriptor_get_id_name(self.inner) };
         cstr_to_str(name).unwrap_or_default()
     }
@@ -291,6 +317,9 @@ impl<'a> DecoderDescriptor<'a> {
     #[allow(unsafe_code)]
     pub fn name(&self) -> String {
         let _lock = DECODER_MUTEX.lock();
+        // SAFETY: The descriptor stays loaded for 'a, as in id(). get_plugin_name may write
+        // a buffer shared by all calls, so the call and the copy below run under
+        // DECODER_MUTEX and the result is owned before the lock is released.
         let name = unsafe { lh::heif_decoder_descriptor_get_name(self.inner) };
         cstr_to_str(name).unwrap_or_default().to_owned()
     }
