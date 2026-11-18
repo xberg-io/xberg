@@ -658,6 +658,8 @@ impl TesseractAPI {
     /// Returns the source Y resolution as an integer.
     pub fn get_source_y_resolution(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The mutex guard protects the live API handle. The native call returns a scalar,
+        // including -1 when the thresholder has not been created.
         Ok(unsafe { TessBaseAPIGetSourceYResolution(*handle) })
     }
 
@@ -669,6 +671,8 @@ impl TesseractAPI {
     /// Use `thresholded_image` for an independent typed allocation.
     pub fn get_thresholded_image(&self) -> Result<*mut c_void> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The live API handle stays locked through this call. A non-null result owns
+        // one PIX reference that the caller releases with pixDestroy, even when it shares engine pixels.
         let pix = unsafe { TessBaseAPIGetThresholdedImage(*handle) };
         if pix.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1016,6 +1020,8 @@ impl TesseractAPI {
     /// Returns the thresholded image scale factor as an integer.
     pub fn get_thresholded_image_scale_factor(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The mutex guard protects the live API handle. The native call returns a scalar,
+        // including zero when the thresholder has not been created.
         Ok(unsafe { TessBaseAPIGetThresholdedImageScaleFactor(*handle) })
     }
 
@@ -1415,6 +1421,8 @@ impl TesseractAPI {
     /// Returns `Ok(())` if setting the source resolution is successful, otherwise returns an error.
     pub fn set_source_resolution(&self, ppi: i32) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The mutex guard protects the live API handle. The native setter only passes
+        // a scalar to the API's thresholder when present.
         unsafe { TessBaseAPISetSourceResolution(*handle, ppi) };
         Ok(())
     }
