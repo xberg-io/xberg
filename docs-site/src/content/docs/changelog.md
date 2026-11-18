@@ -185,6 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
 - **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
+- **ocr:** Scanned PDFs rejoin witnessed words split across eligible lines and retain lexical hyphens. (#3170)
 
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
 - **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.

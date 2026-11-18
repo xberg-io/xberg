@@ -23,6 +23,10 @@ use fragmented_tables::{MAX_FRAGMENTED_HOCR_INPUT_BYTES, MAX_FRAGMENTED_HOCR_WOR
 mod recognition_orientation;
 
 #[cfg(feature = "pdf")]
+#[path = "execution/dehyphenation.rs"]
+mod dehyphenation;
+
+#[cfg(feature = "pdf")]
 #[path = "execution/full_scan_table.rs"]
 mod full_scan_table;
 
@@ -2922,6 +2926,8 @@ pub(super) fn perform_ocr(
         tracing::trace!(capture_region_hocr, format = %config.output_format, merged = merged_read.is_some(),
             "hOCR region capture requested");
     }
+    // Region receipts keep the exact selected hOCR bytes for later source replay. ~keep
+    let observe_hyphens = cfg!(feature = "pdf") && config.known_full_page_scan && !capture_requested;
 
     let dictionary_filter = DictionaryLineFilter {
         is_valid_word: &|text| dictionary.is_valid_word(text),
@@ -2936,6 +2942,8 @@ pub(super) fn perform_ocr(
         dictionary_kept_numeral_line_count,
         retained_hocr_confidence_stats,
         mut retained_hocr_read,
+        #[cfg(feature = "pdf")]
+        dehyphenation_words,
     } = primary_output::read(primary_output::Request {
         api: &api,
         config,
@@ -2946,6 +2954,7 @@ pub(super) fn perform_ocr(
         security_limits: &security_limits,
         dimensions: (ocr_image_width, ocr_image_height),
         capture_region_hocr,
+        observe_hyphens,
     })?;
 
     let mut metadata = primary_read_metadata::build(primary_read_metadata::PrimaryRead {
@@ -3352,6 +3361,23 @@ pub(super) fn perform_ocr(
                 );
             }
         }
+    }
+
+    #[cfg(feature = "pdf")]
+    if tables.is_empty()
+        && !fully_claimed
+        && content == raw_content
+        && let Some(words) = dehyphenation_words.as_deref()
+        && let Some(doc) = hocr_document.as_mut()
+        && content == flatten_hocr_elements_to_text(&doc.elements)
+        && dehyphenation::join_scanned_wraps(
+            &mut doc.elements,
+            words,
+            ocr_image_width,
+            config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8,
+        )
+    {
+        content = flatten_hocr_elements_to_text(&doc.elements);
     }
 
     if let Some(read) = retained_hocr_read.as_mut()

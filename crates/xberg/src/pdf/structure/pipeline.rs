@@ -72,7 +72,7 @@ type HeadingMap = Vec<(f32, Option<u8>)>;
 /// Lowercased `(left, right)` word pairs the document itself writes as a single
 /// hyphenated token elsewhere in the text, gathered once per document (#1543).
 /// Threaded alongside [`HeadingMap`] as a document-scoped shared reference. ~keep
-pub(super) type HyphenWitnesses = ahash::AHashSet<(String, String)>;
+pub(crate) type HyphenWitnesses = ahash::AHashSet<(String, String)>;
 
 /// Document-scoped text-repair evidence, collected once per document by
 /// [`collect_hyphen_witnesses`] and [`collect_word_witnesses`] and threaded through
@@ -7975,7 +7975,7 @@ fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitness
     witnesses
 }
 
-pub(super) fn should_preserve_lexical_hyphen(
+pub(crate) fn should_preserve_lexical_hyphen(
     trailing_word: &str,
     leading_word: &str,
     hyphen_witnesses: &HyphenWitnesses,

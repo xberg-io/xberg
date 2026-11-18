@@ -22,6 +22,7 @@ pub(super) struct Request<'a> {
     pub(super) security_limits: &'a SecurityLimits,
     pub(super) dimensions: (u32, u32),
     pub(super) capture_region_hocr: bool,
+    pub(super) observe_hyphens: bool,
 }
 
 pub(super) struct Output {
@@ -33,6 +34,8 @@ pub(super) struct Output {
     pub(super) dictionary_kept_numeral_line_count: usize,
     pub(super) retained_hocr_confidence_stats: Option<RetainedWordConfidenceStats>,
     pub(super) retained_hocr_read: Option<RetainedHocrRead>,
+    #[cfg(feature = "pdf")]
+    pub(super) dehyphenation_words: Option<Vec<crate::ocr::hocr_parser::HocrWordOccurrence>>,
 }
 
 impl Output {
@@ -46,6 +49,8 @@ impl Output {
             dictionary_kept_numeral_line_count: 0,
             retained_hocr_confidence_stats: None,
             retained_hocr_read: None,
+            #[cfg(feature = "pdf")]
+            dehyphenation_words: None,
         }
     }
 }
@@ -108,12 +113,13 @@ fn read_markdown(request: &Request<'_>) -> Result<Output, OcrError> {
         security_limits,
         dimensions,
         capture_region_hocr,
+        observe_hyphens,
     } = *request;
     let hocr = api
         .get_hocr_text(0)
         .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
 
-    let (parse_result, occurrences) = if capture_region_hocr && merged_read.is_none() {
+    let (parse_result, mut occurrences) = if (capture_region_hocr || observe_hyphens) && merged_read.is_none() {
         parse_hocr_with_occurrences(&hocr, Some(dictionary_filter), config.page_number)
     } else {
         (
@@ -131,8 +137,13 @@ fn read_markdown(request: &Request<'_>) -> Result<Output, OcrError> {
             parsed_occurrences = ?occurrences.as_ref().map(Vec::len),
             elements = parse_result.document.elements.len(), "parsed selected hOCR occurrences");
     }
-    let retained_hocr_read =
-        occurrences.and_then(|words| capture_retained_hocr_read(&parse_result.document.elements, words, dimensions));
+    let retained_hocr_read = if capture_region_hocr {
+        occurrences
+            .take()
+            .and_then(|words| capture_retained_hocr_read(&parse_result.document.elements, words, dimensions))
+    } else {
+        None
+    };
     let dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
     let hocr_for_tables = if config.enable_table_detection
         && (dictionary_filtered_line_count > 0
@@ -166,6 +177,8 @@ fn read_markdown(request: &Request<'_>) -> Result<Output, OcrError> {
         dictionary_kept_numeral_line_count: parse_result.dictionary_kept_numeral_line_count,
         retained_hocr_confidence_stats: Some(parse_result.retained_word_confidence_stats),
         retained_hocr_read,
+        #[cfg(feature = "pdf")]
+        dehyphenation_words: occurrences,
         hocr_document: Some(parse_result.document),
     })
 }
