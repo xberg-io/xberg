@@ -11316,6 +11316,7 @@ version = "1.4.1"
 dependencies = [
  "anstyle",
  "anyhow",
+ "async-trait",
  "base64 0.23.1",
  "bytes",
  "clap",

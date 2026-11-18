@@ -8,7 +8,10 @@
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, not(target_arch = "wasm32")))]
-#![allow(unsafe_code, reason = "the child calls C `exit()` while an engine is in use to reach the exit cleanup")]
+#![allow(
+    unsafe_code,
+    reason = "the child calls C `exit()` while an engine is in use to reach the exit cleanup"
+)]
 #![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design
 
 use std::os::unix::process::ExitStatusExt;

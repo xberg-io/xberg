@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
+
 - **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
@@ -158,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
+
 - **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
   DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
 
@@ -169,12 +173,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
 - **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
 
+- **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
+- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
+
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
 - **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
 - **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
+- **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
 - Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
 - **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
 - **onnx:** Concurrent ONNX inference no longer shares a session mutably (undefined behavior). (#3166)

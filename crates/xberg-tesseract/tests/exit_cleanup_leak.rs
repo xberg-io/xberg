@@ -5,7 +5,10 @@
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, not(target_arch = "wasm32")))]
-#![allow(unsafe_code, reason = "the child parks its engine and calls C `exit()` to reach the exit cleanup")]
+#![allow(
+    unsafe_code,
+    reason = "the child parks its engine and calls C `exit()` to reach the exit cleanup"
+)]
 
 use std::path::PathBuf;
 use std::process::Command;
