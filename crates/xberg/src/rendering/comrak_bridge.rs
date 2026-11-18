@@ -3627,7 +3627,7 @@ mod tests {
         builder.push_paragraph(watermark, vec![], None, None);
         push_math_paragraph(&mut builder, "Let $x^2$ hold.", &["$x^2$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "\\$5.\n\nLet $x^2$ hold.\n");
+        assert_eq!(markdown, "$5.\n\nLet $x^2$ hold.\n");
 
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(watermark, vec![], None, None);
@@ -3639,7 +3639,7 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_literals(&markdown, &["c$<img src=x onerror=alert(1)>"]);
-        assert!(markdown.starts_with("\\$5.\n\n- item"), "{markdown}");
+        assert!(markdown.starts_with("$5.\n\n- item"), "{markdown}");
     }
 
     #[test]
@@ -3824,7 +3824,7 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_literals(&markdown, &[""]);
-        assert!(markdown.starts_with("- \\$\n  1. \\$\n"), "{markdown}");
+        assert!(markdown.starts_with("- $\n  1. $\n"), "{markdown}");
     }
 
     #[test]
