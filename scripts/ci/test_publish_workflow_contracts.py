@@ -1046,6 +1046,11 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
     integrity = project / integrity_path
     integrity.mkdir(parents=True)
     shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
+    assert (repo_root / integrity_path / "nuget-fallback.sh").is_file()
+    (integrity / "nuget-fallback.sh").write_text(
+        '#!/usr/bin/env bash\nprintf "nuget %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
+        'exit "${TEST_NUGET_STATUS:-0}"\n'
+    )
     pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
     fixture_manifest = integrity / "checksums.sha256"
     stub = r"""
@@ -1083,6 +1088,7 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
         assert hook.startswith("set -euo pipefail\n"), filename
         prefix, boundary, stage = hook.partition("\nort_version=")
         assert boundary and "curl " not in prefix and "tar " not in prefix, filename
+        assert stage.count("nuget-fallback.sh") == 1, filename
         assert f'ort_integrity="{{project}}/{integrity_path}"' in stage, filename
         script = textwrap.dedent(stub) + boundary + stage.replace("{project}", str(project))
         for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
@@ -1119,8 +1125,26 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
             assert f"SHA-256 mismatch for {archive}" in tampered.stderr
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
-            interrupted = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": "18"})
-            assert interrupted.returncode == 18 and interrupted.stdout.splitlines() == [f"curl {url}"]
+            rid = "linux-arm64" if asset_arch == "aarch64" else "linux-x64"
+            nuget = f"nuget 1.24.2 {rid} /opt/msort {integrity}/checksums.sha256"
+            for curl_status in ("18", "22"):
+                fell_back = run(
+                    ["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": curl_status}
+                )
+                assert fell_back.returncode == 0, (filename, uname, curl_status, fell_back.stderr)
+                assert fell_back.stdout.splitlines() == [f"curl {url}", nuget, "runner_temp ort-download"], (
+                    filename,
+                    uname,
+                    fell_back,
+                )
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rejected = run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                tmp_path,
+                {**env, "TEST_CURL_STATUS": "22", "TEST_NUGET_STATUS": "7"},
+            )
+            assert rejected.returncode == 7 and rejected.stdout.splitlines()[:2] == [f"curl {url}", nuget], rejected
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
 

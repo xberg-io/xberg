@@ -718,11 +718,15 @@ jobs:
             if curl --retry-all-errors --version >/dev/null 2>&1; then
               set -- "$@" --retry-all-errors
             fi
-            curl --proto '=https' --proto-redir '=https' "$@" -fsSL -o "$ort_archive" \
-              "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"
-            bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
-            mkdir -p /opt/msort
-            tar -xzf "$ort_archive" -C /opt/msort --strip-components=1
+            if curl --proto '=https' --proto-redir '=https' "$@" -fsSL -o "$ort_archive" \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"; then
+              bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
+              mkdir -p /opt/msort
+              tar -xzf "$ort_archive" -C /opt/msort --strip-components=1
+            else
+              case "$ort_arch" in aarch64) ort_rid=linux-arm64 ;; *) ort_rid=linux-x64 ;; esac
+              RUNNER_TEMP="$ort_tmp" bash "$ort_integrity/nuget-fallback.sh" "$ort_version" "$ort_rid" /opt/msort "$ort_integrity/checksums.sha256"
+            fi
           cibw-environment: >-
             MATURIN_BUILD_ARGS="--compatibility manylinux_2_28"
             CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc

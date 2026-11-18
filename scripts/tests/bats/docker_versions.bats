@@ -263,6 +263,7 @@ import sys
 
 root = Path(sys.argv[1])
 verifier = "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
+nuget_fallback = "scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh"
 manifests = {
     "PDFIUM": ("scripts/pdfium-runtime-checksums.sha256", "pdfium-runtime-checksums.sha256"),
     "ORT": ("scripts/ci/actions/setup-onnx-runtime/checksums.sha256", "onnxruntime-checksums.sha256"),
@@ -373,6 +374,44 @@ def verify_variant(name, text, allowlist):
             continue
         verify_copy(source, target)
         verify = f"bash {integrity}verify-archive.sh {archive} {integrity}{target}"
+        if kind == "ORT":
+            verify_copy(nuget_fallback, "nuget-fallback.sh")
+            run = downloads[0]
+            head, conditional, tail = run.partition("if curl -fL ")
+            head_steps = [step.strip() for step in head.split("&&")]
+            assert (
+                conditional
+                and verify + " --known" in head_steps
+                and not any(step.startswith(("curl ", "tar ")) or "nuget-fallback" in step for step in head_steps)
+            ), (name, kind, "preflight/download/verify/extract order")
+            branches = re.fullmatch(
+                r'(?P<url>"[^"]+") -o "\$ORT_ARCHIVE"; then (?P<ok>.*?); else (?P<bad>.*?); fi && (?P<rest>.*)', tail
+            )
+            assert branches is not None, (name, kind, "preflight/download/verify/extract order")
+            assert branches["url"] == f'"{endpoint}"', (name, kind, "preflight/download/verify/extract order")
+            ok_steps = [step.strip() for step in branches["ok"].split("&&")]
+            assert (
+                len(ok_steps) == 2
+                and ok_steps[0] == verify
+                and ok_steps[1].startswith(f"tar -xzf {archive} ")
+                and extracts == downloads
+            ), (name, kind, "preflight/download/verify/extract order")
+            fallback = (
+                f'rm -f {archive} && RUNNER_TEMP=/tmp bash {integrity}nuget-fallback.sh "$ONNXRUNTIME_VERSION" '
+                f'"$ORT_RID" /build/onnxruntime {integrity}{target}'
+            )
+            assert branches["bad"].strip() == fallback and run.count("nuget-fallback.sh") == 1, (
+                name, kind, "nuget fallback invocation"
+            )
+            assert "curl " not in branches["rest"] and "nuget-fallback" not in branches["rest"], (
+                name, kind, "nuget fallback invocation"
+            )
+            rid_pairs = re.findall(r'ORT_ARCH="(\w+)"; ORT_RID="([\w-]+)";', run)
+            assert sorted(rid_pairs) == [("aarch64", "linux-arm64"), ("x64", "linux-x64")], (
+                name, kind, "nuget fallback invocation"
+            )
+            verified_runs.add(run)
+            continue
         steps = [step.strip() for step in downloads[0].split("&&")]
         checks = [step for step in steps if verify in step or step.startswith(("curl ", "tar -xzf "))]
         assert (
@@ -428,6 +467,11 @@ def verify_rustup(variants):
             rustup_pins(name, variants[name], libc)
 
 
+def swap(text, old, new, count=1):
+    assert old in text, ("mutation target missing", old)
+    return text.replace(old, new, count)
+
+
 if sys.argv[2] == "negative":
     core = variants["core"]
     wrong_gnu_digest = {
@@ -466,6 +510,15 @@ if sys.argv[2] == "negative":
             ),
             "archive URL outside verified chain",
         ),
+        (lambda: verify_variant("core", core.replace(" --known &&", " &&", 1), ignore), "preflight/download/verify/extract order"),
+        (lambda: verify_variant("core", swap(core, "COPY " + nuget_fallback + " /opt/xberg-integrity/nuget-fallback.sh\n", ""), ignore), "COPY source and destination"),
+        (lambda: verify_variant("core", core, swap(ignore, "!" + nuget_fallback, nuget_fallback)), "Docker allowlist"),
+        (lambda: verify_variant("core", swap(core, "bash /opt/xberg-integrity/nuget-fallback.sh", "true", 1), ignore), "nuget fallback invocation"),
+        (lambda: verify_variant("core", swap(core, '"$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256', '"$ORT_RID" /build/onnxruntime /opt/xberg-integrity/pdfium-runtime-checksums.sha256', 1), ignore), "nuget fallback invocation"),
+        (lambda: verify_variant("core", swap(core, '    else \\\n        rm -f "$ORT_ARCHIVE" &&', '    fi || true; \\\n    true && \\\n        rm -f "$ORT_ARCHIVE" &&', 1), ignore), "preflight/download/verify/extract order"),
+        (lambda: verify_variant("core", swap(core, 'fi && \\\n    ORT_ASSET', 'fi && \\\n    RUNNER_TEMP=/tmp bash /opt/xberg-integrity/nuget-fallback.sh "$ONNXRUNTIME_VERSION" "$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256 && \\\n    ORT_ASSET', 1), ignore), "preflight/download/verify/extract order"),
+        (lambda: verify_variant("manylinux-rustler", swap(variants["manylinux-rustler"], '        bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 && \\\n        tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1; \\\n', '        tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1 && \\\n        bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256; \\\n', 1), ignore), "preflight/download/verify/extract order"),
+        (lambda: verify_variant("manylinux-node", swap(variants["manylinux-node"], 'ORT_RID="linux-arm64"', 'ORT_RID="linux-x64"', 1), ignore), "nuget fallback invocation"),
         (lambda: verify_variant("core", core.replace(" --known &&", " &&", 1), ignore), "preflight/download/verify/extract order"),
         (lambda: verify_variant("core", core.replace('tar -xzf "$PDFIUM_ARCHIVE"', 'tar -xzf unverified.tgz', 1), ignore), "archive extract count"),
         (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),

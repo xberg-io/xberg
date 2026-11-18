@@ -13,10 +13,29 @@ package="microsoft.ml.onnxruntime.${ort_version}.nupkg"
 bash "$script_dir/verify-archive.sh" "$package" "$checksums" --known
 work="$(mktemp -d "${RUNNER_TEMP:?RUNNER_TEMP required}/onnxruntime-nuget.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$work/$package" \
+# manylinux_2_28 ships curl 7.61, which predates --retry-all-errors. ~keep
+curl_options=(--proto '=https' --proto-redir '=https' --retry 5 --retry-delay 5)
+if curl --retry-all-errors --version >/dev/null 2>&1; then
+  curl_options+=(--retry-all-errors)
+fi
+curl "${curl_options[@]}" -fsSL -o "$work/$package" \
   "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ort_version}/${package}"
 bash "$script_dir/verify-archive.sh" "$work/$package" "$checksums"
-unzip -q "$work/$package" "runtimes/$rid/native/*" "build/native/include/*" -d "$work/package"
+# Builder images are not guaranteed to ship unzip; python3 reads the same members. ~keep
+if command -v unzip >/dev/null 2>&1; then
+  unzip -q "$work/$package" "runtimes/$rid/native/*" "build/native/include/*" -d "$work/package"
+else
+  python3 - "$work/$package" "$work/package" "runtimes/$rid/native/" "build/native/include/" <<'PYTHON'
+import sys
+import zipfile
+
+package, destination, *prefixes = sys.argv[1:]
+with zipfile.ZipFile(package) as archive:
+    for member in archive.namelist():
+        if member.startswith(tuple(prefixes)):
+            archive.extract(member, destination)
+PYTHON
+fi
 
 native="$work/package/runtimes/$rid/native"
 tree="$work/tree"

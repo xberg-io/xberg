@@ -254,9 +254,9 @@ prepare_ort_archive() {
 	xberg_assert_github_env ''
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
 	[ ! -e "$(runtime_root x64)" ]
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 2 ]
-	sed -n 1p "$XBERG_TRACE" | grep -Fq 'github.com/microsoft/onnxruntime/releases/download/v1.24.2/'
-	sed -n 2p "$XBERG_TRACE" | grep -Fq 'api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg'
+	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
+	grep -v -e '--version' "$XBERG_TRACE" | sed -n 1p | grep -Fq 'github.com/microsoft/onnxruntime/releases/download/v1.24.2/'
+	grep -v -e '--version' "$XBERG_TRACE" | sed -n 2p | grep -Fq 'api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg'
 }
 
 prepare_nuget_package() {
@@ -300,7 +300,7 @@ PYTHON
 	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so.1" 'nuget runtime'
 	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime_providers_shared.so" 'nuget providers'
 	grep -Fxq "ORT_LIB_LOCATION=$root/lib" "$GITHUB_ENV"
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 2 ]
+	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
 }
 
 @test "Linux ORT verified archive mode should fall back to NuGet without caching a release archive" {
@@ -323,4 +323,53 @@ PYTHON
 	xberg_assert_github_env ''
 	[ ! -e "$(runtime_root x64)" ]
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
+}
+
+run_nuget_fallback() {
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh" \
+		1.24.2 linux-x64 "$BATS_TEST_TMPDIR/ort-root" "$ORT_CHECKSUMS_FILE"
+}
+
+@test "NuGet fallback should force HTTPS and omit --retry-all-errors when curl predates it" {
+	prepare_nuget_package linux-x64 1.24.2
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *--version*) exit 2 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	run_nuget_fallback
+	xberg_assert_status 0
+	download="$(grep -v -e '--version' "$XBERG_TRACE")"
+	[[ "$download" == '--proto =https --proto-redir =https --retry 5 --retry-delay 5 -fsSL -o '* ]]
+	[[ "$download" != *--retry-all-errors* ]]
+}
+
+@test "NuGet fallback should retry all errors when curl supports it" {
+	prepare_nuget_package linux-x64 1.24.2
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *--version*) exit 0 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	run_nuget_fallback
+	xberg_assert_status 0
+	grep -v -e '--version' "$XBERG_TRACE" | grep -Fq -e '--proto =https --proto-redir =https --retry 5 --retry-delay 5 --retry-all-errors -fsSL'
+}
+
+@test "NuGet fallback should extract with python3 when unzip is missing" {
+	prepare_nuget_package linux-x64 1.24.2
+	bin="$BATS_TEST_TMPDIR/no-unzip-bin"
+	mkdir -p "$bin"
+	for tool in bash env dirname mktemp mkdir cp mv ln rm cat sed grep awk tr cut head tail wc basename sort uname shasum sha256sum python3 chmod readlink; do
+		path="$(command -v "$tool" || true)"
+		[ -z "$path" ] || ln -s "$path" "$bin/$tool"
+	done
+	cp "$XBERG_STUB_BIN/curl" "$bin/curl"
+	PATH="$bin"
+	! command -v unzip
+	run_nuget_fallback
+	xberg_assert_status 0
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime.so.1.24.2" 'nuget runtime'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/include/onnxruntime_c_api.h" 'header'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime_providers_shared.so" 'nuget providers'
 }
