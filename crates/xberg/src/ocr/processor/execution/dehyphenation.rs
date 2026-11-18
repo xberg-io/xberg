@@ -276,8 +276,8 @@ fn same_body_flow(prior: &Line<'_>, next: &Line<'_>, page_width: u32, terminal_w
     let right_edge_matches = if terminal_word {
         after.left >= before.left && after.right <= before.right
     } else {
-        after.full_width(page_width)
-            && before.right.abs_diff(after.right) <= before.height().max(after.height()).saturating_mul(2)
+        let tolerance = before.height().max(after.height()).saturating_mul(2);
+        after.right <= before.right.saturating_add(tolerance).min(page_width)
     };
     (prior.words.last()?.bounds[2] == before.right
         && next.words.first()?.bounds[0] == after.left
@@ -288,7 +288,10 @@ fn same_body_flow(prior: &Line<'_>, next: &Line<'_>, page_width: u32, terminal_w
 }
 
 fn lexical_core(word: &str) -> &str {
-    word.trim_matches(['.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '[', ']', '{', '}'])
+    word.trim_matches([
+        '.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '[', ']', '{', '}', '‘', '’', '‚', '‛', '“', '”', '„', '‟',
+        '«', '»', '‹', '›', '…', '。', '、', '！', '？', '，', '；', '：',
+    ])
 }
 
 fn ascii_word_part(word: &str) -> bool {
@@ -479,6 +482,43 @@ mod tests {
         ));
         assert!(!join_scanned_wraps(&mut elements, &words, 1000, true));
         assert_eq!([elements[0].text.as_str(), elements[1].text.as_str()], [line, "tures"]);
+    }
+
+    #[test]
+    fn joins_a_short_paragraph_final_continuation_after_a_full_line() {
+        let text = "Earlier recognition grounds the reading\nA passage ends with recog-\nnition of the tables.";
+        let full = (160, 840);
+        let short = (160, 420);
+        let (mut elements, words) = scan(text, &[full, full, short]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(
+            elements[0].text,
+            "Earlier recognition grounds the reading\nA passage ends with recognition\nof the tables."
+        );
+
+        for spans in [
+            [full, (160, 520), short],
+            [full, full, (190, 450)],
+            [full, full, (160, 960)],
+        ] {
+            let (mut elements, words) = scan(text, &spans);
+            assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{spans:?}");
+            assert_eq!(elements[0].text, text);
+        }
+    }
+
+    #[test]
+    fn uses_a_spelling_witness_with_unicode_surrounding_punctuation() {
+        for witness in ["recognition”", "«recognition»", "recognition。"] {
+            let text =
+                format!("A passage ends with recog-\nnition and explanatory text\nEarlier {witness} supports it");
+            let (mut elements, words) = scan(&text, &[(160, 840); 3]);
+            assert!(join_scanned_wraps(&mut elements, &words, 1000, false), "{witness}");
+            assert_eq!(
+                elements[0].text,
+                format!("A passage ends with recognition\nand explanatory text\nEarlier {witness} supports it")
+            );
+        }
     }
 
     #[test]

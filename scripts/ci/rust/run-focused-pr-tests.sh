@@ -92,6 +92,12 @@ run_pdf_cases() {
   run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_do_not_consume_an_entire_following_block' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::digits_and_non_ascii_edges_do_not_license_joins' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_can_share_a_wrap_without_merging_their_elements' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::joins_a_short_paragraph_final_continuation_after_a_full_line' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::uses_a_spelling_witness_with_unicode_surrounding_punctuation' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_joins_with_bracketed_body_geometry' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_rejects_unproved_body_geometry' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_stops_at_a_right_lane_overrun' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_requires_spelling_and_unclaimed_ownership' --lib
   run_exact english_ocr_preserves_the_reporters_spanish_body --ignored --test issue_2951_spanish_layer
   run_exact correction_does_not_rewrite_the_same_spelling_at_a_disjoint_position --ignored --test issue_2951_spanish_layer
   run_exact recovery_does_not_publish_invisible_native_text --ignored --test issue_2951_spanish_layer
@@ -458,7 +464,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=129
+  expected=135
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases

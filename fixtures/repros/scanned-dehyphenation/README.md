@@ -20,8 +20,9 @@ uv run --no-project --python 3.13 --with pillow==11.3.0 python \
 The companion integration test uses the corpus-pinned Docling scan at
 `pdf_scanned/docling_scanned.pdf`. On page 2, the list item ends with
 “struc-” on a full-width line and “tures” alone on its final line. The same
-page independently spells “structures”. The shorter continuation must stay
-inside the same OCR block and follow its left edge at the usual line spacing.
+page independently spells “structures”. Sparse OCR puts the final fragment in
+a separate block. The join checks the near-aligned left edges and gap, a
+detached list marker, and surrounding body lines that corroborate the lane.
 
 This scanned-text path uses exact ASCII spellings from the selected Tesseract
 hOCR page. The hOCR stage has word boxes for just that page and can confirm

@@ -2949,7 +2949,7 @@ pub(super) fn perform_ocr(
                 .get_hocr_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
 
-            let (parse_result, occurrences) = if (capture_region_hocr || observe_hyphens) && merged_read.is_none() {
+            let (parse_result, mut occurrences) = if (capture_region_hocr || observe_hyphens) && merged_read.is_none() {
                 crate::ocr::hocr_parser::parse_hocr_with_occurrences(
                     &hocr,
                     Some(&dictionary_filter),
@@ -2970,18 +2970,17 @@ pub(super) fn perform_ocr(
                     elements = parse_result.document.elements.len(), "parsed selected hOCR occurrences");
             }
             if capture_region_hocr {
-                retained_hocr_read = occurrences.and_then(|words| {
+                retained_hocr_read = occurrences.take().and_then(|words| {
                     capture_retained_hocr_read(
                         &parse_result.document.elements,
                         words,
                         (ocr_image_width, ocr_image_height),
                     )
                 });
-            } else {
-                #[cfg(feature = "pdf")]
-                {
-                    dehyphenation_words = occurrences;
-                }
+            }
+            #[cfg(feature = "pdf")]
+            {
+                dehyphenation_words = occurrences;
             }
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
             dictionary_kept_numeral_line_count = parse_result.dictionary_kept_numeral_line_count;

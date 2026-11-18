@@ -85,8 +85,9 @@ fn assert_witnessed_wraps(psm: Option<i32>) {
         page_text.contains("commodity hardware. Its code"),
         "join the witnessed wrap before the sentence boundary: {page_text}"
     );
-    // Check that the dash remains visible across the physical break. The abstract supplies
-    // no independent lexical witness; PSM 6 may insert one token from the margin stamp. ~keep
+    // This is a hard-hyphen preservation control. The abstract has no independent lexical
+    // witness, so the extraction may leave the words apart. PSM 6 may insert one token from
+    // the margin stamp. ~keep
     let license = page_text
         .split_once("self-contained, MIT-")
         .and_then(|(_, tail)| tail.split_once("licensed open-source package"));
