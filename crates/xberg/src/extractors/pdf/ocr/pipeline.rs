@@ -1657,13 +1657,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let sparse_glyph_images = sparse_glyph_read::images_config();
     #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-    let implicit_sparse_glyph_pages = sparse_glyph_read::implicit_pipeline_pages(
-        config,
-        &ocr_config_owned,
-        effective_pipeline.as_ref(),
-        &render_doc,
-        native_coverage_layers.as_deref(),
-        !probing_hidden_layer && !mixed_route_layout_active && !capture_rasters,
+    let implicit_sparse_glyph_pages = sparse_glyph_read::without_number_recovery_pages(
+        sparse_glyph_read::implicit_pipeline_pages(
+            config,
+            &ocr_config_owned,
+            effective_pipeline.as_ref(),
+            &render_doc,
+            native_coverage_layers.as_deref(),
+            !probing_hidden_layer && !mixed_route_layout_active && !capture_rasters,
+        ),
+        number_layers.as_deref(),
     );
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let hints_for_pipeline_page = |idx, raster: Option<crate::pdf::render::OcrRasterDpi>| {

@@ -99,6 +99,22 @@ pub(super) fn implicit_pipeline_pages(
     eligible_pages(config, pdf, layers, backend.as_ref())
 }
 
+// Khmer number recovery claims each page once per run, so a trial declined after its claim
+// would leave the normal-density read without that recovery. ~keep
+#[cfg(paddle_ocr)]
+pub(super) fn without_number_recovery_pages(
+    mut pages: ahash::AHashMap<usize, MarkedWords>,
+    number_layers: Option<&ahash::AHashMap<u32, String>>,
+) -> ahash::AHashMap<usize, MarkedWords> {
+    pages.retain(|&index, _| {
+        !u32::try_from(index + 1)
+            .ok()
+            .and_then(|page| number_layers?.get(&page))
+            .is_some_and(|layer| super::super::number_recovery::has_bounded_numbers(layer))
+    });
+    pages
+}
+
 #[cfg(paddle_ocr)]
 struct PipelineTrial {
     pdf: Arc<PdfDocument>,
@@ -948,6 +964,25 @@ fn implicit_trial_renderer_uses_the_resolved_page_rotation() {
             "trial and normal OCR must normalize rotation identically"
         );
     });
+}
+
+#[cfg(all(test, paddle_ocr))]
+#[test]
+fn implicit_trial_skips_pages_that_khmer_number_recovery_may_claim() {
+    let words = || MarkedWords {
+        media: Default::default(),
+        words: Vec::new(),
+    };
+    let pages = ahash::AHashMap::from_iter([(0, words()), (1, words()), (2, words())]);
+    let layers = ahash::AHashMap::from_iter([
+        (1, "Chapter \u{17E1}\u{17E2} quiet queue".to_owned()),
+        (2, "Chapter 12 quiet queue".to_owned()),
+    ]);
+    let mut kept: Vec<_> = without_number_recovery_pages(pages, Some(&layers))
+        .into_keys()
+        .collect();
+    kept.sort_unstable();
+    assert_eq!(kept, [1, 2]);
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]

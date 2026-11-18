@@ -8,6 +8,10 @@ const FOLIO: &[u8] = include_bytes!(concat!(
 ));
 
 async fn assert_normal_tesseract_raster(configure: impl FnOnce(&mut OcrConfig)) {
+    assert_tesseract_raster((1275, 1650), configure).await;
+}
+
+async fn assert_tesseract_raster(expected: (usize, usize), configure: impl FnOnce(&mut OcrConfig)) {
     let tessdata = tempfile::tempdir().unwrap();
     std::fs::write(
         tessdata.path().join("eng.traineddata"),
@@ -36,7 +40,7 @@ async fn assert_normal_tesseract_raster(configure: impl FnOnce(&mut OcrConfig)) 
         .expect("normal Tesseract raster metadata");
     assert_eq!(
         (raster.original_dimensions.width, raster.original_dimensions.height),
-        (1275, 1650)
+        expected
     );
     assert!(page.content.contains("quiet queue"));
 }
@@ -51,6 +55,16 @@ fn test_config(ocr: OcrConfig) -> ExtractionConfig {
         ocr: Some(ocr),
         ..Default::default()
     }
+}
+
+// The negative controls below differ from this configuration only in the field they set. ~keep
+#[test]
+fn implicit_tesseract_paddle_pipeline_reads_at_trial_density() {
+    super::super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || {
+        assert_tesseract_raster((1020, 1320), |ocr| {
+            assert!(ocr.pipeline.is_none() && ocr.auto_rotate.is_none());
+        })
+    });
 }
 
 #[test]

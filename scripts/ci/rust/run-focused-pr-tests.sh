@@ -488,7 +488,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 pdf-sparse-paddle)
-  expected=14
+  expected=16
   for name in \
     automatic_ocr_keeps_overprinted_separation_text_and_native_sibling \
     reporter_folio_keeps_the_exact_transcript_with_automatic_ocr \
@@ -504,6 +504,8 @@ pdf-sparse-paddle)
     implicit_pipeline_retries_missing_marked_words_at_normal_density \
     implicit_pipeline_preserves_normal_render_on_rotated_or_failed_trials \
     implicit_trial_renderer_uses_the_resolved_page_rotation \
+    implicit_trial_skips_pages_that_khmer_number_recovery_may_claim \
+    review_tests::implicit_tesseract_paddle_pipeline_reads_at_trial_density \
     review_tests::explicit_tesseract_paddle_pipeline_keeps_the_normal_raster \
     review_tests::explicit_vlm_fallback_keeps_the_normal_raster \
     review_tests::explicit_paddle_backend_receives_the_normal_raster \
