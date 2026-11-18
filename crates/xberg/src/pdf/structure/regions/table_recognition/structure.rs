@@ -83,6 +83,12 @@ pub(super) fn apply_structure_with_source(
     }
 }
 
+/// Merges TATR span proposals, splitting a proposal at the row boundaries the source paint divides.
+///
+/// Known limit: after a split, only an exact 2x2 header span recovers a per-row colspan, through
+/// `has_column_opening`. Any other divided multi-column proposal, such as a 2x3 header or a
+/// multi-column body span, keeps its column extent only on segments that still cover two or more
+/// rows; a segment reduced to one row falls back to 1x1 cells and loses the colspan.
 fn apply_model_spans(
     dense: &mut [Vec<String>],
     plan: &mut SpanPlan,
