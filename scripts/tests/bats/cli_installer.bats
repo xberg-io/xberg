@@ -89,7 +89,8 @@ make_cli_archive() {
 @test "Packaged musl CLI launcher should fill only unset allocator settings" {
 	local stage="$XBERG_WORK/wrapped cli" format
 	mkdir -p "$stage/lib"
-	format="$(python3 - "$REPOSITORY_ROOT/docker/Dockerfile.musl-build" <<'PY'
+	format="$(
+		python3 - "$REPOSITORY_ROOT/docker/Dockerfile.musl-build" <<'PY'
 import shlex
 import sys
 from pathlib import Path
