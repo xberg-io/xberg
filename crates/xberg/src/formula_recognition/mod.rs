@@ -15,7 +15,7 @@ use ort::inputs;
 use ort::session::Session;
 use ort::value::{Tensor, TensorRef};
 
-use crate::core::config::AccelerationConfig;
+use crate::core::config::{AccelerationConfig, ExecutionProviderType};
 use crate::layout::error::LayoutError;
 #[cfg(not(paddle_ocr))]
 use crate::layout::model_manager::ModelManifestEntry;
@@ -236,12 +236,38 @@ pub fn ensure_models() -> Result<FormulaModelPaths, String> {
     ensure_models_in(None)
 }
 
-/// Pool state: the loaded recognizer plus the acceleration it was built with,
-/// so a changed acceleration config rebuilds the sessions, like the layout
-/// engine's `matches_config`.
+#[derive(Debug, PartialEq)]
+struct FormulaSessionKey {
+    acceleration: Option<AccelerationConfig>,
+    provider: ExecutionProviderType,
+    threads: usize,
+}
+
+impl FormulaSessionKey {
+    fn resolve(acceleration: Option<&AccelerationConfig>, budget: usize) -> Self {
+        let provider = crate::ort_discovery::resolve_execution_provider(acceleration);
+        Self::new(acceleration, provider, budget)
+    }
+
+    fn new(acceleration: Option<&AccelerationConfig>, provider: ExecutionProviderType, budget: usize) -> Self {
+        // Four-CPU qualification favored two threads for the serial formula recognizer.
+        // Leave smaller budgets and automatic or accelerator selection on their existing policy. ~keep
+        let threads = if provider == ExecutionProviderType::Cpu && budget >= 4 {
+            2
+        } else {
+            budget
+        };
+        Self {
+            acceleration: acceleration.cloned(),
+            provider,
+            threads,
+        }
+    }
+}
+
 struct PooledRecognizer {
     recognizer: FormulaRecognizer,
-    acceleration: Option<AccelerationConfig>,
+    key: FormulaSessionKey,
 }
 
 /// Process-wide recognizer pool and the failure cooldown timestamp. Lock
@@ -283,21 +309,16 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
         }
     }
 
+    let budget = crate::core::config::concurrency::resolve_thread_budget(None);
+    let key = FormulaSessionKey::resolve(accel, budget);
     let mut pool = RECOGNIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let rebuild = match pool.as_ref() {
-        None => true,
-        Some(pooled) => pooled.acceleration.as_ref() != accel,
-    };
-    if rebuild {
+    if pool.as_ref().is_none_or(|pooled| pooled.key != key) {
         let init = ensure_models().and_then(|paths| {
-            FormulaRecognizer::load(&paths, accel).map_err(|e| format!("formula model load failed: {e}"))
+            FormulaRecognizer::load(&paths, &key).map_err(|e| format!("formula model load failed: {e}"))
         });
         match init {
             Ok(recognizer) => {
-                *pool = Some(PooledRecognizer {
-                    recognizer,
-                    acceleration: accel.cloned(),
-                });
+                *pool = Some(PooledRecognizer { recognizer, key });
                 *LAST_INIT_FAILURE
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
@@ -407,8 +428,9 @@ pub(crate) struct FormulaRecognizer {
 
 impl FormulaRecognizer {
     /// Load every session from `paths`.
-    pub(crate) fn load(paths: &FormulaModelPaths, accel: Option<&AccelerationConfig>) -> Result<Self, LayoutError> {
-        let threads = crate::core::config::concurrency::resolve_thread_budget(None);
+    fn load(paths: &FormulaModelPaths, key: &FormulaSessionKey) -> Result<Self, LayoutError> {
+        let accel = key.acceleration.as_ref();
+        let threads = key.threads;
         let resizer = build_session(&paths.resizer.to_string_lossy(), accel, threads)?;
         let encoder = build_session(&paths.encoder.to_string_lossy(), accel, threads)?;
         let decoder = build_session(&paths.decoder.to_string_lossy(), accel, threads)?;
@@ -700,6 +722,9 @@ fn post_process(s: &str) -> String {
     }
     out.replace(SPACE_SENTINEL, "\\ ").trim().to_string()
 }
+
+#[cfg(test)]
+mod session_policy_tests;
 
 #[cfg(test)]
 mod tests {
