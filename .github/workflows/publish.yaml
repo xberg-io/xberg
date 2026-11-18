@@ -2164,7 +2164,13 @@ jobs:
           VERSION="$(sed -n '/^\[workspace.package\]$/,/^\[/s/^version = "\([^"]*\)".*/\1/p' Cargo.toml)"
           test -n "$VERSION"
           docker pull debian:12-slim
-          docker run --rm --network none -e SMOKE_REQUIRE_MIMALLOC=1 -v "$PWD:/src:ro" debian:12-slim \
+          # A republish may build an older checkout using the current workflow's smoke script. ~keep
+          test -r docker/Dockerfile.musl-build
+          mimalloc_required=0
+          if grep -Fxq '# xberg-release-smoke: mimalloc-required ~keep' docker/Dockerfile.musl-build; then
+            mimalloc_required=1
+          fi
+          docker run --rm --network none -e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required" -v "$PWD:/src:ro" debian:12-slim \
             bash /src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh "/src/xberg-cli-${TARGET}.tar.gz" "$VERSION" musl
 
       - uses: actions/upload-artifact@v7

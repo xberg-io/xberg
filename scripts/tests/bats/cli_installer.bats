@@ -174,6 +174,7 @@ SH
 
 	run env SMOKE_REQUIRE_MIMALLOC=1 SMOKE_STUB_MIMALLOC=1 bash "$smoke" "$CLI_ARCHIVE" 1.4.0 musl
 	xberg_assert_status 0
+	xberg_assert_output_contains 'Verified: packaged CLI reports mimalloc'
 	xberg_assert_output_contains 'Xberg installed layout smoke test'
 	xberg_assert_trace_empty
 }
