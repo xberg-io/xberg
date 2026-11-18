@@ -22,6 +22,8 @@ pub struct DecodingOptions {
 #[allow(unsafe_code)]
 impl DecodingOptions {
     pub fn new() -> Option<Self> {
+        // SAFETY: The allocator takes no pointers and initializes the options. The wrapper
+        // accepts only a non-null allocation and owns it until drop. ~keep
         let inner_ptr = unsafe { lh::heif_decoding_options_alloc() };
         ptr::NonNull::new(inner_ptr).map(|inner| Self {
             inner,
@@ -38,10 +40,14 @@ impl Drop for DecodingOptions {
         {
             let inner_mut = self.inner_mut();
             if !inner_mut.color_conversion_options_ext.is_null() {
+                // SAFETY: The non-null extension comes from the matching allocator and is
+                // owned by these options. Drop clears the pointer before freeing the options. ~keep
                 unsafe { lh::heif_color_conversion_options_ext_free(inner_mut.color_conversion_options_ext) };
                 inner_mut.color_conversion_options_ext = ptr::null_mut();
             }
         }
+        // SAFETY: This frees the allocation owned by these options using its matching
+        // native deallocator. The separately allocated extension has already been handled. ~keep
         unsafe {
             lh::heif_decoding_options_free(self.inner.as_ptr());
         }
@@ -53,12 +59,16 @@ impl DecodingOptions {
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_ref(&self) -> &lh::heif_decoding_options {
+        // SAFETY: The initialized, non-null allocation belongs to self and outlives
+        // the shared reference returned from this borrow. ~keep
         unsafe { self.inner.as_ref() }
     }
 
     #[inline(always)]
     #[allow(unsafe_code)]
     pub(crate) fn inner_mut(&mut self) -> &mut lh::heif_decoding_options {
+        // SAFETY: The initialized, non-null allocation belongs to self. The exclusive
+        // borrow grants exclusive access to the options for the returned reference. ~keep
         unsafe { self.inner.as_mut() }
     }
 
@@ -140,6 +150,8 @@ impl DecodingOptions {
     pub fn set_alpha_composition_mode(&mut self, v: AlphaCompositionMode) {
         let inner = self.inner_mut();
         if inner.color_conversion_options_ext.is_null() {
+            // SAFETY: This allocator takes no pointers and initializes the extension.
+            // The options own the returned allocation if it is non-null. ~keep
             inner.color_conversion_options_ext = unsafe { lh::heif_color_conversion_options_ext_alloc() };
         }
         v.fill_libheif_cc_options_ext(inner.color_conversion_options_ext);
@@ -234,6 +246,8 @@ impl Default for ColorConversionOptions {
         };
         #[cfg(feature = "v1_19")]
         {
+            // SAFETY: cc_options is a writable, initialized version-1 structure that
+            // stays live while libheif sets its default fields. ~keep
             unsafe { lh::heif_color_conversion_options_set_defaults(&mut cc_options) };
         }
         Self::from_cc_options(&cc_options)
