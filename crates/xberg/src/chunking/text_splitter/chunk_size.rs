@@ -401,15 +401,13 @@ where
             }
         });
 
+        // Every first section is measured, short ones included: a tokenizer that adds special
+        // tokens to each text counts more tokens than a short section has bytes (#3291).
         for (level, str) in levels_with_first_chunk {
-            let len = str.len();
-            if len > capacity.max {
-                let chunk_size = self.chunk_size(offset, str, trim);
-                let fits = capacity.fits(chunk_size);
-                if fits.is_gt() {
-                    max_offset = Some(offset + len);
-                    break;
-                }
+            let chunk_size = self.chunk_size(offset, str, trim);
+            if capacity.fits(chunk_size).is_gt() {
+                max_offset = Some(offset + str.len());
+                break;
             }
             semantic_level = Some(level);
         }
