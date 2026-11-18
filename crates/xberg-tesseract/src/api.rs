@@ -10,7 +10,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::{OnceLock, PoisonError};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 
 /// Unique temporary directory removed on drop; holds the text renderer's output for
@@ -2091,9 +2094,11 @@ static ENGINES_FREED_BY_DROP: AtomicU64 = AtomicU64::new(0);
 /// stops at its next stop check, which tesseract makes before each word; initialization,
 /// layout analysis and the other guarded calls cannot be stopped. A call still running
 /// after this keeps its engine, which the cleanup then skips.
+#[cfg(not(target_arch = "wasm32"))]
 const EXIT_NATIVE_CALL_GRACE: Duration = Duration::from_secs(2);
 
 /// How often the exit cleanup looks at a counter while it waits.
+#[cfg(not(target_arch = "wasm32"))]
 const EXIT_WAIT_POLL: Duration = Duration::from_millis(5);
 
 /// Counts one native call in [`NATIVE_CALLS`] until it is dropped. Calls that load
@@ -2146,6 +2151,7 @@ impl Drop for FreeInFlight {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Waits until `counter` is zero, or until `grace` has passed when it is `Some`.
 fn wait_until_zero(counter: &AtomicUsize, grace: Option<Duration>) {
     if counter.load(Ordering::SeqCst) == 0 {
@@ -2230,6 +2236,7 @@ fn set_engine_idle(handle: *mut c_void, generation: u64, idle: bool) -> Option<b
 /// The registry lock is held across the frees. [`set_engine_idle`] takes the same lock,
 /// so an owner cannot take back an engine that this function is freeing, and a taker
 /// that arrives later finds the engine gone and gets an error instead of a freed handle.
+#[cfg(not(target_arch = "wasm32"))]
 fn finalize_idle_engines() {
     let Ok(mut live) = LIVE_ENGINES.lock() else {
         return;
@@ -2249,8 +2256,10 @@ fn finalize_idle_engines() {
     });
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 static TESSERACT_CLEANUP: OnceLock<()> = OnceLock::new();
 
+#[cfg(not(target_arch = "wasm32"))]
 unsafe extern "C" {
     fn atexit(f: extern "C" fn()) -> c_int;
 }
@@ -2269,6 +2278,7 @@ unsafe extern "C" {
 /// hook only. Never call it, or `exit()`, from a signal handler: it can deadlock on the
 /// mutex the interrupted thread holds. A thread that calls `exit()` from inside a
 /// recognition's stop check waits out the whole grace.
+#[cfg(not(target_arch = "wasm32"))]
 extern "C" fn tesseract_atexit_cleanup() {
     {
         let _live = LIVE_ENGINES.lock().unwrap_or_else(PoisonError::into_inner);
@@ -2288,7 +2298,12 @@ extern "C" fn tesseract_atexit_cleanup() {
 /// the `End` calls are safe. Registering at engine creation instead runs the handler
 /// after the `DawgCache` destructor, which both misses the leak and crashes on a
 /// destroyed mutex.
+///
+/// wasm has no process exit to clean up for, and its libc runs `atexit` handlers as module
+/// destructors after an exported call returns. Registering there would set
+/// [`PROCESS_EXITING`] after the first recognition and refuse every later engine.
 fn ensure_tesseract_cleanup_registered() {
+    #[cfg(not(target_arch = "wasm32"))]
     let _ = TESSERACT_CLEANUP.get_or_init(|| unsafe {
         let _ = atexit(tesseract_atexit_cleanup);
     });
