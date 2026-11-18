@@ -1689,8 +1689,10 @@ def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
         assert "continue-on-error" not in gate
         if libc == "gnu":
             assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
+            assert "SMOKE_REQUIRE_MIMALLOC" not in gate
         else:
             assert "if:" not in gate
+            assert re.search(r"docker run [^\n]* -e SMOKE_REQUIRE_MIMALLOC=1 ", gate)
 
 
 DOCKER_DIR = Path(__file__).parents[2] / "docker"

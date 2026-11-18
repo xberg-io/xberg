@@ -108,11 +108,11 @@ PY
 test "$1" = --library-path && test "$2" = "$(dirname "$0")" || exit 96
 test "$3" = "$(dirname "$2")/xberg.bin" || exit 97
 test "$4" = "preserve this arg" || exit 98
-printf 'purge=[%s] thp=[%s]\n' "${MIMALLOC_PURGE_DELAY-unset}" "${MIMALLOC_ALLOW_THP-unset}"
+printf 'purge=[%s] thp=[%s] reset=[%s]\n' "${MIMALLOC_PURGE_DELAY-unset}" "${MIMALLOC_ALLOW_THP-unset}" "${MIMALLOC_RESET_DELAY-unset}"
 SH
 	chmod +x "$stage/xberg" "$stage/lib/ld-musl-test.so.1"
 
-	unset MIMALLOC_PURGE_DELAY MIMALLOC_ALLOW_THP
+	unset MIMALLOC_PURGE_DELAY MIMALLOC_ALLOW_THP MIMALLOC_RESET_DELAY
 	run "$stage/xberg" "preserve this arg"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'purge=[0] thp=[0]'
@@ -124,6 +124,18 @@ SH
 	run env MIMALLOC_PURGE_DELAY= "$stage/xberg" "preserve this arg"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'purge=[] thp=[0]'
+
+	run env MIMALLOC_RESET_DELAY=75 "$stage/xberg" "preserve this arg"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'purge=[unset] thp=[0] reset=[75]'
+
+	run env MIMALLOC_RESET_DELAY= "$stage/xberg" "preserve this arg"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'purge=[unset] thp=[0] reset=[]'
+
+	run env MIMALLOC_PURGE_DELAY=40 MIMALLOC_RESET_DELAY=75 "$stage/xberg" "preserve this arg"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'purge=[40] thp=[0] reset=[75]'
 
 	run "$stage/lib/ld-musl-test.so.1" --library-path "$stage/lib" "$stage/xberg.bin" "preserve this arg"
 	xberg_assert_status 0
@@ -138,7 +150,12 @@ SH
 #!/usr/bin/env bash
 file="${2:-}"
 case "$1:${file##*/}" in
---version:) printf 'xberg 1.4.0\n' ;;
+--version:)
+  printf 'xberg 1.4.0\n'
+  if [ "${MIMALLOC_VERBOSE:-0}" = 1 ] && [ "${SMOKE_STUB_MIMALLOC:-0}" = 1 ]; then
+    printf "mimalloc: process init\noption 'verbose': 1 \n" >&2
+  fi
+  ;;
 extract:document.txt) printf 'Xberg installed layout smoke test\n' ;;
 extract:musl-python-smoke.pdf) printf 'XBERG MUSL SMOKE 490\n' ;;
 extract:merged_cells.docx) printf 'Blower\n' ;;
@@ -146,9 +163,18 @@ extract:merged_cells.docx) printf 'Blower\n' ;;
 esac
 SH
 	tar -czf "$CLI_ARCHIVE" -C source "xberg-cli-$CLI_TARGET"
-	run bash "$REPOSITORY_ROOT/scripts/ci/smoke-test-cli-installer.sh" "$CLI_ARCHIVE" 1.4.0 musl
+	local smoke="$REPOSITORY_ROOT/scripts/ci/smoke-test-cli-installer.sh"
+	run bash "$smoke" "$CLI_ARCHIVE" 1.4.0 musl
 	xberg_assert_status 0
 	xberg_assert_output_contains 'Verified: xberg 1.4.0'
+
+	run env SMOKE_REQUIRE_MIMALLOC=1 bash "$smoke" "$CLI_ARCHIVE" 1.4.0 musl
+	xberg_assert_status 1
+	xberg_assert_output_contains "Packaged CLI did not report mimalloc's verbose option"
+
+	run env SMOKE_REQUIRE_MIMALLOC=1 SMOKE_STUB_MIMALLOC=1 bash "$smoke" "$CLI_ARCHIVE" 1.4.0 musl
+	xberg_assert_status 0
+	xberg_assert_output_contains 'Xberg installed layout smoke test'
 	xberg_assert_trace_empty
 }
 
