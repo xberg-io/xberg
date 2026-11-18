@@ -369,7 +369,7 @@ async fn test_orgmode_links() {
 /// - #+BEGIN_SRC blocks are recognized
 /// - #+BEGIN_SRC language blocks are identified
 /// - Code content is preserved
-/// - Multiple code blocks are extracted
+/// - The fixture's single bash block survives with its command and URL
 #[tokio::test]
 async fn test_orgmode_code_blocks() {
     let fixture = "org/readme.org";
@@ -384,8 +384,14 @@ async fn test_orgmode_code_blocks() {
         .expect("Should extract code blocks from Org Mode");
 
     assert!(
-        result.content.contains("curl") || result.content.contains("bash") || result.content.contains("bash"),
-        "Should contain code block content or language specification"
+        result.content.contains("curl -O"),
+        "Code block command should be preserved, got: {}",
+        result.content
+    );
+    assert!(
+        result.content.contains("sec.gov/Archives/edgar"),
+        "Code block URL should be preserved, got: {}",
+        result.content
     );
 
     println!("✅ Org Mode code blocks test passed!");
@@ -742,17 +748,20 @@ async fn test_orgmode_comprehensive_document() {
 #[tokio::test]
 async fn test_orgmode_extraction_statistics() {
     let test_files = vec!["org/tables.org", "org/readme.org"];
+    let expected_files = test_files.len();
 
     println!("\n╔════════════════════════════════════════════════════════════╗");
     println!("║        Org Mode Extraction Statistics Report              ║");
     println!("╚════════════════════════════════════════════════════════════╝\n");
 
     let mut total_files = 0;
+    let mut skipped_files = 0;
     let mut total_content_bytes = 0;
     let mut total_metadata_fields = 0;
 
     for orgmode_file in test_files {
         if skip_if_missing(orgmode_file) {
+            skipped_files += 1;
             continue;
         }
         let test_file = get_test_file_path(orgmode_file);
@@ -785,17 +794,17 @@ async fn test_orgmode_extraction_statistics() {
 
                     println!();
                 }
-                Err(e) => {
-                    println!("✗ {} - Error: {:?}", orgmode_file, e);
-                    println!();
-                }
+                Err(e) => panic!("{orgmode_file} extraction failed: {e:?}"),
             },
-            Err(e) => {
-                println!("✗ {} - Read error: {:?}", orgmode_file, e);
-                println!();
-            }
+            Err(e) => panic!("{orgmode_file} read failed: {e:?}"),
         }
     }
+
+    assert_eq!(
+        total_files + skipped_files,
+        expected_files,
+        "every listed Org fixture should be extracted"
+    );
 
     println!("╔════════════════════════════════════════════════════════════╗");
     println!("║                    Summary Statistics                      ║");

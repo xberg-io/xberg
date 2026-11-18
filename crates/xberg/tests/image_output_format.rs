@@ -257,13 +257,11 @@ fn office_mixed_to_png() {
     let config = config_with_output_format(ImageOutputFormat::Png);
     let result = extract_uri_document_blocking(&path, None, &config).expect("DOCX PNG extraction must succeed");
 
-    let images = match result.images.as_ref() {
-        Some(v) if !v.is_empty() => v,
-        _ => {
-            eprintln!("skipped: word_image_anchors.docx yielded no extracted images");
-            return;
-        }
-    };
+    let images = result
+        .images
+        .as_ref()
+        .filter(|v| !v.is_empty())
+        .expect("word_image_anchors.docx embeds two PNGs, so images must be extracted");
 
     for img in images {
         let undecodable = result
@@ -472,10 +470,10 @@ fn quality_change_alters_byte_size() {
         .as_ref()
         .expect("images must be Some when extract_images=true");
 
-    if images_high.is_empty() {
-        eprintln!("skipped: multipage_marketing.pdf yielded no extractable images");
-        return;
-    }
+    assert!(
+        !images_high.is_empty(),
+        "multipage_marketing.pdf embeds JPEG images, so images must be extracted"
+    );
 
     assert_eq!(
         images_high.len(),

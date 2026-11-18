@@ -395,24 +395,22 @@ fn count_blocks(content: &str) -> HashMap<String, usize> {
 }
 
 /// Extract a document in the given output format.
-fn extract_with_format(path: &Path, format: OutputFormat) -> Option<String> {
+fn extract_with_format(path: &Path, format: OutputFormat) -> String {
     let config = ExtractionConfig {
         output_format: format.clone(),
         ..Default::default()
     };
 
-    match extract_uri_document_blocking(path, None, &config) {
-        Ok(result) => Some(result.content),
-        Err(err) => {
-            eprintln!(
-                "  [WARN] extraction failed for {} with format {}: {}",
+    extract_uri_document_blocking(path, None, &config)
+        .unwrap_or_else(|err| {
+            panic!(
+                "extraction failed for {} with format {}: {}",
                 path.display(),
                 format,
                 err
-            );
-            None
-        }
-    }
+            )
+        })
+        .content
 }
 
 /// Strip markup from content based on its format.
@@ -574,17 +572,16 @@ fn cross_format_parity_all_documents() {
 
         let mut outputs: HashMap<String, String> = HashMap::new();
         for format in &formats {
-            if let Some(content) = extract_with_format(&path, format.clone()) {
-                let stripped = strip_markup(&content, format);
-                let format_name = format.to_string();
-                eprintln!(
-                    "  {}: {} chars raw, {} chars stripped",
-                    format_name,
-                    content.len(),
-                    stripped.len()
-                );
-                outputs.insert(format_name, stripped);
-            }
+            let content = extract_with_format(&path, format.clone());
+            let stripped = strip_markup(&content, format);
+            let format_name = format.to_string();
+            eprintln!(
+                "  {}: {} chars raw, {} chars stripped",
+                format_name,
+                content.len(),
+                stripped.len()
+            );
+            outputs.insert(format_name, stripped);
         }
 
         let md_tokens = match outputs.get("markdown") {
@@ -714,26 +711,26 @@ fn cross_format_table_content_parity() {
         tested += 1;
 
         for (format_name, format) in &formats {
-            if let Some(content) = extract_with_format(&path, format.clone()) {
-                let lower = content.to_lowercase();
+            let content = extract_with_format(&path, format.clone());
+            let lower = content.to_lowercase();
 
-                for &cell in expected_cells {
-                    if !lower.contains(&cell.to_lowercase()) {
-                        failures.push(format!(
-                            "{} [{}]: missing expected table cell '{}'",
-                            relative_path, format_name, cell
-                        ));
-                    }
+            for &cell in expected_cells {
+                if !lower.contains(&cell.to_lowercase()) {
+                    failures.push(format!(
+                        "{} [{}]: missing expected table cell '{}'",
+                        relative_path, format_name, cell
+                    ));
                 }
+            }
 
-                if content.trim().is_empty() {
-                    failures.push(format!("{} [{}]: produced empty content", relative_path, format_name));
-                }
+            if content.trim().is_empty() {
+                failures.push(format!("{} [{}]: produced empty content", relative_path, format_name));
             }
         }
     }
 
     eprintln!("\n=== Table parity: tested {} documents ===", tested);
+    assert!(tested > 0, "Expected at least one document to be tested");
 
     if !failures.is_empty() {
         panic!("Table content parity failures:\n  - {}", failures.join("\n  - "));
@@ -766,26 +763,25 @@ fn markdown_gfm_lint_validation() {
         }
         let path = get_test_file_path(doc.relative_path);
 
-        if let Some(md_content) = extract_with_format(&path, OutputFormat::Markdown) {
-            tested += 1;
-            let violations = validate_gfm_basics(&md_content);
-            if !violations.is_empty() {
-                let shown: Vec<_> = violations.iter().take(5).collect();
-                let suffix = if violations.len() > 5 {
-                    format!(" ... and {} more", violations.len() - 5)
-                } else {
-                    String::new()
-                };
-                failures.push(format!(
-                    "{}: {} GFM violations: [{}]{}",
-                    doc.label,
-                    violations.len(),
-                    shown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-                    suffix,
-                ));
+        let md_content = extract_with_format(&path, OutputFormat::Markdown);
+        tested += 1;
+        let violations = validate_gfm_basics(&md_content);
+        if !violations.is_empty() {
+            let shown: Vec<_> = violations.iter().take(5).collect();
+            let suffix = if violations.len() > 5 {
+                format!(" ... and {} more", violations.len() - 5)
             } else {
-                eprintln!("  [OK] {} — GFM lint clean", doc.label);
-            }
+                String::new()
+            };
+            failures.push(format!(
+                "{}: {} GFM violations: [{}]{}",
+                doc.label,
+                violations.len(),
+                shown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                suffix,
+            ));
+        } else {
+            eprintln!("  [OK] {} — GFM lint clean", doc.label);
         }
     }
 
@@ -828,30 +824,28 @@ fn structural_block_comparison() {
         }
         let path = get_test_file_path(doc.relative_path);
 
-        let md_content = extract_with_format(&path, OutputFormat::Markdown);
-        let djot_content = extract_with_format(&path, OutputFormat::Djot);
+        let md = extract_with_format(&path, OutputFormat::Markdown);
+        let djot = extract_with_format(&path, OutputFormat::Djot);
 
-        if let (Some(md), Some(djot)) = (md_content, djot_content) {
-            tested += 1;
-            let md_blocks = count_blocks(&md);
-            let djot_blocks = count_blocks(&djot);
+        tested += 1;
+        let md_blocks = count_blocks(&md);
+        let djot_blocks = count_blocks(&djot);
 
-            eprintln!("\n--- structural blocks: {} ---", doc.label);
+        eprintln!("\n--- structural blocks: {} ---", doc.label);
 
-            let block_types = ["headings", "paragraphs", "table_rows", "list_items", "code_blocks"];
-            for block_type in &block_types {
-                let md_count = *md_blocks.get(*block_type).unwrap_or(&0) as i64;
-                let djot_count = *djot_blocks.get(*block_type).unwrap_or(&0) as i64;
-                let diff = (md_count - djot_count).abs();
+        let block_types = ["headings", "paragraphs", "table_rows", "list_items", "code_blocks"];
+        for block_type in &block_types {
+            let md_count = *md_blocks.get(*block_type).unwrap_or(&0) as i64;
+            let djot_count = *djot_blocks.get(*block_type).unwrap_or(&0) as i64;
+            let diff = (md_count - djot_count).abs();
 
-                eprintln!("  {}: md={}, djot={}, diff={}", block_type, md_count, djot_count, diff);
+            eprintln!("  {}: md={}, djot={}, diff={}", block_type, md_count, djot_count, diff);
 
-                if diff > tolerance {
-                    failures.push(format!(
-                        "{}: {} count differs by {} (md={}, djot={}, tolerance={})",
-                        doc.label, block_type, diff, md_count, djot_count, tolerance
-                    ));
-                }
+            if diff > tolerance {
+                failures.push(format!(
+                    "{}: {} count differs by {} (md={}, djot={}, tolerance={})",
+                    doc.label, block_type, diff, md_count, djot_count, tolerance
+                ));
             }
         }
     }
@@ -901,35 +895,34 @@ fn no_escaped_brackets_in_markdown() {
         }
         let path = get_test_file_path(relative_path);
 
-        if let Some(md_content) = extract_with_format(&path, OutputFormat::Markdown) {
-            tested += 1;
+        let md_content = extract_with_format(&path, OutputFormat::Markdown);
+        tested += 1;
 
-            let mut in_fenced_block = false;
-            for (i, line) in md_content.lines().enumerate() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("```") {
-                    in_fenced_block = !in_fenced_block;
-                    continue;
-                }
-                if in_fenced_block {
-                    continue;
-                }
-
-                let without_code = strip_inline_code(line);
-                if without_code.contains("\\[") || without_code.contains("\\]") {
-                    failures.push(format!(
-                        "{} line {}: escaped bracket found: '{}'",
-                        relative_path,
-                        i + 1,
-                        line.trim()
-                    ));
-                    break;
-                }
+        let mut in_fenced_block = false;
+        for (i, line) in md_content.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("```") {
+                in_fenced_block = !in_fenced_block;
+                continue;
+            }
+            if in_fenced_block {
+                continue;
             }
 
-            if !failures.iter().any(|f| f.starts_with(relative_path)) {
-                eprintln!("  [OK] {} — no escaped brackets", relative_path);
+            let without_code = strip_inline_code(line);
+            if without_code.contains("\\[") || without_code.contains("\\]") {
+                failures.push(format!(
+                    "{} line {}: escaped bracket found: '{}'",
+                    relative_path,
+                    i + 1,
+                    line.trim()
+                ));
+                break;
             }
+        }
+
+        if !failures.iter().any(|f| f.starts_with(relative_path)) {
+            eprintln!("  [OK] {} — no escaped brackets", relative_path);
         }
     }
 
