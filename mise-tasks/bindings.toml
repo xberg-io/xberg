@@ -5,6 +5,66 @@
 
 # ---- Python ------------------------------------------------------------------------------------
 
+["python:callback:smoke"]
+description = "Build a Linux Python wheel and test OCR callback exception identity"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+scratch=$(mktemp -d)
+trap 'rm -rf -- "$scratch"' EXIT
+venv="$scratch/venv"
+
+UV_PROJECT_ENVIRONMENT="$venv" uv sync --locked --only-dev --no-install-project --no-install-workspace
+(
+  cd packages/python
+  "$venv/bin/maturin" build --locked --compatibility linux --interpreter "$venv/bin/python" --out "$scratch/wheels"
+)
+
+set -- "$scratch"/wheels/*.whl
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+  echo "Expected exactly one Python wheel in $scratch/wheels" >&2
+  exit 1
+fi
+
+uv pip install --python "$venv/bin/python" --no-deps "$1"
+HF_HUB_OFFLINE=1 "$venv/bin/python" -I - <<'PYTHON'
+from importlib.machinery import ExtensionFileLoader
+from pathlib import Path
+import sys
+import pytest
+
+import xberg._xberg as native
+
+if (
+    not isinstance(native.__loader__, ExtensionFileLoader)
+    or not Path(native.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+):
+    raise SystemExit("OCR callback smoke requires the native extension from the new wheel")
+
+class SmokeResults:
+    collected = 0
+    passed = 0
+
+    def pytest_collection_finish(self, session):
+        self.collected = len(session.items)
+
+    def pytest_runtest_logreport(self, report):
+        if report.when == "call" and report.passed and not hasattr(report, "wasxfail"):
+            self.passed += 1
+
+
+expected = 4
+results = SmokeResults()
+status = pytest.main(
+    ["-c", "e2e/python/pyproject.toml", "packages/python/tests/test_ocr_callback_exceptions.py"],
+    plugins=[results],
+)
+if status != pytest.ExitCode.OK or (results.collected, results.passed) != (expected, expected):
+    raise SystemExit(f"Expected {expected} passed callback tests, collected {results.collected}, passed {results.passed}")
+
+PYTHON
+'''
+
 ["python:wheel:closure:test"]
 description = "Test wheel-local Windows PE dependency and runtime packaging contracts"
 run = "python scripts/ci/test_windows_wheel_closure.py -v"
