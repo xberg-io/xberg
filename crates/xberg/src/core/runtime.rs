@@ -80,6 +80,70 @@ pub(crate) fn check_blocking_cancelled(cancel: Option<&crate::cancellation::Canc
     Ok(())
 }
 
+#[cfg(all(
+    any(feature = "office", feature = "excel", feature = "excel-wasm"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) struct OfficeBlockingPool {
+    pub(crate) runtime: tokio::runtime::Runtime,
+    pub(crate) admission: std::sync::Arc<tokio::sync::Semaphore>,
+    #[cfg(test)]
+    pub(crate) slots: usize,
+}
+
+#[cfg(all(
+    any(feature = "office", feature = "excel", feature = "excel-wasm"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) fn current_office_pool() -> Option<&'static OfficeBlockingPool> {
+    current_global_runtime()?;
+    static POOL: std::sync::LazyLock<Option<OfficeBlockingPool>> = std::sync::LazyLock::new(|| {
+        let slots = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        match tokio::runtime::Builder::new_current_thread()
+            .thread_stack_size(GLOBAL_RUNTIME_STACK_SIZE_BYTES)
+            .build()
+        {
+            Ok(runtime) => Some(OfficeBlockingPool {
+                runtime,
+                admission: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
+                #[cfg(test)]
+                slots,
+            }),
+            Err(error) => {
+                tracing::warn!(%error, "Office blocking pool unavailable; parsing inline");
+                None
+            }
+        }
+    });
+    POOL.as_ref()
+}
+
+#[cfg(all(
+    any(feature = "office", feature = "excel", feature = "excel-wasm"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) async fn acquire_office_slot(
+    admission: std::sync::Arc<tokio::sync::Semaphore>,
+    cancel: Option<&crate::cancellation::CancellationToken>,
+) -> crate::Result<tokio::sync::OwnedSemaphorePermit> {
+    let acquire = admission.acquire_owned();
+    let permit = if let Some(cancel) = cancel {
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(crate::XbergError::Cancelled),
+            permit = acquire => permit,
+        }
+    } else {
+        acquire.await
+    };
+    let permit = permit.map_err(|_| crate::XbergError::Cancelled)?;
+    check_blocking_cancelled(cancel)?;
+    Ok(permit)
+}
+
 /// Run synchronous work on the selected pool, preserving tracing and typed cancellation.
 ///
 /// Dropping the future aborts queued work. Work that has already started must cooperate

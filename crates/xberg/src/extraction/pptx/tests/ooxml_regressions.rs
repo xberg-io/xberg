@@ -110,6 +110,7 @@ fn test_math_runs_are_collected_beside_the_text() {
             ..Default::default()
         },
         &mut Vec::new(),
+        crate::extraction::pptx::PptxReadCancellation::default(),
     )
     .unwrap();
 
@@ -154,6 +155,7 @@ fn test_slide_structure_emits_formula_nodes() {
             ..Default::default()
         },
         &mut Vec::new(),
+        crate::extraction::pptx::PptxReadCancellation::default(),
     )
     .unwrap();
 

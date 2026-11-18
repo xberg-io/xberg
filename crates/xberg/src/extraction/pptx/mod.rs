@@ -174,6 +174,25 @@ fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> Str
     result
 }
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct PptxReadCancellation<'a> {
+    pub(crate) request: Option<&'a crate::cancellation::CancellationToken>,
+    pub(crate) abandoned: Option<&'a std::sync::atomic::AtomicBool>,
+}
+
+impl PptxReadCancellation<'_> {
+    pub(crate) fn check(self) -> Result<()> {
+        crate::core::runtime::check_blocking_cancelled(self.request)?;
+        if self
+            .abandoned
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return Err(crate::XbergError::Cancelled);
+        }
+        Ok(())
+    }
+}
+
 /// Extract PPTX content from a file path.
 ///
 /// # Arguments
@@ -189,9 +208,11 @@ pub(crate) fn extract_pptx_from_path_with_slide_contents(
     path: &str,
     options: &PptxExtractionOptions,
     warnings: &mut Vec<ProcessingWarning>,
+    cancel: PptxReadCancellation<'_>,
 ) -> Result<PptxInternalExtraction> {
+    cancel.check()?;
     let container = PptxContainer::open(path, &options.security_limits)?;
-    extract_pptx_from_container(container, options, warnings)
+    extract_pptx_from_container(container, options, warnings, cancel)
 }
 
 /// Extract PPTX content from a byte buffer.
@@ -210,16 +231,18 @@ pub(crate) fn extract_pptx_from_bytes(
     options: &PptxExtractionOptions,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<PptxExtractionResult> {
-    Ok(extract_pptx_from_bytes_with_slide_contents(data, options, warnings)?.result)
+    Ok(extract_pptx_from_bytes_with_slide_contents(data, options, warnings, PptxReadCancellation::default())?.result)
 }
 
 pub(crate) fn extract_pptx_from_bytes_with_slide_contents(
     data: &[u8],
     options: &PptxExtractionOptions,
     warnings: &mut Vec<ProcessingWarning>,
+    cancel: PptxReadCancellation<'_>,
 ) -> Result<PptxInternalExtraction> {
+    cancel.check()?;
     let container = PptxContainer::from_bytes(data, &options.security_limits)?;
-    extract_pptx_from_container(container, options, warnings)
+    extract_pptx_from_container(container, options, warnings, cancel)
 }
 
 fn ordered_slide_images(slide: &elements::Slide) -> Vec<(&elements::ImageReference, &elements::ElementPosition)> {
@@ -489,14 +512,15 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
     mut container: PptxContainer<R>,
     options: &PptxExtractionOptions,
     warnings: &mut Vec<ProcessingWarning>,
+    cancel: PptxReadCancellation<'_>,
 ) -> Result<PptxInternalExtraction> {
+    cancel.check()?;
     enforce_slide_limit(container.slide_paths().len(), options.max_pages)?;
 
     let page_config = options.page_config.as_ref();
-    let include_structure = options.include_structure;
-
     let (config, metadata, office_metadata, notes, section_names, revisions) =
         gather_pptx_container_metadata(&mut container, options, warnings)?;
+    cancel.check()?;
 
     let mut iterator = SlideIterator::new(container);
     let slide_count = iterator.slide_count();
@@ -510,7 +534,7 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
     let mut extracted_images = Vec::new();
     let mut collected_hyperlinks: Vec<(String, Option<String>)> = Vec::new();
     let mut collected_formulas: Vec<(String, bool)> = Vec::new();
-    let mut doc_builder = if include_structure {
+    let mut doc_builder = if options.include_structure {
         Some(DocumentStructureBuilder::new().source_format("pptx"))
     } else {
         None
@@ -533,10 +557,11 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
         total_image_count: &mut total_image_count,
         total_table_count: &mut total_table_count,
     };
-    while let Some(slide) = iterator.next_slide(warnings)? {
+    while let Some(slide) = iterator.next_slide(warnings, cancel)? {
         process_one_slide(slide, &mut iterator, &mut ctx, warnings);
     }
 
+    cancel.check()?;
     let (content, boundaries, page_contents) = content_builder.build();
     let (page_contents, page_structure) =
         build_page_structure(slide_count, boundaries, page_contents, &extracted_images);

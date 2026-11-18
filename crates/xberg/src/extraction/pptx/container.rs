@@ -8,6 +8,7 @@ use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 use zip::ZipArchive;
 
+use super::PptxReadCancellation;
 use super::elements::{Slide, SlideElement};
 use super::image_handling::get_full_image_path;
 use crate::core::diagnostics::push_warning;
@@ -68,14 +69,14 @@ impl PptxContainer<std::fs::File> {
     }
 }
 
-impl PptxContainer<Cursor<Vec<u8>>> {
+impl<'a> PptxContainer<Cursor<&'a [u8]>> {
     /// `limits` is the caller's configured `SecurityLimits` (see
     /// `PptxExtractionOptions::security_limits`), not hardcoded ceilings.
     ///
     /// See `PptxContainer::open` (the file-based constructor above) for why both
     /// `check_entry_count` and `ZipBombValidator::validate` run here.
-    pub(super) fn from_bytes(data: &[u8], limits: &SecurityLimits) -> Result<Self> {
-        let cursor = Cursor::new(data.to_vec());
+    pub(super) fn from_bytes(data: &'a [u8], limits: &SecurityLimits) -> Result<Self> {
+        let cursor = Cursor::new(data);
 
         let mut archive = match ZipArchive::new(cursor) {
             Ok(arc) => arc,
@@ -214,8 +215,13 @@ impl<R: Read + Seek> SlideIterator<R> {
     /// Read and parse the next slide, skipping (and warning about) any slide
     /// whose XML part could not be read or parsed rather than aborting the
     /// whole presentation for one bad slide (#91).
-    pub(super) fn next_slide(&mut self, warnings: &mut Vec<ProcessingWarning>) -> Result<Option<Slide>> {
+    pub(super) fn next_slide(
+        &mut self,
+        warnings: &mut Vec<ProcessingWarning>,
+        cancel: PptxReadCancellation<'_>,
+    ) -> Result<Option<Slide>> {
         while self.current_index < self.total_slides {
+            cancel.check()?;
             let slide_path = self.container.slide_paths()[self.current_index].clone();
             let slide_number = (self.current_index + 1) as u32;
             self.current_index += 1;
@@ -359,6 +365,83 @@ impl<R: Read + Seek> SlideIterator<R> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    struct CancelOnSlideRead<'a> {
+        inner: Cursor<&'a [u8]>,
+        token: &'a crate::cancellation::CancellationToken,
+        first_offset: u64,
+        second_offset: u64,
+        armed: &'a std::cell::Cell<bool>,
+        read_second: &'a std::cell::Cell<bool>,
+    }
+
+    impl Read for CancelOnSlideRead<'_> {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let offset = self.inner.position();
+            let read = self.inner.read(buffer)?;
+            if self.armed.get() && read > 0 {
+                if offset == self.first_offset {
+                    self.token.cancel();
+                }
+                if offset == self.second_offset {
+                    self.read_second.set(true);
+                }
+            }
+            Ok(read)
+        }
+    }
+
+    impl Seek for CancelOnSlideRead<'_> {
+        fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(position)
+        }
+    }
+
+    #[test]
+    fn cancellation_during_one_slide_stops_before_reading_the_next() {
+        let bytes = super::super::tests::create_test_pptx_bytes(vec!["First slide", "Second slide"]);
+        let paths = ["ppt/slides/slide1.xml", "ppt/slides/slide2.xml"];
+        let mut source = ZipArchive::new(Cursor::new(bytes.as_slice())).unwrap();
+        let [first_offset, second_offset] = paths.map(|path| {
+            source
+                .by_name(path)
+                .unwrap()
+                .data_start()
+                .expect("slide XML data offset")
+        });
+        let token = crate::cancellation::CancellationToken::new();
+        let armed = std::cell::Cell::new(false);
+        let read_second = std::cell::Cell::new(false);
+        let archive = ZipArchive::new(CancelOnSlideRead {
+            inner: Cursor::new(&bytes),
+            token: &token,
+            first_offset,
+            second_offset,
+            armed: &armed,
+            read_second: &read_second,
+        })
+        .unwrap();
+        let mut slides = SlideIterator::new(PptxContainer {
+            archive,
+            slide_paths: paths.map(str::to_owned).into(),
+        });
+        let cancel = PptxReadCancellation {
+            request: Some(&token),
+            abandoned: None,
+        };
+        armed.set(true);
+        let mut warnings = Vec::new();
+        assert_eq!(
+            slides.next_slide(&mut warnings, cancel).unwrap().unwrap().slide_number,
+            1
+        );
+        assert!(token.is_cancelled(), "the first slide actually read its part");
+        assert!(matches!(
+            slides.next_slide(&mut warnings, cancel),
+            Err(XbergError::Cancelled)
+        ));
+        assert!(!read_second.get(), "the second slide must not be read");
+    }
 
     /// Build a minimal ZIP with `entry_count` empty files, none of them PPTX parts.
     /// The archive is invalid as a presentation, so these tests exercise only the

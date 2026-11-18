@@ -135,6 +135,7 @@ fn test_extract_pptx_from_bytes_multiple_slides() {
             ..Default::default()
         },
         &mut Vec::new(),
+        crate::extraction::pptx::PptxReadCancellation::default(),
     )
     .unwrap();
     let result = internal.result;

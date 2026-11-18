@@ -1045,13 +1045,22 @@ impl InternalDocumentExtractor for DocxExtractor {
         let inject_placeholders = config.images.as_ref().map(|i| i.inject_placeholders).unwrap_or(true);
         let budget = SecurityBudget::from_config(config);
         let limits = config.security_limits.clone().unwrap_or_default();
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let pool = crate::core::runtime::current_office_pool();
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let permit = if let Some(pool) = pool {
+            Some(crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?)
+        } else {
+            None
+        };
         let content_owned: Arc<[u8]> = Arc::from(content);
         let (text, tables, page_boundaries, drawings, drawing_page_nums, image_rels, mut internal_doc) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(runtime) = crate::core::runtime::current_global_runtime() {
+            if let Some(pool) = pool {
                 let parse_content = Arc::clone(&content_owned);
                 let parse_limits = limits.clone();
-                crate::core::runtime::run_blocking(&runtime, cancel, move |cancel| {
+                crate::core::runtime::run_blocking(pool.runtime.handle(), cancel, move |cancel| {
+                    let _permit = permit;
                     parse_docx_core(
                         &parse_content,
                         output_format,
@@ -1092,10 +1101,15 @@ impl InternalDocumentExtractor for DocxExtractor {
         let mut archive = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if crate::core::batch_mode::is_batch_mode()
-                && let Some(runtime) = crate::core::runtime::current_global_runtime()
+                && let Some(pool) = pool
             {
+                let permit = crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?;
                 let archive_content = Arc::clone(&content_owned);
-                crate::core::runtime::run_blocking(&runtime, cancel, move |_| open_archive(archive_content)).await?
+                crate::core::runtime::run_blocking(pool.runtime.handle(), cancel, move |_| {
+                    let _permit = permit;
+                    open_archive(archive_content)
+                })
+                .await?
             } else {
                 open_archive(Arc::clone(&content_owned))?
             }
@@ -1809,6 +1823,7 @@ mod tests {
 
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
+    #[serial_test::serial(office_admission)]
     fn docx_queues_on_a_shared_worker_and_honors_typed_cancellation() {
         use crate::core::runtime::{global_runtime, poll_with_blocking_worker_held};
 

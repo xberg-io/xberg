@@ -1,19 +1,17 @@
 //! Cancellation token for extraction operations.
 //!
 //! Provides a lightweight, FFI-friendly cancellation primitive based on
-//! `Arc<AtomicBool>`. The token can be cloned and shared across threads;
+//! a shared atomic flag. The token can be cloned and shared across threads;
 //! any holder can request cancellation and all other holders will observe
 //! the request on their next check.
 //!
 //! # Design
 //!
-//! - `Arc<AtomicBool>` is used rather than `tokio_util::CancellationToken` so
-//!   the type has no Tokio dependency at the type level and is usable from both
-//!   sync and async contexts.
+//! - Synchronous callers read the shared atomic flag. Native Tokio builds also
+//!   notify async waiters that cannot perform a checkpoint until an event wakes them.
 //! - `Ordering::Relaxed` is sufficient: we only need eventual visibility, not
 //!   happens-before ordering relative to other memory accesses.
-//! - The token wraps an `Arc<AtomicBool>` and can be stored in
-//!   `ExtractionConfig` without layout surprises.
+//! - The flag and notification share one allocation across regular and scoped clones.
 //!
 //! # Rust callers
 //!
@@ -71,8 +69,15 @@ use std::time::Instant;
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Default)]
 pub struct CancellationToken {
-    cancelled: Arc<AtomicBool>,
+    cancelled: Arc<CancelState>,
     stop: Arc<StopState>,
+}
+
+#[derive(Debug, Default)]
+struct CancelState {
+    requested: AtomicBool,
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    notification: tokio::sync::Notify,
 }
 
 /// Soft-stop state of one timed extraction.
@@ -147,13 +152,36 @@ impl CancellationToken {
     /// latency is implied.
     #[inline]
     pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
+        self.mark_cancelled();
     }
 
     /// Request cancellation for a hard timeout and report whether this request set the flag.
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     pub(crate) fn cancel_for_timeout(&self) -> bool {
-        !self.cancelled.swap(true, Ordering::Relaxed)
+        self.mark_cancelled()
+    }
+
+    fn mark_cancelled(&self) -> bool {
+        let first = !self.cancelled.requested.swap(true, Ordering::Relaxed);
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        if first {
+            self.cancelled.notification.notify_waiters();
+        }
+        first
+    }
+
+    /// Wait for hard cancellation, including a deadline enforced by the extraction wrapper.
+    #[cfg(all(
+        any(feature = "office", feature = "excel", feature = "excel-wasm"),
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(crate) async fn cancelled(&self) {
+        // Subscribe before reading the flag; notify_waiters also wakes a Notified not yet polled. ~keep
+        let notified = self.cancelled.notification.notified();
+        if !self.is_cancelled() {
+            notified.await;
+        }
     }
 
     /// Returns `true` if cancellation has been requested on any clone.
@@ -162,7 +190,7 @@ impl CancellationToken {
     /// extraction terminated because cancellation can race with normal completion.
     #[inline]
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
+        self.cancelled.requested.load(Ordering::Relaxed)
     }
 
     /// A token that shares this token's cancellation but has its own soft-stop state.
@@ -270,16 +298,64 @@ impl<'de> Deserialize<'de> for CancellationToken {
         D: Deserializer<'de>,
     {
         let cancelled = bool::deserialize(deserializer)?;
-        Ok(CancellationToken {
-            cancelled: Arc::new(AtomicBool::new(cancelled)),
-            stop: Arc::default(),
-        })
+        let token = Self::new();
+        if cancelled {
+            token.cancel();
+        }
+        Ok(token)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "office", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn hard_cancellation_wakes_waiters_on_all_scoped_clones() {
+        use std::future::{Future, poll_fn};
+        use std::time::Duration;
+        use tokio::sync::oneshot;
+
+        let spawn_waiter = |token: CancellationToken| {
+            let (registered, waiting) = oneshot::channel();
+            let task = tokio::spawn(async move {
+                let mut registered = Some(registered);
+                let mut cancelled = std::pin::pin!(token.cancelled());
+                poll_fn(|cx| {
+                    let result = cancelled.as_mut().poll(cx);
+                    if result.is_pending()
+                        && let Some(registered) = registered.take()
+                    {
+                        registered.send(()).unwrap();
+                    }
+                    result
+                })
+                .await;
+            });
+            (task, waiting)
+        };
+
+        let token = CancellationToken::new();
+        let scope = token.scoped();
+        let (first, first_waiting) = spawn_waiter(token.clone());
+        let (second, second_waiting) = spawn_waiter(scope.clone());
+        tokio::time::timeout(Duration::from_secs(1), async {
+            tokio::try_join!(first_waiting, second_waiting).unwrap();
+        })
+        .await
+        .unwrap();
+        assert!(scope.cancel_for_timeout());
+        assert!(!token.cancel_for_timeout());
+        tokio::time::timeout(Duration::from_secs(1), async {
+            tokio::try_join!(first, second).unwrap();
+        })
+        .await
+        .expect("registered tasks must be woken by hard cancellation");
+        tokio::time::timeout(Duration::from_secs(1), token.cancelled())
+            .await
+            .unwrap();
+    }
 
     #[test]
     fn test_new_token_is_not_cancelled() {

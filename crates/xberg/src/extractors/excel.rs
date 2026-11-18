@@ -421,9 +421,11 @@ impl InternalDocumentExtractor for ExcelExtractor {
         check_blocking_cancelled(cancel)?;
         let (workbook, read_warnings) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(runtime) = crate::core::runtime::current_global_runtime() {
+            if let Some(pool) = crate::core::runtime::current_office_pool() {
+                let permit = crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?;
                 let content = content.to_vec();
-                run_excel_read(&runtime, cancel, move || {
+                run_excel_read(pool.runtime.handle(), cancel, move || {
+                    let _permit = permit;
                     read_excel_bytes(&content, extension, &security_limits)
                 })
                 .await?
@@ -475,9 +477,14 @@ impl InternalDocumentExtractor for ExcelExtractor {
         check_blocking_cancelled(cancel)?;
         let (workbook, read_warnings) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(runtime) = crate::core::runtime::current_global_runtime() {
+            if let Some(pool) = crate::core::runtime::current_office_pool() {
+                let permit = crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?;
                 let path_str = path_str.to_owned();
-                run_excel_read(&runtime, cancel, move || read_excel_file(&path_str, &security_limits)).await?
+                run_excel_read(pool.runtime.handle(), cancel, move || {
+                    let _permit = permit;
+                    read_excel_file(&path_str, &security_limits)
+                })
+                .await?
             } else {
                 read_excel_file(path_str, &security_limits)?
             }
@@ -1049,6 +1056,7 @@ mod tests {
 
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
+    #[serial_test::serial(office_admission)]
     fn single_excel_reads_queue_and_return_typed_cancellation() {
         let data = build_test_xlsx(&[]);
         let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
@@ -1139,6 +1147,7 @@ mod tests {
 
     #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
+    #[serial_test::serial(office_admission)]
     fn excel_batch_runs_bytes_and_paths_on_a_blocking_worker() {
         let runtime = crate::core::runtime::global_runtime().unwrap();
         let data = build_test_xlsx(&[]);
