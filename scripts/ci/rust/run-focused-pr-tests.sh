@@ -141,11 +141,16 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
-  expected=$((expected + 5))
+  expected=$((expected + 10))
   local tall_scan_policy='extractors::pdf::ocr::tall_source::policy::tests'
   run_exact "$tall_scan_policy::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render" --lib
   run_exact "$tall_scan_policy::reports_the_actual_density_of_a_budgeted_pdf_read" --lib
   run_exact "$tall_scan_policy::strip_recovery_early_returns_report_only_the_proven_density_once" --lib
+  run_exact 'extractors::pdf::ocr::tall_source::tests::bilevel_above_maximum_density_is_not_reported_as_below_minimum' --lib
+  run_exact a_120_dpi_bilevel_scan_explains_the_source_density_refusal --test pdf_tall_scan_strips
+  run_exact bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so --test pdf_tall_scan_strips
+  run_exact tall_scans_below_the_density_floor_say_recovery_was_not_used --test pdf_tall_scan_strips
+  run_exact fractional_bilevel_source_density_is_floored_below_the_minimum --test pdf_tall_scan_strips
   run_exact an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm --test pdf_tall_scan_strips
   run_exact the_mixed_route_names_the_configuration_that_blocked_strip_recovery --test pdf_tall_scan_strips
 }
