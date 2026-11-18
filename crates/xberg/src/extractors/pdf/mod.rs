@@ -418,14 +418,7 @@ fn native_text_stopped_by_time_limit(config: &ExtractionConfig) -> bool {
 
 #[cfg(feature = "pdf")]
 fn ensure_pdf_not_cancelled(config: &ExtractionConfig) -> Result<()> {
-    if config
-        .cancel_token
-        .as_ref()
-        .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
-    {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
+    crate::cancellation::check_cancelled(config.cancel_token.as_ref())
 }
 
 #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]

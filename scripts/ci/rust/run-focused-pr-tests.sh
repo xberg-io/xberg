@@ -468,6 +468,22 @@ run_mixed_plain_cases() {
   fi
 }
 
+run_cancellation_cases() {
+  local thresholds='extractors::image::image_color_threshold::tests'
+  local cache='core::extractor::cache_context'
+  run_exact 'cancellation::tests::check_cancelled_only_rejects_a_cancelled_token' --lib
+  run_exact "$thresholds::cancellation_before_the_probe_prevents_all_retry_work" --lib
+  run_exact "$thresholds::cancellation_during_the_probe_prevents_ocr" --lib
+  run_exact "$thresholds::cancellation_during_ocr_discards_the_candidate" --lib
+  run_exact "$cache::tests::cancellation_precedes_model_lookup_and_invalidates_cache_work" --lib
+  run_exact "$cache::explicit_mode_tests::outer_cache_rejects_legacy_retry_entry_after_model_removal" --lib
+  run_exact "$cache::explicit_mode_tests::image_osd_identity_observes_equal_length_revisions_without_pdf_support" --lib
+  run_exact "$cache::explicit_mode_tests::non_osd_image_modes_keep_empty_context_without_model_io" --lib
+  run_exact "$cache::explicit_mode_tests::explicit_osd_modes_apply_to_pdf_and_images_but_not_other_backends" --lib
+  run_exact 'extractors::pdf::ocr::orientation_retry::tests::recognition_cancellation_and_exhaustion_precede_the_cache_probe' --lib
+  run_exact 'extractors::pdf::tests::native_pdf_blocking_phase_stops_when_cancelled' --lib
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -505,6 +521,8 @@ pdf-ocr)
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
+  expected=$((expected + 11))
+  run_cancellation_cases
   ;;
 office-pages)
   expected=53

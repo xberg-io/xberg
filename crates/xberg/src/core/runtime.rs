@@ -67,19 +67,6 @@ pub(crate) fn current_global_runtime() -> Option<tokio::runtime::Handle> {
     (GLOBAL_RUNTIME.get()?.handle().id() == handle.id()).then_some(handle)
 }
 
-#[cfg(any(
-    all(feature = "tokio-runtime", not(target_arch = "wasm32")),
-    feature = "office",
-    feature = "excel",
-    feature = "excel-wasm"
-))]
-pub(crate) fn check_blocking_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
-}
-
 /// Run synchronous work on the selected pool, preserving tracing and typed cancellation.
 ///
 /// Dropping the future aborts queued work. Work that has already started must cooperate
@@ -101,9 +88,9 @@ where
     let task = runtime.spawn_blocking(move || {
         let _dispatcher = tracing::dispatcher::set_default(&dispatcher);
         let _span = span.entered();
-        check_blocking_cancelled(cancel.as_ref())?;
+        crate::cancellation::check_cancelled(cancel.as_ref())?;
         let result = work(cancel.as_ref())?;
-        check_blocking_cancelled(cancel.as_ref())?;
+        crate::cancellation::check_cancelled(cancel.as_ref())?;
         Ok(result)
     });
     await_task(task).await?
