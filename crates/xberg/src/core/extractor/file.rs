@@ -2061,4 +2061,178 @@ mod issue_217_fallback_tests {
             );
         }
     }
+
+    /// A token a caller reuses must not carry the stop an earlier timed extraction requested on it:
+    /// both routes scope the caller's token before arming the limit.
+    mod token_reuse {
+        use super::*;
+        use crate::cancellation::CancellationToken;
+        use crate::core::config::{ExtractInput, PostProcessorConfig};
+        use crate::plugins::{DocumentExtractor, Plugin};
+        use async_trait::async_trait;
+        use serial_test::serial;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        /// Aliases the xlam MIME type, which `validate_mime_type` accepts and no other test uses; the
+        /// entry points reject a MIME type that is not in the supported set before reaching the registry.
+        const MIME: &str = "application/vnd.ms-excel.addin.macroEnabled";
+        const NAME: &str = "token-reuse-test-extractor";
+        const CONTENT: &[u8] = b"token reuse test";
+
+        #[derive(Default)]
+        struct Seen {
+            calls: AtomicUsize,
+            later_call_saw_stop: AtomicBool,
+            later_call_saw_unread_page: AtomicBool,
+        }
+
+        /// The first call stops the way a page loop cut short by the time limit does; later calls
+        /// record what state their token arrived in.
+        struct Stopping {
+            seen: Arc<Seen>,
+        }
+
+        impl Plugin for Stopping {
+            fn name(&self) -> &str {
+                NAME
+            }
+        }
+
+        #[async_trait]
+        impl DocumentExtractor for Stopping {
+            async fn extract(&self, _input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+                let token = config.cancel_token.as_ref().expect("the entry point supplies a token");
+                if self.seen.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    token.request_stop();
+                    token.note_unread_page(2);
+                } else {
+                    self.seen
+                        .later_call_saw_stop
+                        .fetch_or(token.stop_requested(), Ordering::SeqCst);
+                    self.seen
+                        .later_call_saw_unread_page
+                        .fetch_or(token.first_unread_page().is_some(), Ordering::SeqCst);
+                }
+                Ok(ExtractedDocument {
+                    content: "pages read".to_string(),
+                    mime_type: Cow::Borrowed("text/plain"),
+                    ..Default::default()
+                })
+            }
+
+            fn supported_mime_types(&self) -> &[&str] {
+                &[MIME]
+            }
+
+            fn priority(&self) -> i32 {
+                100
+            }
+        }
+
+        struct Registered;
+
+        impl Registered {
+            fn new(seen: &Arc<Seen>) -> Self {
+                crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .register(Arc::new(Stopping { seen: Arc::clone(seen) }))
+                    .unwrap();
+                Self
+            }
+        }
+
+        impl Drop for Registered {
+            fn drop(&mut self) {
+                let _ = crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .remove(NAME);
+            }
+        }
+
+        #[derive(Clone, Copy)]
+        enum Route {
+            File,
+            Bytes,
+        }
+
+        fn timeout_warning(document: &ExtractedDocument) -> Option<&crate::types::ProcessingWarning> {
+            document
+                .processing_warnings
+                .iter()
+                .find(|warning| warning.source == "timeout")
+        }
+
+        async fn assert_reused_token_starts_unstopped(route: Route) {
+            let seen = Arc::new(Seen::default());
+            let _registered = Registered::new(&seen);
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("input.bin");
+            std::fs::write(&path, CONTENT).unwrap();
+
+            let caller_token = CancellationToken::new();
+            let config = ExtractionConfig {
+                // A requested stop also cuts the post-processing stages; with none enabled, only the
+                // page loop's unread page marks the result. ~keep
+                postprocessor: Some(PostProcessorConfig {
+                    enabled: false,
+                    ..Default::default()
+                }),
+                use_cache: false,
+                extraction_timeout_secs: Some(600),
+                cancel_token: Some(caller_token.clone()),
+                ..Default::default()
+            };
+
+            let mut results = Vec::new();
+            for _ in 0..2 {
+                let result = match route {
+                    Route::File => extract_file(&path, Some(MIME), &config).await,
+                    Route::Bytes => crate::core::extractor::bytes::extract_bytes(CONTENT, MIME, &config).await,
+                };
+                results.push(result.expect("the stub extractor succeeds"));
+            }
+            let [first, second] = &results[..] else {
+                unreachable!("two extractions ran");
+            };
+
+            assert_eq!(
+                seen.calls.load(Ordering::SeqCst),
+                2,
+                "each call must reach the extractor"
+            );
+            let warning = timeout_warning(first).expect("the first result reports the page it did not read");
+            assert!(warning.message.contains("page 2"), "{}", warning.message);
+            assert!(
+                !caller_token.is_cancelled(),
+                "a partial result leaves the caller's token usable"
+            );
+            assert!(
+                !caller_token.stop_requested(),
+                "the stop belongs to the extraction's scoped token, not the caller's"
+            );
+            assert_eq!(caller_token.first_unread_page(), None);
+            assert!(
+                !seen.later_call_saw_stop.load(Ordering::SeqCst),
+                "the second call's token arrived with the first call's stop"
+            );
+            assert!(
+                !seen.later_call_saw_unread_page.load(Ordering::SeqCst),
+                "the second call's token arrived with the first call's unread page"
+            );
+            assert!(timeout_warning(second).is_none(), "{:?}", second.processing_warnings);
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_token_reused_after_a_partial_file_result_starts_unstopped() {
+            assert_reused_token_starts_unstopped(Route::File).await;
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_token_reused_after_a_partial_bytes_result_starts_unstopped() {
+            assert_reused_token_starts_unstopped(Route::Bytes).await;
+        }
+    }
 }

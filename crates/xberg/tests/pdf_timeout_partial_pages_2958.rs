@@ -5,7 +5,8 @@
 //! The cases need the page loops to outlast a 1-24 s limit, which holds only for an unoptimized
 //! build: an optimized build finishes the fixtures first and would fail them. They are compiled
 //! out of such a build, so their outcome does not depend on the machine's speed; the unit tests
-//! that request the stop on the token cover every profile.
+//! that request the stop on the token, and those that reuse a caller's token after a partial result,
+//! cover every profile.
 //!
 //! The cases run one at a time: run side by side they slow each other past the grace, and every
 //! limit then ends in `Timeout` with nothing to check.
@@ -23,7 +24,6 @@ mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
 use serial_test::serial;
 use std::path::Path;
-use xberg::cancellation::CancellationToken;
 use xberg::core::config::{ConcurrencyConfig, ExtractionConfig, PageConfig};
 use xberg::{ExtractedDocument, XbergError};
 
@@ -106,11 +106,6 @@ fn has_timeout_warning(result: &ExtractedDocument) -> bool {
         .processing_warnings
         .iter()
         .any(|warning| warning.source == "timeout")
-}
-
-fn pages_read(result: &ExtractedDocument) -> usize {
-    let pages = result.pages.as_deref().expect("page contents were requested");
-    pages.iter().filter(|page| !page.content.trim().is_empty()).count()
 }
 
 /// `full` is the same document read without a limit, or `None` when every page is known to
@@ -210,57 +205,4 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
         return;
     }
     unexercised("no native fixture was cut short by a 1 s limit, so the stop was not exercised");
-}
-
-/// A caller's token reused for a second extraction must not carry the first one's stop. Each
-/// attempt gets a fresh token because a hard timeout cancels the caller's token for good; only
-/// the token of the attempt that returned its pages is reused.
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
-    let mut cut_short = None;
-    'fixtures: for name in NATIVE_FIXTURES {
-        let path = fixture(name);
-        for secs in NATIVE_LIMITS_SECS {
-            let token = CancellationToken::new();
-            let config = ExtractionConfig {
-                cancel_token: Some(token.clone()),
-                ..timed_config(secs)
-            };
-            match extract_uri_document(&path, None, &config).await {
-                Err(XbergError::Timeout { .. }) => continue,
-                other => {
-                    let result = other.expect("a limited extraction returns its pages");
-                    if has_timeout_warning(&result) {
-                        cut_short = Some((path, token, result));
-                        break 'fixtures;
-                    }
-                    continue 'fixtures;
-                }
-            }
-        }
-    }
-    let Some((path, token, first)) = cut_short else {
-        unexercised("the first extraction was not cut short on this machine, so there is no stop to carry over");
-        return;
-    };
-    assert!(pages_read(&first) < page_count(&path));
-    assert!(
-        !token.is_cancelled(),
-        "a partial result must leave the caller's token usable"
-    );
-
-    let config = ExtractionConfig {
-        cancel_token: Some(token.clone()),
-        ..timed_config(600)
-    };
-    let second = extract_uri_document(&path, None, &config)
-        .await
-        .expect("the second extraction must complete");
-
-    assert!(!has_timeout_warning(&second), "{:?}", second.processing_warnings);
-    assert!(
-        pages_read(&second) > pages_read(&first),
-        "the second extraction must read past the first one's stop"
-    );
 }
