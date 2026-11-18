@@ -204,8 +204,12 @@ impl TesseractAPI {
     /// # Errors
     ///
     /// Returns [`TesseractError::NullPointerError`] when `TessBaseAPICreate` returns a
-    /// null pointer, which indicates an allocation failure in the Tesseract C library.
+    /// null pointer, which indicates an allocation failure in the Tesseract C library, or
+    /// once process exit has begun.
     pub fn new() -> Result<Self> {
+        if PROCESS_EXITING.load(Ordering::SeqCst) {
+            return Err(TesseractError::NullPointerError);
+        }
         // SAFETY: The constructor takes no pointers. A non-null result is a new
         // engine allocation to be released by TessBaseAPIDelete. ~keep
         let handle = unsafe { TessBaseAPICreate() };
@@ -261,6 +265,19 @@ impl TesseractAPI {
             Some(false) => Err(TesseractError::NullPointerError),
             None => Err(TesseractError::MutexLockError),
         }
+    }
+
+    /// Returns `true` once the process-exit cleanup has started.
+    #[doc(hidden)]
+    pub fn exit_cleanup_started() -> bool {
+        PROCESS_EXITING.load(Ordering::SeqCst)
+    }
+
+    /// Counts the engines that `Drop` has freed in this process, so a test can tell a
+    /// leaked engine from a freed one.
+    #[doc(hidden)]
+    pub fn engines_freed_by_drop() -> u64 {
+        ENGINES_FREED_BY_DROP.load(Ordering::SeqCst)
     }
 
     /// Returns `true` when the process-exit cleanup may free this engine.
@@ -319,6 +336,7 @@ impl TesseractAPI {
         let datapath = CString::new(datapath_str).map_err(|_| TesseractError::NullByteInString)?;
         let language = CString::new(language_str).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
         let result = unsafe { TessBaseAPIInit3(*handle, datapath.as_ptr(), language.as_ptr()) };
         if result != 0 {
             Err(TesseractError::InitError)
@@ -529,7 +547,8 @@ impl TesseractAPI {
     ///
     /// The callback must be quick and must not call back into this API instance. The
     /// recognition also stops once process exit has begun, so the exit cleanup does not
-    /// wait for the rest of the page.
+    /// wait for the rest of the page. Tesseract makes the first check before the first
+    /// word, after layout analysis.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn recognize_with_cancel(&self, stop: impl Fn() -> bool) -> Result<()> {
         let reached = std::cell::Cell::new(false);
@@ -538,9 +557,10 @@ impl TesseractAPI {
             PROCESS_EXITING.load(Ordering::SeqCst) || stop()
         };
         let result = TessMonitor::new().with_cancel(&stop, |monitor| self.recognize_monitored(monitor));
-        // Tesseract asks for cancellation only between recognized words, so an engine that
-        // reached the check is initialized as for a successful recognition, and a stopped
-        // recognition must not leave the exit cleanup unregistered. ~keep
+        // Tesseract makes its first stop check before the first word, after initialization
+        // and layout analysis, so an engine that reached the check is initialized as for a
+        // successful recognition, and a stopped recognition must not leave the exit cleanup
+        // unregistered. ~keep
         if reached.get() {
             ensure_tesseract_cleanup_registered();
         }
@@ -549,9 +569,7 @@ impl TesseractAPI {
 
     fn recognize_monitored(&self, monitor: *mut c_void) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        let Some(_running) = RunningRecognition::start() else {
-            return Err(TesseractError::OcrError);
-        };
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe { shim::xberg_tess_recognize(*handle, monitor) };
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
@@ -575,6 +593,7 @@ impl TesseractAPI {
     /// Returns the HOCR text for the specified page as a string.
     pub fn get_hocr_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let text_ptr = unsafe { shim::xberg_tess_get_hocr_text(*handle, page) };
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
@@ -620,6 +639,7 @@ impl TesseractAPI {
     /// Returns the TSV text for the specified page as a string.
     pub fn get_tsv_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         let text_ptr = unsafe { TessBaseAPIGetTsvText(*handle, page) };
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
@@ -837,6 +857,7 @@ impl TesseractAPI {
     /// Returns a tuple containing the orientation in degrees, the orientation confidence, the script name, and the script confidence.
     pub fn detect_os(&self) -> Result<(i32, f32, String, f32)> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         let mut orient_deg = 0;
         let mut orient_conf = 0.0;
         let mut script_name_ptr: *const c_char = std::ptr::null();
@@ -1173,6 +1194,7 @@ impl TesseractAPI {
     /// Returns `Ok(())` if clearing the OCR engine is successful, otherwise returns an error.
     pub fn clear(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe { shim::xberg_tess_clear(*handle) };
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
@@ -1252,6 +1274,7 @@ impl TesseractAPI {
             .collect::<Result<_>>()?;
         let config_ptr_ptrs: Vec<_> = config_ptrs.iter().map(|cs| cs.as_ptr()).collect();
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
         let result = unsafe {
             TessBaseAPIInit1(
                 *handle,
@@ -1284,6 +1307,7 @@ impl TesseractAPI {
         let datapath = CString::new(datapath).map_err(|_| TesseractError::NullByteInString)?;
         let language = CString::new(language).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
         let result = unsafe { TessBaseAPIInit2(*handle, datapath.as_ptr(), language.as_ptr(), oem) };
         if result != 0 {
             Err(TesseractError::InitError)
@@ -1313,6 +1337,7 @@ impl TesseractAPI {
             .collect::<Result<_>>()?;
         let config_ptr_ptrs: Vec<_> = config_ptrs.iter().map(|cs| cs.as_ptr()).collect();
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
         let result = unsafe {
             TessBaseAPIInit4(
                 *handle,
@@ -1355,6 +1380,7 @@ impl TesseractAPI {
             .collect::<Result<_>>()?;
         let config_ptr_ptrs: Vec<_> = config_ptrs.iter().map(|cs| cs.as_ptr()).collect();
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
         let result = unsafe {
             TessBaseAPIInit5(
                 *handle,
@@ -1469,6 +1495,7 @@ impl TesseractAPI {
     /// Returns the recognized text as a String if successful, otherwise returns an error.
     pub fn get_utf8_text(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
 
         if *handle == std::ptr::null_mut() {
             return Err(TesseractError::UninitializedError);
@@ -1530,6 +1557,7 @@ impl TesseractAPI {
     /// Returns the layout of the image as a `PageIterator` if successful, otherwise returns an error.
     pub fn analyse_layout(&self) -> Result<PageIterator> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
         let iterator = unsafe { TessBaseAPIAnalyseLayout(*handle) };
         if iterator.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1561,6 +1589,7 @@ impl TesseractAPI {
     /// Gets a page iterator for analyzing layout and getting bounding boxes
     pub fn analyze_layout(&self) -> Result<PageIterator> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
         let iterator = unsafe { TessBaseAPIAnalyseLayout(*handle) };
         if iterator.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -1869,11 +1898,12 @@ impl TesseractAPI {
 impl Drop for TesseractAPI {
     /// Frees the engine, unless the process-exit cleanup already freed it or exit has begun.
     ///
-    /// The registry lock is held from the unregistration through `End` and `Delete`, so
-    /// the exit cleanup runs either after the engine is freed or before this check, which
-    /// then sees [`PROCESS_EXITING`] and leaks the engine: `End` releases dictionaries into
-    /// tesseract's `DawgCache`, and `exit()` destroys that static after the cleanup. Drop
-    /// never panics, so a poisoned lock also leaks the engine.
+    /// The engine leaves the registry, and the free is counted in [`FREES_IN_FLIGHT`],
+    /// under the registry lock and only while [`PROCESS_EXITING`] is unset. The exit
+    /// cleanup sets that flag under the same lock and then waits for the count to reach
+    /// zero, so a free either finishes before `exit()` destroys tesseract's `DawgCache`,
+    /// which `End` releases dictionaries into, or does not start and leaks the engine.
+    /// Drop never panics, so a poisoned lock also leaks the engine.
     fn drop(&mut self) {
         let Ok(handle) = self.handle.lock() else {
             return;
@@ -1881,20 +1911,18 @@ impl Drop for TesseractAPI {
         if handle.is_null() {
             return;
         }
-        let Ok(mut live) = LIVE_ENGINES.lock() else {
+        let Some(_free) = FreeInFlight::start(*handle, self.generation) else {
             return;
         };
-        if !remove_live_engine(&mut live, *handle, self.generation) || PROCESS_EXITING.load(Ordering::SeqCst) {
-            return;
-        }
         // SAFETY: the handle came from `TessBaseAPICreate` and was still registered, so no
-        // one freed it; removing it under the lock makes this the only free. The handle
-        // lock keeps every other method of this engine out, and the held registry lock
-        // keeps the exit cleanup from starting until the free has finished. ~keep
+        // one freed it; removing it under the registry lock makes this the only free. The
+        // handle lock keeps every other method of this engine out, and the exit cleanup
+        // waits for the counted free to finish. ~keep
         unsafe {
             TessBaseAPIEnd(*handle);
             TessBaseAPIDelete(*handle);
         }
+        ENGINES_FREED_BY_DROP.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -1964,61 +1992,93 @@ struct LiveEngine {
 /// recognizes with an engine, and freeing that engine under the thread crashes the
 /// process. The owner calls [`TesseractAPI::mark_idle`] when it parks the engine and
 /// [`TesseractAPI::mark_in_use`] when it takes the engine again. The handler skips an
-/// engine in use. It stops running recognitions and waits up to [`EXIT_RECOGNITION_GRACE`]
-/// for them to return, and an engine dropped after the handler has started is leaked.
-/// Other native calls on a busy engine are not waited for, so they can still overlap the
-/// C++ static destructors.
+/// engine in use. It stops running recognitions, refuses new native calls that load or
+/// read recognition state, and waits up to [`EXIT_NATIVE_CALL_GRACE`] for the running ones
+/// to return. An engine dropped after the handler has started is leaked. Native calls that
+/// do not take a [`NativeCall`] guard, and guarded calls still running when the grace
+/// ends, can overlap the C++ static destructors.
 static LIVE_ENGINES: Mutex<Vec<LiveEngine>> = Mutex::new(Vec::new());
 
 /// `true` once the process-exit cleanup has started. It is set under the [`LIVE_ENGINES`]
 /// lock, so an owner that holds the lock sees a value that does not change under it.
 static PROCESS_EXITING: AtomicBool = AtomicBool::new(false);
 
-/// Recognitions that have started and not yet returned.
-static RUNNING_RECOGNITIONS: AtomicUsize = AtomicUsize::new(0);
+/// Guarded native calls that have started and not yet returned.
+static NATIVE_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-/// How long the exit cleanup waits for running recognitions to return. A recognition
-/// stops at its next check between words. Layout analysis comes before the first check
-/// and cannot be stopped. A recognition still running after this keeps its engine, which
-/// the cleanup then skips.
-const EXIT_RECOGNITION_GRACE: Duration = Duration::from_secs(2);
+/// Engine frees by `Drop` that have started and not yet returned.
+static FREES_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
-/// How often the exit cleanup looks at [`RUNNING_RECOGNITIONS`] while it waits.
-const EXIT_RECOGNITION_POLL: Duration = Duration::from_millis(5);
+/// Engines that `Drop` has freed. Read through [`TesseractAPI::engines_freed_by_drop`].
+static ENGINES_FREED_BY_DROP: AtomicU64 = AtomicU64::new(0);
 
-/// Counts one recognition in [`RUNNING_RECOGNITIONS`] until it is dropped.
-struct RunningRecognition;
+/// How long the exit cleanup waits for guarded native calls to return. A recognition
+/// stops at its next stop check, which tesseract makes before each word; initialization,
+/// layout analysis and the other guarded calls cannot be stopped. A call still running
+/// after this keeps its engine, which the cleanup then skips.
+const EXIT_NATIVE_CALL_GRACE: Duration = Duration::from_secs(2);
 
-impl RunningRecognition {
-    /// Counts a recognition about to start, or returns `None` once process exit has begun.
+/// How often the exit cleanup looks at a counter while it waits.
+const EXIT_WAIT_POLL: Duration = Duration::from_millis(5);
+
+/// Counts one native call in [`NATIVE_CALLS`] until it is dropped. Calls that load
+/// models, recognize, or read results that tesseract may recognize on demand take it.
+struct NativeCall;
+
+impl NativeCall {
+    /// Counts a native call about to start, or returns `None` once process exit has begun.
     ///
     /// The count goes up before the flag is read, and the exit cleanup sets the flag before
-    /// it reads the count. Both use sequentially consistent ordering, so either this
-    /// recognition sees the flag and does not start, or the cleanup sees it and waits.
+    /// it reads the count. Both use sequentially consistent ordering, so either this call
+    /// sees the flag and does not start, or the cleanup sees it and waits.
     fn start() -> Option<Self> {
-        RUNNING_RECOGNITIONS.fetch_add(1, Ordering::SeqCst);
-        let running = Self;
+        NATIVE_CALLS.fetch_add(1, Ordering::SeqCst);
+        let call = Self;
         if PROCESS_EXITING.load(Ordering::SeqCst) {
             return None;
         }
-        Some(running)
+        Some(call)
     }
 }
 
-impl Drop for RunningRecognition {
+impl Drop for NativeCall {
     fn drop(&mut self) {
-        RUNNING_RECOGNITIONS.fetch_sub(1, Ordering::SeqCst);
+        NATIVE_CALLS.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
-/// Waits until no recognition runs, or until `grace` has passed.
-fn wait_for_running_recognitions(grace: Duration) {
-    if RUNNING_RECOGNITIONS.load(Ordering::SeqCst) == 0 {
+/// Counts one engine free in [`FREES_IN_FLIGHT`] until it is dropped.
+struct FreeInFlight;
+
+impl FreeInFlight {
+    /// Removes the engine `handle` of this `generation` from the registry and counts its
+    /// free, both under the registry lock. Returns `None`, and the caller must not free
+    /// the engine, when the exit cleanup already freed it, exit has begun, or the lock is
+    /// poisoned.
+    fn start(handle: *mut c_void, generation: u64) -> Option<Self> {
+        let mut live = LIVE_ENGINES.lock().ok()?;
+        if !remove_live_engine(&mut live, handle, generation) || PROCESS_EXITING.load(Ordering::SeqCst) {
+            return None;
+        }
+        FREES_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        Some(Self)
+    }
+}
+
+impl Drop for FreeInFlight {
+    fn drop(&mut self) {
+        FREES_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Waits until `counter` is zero, or until `grace` has passed when it is `Some`.
+fn wait_until_zero(counter: &AtomicUsize, grace: Option<Duration>) {
+    if counter.load(Ordering::SeqCst) == 0 {
         return;
     }
-    let deadline = Instant::now() + grace;
-    while RUNNING_RECOGNITIONS.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
-        std::thread::sleep(EXIT_RECOGNITION_POLL);
+    let deadline = grace.map(|grace| Instant::now() + grace);
+    while counter.load(Ordering::SeqCst) > 0 && deadline.is_none_or(|deadline| Instant::now() < deadline) {
+        std::thread::sleep(EXIT_WAIT_POLL);
     }
 }
 
@@ -2123,10 +2183,12 @@ unsafe extern "C" {
 /// Process-exit handler: finalize every idle engine whose owner never ran `Drop`, so
 /// tesseract's global `DawgCache` static destructor finds an empty cache.
 ///
-/// It first sets [`PROCESS_EXITING`], which stops running recognitions, refuses new ones
-/// and makes every later `Drop` leak its engine. It then waits up to
-/// [`EXIT_RECOGNITION_GRACE`] for running recognitions to return, so that fewer threads are
-/// inside tesseract when its statics are destroyed. An engine in use is skipped.
+/// It first sets [`PROCESS_EXITING`], which stops running recognitions, refuses new
+/// engines and guarded native calls, and makes every later `Drop` leak its engine. It
+/// then waits up to [`EXIT_NATIVE_CALL_GRACE`] for guarded calls to return, so that fewer
+/// threads are inside tesseract when its statics are destroyed, and without a limit for
+/// frees that `Drop` has already started: an `End` cut short by the `DawgCache` destructor
+/// crashes, and a free takes no lock that `exit()` holds. An engine in use is skipped.
 ///
 /// This handler takes the registry mutex and calls into C++. It is safe as an `atexit`
 /// hook only. Never call it, or `exit()`, from a signal handler: it can deadlock on the
@@ -2137,7 +2199,8 @@ extern "C" fn tesseract_atexit_cleanup() {
         let _live = LIVE_ENGINES.lock().unwrap_or_else(PoisonError::into_inner);
         PROCESS_EXITING.store(true, Ordering::SeqCst);
     }
-    wait_for_running_recognitions(EXIT_RECOGNITION_GRACE);
+    wait_until_zero(&NATIVE_CALLS, Some(EXIT_NATIVE_CALL_GRACE));
+    wait_until_zero(&FREES_IN_FLIGHT, None);
     finalize_idle_engines();
 }
 
@@ -2346,8 +2409,13 @@ mod live_engine_tests {
         let api = TesseractAPI::new().expect("create engine");
         let addr = *api.handle.lock().unwrap() as usize;
         assert!(is_registered(addr), "a new engine should be tracked as live");
+        let freed = TesseractAPI::engines_freed_by_drop();
         drop(api);
         assert!(!is_registered(addr), "a dropped engine should be unregistered");
+        assert!(
+            TesseractAPI::engines_freed_by_drop() > freed,
+            "a dropped engine should be counted as freed"
+        );
     }
 
     #[test]
@@ -2466,6 +2534,69 @@ mod live_engine_tests {
         assert!(
             output.status.success() && stdout.contains(POISON_CHILD_DONE),
             "child did not run its poison checks to the end: {stdout}{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    const EXITING_CHILD_ENV: &str = "XBERG_TESSERACT_EXITING_CHILD";
+    const EXITING_CHILD_DONE: &str = "exiting checks done";
+
+    /// Marks the process that runs it as exiting, and never undoes that. Only the child
+    /// process of the next test sets `EXITING_CHILD_ENV`, so no other test shares a process
+    /// with the flag set.
+    #[test]
+    fn exiting_process_child() {
+        if std::env::var_os(EXITING_CHILD_ENV).is_none() {
+            return;
+        }
+        let parked = TesseractAPI::new().expect("create engine");
+        // SAFETY: the test owns the engine and no other thread uses it.
+        unsafe { parked.mark_idle() };
+        let busy = TesseractAPI::new().expect("create engine");
+        let busy_addr = *busy.handle.lock().unwrap() as usize;
+        {
+            let _live = LIVE_ENGINES.lock().unwrap();
+            PROCESS_EXITING.store(true, Ordering::SeqCst);
+        }
+        assert!(TesseractAPI::exit_cleanup_started());
+        assert!(
+            matches!(parked.mark_in_use(), Err(TesseractError::NullPointerError)),
+            "a parked engine cannot be taken back once exit has begun"
+        );
+        assert!(
+            matches!(TesseractAPI::new(), Err(TesseractError::NullPointerError)),
+            "no engine is created once exit has begun"
+        );
+        assert!(matches!(busy.init_2("", "eng", 1), Err(TesseractError::InitError)));
+        assert!(matches!(busy.recognize(), Err(TesseractError::OcrError)));
+        assert!(matches!(busy.clear(), Err(TesseractError::OcrError)));
+        assert!(matches!(busy.get_utf8_text(), Err(TesseractError::OcrError)));
+        assert_eq!(NATIVE_CALLS.load(Ordering::SeqCst), 0, "a refused call leaves no count");
+        let freed = TesseractAPI::engines_freed_by_drop();
+        drop(busy);
+        assert_eq!(
+            TesseractAPI::engines_freed_by_drop(),
+            freed,
+            "an engine dropped once exit has begun is leaked, not freed"
+        );
+        assert!(!is_registered(busy_addr), "a leaked engine still leaves the registry");
+        println!("{EXITING_CHILD_DONE}");
+    }
+
+    #[test]
+    fn once_exit_has_begun_engines_are_refused_and_leaked() {
+        // ~keep: module_path! starts with the crate name; a test filter does not.
+        let module = module_path!().split_once("::").map_or("", |(_, rest)| rest);
+        let child = format!("{module}::exiting_process_child");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary path"))
+            .args(["--exact", child.as_str(), "--test-threads=1", "--nocapture"])
+            .env(EXITING_CHILD_ENV, "1")
+            .output()
+            .expect("run the child process");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains(EXITING_CHILD_DONE),
+            "child did not run its exit checks to the end: {stdout}{}",
             String::from_utf8_lossy(&output.stderr)
         );
     }
