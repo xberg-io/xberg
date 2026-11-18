@@ -1349,7 +1349,13 @@ traineddata = "traineddata"
 name = "xberg"
 core_import = "xberg"
 error_type = "XbergError"
-error_constructor = "xberg::XbergError::Other({msg})"
+# Preserve the Python exception through OCR aggregation while keeping the error category of other
+# callbacks and Rust-only conversion failures. Bridges outside Python pass no Python source. ~keep
+error_constructor = """\
+match ({trait}, {python_source}, {msg}) {
+    ("OcrBackend", Some(source), message) => xberg::XbergError::Ocr { message, source: Some(source) },
+    (_, _, message) => xberg::XbergError::Other(message),
+}"""
 version_from = "Cargo.toml"
 workspace_root = "."
 crate_attributes = ["allow(deprecated)"]
@@ -3262,7 +3268,7 @@ functions = [
 [crates.test.python]
 precondition = "command -v uv >/dev/null 2>&1"
 before = "bash scripts/e2e/build-mock-server.sh && cd e2e/python && uv sync --reinstall-package xberg"
-e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ -q"
+e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ ../../packages/python/tests/test_ocr_callback_exceptions.py -q"
 
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
