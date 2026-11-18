@@ -9,6 +9,10 @@ mod structure;
 #[path = "table_recognition/metadata_tests.rs"]
 mod metadata_tests;
 
+#[cfg(all(test, feature = "layout-detection"))]
+#[path = "table_recognition/adjacent_span_tests.rs"]
+mod adjacent_span_tests;
+
 #[cfg(feature = "layout-detection")]
 use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
 #[cfg(feature = "layout-detection")]
@@ -411,7 +415,22 @@ fn assemble_tatr_table(
         .iter()
         .map(|local_id| indexed_table_words[*local_id].0)
         .collect();
-    let grid = structure::apply_structure(&mut grid_output.grid, inference, crop, context.page_height);
+    let ownership = (allowed_word_ids.is_none()
+        && recovered.is_none()
+        && grid_output.grid.len() == grid_output.source_row_bands.len())
+    .then(|| structure::SourceOwnership::new(&grid_output.source_placements, context.words));
+    let source = structure::StructureWords {
+        words: &table_words,
+        ownership,
+    };
+    let grid = structure::apply_structure_with_source(
+        &mut grid_output.grid,
+        &grid_output.source_row_bands,
+        source,
+        inference,
+        crop,
+        context.page_height,
+    );
     let columns =
         (inference.structure.header_row_count > 0).then(|| grid_output.grid[usize::from(recovered.is_some())].clone());
     grid_output.markdown = render_grid_as_markdown(&grid_output.grid);
@@ -524,6 +543,7 @@ fn recover_ruled_parent(
         .collect::<Vec<_>>()
         .join(" ");
     output.grid.insert(0, row);
+    output.source_row_bands.insert(0, None);
     output.consumed_word_indices.extend(ids.into_iter().map(|(id, _)| id));
     Some(recovered)
 }
@@ -954,6 +974,8 @@ struct TatrGridOutput {
     consumed_bottom: Option<u32>,
     consumed_word_indices: Vec<usize>,
     model_grid_cell_count: usize,
+    source_row_bands: Vec<Option<(f32, f32)>>,
+    source_placements: Vec<Option<(usize, usize)>>,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -972,6 +994,8 @@ fn build_tatr_grid_table(
             consumed_bottom: None,
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
     }
 
@@ -984,6 +1008,8 @@ fn build_tatr_grid_table(
             consumed_bottom: None,
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
     }
 
@@ -1034,8 +1060,17 @@ fn build_tatr_grid_table(
 
     separate_tatr_header_and_first_record(&mut cell_words, &converted_cells, words, &mut word_consumed, crop);
 
+    let source_row_bands = cell_words
+        .iter()
+        .map(|row| {
+            let mut centers = row.iter().flatten().map(|&(_, _, y)| y);
+            let first = centers.next()?;
+            Some(centers.fold((first, first), |(top, bottom), y| (top.min(y), bottom.max(y))))
+        })
+        .collect();
     let mut grid: Vec<Vec<String>> = Vec::with_capacity(num_rows);
-    for row_cells in &cell_words {
+    let mut source_placements = vec![None; words.len()];
+    for (ri, row_cells) in cell_words.iter().enumerate() {
         let mut grid_row = vec![String::new(); num_cols];
         for (ci, cell_word_indices) in row_cells.iter().enumerate() {
             if cell_word_indices.is_empty() {
@@ -1045,7 +1080,10 @@ fn build_tatr_grid_table(
             sorted.sort_by(|a, b| a.2.total_cmp(&b.2).then_with(|| a.1.total_cmp(&b.1)));
             let text: String = sorted
                 .iter()
-                .map(|(wi, _, _)| words[*wi].text.trim())
+                .map(|(wi, _, _)| {
+                    source_placements[*wi] = Some((ri, ci));
+                    words[*wi].text.trim()
+                })
                 .filter(|t| !t.is_empty())
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -1068,6 +1106,8 @@ fn build_tatr_grid_table(
         consumed_bottom,
         consumed_word_indices,
         model_grid_cell_count: num_rows * num_cols,
+        source_row_bands,
+        source_placements,
     }
 }
 
@@ -1217,45 +1257,55 @@ fn continues_tatr_header_label(
 
 #[cfg(feature = "layout-detection")]
 fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f32, body_y: f32) -> bool {
-    let x = |value: f32| {
-        (value * crop.sx - crop.px_left as f32)
-            .round()
-            .clamp(0.0, crop.width as f32) as u32
-    };
-    let y = |value: f32| {
-        (value * crop.sy - crop.px_top as f32)
-            .ceil()
-            .clamp(0.0, crop.height as f32) as u32
-    };
-    let (left, right) = (x(left), x(right));
+    has_tatr_rule_in_band(crop, (left, right), (header_y, body_y))
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_in_band(crop: &TatrCrop, horizontal: (f32, f32), vertical: (f32, f32)) -> bool {
+    has_tatr_rule_run(
+        crop,
+        tatr_rule_track(crop, horizontal),
+        tatr_rule_band(crop, vertical),
+        |_, _| true,
+        |_| true,
+    )
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_coverage(covered: u32, width: u32) -> bool {
+    width > 0 && u64::from(covered) * 10 >= u64::from(width) * 9
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_contiguous_tatr_rule_coverage(mut track: std::ops::Range<u32>, matches: impl Fn(u32) -> bool) -> bool {
+    let width = track.end.saturating_sub(track.start);
+    let mut run = 0;
+    track.any(|column| {
+        run = if matches(column) { run + 1 } else { 0 };
+        has_tatr_rule_coverage(run, width)
+    })
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_run(
+    crop: &TatrCrop,
+    track: std::ops::Range<u32>,
+    band: std::ops::Range<u32>,
+    column_visible: impl Fn(u32, &std::ops::Range<u32>) -> bool,
+    accept: impl Fn(std::ops::Range<u32>) -> bool,
+) -> bool {
+    let (left, right) = (track.start, track.end);
     let width = right.saturating_sub(left);
     if width == 0 {
         return false;
     }
-    let crosses_tracks = |matches: &dyn Fn(u32) -> bool| {
-        let mut run = 0;
-        (left..right).any(|column| {
-            run = if matches(column) { run + 1 } else { 0 };
-            run * 10 >= width * 9
-        })
-    };
     let is_rule_row =
-        |row| crosses_tracks(&|column| crop.image.get_pixel(column, row).0.iter().all(|&channel| channel < 220));
-    const MIN_SHOULDER_CONTRAST: u8 = 16;
-    let contrasts = |column, ink, shoulder| {
-        crop.image
-            .get_pixel(column, ink)
-            .0
-            .iter()
-            .zip(crop.image.get_pixel(column, shoulder).0)
-            .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
-    };
-    let max_rule_height = (crop.sy * 2.0).ceil() as u32;
-    let start = y(header_y + 2.0).max(1);
-    let end = y(body_y - 2.0).min(crop.height.saturating_sub(1));
-    if start >= end {
+        |row| has_contiguous_tatr_rule_coverage(left..right, |column| tatr_pixel_below_white_cutoff(crop, column, row));
+    let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
+    if band.is_empty() {
         return false;
     }
+    let (start, end) = (band.start, band.end);
     let mut run_height = 0;
     for row in start.saturating_sub(1)..=end {
         if is_rule_row(row) {
@@ -1264,10 +1314,15 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
             if row > start && run_height > 0 && run_height <= max_rule_height && row - run_height >= start {
                 let first = row - run_height;
                 // Vertical grid lines interrupt the shoulders while leaving the separator continuous. ~keep
-                let contrasted = (left..right)
-                    .filter(|&column| contrasts(column, first, first - 1) && contrasts(column, row - 1, row))
+                let rows = first..row;
+                let coverage = (left..right)
+                    .filter(|&column| {
+                        column_visible(column, &rows)
+                            && tatr_rule_contrasts(crop, column, first, first - 1)
+                            && tatr_rule_contrasts(crop, column, row - 1, row)
+                    })
                     .count() as u32;
-                if contrasted * 10 >= width * 9 {
+                if has_tatr_rule_coverage(coverage, width) && accept(rows) {
                     return true;
                 }
             }
@@ -1275,6 +1330,99 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
         }
     }
     false
+}
+
+#[cfg(feature = "layout-detection")]
+const TATR_NEAR_WHITE_CHANNEL: u8 = 220;
+
+#[cfg(feature = "layout-detection")]
+const TATR_MAX_RULE_HEIGHT_PT: f32 = 2.0;
+
+#[cfg(feature = "layout-detection")]
+fn tatr_pixel_below_white_cutoff(crop: &TatrCrop, column: u32, row: u32) -> bool {
+    crop.image
+        .get_pixel(column, row)
+        .0
+        .iter()
+        .all(|&channel| channel < TATR_NEAR_WHITE_CHANNEL)
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_contrasts(crop: &TatrCrop, column: u32, ink: u32, shoulder: u32) -> bool {
+    const MIN_SHOULDER_CONTRAST: u8 = 16;
+    crop.image
+        .get_pixel(column, ink)
+        .0
+        .iter()
+        .zip(crop.image.get_pixel(column, shoulder).0)
+        .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_span_rule_run(
+    crop: &TatrCrop,
+    track: std::ops::Range<u32>,
+    band: std::ops::Range<u32>,
+    column_visible: impl Fn(u32, &std::ops::Range<u32>) -> bool,
+    accept: impl Fn(std::ops::Range<u32>) -> bool,
+) -> bool {
+    // A tint can be below the absolute ink cutoff. Require the thin rule to be
+    // darker than its immediate shoulders without treating the tint itself as ink. ~keep
+    if has_tatr_rule_run(crop, track.clone(), band.clone(), &column_visible, &accept) {
+        return true;
+    }
+
+    let width = track.end.saturating_sub(track.start);
+    let max_rule_height = (crop.sy * TATR_MAX_RULE_HEIGHT_PT).ceil() as u32;
+    band.clone().any(|start| {
+        let upper = start - 1;
+        if !has_contiguous_tatr_rule_coverage(track.clone(), |column| tatr_rule_contrasts(crop, column, start, upper)) {
+            return false;
+        }
+        let maximum_end = band.end.min(start.saturating_add(max_rule_height));
+        (start + 1..=maximum_end).any(|end| {
+            let rows = start..end;
+            if !rows.clone().all(|ink| {
+                has_contiguous_tatr_rule_coverage(track.clone(), |column| {
+                    tatr_rule_contrasts(crop, column, ink, upper) || tatr_rule_contrasts(crop, column, ink, end)
+                })
+            }) {
+                return false;
+            }
+            let coverage = track
+                .clone()
+                .filter(|&column| {
+                    column_visible(column, &rows)
+                        && (tatr_pixel_below_white_cutoff(crop, column, upper)
+                            || tatr_pixel_below_white_cutoff(crop, column, end))
+                        && rows.clone().all(|ink| {
+                            tatr_rule_contrasts(crop, column, ink, upper) && tatr_rule_contrasts(crop, column, ink, end)
+                        })
+                })
+                .count() as u32;
+            has_tatr_rule_coverage(coverage, width) && accept(rows)
+        })
+    })
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_track(crop: &TatrCrop, horizontal: (f32, f32)) -> std::ops::Range<u32> {
+    let x = |value: f32| {
+        (value * crop.sx - crop.px_left as f32)
+            .round()
+            .clamp(0.0, crop.width as f32) as u32
+    };
+    x(horizontal.0)..x(horizontal.1)
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_band(crop: &TatrCrop, vertical: (f32, f32)) -> std::ops::Range<u32> {
+    let y = |value: f32| {
+        (value * crop.sy - crop.px_top as f32)
+            .ceil()
+            .clamp(0.0, crop.height as f32) as u32
+    };
+    y(vertical.0 + 2.0).max(1)..y(vertical.1 - 2.0).min(crop.height.saturating_sub(1))
 }
 
 #[cfg(feature = "layout-detection")]
@@ -2528,6 +2676,8 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: vec![0, 1, 2, 3, 4],
             model_grid_cell_count: 20,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2543,6 +2693,8 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(!tatr_grid_is_credible(&output, 0, false));
@@ -2556,6 +2708,8 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, true));
@@ -2575,6 +2729,8 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..4).collect(),
             model_grid_cell_count: 15,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2591,6 +2747,8 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..3).collect(),
             model_grid_cell_count: 6,
+            source_row_bands: Vec::new(),
+            source_placements: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));

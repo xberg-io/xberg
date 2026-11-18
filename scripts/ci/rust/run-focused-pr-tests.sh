@@ -2,11 +2,12 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
+suite="${1:?expected pdf-ocr, office-pages, api-jobs or pdf-table-paint}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
+pdf-table-paint) features="pdf,layout-detection" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
   exit 2
@@ -556,6 +557,40 @@ office-pages)
 api-jobs)
   expected=4
   run_api_cases
+  ;;
+pdf-table-paint)
+  expected=24
+  table_module="pdf::structure::regions::table_recognition"
+  run_exact "$table_module::structure::row_span_closure::tests::closed_native_rowspan_preserves_heading_and_rejects_incomplete_evidence" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_rowspan_retains_only_column_spans_with_open_source_rules" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_header_rejects_a_displaced_rule_between_native_words" --lib
+  for name in \
+    native_tatr_vertical_span_stops_at_a_painted_rule \
+    native_tatr_vertical_span_survives_a_rule_outside_the_merged_track \
+    native_tatr_three_row_span_retains_only_the_source_supported_merge \
+    native_tatr_preserves_adjacent_source_supported_rowspans \
+    native_tatr_preserves_three_adjacent_rowspans_across_empty_continuations \
+    native_tatr_preserves_a_tinted_open_track \
+    native_tatr_resolves_open_and_divided_tracks_on_full_width_tints \
+    native_tatr_requires_continuous_flank_rule_on_a_tint \
+    native_tatr_preserves_a_noisy_near_white_open_track \
+    native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor; do
+    run_exact "$table_module::metadata_tests::$name" --lib
+  done
+  run_exact "$table_module::adjacent_span_tests::native_tatr_preserves_adjacent_spans_with_vertically_aligned_labels" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_span_stops_expanding_at_a_contradicted_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_opening_accepts_a_shorter_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_opening_checks_only_the_neighbor_prefix_at_the_boundary" --lib
+  for name in \
+    narrow_track_glyph_ink_does_not_count_as_a_divider \
+    staggered_flank_rules_do_not_prove_an_opening \
+    masked_divider_does_not_prove_an_opening \
+    glyph_ink_in_either_flank_does_not_prove_an_opening \
+    near_white_opening_requires_visible_band_columns \
+    near_white_opening_checks_word_masks_on_rule_shoulders \
+    aligned_flank_rules_require_at_least_eighteen_of_twenty_visible_columns; do
+    run_exact "$table_module::structure::tests::$name" --lib
+  done
   ;;
 esac
 if [ "$passed" -ne "$expected" ]; then
