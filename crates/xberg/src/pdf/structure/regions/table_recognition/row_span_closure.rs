@@ -391,7 +391,6 @@ mod tests {
             structure: TableStructure {
                 spans: vec![(0, 5, 1, 2)],
                 header_row_count: 1,
-                ..Default::default()
             },
         }
     }
