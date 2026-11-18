@@ -69,12 +69,12 @@ fn synthetic_page() -> Vec<u8> {
     page
 }
 
-fn recognize(lease: &TesseractApiLease, page: &[u8], width: usize) {
+fn recognize(lease: &TesseractApiLease, page: &[u8], width: usize) -> xberg_tesseract::Result<()> {
     let height = page.len() / (width * 3);
     lease
         .set_image(page, width as i32, height as i32, 3, (width * 3) as i32)
         .expect("set image");
-    lease.recognize().expect("recognize");
+    lease.recognize()
 }
 
 fn run_child(test_name: &str, value: &str) -> Output {
@@ -93,7 +93,7 @@ fn race_child(exit_delay: Duration) -> ! {
     let models = english_models(&directory);
     let pool = TesseractApiPool::new();
     let page = synthetic_page();
-    recognize(&pool.checkout(&models, "eng", 1).expect("first lease"), &page, WIDTH);
+    recognize(&pool.checkout(&models, "eng", 1).expect("first lease"), &page, WIDTH).expect("recognize");
 
     let lease = pool
         .checkout(&models, "eng", 1)
@@ -105,8 +105,11 @@ fn race_child(exit_delay: Duration) -> ! {
     std::thread::spawn(move || {
         let mut first = Some(first_done);
         loop {
-            recognize(&lease, &page, WIDTH);
+            // Recognition fails once exit has begun. The loop goes on using the engine, so a
+            // cleanup that freed it would still crash the child.
+            let recognized = recognize(&lease, &page, WIDTH);
             if let Some(sender) = first.take() {
+                recognized.expect("the first recognition");
                 let _ = sender.send(());
             }
         }
@@ -178,7 +181,7 @@ fn after_cleanup_child() -> ! {
     let models = english_models(directory);
     let pool = TesseractApiPool::new();
     let blank = vec![255u8; 3 * 200 * 100];
-    recognize(&pool.checkout(&models, "eng", 1).expect("first lease"), &blank, 200);
+    recognize(&pool.checkout(&models, "eng", 1).expect("first lease"), &blank, 200).expect("recognize");
     assert!(pool.resources.counts() == (0, 1), "the engine is parked");
     let _ = AFTER_CLEANUP_STATE.set((pool, models));
     unsafe { libc::exit(0) }

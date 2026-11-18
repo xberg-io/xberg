@@ -38,7 +38,7 @@ setup() {
 		'if [ "$1" = test ] && [ -z "${CARGO_LINKS_NOTHING:-}" ]; then prev=; for arg in "$@"; do if [ "$prev" = --test ]; then out="$REPO_ROOT/target/debug/build/xberg/0123456789abcdef/out"; mkdir -p "$out"; printf "binary\n" >"$out/${arg//-/_}-0123456789abcdef"; printf "data\n" >"$out/${arg//-/_}-0123456789abcdef.d"; fi; prev=$arg; done; fi' \
 		'tests=1' \
 		'case "$*" in' \
-		'  *"-p xberg-tesseract"*) tests=4 ;;' \
+		'  *"-p xberg-tesseract"*) tests=6 ;;' \
 		'  *english_recovery_tests::small_english_*|*english_recovery_tests::large::large_english_*) tests=2 ;;' \
 		'  *encoded_pipeline::builtin_pipeline_png_*) tests=3 ;;' \
 		'esac' \
@@ -268,12 +268,12 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 }
 
 @test "Rust unit runner should reject a Tesseract exit cleanup leg that lists the wrong number of tests" {
-	for listed in 0 3; do
+	for listed in 0 5; do
 		export TESSERACT_LISTED=$listed
 		: >"$XBERG_TRACE"
 		run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 		xberg_assert_status 1
-		xberg_assert_output_contains "expected 4 collected tests, observed $listed"
+		xberg_assert_output_contains "expected 6 collected tests, observed $listed"
 		grep -Fq -- '-p xberg-tesseract --all-features --test exit_cleanup_leak --test exit_cleanup_race -- --list' "$XBERG_TRACE"
 		refute_trace_pattern 'xberg-tesseract.*--no-fail-fast'
 		refute_trace_pattern '-p xberg-libheif'

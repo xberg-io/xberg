@@ -166,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **pdf:** Native extraction keeps two separately outlined ruled tables with a blank gap between them apart and in page order in Plain and Markdown, unless they share both width and column count. (#3286)
-
+- **ocr:** A process no longer crashes at exit when a page abandoned by the extraction time limit releases its Tesseract engine after `exit()` has begun. Recognitions still in flight at exit are stopped and get up to 2 seconds to return. (#3290)
 - **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
 
 - **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.

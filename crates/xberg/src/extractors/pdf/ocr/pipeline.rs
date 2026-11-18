@@ -448,10 +448,10 @@ pub(in crate::extractors::pdf) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str =
 /// the rest of it for assembling the result. A batch is one OCR task per worker, and under load a
 /// task can take far longer than the grace that is left, so the batch is not awaited to its end.
 ///
-/// Abandoning a page stops waiting for it, not the recognition: Tesseract in the native build runs
-/// to the end of the page on its blocking thread, because the build's recognize shim takes no
-/// monitor or cancel callback. No page is started after the stop, so the work left over is bounded
-/// by one batch.
+/// Abandoning a page stops waiting for it, not its blocking thread. Native Tesseract recognition
+/// polls the stop between words and returns early, but the page's other native work, such as layout
+/// analysis, runs to its end on that thread. No page is started after the stop, so the work left over
+/// is bounded by one batch.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     feature = "pdf",

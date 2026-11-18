@@ -106,13 +106,19 @@ fn native_recognition_observes_the_stop_callback() {
     let (width, height) = (image.width() as i32, image.height() as i32);
     let set_image = || api.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
 
+    // Stops at a later check than the first, so the recognition has read words before it stops.
+    const STOP_AT_CALL: u32 = 2;
     set_image();
     let calls = Cell::new(0);
     let result = api.recognize_with_cancel(|| {
         calls.set(calls.get() + 1);
-        true
+        calls.get() >= STOP_AT_CALL
     });
-    assert!(calls.get() > 0, "native recognition must reach the callback");
+    assert_eq!(
+        calls.get(),
+        STOP_AT_CALL,
+        "native recognition must reach the stopping callback"
+    );
     assert!(result.is_err());
 
     let next = TesseractAPI::new().expect("create fresh engine");
@@ -120,5 +126,15 @@ fn native_recognition_observes_the_stop_callback() {
     next.set_page_seg_mode(TessPageSegMode::PSM_SINGLE_BLOCK).unwrap();
     next.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
     next.recognize_with_cancel(|| false).unwrap();
-    assert!(next.get_utf8_text().unwrap().contains("Annual calibration"));
+    let fresh_text = next.get_utf8_text().unwrap();
+    let fresh_tsv = next.get_tsv_text(0).unwrap();
+    assert!(fresh_text.contains("Annual calibration"));
+
+    // An engine pool keeps an engine whose recognition was stopped, so after `clear` it must
+    // read the next page as a fresh engine does.
+    api.clear().unwrap();
+    set_image();
+    api.recognize_with_cancel(|| false).unwrap();
+    assert_eq!(api.get_utf8_text().unwrap(), fresh_text);
+    assert_eq!(api.get_tsv_text(0).unwrap(), fresh_tsv);
 }
