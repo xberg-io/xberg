@@ -166,6 +166,7 @@ mod tests {
     fn text_defers_engine_confidence_and_keeps_preprocessing_provenance() {
         let config = TesseractConfig {
             output_format: "text".into(),
+            language: "deu".into(),
             psm: 11,
             ..Default::default()
         };
@@ -189,12 +190,14 @@ mod tests {
         assert_eq!(values[OCR_IMAGE_PREPROCESSING_METADATA_KEY], expected_preprocessing);
         assert_eq!(values[OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY], json!(400));
         assert_eq!(values[OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY], json!(200));
+        assert_eq!(values["language"], json!("deu"));
         assert_eq!(values["psm"], json!("11"));
         assert_eq!(values["table_count"], json!(0));
         assert_eq!(values["tables_detected"], json!(0));
         assert!(!values.contains_key("mean_text_conf"));
         assert!(!values.contains_key("word_count"));
         assert!(!values.contains_key("source_format"));
+        assert!(!values.contains_key("auto_rotate_unavailable"));
     }
 
     #[test]
@@ -245,5 +248,36 @@ mod tests {
             assert!(!values.contains_key(OCR_AUTO_ROTATED_METADATA_KEY));
             assert!(!values.contains_key("source_format"));
         }
+    }
+
+    #[test]
+    fn confident_upright_orientation_is_not_reported_as_auto_rotated() {
+        let config = TesseractConfig {
+            output_format: "hocr".into(),
+            ..Default::default()
+        };
+        let mut read = primary_read(&config);
+        read.detected_orientation = Some((0, 0.9));
+        let values = build(read).unwrap();
+        assert_eq!(values[OCR_ORIENTATION_DEGREES_METADATA_KEY], json!(0));
+        assert_eq!(
+            values[OCR_ORIENTATION_CONFIDENCE_METADATA_KEY],
+            json!(f64::from(0.9_f32))
+        );
+        assert!(!values.contains_key(OCR_AUTO_ROTATED_METADATA_KEY));
+    }
+
+    #[test]
+    fn negative_engine_mean_confidence_is_omitted_but_word_stats_remain() {
+        let config = TesseractConfig {
+            output_format: "hocr".into(),
+            ..Default::default()
+        };
+        let mut read = primary_read(&config);
+        read.mean_text_conf = -1;
+        let values = build(read).unwrap();
+        assert!(!values.contains_key("mean_text_conf"));
+        assert_eq!(values["median_word_conf"], json!(71));
+        assert_eq!(values["word_count"], json!(6));
     }
 }
