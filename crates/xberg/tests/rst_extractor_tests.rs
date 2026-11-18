@@ -17,29 +17,17 @@
 use xberg::core::config::ExtractionConfig;
 
 mod helpers;
-use helpers::{extract_bytes_document, get_test_file_path};
+use helpers::{extract_bytes_document, get_test_file_path, skip_if_missing};
 
 const RST_FIXTURE_PATH: &str = "rst/rst-reader.rst";
 
-/// Read the RST fixture at runtime, skipping the calling test with a greppable
-/// message when the corpus is absent.
-///
-/// `test_documents/` is bucket-fetched (see `test_documents/scripts/fetch_corpus.py`)
-/// and is not present in a bare checkout, so baking this in with `include_str!` made
-/// the whole test binary fail to *compile* there -- which is what broke the `validate
-/// (poly)` job, since its workspace clippy has to build every target.
 fn rst_fixture_bytes() -> Option<Vec<u8>> {
-    let path = get_test_file_path(RST_FIXTURE_PATH);
-    match std::fs::read(&path) {
-        Ok(bytes) => Some(bytes),
-        Err(e) => {
-            eprintln!(
-                "SKIP: fixture {} not available ({e}); run `python3 test_documents/scripts/fetch_corpus.py` to fetch it",
-                path.display()
-            );
-            None
-        }
+    if skip_if_missing(RST_FIXTURE_PATH) {
+        return None;
     }
+
+    let path = get_test_file_path(RST_FIXTURE_PATH);
+    Some(std::fs::read(&path).unwrap_or_else(|error| panic!("could not read RST fixture {}: {error}", path.display())))
 }
 
 /// Test extraction of document title from RST file structure
