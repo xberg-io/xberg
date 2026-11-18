@@ -872,8 +872,6 @@ fn an_image_file_keeps_the_record_of_a_failed_stage() {
 }
 
 const CANCELLING_STAGE: &str = "ocr-page-failures-cancelling-stage";
-const CANCELLED_FALLBACK_WARNING: &str = "OCR fallback failed (Extraction cancelled); returning native text that was \
-    below the quality threshold which triggered OCR. Extracted content may be empty or incomplete.";
 
 /// A backend that cancels the extraction on its first call and then fails.
 struct CancellingBackend {
@@ -913,11 +911,11 @@ impl OcrBackend for CancellingBackend {
 }
 
 /// The first stage of a two-stage pipeline cancels the extraction during the fallback for the
-/// whole document. The pipeline reports cancellation, retains the native cover text, and does
-/// not record the cancelled pages as OCR failures.
+/// whole document. A typed cancellation stops the extraction (#3175) rather than returning the
+/// native text with an OCR failure record.
 #[test]
 #[serial_test::serial]
-fn a_cancelled_whole_document_fallback_adds_no_record() {
+fn a_cancelled_whole_document_fallback_returns_cancelled() {
     let token = xberg::cancellation::CancellationToken::new();
     let mut pipeline = two_stage_pipeline();
     pipeline.stages[0].backend = CANCELLING_STAGE.to_string();
@@ -945,26 +943,11 @@ fn a_cancelled_whole_document_fallback_adds_no_record() {
         &config,
     );
     unregister_ocr_backend(CANCELLING_STAGE).expect("the backend unregisters");
-    let result = result.expect("the native text of the cover page is kept");
-
     assert!(token.is_cancelled(), "the first stage ran and cancelled the extraction");
     assert!(
-        result.content.contains("word0"),
-        "the native text of the cover page is kept; content: {:?}",
-        result.content
+        matches!(result, Err(xberg::XbergError::Cancelled)),
+        "a cancelled whole-document fallback returns Cancelled: {result:?}"
     );
-    let fallback_warnings: Vec<&str> = result
-        .processing_warnings
-        .iter()
-        .filter(|warning| warning.source == "ocr" && warning.message.starts_with("OCR fallback failed ("))
-        .map(|warning| warning.message.as_ref())
-        .collect();
-    assert_eq!(
-        fallback_warnings,
-        vec![CANCELLED_FALLBACK_WARNING],
-        "the whole-document fallback reports cancellation exactly once"
-    );
-    assert_eq!(result.ocr_page_failures, None);
 }
 
 #[path = "ocr_page_failures/discarded_noise_2908.rs"]
