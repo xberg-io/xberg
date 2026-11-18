@@ -1,0 +1,26 @@
+name: Actions Bump Maintenance
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: actions-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: xberg-io/actions/.github/workflows/reusable-actions-bump.yml@v1
+    with:
+      mode: pr
+    secrets:
+      app-id: ${{ secrets.BOT_APP_ID }}
+      app-private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}

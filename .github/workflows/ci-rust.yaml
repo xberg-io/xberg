@@ -228,6 +228,7 @@ jobs:
           # ~keep The pass count above anchors at `^test result:`; mise's prefix output mode would
           # prepend `[rust:test:ci] ` to every line and turn the sum into 0.
           MISE_TASK_OUTPUT: interleave
+          XBERG_REQUIRE_TEST_FIXTURES: "1"
           # ~keep Optimize macOS tests to shrink __eh_frame below the compact-unwind table's 16 MB offset limit.
           CARGO_PROFILE_TEST_OPT_LEVEL: "${{ runner.os == 'macOS' && '1' || '0' }}"
           LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH || '' }}
@@ -863,6 +864,34 @@ jobs:
             echo "::error::feature_profile_tests matched 0 tests for the ${{ matrix.name }} feature leg -- clap command-introspection coverage for this leg silently dropped to zero" >&2
             exit 1
           fi
+        shell: bash
+
+  ort-discovery:
+    name: Dynamic ONNX Runtime discovery
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-ort-discovery
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+
+      - name: Setup mise
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+
+      - name: Test staged runtime through the production routes
+        run: mise run rust:test:ort-discovery
         shell: bash
 
   # #702: `PdfBackend::Pdfium` (crates/xberg/src/extractors/pdf/pdfium_engine.rs) had zero

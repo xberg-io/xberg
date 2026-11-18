@@ -2,3 +2,13 @@
 # https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.24.2
 43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6  onnxruntime-linux-x64-1.24.2.tgz
 6715b3d19965a2a6981e78ed4ba24f17a8c30d2d26420dbed10aac7ceca0085e  onnxruntime-linux-aarch64-1.24.2.tgz
+0af4fa503e8ea285245b47ee42d0a7461b8156a81270857da0c1d4ecf858abde  onnxruntime-osx-arm64-1.24.2.tgz
+8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0  onnxruntime-win-x64-1.24.2.zip
+dd8180d98e5a0ead7ead99029acc80b86a8b905b9aba4cc978e388039bb5823b  onnxruntime-win-arm64-1.24.2.zip
+# Intel macOS uses the last published x86_64 archive.
+# https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.23.2
+d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6  onnxruntime-osx-x86_64-1.23.2.tgz
+# NuGet fallback when the GitHub release is unavailable: Microsoft.ML.OnnxRuntime packages.
+# https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/<version>/microsoft.ml.onnxruntime.<version>.nupkg
+782564d3d68e87269ea1812cc94710ad06fe014faf093f01a6f89d0bd58719d3  microsoft.ml.onnxruntime.1.24.2.nupkg
+25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a  microsoft.ml.onnxruntime.1.23.2.nupkg

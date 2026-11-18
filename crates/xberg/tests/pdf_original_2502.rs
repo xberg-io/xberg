@@ -4,6 +4,7 @@
     feature = "tokio-runtime",
     feature = "bundle-tessdata-eng"
 ))]
+#![allow(clippy::print_stdout)] // ~keep: the trace dumps print by design; org logging policy exempts tests
 
 use sha2::{Digest, Sha256};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig};

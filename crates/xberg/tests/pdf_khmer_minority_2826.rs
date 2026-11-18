@@ -112,6 +112,32 @@ fn automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_k
 }
 
 #[test]
+fn mixed_ocr_recovers_ordered_khmer_with_explicit_zero_margins() {
+    let pdf = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
+    let config = ExtractionConfig {
+        pdf_options: Some(xberg::PdfConfig {
+            top_margin_fraction: Some(0.0),
+            bottom_margin_fraction: Some(0.0),
+            ..Default::default()
+        }),
+        ..automatic_english()
+    };
+
+    let result = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
+    assert!(result.metadata.ocr_used);
+    let [page] = result.pages.as_deref().expect("page output requested") else {
+        panic!("expected one page");
+    };
+    for content in [&result.content, &page.content] {
+        assert_eq!(khmer(content).chars().count(), 222);
+        let first = content.find(is_khmer).expect("first recovered Khmer glyph");
+        let last = content.rfind(is_khmer).expect("last recovered Khmer glyph");
+        assert!(content[..first].contains("auditorium"), "{content}");
+        assert!(content[last..].contains("reception"), "{content}");
+    }
+}
+
+#[test]
 fn mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink() {
     const ORDERED: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
     const OVERLAP: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/overlap.pdf");
@@ -158,58 +184,84 @@ fn is_khmer(ch: char) -> bool {
     ('\u{1780}'..='\u{17ff}').contains(&ch)
 }
 
+// The global subscriber must be installed before any other test in the process emits an event:
+// installed mid-run beside sibling tests, it left DEBUG disabled on CI runners and the event unseen. ~keep
+#[cfg(any(feature = "paddle-ocr-tract", feature = "paddle-ocr-ort"))]
+const DETACHED_KHMER_CHILD: &str = "XBERG_DETACHED_KHMER_CHILD";
+
 #[cfg(any(feature = "paddle-ocr-tract", feature = "paddle-ocr-ort"))]
 #[test]
 fn paddle_enabled_pdf_keeps_khmer_from_its_detached_tesseract_read() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    };
-    use tracing_subscriber::layer::SubscriberExt as _;
+    xberg_child_test::run_child_test(
+        "paddle_enabled_pdf_keeps_khmer_from_its_detached_tesseract_read::child",
+        DETACHED_KHMER_CHILD,
+        "1",
+        |_| {},
+    );
+}
 
-    struct DetachedRecovery(Arc<AtomicBool>);
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for DetachedRecovery {
-        fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-            struct Message(bool);
-            impl tracing::field::Visit for Message {
-                fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-                    if field.name() == "message" {
-                        self.0 = format!("{value:?}") == "Detached Tesseract read recovered Khmer";
+#[cfg(any(feature = "paddle-ocr-tract", feature = "paddle-ocr-ort"))]
+mod paddle_enabled_pdf_keeps_khmer_from_its_detached_tesseract_read {
+    use super::*;
+
+    #[test]
+    #[ignore = "run in an isolated subprocess"]
+    fn child() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        struct DetachedRecovery(Arc<AtomicBool>);
+        impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for DetachedRecovery {
+            fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+                struct Message(bool);
+                impl tracing::field::Visit for Message {
+                    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                        if field.name() == "message" {
+                            self.0 = format!("{value:?}") == "Detached Tesseract read recovered Khmer";
+                        }
                     }
                 }
-            }
-            let mut message = Message(false);
-            event.record(&mut message);
-            if message.0 {
-                self.0.store(true, Ordering::Relaxed);
+                let mut message = Message(false);
+                event.record(&mut message);
+                if message.0 {
+                    self.0.store(true, Ordering::Relaxed);
+                }
             }
         }
-    }
 
-    let detached = Arc::new(AtomicBool::new(false));
-    tracing::subscriber::set_global_default(tracing_subscriber::registry().with(DetachedRecovery(detached.clone())))
+        if xberg_child_test::child_test_root(DETACHED_KHMER_CHILD).is_none() {
+            return;
+        }
+        let detached = Arc::new(AtomicBool::new(false));
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::registry().with(DetachedRecovery(detached.clone())),
+        )
         .expect("this exact test owns the tracing subscriber");
-    let config = automatic_english();
-    let source = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
-    let result = helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap();
-    assert!(
-        detached.load(Ordering::Relaxed),
-        "expected recovery in the detached Tesseract read"
-    );
-    assert_eq!(
-        result.pages.as_ref().unwrap()[0]
-            .ocr_confidence
-            .as_ref()
-            .unwrap()
-            .backend,
-        "tesseract"
-    );
-    for content in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
-        assert_eq!(khmer(content).chars().count(), 222);
-        let first = content.find(is_khmer).unwrap();
-        let last = content.rfind(is_khmer).unwrap();
-        assert!(content[..first].contains("auditorium"));
-        assert!(content[last..].contains("reception"));
+        let config = automatic_english();
+        let source = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
+        let result = helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap();
+        assert!(
+            detached.load(Ordering::Relaxed),
+            "expected recovery in the detached Tesseract read"
+        );
+        assert_eq!(
+            result.pages.as_ref().unwrap()[0]
+                .ocr_confidence
+                .as_ref()
+                .unwrap()
+                .backend,
+            "tesseract"
+        );
+        for content in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+            assert_eq!(khmer(content).chars().count(), 222);
+            let first = content.find(is_khmer).unwrap();
+            let last = content.rfind(is_khmer).unwrap();
+            assert!(content[..first].contains("auditorium"));
+            assert!(content[last..].contains("reception"));
+        }
     }
 }
 

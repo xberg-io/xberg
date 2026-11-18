@@ -5,6 +5,7 @@
 //! `impl` is the same inherent impl and sees the parent's private items unchanged. ~keep
 
 use super::*;
+use crate::text::cjk_ranges::is_vertical_text_cjk;
 
 impl PdfDocument {
     /// Circular references and recursion limit errors are handled gracefully
@@ -194,17 +195,10 @@ impl PdfDocument {
     /// glyph width) and top-to-bottom within a column (Y descending), matching
     /// how the script is read.
     pub(super) fn try_assemble_vertical_cjk(spans: &[TextSpan]) -> Option<String> {
-        fn is_cjk(c: char) -> bool {
-            matches!(
-                c as u32,
-                0x3040..=0x30FF
-                | 0x3400..=0x4DBF
-                | 0x4E00..=0x9FFF
-                | 0xF900..=0xFAFF
-                | 0xFF66..=0xFF9F
-            )
-        }
-        let cjk: Vec<&TextSpan> = spans.iter().filter(|s| s.text.chars().any(is_cjk)).collect();
+        let cjk: Vec<&TextSpan> = spans
+            .iter()
+            .filter(|s| s.text.chars().any(is_vertical_text_cjk))
+            .collect();
         if cjk.len() < 8 {
             return None;
         }
@@ -212,7 +206,7 @@ impl PdfDocument {
             .iter()
             .filter(|s| {
                 let t = s.text.trim();
-                t.chars().count() == 1 && t.chars().all(is_cjk)
+                t.chars().count() == 1 && t.chars().all(is_vertical_text_cjk)
             })
             .count();
         if single_glyph_cjk * 2 < cjk.len() {
@@ -222,7 +216,10 @@ impl PdfDocument {
             .iter()
             .map(|s| s.text.chars().filter(|c| !c.is_whitespace()).count())
             .sum();
-        let cjk_chars: usize = cjk.iter().map(|s| s.text.chars().filter(|c| is_cjk(*c)).count()).sum();
+        let cjk_chars: usize = cjk
+            .iter()
+            .map(|s| s.text.chars().filter(|c| is_vertical_text_cjk(*c)).count())
+            .sum();
         if total_chars == 0 || cjk_chars * 2 < total_chars {
             return None;
         }

@@ -16,6 +16,7 @@ use crate::error::Error;
 use crate::geometry::Rect;
 use crate::layout::{Color, FontWeight, TextBlock, TextSpan};
 use crate::structure::types::{McidScope, StructChild, StructElem, StructType};
+use crate::text::cjk_ranges::suppress_table_cell_space;
 
 /// A complete extracted table with rows and optional header information.
 #[derive(Debug, Clone)]
@@ -715,43 +716,12 @@ fn extract_cell(cell_elem: &StructElem, text_blocks: &[TextBlock], is_header: bo
                 } else if gap <= font_size * 0.15 {
                     false
                 } else {
-                    // Suppress space insertion when one side is CJK and the
-                    // other is CJK or a fullwidth/math operator (e.g. ≤, ＜, μ).
-                    // This mirrors the CJK-pair suppression in document.rs and
-                    // converters/mod.rs. ~keep
-                    #[inline(always)]
-                    fn is_cjk(c: char) -> bool {
-                        matches!(c,
-                            '\u{3040}'..='\u{309F}' |   // Hiragana ~keep
-                            '\u{30A0}'..='\u{30FF}' |   // Katakana ~keep
-                            '\u{4E00}'..='\u{9FFF}' |   // CJK Unified Ideographs ~keep
-                            '\u{AC00}'..='\u{D7AF}' |   // Hangul ~keep
-                            '\u{3400}'..='\u{4DBF}' |   // CJK Extension A ~keep
-                            '\u{20000}'..='\u{2A6DF}'   // CJK Extension B ~keep
-                        )
-                    }
-                    #[inline(always)]
-                    fn is_fw_math(c: char) -> bool {
-                        matches!(c,
-                            '\u{FF0B}' | '\u{FF0D}' |
-                            '\u{FF1A}' | '\u{FF1B}' |
-                            '\u{FF1C}'..='\u{FF1E}' |
-                            '\u{2260}' | '\u{2248}' |
-                            '\u{2264}'..='\u{2265}' |
-                            '\u{00B5}' | '\u{03BC}' |
-                            '\u{00B1}' | '\u{00D7}' | '\u{00F7}'
-                        )
-                    }
-                    let p_last = prev.text.chars().next_back();
-                    let b_first = block.text.chars().next();
-                    let suppress = if let (Some(p), Some(b)) = (p_last, b_first) {
-                        let p_cjk = is_cjk(p);
-                        let b_cjk = is_cjk(b);
-                        (p_cjk || is_fw_math(p)) && (b_cjk || is_fw_math(b)) && (p_cjk || b_cjk)
-                    } else {
-                        false
-                    };
-                    !suppress
+                    !prev
+                        .text
+                        .chars()
+                        .next_back()
+                        .zip(block.text.chars().next())
+                        .is_some_and(|(left, right)| suppress_table_cell_space(left, right))
                 }
             } else {
                 !cell_text.ends_with(' ')

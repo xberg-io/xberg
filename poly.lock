@@ -12,3 +12,9 @@ id = "ai-rulez"
 source = "https://github.com/Goldziher/ai-rulez.git"
 revision = "6966b9819c2829e3bccb62d06b5fef448a2826c8"
 path = "cache://hook-sources/a028197e1e7ffd465c27caaca41da62d/6966b9819c2829e3bccb62d06b5fef448a2826c8"
+
+[[hook_sources]]
+id = "gh-actions-updater"
+source = "https://github.com/Goldziher/gh-actions-updater.git"
+revision = "93f32049db3418fe9508790b1a65d1de3436ae92"
+path = "cache://hook-sources/b631113be44d7a0373123edd3551bb86/93f32049db3418fe9508790b1a65d1de3436ae92"

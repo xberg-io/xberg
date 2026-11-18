@@ -6,7 +6,9 @@ pub struct TessMonitor {
     handle: Arc<Mutex<*mut c_void>>,
 }
 
+// SAFETY: The owned ETEXT_DESC has no thread affinity. Native recognition uses it under the guard. ~keep
 unsafe impl Send for TessMonitor {}
+// SAFETY: The owned ETEXT_DESC has no thread affinity. Native recognition uses it under the guard. ~keep
 unsafe impl Sync for TessMonitor {}
 
 impl TessMonitor {
@@ -16,6 +18,7 @@ impl TessMonitor {
     ///
     /// Returns the new instance of the TessMonitor.
     pub fn new() -> Self {
+        // SAFETY: The constructor takes no arguments and returns an owned ETEXT_DESC allocation. ~keep
         let handle = unsafe { TessMonitorCreate() };
         TessMonitor {
             handle: Arc::new(Mutex::new(handle)),
@@ -33,6 +36,7 @@ impl TessMonitor {
     /// Returns a `TesseractError::MutexLockError` if the mutex lock fails.
     pub fn set_deadline(&self, deadline: i32) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The monitor owns its native allocation and the guard serializes writes to the deadline. ~keep
         unsafe { TessMonitorSetDeadlineMSecs(*handle, deadline) };
         Ok(())
     }
@@ -48,6 +52,7 @@ impl TessMonitor {
     /// Returns a `TesseractError::MutexLockError` if the mutex lock fails.
     pub fn get_progress(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Read progress from the owned monitor under the same lock used for native recognition. ~keep
         Ok(unsafe { TessMonitorGetProgress(*handle) })
     }
 
@@ -91,6 +96,8 @@ impl TessMonitor {
 impl Drop for TessMonitor {
     fn drop(&mut self) {
         if let Ok(handle) = self.handle.lock() {
+            // SAFETY: No operation can hold the monitor through this wrapper at drop; the native deleter frees its
+            // allocation. ~keep
             unsafe { TessMonitorDelete(*handle) };
         }
     }

@@ -107,8 +107,24 @@ jobs:
             # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
             ort_version=1.24.2
             case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
-            curl -fsSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
-            mkdir -p /opt/msort && tar -xzf /tmp/ort.tgz -C /opt/msort --strip-components=1
+            ort_integrity="{project}/scripts/ci/actions/setup-onnx-runtime"
+            ort_tmp=$(mktemp -d)
+            ort_archive="$ort_tmp/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
+            trap 'rm -f -- "$ort_archive"; rmdir -- "$ort_tmp"' EXIT
+            bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256" --known
+            set -- --retry 5 --retry-delay 5
+            if curl --retry-all-errors --version >/dev/null 2>&1; then
+              set -- "$@" --retry-all-errors
+            fi
+            if curl --proto '=https' --proto-redir '=https' "$@" -fsSL -o "$ort_archive" \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"; then
+              bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
+              mkdir -p /opt/msort
+              tar -xzf "$ort_archive" -C /opt/msort --strip-components=1
+            else
+              case "$ort_arch" in aarch64) ort_rid=linux-arm64 ;; *) ort_rid=linux-x64 ;; esac
+              RUNNER_TEMP="$ort_tmp" bash "$ort_integrity/nuget-fallback.sh" "$ort_version" "$ort_rid" /opt/msort "$ort_integrity/checksums.sha256"
+            fi
           cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++ ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib'
           # The deployment target is the wheel's macOS floor, 15.0: the oldest macOS Apple
           # still supports. delocate bundles the libheif closure, so the hook builds it

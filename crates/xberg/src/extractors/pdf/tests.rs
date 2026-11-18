@@ -11,6 +11,37 @@ mod formula_insertion_tests {
     use crate::types::document_structure::NodeContent;
     use crate::types::internal::{Relationship, RelationshipKind, RelationshipTarget};
 
+    #[test]
+    fn formula_evidence_uses_cli_full_format_for_both_outcomes() {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter("info,xberg::extractors::pdf::formula_evidence=debug")
+            .with_writer(log.reopen().unwrap())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            let _extract = tracing::info_span!("extract_file", xberg.operation = "extract_file").entered();
+            let _pipeline = tracing::info_span!("xberg.pipeline", xberg.pipeline.stage = "extraction").entered();
+            trace_formula_recognition(1, 2, 0);
+            trace_formula_recognition(2, 0, 3);
+            trace_formula_recognition(3, 0, 0);
+        });
+
+        let log = std::fs::read_to_string(log.path()).unwrap();
+        let events: Vec<_> = log.lines().map(|line| line.split_once(" DEBUG ").unwrap().1).collect();
+        let prefix = concat!(
+            "extract_file{xberg.operation=\"extract_file\"}:xberg.pipeline{xberg.pipeline.stage=\"extraction\"}: ",
+            "xberg::extractors::pdf::formula_evidence: native PDF formula recognition applied"
+        );
+        assert_eq!(
+            events,
+            [
+                format!("{prefix} page=1 replaced=2 synthesized=0"),
+                format!("{prefix} page=2 replaced=0 synthesized=3"),
+            ]
+        );
+    }
+
     fn paragraph(text: &str, page: u32) -> InternalElement {
         let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_page(page);
         element.bbox = Some(crate::types::BoundingBox {
@@ -4867,13 +4898,28 @@ async fn automatic_ocr_failure_with_no_native_text_returns_an_error() {
         .await
         .expect_err("a failed automatic OCR fallback with no native text must not report success");
 
+    assert_eq!(error.extraction_error_type(), "plugin");
+    assert_eq!(error.extraction_error_code(), 1008);
+    #[cfg(feature = "api")]
+    {
+        assert_eq!(error.api_error_type(), "PluginError");
+        assert_eq!(error.api_status_category(), crate::error::ApiStatusCategory::Internal);
+    }
+
     match error {
-        crate::XbergError::Plugin { plugin_name, message } => {
-            assert_eq!(plugin_name, "ocr");
+        crate::XbergError::Ocr { message, source } => {
             assert!(
                 message.contains(FAILURE),
                 "the backend failure must propagate, got: {message}"
             );
+            assert!(matches!(
+                source
+                    .as_deref()
+                    .and_then(|error| error.source())
+                    .and_then(|error| error.downcast_ref::<crate::XbergError>()),
+                Some(crate::XbergError::Plugin { plugin_name, message })
+                    if plugin_name == BACKEND_NAME && message == FAILURE
+            ));
         }
         other => panic!("the typed OCR failure must propagate, got: {other}"),
     }
@@ -8634,6 +8680,80 @@ async fn test_ocr_inline_images_uses_configured_backend() {
             "a custom inline-image backend must not bypass the caller's absent element policy"
         );
     }
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[tokio::test]
+#[serial]
+async fn inline_image_ocr_backend_cancellation_stops_pdf_extraction() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const BACKEND_NAME: &str = "pdf-inline-image-ocr-cancel";
+
+    #[derive(Default)]
+    struct CancelInlineImage(AtomicUsize);
+
+    impl crate::plugins::Plugin for CancelInlineImage {
+        fn name(&self) -> &str {
+            BACKEND_NAME
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for CancelInlineImage {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _: &[u8],
+            _: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(crate::XbergError::Cancelled)
+        }
+    }
+
+    let backend = Arc::new(CancelInlineImage::default());
+    crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+    let _guard = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+    let config = ExtractionConfig {
+        use_cache: false,
+        // With no requested OCR pages, only the inline-image route can call the backend. ~keep
+        force_ocr_pages: Some(Vec::new()),
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: BACKEND_NAME.to_string(),
+            ..Default::default()
+        }),
+        pdf_options: Some(crate::core::config::pdf::PdfConfig {
+            extract_images: true,
+            ocr_inline_images: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = PdfExtractor::new()
+        .extract_content(SCANNED_HELLO_PDF, "application/pdf", &config)
+        .await;
+    assert_eq!(
+        backend.0.load(Ordering::SeqCst),
+        1,
+        "the embedded image must reach OCR exactly once"
+    );
+    assert!(
+        matches!(result, Err(crate::XbergError::Cancelled)),
+        "inline-image backend cancellation must survive the warning fallback: {result:?}"
+    );
 }
 
 /// Verifies that the extraction-level output_format is forwarded to the backend

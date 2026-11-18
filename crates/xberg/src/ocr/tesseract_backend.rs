@@ -20,13 +20,13 @@ use std::sync::Arc;
 const USE_CACHE_BACKEND_OPTION: &str = "use_cache";
 
 /// Memo key for the available-language probe: `(probe languages, tessdata_path override,
-/// TESSDATA_PREFIX, XBERG_CACHE_DIR)`.
+/// TESSDATA_PREFIX, XBERG_CACHE_DIR, XBERG_TESSDATA_SYSTEM_PATHS)`.
 ///
 /// Every component is something tessdata resolution actually reads, so two calls differing in any
 /// one of them can resolve different directories and must not serve each other's answer. Keying on
 /// the override alone (GH#1857's fix) let two calls under different environments, or for different
 /// languages, collide. GH#1891. ~keep
-type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>);
+type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>, bool);
 
 #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) mod orientation_evidence {
@@ -316,8 +316,8 @@ impl TesseractBackend {
     /// Get cached available languages, lazily querying Tesseract if needed.
     ///
     /// `languages` are the languages the caller's config asks for, `override_path` is
-    /// `OcrConfig.tessdata_path` (or `None`). Both, plus the two environment values on
-    /// `tessdata_env`, take part in tessdata resolution, so all four make up the memo key -- see
+    /// `OcrConfig.tessdata_path` (or `None`). Both, plus the environment values on
+    /// `tessdata_env`, take part in tessdata resolution, so all of them make up the memo key -- see
     /// [`LanguagesMemoKey`]. Falls back to a hardcoded language list if dynamic querying fails.
     ///
     /// ~keep The key carries the languages the probe will actually resolve with, not the caller's
@@ -359,6 +359,7 @@ impl TesseractBackend {
             override_path.map(Path::to_path_buf),
             tessdata_env.tessdata_prefix.clone(),
             tessdata_env.cache_dir.clone(),
+            tessdata_env.system_paths,
         )
     }
 
@@ -600,9 +601,14 @@ impl TesseractBackend {
         &self,
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
+        implicit_psm: bool,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows, false)
-            .await
+        let policy = if implicit_psm {
+            ImageOcrPolicy::ImplicitStandaloneSparseRows
+        } else {
+            ImageOcrPolicy::StandaloneSparseRows
+        };
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1306,6 +1312,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let requested = vec!["deu".to_string()];
 
@@ -1340,6 +1347,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
 
         assert_eq!(
@@ -1367,14 +1375,22 @@ mod tests {
         let env_a = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: None,
+            system_paths: true,
         };
         let env_b = TessdataEnv {
             tessdata_prefix: Some("/b/tessdata".to_string()),
             cache_dir: None,
+            system_paths: true,
         };
         let env_c = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: Some(std::path::PathBuf::from("/cache")),
+            system_paths: true,
+        };
+        let env_d = TessdataEnv {
+            tessdata_prefix: Some("/a/tessdata".to_string()),
+            cache_dir: None,
+            system_paths: false,
         };
 
         let baseline = TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_a);
@@ -1398,6 +1414,11 @@ mod tests {
             baseline,
             TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_c),
             "XBERG_CACHE_DIR must take part in the key: it contributes two search directories"
+        );
+        assert_ne!(
+            baseline,
+            TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_d),
+            "XBERG_TESSDATA_SYSTEM_PATHS must take part in the key: it removes the system directories"
         );
         assert_ne!(
             baseline,
@@ -1434,6 +1455,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1505,6 +1527,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1548,6 +1571,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), Some(&override_dir), &tessdata_env)
             .expect("the probe must resolve the configured tessdata directory");
@@ -1589,6 +1613,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let backend = TesseractBackend::new();
 
