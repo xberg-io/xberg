@@ -512,7 +512,8 @@ pdf-ocr)
   run_exact psm6_html_keeps_element_output_flattened --test pdf_auto_dot_leader_rows_2503
   run_exact psm6_markdown_keeps_scan_rows_flattened --test pdf_auto_dot_leader_rows_2503
   run_exact 'extractors::pdf::ocr::document::tests::certified_scan_html_rows_require_each_admission_condition' --lib
-  expected=$((expected + 7))
+  run_exact 'rendering::comrak_bridge::tests::marked_paragraph_rows_escape_html_text_in_each_row' --lib
+  expected=$((expected + 8))
   ;;
 office-pages)
   expected=53
