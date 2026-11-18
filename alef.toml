@@ -5756,5 +5756,11 @@ git = "https://github.com/Goldziher/adrlint.git"
 revision = "v0"
 hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]
 
+[[workspace.poly.hooks-sources]]
+id = "gh-actions-updater"
+git = "https://github.com/Goldziher/gh-actions-updater.git"
+revision = "v0"
+hooks = ["gh-actions-updater-lint-pins"]
+
 [extensions.python_host_aliases.crates.xberg.traits.TokenizerBackend]
 try_count_tokens = { fallback = "count_tokens", python_only = true }

@@ -33,6 +33,9 @@ run_exact() {
   if [[ "${1:-}" == --native-pdf ]]; then
     shift
     cargo_args=(test --locked -p xberg-native-pdf "$@")
+  elif [[ "${1:-}" == --cli ]]; then
+    shift
+    cargo_args=(test --locked -p xberg-cli --no-default-features --features pdf-ocr --bin xberg "$@")
   else
     cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
   fi
@@ -149,11 +152,16 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
-  expected=$((expected + 5))
+  expected=$((expected + 10))
   local tall_scan_policy='extractors::pdf::ocr::tall_source::policy::tests'
   run_exact "$tall_scan_policy::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render" --lib
   run_exact "$tall_scan_policy::reports_the_actual_density_of_a_budgeted_pdf_read" --lib
   run_exact "$tall_scan_policy::strip_recovery_early_returns_report_only_the_proven_density_once" --lib
+  run_exact 'extractors::pdf::ocr::tall_source::tests::bilevel_above_maximum_density_is_not_reported_as_below_minimum' --lib
+  run_exact a_120_dpi_bilevel_scan_explains_the_source_density_refusal --test pdf_tall_scan_strips
+  run_exact bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so --test pdf_tall_scan_strips
+  run_exact tall_scans_below_the_density_floor_say_recovery_was_not_used --test pdf_tall_scan_strips
+  run_exact fractional_bilevel_source_density_is_floored_below_the_minimum --test pdf_tall_scan_strips
   run_exact an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm --test pdf_tall_scan_strips
   run_exact the_mixed_route_names_the_configuration_that_blocked_strip_recovery --test pdf_tall_scan_strips
 }
@@ -461,6 +469,20 @@ pdf-ocr)
   expected=$((expected + 1))
   run_ink_probe_cases
   run_discarded_recovery_cases
+  run_exact 'extractors::pdf::ocr::tests::tests::should_error_when_every_page_fails_and_nothing_can_be_recovered' --lib
+  run_exact 'core::extractor::file::issue_217_fallback_tests::pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal' --lib
+  run_exact 'extractors::pdf::tests::automatic_ocr_failure_with_no_native_text_returns_an_error' --lib
+  run_exact 'extractors::pdf::ocr::failed_page_record_tests::a_pipeline_whose_stages_all_fail_carries_every_page_record' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::all_pages_failing_keeps_the_cause_chain_everywhere' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::pdf_ocr_trace_keeps_error_categories_without_backend_text' --lib
+  run_exact 'extractors::pdf::ocr::pipeline::tracing_tests::public_mixed_pdf_fallback_warns_without_exposing_the_backend_error' --lib
+  run_exact 'extractors::pdf::ocr::pipeline::tracing_tests::public_inline_image_ocr_warns_without_exposing_the_backend_error' --lib
+  run_exact 'error::tests::cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug' --lib
+  run_exact 'extractors::pdf::tests::inline_image_ocr_backend_cancellation_stops_pdf_extraction' --lib
+  run_exact a_targeted_retry_backend_cancellation_discards_the_successful_whole_read --test pdf_marked_page_retry_fallback_2833
+  run_exact 'commands::extract::ocr_diagnostic_tests::cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats' --cli
+  run_exact 'commands::extract::tests::uri_extraction_failure_does_not_assert_a_false_readability_diagnosis' --cli
+  expected=$((expected + 13))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases

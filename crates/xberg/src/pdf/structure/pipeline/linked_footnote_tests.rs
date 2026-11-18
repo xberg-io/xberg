@@ -1,9 +1,13 @@
 use super::super::tests::{linked_footnote_image_pdf, linked_footnote_reference, linked_footnote_text, seg_at};
 use super::*;
 
+type ParagraphEdit = fn(&mut PdfParagraph);
+type Segments = Vec<crate::pdf::hierarchy::SegmentData>;
+type SegmentsEdit = fn(&mut Segments);
+
 #[test]
 fn compact_note_refuses_semantic_roles_already_owned_elsewhere() {
-    let cases: [(&str, fn(&mut PdfParagraph)); 7] = [
+    let cases: [(&str, ParagraphEdit); 7] = [
         ("page furniture", |note| note.is_page_furniture = true),
         ("heading", |note| note.heading_level = Some(1)),
         ("list", |note| note.is_list_item = true),
@@ -24,8 +28,7 @@ fn compact_note_refuses_semantic_roles_already_owned_elsewhere() {
 
 #[test]
 fn compact_note_requires_numeric_upright_marker_and_single_note_row() {
-    type Segments = Vec<crate::pdf::hierarchy::SegmentData>;
-    let cases: [(&str, fn(&mut Segments)); 13] = [
+    let cases: [(&str, SegmentsEdit); 13] = [
         ("symbol accepted by the shared marker grammar", |segments| {
             segments[0].text = "*".into()
         }),
@@ -90,7 +93,7 @@ fn note_must_fit_horizontally_and_vertically_below_rule() {
 #[test]
 fn references_require_prose_prefix_and_unambiguous_upright_source() {
     let hyphens = HyphenWitnesses::default();
-    let cases: [(&str, fn(&mut PdfParagraph), bool); 4] = [
+    let cases: [(&str, ParagraphEdit, bool); 4] = [
         ("ordinary prose", |_| {}, true),
         ("formula", |paragraph| paragraph.is_formula = true, false),
         (
