@@ -10,8 +10,7 @@ use crate::xref::{CrossRefTable, find_xref_offset, parse_xref};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
-#[cfg(not(target_arch = "wasm32"))]
-use std::hash::BuildHasher;
+#[cfg(target_arch = "wasm32")]
 use std::hash::RandomState;
 use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 #[cfg(not(target_arch = "wasm32"))]
@@ -439,15 +438,8 @@ impl BoundedObjectStreamCache {
 
 impl BoundedObjectCache {
     fn new(max_bytes: usize) -> Self {
-        let seed_state = RandomState::new();
-        #[cfg(not(target_arch = "wasm32"))]
-        let seed_state = {
-            // Derive private aHash keys without adding a second OS entropy call. ~keep
-            let seed = |index: u8| seed_state.hash_one((b"xberg PDF object cache", index));
-            ahash::RandomState::with_seeds(seed(0), seed(1), seed(2), seed(3))
-        };
         Self {
-            map: HashMap::with_hasher(seed_state),
+            map: HashMap::with_hasher(ObjectCacheHasher::new()),
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
@@ -1430,26 +1422,13 @@ impl PdfDocument {
     /// plus any new ones pushed since the last call. Use
     /// [`Self::take_structured_warnings`] to drain.
     ///
-    /// Merges the process-wide `GLOBAL_WARNING_SINK` (where
-    /// free-function log sites like `SPEC VIOLATION`,
-    /// operator-cap-exceeded, and Type0/Type3 font fallbacks push
-    /// their structured records) into the per-document sink on each
-    /// call. The drain attribution follows the "first caller wins"
-    /// rule documented at the global sink — process-wide scope means
-    /// the first document to call `structured_warnings` collects
-    /// the global tail that accumulated since the last drain.
-    ///
-    /// Renamed from `flatten_warnings` in to avoid colliding
-    /// with the pre-existing `DocumentEditor::flatten_warnings`
-    /// (which returns the form-flattening side-effect log, a
-    /// `&[String]` — different feature). Both the Rust and Python
-    /// (`PyDocument`) surfaces now agree on `structured_warnings`.
+    /// Warnings from other documents and standalone operations are excluded.
     pub fn structured_warnings(&self) -> Vec<crate::extractors::warnings::Warning> {
-        let global = crate::extractors::warnings::drain_global_warnings();
-        if !global.is_empty() {
-            self.warning_sink.extend(global);
-        }
         self.warning_sink.snapshot()
+    }
+
+    pub(crate) fn warning_scope(&self) -> crate::extractors::warnings::WarningScope {
+        self.warning_sink.enter()
     }
 
     /// Drain and return all accumulated structured warnings.
@@ -1930,6 +1909,7 @@ mod key_value_rows;
 mod objects;
 mod open;
 mod pages;
+mod pagination_separators;
 mod paths;
 mod picture_text;
 mod reading_order;

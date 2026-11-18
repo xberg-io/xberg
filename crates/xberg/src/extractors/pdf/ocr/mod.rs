@@ -234,6 +234,8 @@ fn run_on_ocr_test_stack<F: std::future::Future<Output = ()>>(
 
 #[cfg(all(test, feature = "ocr"))]
 mod tests;
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
+pub(crate) use tests::tests::build_minimal_two_page_pdf_with_sizes;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;

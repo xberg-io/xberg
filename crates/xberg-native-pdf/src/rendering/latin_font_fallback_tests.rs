@@ -530,61 +530,51 @@ fn assert_real_cjk_glyph(actual: &RenderedImage) {
     );
 }
 
+const MIXED_FALLBACK_CASE: &str = "XBERG_LATIN_CJK_FALLBACK_CHILD_2510";
+const PROVIDED_FONT_CASE: &str = "XBERG_PROVIDED_LATIN_FONT_CHILD_2510";
+
 #[test]
 fn mixed_latin_cjk_fallback_isolated() {
-    const CHILD: &str = "XBERG_LATIN_CJK_FALLBACK_CHILD_2510";
-    if let Ok(mode) = std::env::var(CHILD) {
-        assert!(matches!(mode.as_str(), "absent" | "present"));
-        mixed_cjk_case(mode == "present");
-        return;
-    }
-    let modes = if cfg!(feature = "cjk-render-fallback") {
-        vec!["absent", "present"]
+    let child = concat!(module_path!(), "::mixed_latin_cjk_fallback_child");
+    let child = child.strip_prefix("xberg_native_pdf::").expect("crate module prefix");
+    let modes: &[&str] = if cfg!(feature = "cjk-render-fallback") {
+        &["absent", "present"]
     } else {
-        vec!["absent"]
+        &["absent"]
     };
-    for mode in modes {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "rendering::page_renderer::latin_font_fallback_tests::mixed_latin_cjk_fallback_isolated",
-                "--nocapture",
-            ])
-            .env(CHILD, mode)
-            .output()
-            .expect("run isolated font-provider case");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            stdout.contains("running 1 test"),
-            "child must collect exactly one case: {stdout}"
-        );
-        assert!(
-            output.status.success(),
-            "{mode}: {stdout} {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(stdout.contains("1 passed"), "{stdout}");
+    for &mode in modes {
+        xberg_child_test::run_child_test(child, MIXED_FALLBACK_CASE, mode, |_| {});
+    }
+}
+
+#[test]
+#[ignore = "run in an isolated subprocess by the mixed fallback test"]
+fn mixed_latin_cjk_fallback_child() {
+    let Some(mode) = xberg_child_test::child_test_root(MIXED_FALLBACK_CASE) else {
+        return;
+    };
+    match mode.to_str() {
+        Some("absent") => mixed_cjk_case(false),
+        Some("present") => mixed_cjk_case(true),
+        _ => panic!("unknown mixed font fallback case"),
     }
 }
 
 #[test]
 fn provided_font_is_used_before_the_bundled_regular_face() {
-    const CHILD: &str = "XBERG_PROVIDED_LATIN_FONT_CHILD_2510";
-    if std::env::var(CHILD).as_deref() == Ok("child") {
-        provided_font_case();
+    let child = concat!(module_path!(), "::provided_font_before_bundled_child");
+    let child = child.strip_prefix("xberg_native_pdf::").expect("crate module prefix");
+    xberg_child_test::run_child_test(child, PROVIDED_FONT_CASE, "provided", |_| {});
+}
+
+#[test]
+#[ignore = "run in an isolated subprocess by the provided font test"]
+fn provided_font_before_bundled_child() {
+    let Some(case) = xberg_child_test::child_test_root(PROVIDED_FONT_CASE) else {
         return;
-    }
-    let output = std::process::Command::new(std::env::current_exe().unwrap()).args([
-        "--exact", "rendering::page_renderer::latin_font_fallback_tests::provided_font_is_used_before_the_bundled_regular_face", "--nocapture",
-    ]).env(CHILD, "child").output().expect("run isolated provider case");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("running 1 test"), "{stdout}");
-    assert!(
-        output.status.success(),
-        "{stdout} {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(stdout.contains("1 passed"), "{stdout}");
+    };
+    assert_eq!(case.to_str(), Some("provided"));
+    provided_font_case();
 }
 
 /// A form XObject (object 8) that shows `text` in a font named only by the form's own

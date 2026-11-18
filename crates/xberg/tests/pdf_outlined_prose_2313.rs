@@ -1,5 +1,7 @@
 #![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 
+mod helpers;
+
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
 
 // Synthetic 12pt DejaVu Sans glyph outlines, placed as five rows on a Letter page. ~keep
@@ -462,9 +464,18 @@ impl xberg::engine::seams::CacheBackend for DocumentCache {
     }
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
+const CACHED_AUTO_OCR_CASE: &str = "cached_auto_ocr_keeps_the_recovered_outline_text";
+
 #[tokio::test]
 async fn cached_auto_ocr_keeps_the_recovered_outline_text() {
     use std::sync::{Arc, atomic::Ordering};
+
+    #[cfg(feature = "bundle-tessdata-eng")]
+    if !helpers::is_bundled_english_tessdata_child(CACHED_AUTO_OCR_CASE) {
+        helpers::run_with_bundled_english_tessdata_only(CACHED_AUTO_OCR_CASE);
+        return;
+    }
 
     let cache = Arc::new(DocumentCache::default());
     let engine = xberg::engine::Engine::builder()

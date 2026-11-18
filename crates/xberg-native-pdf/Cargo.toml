@@ -124,12 +124,12 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
 fontconfig-parser = { version = "0.5", default-features = false }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ahash = { workspace = true }
 # jpeg-decoder's default thread-per-component worker queues full-resolution coefficient rows without a
 # bound; its rayon worker converts each row as it is read. Reduced JPEG decoding relies on that. The
 # version matches the xberg crate's, whose peak model `tests/bounded_jpeg_peak.rs` measures. ~keep
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 jpeg-decoder = { version = "0.3.2", default-features = false, features = ["rayon"] }
-ahash = { workspace = true }
 
 [dev-dependencies]
 aes = "0.9"
@@ -140,6 +140,7 @@ jpeg-encoder = "0.7.1"
 sha2 = "0.11"
 tempfile = "3.27"
 tracing-subscriber = "0.3"
+xberg-child-test = { workspace = true }
 
 [[bench]]
 name = "text_extraction"

@@ -53,6 +53,10 @@ fn indexed_palette(color: &Object) -> Option<[u8; 2]> {
     }
 }
 
+pub(super) fn retained_gray_bytes(compressed_len: usize, pixels: usize) -> Option<usize> {
+    compressed_len.checked_add(pixels)?.checked_add(1)
+}
+
 pub(super) fn decode_source_gray(
     compressed: &[u8],
     width: usize,
@@ -61,7 +65,7 @@ pub(super) fn decode_source_gray(
     byte_limit: usize,
 ) -> Option<(Vec<u8>, usize)> {
     let pixels = width.checked_mul(height)?;
-    let retained_bytes = compressed.len().checked_add(pixels)?.checked_add(1)?;
+    let retained_bytes = retained_gray_bytes(compressed.len(), pixels)?;
     if retained_bytes > byte_limit {
         return None;
     }

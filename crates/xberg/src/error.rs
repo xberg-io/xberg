@@ -352,6 +352,110 @@ impl XbergError {
     error_constructor!(transcription, Transcription);
 }
 
+/// Marks a PDF OCR aggregate's private diagnostic cause while preserving the backend error
+/// itself as the next link in the typed source chain. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[derive(Debug, Error)]
+#[error("PDF OCR backend failure")]
+struct PdfOcrFailureCause {
+    #[source]
+    backend: XbergError,
+    // Constructed from aggregate counts and fixed text. ~keep
+    cli_message: String,
+}
+
+impl XbergError {
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn all_page_ocr_failure(message: String, cli_message: String, first_error: Self) -> Self {
+        Self::Ocr {
+            message,
+            source: Some(Box::new(PdfOcrFailureCause {
+                backend: first_error,
+                cli_message,
+            })),
+        }
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    pub(crate) fn ocr_pipeline_failure(message: String, cli_message: &str, first_error: Option<Self>) -> Self {
+        Self::Parsing {
+            message,
+            source: first_error.map(|backend| {
+                Box::new(PdfOcrFailureCause {
+                    backend,
+                    cli_message: cli_message.to_owned(),
+                }) as _
+            }),
+        }
+    }
+
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn is_all_page_ocr_failure(&self) -> bool {
+        #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+        {
+            matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<PdfOcrFailureCause>())
+        }
+        #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+        {
+            false
+        }
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn pdf_ocr_trace_category(&self) -> String {
+        use std::error::Error as _;
+
+        match self
+            .source()
+            .and_then(|source| source.downcast_ref::<PdfOcrFailureCause>())
+        {
+            Some(cause) => cause.backend.extraction_diagnostic_category(),
+            None => self.extraction_diagnostic_category(),
+        }
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[cfg_attr(alef, alef(skip))]
+    fn extraction_diagnostic_category(&self) -> String {
+        use std::error::Error as _;
+
+        let category = self.extraction_error_type();
+        let io_error = match self {
+            Self::Io(error) => Some(error),
+            _ => self.source().and_then(|source| source.downcast_ref::<std::io::Error>()),
+        };
+        match io_error {
+            Some(error) => format!("{category} ({:?})", error.kind()),
+            None => category.to_owned(),
+        }
+    }
+
+    /// Prepare an extraction error for the CLI renderer using the aggregate's safe summary.
+    #[doc(hidden)]
+    #[cfg_attr(alef, alef(skip))]
+    pub fn into_cli_extraction_diagnostic(self) -> Self {
+        #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+        {
+            let mut error = self;
+            if let Self::Ocr { message, source } | Self::Parsing { message, source } = &mut error
+                && let Some(cause) = source
+                    .as_ref()
+                    .and_then(|cause| cause.downcast_ref::<PdfOcrFailureCause>())
+            {
+                let headline = &cause.cli_message;
+                let category = cause.backend.extraction_diagnostic_category();
+                *message = format!("{headline}; first failure category: {category}");
+                *source = None;
+            }
+            error
+        }
+        #[cfg(not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))))]
+        self
+    }
+}
+
 /// HTTP status category for [`XbergError`], used to select the REST API response status.
 ///
 /// This is not part of the public API: it exists solely so `api::error::ApiError`'s
@@ -399,6 +503,7 @@ impl XbergError {
         match self {
             XbergError::Validation { .. } => "ValidationError",
             XbergError::Parsing { .. } => "ParsingError",
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => "PluginError",
             XbergError::Ocr { .. } => "OCRError",
             XbergError::Io(_) => "IOError",
             XbergError::Cache { .. } => "CacheError",
@@ -427,6 +532,7 @@ impl XbergError {
     pub(crate) fn api_status_category(&self) -> ApiStatusCategory {
         match self {
             XbergError::Validation { .. } | XbergError::UnsupportedFormat(_) => ApiStatusCategory::Validation,
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => ApiStatusCategory::Internal,
             XbergError::Parsing { .. } | XbergError::Ocr { .. } => ApiStatusCategory::Unprocessable,
             _ => ApiStatusCategory::Internal,
         }
@@ -442,6 +548,7 @@ impl XbergError {
         match self {
             XbergError::Io(_) => "io",
             XbergError::Parsing { .. } => "parsing",
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => "plugin",
             XbergError::Ocr { .. } => "ocr",
             XbergError::Validation { .. } => "validation",
             XbergError::Cache { .. } => "cache",
@@ -463,15 +570,16 @@ impl XbergError {
 
     /// Returns the canonical numeric error code used in batch extraction error items.
     ///
-    /// These values match the stable FFI error codes declared on [`XbergError`]. This is the
-    /// single source of truth for
+    /// These values match the stable FFI error codes declared on [`XbergError`], with the
+    /// legacy plugin code retained for all-page OCR failures. This is the single source of truth for
     /// `core::config::extraction::types::ExtractionErrorItem::code`; do not duplicate this match
     /// elsewhere.
     #[cfg_attr(alef, alef(skip))]
-    pub(crate) const fn extraction_error_code(&self) -> u32 {
+    pub(crate) fn extraction_error_code(&self) -> u32 {
         match self {
             XbergError::Io(_) => 1000,
             XbergError::Parsing { .. } => 1001,
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => 1008,
             XbergError::Ocr { .. } => 1002,
             XbergError::Validation { .. } => 1003,
             XbergError::Cache { .. } => 1004,
@@ -513,6 +621,48 @@ impl XbergError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug() {
+        use std::error::Error as _;
+
+        const PATH: &str = "/tmp/PATH_SENTINEL/model.onnx";
+        const SECRET: &str = "SECRET_SENTINEL";
+        let backend_failure =
+            || XbergError::ocr_with_source("page read failed", std::io::Error::other(format!("{PATH} {SECRET}")));
+        let ordinary_failure =
+            XbergError::parsing_with_source("ordinary failure", std::io::Error::other("invalid header"));
+        let ordinary_debug = format!("{ordinary_failure:?}");
+        assert_eq!(
+            format!("{:?}", ordinary_failure.into_cli_extraction_diagnostic()),
+            ordinary_debug
+        );
+        assert!(ordinary_debug.contains("invalid header"));
+
+        let raw_message = format!("backend failed opening {PATH}");
+        for (error, raw_prefix, safe_message) in [
+            (
+                XbergError::all_page_ocr_failure(raw_message.clone(), "every page failed".into(), backend_failure()),
+                "OCR error",
+                "OCR error: every page failed; first failure category: ocr (Other)",
+            ),
+            (
+                XbergError::ocr_pipeline_failure(raw_message.clone(), "every stage failed", Some(backend_failure())),
+                "Parsing error",
+                "Parsing error: every stage failed; first failure category: ocr (Other)",
+            ),
+        ] {
+            let raw = format!("{error:?}");
+            assert!(raw.contains(PATH) && raw.contains(SECRET), "{raw}");
+            assert_eq!(error.to_string(), format!("{raw_prefix}: {raw_message}"));
+            let diagnostic = error.into_cli_extraction_diagnostic();
+            assert_eq!(diagnostic.to_string(), safe_message);
+            assert!(diagnostic.source().is_none());
+            let rendered = format!("{diagnostic:?}");
+            assert!(!rendered.contains(PATH) && !rendered.contains(SECRET), "{rendered}");
+        }
+    }
 
     #[test]
     fn test_io_error_from() {

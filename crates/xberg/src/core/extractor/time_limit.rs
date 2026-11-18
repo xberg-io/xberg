@@ -256,3 +256,6 @@ mod tests {
 
 #[cfg(test)]
 mod entry_point_deadline_tests;
+
+#[cfg(all(test, feature = "ocr", feature = "pdf", feature = "bundle-tessdata-eng"))]
+mod ocr_worker_deadline_tests;
