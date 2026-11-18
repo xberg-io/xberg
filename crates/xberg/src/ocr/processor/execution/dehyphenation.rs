@@ -90,16 +90,20 @@ struct SpellingWitnesses {
     compounds: HyphenWitnesses,
 }
 
+/// Whether any element ends a line with a hyphen, the precondition for [`join_scanned_wraps`].
+pub(super) fn may_join_scanned_wraps(elements: &[InternalElement], sparse: bool) -> bool {
+    elements
+        .iter()
+        .any(|element| element.text.contains("-\n") || (sparse && element.text.ends_with('-')))
+}
+
 pub(super) fn join_scanned_wraps(
     elements: &mut Vec<InternalElement>,
     words: &[HocrWordOccurrence],
     page_width: u32,
     sparse: bool,
 ) -> bool {
-    if !elements
-        .iter()
-        .any(|element| element.text.contains("-\n") || (sparse && element.text.ends_with('-')))
-    {
+    if !may_join_scanned_wraps(elements, sparse) {
         return false;
     }
     let page = elements.first().and_then(|element| element.page);
