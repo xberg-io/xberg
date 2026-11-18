@@ -23,7 +23,6 @@ fn paragraph(authoritative: &str, located: &str) -> PdfParagraph {
     let line = PdfLine {
         segments: vec![segment(located)],
         native_scripts: Vec::new(),
-        has_segment_geometry: true,
         baseline_y: Some(0.0),
         dominant_font_size: 20.0,
         is_bold: false,

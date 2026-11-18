@@ -3231,7 +3231,6 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let is_monospace = segments.iter().all(|s| s.is_monospace);
         super::types::PdfLine {
             native_scripts: Vec::new(),
-            has_segment_geometry: true,
             segments,
             baseline_y: Some(baseline_y),
             dominant_font_size,

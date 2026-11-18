@@ -1922,7 +1922,6 @@ fn make_ocr_pdf_line(
     };
     types::PdfLine {
         native_scripts: Vec::new(),
-        has_segment_geometry: baseline_y.is_some(),
         segments: vec![segment],
         baseline_y,
         dominant_font_size: font_size,

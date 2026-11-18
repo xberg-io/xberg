@@ -580,7 +580,8 @@ pub(super) fn apply_hint_to_paragraph(para: &mut PdfParagraph, hint: &LayoutHint
 
 /// Compute a paragraph's bounding box from its line segments' positional data.
 ///
-/// Returns `None` if the paragraph has no segments with valid positional data.
+/// Returns `None` if no line has a measured baseline. Lines without one carry placeholder
+/// segment coordinates, while a measured line at the page origin keeps its geometry.
 ///
 /// In PDF coordinates (y=0 at bottom, y increases upward):
 /// - `seg.y` / `seg.baseline_y` is the text baseline (near the bottom of glyphs).
@@ -601,7 +602,7 @@ fn compute_paragraph_bbox(para: &PdfParagraph) -> Option<Rect> {
     let mut segments = para
         .lines
         .iter()
-        .filter(|line| line.has_segment_geometry)
+        .filter(|line| line.baseline_y.is_some())
         .flat_map(|line| &line.segments)
         .peekable();
     segments.peek()?;
@@ -646,7 +647,6 @@ mod tests {
     fn make_line_at(segments: Vec<SegmentData>, baseline_y: f32) -> PdfLine {
         PdfLine {
             native_scripts: Vec::new(),
-            has_segment_geometry: true,
             segments,
             baseline_y: Some(baseline_y),
             dominant_font_size: 12.0,
@@ -879,31 +879,26 @@ mod tests {
 
     #[test]
     fn test_no_positional_data_skips_layout_overrides() {
-        let mut paragraph = make_para(50.0, 600.0, 300.0, 14.0);
-        paragraph.lines[0].segments[0].text = "Plan 2024 • 2 options • 3 modes".to_string();
-        paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
-        let mut paragraphs = vec![paragraph];
-        super::super::paragraphs::split_embedded_list_items(&mut paragraphs);
-        assert_eq!(paragraphs.len(), 3);
-        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
-        assert!(
-            paragraphs
-                .iter()
-                .all(|paragraph| compute_paragraph_bbox(paragraph).is_none())
-        );
+        for class in [LayoutHintClass::Title, LayoutHintClass::PageHeader] {
+            let hints = [make_hint(class, 0.9, 40.0, 0.0, 560.0, 760.0)];
+            let mut measured = [make_para(50.0, 600.0, 300.0, 14.0)];
+            let mut boxless = measured.clone();
+            boxless[0].lines[0].baseline_y = None;
 
-        let hints = vec![make_hint(LayoutHintClass::Title, 0.9, 40.0, 0.0, 560.0, 760.0)];
-        apply_layout_overrides(&mut paragraphs, &hints, 0.5, 0.5, None);
-        assert_eq!(paragraphs[0].heading_level, None);
-        assert_eq!(paragraphs[0].layout_class, None);
+            assert_eq!(
+                apply_layout_overrides_with_matches(&mut measured, &hints, 0.5, 0.5, None),
+                [Some(0)]
+            );
+            assert_eq!(measured[0].layout_class, Some(class));
 
-        paragraphs[0].heading_level = None;
-        paragraphs[0].layout_class = None;
-
-        let hints = vec![make_hint(LayoutHintClass::PageHeader, 0.9, 40.0, 0.0, 560.0, 760.0)];
-        apply_layout_overrides(&mut paragraphs, &hints, 0.5, 0.5, None);
-        assert!(!paragraphs[0].is_page_furniture);
-        assert_eq!(paragraphs[0].layout_class, None);
+            assert_eq!(
+                apply_layout_overrides_with_matches(&mut boxless, &hints, 0.5, 0.5, None),
+                [None]
+            );
+            assert_eq!(boxless[0].heading_level, None);
+            assert_eq!(boxless[0].layout_class, None);
+            assert!(!boxless[0].is_page_furniture);
+        }
     }
 
     #[test]
@@ -1174,13 +1169,27 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_paragraph_bbox_distinguishes_measured_origin_from_missing_geometry() {
-        let mut paragraph = make_para(0.0, 0.0, 0.0, 0.0);
-        let bbox = compute_paragraph_bbox(&paragraph).expect("a measured origin has geometry");
-        assert_eq!((bbox.left, bbox.y_min, bbox.right, bbox.y_max), (0.0, 0.0, 0.0, 0.0));
+    fn test_measured_origin_paragraph_matches_a_hint_that_a_boxless_one_cannot() {
+        let hints = [make_hint(LayoutHintClass::Title, 0.9, 0.0, 0.0, 100.0, 12.0)];
+        let mut measured = [make_para(0.0, 0.0, 100.0, 12.0)];
+        measured[0].lines[0].baseline_y = Some(0.0);
+        let mut boxless = measured.clone();
+        boxless[0].lines[0].baseline_y = None;
 
-        paragraph.lines[0].has_segment_geometry = false;
-        assert!(compute_paragraph_bbox(&paragraph).is_none());
+        let bbox = compute_paragraph_bbox(&measured[0]).expect("a measured origin has geometry");
+        assert_eq!((bbox.left, bbox.y_min, bbox.right, bbox.y_max), (0.0, 0.0, 100.0, 12.0));
+        assert_eq!(
+            apply_layout_overrides_with_matches(&mut measured, &hints, 0.5, 0.5, None),
+            [Some(0)]
+        );
+        assert_eq!(measured[0].heading_level, Some(1));
+
+        assert!(compute_paragraph_bbox(&boxless[0]).is_none());
+        assert_eq!(
+            apply_layout_overrides_with_matches(&mut boxless, &hints, 0.5, 0.5, None),
+            [None]
+        );
+        assert_eq!(boxless[0].heading_level, None);
     }
 
     #[test]

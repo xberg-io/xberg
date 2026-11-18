@@ -6,10 +6,9 @@ use crate::pdf::hierarchy::SegmentData;
 #[derive(Debug, Clone)]
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
-    /// Segment positions come from PDF or OCR geometry.
-    pub has_segment_geometry: bool,
     pub native_scripts: Vec<crate::pdf::native::hierarchy::script_evidence::ScriptOwner>,
     /// The source baseline, including a measured zero. Text without a position has no baseline.
+    /// Layout hint matching treats segments on a line without a baseline as placeholders.
     pub baseline_y: Option<f32>,
     #[allow(dead_code)]
     pub dominant_font_size: f32,

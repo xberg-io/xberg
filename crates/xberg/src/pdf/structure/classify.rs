@@ -2439,7 +2439,6 @@ mod tests {
 
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
-            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: font_size,
@@ -3076,7 +3075,6 @@ mod tests {
 
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
-            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: 18.0,
@@ -3572,7 +3570,6 @@ mod tests {
         }];
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
-            has_segment_geometry: true,
             segments,
             baseline_y: Some(700.0),
             dominant_font_size: font_size,
@@ -4398,7 +4395,6 @@ mod tests {
         let lines: Vec<super::super::types::PdfLine> = (0..line_count)
             .map(|i| super::super::types::PdfLine {
                 native_scripts: Vec::new(),
-                has_segment_geometry: true,
                 segments: vec![SegmentData {
                     text: format!("line{i}"),
                     x: 0.0,
