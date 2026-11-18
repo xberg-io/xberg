@@ -250,8 +250,13 @@ impl<'s> Decoder<'s> {
         while i < end {
             let ch = self.source[i..end].chars().next().ok_or(Error::InvalidSource)?;
             let length = ch.len_utf8();
-            // Comrak retains CR before LF; reconstruction must equal the actual leaf. ~keep
-            if ch == '\n' || (ch == '\r' && self.source.as_bytes().get(i + 1) != Some(&b'\n')) {
+            // Comrak folds CRLF, lone CR and LF into one space; the origin of a CRLF covers both bytes. ~keep
+            if ch == '\r' && self.source.as_bytes().get(i + 1) == Some(&b'\n') {
+                self.emit(" ", i..i + 2, work)?;
+                i += 2;
+                continue;
+            }
+            if ch == '\n' || ch == '\r' {
                 self.emit(" ", i..i + length, work)?;
             } else {
                 self.emit(&self.source[i..i + length], i..i + length, work)?;
