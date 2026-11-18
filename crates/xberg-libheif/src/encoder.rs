@@ -218,6 +218,8 @@ pub struct EncodingOptions {
 #[allow(unsafe_code)]
 impl EncodingOptions {
     pub fn new() -> Result<Self> {
+        // SAFETY: The allocator returns a fully defaulted struct, including `version`,
+        // which this wrapper owns once the result is non-null.
         let inner_ptr = unsafe { lh::heif_encoding_options_alloc() };
         match ptr::NonNull::new(inner_ptr) {
             Some(inner) => Ok(Self { inner }),
@@ -239,6 +241,12 @@ impl Default for EncodingOptions {
 #[allow(unsafe_code)]
 impl Drop for EncodingOptions {
     fn drop(&mut self) {
+        // SAFETY: This wrapper is the sole owner of the allocation and is not Clone, so it
+        // is freed once; heif_encoding_options_free is the `delete` matching the `new` in
+        // heif_encoding_options_alloc. The raw pointer from get_encoding_options_ptr does
+        // not outlive it: every caller in context.rs takes EncodingOptions by value and
+        // passes the pointer to one libheif encode call, which copies the options and
+        // does not retain the pointer.
         unsafe {
             lh::heif_encoding_options_free(self.inner.as_ptr());
         }
@@ -250,12 +258,20 @@ impl EncodingOptions {
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_ref(&self) -> &lh::heif_encoding_options {
+        // SAFETY: The pointer is the initialized allocation from heif_encoding_options_alloc,
+        // which self keeps alive for this shared borrow. The libheif-sys bindings follow
+        // the highest enabled `v1_*` feature, and the build requires libheif at or above
+        // that version. libheif only appends fields, so a runtime at or above the build
+        // floor allocates at least this layout; older runtimes are unsupported.
         unsafe { self.inner.as_ref() }
     }
 
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_mut(&mut self) -> &mut lh::heif_encoding_options {
+        // SAFETY: The pointer is the initialized allocation from heif_encoding_options_alloc,
+        // which self owns, and &mut self grants exclusive access. The layout holds for
+        // the reason given in inner_ref: the runtime libheif is at or above the build floor.
         unsafe { self.inner.as_mut() }
     }
 
@@ -326,8 +342,10 @@ impl EncodingOptions {
     }
 }
 
-/// This function makes sure the encoding options
-/// won't be freed too early.
+/// Returns the raw options pointer, or null for `None`.
+///
+/// The pointer is valid only while `options` is alive. The caller must keep `options`
+/// alive across the libheif call that receives it.
 pub(crate) fn get_encoding_options_ptr(options: &Option<EncodingOptions>) -> *mut lh::heif_encoding_options {
     options.as_ref().map(|o| o.inner.as_ptr()).unwrap_or_else(ptr::null_mut)
 }
