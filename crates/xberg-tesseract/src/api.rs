@@ -9,8 +9,9 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 /// Unique temporary directory removed on drop; holds the text renderer's output for
 /// [`TesseractAPI::process_pages`].
@@ -250,7 +251,7 @@ impl TesseractAPI {
     /// # Errors
     ///
     /// Returns [`TesseractError::NullPointerError`] when the process-exit cleanup already
-    /// freed the engine. The caller must not use the engine then. Returns
+    /// freed the engine, or process exit has begun. The caller must not use the engine then. Returns
     /// [`TesseractError::MutexLockError`] when a panic poisoned the engine registry.
     #[doc(hidden)]
     pub fn mark_in_use(&self) -> Result<()> {
@@ -505,11 +506,18 @@ impl TesseractAPI {
 
     /// Recognizes the text in the current image.
     ///
+    /// Once process exit has begun, a recognition fails to start, and a running one stops
+    /// at its next cancellation check, as with [`Self::recognize_with_cancel`].
+    ///
     /// # Returns
     ///
     /// Returns `Ok(())` if recognition is successful, otherwise returns an error.
     pub fn recognize(&self) -> Result<()> {
-        self.recognize_monitored(std::ptr::null_mut())
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = self.recognize_with_cancel(|| false);
+        #[cfg(target_arch = "wasm32")]
+        let result = self.recognize_monitored(std::ptr::null_mut());
+        result
     }
 
     /// Recognizes text using the given progress monitor and its configured deadline.
@@ -519,14 +527,31 @@ impl TesseractAPI {
 
     /// Recognizes text with a synchronous cooperative stop check.
     ///
-    /// The callback must be quick and must not call back into this API instance.
+    /// The callback must be quick and must not call back into this API instance. The
+    /// recognition also stops once process exit has begun, so the exit cleanup does not
+    /// wait for the rest of the page.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn recognize_with_cancel(&self, stop: impl Fn() -> bool) -> Result<()> {
-        TessMonitor::new().with_cancel(&stop, |monitor| self.recognize_monitored(monitor))
+        let reached = std::cell::Cell::new(false);
+        let stop = || {
+            reached.set(true);
+            PROCESS_EXITING.load(Ordering::SeqCst) || stop()
+        };
+        let result = TessMonitor::new().with_cancel(&stop, |monitor| self.recognize_monitored(monitor));
+        // Tesseract asks for cancellation only between recognized words, so an engine that
+        // reached the check is initialized as for a successful recognition, and a stopped
+        // recognition must not leave the exit cleanup unregistered. ~keep
+        if reached.get() {
+            ensure_tesseract_cleanup_registered();
+        }
+        result
     }
 
     fn recognize_monitored(&self, monitor: *mut c_void) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let Some(_running) = RunningRecognition::start() else {
+            return Err(TesseractError::OcrError);
+        };
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe { shim::xberg_tess_recognize(*handle, monitor) };
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
@@ -1842,17 +1867,33 @@ impl TesseractAPI {
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 impl Drop for TesseractAPI {
-    /// Drops the TesseractAPI instance.
+    /// Frees the engine, unless the process-exit cleanup already freed it or exit has begun.
     ///
-    /// SAFETY: Drop must never panic, so we use `.ok()` to handle potential mutex poisoning.
+    /// The registry lock is held from the unregistration through `End` and `Delete`, so
+    /// the exit cleanup runs either after the engine is freed or before this check, which
+    /// then sees [`PROCESS_EXITING`] and leaks the engine: `End` releases dictionaries into
+    /// tesseract's `DawgCache`, and `exit()` destroys that static after the cleanup. Drop
+    /// never panics, so a poisoned lock also leaks the engine.
     fn drop(&mut self) {
-        if let Ok(handle) = self.handle.lock() {
-            unsafe {
-                if !(*handle).is_null() && unregister_engine(*handle, self.generation) {
-                    TessBaseAPIEnd(*handle);
-                    TessBaseAPIDelete(*handle);
-                }
-            }
+        let Ok(handle) = self.handle.lock() else {
+            return;
+        };
+        if handle.is_null() {
+            return;
+        }
+        let Ok(mut live) = LIVE_ENGINES.lock() else {
+            return;
+        };
+        if !remove_live_engine(&mut live, *handle, self.generation) || PROCESS_EXITING.load(Ordering::SeqCst) {
+            return;
+        }
+        // SAFETY: the handle came from `TessBaseAPICreate` and was still registered, so no
+        // one freed it; removing it under the lock makes this the only free. The handle
+        // lock keeps every other method of this engine out, and the held registry lock
+        // keeps the exit cleanup from starting until the free has finished. ~keep
+        unsafe {
+            TessBaseAPIEnd(*handle);
+            TessBaseAPIDelete(*handle);
         }
     }
 }
@@ -1923,9 +1964,63 @@ struct LiveEngine {
 /// recognizes with an engine, and freeing that engine under the thread crashes the
 /// process. The owner calls [`TesseractAPI::mark_idle`] when it parks the engine and
 /// [`TesseractAPI::mark_in_use`] when it takes the engine again. The handler skips an
-/// engine in use and does not wait for it. C++ static destructors still run while a busy
-/// worker continues, so the exit window is narrowed, not closed.
+/// engine in use. It stops running recognitions and waits up to [`EXIT_RECOGNITION_GRACE`]
+/// for them to return, and an engine dropped after the handler has started is leaked.
+/// Other native calls on a busy engine are not waited for, so they can still overlap the
+/// C++ static destructors.
 static LIVE_ENGINES: Mutex<Vec<LiveEngine>> = Mutex::new(Vec::new());
+
+/// `true` once the process-exit cleanup has started. It is set under the [`LIVE_ENGINES`]
+/// lock, so an owner that holds the lock sees a value that does not change under it.
+static PROCESS_EXITING: AtomicBool = AtomicBool::new(false);
+
+/// Recognitions that have started and not yet returned.
+static RUNNING_RECOGNITIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// How long the exit cleanup waits for running recognitions to return. A recognition
+/// stops at its next check between words. Layout analysis comes before the first check
+/// and cannot be stopped. A recognition still running after this keeps its engine, which
+/// the cleanup then skips.
+const EXIT_RECOGNITION_GRACE: Duration = Duration::from_secs(2);
+
+/// How often the exit cleanup looks at [`RUNNING_RECOGNITIONS`] while it waits.
+const EXIT_RECOGNITION_POLL: Duration = Duration::from_millis(5);
+
+/// Counts one recognition in [`RUNNING_RECOGNITIONS`] until it is dropped.
+struct RunningRecognition;
+
+impl RunningRecognition {
+    /// Counts a recognition about to start, or returns `None` once process exit has begun.
+    ///
+    /// The count goes up before the flag is read, and the exit cleanup sets the flag before
+    /// it reads the count. Both use sequentially consistent ordering, so either this
+    /// recognition sees the flag and does not start, or the cleanup sees it and waits.
+    fn start() -> Option<Self> {
+        RUNNING_RECOGNITIONS.fetch_add(1, Ordering::SeqCst);
+        let running = Self;
+        if PROCESS_EXITING.load(Ordering::SeqCst) {
+            return None;
+        }
+        Some(running)
+    }
+}
+
+impl Drop for RunningRecognition {
+    fn drop(&mut self) {
+        RUNNING_RECOGNITIONS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Waits until no recognition runs, or until `grace` has passed.
+fn wait_for_running_recognitions(grace: Duration) {
+    if RUNNING_RECOGNITIONS.load(Ordering::SeqCst) == 0 {
+        return;
+    }
+    let deadline = Instant::now() + grace;
+    while RUNNING_RECOGNITIONS.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
+        std::thread::sleep(EXIT_RECOGNITION_POLL);
+    }
+}
 
 /// Records a freshly created engine handle as live and in use. Returns its generation,
 /// or 0 when the registry lock is poisoned: no live entry carries generation 0.
@@ -1948,25 +2043,40 @@ fn register_engine(handle: *mut c_void) -> u64 {
 /// Removes the engine `handle` of this `generation` from the live set. Returns `true` if
 /// it was present — meaning the caller now owns finalizing it; `false` means the
 /// process-exit cleanup already did, even when a newer engine now has the same address.
+#[cfg(test)]
 fn unregister_engine(handle: *mut c_void, generation: u64) -> bool {
-    if let Ok(mut live) = LIVE_ENGINES.lock()
-        && let Some(pos) = live
-            .iter()
-            .position(|engine| engine.addr == handle as usize && engine.generation == generation)
+    LIVE_ENGINES
+        .lock()
+        .is_ok_and(|mut live| remove_live_engine(&mut live, handle, generation))
+}
+
+/// Removes the engine `handle` of this `generation` from `live`, the locked live set.
+/// Returns `true` if it was present.
+fn remove_live_engine(live: &mut Vec<LiveEngine>, handle: *mut c_void, generation: u64) -> bool {
+    match live
+        .iter()
+        .position(|engine| engine.addr == handle as usize && engine.generation == generation)
     {
-        live.swap_remove(pos);
-        return true;
+        Some(pos) => {
+            live.swap_remove(pos);
+            true
+        }
+        None => false,
     }
-    false
 }
 
 /// Sets the idle flag of a live engine. Returns `Some(false)` when the engine is not live,
 /// because the process-exit cleanup already freed it. A newer engine at the same address
-/// does not count. Returns `None` when a panic poisoned the registry lock.
+/// does not count. Once process exit has begun, it also returns `Some(false)` instead of
+/// taking an engine back: work started then would run while `exit()` destroys tesseract's
+/// statics. Returns `None` when a panic poisoned the registry lock.
 fn set_engine_idle(handle: *mut c_void, generation: u64, idle: bool) -> Option<bool> {
     let Ok(mut live) = LIVE_ENGINES.lock() else {
         return None;
     };
+    if !idle && PROCESS_EXITING.load(Ordering::SeqCst) {
+        return Some(false);
+    }
     match live
         .iter_mut()
         .find(|engine| engine.addr == handle as usize && engine.generation == generation)
@@ -2011,13 +2121,23 @@ unsafe extern "C" {
 }
 
 /// Process-exit handler: finalize every idle engine whose owner never ran `Drop`, so
-/// tesseract's global `DawgCache` static destructor finds an empty cache. An engine in
-/// use is skipped, not waited for: the process exits without delay.
+/// tesseract's global `DawgCache` static destructor finds an empty cache.
+///
+/// It first sets [`PROCESS_EXITING`], which stops running recognitions, refuses new ones
+/// and makes every later `Drop` leak its engine. It then waits up to
+/// [`EXIT_RECOGNITION_GRACE`] for running recognitions to return, so that fewer threads are
+/// inside tesseract when its statics are destroyed. An engine in use is skipped.
 ///
 /// This handler takes the registry mutex and calls into C++. It is safe as an `atexit`
 /// hook only. Never call it, or `exit()`, from a signal handler: it can deadlock on the
-/// mutex the interrupted thread holds.
+/// mutex the interrupted thread holds. A thread that calls `exit()` from inside a
+/// recognition's stop check waits out the whole grace.
 extern "C" fn tesseract_atexit_cleanup() {
+    {
+        let _live = LIVE_ENGINES.lock().unwrap_or_else(PoisonError::into_inner);
+        PROCESS_EXITING.store(true, Ordering::SeqCst);
+    }
+    wait_for_running_recognitions(EXIT_RECOGNITION_GRACE);
     finalize_idle_engines();
 }
 

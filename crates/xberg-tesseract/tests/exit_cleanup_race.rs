@@ -1,10 +1,9 @@
-//! The process-exit cleanup must not free an engine that a thread still uses.
+//! Process exit while engines are still in use must not crash.
 //!
-//! The test runs its own binary as a child process. In the child, a worker thread
-//! recognizes a synthetic page in a loop, and the main thread calls C `exit()` while the
-//! worker is inside a recognition. `exit()` runs the exit cleanup. The child must exit
-//! with status 0. A crash (SIGSEGV or SIGABRT) means the cleanup freed the engine under
-//! the worker. The engine loads the bundled English model, so `required-features` in
+//! Each test runs its own binary as a child process that calls C `exit()`, which runs the
+//! exit cleanup, and asserts that the child exits with status 0. A crash (SIGSEGV or
+//! SIGABRT) means native code ran against freed engine memory or a destroyed tesseract
+//! static. The engine loads the bundled English model, so `required-features` in
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, not(target_arch = "wasm32")))]
@@ -14,11 +13,13 @@
 )]
 #![allow(clippy::print_stdout)] // ~keep: the child reports its progress on stdout by design
 
+use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
-use std::process::Command;
-use std::sync::mpsc;
-use std::time::Duration;
+use std::process::{Command, Output};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, mpsc};
+use std::time::{Duration, Instant};
 use xberg_tesseract::TesseractAPI;
 
 /// The failure message when the build lacks the bundled model. The test fails and does not skip.
@@ -28,7 +29,15 @@ const CHILD_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_CHILD";
 const MODELS_ENV: &str = "XBERG_TESSERACT_EXIT_RACE_MODELS";
 const TEST_NAME: &str = "process_exit_during_recognition_does_not_crash";
 const ATTEMPTS: u64 = 6;
+const DROP_TEST_NAME: &str = "dropping_a_busy_engine_after_exit_began_does_not_crash";
+const STOP_TEST_NAME: &str = "exit_stops_a_recognition_in_flight";
 const RECOGNIZING: &str = "RECOGNIZING";
+const DROPPED: &str = "DROPPED";
+const STOPPED: &str = "RECOGNITION-STOPPED";
+const RAN_ON: &str = "RECOGNITION-RAN-ON";
+/// How long the late exit hook waits for the worker to see its recognition fail. A
+/// recognition that exit does not stop runs for longer: the worker restarts it in a loop.
+const STOP_WAIT: Duration = Duration::from_secs(20);
 const WIDTH: usize = 2400;
 const HEIGHT: usize = 3200;
 
@@ -91,8 +100,11 @@ fn run_child(exit_delay: Duration) -> ! {
         loop {
             api.set_image(&page, WIDTH as i32, HEIGHT as i32, 3, (WIDTH * 3) as i32)
                 .expect("set image");
-            api.recognize().expect("recognize");
+            // Recognition fails once exit has begun. The loop goes on using the engine, so a
+            // cleanup that freed it would still crash the child.
+            let recognized = api.recognize();
             if let Some(sender) = first.take() {
+                recognized.expect("the first recognition");
                 let _ = sender.send(());
             }
         }
@@ -140,4 +152,157 @@ fn process_exit_during_recognition_does_not_crash() {
         "process exit during recognition crashed the child in {} of {ATTEMPTS} attempts: {failures:?}",
         failures.len()
     );
+}
+
+/// Prints one line and flushes it, so the parent sees it even when the child crashes later.
+fn say(line: &str) {
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "{line}");
+    let _ = out.flush();
+}
+
+/// Runs `test_name` in a child process with `mode` and the English models.
+fn run_mode(test_name: &str, mode: &str) -> Output {
+    let models = english_models();
+    Command::new(std::env::current_exe().expect("test binary path"))
+        .args(["--exact", test_name, "--nocapture", "--test-threads=1"])
+        .env(CHILD_ENV, mode)
+        .env(MODELS_ENV, models.path())
+        .output()
+        .expect("run the child process")
+}
+
+/// Asserts a clean exit and that the child printed `marker` before it ended. libtest prints
+/// the test name on the same line as the child's first output, so this matches a substring.
+fn assert_clean_exit(output: &Output, marker: &str) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "the child crashed: exit code {:?}, signal {:?}. stdout: {stdout}, stderr: {stderr}",
+        output.status.code(),
+        output.status.signal()
+    );
+    assert!(
+        stdout.contains(marker),
+        "the child never printed {marker}. stdout: {stdout}, stderr: {stderr}"
+    );
+}
+
+/// The engine the late exit hook drops. Nothing marks it idle, so the exit cleanup skips it.
+static BUSY_ENGINE: Mutex<Option<TesseractAPI>> = Mutex::new(None);
+
+/// Drops the busy engine the way an abandoned OCR thread does when its page ends after
+/// `exit()` has begun.
+extern "C" fn drop_busy_engine() {
+    let engine = BUSY_ENGINE.lock().map(|mut slot| slot.take()).unwrap_or(None);
+    let had_engine = engine.is_some();
+    drop(engine);
+    if had_engine {
+        say(DROPPED);
+    }
+}
+
+/// Runs in the child: drop a busy engine from an exit hook that runs after tesseract's
+/// `DawgCache` static is destroyed, then exit.
+///
+/// C runs exit handlers in reverse order of registration. The hook is registered before
+/// the first engine loads a dictionary, which constructs the function-local `DawgCache`
+/// and registers its destructor; the Tesseract cleanup registers itself after the first
+/// recognition. So `exit()` runs the cleanup, then the `DawgCache` destructor, then the hook.
+fn drop_child() -> ! {
+    // SAFETY: `drop_busy_engine` is an `extern "C" fn()` that lives for the whole process.
+    let registered = unsafe { libc::atexit(drop_busy_engine) };
+    assert_eq!(registered, 0, "register the exit hook");
+    let tessdata = PathBuf::from(std::env::var_os(MODELS_ENV).expect("the parent passes the model directory"));
+    let api = TesseractAPI::new().expect("create engine");
+    api.init(&tessdata, "eng").expect("initialize engine");
+    let page = vec![255u8; 200 * 100 * 3];
+    api.set_image(&page, 200, 100, 3, 200 * 3).expect("set image");
+    api.recognize().expect("recognize");
+    *BUSY_ENGINE.lock().expect("engine slot") = Some(api);
+    // SAFETY: no other thread runs; `exit` runs the registered handlers and ends the process.
+    unsafe { libc::exit(0) }
+}
+
+#[test]
+fn dropping_a_busy_engine_after_exit_began_does_not_crash() {
+    if let Ok(mode) = std::env::var(CHILD_ENV) {
+        assert_eq!(mode, "drop", "the parent runs this test's child with the drop mode");
+        drop_child();
+    }
+    assert_clean_exit(&run_mode(DROP_TEST_NAME, "drop"), DROPPED);
+}
+
+/// Set by the worker once a recognition fails after the first one succeeded.
+static RECOGNITION_STOPPED: AtomicBool = AtomicBool::new(false);
+
+/// Waits for the worker to report that its recognition stopped, and says whether it did.
+/// It runs after the Tesseract cleanup, for the reason given on [`drop_child`].
+extern "C" fn report_stopped_recognition() {
+    let deadline = Instant::now() + STOP_WAIT;
+    while !RECOGNITION_STOPPED.load(Ordering::SeqCst) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    say(if RECOGNITION_STOPPED.load(Ordering::SeqCst) {
+        STOPPED
+    } else {
+        RAN_ON
+    });
+}
+
+/// Runs in the child: a worker recognizes a large page in a loop through the cancellable
+/// path, with a stop check that never asks to stop, and the main thread calls `exit()`
+/// while the worker is inside a recognition. The worker keeps its engine and parks once a
+/// recognition fails, which only exit can cause.
+fn stop_child() -> ! {
+    // SAFETY: `report_stopped_recognition` is an `extern "C" fn()` that lives for the whole process.
+    let registered = unsafe { libc::atexit(report_stopped_recognition) };
+    assert_eq!(registered, 0, "register the exit hook");
+    let tessdata = PathBuf::from(std::env::var_os(MODELS_ENV).expect("the parent passes the model directory"));
+    let (first_done, first_done_receiver) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let api = TesseractAPI::new().expect("create engine");
+        api.init(&tessdata, "eng").expect("initialize engine");
+        let page = synthetic_page();
+        let mut first = Some(first_done);
+        loop {
+            api.set_image(&page, WIDTH as i32, HEIGHT as i32, 3, (WIDTH * 3) as i32)
+                .expect("set image");
+            let recognized = api.recognize_with_cancel(|| false);
+            if let Some(sender) = first.take() {
+                recognized.expect("the first recognition");
+                let _ = sender.send(());
+            } else if recognized.is_err() {
+                RECOGNITION_STOPPED.store(true, Ordering::SeqCst);
+                loop {
+                    std::thread::park();
+                }
+            }
+        }
+    });
+    first_done_receiver
+        .recv_timeout(Duration::from_secs(120))
+        .expect("the first recognition finishes");
+    say(RECOGNIZING);
+    std::thread::sleep(Duration::from_millis(300));
+    // SAFETY: `exit` runs the registered handlers and ends the process; the worker keeps
+    // its engine, which the exit cleanup skips as in use.
+    unsafe { libc::exit(0) }
+}
+
+#[test]
+fn exit_stops_a_recognition_in_flight() {
+    if let Ok(mode) = std::env::var(CHILD_ENV) {
+        assert_eq!(mode, "stop", "the parent runs this test's child with the stop mode");
+        stop_child();
+    }
+    let output = run_mode(STOP_TEST_NAME, "stop");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(RECOGNIZING),
+        "the child never reached its recognition loop. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_clean_exit(&output, STOPPED);
 }
