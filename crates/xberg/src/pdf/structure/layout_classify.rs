@@ -580,7 +580,8 @@ pub(super) fn apply_hint_to_paragraph(para: &mut PdfParagraph, hint: &LayoutHint
 
 /// Compute a paragraph's bounding box from its line segments' positional data.
 ///
-/// Returns `None` if the paragraph has no segments with valid positional data.
+/// Returns `None` if no line has a measured baseline. Lines without one carry placeholder
+/// segment coordinates, while a measured line at the page origin keeps its geometry.
 ///
 /// In PDF coordinates (y=0 at bottom, y increases upward):
 /// - `seg.y` / `seg.baseline_y` is the text baseline (near the bottom of glyphs).
@@ -598,30 +599,25 @@ fn compute_paragraph_bbox(para: &PdfParagraph) -> Option<Rect> {
         return Some(Rect::from_lbrt(left, bottom, right, top));
     }
 
+    let mut segments = para
+        .lines
+        .iter()
+        .filter(|line| line.baseline_y.is_some())
+        .flat_map(|line| &line.segments)
+        .peekable();
+    segments.peek()?;
+
     let mut left = f32::MAX;
     let mut right = f32::MIN;
     let mut bottom = f32::MAX;
     let mut top = f32::MIN;
-    let mut has_data = false;
-
-    for line in &para.lines {
-        for seg in &line.segments {
-            if seg.x == 0.0 && seg.width == 0.0 && seg.y == 0.0 && seg.height == 0.0 {
-                continue;
-            }
-            has_data = true;
-            left = left.min(seg.x);
-            right = right.max(seg.x + seg.width);
-            top = top.max(seg.y + seg.height);
-            bottom = bottom.min(seg.y);
-        }
+    for segment in segments {
+        left = left.min(segment.x);
+        right = right.max(segment.x + segment.width);
+        bottom = bottom.min(segment.y);
+        top = top.max(segment.y + segment.height);
     }
-
-    if has_data {
-        Some(Rect::from_lbrt(left, bottom, right, top))
-    } else {
-        None
-    }
+    Some(Rect::from_lbrt(left, bottom, right, top))
 }
 
 #[cfg(test)]
@@ -883,38 +879,26 @@ mod tests {
 
     #[test]
     fn test_no_positional_data_skips_layout_overrides() {
-        let lines = vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])];
-        let word_count = PdfParagraph::compute_word_count("", &lines);
-        let mut paragraphs = vec![PdfParagraph {
-            text: String::new(),
-            lines,
-            dominant_font_size: 12.0,
-            heading_level: None,
-            is_bold: false,
-            is_list_item: false,
-            is_code_block: false,
-            is_formula: false,
-            is_page_furniture: false,
-            layout_class: None,
-            layout_region_path: None,
-            ocr_source_spans: Vec::new(),
-            caption_for: None,
-            block_bbox: None,
-            word_count,
-        }];
+        for class in [LayoutHintClass::Title, LayoutHintClass::PageHeader] {
+            let hints = [make_hint(class, 0.9, 40.0, 0.0, 560.0, 760.0)];
+            let mut measured = [make_para(50.0, 600.0, 300.0, 14.0)];
+            let mut boxless = measured.clone();
+            boxless[0].lines[0].baseline_y = None;
 
-        let hints = vec![make_hint(LayoutHintClass::Title, 0.9, 40.0, 0.0, 560.0, 760.0)];
-        apply_layout_overrides(&mut paragraphs, &hints, 0.5, 0.5, None);
-        assert_eq!(paragraphs[0].heading_level, None);
-        assert_eq!(paragraphs[0].layout_class, None);
+            assert_eq!(
+                apply_layout_overrides_with_matches(&mut measured, &hints, 0.5, 0.5, None),
+                [Some(0)]
+            );
+            assert_eq!(measured[0].layout_class, Some(class));
 
-        paragraphs[0].heading_level = None;
-        paragraphs[0].layout_class = None;
-
-        let hints = vec![make_hint(LayoutHintClass::PageHeader, 0.9, 40.0, 0.0, 560.0, 760.0)];
-        apply_layout_overrides(&mut paragraphs, &hints, 0.5, 0.5, None);
-        assert!(!paragraphs[0].is_page_furniture);
-        assert_eq!(paragraphs[0].layout_class, None);
+            assert_eq!(
+                apply_layout_overrides_with_matches(&mut boxless, &hints, 0.5, 0.5, None),
+                [None]
+            );
+            assert_eq!(boxless[0].heading_level, None);
+            assert_eq!(boxless[0].layout_class, None);
+            assert!(!boxless[0].is_page_furniture);
+        }
     }
 
     #[test]
@@ -1185,27 +1169,27 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_paragraph_bbox_no_positional_data() {
-        let lines = vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])];
-        let word_count = PdfParagraph::compute_word_count("", &lines);
-        let para = PdfParagraph {
-            text: String::new(),
-            lines,
-            dominant_font_size: 12.0,
-            heading_level: None,
-            is_bold: false,
-            is_list_item: false,
-            is_code_block: false,
-            is_formula: false,
-            is_page_furniture: false,
-            layout_class: None,
-            layout_region_path: None,
-            ocr_source_spans: Vec::new(),
-            caption_for: None,
-            block_bbox: None,
-            word_count,
-        };
-        assert!(compute_paragraph_bbox(&para).is_none());
+    fn test_measured_origin_paragraph_matches_a_hint_that_a_boxless_one_cannot() {
+        let hints = [make_hint(LayoutHintClass::Title, 0.9, 0.0, 0.0, 100.0, 12.0)];
+        let mut measured = [make_para(0.0, 0.0, 100.0, 12.0)];
+        measured[0].lines[0].baseline_y = Some(0.0);
+        let mut boxless = measured.clone();
+        boxless[0].lines[0].baseline_y = None;
+
+        let bbox = compute_paragraph_bbox(&measured[0]).expect("a measured origin has geometry");
+        assert_eq!((bbox.left, bbox.y_min, bbox.right, bbox.y_max), (0.0, 0.0, 100.0, 12.0));
+        assert_eq!(
+            apply_layout_overrides_with_matches(&mut measured, &hints, 0.5, 0.5, None),
+            [Some(0)]
+        );
+        assert_eq!(measured[0].heading_level, Some(1));
+
+        assert!(compute_paragraph_bbox(&boxless[0]).is_none());
+        assert_eq!(
+            apply_layout_overrides_with_matches(&mut boxless, &hints, 0.5, 0.5, None),
+            [None]
+        );
+        assert_eq!(boxless[0].heading_level, None);
     }
 
     #[test]
