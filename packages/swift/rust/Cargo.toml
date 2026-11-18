@@ -61,7 +61,7 @@ xml = ["xberg/xml"]
 
 [dependencies]
 async-trait = "0.1"
-crawlberg = { default-features = false, version = "1.13.0" }
+crawlberg = { default-features = false, version = "1.13.1" }
 html-to-markdown-rs = { default-features = false, version = "3.22.2" }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }

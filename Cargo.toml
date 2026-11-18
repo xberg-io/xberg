@@ -70,8 +70,8 @@ cc = "1.11"
 cfb = "0.16"
 chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "color", "suggestions"] }
-comrak = { version = "0.59", default-features = false }
-crawlberg = { version = "1.13.0", default-features = false }
+comrak = { version = "1.0", default-features = false }
+crawlberg = { version = "1.13.1", default-features = false }
 criterion = { version = "0.8", features = ["html_reports"] }
 dbase = "0.8"
 flate2 = "1.1"
