@@ -27,6 +27,9 @@ class SetupContract(unittest.TestCase):
         action = (ROOT / ".github/actions/setup-onnx-runtime/action.yml").read_text()
         workflow = (ROOT / ".github/workflows/ci-rust.yaml").read_text()
         version_sources(action, workflow)
+        missing_consumer = workflow.replace("uses: ./.github/actions/setup-onnx-runtime", "uses: ./unused-action", 1)
+        with self.assertRaisesRegex(ValueError, "expected exactly six main ORT action consumers, found 5"):  # noqa: PT027 -- Setup runs with stdlib only.
+            version_sources(action, missing_consumer)
         focused = (ROOT / ".github/workflows/ci-focused-pr.yaml").read_text()
         marker = "      - name: Setup ONNX Runtime for NLI admission tests"
         assert focused.count(marker) == 1
