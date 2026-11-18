@@ -3,6 +3,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use super::{SecurityBudget, SecurityLimits, SheetBounds, SkippedSheets, preflight_sheet};
+use crate::extraction::excel::ExcelReadCancellation;
 use crate::{Result, XbergError};
 
 const BIFF_BOF: u16 = 0x0809;
@@ -11,7 +12,12 @@ const BIFF_BOUND_SHEET: u16 = 0x0085;
 const BIFF_DIMENSIONS: u16 = 0x0200;
 const BIFF_WORKSHEET: u16 = 0x0010;
 
-fn next_record(reader: &mut impl Read, budget: &mut SecurityBudget) -> Result<Option<(u16, Vec<u8>)>> {
+fn next_record(
+    reader: &mut impl Read,
+    budget: &mut SecurityBudget,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<(u16, Vec<u8>)>> {
+    cancel.check()?;
     let mut header = [0u8; 4];
     if reader.read(&mut header[..1])? == 0 {
         return Ok(None);
@@ -28,11 +34,12 @@ fn next_record(reader: &mut impl Read, budget: &mut SecurityBudget) -> Result<Op
 pub(in crate::extraction::excel) fn validate_xls(
     reader: &mut (impl Read + Seek),
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     let mut worksheets = Vec::new();
-    while let Some((kind, data)) = next_record(reader, &mut budget)? {
+    while let Some((kind, data)) = next_record(reader, &mut budget, cancel)? {
         if kind == BIFF_EOF {
             break;
         }
@@ -44,7 +51,7 @@ pub(in crate::extraction::excel) fn validate_xls(
     for (index, offset) in worksheets.into_iter().enumerate() {
         preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             reader.seek(SeekFrom::Start(offset))?;
-            validate_sheet(reader, budget, limits)
+            validate_sheet(reader, budget, limits, cancel)
         })?;
     }
     Ok(skipped)
@@ -59,6 +66,7 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     data: &[u8],
     skipped: &SkippedSheets,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<Option<Vec<u8>>> {
     if skipped.is_empty() {
         return Ok(None);
@@ -71,35 +79,43 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     } else {
         "/Book"
     };
-    let mut stream = Vec::new();
     let read_limit = u64::try_from(limits.max_archive_size).unwrap_or(u64::MAX);
-    compound
-        .open_stream(stream_name)?
-        .take(read_limit.saturating_add(1))
-        .read_to_end(&mut stream)?;
+    let mut stream = cancel.read_to_end(compound.open_stream(stream_name)?.take(read_limit.saturating_add(1)))?;
     if stream.len() as u64 > read_limit {
         return Err(XbergError::validation(
             "XLS workbook stream exceeds the configured archive size".to_string(),
         ));
     }
-    repoint_skipped_sheets(&mut stream, skipped, limits)?;
+    repoint_skipped_sheets(&mut stream, skipped, limits, cancel)?;
     // ~keep Calamine reads only the workbook stream, so the rewritten container carries just that;
     // the document-information, VBA and picture streams of the original are dropped, and nothing
     // downstream reads them from XLS input.
     // ~keep Calamine's CFB reader cannot open a V4 (4096-byte sector) container once the stream
     // grows past about 2 KiB, so the workbook stream is always rewritten into a V3 container.
     let mut rewritten = cfb::CompoundFile::create_with_version(cfb::Version::V3, std::io::Cursor::new(Vec::new()))?;
-    std::io::Write::write_all(&mut rewritten.create_stream(stream_name)?, &stream)?;
+    {
+        let mut output = rewritten.create_stream(stream_name)?;
+        for chunk in stream.chunks(16 * 1024) {
+            cancel.check()?;
+            std::io::Write::write_all(&mut output, chunk)?;
+        }
+    }
     Ok(Some(rewritten.into_inner().into_inner()))
 }
 
-fn repoint_skipped_sheets(stream: &mut Vec<u8>, skipped: &SkippedSheets, limits: &SecurityLimits) -> Result<()> {
+fn repoint_skipped_sheets(
+    stream: &mut Vec<u8>,
+    skipped: &SkippedSheets,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<()> {
     let mut budget = SecurityBudget::from_limits(limits);
     let empty_sheet_start = u32::try_from(stream.len())
         .map_err(|_| XbergError::validation("XLS workbook stream is too large to rewrite".to_string()))?;
     let (mut first_record, mut empty_sheet) = (true, Vec::new());
     let (mut position, mut index) = (0usize, 0usize);
     while let Some((kind, length)) = record_header(stream, position) {
+        cancel.check()?;
         budget.step()?;
         let data = position + 4..position + 4 + length;
         if kind == BIFF_BOF && first_record {
@@ -136,14 +152,19 @@ fn record_header(stream: &[u8], position: usize) -> Option<(u16, usize)> {
     (position + 4 + length <= stream.len()).then_some((kind, length))
 }
 
-fn validate_sheet(reader: &mut impl Read, budget: &mut SecurityBudget, limits: &SecurityLimits) -> Result<()> {
+fn validate_sheet(
+    reader: &mut impl Read,
+    budget: &mut SecurityBudget,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<()> {
     let mut bounds = LegacyBounds {
         max_content_size: limits.max_content_size,
         ..Default::default()
     };
     let mut seen_bof = false;
     let mut nested = 0usize;
-    while let Some((kind, data)) = next_record(reader, budget)? {
+    while let Some((kind, data)) = next_record(reader, budget, cancel)? {
         if nested > 0 {
             match kind {
                 BIFF_BOF => nested += 1,
@@ -316,6 +337,15 @@ fn account_cell_record(kind: u16, data: &[u8], bounds: &mut LegacyBounds, budget
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn validate_xls(reader: &mut (impl Read + Seek), limits: &SecurityLimits) -> Result<SkippedSheets> {
+        super::validate_xls(reader, limits, ExcelReadCancellation::default())
+    }
+
+    fn drop_skipped_sheets(data: &[u8], skipped: &SkippedSheets, limits: &SecurityLimits) -> Result<Option<Vec<u8>>> {
+        super::drop_skipped_sheets(data, skipped, limits, ExcelReadCancellation::default())
+    }
+
     use crate::extraction::excel::tests::assert_sheet_skipped_for_cell_limit;
     use std::io::{Cursor, Write};
 

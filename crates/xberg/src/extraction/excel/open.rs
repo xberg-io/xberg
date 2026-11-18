@@ -5,7 +5,11 @@
 use super::*;
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &SecurityLimits) -> Result<SkippedSheets> {
+fn validate_legacy_xls_container<R: Read + Seek>(
+    mut reader: R,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<SkippedSheets> {
     let container_size = reader.seek(std::io::SeekFrom::End(0))?;
     reader.seek(std::io::SeekFrom::Start(0))?;
     let mut compound = cfb::OpenOptions::new()
@@ -14,6 +18,7 @@ fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &Securit
     let configured_limit = limits.max_archive_size as u64;
 
     for entry in compound.walk().filter(|entry| entry.is_stream()) {
+        cancel.check()?;
         let declared_size = entry.len();
         if declared_size > configured_limit {
             return Err(XbergError::validation(format!(
@@ -35,7 +40,7 @@ fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &Securit
     };
     if compound.is_stream(stream_name) {
         let mut workbook = compound.open_stream(stream_name)?;
-        return super::table_budget::validate_xls(&mut workbook, limits);
+        return super::table_budget::validate_xls(&mut workbook, limits, cancel);
     }
     Ok(SkippedSheets::default())
 }
@@ -66,7 +71,7 @@ fn row_only_dimension(event: &quick_xml::events::BytesStart<'_>) -> Result<bool>
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn remove_row_only_xlsx_dimensions(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
+fn remove_row_only_xlsx_dimensions(xml: &[u8], cancel: ExcelReadCancellation<'_>) -> Result<(Vec<u8>, bool)> {
     use quick_xml::events::Event;
 
     let mut reader = quick_xml::Reader::from_reader(xml);
@@ -75,6 +80,7 @@ fn remove_row_only_xlsx_dimensions(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
     let mut changed = false;
 
     loop {
+        cancel.check()?;
         buffer.clear();
         let event = reader
             .read_event_into(&mut buffer)
@@ -99,7 +105,7 @@ fn remove_row_only_xlsx_dimensions(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn remove_ods_row_whitespace(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
+fn remove_ods_row_whitespace(xml: &[u8], cancel: ExcelReadCancellation<'_>) -> Result<(Vec<u8>, bool)> {
     use quick_xml::events::Event;
 
     let mut reader = quick_xml::Reader::from_reader(xml);
@@ -110,6 +116,7 @@ fn remove_ods_row_whitespace(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
     let mut changed = false;
 
     loop {
+        cancel.check()?;
         buffer.clear();
         let event = reader
             .read_event_into(&mut buffer)
@@ -145,25 +152,36 @@ fn remove_ods_row_whitespace(xml: &[u8]) -> Result<(Vec<u8>, bool)> {
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn read_zip_member_bounded<R: Read + Seek>(
-    reader: &mut R,
+struct MemberLocation {
     header_start: u64,
     compressed_size: u64,
     crc32: u32,
+}
+
+#[cfg(any(feature = "excel", feature = "excel-wasm"))]
+fn read_zip_member_bounded<R: Read + Seek>(
+    reader: &mut R,
+    location: MemberLocation,
     limit: usize,
     member_name: &str,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<Vec<u8>> {
     let read_limit = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
-    reader.seek(std::io::SeekFrom::Start(header_start))?;
+    reader.seek(std::io::SeekFrom::Start(location.header_start))?;
     let options = zip::read::ZipReadOptions::new()
-        .override_compressed_size(compressed_size)
+        .override_compressed_size(location.compressed_size)
         .override_uncompressed_size(read_limit)
-        .override_crc(crc32);
-    let mut member = zip::read::read_zipfile_from_stream_with_options(reader, options)
+        .override_crc(location.crc32);
+    // ZIP streaming readers drain compressed bytes on drop. Apply cancellation to the source too. ~keep
+    let mut guarded = cancel.guard_reader(reader);
+    let member = zip::read::read_zipfile_from_stream_with_options(&mut guarded, options);
+    cancel.check()?;
+    let member = member
         .map_err(|error| XbergError::parsing(format!("Invalid spreadsheet ZIP entry '{member_name}': {error}")))?
         .ok_or_else(|| XbergError::parsing(format!("Missing spreadsheet ZIP entry '{member_name}'")))?;
-    let mut bytes = Vec::new();
-    member.by_ref().take(read_limit).read_to_end(&mut bytes)?;
+    let bytes = cancel.read_to_end(member.take(read_limit));
+    cancel.check()?;
+    let bytes = bytes?;
     if bytes.len() > limit {
         return Err(XbergError::validation(format!(
             "Spreadsheet ZIP member '{member_name}' exceeds the configured {limit}-byte archive limit"
@@ -176,12 +194,13 @@ fn read_zip_member_bounded<R: Read + Seek>(
 fn rewrite_spreadsheet_zip(
     data: &[u8],
     limits: &SecurityLimits,
-    mut transform: impl FnMut(&str, &[u8]) -> Result<(Vec<u8>, bool)>,
+    mut transform: impl FnMut(&str, &[u8], cancel: ExcelReadCancellation<'_>) -> Result<(Vec<u8>, bool)>,
 ) -> Result<Option<Vec<u8>>> {
     let archive = zip::ZipArchive::new(Cursor::new(data))
         .map_err(|error| XbergError::parsing(format!("Invalid spreadsheet ZIP: {error}")))?;
     let mut entry_metadata = Vec::with_capacity(archive.len());
     for index in 0..archive.len() {
+        cancel.check()?;
         let entry = archive
             .by_index_data(index)
             .map_err(|error| XbergError::parsing(format!("Invalid spreadsheet ZIP entry: {error}")))?;
@@ -202,17 +221,21 @@ fn rewrite_spreadsheet_zip(
     let mut actual_contents_size = 0usize;
     let mut changed = false;
     for (name, is_dir, header_start, compressed_size, crc32) in entry_metadata {
+        cancel.check()?;
         if is_dir {
             entries.push((name, None));
             continue;
         }
         let contents = read_zip_member_bounded(
             &mut reader,
-            header_start,
-            compressed_size,
-            crc32,
+            MemberLocation {
+                header_start,
+                compressed_size,
+                crc32,
+            },
             limits.max_archive_size,
             &name,
+            cancel,
         )?;
         actual_contents_size = actual_contents_size
             .checked_add(contents.len())
@@ -232,17 +255,22 @@ fn rewrite_spreadsheet_zip(
         return Ok(None);
     }
 
-    write_spreadsheet_zip(entries, data.len()).map(Some)
+    write_spreadsheet_zip(entries, data.len(), cancel).map(Some)
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn write_spreadsheet_zip(entries: Vec<(String, Option<Vec<u8>>)>, capacity: usize) -> Result<Vec<u8>> {
+fn write_spreadsheet_zip(
+    entries: Vec<(String, Option<Vec<u8>>)>,
+    capacity: usize,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Vec<u8>> {
     use std::io::Write as _;
 
     let mut rewritten = Vec::with_capacity(capacity);
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut rewritten));
         for (name, contents) in entries {
+            cancel.check()?;
             let options = zip::write::SimpleFileOptions::default().compression_method(if name == "mimetype" {
                 zip::CompressionMethod::Stored
             } else {
@@ -253,7 +281,10 @@ fn write_spreadsheet_zip(entries: Vec<(String, Option<Vec<u8>>)>, capacity: usiz
                     writer.start_file(name, options).map_err(|error| {
                         XbergError::parsing(format!("Failed to rewrite spreadsheet ZIP entry: {error}"))
                     })?;
-                    writer.write_all(&contents)?;
+                    for chunk in contents.chunks(16 * 1024) {
+                        cancel.check()?;
+                        writer.write_all(chunk)?;
+                    }
                 }
                 None => writer.add_directory(name, options).map_err(|error| {
                     XbergError::parsing(format!("Failed to rewrite spreadsheet ZIP directory: {error}"))
@@ -268,22 +299,36 @@ fn write_spreadsheet_zip(entries: Vec<(String, Option<Vec<u8>>)>, capacity: usiz
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn normalize_xlsx_dimensions(data: &[u8], limits: &SecurityLimits) -> Result<Option<Vec<u8>>> {
-    rewrite_spreadsheet_zip(data, limits, |name, contents| {
-        if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
-            remove_row_only_xlsx_dimensions(contents)
-        } else {
-            Ok((contents.to_vec(), false))
-        }
-    })
+fn normalize_xlsx_dimensions(
+    data: &[u8],
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<Vec<u8>>> {
+    rewrite_spreadsheet_zip(
+        data,
+        limits,
+        |name, contents| {
+            if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
+                remove_row_only_xlsx_dimensions(contents, cancel)
+            } else {
+                Ok((contents.to_vec(), false))
+            }
+        },
+        cancel,
+    )
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn has_row_only_xlsx_dimensions<R: Read + Seek>(reader: R, limits: &SecurityLimits) -> Result<bool> {
+fn has_row_only_xlsx_dimensions<R: Read + Seek>(
+    reader: R,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<bool> {
     let archive =
         zip::ZipArchive::new(reader).map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP: {error}")))?;
     let mut worksheets = Vec::new();
     for index in 0..archive.len() {
+        cancel.check()?;
         let entry = archive
             .by_index_data(index)
             .map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP entry: {error}")))?;
@@ -298,15 +343,20 @@ fn has_row_only_xlsx_dimensions<R: Read + Seek>(reader: R, limits: &SecurityLimi
     }
     let mut reader = archive.into_inner();
     for (name, header_start, compressed_size, crc32) in worksheets {
+        tracing::debug!(target: "xberg::excel::worksheet_dimensions", "checking worksheet dimensions");
+        cancel.check()?;
         let contents = read_zip_member_bounded(
             &mut reader,
-            header_start,
-            compressed_size,
-            crc32,
+            MemberLocation {
+                header_start,
+                compressed_size,
+                crc32,
+            },
             limits.max_archive_size,
             &name,
+            cancel,
         )?;
-        if remove_row_only_xlsx_dimensions(&contents)?.1 {
+        if remove_row_only_xlsx_dimensions(&contents, cancel)?.1 {
             return Ok(true);
         }
     }
@@ -314,28 +364,47 @@ fn has_row_only_xlsx_dimensions<R: Read + Seek>(reader: R, limits: &SecurityLimi
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn drop_skipped_ods_sheets(data: &[u8], limits: &SecurityLimits, skipped: &SkippedSheets) -> Result<Option<Vec<u8>>> {
+fn drop_skipped_ods_sheets(
+    data: &[u8],
+    limits: &SecurityLimits,
+    skipped: &SkippedSheets,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<Vec<u8>>> {
     if skipped.is_empty() {
         return Ok(None);
     }
-    rewrite_spreadsheet_zip(data, limits, |name, contents| {
-        if name == "content.xml" {
-            super::table_budget::drop_skipped_ods_sheets(contents, skipped, limits)
-        } else {
-            Ok((contents.to_vec(), false))
-        }
-    })
+    rewrite_spreadsheet_zip(
+        data,
+        limits,
+        |name, contents| {
+            if name == "content.xml" {
+                super::table_budget::drop_skipped_ods_sheets(contents, skipped, limits, cancel)
+            } else {
+                Ok((contents.to_vec(), false))
+            }
+        },
+        cancel,
+    )
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn normalize_ods_row_whitespace(data: &[u8], limits: &SecurityLimits) -> Result<Option<Vec<u8>>> {
-    rewrite_spreadsheet_zip(data, limits, |name, contents| {
-        if name == "content.xml" {
-            remove_ods_row_whitespace(contents)
-        } else {
-            Ok((contents.to_vec(), false))
-        }
-    })
+fn normalize_ods_row_whitespace(
+    data: &[u8],
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<Vec<u8>>> {
+    rewrite_spreadsheet_zip(
+        data,
+        limits,
+        |name, contents| {
+            if name == "content.xml" {
+                remove_ods_row_whitespace(contents, cancel)
+            } else {
+                Ok((contents.to_vec(), false))
+            }
+        },
+        cancel,
+    )
 }
 
 /// Reject a ZIP-backed spreadsheet (XLSX/XLSM/XLTM/XLAM/XLSB/ODS) whose ZIP central
@@ -372,6 +441,7 @@ fn validate_zip_container<R: Read + Seek>(
     mut reader: R,
     file_extension: &str,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<SkippedSheets> {
     const OLE_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
@@ -382,7 +452,7 @@ fn validate_zip_container<R: Read + Seek>(
 
     let extension = file_extension.to_ascii_lowercase();
     if matches!(extension.as_str(), ".xls" | ".xla") && has_ole_signature {
-        return validate_legacy_xls_container(reader, limits);
+        return validate_legacy_xls_container(reader, limits, cancel);
     }
 
     let mut archive = match zip::ZipArchive::new(reader) {
@@ -397,18 +467,21 @@ fn validate_zip_container<R: Read + Seek>(
             limits.max_files_in_archive
         )));
     }
+    cancel.check()?;
     crate::extractors::security::ZipBombValidator::new(limits.clone()).validate(&mut archive)?;
+    cancel.check()?;
     archive.validate_header_consistency().map_err(|error| {
         XbergError::security_with_source(format!("Invalid spreadsheet ZIP header consistency: {error}"), error)
     })?;
+    cancel.check()?;
     if extension == ".xlsb" {
-        super::table_budget::validate_xlsb_parts(&mut archive, limits)?;
+        super::table_budget::validate_xlsb_parts(&mut archive, limits, cancel)?;
     }
     if matches!(extension.as_str(), ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
-        super::table_budget::validate_xlsx_string_parts(&mut archive, limits)?;
+        super::table_budget::validate_xlsx_string_parts(&mut archive, limits, cancel)?;
     }
     if extension == ".ods" {
-        return super::table_budget::validate_ods(&mut archive, limits);
+        return super::table_budget::validate_ods(&mut archive, limits, cancel);
     }
     Ok(SkippedSheets::default())
 }
@@ -442,7 +515,7 @@ pub(crate) fn read_excel_file_with_cancellation(
             .and_then(|extension| extension.to_str())
             .map(|extension| format!(".{extension}"))
             .unwrap_or_default();
-        validate_zip_container(std::io::BufReader::new(check_file), &file_extension, limits)?
+        validate_zip_container(std::io::BufReader::new(check_file), &file_extension, limits, cancel)?
     };
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
     let skipped = {
@@ -486,16 +559,18 @@ pub(crate) fn read_excel_file_with_cancellation(
     read_detected_spreadsheet_file(file_path, limits, cancel)
 }
 
-fn read_bounded_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<Vec<u8>> {
+fn read_bounded_spreadsheet_file(
+    file_path: &str,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Vec<u8>> {
     let file = std::fs::File::open(file_path)?;
     if file.metadata()?.len() > limits.max_archive_size as u64 {
         return Err(XbergError::validation(
             "Spreadsheet file exceeds the configured archive size".to_string(),
         ));
     }
-    let mut data = Vec::new();
-    file.take((limits.max_archive_size as u64).saturating_add(1))
-        .read_to_end(&mut data)?;
+    let data = cancel.read_to_end(file.take((limits.max_archive_size as u64).saturating_add(1)))?;
     if data.len() > limits.max_archive_size {
         return Err(XbergError::validation(
             "Spreadsheet file exceeds the configured archive size".to_string(),
@@ -510,7 +585,7 @@ fn read_detected_spreadsheet_file(
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
     cancel.check()?;
-    let data = read_bounded_spreadsheet_file(file_path, limits)?;
+    let data = read_bounded_spreadsheet_file(file_path, limits, cancel)?;
     const OLE_SIGNATURE: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     let extension = if data.starts_with(OLE_SIGNATURE) {
         ".xls"
@@ -539,17 +614,17 @@ fn read_xlsx_family_file(
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
     let check_file = std::fs::File::open(file_path)?;
-    if has_row_only_xlsx_dimensions(std::io::BufReader::new(check_file), limits)? {
-        let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
-        let normalized = normalize_xlsx_dimensions(&bytes, limits)?
+    if has_row_only_xlsx_dimensions(std::io::BufReader::new(check_file), limits, cancel)? {
+        let bytes = read_bounded_spreadsheet_file(file_path, limits, cancel)?;
+        let normalized = normalize_xlsx_dimensions(&bytes, limits, cancel)?
             .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))?;
         cancel.check()?;
         let mut workbook = calamine::Xlsx::new(Cursor::new(normalized))
             .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
         let skipped = super::table_budget::validate_xlsx(&mut workbook, limits, cancel)?;
         let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped, cancel)?;
-        result.revisions = extract_xlsx_revisions_from_file(file_path);
-        if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
+        result.revisions = extract_xlsx_revisions_from_file(file_path, cancel)?;
+        if let Some(comments) = extract_xlsx_comments_from_file(file_path, cancel)? {
             result.metadata.insert("comments".to_owned(), comments);
         }
         return Ok((result, warnings));
@@ -560,8 +635,8 @@ fn read_xlsx_family_file(
         .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
     let skipped = super::table_budget::validate_xlsx(&mut workbook, limits, cancel)?;
     let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped, cancel)?;
-    result.revisions = extract_xlsx_revisions_from_file(file_path);
-    if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
+    result.revisions = extract_xlsx_revisions_from_file(file_path, cancel)?;
+    if let Some(comments) = extract_xlsx_comments_from_file(file_path, cancel)? {
         result.metadata.insert("comments".to_owned(), comments);
     }
     Ok((result, warnings))
@@ -617,7 +692,7 @@ fn read_xla_file(
         // The skipped sheets are dropped by rewriting the input, so the file is read once under the
         // archive-size bound and that buffer is validated again and parsed.
         return read_excel_bytes_with_cancellation(
-            &read_bounded_spreadsheet_file(file_path, limits)?,
+            &read_bounded_spreadsheet_file(file_path, limits, cancel)?,
             ".xla",
             limits,
             cancel,
@@ -680,7 +755,7 @@ pub(crate) fn read_excel_bytes_with_cancellation(
     let warnings: Vec<ProcessingWarning> = Vec::new();
 
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-    let skipped = validate_zip_container(Cursor::new(data), file_extension, limits)?;
+    let skipped = validate_zip_container(Cursor::new(data), file_extension, limits, cancel)?;
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
     let skipped = {
         let _ = limits;
@@ -720,8 +795,8 @@ fn read_xlsx_family_bytes(
     limits: &SecurityLimits,
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
-    let normalized = if has_row_only_xlsx_dimensions(Cursor::new(data), limits)? {
-        normalize_xlsx_dimensions(data, limits)?
+    let normalized = if has_row_only_xlsx_dimensions(Cursor::new(data), limits, cancel)? {
+        normalize_xlsx_dimensions(data, limits, cancel)?
     } else {
         None
     };
@@ -731,8 +806,8 @@ fn read_xlsx_family_bytes(
         calamine::Xlsx::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
     let skipped = super::table_budget::validate_xlsx(&mut workbook, limits, cancel)?;
     let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped, cancel)?;
-    result.revisions = extract_xlsx_revisions_from_bytes(data);
-    if let Some(comments) = extract_xlsx_comments_from_bytes(data) {
+    result.revisions = extract_xlsx_revisions_from_bytes(data, cancel)?;
+    if let Some(comments) = extract_xlsx_comments_from_bytes(data, cancel)? {
         result.metadata.insert("comments".to_owned(), comments);
     }
     Ok((result, warnings))
@@ -781,7 +856,7 @@ fn read_xls_bytes(
     skipped: &SkippedSheets,
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
-    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits, cancel)?;
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     cancel.check()?;
     let workbook =
@@ -802,7 +877,7 @@ fn read_xla_bytes(
     skipped: &SkippedSheets,
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
-    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits, cancel)?;
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     cancel.check()?;
     match calamine::Xls::new(cursor) {
@@ -856,7 +931,7 @@ fn read_ods_bytes(
     skipped: &SkippedSheets,
     cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelReadResult> {
-    let rewritten = drop_skipped_ods_sheets(data, limits, skipped)?;
+    let rewritten = drop_skipped_ods_sheets(data, limits, skipped, cancel)?;
     let data = rewritten.as_deref().unwrap_or(data);
     let cursor = Cursor::new(data);
     cancel.check()?;
@@ -866,7 +941,7 @@ fn read_ods_bytes(
             Ok((result, warnings))
         }
         Err(original_error) => {
-            let Some(normalized) = normalize_ods_row_whitespace(data, limits)? else {
+            let Some(normalized) = normalize_ods_row_whitespace(data, limits, cancel)? else {
                 return Err(XbergError::parsing(format!("Failed to parse ODS: {original_error}")));
             };
             cancel.check()?;
@@ -888,7 +963,7 @@ fn read_ods_file(
 ) -> Result<ExcelReadResult> {
     if !skipped.is_empty() {
         return read_excel_bytes_with_cancellation(
-            &read_bounded_spreadsheet_file(file_path, limits)?,
+            &read_bounded_spreadsheet_file(file_path, limits, cancel)?,
             ".ods",
             limits,
             cancel,
@@ -902,8 +977,8 @@ fn read_ods_file(
             Ok((result, warnings))
         }
         Err(original_error) => {
-            let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
-            let Some(normalized) = normalize_ods_row_whitespace(&bytes, limits)? else {
+            let bytes = read_bounded_spreadsheet_file(file_path, limits, cancel)?;
+            let Some(normalized) = normalize_ods_row_whitespace(&bytes, limits, cancel)? else {
                 return Err(XbergError::parsing(format!("Failed to parse ODS: {original_error}")));
             };
             cancel.check()?;
@@ -917,7 +992,7 @@ fn read_ods_file(
 
 #[cfg(all(test, any(feature = "excel", feature = "excel-wasm")))]
 mod zip_header_consistency_tests {
-    use super::validate_zip_container;
+    use super::{ExcelReadCancellation, validate_zip_container};
     use crate::extractors::security::SecurityLimits;
     use std::borrow::Cow;
     use std::io::{Cursor, Write};
@@ -931,6 +1006,7 @@ mod zip_header_consistency_tests {
         let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         for (name, contents) in entries {
+            cancel.check()?;
             writer.start_file(*name, options).expect("start synthetic ZIP entry");
             writer.write_all(contents).expect("write synthetic ZIP payload");
         }
@@ -991,6 +1067,7 @@ mod zip_header_consistency_tests {
         let mut archive = parsed.expect("constructor success checked above");
         assert_eq!(archive.len(), expected_entries, "unexpected retained entry count");
         for index in 0..archive.len() {
+            cancel.check()?;
             let entry = archive
                 .by_index_raw(index)
                 .expect("fixture raw entry must remain readable");
@@ -1013,8 +1090,13 @@ mod zip_header_consistency_tests {
                 );
             }
         }
-        let error = validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default())
-            .expect_err("constructor-readable inconsistent ZIP must be rejected before spreadsheet parsing");
+        let error = validate_zip_container(
+            Cursor::new(bytes),
+            ".xlsx",
+            &SecurityLimits::default(),
+            ExcelReadCancellation::default(),
+        )
+        .expect_err("constructor-readable inconsistent ZIP must be rejected before spreadsheet parsing");
         assert!(
             error.to_string().contains(reason),
             "expected {reason:?}, received {error}"
@@ -1042,8 +1124,13 @@ mod zip_header_consistency_tests {
                 Cow::Borrowed("données.txt")
             ));
         }
-        validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default())
-            .expect("matching local and central headers must pass existing spreadsheet validation");
+        validate_zip_container(
+            Cursor::new(bytes),
+            ".xlsx",
+            &SecurityLimits::default(),
+            ExcelReadCancellation::default(),
+        )
+        .expect("matching local and central headers must pass existing spreadsheet validation");
     }
 
     #[test]
@@ -1154,7 +1241,7 @@ mod zip_header_consistency_tests {
                 "Potential ZIP bomb detected: compressed 9B -> uncompressed 9B (ratio: 1.0:1)",
             ),
         ] {
-            let error = validate_zip_container(Cursor::new(&bytes), ".xlsx", &limits)
+            let error = validate_zip_container(Cursor::new(&bytes), ".xlsx", &limits, ExcelReadCancellation::default())
                 .expect_err("configured limit must reject the inconsistent archive first");
             assert!(
                 error.to_string().contains(expected),

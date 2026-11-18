@@ -4,14 +4,16 @@ use std::io::{BufReader, Read, Seek};
 
 use quick_xml::events::Event;
 
-use super::{SecurityBudget, SecurityLimits};
+use super::{ExcelReadCancellation, SecurityBudget, SecurityLimits};
 use crate::{Result, XbergError};
 
 pub(in crate::extraction::excel) fn validate_xlsx_string_parts<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<()> {
     for index in 0..archive.len() {
+        cancel.check()?;
         let member = archive.by_index(index).map_err(xml_error)?;
         let name = member.name().map_err(xml_error)?;
         let basename = name.rsplit(['/', '\\']).next().unwrap_or(name.as_ref());
@@ -20,7 +22,7 @@ pub(in crate::extraction::excel) fn validate_xlsx_string_parts<R: Read + Seek>(
         }
         drop(name);
         let bounded = member.take((limits.max_archive_size as u64).saturating_add(1));
-        validate_strings(BufReader::new(bounded), limits)?;
+        validate_strings(BufReader::new(bounded), limits, cancel)?;
     }
     Ok(())
 }
@@ -29,7 +31,11 @@ fn xml_error(error: impl std::fmt::Display) -> XbergError {
     XbergError::parsing(format!("Invalid spreadsheet shared strings: {error}"))
 }
 
-fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits) -> Result<()> {
+fn validate_strings(
+    reader: impl std::io::BufRead,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<()> {
     let mut reader = quick_xml::Reader::from_reader(reader);
     reader.config_mut().expand_empty_elements = true;
     let mut budget = SecurityBudget::from_limits(limits);
@@ -38,6 +44,7 @@ fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits) -> R
     let mut string_depth = 0usize;
     let mut buffer = Vec::new();
     loop {
+        cancel.check()?;
         budget.step()?;
         buffer.clear();
         let event = reader.read_event_into(&mut buffer).map_err(xml_error)?;

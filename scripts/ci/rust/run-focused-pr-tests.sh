@@ -417,6 +417,7 @@ run_office_page_cases() {
   run_exact 'extraction::pptx::container::tests::cancellation_during_one_slide_stops_before_reading_the_next' --lib
   run_exact 'cancellation::tests::hard_cancellation_wakes_waiters_on_all_scoped_clones' --lib
   run_exact 'extraction::excel::tests::office_cancellation::cancelled_and_abandoned_excel_read_release_shared_admission_before_remaining_sheets' --lib
+  run_exact 'extraction::excel::tests::office_cancellation::cancelled_and_abandoned_excel_reads_stop_during_xlsx_dimension_preflight' --lib
   run_exact 'extractors::pptx::blocking_tests::pptx_excel_and_docx_hold_the_same_blocking_admission_slot' --lib
   run_exact 'extractors::pptx::blocking_tests::pptx_byte_batch_worker_panic_stays_a_parsing_error' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib

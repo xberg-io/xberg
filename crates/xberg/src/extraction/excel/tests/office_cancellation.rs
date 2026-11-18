@@ -18,7 +18,12 @@ const PPTX: &str = "application/vnd.openxmlformats-officedocument.presentationml
 const DECK: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/office/merged_table.pptx");
 const DEADLINE: Duration = Duration::from_secs(5);
 
+const DIMENSION_SCAN: &str = "xberg::excel::worksheet_dimensions";
+const WORKSHEET_PARSE: &str = "xberg::excel::worksheet";
+
 struct SheetGate {
+    target: &'static str,
+    parses: Arc<AtomicUsize>,
     seen: Arc<AtomicUsize>,
     reached_second: Mutex<Option<oneshot::Sender<()>>>,
     allow_parse: Mutex<mpsc::Receiver<()>>,
@@ -26,7 +31,10 @@ struct SheetGate {
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for SheetGate {
     fn on_event(&self, event: &tracing::Event<'_>, _: Context<'_, S>) {
-        if event.metadata().target() == "xberg::excel::worksheet" && self.seen.fetch_add(1, Ordering::Relaxed) == 1 {
+        if event.metadata().target() == WORKSHEET_PARSE {
+            self.parses.fetch_add(1, Ordering::Relaxed);
+        }
+        if event.metadata().target() == self.target && self.seen.fetch_add(1, Ordering::Relaxed) == 1 {
             self.reached_second.lock().unwrap().take().unwrap().send(()).unwrap();
             self.allow_parse.lock().unwrap().recv_timeout(DEADLINE).unwrap();
         }
@@ -69,16 +77,30 @@ fn cancelled_and_abandoned_excel_read_release_shared_admission_before_remaining_
         ["Sheet1", "Sheet2", "Sheet3"]
     );
     for drop_request in [false, true] {
-        assert_pptx_proceeds_after_excel_stops(&data, tmp.path(), drop_request);
+        assert_pptx_proceeds_after_excel_stops(&data, tmp.path(), drop_request, WORKSHEET_PARSE);
     }
 }
 
-fn assert_pptx_proceeds_after_excel_stops(data: &[u8], workbook: &Path, drop_request: bool) {
+#[test]
+#[serial_test::serial(office_admission)]
+fn cancelled_and_abandoned_excel_reads_stop_during_xlsx_dimension_preflight() {
+    let data = three_sheets();
+    let tmp = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+    std::fs::write(tmp.path(), &data).unwrap();
+    for drop_request in [false, true] {
+        assert_pptx_proceeds_after_excel_stops(&data, tmp.path(), drop_request, DIMENSION_SCAN);
+    }
+}
+
+fn assert_pptx_proceeds_after_excel_stops(data: &[u8], workbook: &Path, drop_request: bool, target: &'static str) {
     let runtime = global_runtime().unwrap();
     let seen = Arc::new(AtomicUsize::new(0));
+    let parses = Arc::new(AtomicUsize::new(0));
     let (reached_tx, reached_rx) = oneshot::channel();
     let (release_tx, release_rx) = mpsc::sync_channel(1);
     let subscriber = tracing_subscriber::registry().with(SheetGate {
+        target,
+        parses: Arc::clone(&parses),
         seen: Arc::clone(&seen),
         reached_second: Mutex::new(Some(reached_tx)),
         allow_parse: Mutex::new(release_rx),
@@ -135,4 +157,11 @@ fn assert_pptx_proceeds_after_excel_stops(data: &[u8], workbook: &Path, drop_req
     });
     tracing::callsite::rebuild_interest_cache();
     assert_eq!(seen.load(Ordering::Relaxed), 2, "Excel still began the third worksheet");
+    if target == DIMENSION_SCAN {
+        assert_eq!(
+            parses.load(Ordering::Relaxed),
+            0,
+            "Excel continued to worksheet parsing"
+        );
+    }
 }

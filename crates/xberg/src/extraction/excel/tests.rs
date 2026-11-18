@@ -913,7 +913,7 @@ fn should_parse_comment_text_and_cell_ref_from_comments_xml() {
   </commentList>
 </comments>"#;
 
-    let entries = parse_comments_xml(xml).expect("comments.xml must parse");
+    let entries = parse_comments_xml(xml, ExcelReadCancellation::default()).expect("comments.xml must parse");
     assert_eq!(entries, vec!["B2: Needs review".to_string()]);
 }
 
@@ -983,7 +983,7 @@ fn test_comments_read_is_bounded_for_oversized_member() {
         zip.finish().unwrap();
     }
 
-    let result = extract_xlsx_comments_from_bytes(&buffer);
+    let result = extract_xlsx_comments_from_bytes(&buffer, ExcelReadCancellation::default()).unwrap();
     assert!(
         result.is_none(),
         "a comment sitting after MAX_EXCEL_ZIP_MEMBER_SIZE must never be reached; an \
