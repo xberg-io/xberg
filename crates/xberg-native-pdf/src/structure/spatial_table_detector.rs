@@ -4344,7 +4344,7 @@ const MERGE_COL_DIFF_TOLERANCE: usize = 2;
 /// Merge tables that are vertically adjacent (small gap between bottom of one
 /// and top of another) and have similar column counts (difference <= `MERGE_COL_DIFF_TOLERANCE`).
 /// When column counts differ, the narrower table's rows are padded with empty cells.
-/// Independently outlined grids with a closed painted seam keep their own schemas.
+/// Independently outlined grids with an open seam stay separate unless they stack as one schema.
 fn merge_vertically_adjacent_tables(
     tables: &mut Vec<Table>,
     h_edges: &[Edge],
@@ -4379,11 +4379,8 @@ fn merge_vertically_adjacent_tables(
                     if gap > ADJACENT_TABLE_MERGE_GAP {
                         return false;
                     }
-                    if has_closed_restart_seam(pb, tb, h_edges, v_edges)
-                        && (aligned_table_restarts(prev, &table)
-                            || (col_diff > 0
-                                && table_has_ruled_outline(prev, h_edges, v_edges)
-                                && table_has_ruled_outline(&table, h_edges, v_edges)))
+                    if (has_closed_restart_seam(pb, tb, h_edges, v_edges) && aligned_table_restarts(prev, &table))
+                        || independent_ruled_tables(prev, &table, h_edges, v_edges)
                     {
                         separated_restart = true;
                         return false;
@@ -4509,19 +4506,42 @@ fn has_closed_restart_seam(lower: Rect, upper: Rect, horizontal: &[Edge], vertic
             (edge.coord - y).abs() <= tol && edge.start <= bounds.left() + tol && edge.end >= bounds.right() - tol
         })
     };
-    upper_start - lower_end > 2.0 * tol
-        && (lower.left() - upper.left()).abs() <= tol
+    (lower.left() - upper.left()).abs() <= tol
         && (lower.right() - upper.right()).abs() <= tol
         && closed(lower_end, lower)
         && closed(upper_start, upper)
+        && has_open_seam(lower, upper, vertical)
+}
+
+// Each grid's own outline closes it, so the grids need not share outer edges.
+// Only a same-schema stack merges, because `record_stacked_join` can then
+// restore its fragments to top-down page order. ~keep
+fn independent_ruled_tables(lower: &Table, upper: &Table, horizontal: &[Edge], vertical: &[Edge]) -> bool {
+    let (Some(lower_bounds), Some(upper_bounds)) = (lower.bbox, upper.bbox) else {
+        return false;
+    };
+    has_open_seam(lower_bounds, upper_bounds, vertical)
+        && !stacks_as_one_grid(lower, upper)
+        && table_has_ruled_outline(lower, horizontal, vertical)
+        && table_has_ruled_outline(upper, horizontal, vertical)
+}
+
+// A blank gap between the grids that no vertical rule crosses. ~keep
+fn has_open_seam(lower: Rect, upper: Rect, vertical: &[Edge]) -> bool {
+    let tol = BAND_RULE_SPAN_TOL;
+    upper.top() - lower.bottom() > 2.0 * tol
         && !has_vertical_seam_connector(
             vertical,
-            lower.left() - tol,
-            lower.right() + tol,
-            lower_end + tol,
-            upper_start - tol,
+            lower.left().min(upper.left()) - tol,
+            lower.right().max(upper.right()) + tol,
+            lower.bottom() + tol,
+            upper.top() - tol,
         )
 }
+
+/// Largest endpoint miss at which two snapped collinear seam segments still connect.
+/// Kept far below a deliberate blank gap; `JOIN_TOL` would bridge a narrow seam outright.
+const SEAM_CONNECTOR_JOIN_TOL: f32 = 0.1;
 
 fn has_vertical_seam_connector(vertical: &[Edge], left: f32, right: f32, bottom: f32, top: f32) -> bool {
     let mut segments: Vec<_> = vertical
@@ -4535,7 +4555,7 @@ fn has_vertical_seam_connector(vertical: &[Edge], left: f32, right: f32, bottom:
     let mut coverage: Option<Edge> = None;
     for edge in segments {
         let span = match coverage.as_mut() {
-            Some(span) if span.coord == edge.coord && edge.start <= span.end => {
+            Some(span) if span.coord == edge.coord && edge.start <= span.end + SEAM_CONNECTOR_JOIN_TOL => {
                 span.end = span.end.max(edge.end);
                 *span
             }
@@ -4595,16 +4615,20 @@ fn record_stacked_join(
     let Some(row_cuts) = cuts else {
         return;
     };
-    let aligned = lower.bbox.zip(upper.bbox).is_some_and(|(lower, upper)| {
-        lower.bottom() < upper.top()
-            && (lower.left() - upper.left()).abs() <= BAND_RULE_SPAN_TOL
-            && (lower.right() - upper.right()).abs() <= BAND_RULE_SPAN_TOL
-    });
-    if aligned && lower.col_count == upper.col_count && table_has_ruled_outline(upper, h_edges, v_edges) {
+    if stacks_as_one_grid(lower, upper) && table_has_ruled_outline(upper, h_edges, v_edges) {
         row_cuts.push(lower.rows.len());
     } else {
         *cuts = None;
     }
+}
+
+fn stacks_as_one_grid(lower: &Table, upper: &Table) -> bool {
+    lower.col_count == upper.col_count
+        && lower.bbox.zip(upper.bbox).is_some_and(|(lower, upper)| {
+            lower.bottom() < upper.top()
+                && (lower.left() - upper.left()).abs() <= BAND_RULE_SPAN_TOL
+                && (lower.right() - upper.right()).abs() <= BAND_RULE_SPAN_TOL
+        })
 }
 
 fn table_has_ruled_outline(table: &Table, h_edges: &[Edge], v_edges: &[Edge]) -> bool {
@@ -10072,15 +10096,21 @@ mod tests {
             start: 153.0,
             ..touching
         };
+        let float_miss = Edge {
+            start: 153.51,
+            ..touching
+        };
         assert_eq!(
             [
                 merges([first, touching], false),
                 merges([first, touching], true),
                 merges([first, overlapping], false),
                 merges([first, overlapping], true),
+                merges([first, float_miss], false),
+                merges([first, float_miss], true),
             ],
-            [1; 4],
-            "collinear segments that touch or overlap must connect the grids in either paint order",
+            [1; 6],
+            "collinear segments that touch, overlap or miss by a float error connect the grids in either paint order",
         );
         let blank_gap = Edge {
             start: 154.0,
@@ -10098,6 +10128,157 @@ mod tests {
                 "different axes do not join"
             );
         }
+    }
+
+    type OutlinedGrid = (Table, [Edge; 2], [Edge; 2]);
+
+    fn outlined_grid(x: f32, y: f32, width: f32, rows: &[&[&str]]) -> OutlinedGrid {
+        let height = 20.0 * rows.len() as f32;
+        let table = Table {
+            rows: rows
+                .iter()
+                .map(|cells| TableRow {
+                    cells: cells
+                        .iter()
+                        .map(|text| TableCell {
+                            text: (*text).into(),
+                            spans: Vec::new(),
+                            colspan: 1,
+                            rowspan: 1,
+                            mcids: Vec::new(),
+                            bbox: None,
+                            is_header: false,
+                        })
+                        .collect(),
+                    is_header: false,
+                })
+                .collect(),
+            has_header: false,
+            col_count: rows[0].len(),
+            bbox: Some(Rect::new(x, y, width, height)),
+        };
+        let horizontal = [y, y + height].map(|coord| Edge {
+            coord,
+            start: x,
+            end: x + width,
+        });
+        let vertical = [x, x + width].map(|coord| Edge {
+            coord,
+            start: y,
+            end: y + height,
+        });
+        (table, horizontal, vertical)
+    }
+
+    fn merge_and_split_outlined(grids: &[&OutlinedGrid], connectors: &[Edge]) -> Vec<Vec<Vec<String>>> {
+        let mut tables: Vec<_> = grids.iter().map(|(table, _, _)| table.clone()).collect();
+        let horizontal: Vec<_> = grids.iter().flat_map(|(_, rules, _)| *rules).collect();
+        let mut vertical: Vec<_> = grids.iter().flat_map(|(_, _, sides)| *sides).collect();
+        vertical.extend_from_slice(connectors);
+        snap_edges(&mut vertical);
+        let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+        split_tables_at_section_dividers(
+            tables,
+            cuts,
+            &restart_members,
+            &horizontal,
+            &vertical,
+            &TableDetectionConfig::default(),
+        )
+        .iter()
+        .map(|table| {
+            table
+                .rows
+                .iter()
+                .map(|row| row.cells.iter().map(|cell| cell.text.clone()).collect())
+                .collect()
+        })
+        .collect()
+    }
+
+    fn grid_texts(grid: &OutlinedGrid) -> Vec<Vec<String>> {
+        grid.0
+            .rows
+            .iter()
+            .map(|row| row.cells.iter().map(|cell| cell.text.clone()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn outlined_tables_of_different_widths_stay_separate_in_page_order() {
+        let wide = outlined_grid(
+            0.0,
+            147.0,
+            300.0,
+            &[
+                &["Service", "Zone", "Period", "Capacity"],
+                &["Iris", "North", "Winter", "350"],
+                &["Hazel", "East", "Autumn", "470"],
+            ],
+        );
+        let wide_pairs = outlined_grid(0.0, 147.0, 300.0, &[&["Region", "North"], &["Tier", "Gold"]]);
+        let narrow = outlined_grid(0.0, 100.0, 150.0, &[&["Review", "Cadence"], &["Clock", "Week one"]]);
+        for upper in [&wide, &wide_pairs] {
+            assert_eq!(
+                merge_and_split_outlined(&[&narrow, upper], &[]),
+                [grid_texts(upper), grid_texts(&narrow)],
+                "a narrow outlined table under a wider one keeps its own schema, below it",
+            );
+            let connector = Edge {
+                coord: 0.0,
+                start: 100.0,
+                end: upper.0.bbox.unwrap().bottom(),
+            };
+            assert_eq!(merge_and_split_outlined(&[&narrow, upper], &[connector]).len(), 1);
+        }
+    }
+
+    #[test]
+    fn outlined_same_schema_stack_merges_in_top_down_order() {
+        let upper = outlined_grid(0.0, 147.0, 300.0, &[&["Region", "North"], &["Tier", "Gold"]]);
+        let lower = outlined_grid(0.0, 100.0, 300.0, &[&["Owner", "Operations"], &["Window", "Night"]]);
+        assert_eq!(
+            merge_and_split_outlined(&[&lower, &upper], &[]),
+            [[grid_texts(&upper), grid_texts(&lower)].concat()],
+        );
+    }
+
+    #[test]
+    fn outlined_header_band_above_a_double_rule_stays_a_separate_table_above_the_body() {
+        let band = outlined_grid(0.0, 143.0, 300.0, &[&["", "Revenue", "Margin"]]);
+        let body = outlined_grid(
+            0.0,
+            80.0,
+            300.0,
+            &[
+                &["Region", "2024", "2025", "2024", "2025"],
+                &["North", "120", "135", "8%", "9%"],
+                &["South", "98", "104", "6%", "7%"],
+            ],
+        );
+        assert_eq!(
+            merge_and_split_outlined(&[&body, &band], &[]),
+            [grid_texts(&band), grid_texts(&body)],
+        );
+    }
+
+    #[test]
+    fn outlined_totals_box_under_an_item_grid_stays_a_separate_table() {
+        let items = outlined_grid(
+            0.0,
+            126.0,
+            300.0,
+            &[
+                &["Item", "Qty", "Price", "Amount"],
+                &["Bolt", "10", "20", "200"],
+                &["Nut", "50", "20", "1,000"],
+            ],
+        );
+        let totals = outlined_grid(0.0, 80.0, 300.0, &[&["Subtotal", "1,200"], &["Total", "1,320"]]);
+        assert_eq!(
+            merge_and_split_outlined(&[&totals, &items], &[]),
+            [grid_texts(&items), grid_texts(&totals)],
+        );
     }
 
     #[test]
