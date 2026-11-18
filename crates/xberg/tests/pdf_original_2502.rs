@@ -71,14 +71,14 @@ const PAGE_FIVE: GuidePage = GuidePage {
     number: 5,
     archive_env: "XBERG_2502_PAGE5_ARCHIVE",
     archive_sha256: "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c",
-    derived_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    derived_sha256: "7f77883e8a514c4db2a4db50ac555d1a97a5089e920a51944675a6c5b8cb91d2",
 };
 
 const PAGE_EIGHT: GuidePage = GuidePage {
     number: 8,
     archive_env: "XBERG_2502_PAGE8_ARCHIVE",
     archive_sha256: "638d8968486a686e9a2e418c6dc7b538abe1bff779c74789786d0a050424c68f",
-    derived_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    derived_sha256: "638d8968486a686e9a2e418c6dc7b538abe1bff779c74789786d0a050424c68f",
 };
 
 fn guide_page(directory: &Path, page: &GuidePage) -> PathBuf {
