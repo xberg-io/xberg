@@ -2582,6 +2582,8 @@ fn read_native_word_confidence_stats(api: &TesseractAPI, output_format: &str) ->
     }
 }
 
+mod primary_read_metadata;
+
 /// Perform OCR on an image using Tesseract.
 ///
 /// This function handles the complete OCR pipeline:
@@ -2946,99 +2948,17 @@ pub(super) fn perform_ocr(
         capture_region_hocr,
     })?;
 
-    let mut metadata = HashMap::new();
-    if let Some(image_preprocessing) = image_preprocessing {
-        let value = serde_json::to_value(image_preprocessing).map_err(|error| {
-            OcrError::ProcessingFailed(format!("Failed to serialize image preprocessing metadata: {error}"))
-        })?;
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_IMAGE_PREPROCESSING_METADATA_KEY.to_string(),
-            value,
-        );
-    }
-    metadata.insert(
-        crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.to_string(),
-        serde_json::Value::Number(ocr_image_width.into()),
-    );
-    metadata.insert(
-        crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.to_string(),
-        serde_json::Value::Number(ocr_image_height.into()),
-    );
-    metadata.insert(
-        "language".to_string(),
-        serde_json::Value::String(config.language.clone()),
-    );
-    metadata.insert("psm".to_string(), serde_json::Value::String(config.psm.to_string()));
-    metadata.insert("table_count".to_string(), serde_json::Value::Number(0.into()));
-    metadata.insert("tables_detected".to_string(), serde_json::Value::Number(0.into()));
-    if config.output_format == "markdown" {
-        metadata.insert(
-            "source_format".to_string(),
-            serde_json::Value::String("hocr".to_string()),
-        );
-    }
-    if auto_rotate_unavailable {
-        metadata.insert("auto_rotate_unavailable".to_string(), serde_json::Value::Bool(true));
-    }
-    insert_dictionary_line_counts(
-        &mut metadata,
-        dictionary_filtered_line_count,
-        dictionary_kept_numeral_line_count,
-    );
-
-    if let Some(stats) = retained_hocr_confidence_stats.as_ref() {
-        insert_retained_word_confidence_metadata(&mut metadata, stats);
-    } else if config.output_format != "text" {
-        if mean_text_conf >= 0 {
-            metadata.insert(
-                "mean_text_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(mean_text_conf)),
-            );
-        }
-
-        if let Some((median_conf, p10_conf, word_count, low_conf_count)) = word_confidence_stats {
-            metadata.insert(
-                "median_word_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(median_conf)),
-            );
-            metadata.insert(
-                "p10_word_conf".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(p10_conf)),
-            );
-            metadata.insert(
-                "word_count".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(word_count)),
-            );
-            metadata.insert(
-                "low_conf_word_count".to_string(),
-                serde_json::Value::Number(serde_json::Number::from(low_conf_count)),
-            );
-        }
-    }
-
-    // No `script_name`/`script_confidence` metadata: the ONNX PP-LCNet
-    // orientation classifier used here has no script-detection capability,
-    // unlike Tesseract's own `DetectOrientationScript()`/OSD (which this crate
-    // does not call). Emitting a placeholder script name would misrepresent
-    // real detection as having happened (#184). ~keep
-    if let Some((orient_deg, orient_conf)) = detected_orientation {
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY.to_string(),
-            serde_json::Value::Number(serde_json::Number::from(orient_deg)),
-        );
-        metadata.insert(
-            crate::ocr_metadata_keys::OCR_ORIENTATION_CONFIDENCE_METADATA_KEY.to_string(),
-            serde_json::Value::Number(
-                serde_json::Number::from_f64(orient_conf as f64).unwrap_or(serde_json::Number::from(0)),
-            ),
-        );
-        if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
-            metadata.insert(
-                crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY.to_string(),
-                serde_json::Value::Bool(true),
-            );
-        }
-    }
+    let mut metadata = primary_read_metadata::build(primary_read_metadata::PrimaryRead {
+        config,
+        dimensions: (ocr_image_width, ocr_image_height),
+        image_preprocessing,
+        auto_rotate_unavailable,
+        dictionary_line_counts: (dictionary_filtered_line_count, dictionary_kept_numeral_line_count),
+        retained_hocr_confidence_stats: retained_hocr_confidence_stats.as_ref(),
+        mean_text_conf,
+        word_confidence_stats,
+        detected_orientation,
+    })?;
 
     if let Some(outcome) = script_retry.as_ref() {
         // After the first read's confidence metadata, so the merged page reports its own. ~keep
