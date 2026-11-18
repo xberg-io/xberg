@@ -142,6 +142,22 @@ run_pdf_cases() {
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
     --test ocr_standalone_row_layout_2432
+  expected=$((expected + 9))
+  run_exact implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript \
+    --test ocr_sparse_table_html_2503
+  run_exact html_columned_prose_stays_prose_and_json_remains_unassociated --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_psm_plain_page_publishes_the_proven_table_rows --test ocr_sparse_table_page_rows
+  run_exact accepted_table_keeps_rows_and_a_repeated_caption_in_plain_and_djot_pages \
+    --test ocr_sparse_table_page_rows
+  local sparse_proof
+  for sparse_proof in \
+    standalone_sparse_grid_preserves_one_non_numeric_value_below_first_row \
+    standalone_value_exception_requires_exact_inventory_and_independent_tracks \
+    merged_header_recovery_preserves_one_uncertain_literal_and_requires_disjoint_rows \
+    merged_header_value_exception_cannot_move_to_a_later_record; do
+    run_exact "ocr::processor::execution::full_scan_table::tests::$sparse_proof" --lib
+  done
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
@@ -403,12 +419,24 @@ run_office_page_cases() {
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
     run_exact "extractors::docx::tests::$test_name" --lib
   done
-  run_exact 'extractors::docx::tests::should_queue_single_docx_parse_and_honor_cancellation_before_it_starts' --lib
+  run_exact 'extractors::docx::tests::direct_docx_reads_from_the_only_foreign_blocking_worker_complete' --lib
   run_exact 'extractors::docx::tests::should_parse_inline_without_tokio_and_check_cancellation_before_parsing' --lib
   run_exact 'extractors::docx::tests::should_resume_a_blocking_docx_worker_panic' --lib
   run_exact 'extractors::docx::tests::should_report_docx_worker_shutdown_as_cancellation' --lib
   run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
+  run_exact 'extractors::excel::tests::excel_batch_runs_bytes_and_paths_on_a_blocking_worker' --lib
+  run_exact 'extractors::excel::tests::single_excel_reads_queue_and_return_typed_cancellation' --lib
+  run_exact 'extractors::excel::tests::direct_excel_reads_from_the_only_foreign_blocking_worker_complete' --lib
+  run_exact 'extractors::excel::tests::single_and_batch_excel_outputs_match_for_bytes_and_paths' --lib
+  run_exact 'extractors::excel::tests::cancelled_excel_worker_does_not_call_the_parser' --lib
+  run_exact 'extractors::excel::tests::single_excel_read_resumes_the_worker_panic' --lib
+  run_exact 'extractors::excel::tests::pre_cancelled_excel_path_returns_cancellation_inline' --lib
+  run_exact 'extractors::docx::tests::docx_queues_on_a_shared_worker_and_honors_typed_cancellation' --lib
+  run_exact 'engine::extract_impl::tests::a_panicking_excel_read_leaves_sibling_batch_results_intact' --lib
+  run_exact 'core::runtime::large_stack_tests::blocking_work_reports_cancellation_after_the_parser_returns' --lib
+  run_exact 'core::runtime::large_stack_tests::dropping_a_queued_blocking_worker_prevents_parser_entry' --lib
+  run_exact 'core::runtime::large_stack_tests::blocking_work_keeps_the_callers_thread_local_dispatcher_and_span' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
   for test_name in \
@@ -484,16 +512,18 @@ pdf-ocr)
   run_exact 'extractors::pdf::ocr::pipeline::tracing_tests::public_inline_image_ocr_warns_without_exposing_the_backend_error' --lib
   run_exact 'error::tests::cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug' --lib
   run_exact 'extractors::pdf::tests::inline_image_ocr_backend_cancellation_stops_pdf_extraction' --lib
+  run_exact 'extractors::pdf::tests::test_ocr_inline_images_uses_configured_backend' --lib
+  run_exact 'extractors::pdf::tests::test_ocr_inline_images_forwards_output_format' --lib
   run_exact a_targeted_retry_backend_cancellation_discards_the_successful_whole_read --test pdf_marked_page_retry_fallback_2833
   run_exact 'commands::extract::ocr_diagnostic_tests::cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats' --cli
   run_exact 'commands::extract::tests::uri_extraction_failure_does_not_assert_a_false_readability_diagnosis' --cli
-  expected=$((expected + 13))
+  expected=$((expected + 15))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=41
+  expected=53
   run_office_page_cases
   ;;
 api-jobs)

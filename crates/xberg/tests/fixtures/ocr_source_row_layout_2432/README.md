@@ -15,3 +15,12 @@ standalone image, without leaders or grid. SHA-256
 `1acaf47a4e0604ffd9768f66b3bfbf00446f1d4e39c1abdad9bed94e3f0ab331`.
 `image-20-tinted-source-rows.tsv` records the 12 source rows. The OCR
 regression preserves the first count as recognized (`BY)` for source `59`).
+
+`image-11-tinted-leaders.png` is the 11 px tinted standalone PNG with dot
+leaders from the same synthetic generator replay. SHA-256
+`58def07f2f629e801fe2abb20b64bcf303fddb9cdc60f16176933a7144285166`.
+The OCR regression checks seven source-exact rows and preserves the literal
+misread count `al` in the Code review row.
+The recognized-row TSV records the stock PSM 11 word text grouped by the
+source grid, including recognition errors. The explicit PSM 6 and 11 text
+snapshots retain the stock page transcript before row recovery.
