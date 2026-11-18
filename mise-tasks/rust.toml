@@ -81,6 +81,12 @@ flag "--no-default-features" help="Disable default features for a narrow local c
 """
 run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usage_no_default_features:-false}"'
 
+["rust:test:tall-scan-qualification"]
+description = "Qualify tall scan recovery with synthetic controls and the pinned public guide"
+depends = ["os:require linux darwin"]
+usage = 'arg "[mode]" help="all (default) or synthetic"'
+run = 'bash scripts/ci/rust/run-tall-scan-qualification.sh "${usage_mode:-all}"'
+
 ["rust:test:explicit-sideways"]
 description = "Qualify explicit sideways OCR with pinned offline model artifacts"
 depends = ["os:require linux darwin"]

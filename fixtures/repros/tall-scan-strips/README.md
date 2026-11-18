@@ -91,3 +91,32 @@ the retained native render dimensions at both source densities. They exercise ra
 ASCII85+Flate page-paint streams, including separately serialized extra-paint
 controls that must report an uncertified source. The low-density geometry tests
 retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 DPI.
+
+## Integrated qualification
+
+The release-feature run collects and executes 38 synthetic tests covering
+encodings, DPI, PSM, language, cache behavior and standalone image warnings.
+
+```sh
+mise run rust:test:tall-scan-qualification -- synthetic
+```
+
+The complete run adds ten tests for the public `sharable_web_guide.pdf`.
+They cover the whole-guide cold and warm cache arms, the Page 5 and 8 markup
+projections, the right-column recovery and the annotation control. Provision
+the release feature set's ONNX Runtime as in Rust CI before running:
+
+```sh
+git submodule update --init test_documents
+python3 test_documents/scripts/fetch_corpus.py --include 'pdf/sharable_web_guide.pdf'
+mise run rust:test:tall-scan-qualification
+```
+
+The task verifies the PDF against the pinned public test corpus. Page 5 and
+Page 8 are isolated in a temporary directory from that verified source. Set
+`XBERG_2502_PAGE5_ARCHIVE` or `XBERG_2502_PAGE8_ARCHIVE` to replay an existing
+exact archive. The corresponding test verifies its archive digest.
+
+The Page 9 and Nougat 009/010 misses still need paired reference receipts with
+the exact intended page, input variant, configuration and text span. The
+public corpus lock lists both original and OCR-rasterized Nougat PDFs.
