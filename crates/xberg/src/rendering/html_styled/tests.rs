@@ -354,3 +354,29 @@ fn a_row_lines_paragraph_emits_one_paragraph_per_row() {
         )
     );
 }
+
+#[test]
+fn styled_html_drops_script_link_href_and_keeps_text() {
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+    let mut b = crate::types::internal_builder::InternalDocumentBuilder::new("test");
+    b.push_paragraph(
+        "click me",
+        vec![TextAnnotation {
+            start: 0,
+            end: 8,
+            kind: AnnotationKind::Link {
+                url: "javascript:alert(1)".into(),
+                title: None,
+            },
+        }],
+        None,
+        None,
+    );
+    let out = render(HtmlOutputConfig::default(), &b.build());
+    assert!(!out.contains("javascript"), "script URL must not reach HTML: {out}");
+    assert!(
+        !out.contains(r#"class="kb-link""#),
+        "unsafe link must be dropped: {out}"
+    );
+    assert!(out.contains("click me"), "link text must survive: {out}");
+}

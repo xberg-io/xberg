@@ -354,6 +354,7 @@ impl TesseractAPI {
         // The lock serializes access to the pointer slot. It cannot prove that the
         // publicly replaceable pointer still identifies a live TessBaseAPI (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
 
         let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
         if confidences_ptr.is_null() {
@@ -383,6 +384,7 @@ impl TesseractAPI {
     /// Returns the mean text confidence as an integer.
     pub fn mean_text_conf(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         Ok(unsafe { TessBaseAPIMeanTextConf(*handle) })
     }
 
@@ -832,6 +834,7 @@ impl TesseractAPI {
     /// Returns a vector of all word confidences.
     pub fn all_word_confidences(&self) -> Result<Vec<i32>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
         let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
         if confidences_ptr.is_null() {
             return Err(TesseractError::OcrError);
@@ -1947,6 +1950,7 @@ impl TesseractAPI {
         self.recognize()?;
 
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
 
         let page_iter = unsafe { TessBaseAPIAnalyseLayout(*handle) };
         let result_iter = unsafe { TessBaseAPIGetIterator(*handle) };
@@ -2642,6 +2646,10 @@ mod live_engine_tests {
         assert!(matches!(busy.recognize(), Err(TesseractError::OcrError)));
         assert!(matches!(busy.clear(), Err(TesseractError::OcrError)));
         assert!(matches!(busy.get_utf8_text(), Err(TesseractError::OcrError)));
+        assert!(matches!(busy.get_word_confidences(), Err(TesseractError::OcrError)));
+        assert!(matches!(busy.all_word_confidences(), Err(TesseractError::OcrError)));
+        assert!(matches!(busy.mean_text_conf(), Err(TesseractError::OcrError)));
+        assert!(busy.get_iterators().is_err());
         assert_eq!(NATIVE_CALLS.load(Ordering::SeqCst), 0, "a refused call leaves no count");
         let freed = TesseractAPI::engines_freed_by_drop();
         drop(busy);

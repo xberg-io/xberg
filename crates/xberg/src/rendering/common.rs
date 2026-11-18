@@ -884,6 +884,9 @@ pub(crate) fn external_link_target(url: &str) -> Option<String> {
     matches!(parsed.scheme(), "http" | "https" | "mailto" | "ftp").then(|| parsed.into())
 }
 
+mod link_url;
+pub(crate) use link_url::{safe_image_url, safe_link_url};
+
 #[cfg(test)]
 mod tests;
 

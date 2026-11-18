@@ -10,8 +10,8 @@ use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, annotation_display_text, annotation_type_label,
     decimal_ordinal, ensure_trailing_newline, finalize_output, get_admonition_kind, get_admonition_title, get_language,
     handle_container_end, is_body_element, is_container_end, normalize_inline_text, parse_metadata_entries,
-    push_with_bq, render_annotated_text_with_plain, render_nested_annotated_text, render_table_djot,
-    valid_math_annotation,
+    push_with_bq, render_annotated_text_with_plain, render_nested_annotated_text, render_table_djot, safe_image_url,
+    safe_link_url, valid_math_annotation,
 };
 
 /// Render an `InternalDocument` to Djot markup.
@@ -134,7 +134,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                         if !img.data.is_empty() {
                             Some(format!("image_{}.{}", image_index, img.format))
                         } else {
-                            img.source_path.clone()
+                            img.source_path.as_deref().and_then(safe_image_url).map(str::to_owned)
                         }
                     })
                     .unwrap_or_default();
@@ -661,6 +661,7 @@ fn render_djot_span(span: &str, kind: &AnnotationKind, normalize: bool) -> Strin
         AnnotationKind::Subscript => format!("~{}~", normalized),
         AnnotationKind::Superscript => format!("^{}^", normalized),
         AnnotationKind::Highlight => format!("{{={}=}}", normalized),
+        AnnotationKind::Link { url, .. } if safe_link_url(url).is_none() => normalized.into_owned(),
         AnnotationKind::Link { url, title } => {
             if let Some(title) = title {
                 format!("[{}]({} \"{}\")", normalized, url, title)

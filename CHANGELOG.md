@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **rendering:** HTML, Markdown and Djot output drop links and image sources whose scheme is not `http`, `https`, `mailto`, `tel` or `ftp` (relative, scheme-relative and fragment links are kept, as are `data:image/` image sources), so a `javascript:` or `vbscript:` link in a source document no longer becomes clickable script; the link text is kept.
 - **install:** The install script verifies CLI release archives against SHA-256 digests from GitHub release metadata before extraction. (#3168)
 - **ocr:** Runtime Tesseract language-pack downloads are verified against pinned SHA-256 digests and use bounded timeouts. (#3168)
 
