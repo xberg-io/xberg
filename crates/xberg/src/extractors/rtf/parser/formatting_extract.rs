@@ -63,9 +63,7 @@ struct FormattingScope {
     ansi_codepage_stack: Vec<u32>,
     font_id_stack: Vec<Option<u16>>,
     default_font_id: Option<u16>,
-    group_has_text: Vec<bool>,
     deleted_stack: Vec<bool>,
-    pending_boundary_space: bool,
     expect_destination: bool,
     ignorable_pending: bool,
     group_depth: i32,
@@ -187,8 +185,6 @@ impl FormattingParser {
         self.scope.group_depth += 1;
         self.scope.expect_destination = true;
         self.formatting.stack.push(self.formatting.fmt.clone());
-        self.scope.group_has_text.push(false);
-        self.scope.pending_boundary_space = false;
         let codepage = self.scope.ansi_codepage_stack.last().copied().unwrap_or(1252);
         self.scope.ansi_codepage_stack.push(codepage);
         let font = self.scope.font_id_stack.last().copied().flatten();
@@ -222,10 +218,6 @@ impl FormattingParser {
         }
         self.fields
             .close_group(self.scope.group_depth, self.formatting.text_offset);
-        let produced_text = self.scope.group_has_text.pop().unwrap_or(false);
-        if produced_text && self.scope.skip_depth == 0 {
-            self.scope.pending_boundary_space = true;
-        }
     }
 
     fn is_deleted(&self) -> bool {
@@ -245,9 +237,6 @@ impl FormattingParser {
         }
         if self.formatting.text_offset > 0 {
             self.formatting.text_offset += 1;
-            if let Some(flag) = self.scope.group_has_text.last_mut() {
-                *flag = true;
-            }
         }
     }
 
@@ -259,11 +248,7 @@ impl FormattingParser {
         if self.text_suppressed() {
             return;
         }
-        self.add_boundary_space();
         self.formatting.text_offset += character.len_utf8();
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
         if self.header.active {
             self.header.text.push(character);
         }
@@ -304,11 +289,7 @@ impl FormattingParser {
         if self.text_suppressed() {
             return;
         }
-        self.add_boundary_space();
         self.formatting.text_offset += next_ch.len_utf8();
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
         if self.header.active {
             self.header.text.push(next_ch);
         }
@@ -334,18 +315,7 @@ impl FormattingParser {
             &self.scope.ansi_codepage_stack,
         );
         let decoded = decode_ansi_bytes(bytes, codepage);
-        self.add_boundary_space();
         self.formatting.text_offset += decoded.len();
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
-    }
-
-    fn add_boundary_space(&mut self) {
-        if self.scope.pending_boundary_space && self.formatting.text_offset > 0 {
-            self.formatting.text_offset += 1;
-        }
-        self.scope.pending_boundary_space = false;
     }
 
     fn handle_control_word(&mut self, chars: &mut Peekable<Chars<'_>>) {

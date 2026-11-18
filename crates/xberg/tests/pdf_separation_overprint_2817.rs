@@ -47,10 +47,7 @@ fn automatic_ocr_keeps_overprinted_separation_text_and_native_sibling() {
             panic!("{label}: expected two pages, got {}", pages.len());
         };
         assert_eq!(ocr.content.split_whitespace().collect::<Vec<_>>(), expected, "{label}");
-        let raster = ocr.image_preprocessing.as_ref().expect("OCR raster provenance");
-        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
-        assert_eq!(raster.target_dpi, 120, "{label}");
-        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
+        assert_ocr_raster(ocr.image_preprocessing.as_ref().expect("OCR raster provenance"), label);
         assert_eq!(
             native.content.trim(),
             "Native sibling control remains unchanged.",
@@ -167,6 +164,19 @@ fn mixed_size_type0_text_keeps_the_exact_transcript_at_normal_density() {
     assert!(raster.is_none_or(|raster| raster.original_dimensions.width == 1275));
 }
 
+fn assert_ocr_raster(raster: &xberg::types::ImagePreprocessingMetadata, label: &str) {
+    // ~keep PaddleOCR builds turn the default "tesseract" backend into the implicit
+    // [tesseract, paddleocr] pipeline, which skips the sparse-glyph 120 DPI read and renders
+    // the 8.5in page at 150 DPI (#3238).
+    if cfg!(any(feature = "paddle-ocr-ort", feature = "paddle-ocr-tract")) {
+        assert_eq!(raster.original_dimensions.width, 1275, "{label}");
+    } else {
+        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+        assert_eq!(raster.target_dpi, 120, "{label}");
+        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
+    }
+}
+
 fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method: ExtractionMethod, label: &str) {
     let mode = if config.disable_ocr { "native-only" } else { "Auto" };
     let result =
@@ -178,10 +188,7 @@ fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method:
     };
     assert_eq!(page.page_number, 1, "{label} {mode}");
     if method == ExtractionMethod::Mixed {
-        let raster = page.image_preprocessing.as_ref().expect("OCR raster provenance");
-        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
-        assert_eq!(raster.target_dpi, 120, "{label}");
-        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
+        assert_ocr_raster(page.image_preprocessing.as_ref().expect("OCR raster provenance"), label);
     }
     let tokens = expected.split_whitespace().collect::<Vec<_>>();
     for (surface, content) in [("document", &result.content), ("page", &page.content)] {

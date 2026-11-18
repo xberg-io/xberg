@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #   ./scripts/install-system-pdfium-macos.sh                    # uses defaults: version=7678, prefix=/usr/local
-#   PDFIUM_VERSION=7763 ./scripts/install-system-pdfium-macos.sh
+#   PDFIUM_VERSION=7763 PDFIUM_CHECKSUMS_FILE=/path/to/trusted.sha256 ./scripts/install-system-pdfium-macos.sh
 
 set -euo pipefail
 
@@ -11,6 +11,10 @@ set -euo pipefail
 # succeeds regardless. ~keep
 readonly PDFIUM_VERSION="${PDFIUM_VERSION:-7678}"
 readonly PREFIX="${PREFIX:-/usr/local}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+readonly VERIFY_ARCHIVE="$SCRIPT_DIR/ci/actions/setup-onnx-runtime/verify-archive.sh"
+readonly CHECKSUMS="${PDFIUM_CHECKSUMS_FILE:-$SCRIPT_DIR/pdfium-runtime-checksums.sha256}"
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -61,9 +65,17 @@ download_pdfium() {
   local arch="$2"
   local tmpdir="${3:?tmpdir required}"
 
-  local url="https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/pdfium-mac-${arch}.tgz"
-  local archive="$tmpdir/pdfium-mac-${arch}.tgz"
+  if [[ ! "$version" =~ ^[0-9]+$ ]]; then
+    log_error "Invalid PDFium Chromium revision: $version"
+    return 1
+  fi
+
+  local asset="pdfium-mac-${arch}.tgz"
+  local url="https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${version}/${asset}"
+  local archive="$tmpdir/${version}-${asset}"
   local extract_dir="$tmpdir/pdfium-extract"
+
+  bash "$VERIFY_ARCHIVE" "$archive" "$CHECKSUMS" --known || return
 
   log_info "Downloading PDFium v${version} (${arch})..."
   log_info "URL: $url"
@@ -76,6 +88,8 @@ download_pdfium() {
     log_error "  - Architecture not available for this version"
     exit 1
   fi
+
+  bash "$VERIFY_ARCHIVE" "$archive" "$CHECKSUMS" >&2 || return
 
   mkdir -p "$extract_dir"
   if ! tar -xzf "$archive" -C "$extract_dir"; then
@@ -263,14 +277,14 @@ main() (
   arch="$(detect_arch)"
   log_info "Architecture: $arch"
 
-  setup_directories "$PREFIX"
-
   local tmpdir
   tmpdir="$(mktemp -d)"
   trap '[[ -n "${tmpdir-}" ]] && rm -rf "${tmpdir-}"' EXIT
 
   local extract_dir
   extract_dir="$(download_pdfium "$PDFIUM_VERSION" "$arch" "$tmpdir")"
+
+  setup_directories "$PREFIX"
 
   install_library "$extract_dir" "$PREFIX"
   install_headers "$extract_dir" "$PREFIX"
