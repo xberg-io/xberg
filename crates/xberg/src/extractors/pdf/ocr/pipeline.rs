@@ -1665,6 +1665,60 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         native_coverage_layers.as_deref(),
         !probing_hidden_layer && !mixed_route_layout_active && !capture_rasters,
     );
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let hints_for_pipeline_page = |idx, raster: Option<crate::pdf::render::OcrRasterDpi>| {
+        #[cfg(not(feature = "ocr"))]
+        let _ = raster;
+        let whole_page_raster = crate::pdf::scan_detect::full_page_raster_density(&render_doc, idx).is_some();
+        PageOcrHints {
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            number_source: (!probing_hidden_layer
+                && !mixed_route_layout_active
+                && config.ocr.as_ref().is_some_and(|ocr| ocr.backend_options.is_none())
+                && number_layers
+                    .as_ref()
+                    .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32))))
+            .then(|| super::number_recovery::DetachedSource {
+                document: Arc::clone(&render_doc),
+                run: Arc::clone(&mixed_number_recovery),
+                raster,
+                layers: number_layers.clone().unwrap_or_default(),
+                config: config.clone(),
+            }),
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: pages.probe_reads.clone(),
+            known_full_page_scan: whole_page_raster,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            detached_recognition_recovery: Some(if whole_document_scan {
+                super::orientation_retry::RecognitionRecovery::TableOrProse
+            } else if automatic_mixed_prose {
+                super::orientation_retry::RecognitionRecovery::MixedPage {
+                    allow_prose: mixed_page_allows_prose(idx, whole_page_raster),
+                }
+            } else {
+                super::orientation_retry::RecognitionRecovery::Table
+            }),
+            single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            decision_layers: page_layers.clone(),
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            native_coverage_layers: native_coverage_layers
+                .as_ref()
+                .filter(|_| super::document::native_preservation_is_automatic(config, (idx + 1) as u32))
+                .cloned(),
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            single_native_type0_page: pages
+                .single_native_type0_page
+                .filter(|_| page_count == 1 && idx == 0)
+                .map(std::sync::Arc::from),
+            ..Default::default()
+        }
+    };
     let images_for_page = |page_index: usize| {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         if sparse_glyph_pages.contains_key(&page_index) {
@@ -1756,15 +1810,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             effective_pipeline.as_ref(),
             batch_pages,
             &implicit_sparse_glyph_pages,
-            |idx| PageOcrHints {
-                single_block_pages: Some(Arc::clone(&single_block_pages)),
-                decision_layers: page_layers.clone(),
-                native_coverage_layers: native_coverage_layers.clone(),
-                single_native_type0_page: pages
-                    .single_native_type0_page
-                    .filter(|_| page_count == 1 && idx == 0)
-                    .map(Arc::from),
-                ..Default::default()
+            |idx| sparse_glyph_read::TrialPage {
+                rotation: page_rotations.get(idx).copied().unwrap_or(0),
+                hints: hints_for_pipeline_page(idx, None),
+                orientation_retry: orientation_retry.clone(),
             },
         )
         .await?;
@@ -2017,60 +2066,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // resolve the wrong page's rotation (or none at all) for anything but the
                     // document's first OCR'd page (#651).
                     let page_rotation_degrees = page_rotations.get(page_idx).copied().unwrap_or(0);
-                    let whole_page_raster =
-                        crate::pdf::scan_detect::full_page_raster_density(&render_doc, page_idx).is_some();
-                    let page_ocr_hints = PageOcrHints {
-                        #[cfg(all(
-                            feature = "pdf",
-                            feature = "ocr",
-                            feature = "tokio-runtime",
-                            not(target_arch = "wasm32")
-                        ))]
-                        number_source: (!probing_hidden_layer
-                            && !mixed_route_layout_active
-                            && config.ocr.as_ref().is_some_and(|ocr| ocr.backend_options.is_none())
-                            && number_layers
-                                .as_ref()
-                                .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32))))
-                        .then(|| super::number_recovery::DetachedSource {
-                            document: Arc::clone(&render_doc),
-                            run: Arc::clone(&mixed_number_recovery),
-                            raster: raster_dpis.get(&idx).copied(),
-                            layers: number_layers.clone().unwrap_or_default(),
-                            config: config.clone(),
-                        }),
-                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                        probe_reads: pages.probe_reads.clone(),
-                        source_dpi: rendered_page_source_dpi(&render_doc, page_idx, image_arc.width()),
-                        known_full_page_scan: whole_page_raster,
-                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                        detached_recognition_recovery: Some(if whole_document_scan {
-                            super::orientation_retry::RecognitionRecovery::TableOrProse
-                        } else if automatic_mixed_prose {
-                            super::orientation_retry::RecognitionRecovery::MixedPage {
-                                allow_prose: mixed_page_allows_prose(page_idx, whole_page_raster),
-                            }
-                        } else {
-                            super::orientation_retry::RecognitionRecovery::Table
-                        }),
-                        single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
-                        native_page_layers: None,
-                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                        decision_layers: page_layers.clone(),
-                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                        native_coverage_layers: native_coverage_layers
-                            .as_ref()
-                            .filter(|_| {
-                                super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
-                            })
-                            .cloned(),
-                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                        single_native_type0_page: pages
-                            .single_native_type0_page
-                            .filter(|_| page_count == 1 && page_idx == 0)
-                            .map(std::sync::Arc::from),
-                        ..Default::default()
-                    };
+                    let mut page_ocr_hints = hints_for_pipeline_page(idx, raster_dpis.get(&idx).copied());
+                    page_ocr_hints.source_dpi = rendered_page_source_dpi(&render_doc, idx, image_arc.width());
                     // See `extract_with_ocr_for_page`'s doc comment on
                     // `points_per_pixel_override`: this call hands the stage a single
                     // detached image with `content: None`, so its own pixel -> point lookup

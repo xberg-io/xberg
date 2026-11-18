@@ -160,6 +160,10 @@ jobs:
             mise run rust:test:focused-pr "$FOCUSED_SUITE"
           fi
 
+      - name: Verify sparse glyph OCR with the implicit Paddle fallback enabled
+        if: matrix.suite == 'pdf-ocr'
+        run: mise run rust:test:focused-pr pdf-sparse-paddle
+
       - name: Verify Khmer recovery with the implicit Paddle fallback enabled
         if: matrix.suite == 'pdf-ocr'
         shell: bash

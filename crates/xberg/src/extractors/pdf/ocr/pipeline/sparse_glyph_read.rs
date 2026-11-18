@@ -105,8 +105,15 @@ struct PipelineTrial {
     index: usize,
     config: ExtractionConfig,
     pipeline: crate::core::config::OcrPipelineConfig,
-    hints: super::PageOcrHints,
+    page: TrialPage,
     words: MarkedWords,
+}
+
+#[cfg(paddle_ocr)]
+pub(super) struct TrialPage {
+    pub(super) rotation: u32,
+    pub(super) hints: super::PageOcrHints,
+    pub(super) orientation_retry: Option<Arc<super::super::orientation_retry::OrientationRetry>>,
 }
 
 #[cfg(paddle_ocr)]
@@ -129,7 +136,7 @@ pub(super) async fn run_batch(
     pipeline: Option<&crate::core::config::OcrPipelineConfig>,
     indices: &[usize],
     eligible: &ahash::AHashMap<usize, MarkedWords>,
-    hints: impl Fn(usize) -> super::PageOcrHints,
+    page: impl Fn(usize) -> TrialPage,
 ) -> crate::Result<std::collections::BTreeMap<usize, AcceptedTrial>> {
     let mut accepted = std::collections::BTreeMap::new();
     let Some(pipeline) = pipeline.filter(|_| !eligible.is_empty()) else {
@@ -145,7 +152,7 @@ pub(super) async fn run_batch(
             index,
             config: config.clone(),
             pipeline: pipeline.clone(),
-            hints: hints(index),
+            page: page(index),
             words: words.clone(),
         };
         let task = async move { (index, trial.run().await) };
@@ -186,9 +193,17 @@ impl PipelineTrial {
         let pdf = Arc::clone(&self.pdf);
         let limits = self.config.security_limits.clone().unwrap_or_default();
         let idx = self.index;
+        let rotation = self.page.rotation;
         let (((_, image), dpi), warnings) = super::super::super::spawn_pdf_blocking(move || {
             crate::pdf::render::capture_render_warnings(|| {
-                super::super::rendering::render_one_selected_page(&pdf, 0, idx, &limits, Some(&images_config()), None)
+                super::super::rendering::render_one_selected_page(
+                    &pdf,
+                    rotation,
+                    idx,
+                    &limits,
+                    Some(&images_config()),
+                    None,
+                )
             })
         })
         .await?;
@@ -209,19 +224,25 @@ impl PipelineTrial {
         Ok(())
     }
 
-    async fn read(&self, image: &image::DynamicImage) -> super::OcrRunResult<super::OcrPipelineOutput> {
-        let mut hints = self.hints.clone();
+    fn read_inputs(&self, width: u32, dpi: Dpi) -> (super::PageOcrHints, super::DetachedOcrPage<'_>) {
+        let mut hints = self.page.hints.clone();
         hints.sparse_glyph_trial = Some(self.words.clone());
-        hints.source_dpi = super::rendered_page_source_dpi(&self.pdf, self.index, image.width());
-        hints.number_source = None;
-        hints.probe_reads = None;
-        let (_, height_pt) = super::page_dimensions_pt(&self.pdf, self.index);
-        let points_per_pixel = (image.height() > 0).then(|| height_pt / image.height() as f32);
+        hints.source_dpi = super::rendered_page_source_dpi(&self.pdf, self.index, width);
+        if let Some(source) = &mut hints.number_source {
+            source.raster = Some(dpi);
+        }
         let detached = super::DetachedOcrPage {
             document: &self.pdf,
             stored_scan: None,
-            orientation_retry: None,
+            orientation_retry: self.page.orientation_retry.as_ref(),
         };
+        (hints, detached)
+    }
+
+    async fn read(&self, image: &image::DynamicImage, dpi: Dpi) -> super::OcrRunResult<super::OcrPipelineOutput> {
+        let (hints, detached) = self.read_inputs(image.width(), dpi);
+        let (_, height_pt) = super::page_dimensions_pt(&self.pdf, self.index);
+        let points_per_pixel = (image.height() > 0).then(|| height_pt / image.height() as f32);
         Box::pin(super::run_ocr_pipeline_for_page(
             None,
             Some(std::slice::from_ref(image)),
@@ -230,7 +251,7 @@ impl PipelineTrial {
             &self.config,
             &self.pipeline,
             None,
-            0,
+            self.page.rotation,
             true,
             points_per_pixel,
             Some(hints),
@@ -249,7 +270,7 @@ impl PipelineTrial {
                 .is_some_and(|source| (source - f64::from(READ_DPI)).abs() < 1.0)
         {
             let dimensions = (image.width(), image.height());
-            match self.read(&image).await {
+            match self.read(&image, dpi).await {
                 Ok(result)
                     if result
                         .9
@@ -870,3 +891,65 @@ async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> Extrac
         .await
         .unwrap()
 }
+
+#[cfg(all(test, paddle_ocr))]
+#[test]
+fn implicit_trial_renderer_uses_the_resolved_page_rotation() {
+    super::super::run_on_ocr_test_stack(32 * 1024 * 1024, || async {
+        let source = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pdf/separation-overprint-2817/folio-black.pdf"
+        ));
+        let mut rotated = lopdf::Document::load_mem(source).unwrap();
+        let page_id = rotated.get_pages()[&1];
+        rotated
+            .get_object_mut(page_id)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .set("Rotate", 90);
+        let mut bytes = Vec::new();
+        rotated.save_to(&mut bytes).unwrap();
+        let (pdf, _, rotations) = super::super::rendering::open_pdf_for_page_ocr(&bytes).unwrap();
+        assert_eq!(rotations, [90]);
+        let words = MarkedWords {
+            media: pdf.get_page_info(0).unwrap().media_box,
+            words: Vec::new(),
+        };
+        let config = ExtractionConfig::default();
+        let (((_, expected), _), _) = crate::pdf::render::capture_render_warnings(|| {
+            super::super::rendering::render_one_selected_page(
+                &pdf,
+                rotations[0],
+                0,
+                &Default::default(),
+                Some(&images_config()),
+                None,
+            )
+        })
+        .unwrap();
+        let trial = PipelineTrial {
+            pdf: Arc::new(pdf),
+            index: 0,
+            config,
+            pipeline: OcrConfig::default().effective_pipeline().unwrap(),
+            page: TrialPage {
+                rotation: rotations[0],
+                hints: super::PageOcrHints::default(),
+                orientation_retry: None,
+            },
+            words,
+        };
+        let (actual, _, warnings) = trial.render().await.unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!((actual.width(), actual.height()), (expected.width(), expected.height()));
+        assert!(
+            actual.as_bytes() == expected.as_bytes(),
+            "trial and normal OCR must normalize rotation identically"
+        );
+    });
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[path = "sparse_glyph_read_review_tests.rs"]
+mod review_tests;

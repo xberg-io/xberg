@@ -2,9 +2,10 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
+suite="${1:?expected pdf-ocr, pdf-sparse-paddle, office-pages or api-jobs}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
+pdf-sparse-paddle) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract" ;;
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
@@ -66,9 +67,15 @@ for route, loop, page in (
 ):
     loop_start = mixed.index(loop)
     branch = mixed[loop_start:].split("let result = match result.map_err", 1)[0]
-    hints = re.search(handoff, branch, re.S)
+    if route == "Tokio":
+        hints = re.search(r"\blet mut page_ocr_hints = hints_for_pipeline_page\(idx, [^\n]+;", branch)
+        builder = mixed.split("let hints_for_pipeline_page =", 1)[1].split("let images_for_page =", 1)[0]
+        fields = builder
+    else:
+        hints = re.search(handoff, branch, re.S)
+        fields = hints["fields"] if hints is not None else ""
     assert hints is not None, f"{route} mixed OCR must construct page hints"
-    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", hints["fields"], re.M), (
+    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", fields, re.M), (
         f"{route} mixed OCR must supply the decision layers"
     )
     invocation = re.search(call, branch[hints.end():], re.S)
@@ -76,6 +83,10 @@ for route, loop, page in (
         rf"Some\(page_ocr_hints\),\s*{re.escape(page)},\s*Some\(source\),", invocation["args"]
     ), f"{route} mixed OCR must pass the hints and the page index to detached OCR"
     print(f"{route} mixed OCR decision-layer handoff verified")
+
+assert re.search(r"hints:\s*hints_for_pipeline_page\(idx, None\)", mixed), (
+    "the sparse trial must use the same page hints as regular detached OCR"
+)
 PYTHON
 }
 
@@ -453,6 +464,30 @@ pdf-ocr)
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
+  ;;
+pdf-sparse-paddle)
+  expected=14
+  for name in \
+    automatic_ocr_keeps_overprinted_separation_text_and_native_sibling \
+    reporter_folio_keeps_the_exact_transcript_with_automatic_ocr \
+    mixed_size_type0_text_keeps_the_exact_transcript_at_normal_density; do
+    run_exact "$name" --test pdf_separation_overprint_2817
+  done
+  sparse_module="extractors::pdf::ocr::pipeline::sparse_glyph_read"
+  for name in \
+    tests::a_marked_word_requires_a_letter_or_digit_at_each_missing_position \
+    page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing \
+    missing_marked_word_retries_sparse_glyphs_with_normal_raster_and_preprocessing \
+    active_pdf_margin_uses_one_normal_density_read \
+    implicit_pipeline_retries_missing_marked_words_at_normal_density \
+    implicit_pipeline_preserves_normal_render_on_rotated_or_failed_trials \
+    implicit_trial_renderer_uses_the_resolved_page_rotation \
+    review_tests::explicit_tesseract_paddle_pipeline_keeps_the_normal_raster \
+    review_tests::explicit_vlm_fallback_keeps_the_normal_raster \
+    review_tests::explicit_paddle_backend_receives_the_normal_raster \
+    review_tests::sparse_preview_preserves_the_detached_recovery_context; do
+    run_exact "$sparse_module::$name" --lib
+  done
   ;;
 office-pages)
   expected=41
