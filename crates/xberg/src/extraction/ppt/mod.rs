@@ -6,7 +6,7 @@
 //! Supports PowerPoint 97, 2000, XP, and 2003 (.ppt) files.
 
 mod embedded;
-pub(crate) use embedded::extract_ppt_embedded_objects;
+pub(crate) use embedded::{PptEmbeddedObject, extract_ppt_embedded_objects};
 
 use crate::error::{Result, XbergError};
 use crate::extraction::office_art::{

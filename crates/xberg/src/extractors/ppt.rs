@@ -5,7 +5,7 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::LEGACY_POWERPOINT_MIME_TYPE;
-use crate::extraction::ppt::PptSlideText;
+use crate::extraction::ppt::{PptExtractionResult, PptSlideText};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::ExtractedImage;
 use crate::types::internal::InternalDocument;
@@ -14,6 +14,14 @@ use crate::types::{Metadata, PageInfo, PageStructure, PageUnitType};
 use ahash::AHashMap;
 use async_trait::async_trait;
 use std::borrow::Cow;
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+use std::path::Path;
+
+#[path = "ppt/embedded.rs"]
+mod embedded;
+
+use embedded::{PptEmbeddingLimits, PptEmbeddings};
+
 #[cfg_attr(alef, alef(skip))]
 /// Native PPT extractor using OLE/CFB parsing.
 ///
@@ -162,80 +170,6 @@ fn build_ppt_page_structure(slide_count: usize) -> Option<PageStructure> {
 
 impl PptExtractor {
     /// Recursively extract the deck's embedded OLE objects into `children` (GH#1660),
-    /// mirroring `extraction::ooxml_embedded::extract_ooxml_embedded_objects`: one
-    /// `ArchiveEntry` per object the matching legacy extractor can read, a warning per
-    /// object it cannot. The entry path carries the displaying slide when a shape
-    /// references the object (`slide2/oleObject1.bin`).
-    async fn extract_embedded_objects(
-        content: &[u8],
-        config: &ExtractionConfig,
-    ) -> (Vec<crate::types::ArchiveEntry>, Vec<crate::types::ProcessingWarning>) {
-        const SOURCE: &str = "ppt_embedded_objects";
-        let security_limits = config.security_limits.clone().unwrap_or_default();
-        let max_object_bytes = config
-            .max_embedded_file_bytes
-            .unwrap_or(security_limits.max_archive_size as u64) as usize;
-
-        let (mut objects, mut warnings) =
-            match crate::extraction::ppt::extract_ppt_embedded_objects(content, max_object_bytes) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    return (
-                        Vec::new(),
-                        vec![crate::types::ProcessingWarning {
-                            source: Cow::Borrowed(SOURCE),
-                            message: Cow::Owned(format!("Failed to read embedded objects: {e}")),
-                        }],
-                    );
-                }
-            };
-        if objects.len() > security_limits.max_files_in_archive {
-            let skipped = objects.len() - security_limits.max_files_in_archive;
-            warnings.push(crate::types::ProcessingWarning {
-                source: Cow::Borrowed(SOURCE),
-                message: Cow::Owned(format!(
-                    "Skipped {skipped} embedded object(s): max_files_in_archive ({}) reached",
-                    security_limits.max_files_in_archive
-                )),
-            });
-            objects.truncate(security_limits.max_files_in_archive);
-        }
-
-        let mut child_config = config.clone();
-        child_config.max_archive_depth = config.max_archive_depth.saturating_sub(1);
-
-        let mut children = Vec::new();
-        for object in objects {
-            let path = match object.slide_number {
-                Some(slide) => format!("slide{slide}/oleObject{}.bin", object.ex_obj_id),
-                None => format!("oleObject{}.bin", object.ex_obj_id),
-            };
-            let Some((inner_bytes, inner_mime)) =
-                crate::extraction::ooxml_embedded::extract_ole_embedded_object(&object.data)
-            else {
-                warnings.push(crate::types::ProcessingWarning {
-                    source: Cow::Borrowed(SOURCE),
-                    message: Cow::Owned(format!(
-                        "Skipped embedded object '{path}': format identification not supported"
-                    )),
-                });
-                continue;
-            };
-            match crate::core::extractor::extract_bytes(&inner_bytes, &inner_mime, &child_config).await {
-                Ok(result) => children.push(crate::types::ArchiveEntry {
-                    path,
-                    mime_type: inner_mime,
-                    result: Box::new(result),
-                }),
-                Err(e) => warnings.push(crate::types::ProcessingWarning {
-                    source: Cow::Borrowed(SOURCE),
-                    message: Cow::Owned(format!("Failed to extract embedded object '{path}': {e}")),
-                }),
-            }
-        }
-        (children, warnings)
-    }
-
     /// Build an `InternalDocument` from PPT extracted slides and embedded images.
     ///
     /// `slides` carries the deck's real per-slide structure (persist order and numbering,
@@ -385,7 +319,64 @@ impl InternalDocumentExtractor for PptExtractor {
         let extract_images = config.needs_image_data();
 
         let result = run_ppt_extraction(content, config, include_master_slides, extract_images).await?;
+        let objects = Self::discover_embedded_objects(content, PptEmbeddingLimits::from_config(config));
+        Ok(Self::finish_document(result, objects, mime_type, config).await)
+    }
 
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+        if !crate::core::batch_mode::is_batch_mode()
+            && let Some(pool) = crate::core::runtime::current_office_pool()
+        {
+            let (result, objects) = Self::read_file_on_worker(path, config, pool).await?;
+            return Ok(Self::finish_document(result, objects, mime_type, config).await);
+        }
+        let content = crate::core::io::open_file_bytes(path)?;
+        self.extract_content(&content, mime_type, config).await
+    }
+
+    fn supported_mime_types(&self) -> &[&str] {
+        &[LEGACY_POWERPOINT_MIME_TYPE]
+    }
+
+    fn priority(&self) -> i32 {
+        60
+    }
+}
+
+impl PptExtractor {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    async fn read_file_on_worker(
+        path: &Path,
+        config: &ExtractionConfig,
+        pool: &crate::core::runtime::OfficeBlockingPool,
+    ) -> Result<(PptExtractionResult, PptEmbeddings)> {
+        use crate::core::runtime::{acquire_office_slot, check_blocking_cancelled, run_blocking};
+
+        let cancel = config.cancel_token.as_ref();
+        let permit = acquire_office_slot(pool.admission.clone(), cancel).await?;
+        let path = path.to_path_buf();
+        let limits = PptEmbeddingLimits::from_config(config);
+        let include_master_slides = config.content_filter.as_ref().is_some_and(|f| f.include_headers);
+        let extract_images = config.needs_image_data();
+        run_blocking(pool.runtime.handle(), cancel, move |cancel| {
+            // Only synchronous reads are admitted. Child extraction can need this same pool. ~keep
+            let _permit = permit;
+            let content = crate::core::io::open_file_bytes(&path)?;
+            let result =
+                crate::extraction::ppt::extract_ppt_text_with_options(&content, include_master_slides, extract_images)?;
+            check_blocking_cancelled(cancel)?;
+            Ok((result, Self::discover_embedded_objects(&content, limits)))
+        })
+        .await
+    }
+
+    async fn finish_document(
+        result: PptExtractionResult,
+        objects: PptEmbeddings,
+        mime_type: &str,
+        config: &ExtractionConfig,
+    ) -> InternalDocument {
         let meta_title = result.metadata.title;
         let meta_subject = result.metadata.subject;
 
@@ -407,13 +398,11 @@ impl InternalDocumentExtractor for PptExtractor {
         // GH#1660: the legacy counterpart of the `ppt/embeddings/` recursion the `.pptx`
         // extractor does -- a Word or Excel table inserted as an object lives in an
         // `ExOleObjStg` and reached the output in no form. ~keep
-        if config.max_archive_depth > 0 {
-            let (children, embed_warnings) = Self::extract_embedded_objects(content, config).await;
-            if !children.is_empty() {
-                doc.children = Some(children);
-            }
-            doc.processing_warnings.extend(embed_warnings);
+        let (children, embed_warnings) = Self::extract_embedded_objects(objects, config).await;
+        if !children.is_empty() {
+            doc.children = Some(children);
         }
+        doc.processing_warnings.extend(embed_warnings);
         doc.metadata = Metadata {
             title: meta_title,
             subject: meta_subject,
@@ -425,17 +414,13 @@ impl InternalDocumentExtractor for PptExtractor {
             ..Default::default()
         };
 
-        Ok(doc)
-    }
-
-    fn supported_mime_types(&self) -> &[&str] {
-        &[LEGACY_POWERPOINT_MIME_TYPE]
-    }
-
-    fn priority(&self) -> i32 {
-        60
+        doc
     }
 }
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "ppt/blocking_tests.rs"]
+mod blocking_tests;
 
 #[cfg(test)]
 mod tests {
