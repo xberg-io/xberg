@@ -55,12 +55,7 @@ fn pinned_guide_page(page: u32) -> Vec<u8> {
         sha(&bytes),
         "04c76db01e20d7641e886b2403bea2df5757dfe9b4be7a283ee44d1861081a06"
     );
-    let mut document = lopdf::Document::load_mem(&bytes).expect("read pinned corpus PDF");
-    let pages = document.get_pages();
-    let selected = pages[&page];
-    document.delete_pages(&pages.into_keys().filter(|number| *number != page).collect::<Vec<_>>());
-    assert_eq!(document.get_pages().into_values().collect::<Vec<_>>(), [selected]);
-    document.prune_objects();
+    let (mut document, _) = helpers::isolate_pdf_page(&bytes, page);
     let mut isolated = Vec::new();
     document.save_to(&mut isolated).expect("serialize isolated source page");
     isolated
