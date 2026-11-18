@@ -2,42 +2,32 @@ use super::*;
 use crate::utils::test_support::{child_test_root, run_child_test};
 
 #[test]
-fn formula_threads_cap_only_explicit_cpu_at_four_or_more() {
-    for budget in [1, 2, 3, 4, 8] {
-        let cpu = FormulaSessionKey::new(None, ExecutionProviderType::Cpu, budget);
-        assert_eq!(cpu.threads, if budget >= 4 { 2 } else { budget });
-        for provider in [
-            ExecutionProviderType::Auto,
-            ExecutionProviderType::CoreMl,
-            ExecutionProviderType::Cuda,
-            ExecutionProviderType::TensorRt,
-        ] {
-            assert_eq!(FormulaSessionKey::new(None, provider, budget).threads, budget);
-        }
-    }
-}
-
-#[test]
-fn formula_session_identity_tracks_the_provider_device_and_effective_threads() {
-    let cpu = |budget| FormulaSessionKey::new(None, ExecutionProviderType::Cpu, budget);
-    assert_eq!(cpu(2), cpu(4));
-    assert_ne!(cpu(3), cpu(4));
-    assert_ne!(cpu(1), cpu(4));
-    assert_ne!(cpu(4), FormulaSessionKey::new(None, ExecutionProviderType::Auto, 2));
-    let device = |device_id| {
-        let config = AccelerationConfig {
-            provider: ExecutionProviderType::Cuda,
-            device_id,
-        };
-        FormulaSessionKey::new(Some(&config), ExecutionProviderType::Cuda, 4)
+fn warm_formula_recognizer_lifetime_depends_on_requested_acceleration() {
+    let cpu = AccelerationConfig {
+        provider: ExecutionProviderType::Cpu,
+        ..Default::default()
     };
-    assert_ne!(device(0), device(1));
+    let cuda = AccelerationConfig {
+        provider: ExecutionProviderType::Cuda,
+        ..Default::default()
+    };
+    let next_device = AccelerationConfig {
+        device_id: 1,
+        ..cuda.clone()
+    };
+
+    assert!(recognizer_needs_rebuild(None, None));
+    assert!(!recognizer_needs_rebuild(Some(None), None));
+    assert!(recognizer_needs_rebuild(Some(None), Some(&cpu)));
+    assert!(!recognizer_needs_rebuild(Some(Some(&cpu)), Some(&cpu.clone())));
+    assert!(recognizer_needs_rebuild(Some(Some(&cpu)), Some(&cuda)));
+    assert!(recognizer_needs_rebuild(Some(Some(&cuda)), Some(&next_device)));
 }
 
 const CHILD_CASE: &str = "XBERG_TEST_FORMULA_PROVIDER_CHILD";
 
 #[test]
-fn formula_thread_policy_honors_ort_provider_override_precedence() {
+fn formula_session_construction_caps_only_explicit_cpu_at_four_or_more() {
     for case in ["cpu", "cuda", "auto", "unset"] {
         run_child_test(
             "formula_recognition::session_policy_tests::provider_override_child",
@@ -60,19 +50,31 @@ fn provider_override_child() {
     let Some(case) = child_test_root(CHILD_CASE) else {
         return;
     };
-    let (requested, provider, threads) = match case.to_str().expect("formula provider case") {
-        "cpu" => (ExecutionProviderType::Cuda, ExecutionProviderType::Cpu, 2),
-        "cuda" => (ExecutionProviderType::Cpu, ExecutionProviderType::Cuda, 4),
-        "auto" => (ExecutionProviderType::Cpu, ExecutionProviderType::Auto, 4),
-        "unset" => (ExecutionProviderType::Cpu, ExecutionProviderType::Cpu, 2),
+    match case.to_str().expect("formula provider case") {
+        "cpu" => assert_session_budget(ExecutionProviderType::Cuda, true),
+        "cuda" | "auto" => assert_session_budget(ExecutionProviderType::Cpu, false),
+        "unset" => {
+            assert_session_budget(ExecutionProviderType::Cpu, true);
+            for provider in [
+                ExecutionProviderType::Auto,
+                ExecutionProviderType::CoreMl,
+                ExecutionProviderType::Cuda,
+                ExecutionProviderType::TensorRt,
+            ] {
+                assert_session_budget(provider, false);
+            }
+            assert_eq!(session_threads(None, 4), 4);
+        }
         _ => panic!("unknown formula provider case"),
-    };
-    let config = AccelerationConfig {
-        provider: requested,
-        device_id: 3,
-    };
-    let key = FormulaSessionKey::resolve(Some(&config), 4);
-    assert_eq!(key.provider, provider);
-    assert_eq!(key.threads, threads);
-    assert_eq!(key.acceleration.as_ref(), Some(&config));
+    }
+}
+
+fn assert_session_budget(provider: ExecutionProviderType, capped: bool) {
+    let acceleration = AccelerationConfig { provider, device_id: 3 };
+    for budget in [1, 2, 3, 4, 8] {
+        assert_eq!(
+            session_threads(Some(&acceleration), budget),
+            if capped && budget >= 4 { 2 } else { budget }
+        );
+    }
 }

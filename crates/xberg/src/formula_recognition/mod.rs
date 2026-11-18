@@ -236,38 +236,12 @@ pub fn ensure_models() -> Result<FormulaModelPaths, String> {
     ensure_models_in(None)
 }
 
-#[derive(Debug, PartialEq)]
-struct FormulaSessionKey {
-    acceleration: Option<AccelerationConfig>,
-    provider: ExecutionProviderType,
-    threads: usize,
-}
-
-impl FormulaSessionKey {
-    fn resolve(acceleration: Option<&AccelerationConfig>, budget: usize) -> Self {
-        let provider = crate::ort_discovery::resolve_execution_provider(acceleration);
-        Self::new(acceleration, provider, budget)
-    }
-
-    fn new(acceleration: Option<&AccelerationConfig>, provider: ExecutionProviderType, budget: usize) -> Self {
-        // Four-CPU qualification favored two threads for the serial formula recognizer.
-        // Leave smaller budgets and automatic or accelerator selection on their existing policy. ~keep
-        let threads = if provider == ExecutionProviderType::Cpu && budget >= 4 {
-            2
-        } else {
-            budget
-        };
-        Self {
-            acceleration: acceleration.cloned(),
-            provider,
-            threads,
-        }
-    }
-}
-
+/// Pool state: the loaded recognizer plus the acceleration it was built with,
+/// so a changed acceleration config rebuilds the sessions, like the layout
+/// engine's `matches_config`.
 struct PooledRecognizer {
     recognizer: FormulaRecognizer,
-    key: FormulaSessionKey,
+    acceleration: Option<AccelerationConfig>,
 }
 
 /// Process-wide recognizer pool and the failure cooldown timestamp. Lock
@@ -275,6 +249,13 @@ struct PooledRecognizer {
 /// state, so a panic mid-recognition leaves nothing inconsistent behind.
 static RECOGNIZER: std::sync::Mutex<Option<PooledRecognizer>> = std::sync::Mutex::new(None);
 static LAST_INIT_FAILURE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+fn recognizer_needs_rebuild(
+    loaded: Option<Option<&AccelerationConfig>>,
+    requested: Option<&AccelerationConfig>,
+) -> bool {
+    loaded != Some(requested)
+}
 
 /// Answers every crop in place of the model while set, so tests can drive the PDF routes
 /// without the model weights.
@@ -309,16 +290,19 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
         }
     }
 
-    let budget = crate::core::config::concurrency::resolve_thread_budget(None);
-    let key = FormulaSessionKey::resolve(accel, budget);
     let mut pool = RECOGNIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    if pool.as_ref().is_none_or(|pooled| pooled.key != key) {
+    let loaded = pool.as_ref().map(|pooled| pooled.acceleration.as_ref());
+    let rebuild = recognizer_needs_rebuild(loaded, accel);
+    if rebuild {
         let init = ensure_models().and_then(|paths| {
-            FormulaRecognizer::load(&paths, &key).map_err(|e| format!("formula model load failed: {e}"))
+            FormulaRecognizer::load(&paths, accel).map_err(|e| format!("formula model load failed: {e}"))
         });
         match init {
             Ok(recognizer) => {
-                *pool = Some(PooledRecognizer { recognizer, key });
+                *pool = Some(PooledRecognizer {
+                    recognizer,
+                    acceleration: accel.cloned(),
+                });
                 *LAST_INIT_FAILURE
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
@@ -426,11 +410,21 @@ pub(crate) struct FormulaRecognizer {
     tokenizer: tokenizers::Tokenizer,
 }
 
+fn session_threads(accel: Option<&AccelerationConfig>, budget: usize) -> usize {
+    // Four-CPU qualification favored two threads for the serial formula recognizer.
+    // Apply the cap at construction so mixed-affinity callers can still reuse the loaded sessions. ~keep
+    if budget >= 4 && crate::ort_discovery::resolve_execution_provider(accel) == ExecutionProviderType::Cpu {
+        2
+    } else {
+        budget
+    }
+}
+
 impl FormulaRecognizer {
     /// Load every session from `paths`.
-    fn load(paths: &FormulaModelPaths, key: &FormulaSessionKey) -> Result<Self, LayoutError> {
-        let accel = key.acceleration.as_ref();
-        let threads = key.threads;
+    pub(crate) fn load(paths: &FormulaModelPaths, accel: Option<&AccelerationConfig>) -> Result<Self, LayoutError> {
+        let budget = crate::core::config::concurrency::resolve_thread_budget(None);
+        let threads = session_threads(accel, budget);
         let resizer = build_session(&paths.resizer.to_string_lossy(), accel, threads)?;
         let encoder = build_session(&paths.encoder.to_string_lossy(), accel, threads)?;
         let decoder = build_session(&paths.decoder.to_string_lossy(), accel, threads)?;
