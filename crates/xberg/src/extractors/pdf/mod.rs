@@ -2504,6 +2504,46 @@ fn wants_dot_output(config: &ExtractionConfig) -> bool {
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn apply_inline_image_ocr(imgs: &mut [crate::types::ExtractedImage], config: &ExtractionConfig) -> Result<()> {
+    let resolved_ocr_config = ocr::resolve_ocr_config(config);
+    let ocr_config = resolved_ocr_config.as_ref();
+    crate::plugins::ensure_ocr_backends_initialized();
+    let backend = {
+        let registry = crate::plugins::registry::get_ocr_backend_registry();
+        registry.read().get(&ocr_config.backend)?
+    };
+    let mut ocr_config_with_format = ocr_config.clone();
+    ocr_config_with_format.output_format = Some(config.output_format.clone());
+    // GH#1651: this embedded-image route never carried the caller's decode limits,
+    // so every decode ran under `SecurityLimits::default()`. Conditional so a limit
+    // set directly on `OcrConfig` is not replaced by `None`. ~keep
+    if let Some(limits) = config.security_limits.clone() {
+        ocr_config_with_format.security_limits = Some(limits);
+    }
+    for img in imgs.iter_mut() {
+        if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+            break;
+        }
+        match backend.process_image(&img.data, &ocr_config_with_format).await {
+            Ok(mut ocr_result) => {
+                ocr_config.apply_public_element_policy(&mut ocr_result);
+                img.ocr_result = Some(Box::new(ocr_result));
+            }
+            Err(e @ crate::XbergError::Cancelled) => return Err(e),
+            Err(e) => {
+                tracing::warn!(
+                    page = img.page_number,
+                    image_index = img.image_index,
+                    error = %e.pdf_ocr_trace_category(),
+                    "inline image OCR failed; image returned without OCR result"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn attach_pdf_preprocessing_metadata(
     pages: &mut Option<Vec<crate::types::PageContent>>,
     by_page: &ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
@@ -3156,41 +3196,7 @@ impl PdfExtractor {
             && let Some(ref mut imgs) = extracted_images
             && !imgs.is_empty()
         {
-            let resolved_ocr_config = ocr::resolve_ocr_config(config);
-            let ocr_config = resolved_ocr_config.as_ref();
-            crate::plugins::ensure_ocr_backends_initialized();
-            let backend = {
-                let registry = crate::plugins::registry::get_ocr_backend_registry();
-                registry.read().get(&ocr_config.backend)?
-            };
-            let mut ocr_config_with_format = ocr_config.clone();
-            ocr_config_with_format.output_format = Some(config.output_format.clone());
-            // GH#1651: this embedded-image route never carried the caller's decode limits,
-            // so every decode ran under `SecurityLimits::default()`. Conditional so a limit
-            // set directly on `OcrConfig` is not replaced by `None`. ~keep
-            if let Some(limits) = config.security_limits.clone() {
-                ocr_config_with_format.security_limits = Some(limits);
-            }
-            for img in imgs.iter_mut() {
-                if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    break;
-                }
-                match backend.process_image(&img.data, &ocr_config_with_format).await {
-                    Ok(mut ocr_result) => {
-                        ocr_config.apply_public_element_policy(&mut ocr_result);
-                        img.ocr_result = Some(Box::new(ocr_result));
-                    }
-                    Err(e @ crate::XbergError::Cancelled) => return Err(e),
-                    Err(e) => {
-                        tracing::warn!(
-                            page = img.page_number,
-                            image_index = img.image_index,
-                            error = %e.pdf_ocr_trace_category(),
-                            "inline image OCR failed; image returned without OCR result"
-                        );
-                    }
-                }
-            }
+            apply_inline_image_ocr(imgs, config).await?;
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

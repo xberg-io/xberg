@@ -601,9 +601,14 @@ impl TesseractBackend {
         &self,
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
+        implicit_psm: bool,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows, false)
-            .await
+        let policy = if implicit_psm {
+            ImageOcrPolicy::ImplicitStandaloneSparseRows
+        } else {
+            ImageOcrPolicy::StandaloneSparseRows
+        };
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
