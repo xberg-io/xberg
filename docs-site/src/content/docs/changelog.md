@@ -105,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
-- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`, except for a custom Python OCR backend, whose own exception is raised instead (below). REST and batch retain their previous plugin classification. (#3175)
+- **Breaking (python):** An exception raised by any custom Python OCR backend callback reaches the caller as the original exception object, including `initialize()` in `register_ocr_backend`, `shutdown()` in `unregister_ocr_backend` and `clear_ocr_backends`, and the `AttributeError` for a missing `process_image*` method. Extraction previously raised `OtherError`, or `OcrError` when every PDF page failed, and the registry functions raised `RuntimeError`. `except xberg.XbergError` no longer catches these failures unless the backend raises an `XbergError` subclass. In `extract_batch` a failed image OCR callback is reported as `ocr` (1002) instead of `other` (1017); an all-page PDF failure keeps `plugin` (1008). A callback raising `xberg.CancelledError` is an ordinary page failure, not a typed cancellation: PDF OCR continues with the remaining pages. Other bindings are unchanged. (#3175)
 
 - **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
 - **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
@@ -185,7 +186,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
-- **python:** Custom OCR backend exceptions propagate unchanged during standalone image extraction, all-page PDF OCR failure, and backend registration. (#3175)
 - **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
 - Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
 - **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
