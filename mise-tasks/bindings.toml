@@ -53,7 +53,7 @@ class SmokeResults:
             self.passed += 1
 
 
-expected = 4
+expected = 8
 results = SmokeResults()
 status = pytest.main(
     ["-c", "e2e/python/pyproject.toml", "packages/python/tests/test_ocr_callback_exceptions.py"],

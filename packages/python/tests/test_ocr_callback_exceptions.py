@@ -38,19 +38,26 @@ class _FailingOcrBackend:
         raise failure
 
 
+async def _ocr_request(
+    fixture: Path, mime_type: str, backend: _FailingOcrBackend
+) -> tuple[xberg.ExtractInput, xberg.ExtractionConfig]:
+    document = xberg.ExtractInput(kind="bytes", bytes=await asyncio.to_thread(fixture.read_bytes), mime_type=mime_type)
+    config = xberg.ExtractionConfig(
+        use_cache=False,
+        force_ocr=True,
+        # One page per batch keeps OCR callback order aligned with PDF page order.
+        concurrency=xberg.ConcurrencyConfig(max_threads=1),
+        ocr=xberg.OcrConfig(backend=backend.name(), language=["eng"]),
+    )
+    return document, config
+
+
 class OcrCallbackExceptionTests(unittest.IsolatedAsyncioTestCase):
     """Verify that extraction returns the callback's original exception object."""
 
     async def _expect_callback_exception(self, fixture: Path, mime_type: str, minimum_calls: int) -> None:
         backend = _FailingOcrBackend()
-        image = xberg.ExtractInput(kind="bytes", bytes=await asyncio.to_thread(fixture.read_bytes), mime_type=mime_type)
-        config = xberg.ExtractionConfig(
-            use_cache=False,
-            force_ocr=True,
-            # One page per batch keeps OCR callback order aligned with PDF page order.
-            concurrency=xberg.ConcurrencyConfig(max_threads=1),
-            ocr=xberg.OcrConfig(backend=backend.name(), language=["eng"]),
-        )
+        image, config = await _ocr_request(fixture, mime_type, backend)
         caught = None
         xberg.register_ocr_backend(backend)
         try:
@@ -76,6 +83,33 @@ class OcrCallbackExceptionTests(unittest.IsolatedAsyncioTestCase):
             _FIXTURES / "repros/label-scan-over-image-budget/label-scan-two-pages.pdf", "application/pdf", 2
         )
 
+    async def _batch_error(self, fixture: Path, mime_type: str) -> xberg.ExtractionErrorItem:
+        backend = _FailingOcrBackend()
+        document, config = await _ocr_request(fixture, mime_type, backend)
+        xberg.register_ocr_backend(backend)
+        try:
+            batch = await xberg.extract_batch([document], config)
+        finally:
+            xberg.unregister_ocr_backend(backend.name())
+
+        assert backend.raised
+        assert len(batch.errors) == 1
+        return batch.errors[0]
+
+    async def test_image_batch_reports_the_callback_failure_as_ocr(self) -> None:
+        """A failed image OCR callback is an OCR batch error."""
+        error = await self._batch_error(_FIXTURES / "images/test_hello_world.png", "image/png")
+        assert (error.error_type, error.code) == ("ocr", 1002)
+        assert "stopped by the caller" in error.message
+
+    async def test_pdf_batch_keeps_the_plugin_code_for_all_page_failure(self) -> None:
+        """An all-page PDF OCR failure keeps the plugin batch classification."""
+        error = await self._batch_error(
+            _FIXTURES / "repros/label-scan-over-image-budget/label-scan-two-pages.pdf", "application/pdf"
+        )
+        assert (error.error_type, error.code) == ("plugin", 1008)
+        assert "OCR failed on all 2 page(s)" in error.message
+
     async def test_native_pdf_ocr_failure_has_no_python_cause(self) -> None:
         """Native page errors produce an OcrError without a Python exception source."""
         fixture = _FIXTURES / "repros/label-scan-over-image-budget/label-scan-two-pages.pdf"
@@ -94,6 +128,45 @@ class OcrCallbackExceptionTests(unittest.IsolatedAsyncioTestCase):
             with pytest.raises(xberg.OcrError, match=r"OCR failed on all 2 page\(s\)") as caught:
                 await xberg.extract(document, config)
         assert caught.value.__cause__ is None
+
+
+class _LifecycleFailingOcrBackend(_FailingOcrBackend):
+    def __init__(self, failing_method: str) -> None:
+        super().__init__()
+        self.failing_method = failing_method
+        self.lifecycle_error = _BackendCancelledError(f"{failing_method} refused")
+
+    def name(self) -> str:
+        return f"ocr-callback-{self.failing_method}-failure"
+
+    def initialize(self) -> None:
+        if self.failing_method == "initialize":
+            raise self.lifecycle_error
+
+    def shutdown(self) -> None:
+        if self.failing_method == "shutdown":
+            raise self.lifecycle_error
+
+
+class OcrBackendLifecycleExceptionTests(unittest.TestCase):
+    """Verify that registry calls raise the backend's own lifecycle exception."""
+
+    def test_registration_raises_the_initialize_exception(self) -> None:
+        """A failing initialize() leaves the backend unregistered and raises its exception."""
+        backend = _LifecycleFailingOcrBackend("initialize")
+        with pytest.raises(_BackendCancelledError) as caught:
+            xberg.register_ocr_backend(backend)
+        assert caught.value is backend.lifecycle_error
+        assert backend.name() not in xberg.list_ocr_backends()
+
+    def test_unregistration_raises_the_shutdown_exception(self) -> None:
+        """A failing shutdown() still removes the backend and raises its exception."""
+        backend = _LifecycleFailingOcrBackend("shutdown")
+        xberg.register_ocr_backend(backend)
+        with pytest.raises(_BackendCancelledError) as caught:
+            xberg.unregister_ocr_backend(backend.name())
+        assert caught.value is backend.lifecycle_error
+        assert backend.name() not in xberg.list_ocr_backends()
 
 
 class _FailingValidator:
