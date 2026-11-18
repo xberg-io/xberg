@@ -62,10 +62,8 @@ struct TextOutput {
 
 #[derive(Default)]
 struct TextScope {
-    group_has_text: Vec<bool>,
     uc_stack: Vec<u8>,
     ansi_codepage_stack: Vec<u32>,
-    pending_boundary_space: bool,
     hidden_stack: Vec<bool>,
     deleted_stack: Vec<bool>,
     font_id_stack: Vec<Option<u16>>,
@@ -231,7 +229,6 @@ impl TextParser {
     fn open_group(&mut self) {
         self.scope.group_depth += 1;
         self.scope.expect_destination = true;
-        self.scope.group_has_text.push(false);
         let role = self
             .scope
             .picture_groups
@@ -253,7 +250,6 @@ impl TextParser {
         let font = self.scope.font_id_stack.last().copied().flatten();
         self.scope.font_id_stack.push(font);
         self.fmt_tracker.push();
-        self.scope.pending_boundary_space = false;
     }
 
     fn close_group(&mut self) {
@@ -287,10 +283,6 @@ impl TextParser {
         );
         self.close_fields();
         self.close_captures();
-        let produced_text = self.scope.group_has_text.pop().unwrap_or(false);
-        if produced_text && self.scope.skip_depth == 0 {
-            self.scope.pending_boundary_space = true;
-        }
     }
 
     fn close_fields(&mut self) {
@@ -386,9 +378,6 @@ impl TextParser {
             && !self.output.result.ends_with('\n')
         {
             self.output.result.push(' ');
-            if let Some(flag) = self.scope.group_has_text.last_mut() {
-                *flag = true;
-            }
         }
     }
 
@@ -417,19 +406,8 @@ impl TextParser {
             state.current_cell.push(character);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push(character);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn finalize_table(&mut self) {
@@ -522,7 +500,6 @@ impl TextParser {
             ensure_table: &ensure_table,
             finalize_table,
             plain: self.output.plain,
-            group_has_text: &mut self.scope.group_has_text,
             cur_heading_level: &mut self.paragraph.cur_heading_level,
             cur_list_level: &mut self.paragraph.cur_list_level,
             cur_list_id: &mut self.paragraph.cur_list_id,
@@ -532,7 +509,6 @@ impl TextParser {
             uc_stack: &mut self.scope.uc_stack,
             ansi_codepage_stack: &mut self.scope.ansi_codepage_stack,
             footnote_count: &mut self.destinations.footnote_count,
-            pending_boundary_space: &mut self.scope.pending_boundary_space,
             hidden_stack: &mut self.scope.hidden_stack,
             fmt_tracker: &mut self.fmt_tracker,
             font_id_stack: &mut self.scope.font_id_stack,
@@ -602,19 +578,8 @@ impl TextParser {
             state.current_cell.push(next_ch);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push(next_ch);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn handle_hex_escape(&mut self, chars: &mut Peekable<Chars<'_>>) {
@@ -640,19 +605,8 @@ impl TextParser {
             state.current_cell.push_str(&decoded);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push_str(&decoded);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn decode_ansi(&self, bytes: &[u8]) -> String {

@@ -202,6 +202,7 @@ binstall = [
 # target feature that the musl aarch64 baseline lacks, so aarch64 ships plain
 # `binstall` (extraction, no Candle OCR). ~keep
 binstall-ocr = ["binstall", "candle-trocr", "candle-paddleocr-vl"]
+mimalloc = ["dep:mimalloc"]
 all = [
     "default",
     "api",
@@ -245,10 +246,15 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tree-sitter-language-pack = { workspace = true, features = ["dynamic-loading", "download", "serde"], optional = true }
 xberg = { workspace = true, features = ["tokio-runtime", "simd-utf8"] }
 
+[target.'cfg(all(target_os = "linux", target_env = "musl"))'.dependencies]
+mimalloc = { version = "0.1.52", default-features = false, optional = true }
+
 [dev-dependencies]
+async-trait = { workspace = true }
 bytes = { workspace = true }
 tempfile = { workspace = true }
 ureq = { version = "3.5", features = ["json"] }
+xberg-child-test = { workspace = true }
 
 [lints]
 workspace = true

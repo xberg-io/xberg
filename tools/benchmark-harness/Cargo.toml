@@ -90,6 +90,7 @@ xberg = { path = "../../crates/xberg", features = ["full"] }
 
 [dev-dependencies]
 dotenvy = "0.15"
+xberg-child-test = { workspace = true }
 
 [lints]
 workspace = true

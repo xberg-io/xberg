@@ -4,6 +4,38 @@
 //! holds the `OcrBackend + Plugin` impls and the per-model configuration
 //! plumbing; model code itself lives in `xberg-candle-ocr::models`.
 
+#[cfg(any(
+    feature = "candle-trocr",
+    feature = "candle-paddleocr-vl",
+    all(
+        not(target_arch = "wasm32"),
+        any(feature = "candle-deepseek-ocr", feature = "candle-glm-ocr")
+    )
+))]
+async fn read_image_file(
+    path: &std::path::Path,
+    limits: &crate::extractors::security::SecurityLimits,
+) -> crate::Result<Vec<u8>> {
+    use tokio::io::AsyncReadExt as _;
+
+    let file = tokio::fs::File::open(path).await?;
+    let limit = u64::try_from(limits.max_content_size).unwrap_or(u64::MAX);
+    let size_error = || {
+        crate::XbergError::validation(format!(
+            "The encoded image file exceeds security_limits.max_content_size ({limit} bytes)"
+        ))
+    };
+    if file.metadata().await?.len() > limit {
+        return Err(size_error());
+    }
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1)).read_to_end(&mut bytes).await?;
+    if bytes.len() > limits.max_content_size {
+        return Err(size_error());
+    }
+    Ok(bytes)
+}
+
 mod config;
 
 // Shared `ExtractedDocument` construction (metadata, tables, detected_languages)

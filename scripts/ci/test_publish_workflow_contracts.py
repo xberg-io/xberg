@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import itertools
 import os
 import re
@@ -109,6 +110,31 @@ def evaluate_expression(expression: str, context: dict[str, object]) -> object:
 
 def evaluate_condition(expression: str, context: dict[str, object]) -> bool:
     return bool(evaluate_expression(expression, context))
+
+
+def gate_passes(job: str, context: dict[str, object]) -> bool:
+    """Evaluate a job's leading require-job-results step the way the action does.
+
+    The step's `succeeded` / `succeeded-or-skipped` entries may be expressions that render a job
+    name or ''. A gate that names no job at all is rejected by the action, so it fails here too.
+    """
+    [step, *_] = yaml.safe_load(WORKFLOW.read_text())["jobs"][job]["steps"]
+    assert step.get("uses") == "xberg-io/actions/require-job-results@v1", f"{job} has no leading gate"
+    assert step["with"]["needs"] == "${{ toJSON(needs) }}"
+    needs = context["needs"]
+    assert isinstance(needs, dict)
+    named = 0
+    for key, accepted in (("succeeded", {"success"}), ("succeeded-or-skipped", {"success", "skipped"})):
+        for entry in re.split(r"[\n,]", step["with"].get(key, "")):
+            entry = entry.strip()
+            if entry.startswith("${{"):
+                entry = str(evaluate_expression(entry.removeprefix("${{").removesuffix("}}").strip(), context))
+            if not entry:
+                continue
+            named += 1
+            if needs[entry.replace("-", "_")]["result"] not in accepted:
+                return False
+    return named > 0
 
 
 def github_context(event_name: str, tag: str, actor: str, triggering_actor: str) -> dict[str, object]:
@@ -232,7 +258,7 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     workflow = WORKFLOW.read_text().split("\njobs:\n", 1)[1]
     jobs = re.findall(r"(?m)^  ([a-zA-Z0-9_-]+):$", workflow)
     core_jobs = [job for job in jobs if job not in ("dispatch-plugin-npm", "dispatch-plugin-hermes")]
-    assert len(core_jobs) == 84
+    assert len(core_jobs) == 86
     for job in core_jobs:
         expression = job_if_expression(job_block(workflow, job))
         assert expression.startswith("!inputs.plugins-only && ("), job
@@ -258,10 +284,14 @@ def test_node_sha_dry_run_builds_and_packs_without_publishing() -> None:
     for name, block in jobs.items():
         condition = job_if_expression(block)
         assert "cancelled()" in condition and evaluate_condition(condition, context), name
-    stage = context["needs"]["node_bindings_musl"]
-    stage["result"] = "failure"
-    assert not evaluate_condition(job_if_expression(jobs["publish-node"]), context)
-    stage["result"] = "success"
+    # A failed build leg must fail the publish job by name rather than skip it silently.
+    assert gate_passes("publish-node", context)
+    for name in matrices:
+        for result in ("failure", "skipped", "cancelled"):
+            context["needs"][name.replace("-", "_")]["result"] = result
+            assert evaluate_condition(job_if_expression(jobs["publish-node"]), context), (name, result)
+            assert not gate_passes("publish-node", context), (name, result)
+        context["needs"][name.replace("-", "_")]["result"] = "success"
     publish = jobs["publish-node"]
     steps = re.findall(r"(?m)^      - name: (.+)\n        if: \$\{\{ (.+) \}\}$", publish)
     publish_steps = {name: expression for name, expression in steps if name.startswith("Publish ")}
@@ -275,11 +305,8 @@ def test_node_sha_dry_run_builds_and_packs_without_publishing() -> None:
     context["needs"]["check_npm"]["result"] = "success"
     context["needs"]["publish_crates"]["result"] = "success"
     assert all(evaluate_condition(job_if_expression(block), context) for block in jobs.values())
-    publish_condition = job_if_expression(publish)
-    for result, expected in (("skipped", True), ("failure", False), ("cancelled", False)):
-        context["needs"]["publish_crates"]["result"] = result
-        assert evaluate_condition(publish_condition, context) is expected, result
-    context["needs"]["publish_crates"]["result"] = "skipped"
+    # npm consumes nothing from crates.io, so a crates.io failure must not hold it back.
+    assert "publish-crates" not in publish[: publish.index("    runs-on:")]
     tools = publish.split("- name: Checkout Node dry-run verification tools", 1)[1].split("- name:", 1)[0]
     assert "ref: ${{ github.sha }}" in tools
     assert "path: .release-tools" in tools
@@ -399,16 +426,23 @@ def test_android_dry_run_and_live_release_gates() -> None:
     assert all(evaluate_condition(expr, context) for expr in (check, native, publish))
     outputs.update(release_kotlin_android="true", release_kotlin="false")
 
-    for dependency, results, expressions in (
-        ("prepare", ("failure", "skipped", "cancelled"), (native, publish)),
-        ("kotlin_android_natives", ("failure", "skipped", "cancelled"), (publish,)),
-        ("publish_crates", ("failure", "cancelled"), (publish,)),
-    ):
+    for dependency, results, expressions in (("prepare", ("failure", "skipped", "cancelled"), (native, publish)),):
         original = needs[dependency]["result"]
         for result in results:
             needs[dependency]["result"] = result
             assert all(not evaluate_condition(expr, context) for expr in expressions), (dependency, result)
         needs[dependency]["result"] = original
+
+    # A failed natives build runs the publish job so its gate fails it by name.
+    outputs.update(dry_run="false", is_tag="true", force_republish="false")
+    needs["check_maven"] = {"result": "success", "outputs": {"kotlin_exists": "false"}}
+    assert gate_passes("publish-kotlin-android", context)
+    for result in ("failure", "skipped", "cancelled"):
+        needs["kotlin_android_natives"]["result"] = result
+        assert evaluate_condition(publish, context), result
+        assert not gate_passes("publish-kotlin-android", context), result
+    needs["kotlin_android_natives"]["result"] = "success"
+    assert "publish-crates" not in job_block(workflow, "publish-kotlin-android").split("    runs-on:", 1)[0]
 
     for disable in ("cancelled", "plugins_only", "release_kotlin"):
         context["cancelled"] = disable == "cancelled"
@@ -433,7 +467,8 @@ def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -
         r"(?m)^        id: release-source\n        uses: actions/checkout@", job_block(workflow, "prepare")
     )
     for block, live_ref in ((native, "checkout_ref"), (publish, "ref")):
-        [ref] = re.findall(r"(?m)^          ref: (.+)$", re.split(r"(?m)^(?=      - )", block)[1])
+        [checkout, *_] = [s for s in re.split(r"(?m)^(?=      - )", block) if "uses: actions/checkout@" in s]
+        [ref] = re.findall(r"(?m)^          ref: (.+)$", checkout)
         assert ref == (
             "${{ needs.prepare.outputs.dry_run == 'true' && "
             f"needs.prepare.outputs.source_sha || needs.prepare.outputs.{live_ref}" + " }}"
@@ -475,13 +510,18 @@ def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -
 
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
-    for plugins_only, cancelled, dry_run, crates_result, available, expected in (
-        (False, False, "true", "skipped", "true", True),
-        (False, False, "true", "skipped", "false", False),
-        (False, False, "false", "skipped", "", True),
-        (True, False, "false", "skipped", "", False),
-        (False, True, "false", "skipped", "", False),
-        (False, False, "false", "failure", "", False),
+    # PIE is gated on the release assets (check-php-pie), not Packagist, which lists every tag
+    # before a single archive exists.
+    assert "check-packagist" not in expression
+    for plugins_only, cancelled, dry_run, crates_result, available, pie, force, expected in (
+        (False, False, "true", "skipped", "true", "", "false", True),
+        (False, False, "true", "skipped", "false", "", "false", False),
+        (False, False, "false", "skipped", "", "true", "true", True),
+        (False, False, "false", "skipped", "", "false", "false", True),
+        (False, False, "false", "skipped", "", "true", "false", False),
+        (True, False, "false", "skipped", "", "false", "false", False),
+        (False, True, "false", "skipped", "", "false", "false", False),
+        (False, False, "false", "failure", "", "false", "false", False),
     ):
         context = {
             "inputs": {"plugins_only": plugins_only},
@@ -492,15 +532,15 @@ def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
                     "outputs": {
                         "dry_run": dry_run,
                         "release_php": "true",
-                        "force_republish": "true",
+                        "force_republish": force,
                         "php_registry_core_available": available,
                     },
                 },
                 "publish_crates": {"result": crates_result},
-                "check_packagist": {"outputs": {"exists": "true"}},
+                "check_php_pie": {"outputs": {"exists": pie}},
             },
         }
-        assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result)
+        assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result, pie, force)
 
 
 def live_lines(text: str) -> list[str]:
@@ -589,8 +629,28 @@ def test_php_partial_retry_publishes_packagist_only_after_successful_upload() ->
     block = job_block(WORKFLOW.read_text(), "publish-packagist")
     condition = block[: block.index("    runs-on:")]
     assert "!cancelled()" in condition
-    assert "needs.upload-php-pie-release.result == 'success'" in condition
     assert "needs.prepare.outputs.release_php == 'true'" in condition
+    needs = {
+        "php_extension": {"result": "success"},
+        "upload_php_pie_release": {"result": "success"},
+        "check_php_pie": {"outputs": {"exists": "false"}},
+    }
+    context = {"needs": needs}
+    for build, upload, pie, expected in (
+        ("success", "success", "false", True),
+        ("failure", "success", "false", False),
+        ("success", "failure", "false", False),
+        # publish-crates failed, so the PHP build never ran: Packagist must not go out.
+        ("skipped", "skipped", "false", False),
+        # Every archive already released, so the build and upload were skipped on purpose.
+        ("skipped", "skipped", "true", True),
+        ("failure", "skipped", "true", False),
+        ("cancelled", "cancelled", "true", False),
+    ):
+        needs["php_extension"]["result"] = build
+        needs["upload_php_pie_release"]["result"] = upload
+        needs["check_php_pie"]["outputs"]["exists"] = pie
+        assert gate_passes("publish-packagist", context) is expected, (build, upload, pie)
 
 
 def test_release_finalization_requires_successful_asset_verification() -> None:
@@ -972,6 +1032,120 @@ def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
         assert result.returncode == expected, (arch, lto, result.stderr)
         if expected:
             assert "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" in result.stderr
+
+
+def test_python_manylinux_verifies_onnx_runtime_before_extraction() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        _check_python_manylinux_onnx_runtime_verification(Path(directory))
+
+
+def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
+    repo_root = WORKFLOW.parents[2]
+    integrity_path = Path("scripts/ci/actions/setup-onnx-runtime")
+    project = tmp_path / "staged project"
+    integrity = project / integrity_path
+    integrity.mkdir(parents=True)
+    shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
+    assert (repo_root / integrity_path / "nuget-fallback.sh").is_file()
+    (integrity / "nuget-fallback.sh").write_text(
+        '#!/usr/bin/env bash\nprintf "nuget %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
+        'exit "${TEST_NUGET_STATUS:-0}"\n'
+    )
+    pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
+    fixture_manifest = integrity / "checksums.sha256"
+    stub = r"""
+        uname() { printf '%s\n' "$TEST_ARCH"; }
+        mktemp() {
+          [[ "$*" == -d ]]
+          command mkdir "$TMPDIR/ort-download"
+          printf '%s\n' "$TMPDIR/ort-download"
+        }
+        mkdir() { [[ "$*" == '-p /opt/msort' ]]; }
+        curl() {
+          if [[ "$*" == '--retry-all-errors --version' ]]; then
+            return "${TEST_CURL_PROBE_STATUS:-0}"
+          fi
+          expected='--proto =https --proto-redir =https --retry 5 --retry-delay 5'
+          if [[ "${TEST_CURL_PROBE_STATUS:-0}" == 0 ]]; then
+            expected+=' --retry-all-errors'
+          fi
+          [[ "${*:1:$#-3}" == "$expected -fsSL" ]]
+          [[ "${@: -3:1}" == -o ]]
+          printf 'curl %s\n' "${@: -1}"
+          printf '%s' "$TEST_PAYLOAD" > "${@: -2:1}"
+          return "${TEST_CURL_STATUS:-0}"
+        }
+        tar() {
+          [[ "$*" == "-xzf $ort_archive -C /opt/msort --strip-components=1" ]]
+          printf 'tar %s\n' "${ort_archive##*/}"
+        }
+    """
+    original_entries = set(tmp_path.iterdir())
+    for filename, job_name in (("publish.yaml", "python-wheels"), ("ci-python-wheel-smoke.yaml", "python-wheel-smoke")):
+        workflow = workflow_job(WORKFLOW.with_name(filename), job_name)
+        [step] = [step for step in workflow["steps"] if step.get("uses") == "xberg-io/actions/build-python-wheels@v1"]
+        hook = step["with"]["cibw-before-build-linux"]
+        assert hook.startswith("set -euo pipefail\n"), filename
+        prefix, boundary, stage = hook.partition("\nort_version=")
+        assert boundary and "curl " not in prefix and "tar " not in prefix, filename
+        assert stage.count("nuget-fallback.sh") == 1, filename
+        assert f'ort_integrity="{{project}}/{integrity_path}"' in stage, filename
+        script = textwrap.dedent(stub) + boundary + stage.replace("{project}", str(project))
+        for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
+            archive = f"onnxruntime-linux-{asset_arch}-1.24.2.tgz"
+            assert len(re.findall(rf"(?m)^[a-f0-9]{{64}}\s+{re.escape(archive)}$", pinned_manifest)) == 1
+            url = f"https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/{archive}"
+            payload = f"fixture for {archive}"
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+            env = {**os.environ, "TEST_ARCH": uname, "TEST_PAYLOAD": payload, "TMPDIR": str(tmp_path)}
+
+            fixture_manifest.write_text("")
+            unpinned = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
+            assert unpinned.returncode == 1 and unpinned.stdout == "", (filename, uname, unpinned)
+            assert f"Expected exactly one pinned SHA-256 for {archive}" in unpinned.stderr
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            fixture_manifest.write_text(f"{digest}  {archive}\n")
+            for curl_probe_status in ("0", "2"):
+                verified = run(
+                    ["bash", "-euo", "pipefail", "-c", script],
+                    tmp_path,
+                    {**env, "TEST_CURL_PROBE_STATUS": curl_probe_status},
+                )
+                assert verified.returncode == 0, (filename, uname, curl_probe_status, verified.stderr)
+                assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname, curl_probe_status)
+
+            tampered = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_PAYLOAD": "tampered"})
+            assert tampered.returncode == 1 and tampered.stdout.splitlines() == [f"curl {url}"], (
+                filename,
+                uname,
+                tampered,
+            )
+            assert f"SHA-256 mismatch for {archive}" in tampered.stderr
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rid = "linux-arm64" if asset_arch == "aarch64" else "linux-x64"
+            nuget = f"nuget 1.24.2 {rid} /opt/msort {integrity}/checksums.sha256"
+            for curl_status in ("18", "22"):
+                fell_back = run(
+                    ["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": curl_status}
+                )
+                assert fell_back.returncode == 0, (filename, uname, curl_status, fell_back.stderr)
+                assert fell_back.stdout.splitlines() == [f"curl {url}", nuget, "runner_temp ort-download"], (
+                    filename,
+                    uname,
+                    fell_back,
+                )
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rejected = run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                tmp_path,
+                {**env, "TEST_CURL_STATUS": "22", "TEST_NUGET_STATUS": "7"},
+            )
+            assert rejected.returncode == 7 and rejected.stdout.splitlines()[:2] == [f"curl {url}", nuget], rejected
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
 
 def test_docker_preflight_checks_out_the_resolved_candidate() -> None:
@@ -1513,12 +1687,6 @@ def test_dry_release_assets_verify_only_selected_groups() -> None:
                 outputs["dry_run"] = "true"
 
 
-if __name__ == "__main__":
-    for name, test in list(globals().items()):
-        if name.startswith("test_") and callable(test):
-            test()
-
-
 def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
     workflow = WORKFLOW.read_text()
     for job, libc, image in (
@@ -1545,8 +1713,36 @@ def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
         assert "continue-on-error" not in gate
         if libc == "gnu":
             assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
+            assert "SMOKE_REQUIRE_MIMALLOC" not in gate
         else:
             assert "if:" not in gate
+            assert '-e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required"' in gate
+
+
+def test_musl_smoke_uses_the_packaged_source_allocator_policy() -> None:
+    steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["cli-binaries-musl"]["steps"]
+    [smoke] = [
+        step["run"] for step in steps if step.get("name") == "Smoke test packaged Linux CLI in a clean container"
+    ]
+    source = (DOCKER_DIR / "Dockerfile.musl-build").read_text()
+    marker = "# xberg-release-smoke: mimalloc-required ~keep"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "docker").mkdir()
+        (root / "Cargo.toml").write_text('[workspace.package]\nversion = "1.4.1"\n')
+        docker = root / "docker-stub"
+        docker.mkdir()
+        command = docker / "docker"
+        command.write_text('#!/bin/sh\n[ "$1" = run ] || exit 0\nprintf "%s\\n" "$@"\n')
+        command.chmod(0o755)
+        env = {**os.environ, "PATH": f"{docker}:{os.environ['PATH']}", "TARGET": "aarch64-unknown-linux-musl"}
+        for checkout_policy, expected in [(source.replace(f"{marker}\n", ""), 0), (source, 1)]:
+            (root / "docker/Dockerfile.musl-build").write_text(checkout_policy)
+            result = run(["bash", "-c", smoke], root, env)
+            assert result.returncode == 0, result.stderr
+            [observed] = [line for line in result.stdout.splitlines() if line.startswith("SMOKE_REQUIRE_MIMALLOC=")]
+            assert observed == f"SMOKE_REQUIRE_MIMALLOC={expected}"
 
 
 DOCKER_DIR = Path(__file__).parents[2] / "docker"
@@ -1636,3 +1832,9 @@ def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
     assert_thin_only_on_arm64(lto_selector(push["with"]["build-args"]), contexts)
     for dockerfile in ("Dockerfile.core", "Dockerfile.full"):
         assert_dockerfile_exports_lto_before(dockerfile, "cargo build --release --package xberg-cli")
+
+
+if __name__ == "__main__":
+    for name, test in list(globals().items()):
+        if name.startswith("test_") and callable(test):
+            test()

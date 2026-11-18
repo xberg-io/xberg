@@ -21,7 +21,6 @@ pub(super) struct ControlWordCtx<'a> {
     pub(super) ensure_table: &'a dyn Fn(&mut Option<TableState>),
     pub(super) finalize_table: &'a dyn Fn(&mut Option<TableState>, &mut Vec<Table>),
     pub(super) plain: bool,
-    pub(super) group_has_text: &'a mut [bool],
     pub(super) cur_heading_level: &'a mut u8,
     pub(super) cur_list_level: &'a mut Option<u8>,
     pub(super) cur_list_id: &'a mut Option<u16>,
@@ -31,7 +30,6 @@ pub(super) struct ControlWordCtx<'a> {
     pub(super) uc_stack: &'a mut Vec<u8>,
     pub(super) ansi_codepage_stack: &'a mut [u32],
     pub(super) footnote_count: &'a mut usize,
-    pub(super) pending_boundary_space: &'a mut bool,
     pub(super) hidden_stack: &'a mut Vec<bool>,
     pub(super) fmt_tracker: &'a mut FormattingTracker,
     pub(super) font_id_stack: &'a mut [Option<u16>],
@@ -134,9 +132,6 @@ fn handle_text_emission_control_word(
                 state.current_cell.push_str(&marker);
             } else {
                 ctx.result.push_str(&marker);
-                if let Some(flag) = ctx.group_has_text.last_mut() {
-                    *flag = true;
-                }
             }
         }
         "pict" => handle_pict_control_word(chars, ctx),
@@ -148,14 +143,11 @@ fn handle_text_emission_control_word(
                 state.current_cell.push('\t');
             } else {
                 ctx.result.push('\t');
-                if let Some(flag) = ctx.group_has_text.last_mut() {
-                    *flag = true;
-                }
             }
         }
         "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash" | "emdash" => {
             if let Some(c) = literal_char_for_control_word(control_word) {
-                push_literal_char(ctx, c);
+                ctx.result.push(c);
             }
         }
         _ => return false,
@@ -239,16 +231,6 @@ fn literal_char_for_control_word(word: &str) -> Option<char> {
     })
 }
 
-/// Push a single literal character produced by a fixed-text control word
-/// (`\bullet`, `\lquote`, etc.), matching the char-append + group-has-text
-/// bookkeeping every such control word performs. ~keep
-fn push_literal_char(ctx: &mut ControlWordCtx, ch: char) {
-    ctx.result.push(ch);
-    if let Some(flag) = ctx.group_has_text.last_mut() {
-        *flag = true;
-    }
-}
-
 /// Handle `\pard`: close the current paragraph and reset per-paragraph state.
 fn handle_pard_control_word(ctx: &mut ControlWordCtx) {
     let in_table_row = ctx.table_state.as_ref().is_some_and(|s| s.in_row);
@@ -262,9 +244,6 @@ fn handle_pard_control_word(ctx: &mut ControlWordCtx) {
         });
         ctx.result.push('\n');
         ctx.result.push('\n');
-        if let Some(flag) = ctx.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
     *ctx.para_meta_emitted = false;
     *ctx.cur_heading_level = 0;
@@ -292,18 +271,7 @@ fn handle_u_control_word(
         {
             state.current_cell.push(c);
         } else {
-            if *ctx.pending_boundary_space
-                && !ctx.result.is_empty()
-                && !ctx.result.ends_with(' ')
-                && !ctx.result.ends_with('\n')
-            {
-                ctx.result.push(' ');
-            }
-            *ctx.pending_boundary_space = false;
             ctx.result.push(c);
-            if let Some(flag) = ctx.group_has_text.last_mut() {
-                *flag = true;
-            }
         }
     }
     let uc_count = ctx.uc_stack.last().copied().unwrap_or(1);
@@ -346,9 +314,6 @@ fn handle_pict_control_word(chars: &mut std::iter::Peekable<std::str::Chars>, ct
         {
             state.current_cell.push_str(&img_md);
         } else {
-            if let Some(flag) = ctx.group_has_text.last_mut() {
-                *flag = true;
-            }
             ctx.result.push_str(&img_md);
         }
     }
@@ -356,7 +321,6 @@ fn handle_pict_control_word(chars: &mut std::iter::Peekable<std::str::Chars>, ct
 
 /// Handle `\par`/`\line`: close the current cell/paragraph as appropriate.
 fn handle_par_or_line(ctx: &mut ControlWordCtx) {
-    *ctx.pending_boundary_space = false;
     let in_table_row = ctx.table_state.as_ref().is_some_and(|s| s.in_row);
     if in_table_row {
         if let Some(state) = ctx.table_state.as_mut()
@@ -385,9 +349,6 @@ fn handle_par_or_line(ctx: &mut ControlWordCtx) {
         ctx.result.push('\n');
         ctx.result.push('\n');
     }
-    if let Some(flag) = ctx.group_has_text.last_mut() {
-        *flag = true;
-    }
 }
 
 /// Handle `\row`: close the current table row and emit its text placeholder.
@@ -405,9 +366,6 @@ fn handle_row_control_word(ctx: &mut ControlWordCtx) {
     ctx.result.push_str("[TABLE_ROW]");
     ctx.result.push('\n');
     ctx.result.push('\n');
-    if let Some(flag) = ctx.group_has_text.last_mut() {
-        *flag = true;
-    }
     *ctx.para_meta_emitted = true;
     ctx.para_metas.push(ParagraphMeta {
         is_table: true,

@@ -34,7 +34,7 @@ wbi
 
 #### ∑ n
 
-*cn n*
+*c n n*
 
 - A. *RFI signal model* Common RFI can be categorized into narrowband interference, chirp broadband interference and sinusoidal = broadband interference [6]. The narrowband interference can be expressed as:
 
@@ -46,7 +46,7 @@ sm *n* =1
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
-*Nm* =∞ 2 *mn c n*
+*Nm* =∞ 2 *m n c n*
 
  *C*~*n*~
 
@@ -56,7 +56,7 @@ sm *n* =1
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
-2 *mn c n*
+2 *m n c n*
 
 
 
@@ -80,7 +80,7 @@ nbi
 
 ## ∑ n
 
-*cn k* =0 *n* =1
+*c n k* =0 *n* =1
 
 *kmk* \!( +
 
@@ -134,6 +134,6 @@ wbi~sm~
 
 ## ∑ n
 
-*cn n n* =1
+*c n n n* =1
 
 By conducting time-frequency analysis on equation (5), it Where, *C*~*n*~ is the amplitude, β is the modulation coefficient ~*n*~ can be found that: and *f*~*n*~ is the modulation frequency. According to the Bessel *fk*~*RFI*~ = ⋅ *t* (6) formula, sinusoidally modulated broadband interference can From formula (6), it can be seen that the signal holds global be expressed as: characteristics on the time-frequency map, which inspires us to propose a Transformer network. Moreover, from the interference model in Equation (5), it can be seen that the

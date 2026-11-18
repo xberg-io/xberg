@@ -16,7 +16,9 @@ ttl = "6h"
 
 [update]
 mode = "latest-tag"
-exclude = ["erlef/setup-beam", "rubygems/configure-rubygems-credentials"]
+pin_style = "major"
+# These actions publish full version tags without major aliases.
+allow_full = ["ruby/setup-ruby", "rubygems/configure-rubygems-credentials", "sigstore/cosign-installer"]
 include_prereleases = false
 preserve_major = false
 missing_ref = "warn"

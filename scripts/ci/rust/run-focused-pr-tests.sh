@@ -32,6 +32,9 @@ run_exact() {
   if [[ "${1:-}" == --native-pdf ]]; then
     shift
     cargo_args=(test --locked -p xberg-native-pdf "$@")
+  elif [[ "${1:-}" == --cli ]]; then
+    shift
+    cargo_args=(test --locked -p xberg-cli --no-default-features --features pdf-ocr --bin xberg "$@")
   else
     cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
   fi
@@ -86,6 +89,28 @@ run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  run_exact 'extractors::warnings::tests::nested_warning_scope_restores_the_outer_sink' --native-pdf --lib
+  run_exact 'extractors::warnings::tests::unwinding_restores_the_outer_warning_scope' --native-pdf --lib
+  run_exact 'extractors::warnings::tests::automatic_warning_outside_a_scope_is_not_retained' --native-pdf --lib
+  run_exact explicit_global_warnings_round_trip_with_a_bounded_backlog --native-pdf --test extraction_api_regression
+  run_exact shared_type0_font_replays_only_the_missing_tounicode_warning_once_per_document \
+    --native-pdf --test extraction_api_regression
+  run_exact concurrent_renderers_keep_their_own_dropped_glyph_warnings --native-pdf --test test_glyph_drop_reporting
+  run_exact 'extractors::warnings::tests::overlapping_warning_scopes_keep_each_threads_warnings' --native-pdf --lib
+  run_exact a_dropped_glyph_warns_on_every_page_it_paints --native-pdf --test test_glyph_drop_reporting
+  run_exact 'rendering::text_rasterizer::tests::glyph_drop_warning_hides_font_and_preserves_details' --native-pdf --lib
+  run_exact 'render_parity::fully_mapped_fonts_render_without_drop_warnings' --native-pdf --test test_decoder_characterization
+  run_exact 'render_parity::subset_missing_glyph_raises_one_drop_warning' --native-pdf --test test_decoder_characterization
+  local jpx_test
+  for jpx_test in \
+    a_dictionary_width_half_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_width_double_the_codestreams_extracts_at_the_codestreams_size \
+    a_dictionary_that_agrees_with_the_codestream_extracts_with_no_size_warning \
+    an_indexed_image_extracts_at_the_codestreams_size \
+    concurrent_documents_keep_their_own_jpx_size_warnings; do
+    run_exact "$jpx_test" --native-pdf --test gh1900_jpx_dict_size_disagrees_with_codestream
+  done
+  expected=$((expected + 16))
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::located_english_word_keeps_its_place_between_khmer_occurrences' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_khmer_occurrence_is_published_inline_in_both_surfaces' --lib
@@ -94,10 +119,29 @@ run_pdf_cases() {
   run_exact automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_khmer --test pdf_khmer_minority_2826
   run_exact mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink --test pdf_khmer_minority_2826
   run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
+  run_exact 'pdf::structure::paragraphs::tests::continuation_merge_distinguishes_zero_baseline_from_missing_geometry' --lib
+  run_exact 'pdf::structure::adapters::tests::ocr_line_baseline_requires_a_source_box' --lib
+  run_exact 'pdf::structure::pipeline::tests::native_paragraphs_retain_the_measured_zero_line_baseline' --lib
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
     --test ocr_standalone_row_layout_2432
+  expected=$((expected + 9))
+  run_exact implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript \
+    --test ocr_sparse_table_html_2503
+  run_exact html_columned_prose_stays_prose_and_json_remains_unassociated --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_psm_plain_page_publishes_the_proven_table_rows --test ocr_sparse_table_page_rows
+  run_exact accepted_table_keeps_rows_and_a_repeated_caption_in_plain_and_djot_pages \
+    --test ocr_sparse_table_page_rows
+  local sparse_proof
+  for sparse_proof in \
+    standalone_sparse_grid_preserves_one_non_numeric_value_below_first_row \
+    standalone_value_exception_requires_exact_inventory_and_independent_tracks \
+    merged_header_recovery_preserves_one_uncertain_literal_and_requires_disjoint_rows \
+    merged_header_value_exception_cannot_move_to_a_later_record; do
+    run_exact "ocr::processor::execution::full_scan_table::tests::$sparse_proof" --lib
+  done
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
@@ -113,6 +157,18 @@ run_pdf_cases() {
   run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
+  expected=$((expected + 10))
+  local tall_scan_policy='extractors::pdf::ocr::tall_source::policy::tests'
+  run_exact "$tall_scan_policy::reports_an_ocr_preprocessing_clamp_on_a_full_density_pdf_render" --lib
+  run_exact "$tall_scan_policy::reports_the_actual_density_of_a_budgeted_pdf_read" --lib
+  run_exact "$tall_scan_policy::strip_recovery_early_returns_report_only_the_proven_density_once" --lib
+  run_exact 'extractors::pdf::ocr::tall_source::tests::bilevel_above_maximum_density_is_not_reported_as_below_minimum' --lib
+  run_exact a_120_dpi_bilevel_scan_explains_the_source_density_refusal --test pdf_tall_scan_strips
+  run_exact bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so --test pdf_tall_scan_strips
+  run_exact tall_scans_below_the_density_floor_say_recovery_was_not_used --test pdf_tall_scan_strips
+  run_exact fractional_bilevel_source_density_is_floored_below_the_minimum --test pdf_tall_scan_strips
+  run_exact an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm --test pdf_tall_scan_strips
+  run_exact the_mixed_route_names_the_configuration_that_blocked_strip_recovery --test pdf_tall_scan_strips
 }
 
 run_retry_timeout_cases() {
@@ -321,6 +377,7 @@ run_discarded_recovery_cases() {
 
 run_office_page_cases() {
   local test_name
+  run_exact should_preserve_source_spacing_across_inline_rtf_groups --test rtf_extractor_tests
   for test_name in \
     plain_heading_carries_no_style_note \
     plain_table_cell_keeps_link_text_and_drops_the_target \
@@ -346,7 +403,24 @@ run_office_page_cases() {
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
     run_exact "extractors::docx::tests::$test_name" --lib
   done
+  run_exact 'extractors::docx::tests::direct_docx_reads_from_the_only_foreign_blocking_worker_complete' --lib
+  run_exact 'extractors::docx::tests::should_parse_inline_without_tokio_and_check_cancellation_before_parsing' --lib
+  run_exact 'extractors::docx::tests::should_resume_a_blocking_docx_worker_panic' --lib
+  run_exact 'extractors::docx::tests::should_report_docx_worker_shutdown_as_cancellation' --lib
+  run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
+  run_exact 'extractors::excel::tests::excel_batch_runs_bytes_and_paths_on_a_blocking_worker' --lib
+  run_exact 'extractors::excel::tests::single_excel_reads_queue_and_return_typed_cancellation' --lib
+  run_exact 'extractors::excel::tests::direct_excel_reads_from_the_only_foreign_blocking_worker_complete' --lib
+  run_exact 'extractors::excel::tests::single_and_batch_excel_outputs_match_for_bytes_and_paths' --lib
+  run_exact 'extractors::excel::tests::cancelled_excel_worker_does_not_call_the_parser' --lib
+  run_exact 'extractors::excel::tests::single_excel_read_resumes_the_worker_panic' --lib
+  run_exact 'extractors::excel::tests::pre_cancelled_excel_path_returns_cancellation_inline' --lib
+  run_exact 'extractors::docx::tests::docx_queues_on_a_shared_worker_and_honors_typed_cancellation' --lib
+  run_exact 'engine::extract_impl::tests::a_panicking_excel_read_leaves_sibling_batch_results_intact' --lib
+  run_exact 'core::runtime::large_stack_tests::blocking_work_reports_cancellation_after_the_parser_returns' --lib
+  run_exact 'core::runtime::large_stack_tests::dropping_a_queued_blocking_worker_prevents_parser_entry' --lib
+  run_exact 'core::runtime::large_stack_tests::blocking_work_keeps_the_callers_thread_local_dispatcher_and_span' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
   for test_name in \
@@ -403,7 +477,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=120
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
@@ -412,12 +486,28 @@ pdf-ocr)
   expected=$((expected + 1))
   run_ink_probe_cases
   run_discarded_recovery_cases
+  run_exact 'extractors::pdf::ocr::tests::tests::should_error_when_every_page_fails_and_nothing_can_be_recovered' --lib
+  run_exact 'core::extractor::file::issue_217_fallback_tests::pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal' --lib
+  run_exact 'extractors::pdf::tests::automatic_ocr_failure_with_no_native_text_returns_an_error' --lib
+  run_exact 'extractors::pdf::ocr::failed_page_record_tests::a_pipeline_whose_stages_all_fail_carries_every_page_record' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::all_pages_failing_keeps_the_cause_chain_everywhere' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::pdf_ocr_trace_keeps_error_categories_without_backend_text' --lib
+  run_exact 'extractors::pdf::ocr::pipeline::tracing_tests::public_mixed_pdf_fallback_warns_without_exposing_the_backend_error' --lib
+  run_exact 'extractors::pdf::ocr::pipeline::tracing_tests::public_inline_image_ocr_warns_without_exposing_the_backend_error' --lib
+  run_exact 'error::tests::cli_diagnostic_omits_raw_pdf_ocr_sources_from_debug' --lib
+  run_exact 'extractors::pdf::tests::inline_image_ocr_backend_cancellation_stops_pdf_extraction' --lib
+  run_exact 'extractors::pdf::tests::test_ocr_inline_images_uses_configured_backend' --lib
+  run_exact 'extractors::pdf::tests::test_ocr_inline_images_forwards_output_format' --lib
+  run_exact a_targeted_retry_backend_cancellation_discards_the_successful_whole_read --test pdf_marked_page_retry_fallback_2833
+  run_exact 'commands::extract::ocr_diagnostic_tests::cli_pdf_ocr_failure_omits_backend_diagnostics_in_both_formats' --cli
+  run_exact 'commands::extract::tests::uri_extraction_failure_does_not_assert_a_false_readability_diagnosis' --cli
+  expected=$((expected + 15))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=35
+  expected=53
   run_office_page_cases
   ;;
 api-jobs)
