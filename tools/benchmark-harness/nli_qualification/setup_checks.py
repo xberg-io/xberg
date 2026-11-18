@@ -15,7 +15,9 @@ def version_sources(action: str, workflow: str) -> str:
         step for step in re.split(r"(?m)^      - ", workflow) if "uses: ./.github/actions/setup-onnx-runtime" in step
     ]
     overrides = any(re.search(r"(?m)^\s+ort-version:", step) for step in steps)
-    if default is None or len(steps) != 5 or overrides or "ORT_VERSION" in workflow:
+    if len(steps) != 6:
+        raise ValueError(f"expected exactly six main ORT action consumers, found {len(steps)}")
+    if default is None or overrides or "ORT_VERSION" in workflow:
         raise ValueError("main ORT consumers must use the single native action default")
     return default[1]
 

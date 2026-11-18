@@ -330,8 +330,8 @@ fn repair_numeric_tokens_in_table(table: &mut crate::types::Table) {
 /// Page-failure text for `error`: its display plus the variant names of its `source()` chain.
 ///
 /// Only leading identifiers of each source's `Debug` output are kept, so the typed cause stays
-/// distinguishable while source messages, paths and secrets never reach a warning, a failure
-/// record, the run error or a trace. ~keep
+/// distinguishable in the returned error and failure record.
+/// The outer error message is supplied by the backend. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn describe_page_failure(error: &crate::XbergError) -> String {
     use std::error::Error as _;
@@ -1122,7 +1122,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
         Ok(run) if !run.output.1.is_empty() => Ok(Some(run)),
         Ok(_) => Ok(None),
         Err(failure) => {
-            tracing::debug!(error = %failure.error, "Hidden PDF text layer probe preserved native text");
+            tracing::debug!(error = %failure.error.pdf_ocr_trace_category(), "Hidden PDF text layer probe preserved native text");
             Ok(None)
         }
     }
@@ -3050,10 +3050,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if correction_degrees == 0
                     && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-                    && config.pdf_options.as_ref().is_none_or(|pdf| {
-                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
-                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
-                    })
+                    && config
+                        .pdf_options
+                        .as_ref()
+                        .is_none_or(|pdf| !pdf.has_nonzero_raw_margins())
                     && !khmer_supplements.contains_key(&((page_idx + 1) as u32))
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
@@ -5915,7 +5915,7 @@ pub(super) async fn extract_with_ocr_for_page(
     // page degrades to empty text (so the blank-page fallback fires for it), the failure is
     // surfaced as a warning, and only a document where *every* page failed *and* nothing was
     // recovered still returns an error.
-    let mut page_backend_errors: Vec<(usize, String)> = Vec::new();
+    let mut page_backend_errors = Vec::new();
     let mut page_failure_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     let mut pending_page_failure_warnings = Vec::new();
     let mut page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
@@ -6214,10 +6214,10 @@ pub(super) async fn extract_with_ocr_for_page(
         let mut batch_column_orders: Vec<Option<super::column_retry::LineOrder>> =
             (0..batch_count).map(|_| None).collect();
         let mut batch_ocr_results: Vec<Option<crate::types::ExtractedDocument>> = vec![None; batch_count];
-        // Backend error text for a page whose OCR call failed, if any (#1444). The page's
+        // Backend error and its display text for a page whose OCR call failed, if any (#1444). The page's
         // entry in `batch_ocr_results` is an empty document in that case, so the blank-page
         // image-XObject fallback below gets its chance before the failure is reported.
-        let mut batch_page_errors: Vec<Option<String>> = vec![None; batch_count];
+        let mut batch_page_errors: Vec<_> = (0..batch_count).map(|_| None).collect();
         // (correction_degrees, upright_width, upright_height) applied by
         // `upright_raster_for_backend` before this page's backend call, so the matching
         // `undo_upright_raster_correction` below maps the result back correctly (#643).
@@ -6246,17 +6246,8 @@ pub(super) async fn extract_with_ocr_for_page(
             for (page_idx, image_data, width, height) in &encoded_batch {
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
-                // Every iteration must spawn exactly one task: the drain loop below and the
-                // `for offset in 0..batch_count` pass after it both index `batch_ocr_results`
-                // by position and `.expect()` a `Some` at every offset (#1620-style
-                // invariant), so a cancelled page still needs an entry -- it just skips the
-                // real OCR work to get it. ~keep
-                if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    let task = crate::engine::seams::inherit_progress(async move {
-                        PageRead::failed(idx, 0, (0, 0), crate::XbergError::Cancelled)
-                    });
-                    join_set.spawn(crate::core::extractor::cacheability::inherit(task));
-                    continue;
+                if cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                    return Err(crate::XbergError::Cancelled.into());
                 }
                 let backend_clone = std::sync::Arc::clone(&backend);
                 #[cfg(feature = "pdf")]
@@ -6763,6 +6754,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
                 })?;
+                if matches!(&ocr_result, Err(crate::XbergError::Cancelled)) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
                 let _ = (ordered_proof, detached_frame_read, number_frame);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -6849,10 +6843,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
-                        batch_page_errors[page_idx - batch_start] = Some(described);
+                        batch_page_errors[page_idx - batch_start] = Some((error, described));
                         batch_ocr_results[page_idx - batch_start] = Some(crate::types::ExtractedDocument::default());
                     }
                 }
@@ -6938,9 +6932,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
-                // A cancelled page still needs a `batch_ocr_results` entry -- see the ~keep
-                // comment on the sibling `JoinSet` branch above -- so this skips the backend
-                // call rather than breaking the loop.
+                // Route token cancellation through the same terminal result check as backend cancellation. ~keep
                 let ocr_result = if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     Err(crate::XbergError::Cancelled)
                 } else {
@@ -6979,6 +6971,9 @@ pub(super) async fn extract_with_ocr_for_page(
                             .await
                     }
                 };
+                if matches!(&ocr_result, Err(crate::XbergError::Cancelled)) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 crate::engine::seams::emit_ocr_page(
                     page_index_offset + *page_idx + 1,
                     progress_total_pages,
@@ -6991,10 +6986,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         let described = describe_page_failure(&error);
                         tracing::warn!(
                             page = page_index_offset + page_idx + 1,
-                            error = %described,
+                            error = %error.pdf_ocr_trace_category(),
                             "OCR backend failed for page"
                         );
-                        batch_page_errors[page_idx - batch_start] = Some(described);
+                        batch_page_errors[page_idx - batch_start] = Some((error, described));
                         batch_ocr_results[page_idx - batch_start] = Some(crate::types::ExtractedDocument::default());
                     }
                 }
@@ -7202,10 +7197,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                 };
                 let additions = if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-                    && config.pdf_options.as_ref().is_none_or(|pdf| {
-                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
-                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
-                    })
+                    && config
+                        .pdf_options
+                        .as_ref()
+                        .is_none_or(|pdf| !pdf.has_nonzero_raw_margins())
                     && !forced_khmer_supplements.contains_key(&page_idx)
                     && super::layer_token_recovery::is_english_read(&ocr_result)
                 {
@@ -7650,7 +7645,7 @@ pub(super) async fn extract_with_ocr_for_page(
             // Report a page whose backend call failed, now that the fallback above has had
             // its chance to recover it (#1444). Either way the failure is visible: a page
             // that vanishes silently is the defect this replaces.
-            if let Some(error) = batch_page_errors[offset].take() {
+            if let Some((backend_error, error)) = batch_page_errors[offset].take() {
                 let recovered = !ocr_result.content.trim().is_empty() || pages_with_recovered_xobject_payload[page_idx];
                 if !recovered && xobject_retry_ran_empty {
                     pages_with_empty_xobject_retry.push(document_page_number);
@@ -7675,10 +7670,10 @@ pub(super) async fn extract_with_ocr_for_page(
                 pending_page_failure_warnings.push((page_idx, recovered, warning));
                 page_failures.push(crate::types::OcrPageFailure {
                     page: document_page_number,
-                    error: error.clone(),
+                    error,
                     recovered,
                 });
-                page_backend_errors.push((page_idx, error));
+                page_backend_errors.push(backend_error);
             }
 
             // Both are read by the `pdf` margin-warning/page-content code below in every
@@ -8303,10 +8298,7 @@ pub(super) async fn extract_with_ocr_for_page(
         }
     }
 
-    // A cancelled run fails every page by design, which the #1444 guard below would report as
-    // a wholesale backend failure. Surface the cancellation itself so a caller can tell a
-    // cancelled extraction apart from a genuinely broken OCR backend. ~keep
-    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
         return Err(crate::XbergError::Cancelled.into());
     }
 
@@ -8318,24 +8310,28 @@ pub(super) async fn extract_with_ocr_for_page(
         && page_texts.iter().all(|text| text.trim().is_empty())
         && pages_with_recovered_xobject_payload.iter().all(|recovered| !recovered)
     {
-        let (_, first_error) = &page_backend_errors[0];
-        let message = if pages_with_empty_xobject_retry.is_empty() {
-            format!(
-                "OCR failed on all {total_pages} page(s) and no text could be recovered from the pages' \
-                 embedded images; first failure: {first_error}"
-            )
+        let first_error = page_backend_errors
+            .into_iter()
+            .next()
+            .expect("at least one page failed");
+        let first_failure = describe_page_failure(&first_error);
+        let headline = format!("OCR failed on all {total_pages} page(s)");
+        let (message, cli_message) = if pages_with_empty_xobject_retry.is_empty() {
+            let summary = format!("{headline} and no text could be recovered from the pages' embedded images");
+            (format!("{summary}; first failure: {first_failure}"), summary)
         } else {
-            format!(
-                "OCR failed on all {total_pages} page(s); first failure: {first_error}. The embedded-image \
-                 retry ran on {} of these page(s) and also returned no text.",
+            let retry = format!(
+                "The embedded-image retry ran on {} of these page(s) and also returned no text.",
                 pages_with_empty_xobject_retry.len()
+            );
+            (
+                format!("{headline}; first failure: {first_failure}. {retry}"),
+                format!("{headline}. {retry}"),
             )
         };
+        let error = crate::XbergError::all_page_ocr_failure(message, cli_message, first_error);
         return Err(FailedOcrRun {
-            error: crate::XbergError::Plugin {
-                message,
-                plugin_name: "ocr".to_string(),
-            },
+            error,
             page_failures,
             unrecovered_glyphs_on_page_one: 0,
         });
@@ -9480,7 +9476,7 @@ pub(super) fn attach_ocr_pipeline_stage_warnings(
     mut doc: Option<crate::types::internal::InternalDocument>,
     text: &str,
     unavailable_backends: &[String],
-    stage_failures: &[(String, String)],
+    stage_failures: &[(String, crate::XbergError)],
 ) -> Option<crate::types::internal::InternalDocument> {
     if unavailable_backends.is_empty() && stage_failures.is_empty() {
         return doc;
@@ -9635,6 +9631,18 @@ impl PipelineXObjectRecoveryOutcome {
     }
 }
 
+/// Whether the same config without its pipeline reads each page through the synthesized
+/// Tesseract-to-Paddle pipeline. That route recovers a refused page without classifying its
+/// paragraphs, so its Plain output keeps each recovered block a paragraph, list markers or not;
+/// a single-backend route retries the page itself and lists them. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn default_route_reads_pages_through_a_pipeline(config: &ExtractionConfig) -> bool {
+    cfg!(paddle_ocr)
+        && config.ocr.as_ref().is_some_and(|ocr| {
+            ocr.backend == "tesseract" && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        })
+}
+
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn plain_budget_recovery_list_document(
     recovery: &PipelineXObjectRecoveryOutcome,
@@ -9646,21 +9654,25 @@ fn plain_budget_recovery_list_document(
         return None;
     }
     let table_pages: ahash::AHashSet<_> = recovery.tables.iter().map(|table| table.page_number).collect();
-    let pages: Vec<_> = recovery
+    let flat: Vec<_> = recovery
         .page_texts
         .iter()
-        .enumerate()
-        .map(|(index, text)| {
-            let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
-            if !table_pages.contains(&((index + 1) as u32)) {
-                apply_ocr_text_list_fallback(&mut paragraphs);
-            }
-            paragraphs
-        })
+        .map(|text| crate::pdf::structure::adapters::ocr_text_to_paragraphs(text))
         .collect();
-    if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
+    let mut listed = flat.clone();
+    for (index, paragraphs) in listed.iter_mut().enumerate() {
+        if !table_pages.contains(&((index + 1) as u32)) {
+            apply_ocr_text_list_fallback(paragraphs);
+        }
+    }
+    if !listed.iter().flatten().any(|paragraph| paragraph.is_list_item) {
         return None;
     }
+    let pages = if default_route_reads_pages_through_a_pipeline(config) {
+        flat
+    } else {
+        listed
+    };
     let mut document =
         crate::pdf::structure::assemble_internal_document(pages, &recovery.tables, None, &[], &Default::default());
     // The assembler skips tables without Markdown, but their sidecars still belong to the result. ~keep
@@ -9672,6 +9684,39 @@ fn plain_budget_recovery_list_document(
             .cloned(),
     );
     Some(document)
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+mod plain_budget_recovery_list_document_tests {
+    use super::*;
+
+    const NOTES: &str = "GENERAL NOTES\n\n1. All lot lines are shown for\n\n1\n\nplanning purposes only.";
+
+    fn plain(backend: &str) -> String {
+        let mut recovery = PipelineXObjectRecoveryOutcome::new(1);
+        recovery.page_texts[0] = NOTES.to_owned();
+        let config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                backend: backend.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let document = plain_budget_recovery_list_document(&recovery, &config).expect("the notes hold a list item");
+        crate::extraction::derive::derive_extraction_result(document, false, crate::core::config::OutputFormat::Plain)
+            .content
+    }
+
+    /// The built-in Tesseract's default route reads each page through the synthesized
+    /// Tesseract-to-Paddle pipeline when Paddle is compiled in; that route keeps every recovered
+    /// block its own paragraph, so a numbered note is not joined to the next block.
+    #[test]
+    fn recovered_notes_keep_the_paragraphs_of_the_default_route_of_their_backend() {
+        let listed = "GENERAL NOTES\n\n1. All lot lines are shown for\n1\n\nplanning purposes only.";
+        let tesseract = if cfg!(paddle_ocr) { NOTES } else { listed };
+        assert_eq!(plain("tesseract"), tesseract);
+        assert_eq!(plain("budget-recovery-custom-backend"), listed);
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -10867,7 +10912,7 @@ async fn run_ocr_pipeline_stages(
     // Track stages that errored outright (e.g. a VLM fallback that failed
     // authentication) so the failure is surfaced to the caller instead of being
     // silently replaced by a lower-quality earlier result (issue #1339).
-    let mut stage_failures: Vec<(String, String)> = Vec::new();
+    let mut stage_failures = Vec::new();
     let mut unrecovered_glyphs_on_page_one = 0;
     #[cfg(feature = "pdf")]
     let mut preferred_recovery_config = None;
@@ -11129,10 +11174,10 @@ async fn run_ocr_pipeline_stages(
                 }
                 tracing::warn!(
                     backend = %stage.backend,
-                    error = %failed_stage.error,
+                    error = %failed_stage.error.pdf_ocr_trace_category(),
                     "Pipeline: backend failed, trying next"
                 );
-                stage_failures.push((stage.backend.clone(), failed_stage.error.to_string()));
+                stage_failures.push((stage.backend.clone(), failed_stage.error));
                 unrecovered_glyphs_on_page_one =
                     unrecovered_glyphs_on_page_one.max(failed_stage.unrecovered_glyphs_on_page_one);
                 merge_ocr_page_failures(stage_page_failures, failed_stage.page_failures);
@@ -11294,11 +11339,13 @@ async fn run_ocr_pipeline_stages(
                     .join("; ");
                 format!(" ({causes})")
             };
+            const HEADLINE: &str = "All OCR pipeline backends failed";
             Err(FailedOcrRun {
-                error: crate::XbergError::Parsing {
-                    message: format!("All OCR pipeline backends failed{detail}"),
-                    source: None,
-                },
+                error: crate::XbergError::ocr_pipeline_failure(
+                    format!("{HEADLINE}{detail}"),
+                    HEADLINE,
+                    stage_failures.into_iter().next().map(|(_, error)| error),
+                ),
                 page_failures: Vec::new(),
                 unrecovered_glyphs_on_page_one,
             })
@@ -11318,9 +11365,10 @@ fn recover_automatic_latin_rows(
     if config.ocr_strategy != crate::core::config::OcrStrategy::Auto
         || !super::document::automatic_tesseract_page(config, page_number)
         || super::document::resolved_ocr_correction_degrees(&read.metadata).is_some_and(|angle| angle != 0)
-        || config.pdf_options.as_ref().is_some_and(|pdf| {
-            pdf.top_margin_fraction.unwrap_or_default() != 0.0 || pdf.bottom_margin_fraction.unwrap_or_default() != 0.0
-        })
+        || config
+            .pdf_options
+            .as_ref()
+            .is_some_and(|pdf| pdf.has_nonzero_raw_margins())
     {
         return;
     }

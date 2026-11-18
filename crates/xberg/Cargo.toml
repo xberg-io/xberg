@@ -384,10 +384,12 @@ paddle-ocr-tract = [
     "tract",
 ]
 # Sceptre keeps its historical feature as the zero-config native ORT mode. The
-# explicit engine features also support native parity benchmarks and mobile tract. ~keep
+# explicit engine features also support native parity benchmarks and mobile tract.
+# The direct ORT dependency shares the loader with Sceptre and the macOS CoreML table. ~keep
 sceptre-ocr = ["sceptre-ocr-ort"]
 sceptre-ocr-ort = [
     "dep:sceptre",
+    "dep:ort",
     "sceptre/ort-bundled",
     "sceptre/download",
     "ocr-pipeline",
@@ -423,7 +425,8 @@ sceptre-wasm = ["dep:sceptre", "sceptre/tract", "image-encode"]
 # Release links Microsoft's runtime instead (system strategy) — see publish.yaml (#1284).
 ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-bundled"]
 # Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
-# No #[cfg] gates — passed through to the `ort` crate.
+# Dynamic ORT consumers use it to preload discovered native libraries. This
+# takes precedence when their features also select ort-bundled. ~keep
 ort-dynamic = ["ort?/load-dynamic", "xberg-gliner?/ort-dynamic"]
 # CoreML EP opt-in. On macOS the target-specific `ort` dependency table already enables
 # `ort/coreml` unconditionally, and `ort_discovery.rs` gates the CoreML EP code behind
@@ -1817,6 +1820,7 @@ tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = "1"
 wiremock = "0.6"
+xberg-child-test = { workspace = true }
 zip = { version = "9.6.0", default-features = false, features = ["deflate-flate2"] }
 
 [[test]]

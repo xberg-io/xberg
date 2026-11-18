@@ -2249,8 +2249,12 @@ async fn recognize_pdf_formula_page_inputs(
                         }
                     }
                     Ok(None) => {}
-                    Err(error) => {
-                        tracing::warn!(error = %error, page = page_number, "pdf formula recognition failed; keeping OCR text");
+                    Err(_) => {
+                        tracing::warn!(
+                            error = "formula_recognition",
+                            page = page_number,
+                            "pdf formula recognition failed; keeping OCR text"
+                        );
                     }
                 }
             }
@@ -2497,6 +2501,46 @@ pub(crate) async fn recognize_formula_regions_for_test(
 #[cfg(feature = "pdf")]
 fn wants_dot_output(config: &ExtractionConfig) -> bool {
     matches!(&config.output_format, crate::core::config::OutputFormat::Custom(name) if name == "dot")
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn apply_inline_image_ocr(imgs: &mut [crate::types::ExtractedImage], config: &ExtractionConfig) -> Result<()> {
+    let resolved_ocr_config = ocr::resolve_ocr_config(config);
+    let ocr_config = resolved_ocr_config.as_ref();
+    crate::plugins::ensure_ocr_backends_initialized();
+    let backend = {
+        let registry = crate::plugins::registry::get_ocr_backend_registry();
+        registry.read().get(&ocr_config.backend)?
+    };
+    let mut ocr_config_with_format = ocr_config.clone();
+    ocr_config_with_format.output_format = Some(config.output_format.clone());
+    // GH#1651: this embedded-image route never carried the caller's decode limits,
+    // so every decode ran under `SecurityLimits::default()`. Conditional so a limit
+    // set directly on `OcrConfig` is not replaced by `None`. ~keep
+    if let Some(limits) = config.security_limits.clone() {
+        ocr_config_with_format.security_limits = Some(limits);
+    }
+    for img in imgs.iter_mut() {
+        if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+            break;
+        }
+        match backend.process_image(&img.data, &ocr_config_with_format).await {
+            Ok(mut ocr_result) => {
+                ocr_config.apply_public_element_policy(&mut ocr_result);
+                img.ocr_result = Some(Box::new(ocr_result));
+            }
+            Err(e @ crate::XbergError::Cancelled) => return Err(e),
+            Err(e) => {
+                tracing::warn!(
+                    page = img.page_number,
+                    image_index = img.image_index,
+                    error = %e.pdf_ocr_trace_category(),
+                    "inline image OCR failed; image returned without OCR result"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3152,40 +3196,7 @@ impl PdfExtractor {
             && let Some(ref mut imgs) = extracted_images
             && !imgs.is_empty()
         {
-            let resolved_ocr_config = ocr::resolve_ocr_config(config);
-            let ocr_config = resolved_ocr_config.as_ref();
-            crate::plugins::ensure_ocr_backends_initialized();
-            let backend = {
-                let registry = crate::plugins::registry::get_ocr_backend_registry();
-                registry.read().get(&ocr_config.backend)?
-            };
-            let mut ocr_config_with_format = ocr_config.clone();
-            ocr_config_with_format.output_format = Some(config.output_format.clone());
-            // GH#1651: this embedded-image route never carried the caller's decode limits,
-            // so every decode ran under `SecurityLimits::default()`. Conditional so a limit
-            // set directly on `OcrConfig` is not replaced by `None`. ~keep
-            if let Some(limits) = config.security_limits.clone() {
-                ocr_config_with_format.security_limits = Some(limits);
-            }
-            for img in imgs.iter_mut() {
-                if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    break;
-                }
-                match backend.process_image(&img.data, &ocr_config_with_format).await {
-                    Ok(mut ocr_result) => {
-                        ocr_config.apply_public_element_policy(&mut ocr_result);
-                        img.ocr_result = Some(Box::new(ocr_result));
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            page = img.page_number,
-                            image_index = img.image_index,
-                            error = %e,
-                            "inline image OCR failed; image returned without OCR result"
-                        );
-                    }
-                }
-            }
+            apply_inline_image_ocr(imgs, config).await?;
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3525,9 +3536,10 @@ impl PdfExtractor {
                             (mixed, ExtractionMethod::Native)
                         }
                     }
+                    Err(e @ crate::XbergError::Cancelled) => return Err(e),
                     Err(e) => {
                         tracing::warn!(
-                            error = %e,
+                            error = %e.pdf_ocr_trace_category(),
                             candidate_pages = ?scanned_pages,
                             "Automatic OCR of detected scanned pages failed; using native text extraction result"
                         );
@@ -3850,9 +3862,10 @@ impl PdfExtractor {
                                 Some(apply_targeted_mixed_run!(mixed_run))
                             }
                         }
+                        Some(Err(error @ crate::XbergError::Cancelled)) => return Err(error),
                         Some(Err(error)) => {
                             tracing::warn!(
-                                error = %error,
+                                error = %error.pdf_ocr_trace_category(),
                                 failing_pages = ?decision.failing_pages,
                                 "Targeted OCR of the pages that dropped their native script failed; \
                                  using the whole-document read"
@@ -3983,16 +3996,16 @@ impl PdfExtractor {
                                 (native_text, ExtractionMethod::Native)
                             }
                             Err(failed_run) => {
+                                if matches!(failed_run.error, crate::XbergError::Cancelled) {
+                                    return Err(failed_run.error);
+                                }
                                 tracing::warn!(
-                                    error = %failed_run.error,
+                                    error = %failed_run.error.pdf_ocr_trace_category(),
                                     "OCR fallback failed; using native text extraction result"
                                 );
                                 if failed_ocr_fallback_is_total_loss(&native_text) {
                                     return Err(failed_run.error);
                                 }
-                                // ~keep A cancelled run did not fail to read its pages, so it adds no
-                                // record. The token decides: a pipeline run reports a cancellation as
-                                // the failure of each of its stages, not as the cancellation error.
                                 if ensure_pdf_not_cancelled(config).is_ok() {
                                     ocr_page_failures.extend(ocr::failed_run_page_failures(
                                         &failed_run,
@@ -4061,9 +4074,10 @@ impl PdfExtractor {
                         .await;
                         match selected_run {
                             Ok(mixed_run) => apply_targeted_mixed_run!(mixed_run),
+                            Err(e @ crate::XbergError::Cancelled) => return Err(e),
                             Err(e) => {
                                 tracing::warn!(
-                                    error = %e,
+                                    error = %e.pdf_ocr_trace_category(),
                                     failing_pages = ?pages,
                                     "Targeted OCR fallback failed; using native text extraction result"
                                 );

@@ -66,6 +66,8 @@ pub(crate) enum ImageOcrPolicy {
     StandaloneAutoTableRows,
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     StandaloneSparseRows,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    ImplicitStandaloneSparseRows,
 }
 
 impl ImageOcrPolicy {

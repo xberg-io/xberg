@@ -96,6 +96,8 @@ pub(in super::super) enum Unrecovered {
     TablesOrFormulas,
     InsufficientReadEvidence,
     Uncertified,
+    FourBitGrayFlate,
+    BilevelBelowDensity(f64),
     IndexedRgb,
     Rejected,
 }
@@ -125,10 +127,22 @@ pub(in super::super) fn note_unrecovered(
     if reduced_dpi.is_none() && render_dpi >= density_floor {
         return;
     }
-    let reason = match why {
+    let density_reason;
+    let reason: &str = match why {
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
         Unrecovered::InsufficientReadEvidence => "the OCR read did not supply enough evidence to compare the strips",
+        Unrecovered::FourBitGrayFlate => {
+            "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support"
+        }
+        Unrecovered::BilevelBelowDensity(dpi) => {
+            let dpi = dpi.floor();
+            density_reason = format!(
+                "the {dpi} DPI one-bit grayscale Flate scan is below the \
+                 {MIN_STANDARD_SOURCE_DPI} DPI strip-recovery minimum"
+            );
+            &density_reason
+        }
         Unrecovered::IndexedRgb => "the general strip route declined the 8-bit Indexed RGB scan",
         Unrecovered::Uncertified => {
             "the page is not one scan image in a supported encoding and density within the memory limit, \

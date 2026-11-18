@@ -37,6 +37,7 @@ use crate::candle_ocr::config::{
 };
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
+use crate::extraction::image_decode::{ImageDecodeBudget, PreparedCandleImageDecode};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::DType;
@@ -225,6 +226,77 @@ impl Plugin for PaddleOcrVlBackend {
     }
 }
 
+impl PaddleOcrVlBackend {
+    async fn process_image_inner(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        let options = self.parse_options(config)?;
+        // A non-OCR task (table/formula/chart) is expected to emit markup, so the
+        // bare-LaTeX rule in `filter_implausible_lines` must not apply to it (GH#1676).
+        // ~keep
+        let plain_text_task = options.task == PaddleOcrVlTask::Ocr;
+
+        if image_bytes.is_empty() {
+            return Err(crate::XbergError::Validation {
+                message: "Empty image data provided to PaddleOCR-VL".to_string(),
+                source: None,
+            });
+        }
+
+        let limits = config.security_limits.clone().unwrap_or_default();
+        let decode_error = |error| match error {
+            error @ crate::XbergError::Validation { .. } => error,
+            error => crate::XbergError::Ocr {
+                message: format!("PaddleOCR-VL image decode failed: {error}"),
+                source: Some(Box::new(error)),
+            },
+        };
+        let (content, image_bytes) = tokio::task::spawn_blocking(move || {
+            let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, true).map_err(decode_error)?;
+            let model_path = match options.model_path {
+                Some(p) => p,
+                None => super::model_stager::ensure_paddleocr_vl_16(
+                    &options.model_id,
+                    options.hf_revision.as_deref(),
+                    options.cache_dir.as_deref(),
+                )
+                .map(|dir| dir.to_string_lossy().into_owned())
+                .map_err(|e| crate::XbergError::Ocr {
+                    message: format!("PaddleOCR-VL weight download failed: {e}"),
+                    source: None,
+                })?,
+            };
+            let engine = get_or_init_engine(&model_path, options.task, options.device)?;
+
+            let mut engine_guard = engine.lock();
+            let img = decode.decode().map_err(decode_error)?.into_rgb8();
+            let output = engine_guard
+                .process_rgb_image(img)
+                .map_err(|e| crate::XbergError::Ocr {
+                    message: format!("PaddleOCR-VL inference failed: {e}"),
+                    source: Some(Box::new(e)),
+                })?;
+
+            Ok::<_, crate::XbergError>((output.content, image_bytes))
+        })
+        .await
+        .map_err(|e| crate::XbergError::Ocr {
+            message: format!("PaddleOCR-VL task execution failed: {e}"),
+            source: None,
+        })??;
+
+        Ok(super::ocr_result::build_ocr_document(
+            content,
+            Vec::new(),
+            &image_bytes,
+            config,
+            super::ocr_result::OcrDocumentContext {
+                mime_type: Cow::Borrowed("text/markdown"),
+                backend_name: "candle-paddleocr-vl",
+                plain_text_task,
+            },
+        ))
+    }
+}
+
 /// Inherits the `RequiresUpright` default for `page_orientation_handling` — unmeasured, not validated (#657).
 ///
 /// # Why this backend must not copy `crate::paddle_ocr`'s `page_rotation_degrees` handling (#734)
@@ -265,68 +337,21 @@ impl OcrBackend for PaddleOcrVlBackend {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::XbergError::Validation`] if `image_bytes` is empty.
+    /// Returns [`crate::XbergError::Validation`] if the image is empty or exceeds the decode budget.
     /// Returns [`crate::XbergError::Ocr`] if weight download, device selection,
     /// engine initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
-        let options = self.parse_options(config)?;
-        // A non-OCR task (table/formula/chart) is expected to emit markup, so the
-        // bare-LaTeX rule in `filter_implausible_lines` must not apply to it (GH#1676).
-        // ~keep
-        let plain_text_task = options.task == PaddleOcrVlTask::Ocr;
+        let limits = config.security_limits.clone().unwrap_or_default();
+        ImageDecodeBudget::from_security_limits(&limits).validate(
+            1,
+            1,
+            u64::try_from(image_bytes.len()).unwrap_or(u64::MAX),
+        )?;
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
 
-        if image_bytes.is_empty() {
-            return Err(crate::XbergError::Validation {
-                message: "Empty image data provided to PaddleOCR-VL".to_string(),
-                source: None,
-            });
-        }
-
-        let image_bytes_owned = image_bytes.to_vec();
-
-        let content = tokio::task::spawn_blocking(move || {
-            let model_path = match options.model_path {
-                Some(p) => p,
-                None => super::model_stager::ensure_paddleocr_vl_16(
-                    &options.model_id,
-                    options.hf_revision.as_deref(),
-                    options.cache_dir.as_deref(),
-                )
-                .map(|dir| dir.to_string_lossy().into_owned())
-                .map_err(|e| crate::XbergError::Ocr {
-                    message: format!("PaddleOCR-VL weight download failed: {e}"),
-                    source: None,
-                })?,
-            };
-            let engine = get_or_init_engine(&model_path, options.task, options.device)?;
-
-            let mut engine_guard = engine.lock();
-            let output = engine_guard
-                .process_image(&image_bytes_owned)
-                .map_err(|e| crate::XbergError::Ocr {
-                    message: format!("PaddleOCR-VL inference failed: {e}"),
-                    source: Some(Box::new(e)),
-                })?;
-
-            Ok::<String, crate::XbergError>(output.content)
-        })
-        .await
-        .map_err(|e| crate::XbergError::Ocr {
-            message: format!("PaddleOCR-VL task execution failed: {e}"),
-            source: None,
-        })??;
-
-        Ok(super::ocr_result::build_ocr_document(
-            content,
-            Vec::new(),
-            image_bytes,
-            config,
-            super::ocr_result::OcrDocumentContext {
-                mime_type: Cow::Borrowed("text/markdown"),
-                backend_name: "candle-paddleocr-vl",
-                plain_text_task,
-            },
-        ))
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image_inner(image_bytes, config).await
     }
 
     /// Process an image file using the PaddleOCR-VL engine.
@@ -335,8 +360,9 @@ impl OcrBackend for PaddleOcrVlBackend {
     ///
     /// Returns an error if the file cannot be read or if inference fails.
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
-        let bytes = crate::core::io::read_file_async(path).await?;
-        self.process_image(&bytes, config).await
+        let limits = config.security_limits.clone().unwrap_or_default();
+        let bytes = super::read_image_file(path, &limits).await?;
+        self.process_image_owned(Arc::new(bytes), config).await
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
@@ -376,6 +402,138 @@ mod tests {
 
     fn parse_default_options(config: &OcrConfig) -> Result<PaddleOcrVlOptions> {
         PaddleOcrVlBackend::default_task().parse_options(config)
+    }
+
+    #[tokio::test]
+    async fn configured_image_budget_rejects_decode_before_loading_model() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let limit = 4 * 1024;
+        assert!(png.get_ref().len() < limit);
+        let temp = tempfile::tempdir().unwrap();
+        let model_path = temp.path().join("missing-model").to_string_lossy().into_owned();
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({ "model_path": model_path, "device": "cpu" })),
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let backend = PaddleOcrVlBackend::default_task();
+        let error = backend
+            .process_image(png.get_ref(), &config)
+            .await
+            .expect_err("decoded raster exceeds the caller's budget");
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+
+        let admitted_config = OcrConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 1 << 20,
+                ..Default::default()
+            }),
+            ..config
+        };
+        let error = backend
+            .process_image(png.get_ref(), &admitted_config)
+            .await
+            .expect_err("the admitted raster reaches model initialization");
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, .. }
+            if message.contains("engine initialisation failed")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn image_budget_counts_decoded_and_rgb_rasters_before_model_loading() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_luma8(64, 64)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let backend = PaddleOcrVlBackend::default_task();
+        let temp = tempfile::tempdir().unwrap();
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({
+                "model_path": temp.path().join("missing-model"),
+                "device": "cpu",
+            })),
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 15 * 1024,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = backend.process_image(png.get_ref(), &config).await.unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_image_file_is_rejected_by_encoded_size() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("image.png");
+        let limit = 1024;
+        std::fs::File::create(&path)
+            .unwrap()
+            .set_len((limit + 1) as u64)
+            .unwrap();
+        let config = OcrConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = PaddleOcrVlBackend::default_task()
+            .process_image_file(&path, &config)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("encoded image file") && message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn jpeg_decoder_copy_is_charged_before_loading_model() {
+        let mut jpeg = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(1, 1)
+            .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+            .unwrap();
+        let jpeg = Arc::new(jpeg.into_inner());
+        let temp = tempfile::tempdir().unwrap();
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({
+                "model_path": temp.path().join("missing-model"),
+                "device": "cpu",
+            })),
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: jpeg.len() + 3,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = PaddleOcrVlBackend::default_task()
+            .process_image_owned(jpeg, &config)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
     }
 
     #[test]

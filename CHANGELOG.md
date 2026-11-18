@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Warning when a tall scanned page was read at reduced resolution and source-image strip recovery did not run or did not improve it. (#2502)
 
 - **ocr:** Warning when resizing a standalone tall image may leave text incomplete. (#2502)
+- **ocr:** `XBERG_TESSDATA_SYSTEM_PATHS=0` (or `false`) stops tessdata resolution from searching the system Tesseract directories.
 - **math:** Explicit math text annotations (`AnnotationKind::math(display)`, `math_display()` in Rust; `Custom` annotation `xberg.math` with value `inline` or `display` in other bindings) render as LaTeX in Markdown, HTML and Djot.
 - **ocr:** Corroborated Khmer numbers are recovered on eligible English-primary PDF pages when `khm.traineddata` is installed. (#2408)
 - **layout:** Experimental `LayoutDetectionConfig.model` (`--layout-model`) selects `rt_detr` (default) or `pp_doc_layout_v3`; PP-DocLayout-V3 requires ONNX Runtime and is an error on tract or WASM builds. (#2284)
@@ -100,7 +101,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
+- **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
+
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
+
+- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
+- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
@@ -155,10 +161,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
+
+- **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
+  DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
+
+- **ocr:** TrOCR checks decode, resize and tensor buffers before allocating pixels. Previously accepted images can exceed the
+  configured budget. The standalone API exposes typed image errors and accepts decoded rasters through `process_decoded_image`.
+  The dimensions helper reads the header without validating pixels. (#3168)
+
+- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
+- **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
+- **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
+
+- **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
+- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
+
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
+- **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
+- **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
+- **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
 - Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
 - **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
 - **onnx:** Concurrent ONNX inference no longer shares a session mutably (undefined behavior). (#3166)
@@ -171,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tables:** Tables are recovered on forced-OCR PDF pages that need a rotation retry. (#2332)
 - **tables:** Verified column headers above repeated numeric groups in PDF tables are preserved. (#2332)
 - **ocr:** Tesseract table output for standalone images and embedded PDF images no longer duplicates rows and keeps rows, row breaks and dot leaders intact (PSM 3, 6 and 11). (#2503)
+- **ocr:** Default sparse-text OCR keeps a certified standalone table with one unreadable value as a table. (#2503)
 - **ocr:** Tesseract PSM 6 preserves verified table row breaks in unified HTML for single-page PDF scans. (#2503)
 - **ocr:** Opt-in recovery for PaddleOCR ruled JPEG table cells (English PP-OCRv6 Small, ONNX Runtime), off by default. (#2503)
 - **pdf:** The page failure record and warning agree when native text is restored after forced OCR fails. (#3148)
