@@ -209,7 +209,19 @@ async fn public_original_multipage_recovery() {
     );
     let (old_pages, new_pages) = (stock.pages.as_ref().unwrap(), live.pages.as_ref().unwrap());
     assert_eq!((old_pages.len(), new_pages.len()), (13, 13));
-    assert_eq!(stock.tables.len(), 10);
+    let expected_tables_per_page = [2, 0, 4, 1, 0, 0, 0, 0, 0, 1, 0, 0, 3];
+    for (route, doc) in [("stock", &stock), ("live", &live)] {
+        let mut tables_per_page = [0; 13];
+        for table in &doc.tables {
+            let slot = table
+                .page_number
+                .checked_sub(1)
+                .and_then(|page| tables_per_page.get_mut(page as usize))
+                .expect("guide table must belong to one of its thirteen pages");
+            *slot += 1;
+        }
+        assert_eq!(tables_per_page, expected_tables_per_page, "{route} guide tables");
+    }
     for (before, after) in old_pages.iter().zip(new_pages) {
         assert_eq!(after.content, expected(&before.content, before.page_number));
         let mut expected_page = before.clone();
