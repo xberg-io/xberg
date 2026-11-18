@@ -22,6 +22,19 @@ fn config(format: OutputFormat) -> ExtractionConfig {
     .unwrap()
 }
 
+fn pinned_english_model() -> tempfile::TempDir {
+    use sha2::{Digest, Sha256};
+
+    let models = tempfile::tempdir().unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    models
+}
+
 fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     extract_with_mime(bytes, "image/png", config)
 }
@@ -330,4 +343,80 @@ fn explicit_auto_mode_publishes_existing_table_rows_in_plain_page_text() {
         expected.trim(),
         "published table rows on the page"
     );
+}
+
+const TINTED_LEADERS: &[u8] = include_bytes!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders.png");
+
+#[test]
+fn implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html() {
+    let expected: Vec<Vec<_>> =
+        include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-recognized-rows.tsv")
+            .lines()
+            .map(|row| row.split('\t').collect())
+            .collect();
+    assert_eq!(expected.len(), 13);
+    assert!(expected.iter().all(|row| row.len() == 4));
+    assert_eq!(expected[6], ["Code review", "al", "822,978", "17,187"]);
+    let transcript = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    let models = pinned_english_model();
+    for format in [OutputFormat::Plain, OutputFormat::Html] {
+        let mut extraction = config(format.clone());
+        let ocr = extraction.ocr.as_mut().unwrap();
+        ocr.element_config = None;
+        ocr.tessdata_path = Some(models.path().to_path_buf());
+        let result = extract(TINTED_LEADERS, &extraction);
+        assert!(result.metadata.ocr_used);
+        assert_eq!(result.metadata.additional["psm"], "11");
+        let [table] = result.tables.as_slice() else {
+            panic!("expected exactly one document table");
+        };
+        assert_eq!(table.cells, expected);
+        let [page] = result.pages.as_deref().unwrap() else {
+            panic!("expected exactly one page");
+        };
+        let [page_table] = page.tables.as_slice() else {
+            panic!("expected exactly one page table");
+        };
+        assert_eq!(page_table.cells, expected);
+        assert_eq!(page.content.trim(), transcript);
+        match format {
+            OutputFormat::Html => assert_html_table(&result, &expected),
+            _ => assert_eq!(result.content.trim(), transcript),
+        }
+    }
+}
+
+#[test]
+fn explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript() {
+    const SPARSE: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm11-plain.txt");
+    const BLOCK: &str = include_str!("fixtures/ocr_source_row_layout_2432/image-11-tinted-leaders-psm6-plain.txt");
+    let models = pinned_english_model();
+    for (psm, expected_page, separator) in [(11, SPARSE, "\n\n"), (6, BLOCK, "\n")] {
+        for format in [OutputFormat::Plain, OutputFormat::Html] {
+            let mut extraction = config(format.clone());
+            let ocr = extraction.ocr.as_mut().unwrap();
+            ocr.element_config = None;
+            ocr.tessdata_path = Some(models.path().to_path_buf());
+            ocr.tesseract_config.get_or_insert_default().psm = Some(psm);
+            let result = extract(TINTED_LEADERS, &extraction);
+            assert!(result.metadata.ocr_used);
+            assert_eq!(result.metadata.additional["psm"], psm.to_string());
+            assert!(result.tables.is_empty());
+            let [page] = result.pages.as_deref().unwrap() else {
+                panic!("expected exactly one page");
+            };
+            assert!(page.tables.is_empty());
+            assert_eq!(page.content.trim(), expected_page.trim());
+            let expected = match (format, psm) {
+                (OutputFormat::Html, 11) => expected_page
+                    .trim()
+                    .split(separator)
+                    .map(|cell| format!("<p>{cell}</p>\n"))
+                    .collect(),
+                (OutputFormat::Html, _) => format!("<p>{}</p>\n", expected_page.trim().replace(separator, " ")),
+                _ => expected_page.trim().to_owned(),
+            };
+            assert_eq!(result.content, expected);
+        }
+    }
 }

@@ -126,6 +126,22 @@ run_pdf_cases() {
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
     --test ocr_standalone_row_layout_2432
+  expected=$((expected + 9))
+  run_exact implicit_sparse_mode_certifies_tinted_leader_rows_in_plain_and_html --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_and_single_block_modes_keep_the_stock_tinted_leader_transcript \
+    --test ocr_sparse_table_html_2503
+  run_exact html_columned_prose_stays_prose_and_json_remains_unassociated --test ocr_sparse_table_html_2503
+  run_exact explicit_sparse_psm_plain_page_publishes_the_proven_table_rows --test ocr_sparse_table_page_rows
+  run_exact accepted_table_keeps_rows_and_a_repeated_caption_in_plain_and_djot_pages \
+    --test ocr_sparse_table_page_rows
+  local sparse_proof
+  for sparse_proof in \
+    standalone_sparse_grid_preserves_one_non_numeric_value_below_first_row \
+    standalone_value_exception_requires_exact_inventory_and_independent_tracks \
+    merged_header_recovery_preserves_one_uncertain_literal_and_requires_disjoint_rows \
+    merged_header_value_exception_cannot_move_to_a_later_record; do
+    run_exact "ocr::processor::execution::full_scan_table::tests::$sparse_proof" --lib
+  done
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
