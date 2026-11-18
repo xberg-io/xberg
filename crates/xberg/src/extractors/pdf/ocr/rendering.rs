@@ -1036,6 +1036,21 @@ pub(super) fn render_one_full_pdf_ocr_page_with_dpi(
     )?;
     Ok(((page_idx, std::sync::Arc::new(data), width, height), dpi))
 }
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod owned_raster;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) use owned_raster::try_render_page_with_owned_ocr;
+
 /// Render every page in `page_range` for the `force_ocr` (whole-document) route, in parallel
 /// across the configured thread budget -- the same mechanism
 /// `render_selected_pages_from_document` uses for the sibling `force_ocr_pages` route (#1666).

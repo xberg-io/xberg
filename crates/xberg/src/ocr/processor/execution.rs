@@ -2627,6 +2627,33 @@ pub(super) fn perform_ocr(
         policy == ImageOcrPolicy::BoundedInferredUpscale,
     )
     .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+    recognize_prepared(
+        prepared_image,
+        image_bytes,
+        0,
+        config,
+        api_pool,
+        extraction_config,
+        models,
+        policy,
+        &security_limits,
+        ci_debug_enabled,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn recognize_prepared(
+    prepared_image: PreparedOcrImage,
+    image_bytes: &[u8],
+    retained_extra: usize,
+    config: &TesseractConfig,
+    api_pool: &Arc<TesseractApiPool>,
+    extraction_config: Option<&ExtractionConfig>,
+    models: &ModelContext,
+    policy: ImageOcrPolicy,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    ci_debug_enabled: bool,
+) -> Result<OcrExtractionResult, OcrError> {
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
@@ -2782,7 +2809,10 @@ pub(super) fn perform_ocr(
     } else {
         let raw_peak = native_image_budget::known_phase_peak(width, height, image_bytes.len(), None)
             .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
-        if raw_peak.is_some_and(|peak| peak > security_limits.max_content_size as u64) {
+        if raw_peak.is_some_and(|peak| {
+            peak.checked_add(retained_extra as u64)
+                .is_none_or(|total| total > security_limits.max_content_size as u64)
+        }) {
             return Err(OcrError::ImageProcessingFailed(format!(
                 "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
                  Raise security_limits.max_content_size",
@@ -2811,7 +2841,7 @@ pub(super) fn perform_ocr(
                 (width, height),
                 image_bytes.len(),
                 preprocessing.as_ref(),
-                &security_limits,
+                security_limits,
             )
     });
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
@@ -2979,7 +3009,7 @@ pub(super) fn perform_ocr(
                         .any(|element| element.text.contains('\n'))
                     || tsv_data_for_tables
                         .as_deref()
-                        .and_then(|tsv| fragmented_hocr_budget(&hocr, tsv, &security_limits))
+                        .and_then(|tsv| fragmented_hocr_budget(&hocr, tsv, security_limits))
                         .is_some())
             {
                 hocr_for_tables = Some(hocr);
@@ -3210,7 +3240,7 @@ pub(super) fn perform_ocr(
             &words,
             config,
             (ocr_image_width, ocr_image_height),
-            &security_limits,
+            security_limits,
         );
         if page_down {
             metadata.insert(
@@ -3317,7 +3347,7 @@ pub(super) fn perform_ocr(
                         width,
                         height,
                         tessdata_path,
-                        &security_limits,
+                        security_limits,
                     )
                 });
             if let Some(recovered) = recovered {
@@ -3366,7 +3396,7 @@ pub(super) fn perform_ocr(
                                 tsv_data,
                                 &content,
                                 &bbox,
-                                &security_limits,
+                                security_limits,
                                 source,
                                 proof,
                             )
@@ -3380,7 +3410,7 @@ pub(super) fn perform_ocr(
                     if !can_prove_scan_grid {
                         return None;
                     }
-                    let stock = full_scan_table::recover(tsv_data, &content, &bbox, &security_limits);
+                    let stock = full_scan_table::recover(tsv_data, &content, &bbox, security_limits);
                     #[cfg(not(target_arch = "wasm32"))]
                     if stock.is_none()
                         && let Some(raster) = leader_raster.as_ref()
@@ -3389,7 +3419,7 @@ pub(super) fn perform_ocr(
                             tsv_data,
                             &content,
                             &bbox,
-                            &security_limits,
+                            security_limits,
                             source,
                             raster,
                         )
@@ -3479,7 +3509,7 @@ pub(super) fn perform_ocr(
             tsv_data_for_tables.as_deref(),
             config,
             policy,
-            &security_limits,
+            security_limits,
         );
     }
 
@@ -8562,4 +8592,128 @@ mod tests {
         assert_eq!(w, 2);
         assert_eq!(h, 2);
     }
+}
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) struct OwnedOcrRaster {
+    pub(crate) rgb: Vec<u8>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) dpi: u32,
+}
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn owned_raster_otsu(policy: &crate::types::ImagePreprocessingConfig, dpi: u32) -> bool {
+    policy.target_dpi == dpi as i32
+        && policy.binarization_method == "otsu"
+        && !policy.deskew
+        && !policy.denoise
+        && !policy.contrast_enhance
+        && !policy.auto_rotate
+        && !policy.invert_colors
+        && !policy.normalize_shaded_rows
+}
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(super) fn process_owned_raster(
+    raster: OwnedOcrRaster,
+    image_bytes: &Vec<u8>,
+    config: &TesseractConfig,
+    api_pool: &Arc<TesseractApiPool>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    policy: ImageOcrPolicy,
+    retry_threshold: Option<f64>,
+) -> Result<OcrExtractionResult, OcrError> {
+    let rejected = |message: &str| OcrError::ImageProcessingFailed(message.to_string());
+    if config.use_cache || config.enable_table_detection || config.auto_rotate || policy != ImageOcrPolicy::Default {
+        return Err(rejected(
+            "owned OCR raster requires cache, tables, and rotation disabled",
+        ));
+    }
+    config.validate().map_err(OcrError::InvalidConfiguration)?;
+    let resolved = resolve_config_language(config)?;
+    let config = resolved.as_ref().unwrap_or(config);
+    let Some(source_dpi) = config
+        .source_dpi
+        .filter(|dpi| raster.dpi > 0 && dpi.round() == f64::from(raster.dpi))
+    else {
+        return Err(rejected("owned OCR raster requires the page's render resolution"));
+    };
+    let extraction_config = output_format.map(|output_format| ExtractionConfig {
+        output_format,
+        ..Default::default()
+    });
+    let security_limits = security_limits_for_ocr(config, extraction_config.as_ref());
+    let images = extraction_config.as_ref().and_then(|config| config.images.as_ref());
+    let (width, height) = (raster.width, raster.height);
+    if width == 0
+        || height == 0
+        || (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|area| area.checked_mul(3))
+            != Some(raster.rgb.len())
+    {
+        return Err(rejected("owned OCR raster requires a complete source frame"));
+    }
+    let preprocessing = ocr_preprocessing_decision(
+        &raster.rgb,
+        width,
+        height,
+        config.preprocessing.as_ref(),
+        config.known_full_page_scan,
+    );
+    let preprocessing = preprocessing
+        .as_deref()
+        .ok_or_else(|| rejected("missing preprocessing"))?;
+    if !owned_raster_otsu(preprocessing, raster.dpi) {
+        return Err(rejected("owned OCR raster requires the supported Otsu policy"));
+    }
+    if crate::image::preprocessing::normalization_requires_resize(
+        width,
+        height,
+        &ocr_dpi_config(preprocessing, images),
+        source_dpi,
+    ) {
+        return Err(rejected("owned RGB normalization must retain the source dimensions"));
+    }
+
+    // The native model already includes RGB length. The owned canvas keeps its original RGBA capacity.
+    let extra = (raster.rgb.capacity() - raster.rgb.len())
+        .checked_add(image_bytes.capacity() - image_bytes.len())
+        .ok_or_else(|| rejected("owned OCR raster working memory overflow"))?;
+    for native_policy in [Some(preprocessing), None] {
+        let peak = native_image_budget::known_phase_peak(width, height, image_bytes.len(), native_policy)
+            .map_err(|error| rejected(&error.to_string()))?;
+        if peak
+            .and_then(|peak| peak.checked_add(extra as u64))
+            .is_none_or(|peak| peak > security_limits.max_content_size as u64)
+        {
+            return Err(rejected("owned RGB workspace exceeds its working memory budget"));
+        }
+    }
+
+    let models = ModelContext::resolve_with_retry(config, retry_threshold)?;
+    let prepared = prepare_decided_ocr_image(
+        raster.rgb,
+        width,
+        height,
+        Some(preprocessing),
+        images,
+        false,
+        Some(source_dpi),
+    );
+    let result = recognize_prepared(
+        prepared,
+        image_bytes,
+        extra,
+        config,
+        api_pool,
+        extraction_config.as_ref(),
+        &models,
+        policy,
+        &security_limits,
+        false,
+    )?;
+    block_outer_cache_for_retry(&result);
+    Ok(result)
 }

@@ -155,6 +155,27 @@ impl OcrProcessor {
         result
     }
 
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) fn process_owned_raster(
+        &self,
+        raster: OwnedOcrRaster,
+        image_bytes: &Vec<u8>,
+        config: &TesseractConfig,
+        output_format: Option<crate::core::config::OutputFormat>,
+        policy: ImageOcrPolicy,
+        retry_threshold: Option<f64>,
+    ) -> Result<OcrExtractionResult, OcrError> {
+        execution::process_owned_raster(
+            raster,
+            image_bytes,
+            config,
+            &self.api_pool,
+            output_format,
+            policy,
+            retry_threshold,
+        )
+    }
+
     pub(crate) fn clear_cache(&self) -> Result<(), OcrError> {
         self.cache.clear()
     }
@@ -371,3 +392,6 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use execution::{OwnedOcrRaster, owned_raster_otsu};

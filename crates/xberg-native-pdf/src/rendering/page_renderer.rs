@@ -64,6 +64,7 @@ use group_process_text::GroupTextPaint;
 #[path = "raster_budget.rs"]
 mod raster_budget;
 pub(super) use raster_budget::PngRenderBudget;
+pub(super) use raster_budget::encode_straight_rgba_png;
 #[cfg(test)]
 use raster_budget::png_working_bytes_fit;
 #[cfg(test)]
@@ -10491,6 +10492,10 @@ mod tests {
         assert_eq!(
             (raw.width, raw.height, raw_dpi, raw_glyph_loss),
             (png.width, png.height, png_dpi, png_glyph_loss)
+        );
+        assert!(
+            super::super::encode_opaque_ocr_canvas(&raw).unwrap().unwrap() == png.data,
+            "fallback PNG bytes must match the stock encoder"
         );
         let png_pixels = image::load_from_memory_with_format(&png.data, image::ImageFormat::Png)
             .unwrap()

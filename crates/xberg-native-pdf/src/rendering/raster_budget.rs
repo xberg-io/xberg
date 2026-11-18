@@ -287,11 +287,15 @@ pub(super) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
         }
     }
 
+    encode_straight_rgba_png(&data, w, h)
+}
+
+pub(in crate::rendering) fn encode_straight_rgba_png(data: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
     use image::ImageEncoder;
     use image::codecs::png::{CompressionType, FilterType, PngEncoder};
     let mut output = Vec::new();
     PngEncoder::new_with_quality(&mut output, CompressionType::Fast, FilterType::Sub)
-        .write_image(&data, w, h, image::ExtendedColorType::Rgba8)
+        .write_image(data, w, h, image::ExtendedColorType::Rgba8)
         .map_err(|e| Error::InvalidPdf(format!("PNG encoding failed: {}", e)))?;
     Ok(output)
 }

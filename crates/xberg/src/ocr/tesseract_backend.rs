@@ -535,6 +535,8 @@ pub(crate) mod read_counter {
     struct Counts {
         reads: usize,
         probe_reuses: usize,
+        owned_successes: usize,
+        force_encoded: bool,
     }
 
     static READS: LazyLock<Mutex<HashMap<usize, Counts>>> = LazyLock::new(Default::default);
@@ -547,6 +549,39 @@ pub(crate) mod read_counter {
 
     pub(crate) fn reads(key: usize) -> usize {
         READS.lock().unwrap().get(&key).map_or(0, |counts| counts.reads)
+    }
+
+    pub(crate) fn force_encoded(key: usize) {
+        READS.lock().unwrap().entry(key).or_default().force_encoded = true;
+    }
+
+    pub(crate) fn encoded_required(config: &OcrConfig) -> bool {
+        config.security_limits.as_ref().is_some_and(|limits| {
+            READS
+                .lock()
+                .unwrap()
+                .get(&limits.max_archive_size)
+                .is_some_and(|count| count.force_encoded)
+        })
+    }
+
+    pub(crate) fn owned_successes(key: usize) -> usize {
+        READS
+            .lock()
+            .unwrap()
+            .get(&key)
+            .map_or(0, |counts| counts.owned_successes)
+    }
+
+    pub(crate) fn record_owned_success(config: &OcrConfig) {
+        if let Some(limits) = config.security_limits.as_ref() {
+            READS
+                .lock()
+                .unwrap()
+                .entry(limits.max_archive_size)
+                .or_default()
+                .owned_successes += 1;
+        }
     }
 
     pub(crate) fn record_probe_reuse(config: &OcrConfig) {
@@ -563,6 +598,12 @@ pub(crate) mod read_counter {
     pub(crate) fn probe_reuses(key: usize) -> usize {
         READS.lock().unwrap().get(&key).map_or(0, |counts| counts.probe_reuses)
     }
+}
+
+enum OcrRasterInput {
+    Encoded(Arc<Vec<u8>>),
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    Owned(crate::ocr::processor::OwnedOcrRaster, Arc<Vec<u8>>),
 }
 
 impl TesseractBackend {
@@ -628,6 +669,60 @@ impl TesseractBackend {
         policy: ImageOcrPolicy,
         defer_element_selection: bool,
     ) -> Result<ExtractedDocument> {
+        self.process_raster_with_policy(
+            OcrRasterInput::Encoded(image_bytes),
+            config,
+            policy,
+            defer_element_selection,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) fn supports_owned_raster(&self, config: &OcrConfig, dpi: u32) -> bool {
+        #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+        if read_counter::encoded_required(config) {
+            return false;
+        }
+        let native = self.config_to_tesseract(config);
+        !native.use_cache
+            && !native.enable_table_detection
+            && !native.auto_rotate
+            && native
+                .preprocessing
+                .as_ref()
+                .is_some_and(|policy| crate::ocr::processor::owned_raster_otsu(policy, dpi))
+    }
+
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) async fn process_owned_raster(
+        &self,
+        raster: crate::ocr::processor::OwnedOcrRaster,
+        png: Arc<Vec<u8>>,
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        let result = self
+            .process_raster_with_policy(
+                OcrRasterInput::Owned(raster, png),
+                config,
+                ImageOcrPolicy::Default,
+                false,
+            )
+            .await;
+        #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+        if result.is_ok() {
+            read_counter::record_owned_success(config);
+        }
+        result
+    }
+
+    async fn process_raster_with_policy(
+        &self,
+        input: OcrRasterInput,
+        config: &OcrConfig,
+        policy: ImageOcrPolicy,
+        defer_element_selection: bool,
+    ) -> Result<ExtractedDocument> {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
         let retry_threshold = Self::script_retry_threshold(config);
@@ -661,14 +756,23 @@ impl TesseractBackend {
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     MIXED_PDF_KHMER_RETRY.sync_scope(khmer_retry, || {
-                        super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || {
-                            processor.process_image_with_retry(
-                                image_bytes.as_slice(),
+                        super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || match input {
+                            OcrRasterInput::Encoded(bytes) => processor.process_image_with_retry(
+                                bytes.as_slice(),
                                 &tess_config_clone,
                                 output_format,
                                 policy,
                                 retry_threshold,
-                            )
+                            ),
+                            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                            OcrRasterInput::Owned(raster, png) => processor.process_owned_raster(
+                                raster,
+                                &png,
+                                &tess_config_clone,
+                                output_format,
+                                policy,
+                                retry_threshold,
+                            ),
                         })
                     })
                 }))

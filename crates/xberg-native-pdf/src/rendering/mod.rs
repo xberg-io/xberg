@@ -429,6 +429,23 @@ pub fn render_ocr_page_with_budget_evidence(
     render_page_impl(doc, page_num, options, Some(budget))
 }
 
+/// Encode a budgeted, opaque native OCR canvas without copying it for alpha conversion.
+#[doc(hidden)]
+pub fn encode_opaque_ocr_canvas(canvas: &RenderedImage) -> Result<Option<Vec<u8>>> {
+    let length = (canvas.width as usize)
+        .checked_mul(canvas.height as usize)
+        .and_then(|area| area.checked_mul(4));
+    if canvas.format != ImageFormat::RawRgba8
+        || canvas.width == 0
+        || canvas.height == 0
+        || length != Some(canvas.data.len())
+        || !canvas.data.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255)
+    {
+        return Ok(None);
+    }
+    page_renderer::encode_straight_rgba_png(&canvas.data, canvas.width, canvas.height).map(Some)
+}
+
 /// One page rendered twice at the same size: as drawn, and with every glyph left unpainted.
 #[doc(hidden)]
 pub struct TextInkRasters {

@@ -6080,7 +6080,52 @@ pub(super) async fn extract_with_ocr_for_page(
         crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
     }
 
+    #[cfg(all(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let owned_backend = if total_pages == 1
+        && page_index_offset == 0
+        && page_rotation_override == 0
+        && detached_page.is_none()
+        && !has_layout_detections
+        && !has_stored_scan
+        && !capture_rasters
+        && !config.use_cache
+        && config.force_ocr
+        && base_ocr_config.auto_rotate == Some(false)
+        && base_ocr_config.pipeline.is_none()
+        && matches!(
+            base_ocr_config.vlm_fallback,
+            crate::core::config::VlmFallbackPolicy::Disabled
+        )
+        && base_ocr_config.tesseract_config.as_ref().and_then(|policy| policy.psm) == Some(6)
+        && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"]
+    {
+        get_ocr_backend_registry()
+            .read()
+            .builtin_tesseract_for(&backend)
+            .filter(|backend| {
+                ocr_config_owned
+                    .tesseract_config
+                    .as_ref()
+                    .and_then(|config| config.preprocessing.as_ref())
+                    .and_then(|policy| u32::try_from(policy.target_dpi).ok())
+                    .is_some_and(|dpi| backend.supports_owned_raster(&ocr_config_owned, dpi))
+            })
+    } else {
+        None
+    };
     for batch_start in (0..total_pages).step_by(batch_size) {
+        #[cfg(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let mut owned_raster = None;
         let batch_end = (batch_start + batch_size).min(total_pages);
 
         #[allow(unused_variables)]
@@ -6157,6 +6202,24 @@ pub(super) async fn extract_with_ocr_for_page(
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
                 let rendered = crate::pdf::render::capture_render_warnings(|| {
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "pdf",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if owned_backend.is_some()
+                        && page_rotations.as_slice() == [0]
+                        && let Some((page, dpi, rgb)) = super::rendering::try_render_page_with_owned_ocr(
+                            doc,
+                            security_limits,
+                            config.images.as_ref(),
+                            preprocessing_render_dpi,
+                        )
+                    {
+                        owned_raster = Some(rgb);
+                        return Ok((vec![page], [(0, dpi)].into_iter().collect()));
+                    }
                     render_full_pdf_ocr_batch_with_dpi(
                         doc,
                         page_rotations,
@@ -6478,6 +6541,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
                     && xobject_document.is_none_or(|pdf| pdf.page_count().ok() == Some(1)))
                 .then(|| Arc::clone(&upright_data));
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "pdf",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                let owned = owned_raster.take().zip(owned_backend.as_ref().map(Arc::clone));
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return PageRead::failed(
@@ -6519,7 +6589,34 @@ pub(super) async fn extract_with_ocr_for_page(
                         },
                         upright_data,
                         cancel_token.as_ref(),
-                        |data| {
+                        |data| async {
+                            #[cfg(all(
+                                feature = "ocr",
+                                feature = "pdf",
+                                feature = "tokio-runtime",
+                                not(target_arch = "wasm32")
+                            ))]
+                            if let Some((raster, tesseract)) = owned
+                                && tesseract.supports_owned_raster(read_config, raster.dpi)
+                            {
+                                match tesseract
+                                    .process_owned_raster(raster, Arc::clone(&data), read_config)
+                                    .await
+                                {
+                                    Ok(result) => {
+                                        tracing::debug!(
+                                            target: "xberg::ocr::raster",
+                                            "Native PDF OCR consumed owned RGB"
+                                        );
+                                        return Ok(result);
+                                    }
+                                    Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                                    Err(error) => tracing::debug!(
+                                        reason = %error.pdf_ocr_trace_category(),
+                                        "owned OCR raster fell back to the retained PNG"
+                                    ),
+                                }
+                            }
                             crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                                 &backend_clone,
                                 data,
@@ -6531,6 +6628,7 @@ pub(super) async fn extract_with_ocr_for_page(
                                 },
                                 cancel_token.as_ref(),
                             )
+                            .await
                         },
                     );
                     #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
@@ -12357,3 +12455,13 @@ fn layout_orientation_retry_uses_each_siblings_frame() {
     assert!(!orientation_retry_page_eligible(true, true, None, 1));
     assert!(orientation_retry_page_eligible(true, false, None, 1));
 }
+
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
+mod owned_raster_tests;

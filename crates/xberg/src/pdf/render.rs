@@ -1064,7 +1064,7 @@ fn layout_media_matches_renderer(
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct OcrRasterDpi {
     requested: u32,
-    actual: u32,
+    pub(crate) actual: u32,
     budget_clamped: bool,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) type0_ink_loss: bool,
@@ -1115,8 +1115,36 @@ pub(crate) fn render_pdf_ocr_page_with_budget_evidence(
     source_budget_exceeded: &mut bool,
     preprocessing_dpi: Option<i32>,
 ) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
+    render_pdf_ocr_raster(
+        doc,
+        page_index,
+        images_config,
+        security_limits,
+        source_budget_exceeded,
+        OcrRasterOptions {
+            preprocessing_dpi,
+            owned_rgba: false,
+        },
+    )
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) struct OcrRasterOptions {
+    pub(crate) preprocessing_dpi: Option<i32>,
+    pub(crate) owned_rgba: bool,
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+pub(crate) fn render_pdf_ocr_raster(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    source_budget_exceeded: &mut bool,
+    raster_options: OcrRasterOptions,
+) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
     *source_budget_exceeded = false;
-    let (requested, planned) = match preprocessing_dpi {
+    let (requested, planned) = match raster_options.preprocessing_dpi {
         Some(target) => crate::image::dpi::planned_pdf_ocr_render_dpi_with_preprocessing(
             doc,
             page_index,
@@ -1135,10 +1163,16 @@ pub(crate) fn render_pdf_ocr_page_with_budget_evidence(
     };
     let (rendered, dpi, type0_ink_loss) = render_page_capturing_glyph_drops(page_index, || {
         guard_render_panic(page_index, || {
-            xberg_native_pdf::rendering::render_png_page_with_budget_evidence(
+            let raster = xberg_native_pdf::rendering::RenderOptions::with_dpi(options.dpi);
+            let raster = if raster_options.owned_rgba {
+                raster.as_raw()
+            } else {
+                raster
+            };
+            xberg_native_pdf::rendering::render_ocr_page_with_budget_evidence(
                 doc,
                 page_index,
-                options.dpi,
+                &raster,
                 floor,
                 security_limits.max_content_size,
             )
