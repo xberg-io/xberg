@@ -4100,6 +4100,9 @@ impl PageRenderer {
         let actual = u32::try_from(integer)
             .map_err(|_| Error::Image(format!("CCITT ImageMask /DecodeParms /{key} must be positive")))?;
         if actual == 0 {
+            if key == "Rows" {
+                return Ok(());
+            }
             return Err(Error::Image(format!(
                 "CCITT ImageMask /DecodeParms /{key} must be positive"
             )));
@@ -9676,6 +9679,15 @@ mod tests {
         let doc = minimal_pdf_doc();
         let result = PageRenderer::image_mask_ccitt_params(&dict, 65_536, 1, &doc);
         assert!(matches!(result, Err(Error::Image(message)) if message.contains("decoder limit")));
+    }
+
+    #[test]
+    fn ccitt_image_mask_uses_image_height_for_zero_rows() {
+        let dict = ccitt_mask_dict(8, 3, 8, 0);
+        let params = PageRenderer::image_mask_ccitt_params(&dict, 8, 3, &minimal_pdf_doc())
+            .unwrap()
+            .unwrap();
+        assert_eq!(params.rows, Some(3));
     }
 
     #[test]

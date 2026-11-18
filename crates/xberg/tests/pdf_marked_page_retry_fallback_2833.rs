@@ -98,6 +98,8 @@ enum Read {
     Blank,
     /// A read that fails.
     Fails,
+    /// A backend cancellation that must end extraction.
+    Cancels,
     /// A read in the page's own script, which the whole read keeps: nothing drops, so no retry
     /// is armed at all.
     Khmer,
@@ -206,6 +208,7 @@ impl OcrBackend for ByRaster {
             Read::Latin => document.content = ENGLISH.to_owned(),
             Read::Blank => {}
             Read::Fails => return Err(xberg::XbergError::ocr("the page raster was refused")),
+            Read::Cancels => return Err(xberg::XbergError::Cancelled),
             Read::Khmer => document.content = KHMER_READ.to_owned(),
             Read::FailsAfterRetryArms => {
                 if self.retry_armed.load(Ordering::SeqCst) {
@@ -241,6 +244,14 @@ fn read(source: &[u8], backend: Arc<ByRaster>) -> ExtractedDocument {
 }
 
 fn read_pinned(source: &[u8], backend: Arc<ByRaster>, max_threads: Option<usize>) -> ExtractedDocument {
+    try_read_pinned(source, backend, max_threads).unwrap()
+}
+
+fn try_read_pinned(
+    source: &[u8],
+    backend: Arc<ByRaster>,
+    max_threads: Option<usize>,
+) -> xberg::Result<ExtractedDocument> {
     let _guard = Guard;
     register_ocr_backend(backend).unwrap();
     let pipeline = serde_json::json!({"stages": [
@@ -264,7 +275,7 @@ fn read_pinned(source: &[u8], backend: Arc<ByRaster>, max_threads: Option<usize>
         }),
         ..Default::default()
     };
-    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config)
 }
 
 fn warnings_containing<'a>(document: &'a ExtractedDocument, needle: &str) -> Vec<&'a str> {
@@ -468,14 +479,27 @@ fn a_retry_read_failure_on_the_marked_page_itself_keeps_the_retry_and_the_native
     );
 }
 
-/// Case E: a whole read that keeps the marked page's script arms no retry — nothing dropped — and
-/// its own result stands (the `None` arm of the retry, the no-partial-drop path). The sibling
-/// `Some(Err)` arm of the retry — the run failing as a whole — is unreachable with an observable
-/// effect through the public API: a page task's backend error, however classified, is converted to
-/// a per-page failure, and a run-level cancellation error is re-raised by the cancellation check
-/// inside that arm before its fallback applies. The arm itself is a fallback, not bare error
-/// propagation: it warns that the targeted OCR failed, records that warning, and hands the
-/// document back to the whole-document read.
+#[test]
+#[serial_test::serial]
+fn a_targeted_retry_backend_cancellation_discards_the_successful_whole_read() {
+    let marked_page = (KHMER_DIMS, false);
+    let backend = Arc::new(ByRaster::new_arming_after(
+        script(&[(marked_page, &[Read::Latin, Read::Cancels])]),
+        Some(marked_page),
+    ));
+    let result = try_read_pinned(THEN_SCANNED, backend.clone(), Some(1));
+    assert!(
+        backend.retry_armed.load(Ordering::SeqCst),
+        "the second read of the marked page must reach the targeted retry: {:?}",
+        backend.calls.lock().unwrap()
+    );
+    assert!(
+        matches!(result, Err(xberg::XbergError::Cancelled)),
+        "backend cancellation must win over the successful whole read: {result:?}"
+    );
+}
+
+/// Case E: a whole read that keeps the marked page's script arms no retry, and its own result stands.
 #[test]
 #[serial_test::serial]
 fn a_whole_read_that_keeps_the_marked_script_arms_no_retry_and_stands_on_its_own() {

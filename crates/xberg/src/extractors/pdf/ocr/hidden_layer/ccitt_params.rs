@@ -3,7 +3,7 @@
 use super::Object;
 
 /// The `/BlackIs1` value of a plain Group 4 image whose parameters the probe decodes exactly.
-/// `/Rows` and `/BlackIs1` may be absent, as the specification defaults them.
+/// Zero or omitted `/Rows` uses the image height. Omitted `/BlackIs1` defaults to false.
 pub(super) fn supported_group4_params(
     params: &std::collections::HashMap<String, Object>,
     width: u32,
@@ -12,9 +12,10 @@ pub(super) fn supported_group4_params(
     let known = params
         .keys()
         .all(|key| matches!(key.as_str(), "K" | "Columns" | "Rows" | "BlackIs1"));
-    let rows_match = params
-        .get("Rows")
-        .is_none_or(|rows| rows.as_integer() == Some(i64::from(height)));
+    let rows_match = params.get("Rows").is_none_or(|rows| {
+        rows.as_integer()
+            .is_some_and(|rows| rows == 0 || rows == i64::from(height))
+    });
     let black_is_1 = match params.get("BlackIs1") {
         None => false,
         Some(Object::Boolean(value)) => *value,
