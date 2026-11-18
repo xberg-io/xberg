@@ -5815,6 +5815,13 @@ pub(super) async fn extract_with_ocr_for_page(
     // empty string is ambiguous -- a blank page produces one too -- and the structured
     // paragraphs of a rejected page must be dropped along with its text.
     let mut rejected_pages = vec![false; total_pages];
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut owned_scan_rows = None;
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
     #[cfg(all(
         feature = "ocr",
@@ -6994,6 +7001,19 @@ pub(super) async fn extract_with_ocr_for_page(
             let document_page_idx = page_index_offset + page_idx;
             let document_page_number = (document_page_idx + 1) as u32;
             let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            // Only the complete source supplies this count. Detached and stored-scan calls omit
+            // the source, and layout-guided calls pass pre-rendered images, so they have zero. ~keep
+            if let Some(rows) = ocr_result.ocr_internal_document.as_ref().and_then(|doc| {
+                super::document::certified_scan_html_rows(config, lazy_pdf_page_count, builtin_tesseract, doc)
+            }) {
+                owned_scan_rows = Some(rows.to_owned());
+            }
 
             #[cfg(all(
                 feature = "pdf",
@@ -8702,6 +8722,23 @@ pub(super) async fn extract_with_ocr_for_page(
         } else {
             (None, Vec::new())
         }
+    };
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let ocr_doc = {
+        let mut ocr_doc = ocr_doc;
+        if rejected_pages == [false]
+            && public_ocr_pages.is_empty()
+            && let (Some(doc), Some(rows)) = (ocr_doc.as_mut(), owned_scan_rows.as_deref())
+        {
+            super::document::certify_scan_html_paragraph(doc, rows);
+        }
+        ocr_doc
     };
 
     // Public nodes are already semantic structure. Do not offer flattened copies

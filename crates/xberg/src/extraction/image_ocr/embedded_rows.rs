@@ -173,6 +173,36 @@ fn assemble_words(document: &ExtractedDocument, max_words: usize) -> Option<Stri
     validate_and_render_bands(words)
 }
 
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) fn proved_scan_rows(text: &str, elements: &[OcrElement]) -> Option<String> {
+    if text.len() > MAX_PLAIN_TEXT_BYTES {
+        return None;
+    }
+    let words = elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Word)
+        .take(MAX_PLAIN_WORDS + 1)
+        .map(Word::from_element)
+        .collect::<Option<Vec<_>>>()?;
+    if words.len() > MAX_PLAIN_WORDS {
+        return None;
+    }
+    let rows = validate_and_render_bands(words)?;
+    let mut stock = text.lines().filter(|line| !line.trim().is_empty());
+    let mut source = elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Line)
+        .map(Word::from_element);
+    for row in rows.lines() {
+        if !row.split_whitespace().eq(stock.next()?.split_whitespace())
+            || !row.split_whitespace().eq(source.next()??.text.split_whitespace())
+        {
+            return None;
+        }
+    }
+    (stock.next().is_none() && source.next().is_none()).then_some(rows)
+}
+
 fn validate_and_render_bands(mut words: Vec<Word<'_>>) -> Option<String> {
     words.sort_unstable_by_key(|word| (word.top, word.left));
     let mut bands: Vec<Vec<Word<'_>>> = Vec::new();

@@ -549,6 +549,15 @@ pdf-ocr)
   run_mixed_plain_cases
   expected=$((expected + 11))
   run_cancellation_cases
+  run_exact psm6_html_preserves_scan_rows_only_with_owned_columns --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_leaves_each_page_of_a_two_page_scan_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_document_structure_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_a_detached_scan_flattened_beside_native_text --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_html_keeps_element_output_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact psm6_markdown_keeps_scan_rows_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact 'extractors::pdf::ocr::document::tests::certified_scan_html_rows_require_each_admission_condition' --lib
+  run_exact 'rendering::comrak_bridge::tests::marked_paragraph_rows_escape_html_text_in_each_row' --lib
+  expected=$((expected + 8))
   ;;
 office-pages)
   expected=53

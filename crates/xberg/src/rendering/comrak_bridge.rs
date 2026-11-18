@@ -1907,6 +1907,23 @@ mod tests {
     }
 
     #[test]
+    fn marked_paragraph_rows_escape_html_text_in_each_row() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        let mut paragraph = InternalElement::text(ElementKind::Paragraph, "Fees <net> 12\nA & B 7", 0);
+        paragraph
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+        let mut doc = InternalDocument::new("pdf");
+        doc.push_element(paragraph);
+        assert_eq!(
+            crate::rendering::render_html(&doc),
+            "<p>Fees &lt;net&gt; 12</p>\n<p>A &amp; B 7</p>\n"
+        );
+    }
+
+    #[test]
     fn test_title() {
         let mut b = InternalDocumentBuilder::new("test");
         b.push_title("My Document", None, None);

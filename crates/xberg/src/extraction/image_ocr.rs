@@ -28,7 +28,7 @@
 use crate::types::{ExtractedDocument, ExtractedImage};
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-mod embedded_rows;
+pub(crate) mod embedded_rows;
 
 #[cfg(all(
     feature = "pdf",

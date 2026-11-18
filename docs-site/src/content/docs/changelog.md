@@ -207,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tables:** Verified column headers above repeated numeric groups in PDF tables are preserved. (#2332)
 - **ocr:** Tesseract table output for standalone images and embedded PDF images no longer duplicates rows and keeps rows, row breaks and dot leaders intact (PSM 3, 6 and 11). (#2503)
 - **ocr:** Default sparse-text OCR keeps a certified standalone table with one unreadable value as a table. (#2503)
+- **ocr:** Tesseract PSM 6 preserves verified table row breaks in unified HTML for single-page PDF scans. (#2503)
 - **ocr:** Opt-in recovery for PaddleOCR ruled JPEG table cells (English PP-OCRv6 Small, ONNX Runtime), off by default. (#2503)
 - **pdf:** The page failure record and warning agree when native text is restored after forced OCR fails. (#3148)
 - **ocr:** Automatic script retries reuse Tesseract engines; OCR caches refresh when the installed model changes. (#3153)
