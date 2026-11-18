@@ -88,7 +88,8 @@ class OcrCallbackExceptionTests(unittest.IsolatedAsyncioTestCase):
             config = xberg.ExtractionConfig(
                 use_cache=False,
                 force_ocr=True,
-                ocr=xberg.OcrConfig(backend="tesseract", language=["eng"], tessdata_path=tessdata),
+                # Registry lookup is case-insensitive. Only lowercase "tesseract" opts into implicit Paddle fallback.
+                ocr=xberg.OcrConfig(backend="TESSERACT", language=["eng"], tessdata_path=tessdata),
             )
             with pytest.raises(xberg.OcrError, match=r"OCR failed on all 2 page\(s\)") as caught:
                 await xberg.extract(document, config)
