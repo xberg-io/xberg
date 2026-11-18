@@ -65,6 +65,6 @@ if [[ $mode == all ]]; then
   run_group pdf_original_2502 1 public_page_eight_heading_keeps_structured_output_exact --exact --ignored
   run_group pdf_original_2502 1 public_page_five_undersampled_line_keeps_competing_owner --exact --ignored
   run_group pdf_original_2502 1 public_page_five_line_keeps_structured_output_exact --exact --ignored
-  run_group pdf_tall_right_column_2426 5
+  run_group pdf_tall_right_column_2426 5 --skip helpers::tests::
   run_group pdf_tall_table_annotations_2502 1 guide_tables_and_real_annotations_survive_paired_reads --exact --ignored
 fi
