@@ -32,26 +32,7 @@ fn main() {
         println!("cargo::rustc-cfg=sceptre_ocr");
     }
 
-    println!("cargo::rustc-check-cfg=cfg(ort_dynamic_discovery)");
-    // Several consumers enable ort-bundled transitively. ort/load-dynamic enables
-    // ort-sys/disable-linking, which takes precedence over download-binaries. ~keep
-    if std::env::var_os("CARGO_FEATURE_ORT_DYNAMIC").is_some()
-        && [
-            "SCEPTRE_OCR_ORT",
-            "LAYOUT_DETECTION",
-            "EMBEDDINGS",
-            "PADDLE_OCR_ORT",
-            "AUTO_ROTATE",
-            "RERANKER",
-            "ONNX_RUNTIME",
-            "TRANSCRIPTION",
-            "NER_ONNX",
-        ]
-        .iter()
-        .any(|feature| std::env::var_os(format!("CARGO_FEATURE_{feature}")).is_some())
-    {
-        println!("cargo::rustc-cfg=ort_dynamic_discovery");
-    }
+    configure_ort_discovery();
 
     println!("cargo::rustc-check-cfg=cfg(layout_detection)");
     if std::env::var_os("CARGO_FEATURE_LAYOUT_DETECTION").is_some()
@@ -74,6 +55,35 @@ fn main() {
         emit_rerun_directives(&manifest_dir);
     }
     println!("cargo::rustc-env=XBERG_BUILD_ID={}", build_id());
+}
+
+fn configure_ort_discovery() {
+    println!("cargo::rustc-check-cfg=cfg(ort_session_providers)");
+    let ort_session_providers = [
+        "LAYOUT_DETECTION",
+        "EMBEDDINGS",
+        "PADDLE_OCR_ORT",
+        "AUTO_ROTATE",
+        "RERANKER",
+        "ONNX_RUNTIME",
+        "TRANSCRIPTION",
+    ]
+    .iter()
+    .any(|feature| std::env::var_os(format!("CARGO_FEATURE_{feature}")).is_some());
+    if ort_session_providers {
+        println!("cargo::rustc-cfg=ort_session_providers");
+    }
+
+    println!("cargo::rustc-check-cfg=cfg(ort_dynamic_discovery)");
+    // Several consumers enable ort-bundled transitively. ort/load-dynamic enables
+    // ort-sys/disable-linking, which takes precedence over download-binaries. ~keep
+    if std::env::var_os("CARGO_FEATURE_ORT_DYNAMIC").is_some()
+        && (ort_session_providers
+            || std::env::var_os("CARGO_FEATURE_NER_ONNX").is_some()
+            || std::env::var_os("CARGO_FEATURE_SCEPTRE_OCR_ORT").is_some())
+    {
+        println!("cargo::rustc-cfg=ort_dynamic_discovery");
+    }
 }
 
 fn link_ios_compiler_runtime() {
