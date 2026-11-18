@@ -1,12 +1,19 @@
 """Exercise Python callback error compatibility through native extraction."""
 
 import asyncio
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 import xberg
+import xberg._xberg as native
+
+if sys.version_info >= (3, 12):
+    from typing import override
+else:
+    from typing_extensions import override
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
 
@@ -29,10 +36,11 @@ class _FailingOcrBackend:
         return lang == "eng"
 
     def backend_type(self) -> xberg.OcrBackendType:
-        return xberg.OcrBackendType.custom
+        return xberg.OcrBackendType.CUSTOM
 
-    def process_image(self, image_bytes: bytes, _config: xberg.OcrConfig) -> xberg.ExtractedDocument:
+    def process_image(self, image_bytes: bytes, config: xberg.OcrConfig) -> xberg.ExtractedDocument:
         assert image_bytes
+        del config
         failure = _BackendCancelledError(f"stopped by the caller on read {len(self.raised) + 1}")
         self.raised.append(failure)
         raise failure
@@ -136,6 +144,7 @@ class _LifecycleFailingOcrBackend(_FailingOcrBackend):
         self.failing_method = failing_method
         self.lifecycle_error = _BackendCancelledError(f"{failing_method} refused")
 
+    @override
     def name(self) -> str:
         return f"ocr-callback-{self.failing_method}-failure"
 
@@ -173,7 +182,8 @@ class _FailingValidator:
     def name(self) -> str:
         return "callback-error-classification-validator"
 
-    def validate(self, _document: xberg.ExtractedDocument, _config: xberg.ExtractionConfig) -> None:
+    def validate(self, result: xberg.ExtractedDocument, config: native.ExtractionConfig) -> None:
+        del result, config
         raise RuntimeError("validator failure")
 
 
