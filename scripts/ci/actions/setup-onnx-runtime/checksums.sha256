@@ -8,3 +8,7 @@ dd8180d98e5a0ead7ead99029acc80b86a8b905b9aba4cc978e388039bb5823b  onnxruntime-wi
 # Intel macOS uses the last published x86_64 archive.
 # https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.23.2
 d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6  onnxruntime-osx-x86_64-1.23.2.tgz
+# NuGet fallback when the GitHub release is unavailable: Microsoft.ML.OnnxRuntime packages.
+# https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/<version>/microsoft.ml.onnxruntime.<version>.nupkg
+782564d3d68e87269ea1812cc94710ad06fe014faf093f01a6f89d0bd58719d3  microsoft.ml.onnxruntime.1.24.2.nupkg
+25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a  microsoft.ml.onnxruntime.1.23.2.nupkg

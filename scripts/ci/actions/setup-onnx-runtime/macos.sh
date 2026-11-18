@@ -27,8 +27,14 @@ if [ -z "$arch_id" ]; then
 fi
 
 case "$arch_id" in
-arm64) ort_arch="arm64" ;;
-x64) ort_arch="x86_64" ;;
+arm64)
+  ort_arch="arm64"
+  nuget_rid="osx-arm64"
+  ;;
+x64)
+  ort_arch="x86_64"
+  nuget_rid="osx-x64"
+  ;;
 *)
   echo "Unsupported macOS arch-id: $arch_id" >&2
   exit 1
@@ -57,11 +63,16 @@ if [ ! -d "$ort_root" ]; then
   checksums="${ORT_CHECKSUMS_FILE:-$script_dir/checksums.sha256}"
   archive_path="$RUNNER_TEMP/$archive"
   bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums" --known
-  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$archive_path" \
-    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
-  bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"
-  mkdir -p "$extract_dir"
-  tar -xzf "$archive_path" -C "$extract_dir"
+  if curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$archive_path" \
+    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"; then
+    bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"
+    mkdir -p "$extract_dir"
+    tar -xzf "$archive_path" -C "$extract_dir"
+  else
+    rm -f "$archive_path"
+    echo "::warning::GitHub release download of $archive failed; using the NuGet package" >&2
+    bash "$script_dir/nuget-fallback.sh" "$ort_version" "$nuget_rid" "$ort_root" "$checksums"
+  fi
 else
   # The extracted-tree cache does not retain the archive for re-verification. ~keep
   echo "Cache hit: Using cached ONNX Runtime ${ort_version}"

@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::config::{BedrockConfig, CredentialProviderConfig, LlmConfig};
+use crate::utils::test_support::{child_test_root, run_child_test};
 
 #[cfg(feature = "api")]
 #[tokio::test]
@@ -267,50 +268,31 @@ fn test_build_client_config_leaves_bedrock_unset_when_absent() {
 /// and no AWS credentials in the environment must fail fast at
 /// `create_client` time with a clear, actionable error instead of a bare
 /// "failed to build client" message or a confusing runtime request failure.
-/// `#[serial]` because the test mutates process-wide AWS environment
-/// variables, matching the save/restore convention used by the
-/// other env-mutating tests in this crate (see
-/// `core::server_config::tests::env_tests`).
-///
-/// `#[allow(unsafe_code)]` is scoped to this one function rather than the module:
-/// the crate sets `#![deny(unsafe_code)]` (lib.rs:36), and `std::env::set_var` /
-/// `remove_var` are `unsafe` as of edition 2024. `core::server_config::tests::env_tests`
-/// takes the same exemption, but as a file-level `#![allow]` — it can, because it is a
-/// dedicated test file. These tests sit inline in a production module, so a
-/// module-scoped allow would also cover `create_client` itself. ~keep
-#[allow(unsafe_code)]
-#[serial_test::serial]
 #[test]
 fn test_create_client_reports_clear_error_for_unconfigured_bedrock() {
-    // ~keep `AWS_BEARER_TOKEN_BEDROCK` has to be cleared as well, not just the access key:
-    // liter-llm's `BedrockProvider::bearer_token` reads it straight from the environment and
-    // `validate` returns `Ok(())` the moment it is set (bedrock.rs:381), so on a machine that
-    // exports one this test would see a successful `create_client` and fail for a reason
-    // unrelated to what it pins.
-    let restore: Vec<(&str, Option<String>)> = ["AWS_ACCESS_KEY_ID", "AWS_BEARER_TOKEN_BEDROCK"]
-        .into_iter()
-        .map(|key| (key, std::env::var(key).ok()))
-        .collect();
-    // SAFETY: guarded by #[serial_test::serial] — no other test in this
-    // process observes these variables concurrently while this one runs.
-    unsafe {
-        for (key, _) in &restore {
-            std::env::remove_var(key);
-        }
-    }
+    let module = module_path!().strip_prefix("xberg::").expect("crate module prefix");
+    let child = format!("{module}::unconfigured_bedrock_child");
+    run_child_test(&child, BEDROCK_CLIENT_CHILD, "unconfigured", |command| {
+        command
+            .env_remove("AWS_ACCESS_KEY_ID")
+            .env_remove("AWS_SECRET_ACCESS_KEY")
+            .env_remove("AWS_SESSION_TOKEN")
+            .env_remove("AWS_BEARER_TOKEN_BEDROCK");
+    });
+}
+
+const BEDROCK_CLIENT_CHILD: &str = "XBERG_TEST_BEDROCK_CLIENT_CHILD";
+
+#[test]
+#[ignore = "run in an isolated subprocess"]
+fn unconfigured_bedrock_child() {
+    let Some(root) = child_test_root(BEDROCK_CLIENT_CHILD) else {
+        return;
+    };
+    assert_eq!(root.as_os_str(), "unconfigured");
 
     let config = bedrock_model_config(BedrockConfig::default());
     let result = create_client(&config);
-
-    // SAFETY: see above.
-    unsafe {
-        for (key, original) in &restore {
-            match original {
-                Some(val) => std::env::set_var(key, val),
-                None => std::env::remove_var(key),
-            }
-        }
-    }
 
     match result {
         Err(crate::XbergError::Validation { message, .. }) => {

@@ -180,3 +180,36 @@ prepare_fresh_archive() {
 	[ ! -e "$DEST" ]
 	[ ! -s "$GITHUB_ENV" ]
 }
+
+@test "setup_onnx_macos rebuilds the Intel release layout from the pinned NuGet package when GitHub fails" {
+	rm -rf "$RUNNER_TEMP/onnxruntime" "$XBERG_STUB_BIN/tar"
+	export ORT_FIXTURE_PACKAGE="$XBERG_WORK/package.nupkg" ORT_CHECKSUMS_FILE="$XBERG_WORK/checksums.sha256"
+	python3 - "$ORT_FIXTURE_PACKAGE" <<'PYTHON'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as package:
+    package.writestr("runtimes/osx-x64/native/libonnxruntime.dylib", "intel nuget dylib\n")
+    package.writestr("runtimes/osx-arm64/native/libonnxruntime.dylib", "arm nuget dylib\n")
+    package.writestr("build/native/include/onnxruntime_c_api.h", "header\n")
+PYTHON
+	checksum="$(shasum -a 256 "$ORT_FIXTURE_PACKAGE")"
+	{
+		printf '%s  onnxruntime-osx-x86_64-1.23.2.tgz\n' "$(printf 'a%.0s' {1..64})"
+		printf '%s  microsoft.ml.onnxruntime.1.23.2.nupkg\n' "${checksum%% *}"
+	} >"$ORT_CHECKSUMS_FILE"
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *github.com*) exit 22 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	intel_root="$RUNNER_TEMP/onnxruntime/onnxruntime-osx-x86_64-1.23.2"
+	run_setup_script 1.24.2 native x64 system
+	xberg_assert_status 0
+	xberg_assert_output_contains 'GitHub release download of onnxruntime-osx-x86_64-1.23.2.tgz failed'
+	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.23.2.nupkg: SHA-256 verified'
+	xberg_assert_file "$intel_root/lib/libonnxruntime.1.23.2.dylib" 'intel nuget dylib'
+	[ "$(readlink "$intel_root/lib/libonnxruntime.dylib")" = libonnxruntime.1.23.2.dylib ]
+	xberg_assert_file "$DEST/libonnxruntime.1.23.2.dylib" 'intel nuget dylib'
+	grep -Fq 'microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg' "$XBERG_TRACE"
+}

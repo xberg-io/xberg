@@ -2703,7 +2703,12 @@ async fn process_whole_image_ocr(
         None if standalone.sparse_rows
             && let Some(tesseract) = standalone.sparse_retry =>
         {
-            Box::pin(tesseract.process_standalone_sparse_image(primary_bytes, effective_config.as_ref())).await?
+            Box::pin(tesseract.process_standalone_sparse_image(
+                primary_bytes,
+                effective_config.as_ref(),
+                is_implicit_horizontal_tesseract(original_config),
+            ))
+            .await?
         }
         None => {
             backend

@@ -65,6 +65,31 @@ Describe 'Windows fresh ORT archive verification' {
         Get-Content $env:GITHUB_ENV | Should -Contain 'ORT_STRATEGY=system'
     }
 
+    It 'rebuilds the release layout from the pinned NuGet package when GitHub fails' {
+        $Package = Join-Path $TestDrive 'package'
+        New-Item -ItemType Directory -Force -Path (Join-Path $Package 'runtimes/win-x64/native'), (Join-Path $Package 'runtimes/win-arm64/native'), (Join-Path $Package 'build/native/include') | Out-Null
+        Set-Content (Join-Path $Package 'runtimes/win-x64/native/onnxruntime.dll') 'nuget runtime'
+        Set-Content (Join-Path $Package 'runtimes/win-x64/native/onnxruntime.lib') 'nuget import library'
+        Set-Content (Join-Path $Package 'runtimes/win-arm64/native/onnxruntime.dll') 'wrong runtime'
+        Set-Content (Join-Path $Package 'build/native/include/onnxruntime_c_api.h') 'header'
+        $Fixture = Join-Path $TestDrive 'package.zip'
+        Compress-Archive -Path (Join-Path $Package '*') -DestinationPath $Fixture -Force
+        $Digest = (Get-FileHash -LiteralPath $Fixture -Algorithm SHA256).Hash.ToLowerInvariant()
+        Set-Content -LiteralPath $env:ORT_CHECKSUMS_FILE -Value @(
+            "$('a' * 64)  onnxruntime-win-x64-1.24.2.zip"
+            "$Digest  microsoft.ml.onnxruntime.1.24.2.nupkg"
+        )
+        Mock Invoke-WebRequest { throw 'release not found' } -ParameterFilter { "$Uri" -like 'https://github.com/*' }
+        Mock Invoke-WebRequest { Copy-Item -LiteralPath (Join-Path (Split-Path $env:TEMP) 'package.zip') -Destination $OutFile } -ParameterFilter { "$Uri" -like 'https://api.nuget.org/*' }
+        & $script:Sut '1.24.2' 'native' 'x64' 'system'
+        Should -Invoke Invoke-WebRequest -Exactly -Times 1 -ParameterFilter { "$Uri" -like '*/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg' }
+        $Root = Join-Path $env:TEMP 'onnxruntime/onnxruntime-win-x64-1.24.2'
+        Get-Content (Join-Path $Root 'lib/onnxruntime.dll') | Should -Be 'nuget runtime'
+        Get-Content (Join-Path $Root 'include/onnxruntime_c_api.h') | Should -Be 'header'
+        Get-Content (Join-Path $env:GITHUB_WORKSPACE 'native/onnxruntime.dll') | Should -Be 'nuget runtime'
+        Get-Content $env:GITHUB_ENV | Should -Contain "ORT_LIB_LOCATION=$(Join-Path $Root 'lib')"
+    }
+
     It 'keeps cached bin DLL staging and bundled exports without another download' {
         $Root = Join-Path $env:TEMP 'onnxruntime/onnxruntime-win-x64-1.24.2'
         New-Item -ItemType Directory -Path (Join-Path $Root 'bin'), (Join-Path $Root 'lib') -Force | Out-Null

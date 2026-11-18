@@ -6,8 +6,10 @@
 //! Also provides `apply_execution_providers` for configuring GPU acceleration
 //! on ORT session builders across all subsystems (layout, embeddings, OCR, etc.).
 
+#[cfg(any(test, ort_session_providers))]
 const XBERG_ORT_EP_ENV_VAR: &str = "XBERG_ORT_EP";
 
+#[cfg(any(test, ort_session_providers))]
 pub(crate) fn parse_execution_provider_override(
     value: &str,
 ) -> Option<crate::core::config::acceleration::ExecutionProviderType> {
@@ -23,13 +25,7 @@ pub(crate) fn parse_execution_provider_override(
     }
 }
 
-// Deliberately ungated (unlike `apply_execution_providers`, which has `ort::` types in its
-// signature): every ORT-capable subsystem calls this independently under its own feature
-// gate, and those gates are numerous and not owned by this module. A feature combination
-// that compiles no ORT-capable subsystem at all (e.g. `paddle-ocr-tract` alone, with no
-// `layout-detection`/`embeddings`/`auto-rotate`/etc.) legitimately calls neither function;
-// that is not a bug in either the caller or here. ~keep
-#[allow(dead_code)]
+#[cfg(any(test, ort_session_providers))]
 pub(crate) fn execution_provider_override() -> Option<crate::core::config::acceleration::ExecutionProviderType> {
     std::env::var(XBERG_ORT_EP_ENV_VAR)
         .ok()
@@ -37,7 +33,7 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
 }
 
 /// Prepare the runtime before callers that may create their own session builders.
-#[allow(dead_code)]
+#[cfg(any(ort_session_providers, feature = "ner-onnx"))]
 pub(crate) fn ensure_ort_available() {
     #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
     tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
@@ -120,10 +116,13 @@ fn platform_candidates() -> &'static [&'static str] {
 /// creation (e.g. missing CUDA runtime libraries). `RegisterStrict` accounts for that gap: the
 /// caller asked for this provider by name, so a registration failure must be reported, not
 /// swallowed by `ort`'s default `fail_silently` policy.
-// See the `#[allow(dead_code)]` rationale on `execution_provider_override` above: under the
-// crate's default features (`tokio-runtime`, `simd-utf8`) none of the feature gates on
-// `apply_execution_providers` are enabled, so this type has no non-test caller in that build.
-#[allow(dead_code)]
+#[cfg(any(
+    test,
+    all(
+        ort_session_providers,
+        any(target_os = "macos", feature = "cuda", feature = "tensorrt")
+    )
+))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GpuEpOutcome {
     /// Register the provider and require registration to succeed; a load failure at session
@@ -140,12 +139,14 @@ pub(crate) enum GpuEpOutcome {
     SkipToCpu,
 }
 
-// Pure and hardware-independent by design: `is_available` is a plain `bool` rather than a call
-// into `ort`'s FFI, so tests can exercise every (explicit, is_available) combination without
-// depending on what accelerators happen to be present on the machine running the test. Kept
-// ungated (see `execution_provider_override` above) so it — and its tests — compile and run
-// even in feature combinations that build no ORT-capable subsystem. ~keep
-#[allow(dead_code)]
+// Keep the policy independently testable with simulated provider availability. ~keep
+#[cfg(any(
+    test,
+    all(
+        ort_session_providers,
+        any(target_os = "macos", feature = "cuda", feature = "tensorrt")
+    )
+))]
 pub(crate) fn decide_gpu_ep_outcome(explicit: bool, is_available: bool) -> GpuEpOutcome {
     match (explicit, is_available) {
         (true, true) => GpuEpOutcome::RegisterStrict,
@@ -159,7 +160,13 @@ pub(crate) fn decide_gpu_ep_outcome(explicit: bool, is_available: bool) -> GpuEp
 /// not available in the loaded ONNX Runtime. Names both the provider and a concrete suggestion
 /// so the caller can act on it immediately, per the error-context convention (operation,
 /// input, root cause, suggestion).
-#[allow(dead_code)] // see `decide_gpu_ep_outcome` above
+#[cfg(any(
+    test,
+    all(
+        ort_session_providers,
+        any(target_os = "macos", feature = "cuda", feature = "tensorrt")
+    )
+))]
 pub(crate) fn unavailable_gpu_ep_error_message(provider_name: &str, suggestion: &str) -> String {
     format!(
         "{provider_name} execution provider requested but not available in the loaded ONNX \
@@ -174,8 +181,7 @@ pub(crate) fn unavailable_gpu_ep_error_message(provider_name: &str, suggestion: 
 /// callers that need this decision *before* invoking `apply_execution_providers` — e.g. deciding
 /// whether a failed session build may retry CPU-only, see `OrtBackend::build_session` in
 /// `inference::ort_backend` — do not re-derive it independently and risk it drifting out of sync.
-// See the `#[allow(dead_code)]` rationale on `execution_provider_override` above.
-#[allow(dead_code)]
+#[cfg(any(test, ort_session_providers))]
 pub(crate) fn resolve_execution_provider(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
 ) -> crate::core::config::acceleration::ExecutionProviderType {
@@ -190,7 +196,7 @@ pub(crate) fn resolve_execution_provider(
 /// [`crate::core::config::acceleration::ExecutionProviderType::Auto`]. `apply_execution_providers`
 /// hard-errors on an explicit request it cannot satisfy rather than falling back to CPU — callers
 /// that build a session must not swallow that error into a silent CPU retry.
-#[allow(dead_code)]
+#[cfg(any(test, all(ort_session_providers, inference_ort, any(layout_detection, auto_rotate))))]
 pub(crate) fn is_explicit_provider_request(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
 ) -> bool {
@@ -201,16 +207,7 @@ pub(crate) fn is_explicit_provider_request(
 /// rc.14 takes it as an argument and ONNX Runtime requires it to outlive every session.
 /// The `xberg-paddle-ocr` and `xberg-gliner` session builders are handed this same
 /// environment when it is created, so call this before they load a model. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription",
-    feature = "ner-onnx"
-))]
+#[cfg(any(ort_session_providers, feature = "ner-onnx"))]
 pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment, ort::Error> {
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     static ENVIRONMENT: std::sync::OnceLock<ort::environment::Environment> = std::sync::OnceLock::new();
@@ -256,15 +253,7 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
 /// unavailable or unloadable GPU providers fall back to CPU silently, with an info-level log.
 ///
 /// [`AccelerationConfig`]: crate::core::config::acceleration::AccelerationConfig
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 pub(crate) fn apply_execution_providers(
     builder: ort::session::builder::SessionBuilder,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
@@ -272,9 +261,7 @@ pub(crate) fn apply_execution_providers(
     use crate::core::config::acceleration::ExecutionProviderType;
 
     let provider = resolve_execution_provider(accel);
-    // Only read by the CUDA/TensorRT EP arms, which are cfg-gated behind their respective
-    // Cargo features; unused without at least one of them enabled.
-    #[cfg_attr(not(any(feature = "cuda", feature = "tensorrt")), allow(unused_variables))]
+    #[cfg(any(feature = "cuda", feature = "tensorrt"))]
     let device_id = accel.map(|a| a.device_id).unwrap_or(0);
 
     let builder = match provider {
@@ -318,15 +305,7 @@ pub(crate) fn apply_execution_providers(
 /// Build the CoreML execution provider, honouring the `XBERG_COREML_FORMAT` and
 /// `XBERG_COREML_UNITS` environment overrides. An unrecognised value is warned about and
 /// ignored rather than failing session creation. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 #[cfg(target_os = "macos")]
 fn build_coreml_ep() -> ort::ep::CoreML {
     use ort::ep::coreml::{ComputeUnits, ModelFormat};
@@ -352,15 +331,7 @@ fn build_coreml_ep() -> ort::ep::CoreML {
 
 /// Register CoreML as an explicitly requested provider: unavailable or unloadable is an error,
 /// never a silent CPU fallback. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 #[cfg(target_os = "macos")]
 fn register_coreml_strict(
     builder: ort::session::builder::SessionBuilder,
@@ -387,15 +358,7 @@ fn register_coreml_strict(
 
 /// Register CUDA as an explicitly requested provider: unavailable or unloadable is an error,
 /// never a silent CPU fallback. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 #[cfg(feature = "cuda")]
 fn register_cuda_strict(
     builder: ort::session::builder::SessionBuilder,
@@ -424,15 +387,7 @@ fn register_cuda_strict(
 
 /// Register TensorRT as an explicitly requested provider: unavailable or unloadable is an error,
 /// never a silent CPU fallback. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 #[cfg(feature = "tensorrt")]
 fn register_tensorrt_strict(
     builder: ort::session::builder::SessionBuilder,
@@ -464,15 +419,7 @@ fn register_tensorrt_strict(
 
 /// `auto`: try the platform GPU provider best-effort and fall back to CPU with an info-level log
 /// when it is unavailable or fails to load. ~keep
-#[cfg(any(
-    feature = "layout-detection",
-    feature = "embeddings",
-    feature = "paddle-ocr-ort",
-    feature = "auto-rotate",
-    feature = "reranker",
-    feature = "onnx-runtime",
-    feature = "transcription"
-))]
+#[cfg(ort_session_providers)]
 fn register_auto_providers(
     builder: ort::session::builder::SessionBuilder,
 ) -> Result<ort::session::builder::SessionBuilder, ort::Error> {

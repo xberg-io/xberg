@@ -59,6 +59,74 @@ pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime
     })
 }
 
+/// Keep direct calls on foreign runtimes inline: they may already hold the only blocking worker.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[allow(dead_code, reason = "Native builds may omit the blocking format extractors")]
+pub(crate) fn current_global_runtime() -> Option<tokio::runtime::Handle> {
+    let handle = tokio::runtime::Handle::try_current().ok()?;
+    (GLOBAL_RUNTIME.get()?.handle().id() == handle.id()).then_some(handle)
+}
+
+#[cfg(any(
+    all(feature = "tokio-runtime", not(target_arch = "wasm32")),
+    feature = "office",
+    feature = "excel",
+    feature = "excel-wasm"
+))]
+pub(crate) fn check_blocking_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> crate::Result<()> {
+    if cancel.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+/// Run synchronous work on the selected pool, preserving tracing and typed cancellation.
+///
+/// Dropping the future aborts queued work. Work that has already started must cooperate
+/// through the token or finish before releasing its resources.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[allow(dead_code, reason = "Native builds may omit the blocking format extractors")]
+pub(crate) async fn run_blocking<T, F>(
+    runtime: &tokio::runtime::Handle,
+    cancel: Option<&crate::cancellation::CancellationToken>,
+    work: F,
+) -> crate::Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce(Option<&crate::cancellation::CancellationToken>) -> crate::Result<T> + Send + 'static,
+{
+    let cancel = cancel.cloned();
+    let span = tracing::Span::current();
+    let dispatcher = tracing::dispatcher::get_default(Clone::clone);
+    let task = runtime.spawn_blocking(move || {
+        let _dispatcher = tracing::dispatcher::set_default(&dispatcher);
+        let _span = span.entered();
+        check_blocking_cancelled(cancel.as_ref())?;
+        let result = work(cancel.as_ref())?;
+        check_blocking_cancelled(cancel.as_ref())?;
+        Ok(result)
+    });
+    await_task(task).await?
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn await_task<T>(task: tokio::task::JoinHandle<T>) -> crate::Result<T> {
+    struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+    impl<T> Drop for AbortOnDrop<T> {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let mut task = AbortOnDrop(task);
+    match (&mut task.0).await {
+        Ok(value) => Ok(value),
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(crate::XbergError::Cancelled),
+    }
+}
+
 /// Run `future` as a task on the shared 16 MiB-stack runtime and await its result.
 ///
 /// The caller's own thread may be a host thread of about 1 to 2 MB (an FFI caller) or a default tokio
@@ -79,14 +147,6 @@ where
     use tracing::Instrument;
     use tracing::instrument::WithSubscriber;
 
-    struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
-
-    impl<T> Drop for AbortOnDrop<T> {
-        fn drop(&mut self) {
-            self.0.abort();
-        }
-    }
-
     let runtime = match global_runtime() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -94,12 +154,74 @@ where
             return Ok(future.await);
         }
     };
-    let mut task = AbortOnDrop(runtime.spawn(future.instrument(tracing::Span::current()).with_current_subscriber()));
-    match (&mut task.0).await {
-        Ok(value) => Ok(value),
-        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
-        Err(_) => Err(crate::XbergError::Cancelled),
+    await_task(runtime.spawn(future.instrument(tracing::Span::current()).with_current_subscriber())).await
+}
+
+#[cfg(all(
+    test,
+    any(feature = "office", feature = "excel"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) fn poll_with_blocking_worker_held<T>(
+    runtime: &tokio::runtime::Runtime,
+    read: impl std::future::Future<Output = T>,
+    after_first_poll: impl FnOnce(),
+) -> (bool, bool, T) {
+    use std::future::poll_fn;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Mutex, mpsc};
+    use std::task::Poll;
+    use std::thread::{self, ThreadId};
+    use std::time::Duration;
+    use tracing::Instrument as _;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{Layer, layer::Context};
+
+    struct Gate {
+        caller: ThreadId,
+        entered: AtomicBool,
+        reached: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
     }
+
+    impl<S: tracing::Subscriber> Layer<S> for Gate {
+        fn on_enter(&self, _id: &tracing::span::Id, _context: Context<'_, S>) {
+            if thread::current().id() != self.caller && !self.entered.swap(true, Ordering::Relaxed) {
+                self.reached.send(()).unwrap();
+                self.release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
+            }
+        }
+    }
+
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let (reached_tx, reached_rx) = mpsc::channel();
+    let subscriber = tracing_subscriber::registry().with(Gate {
+        caller: thread::current().id(),
+        entered: AtomicBool::new(false),
+        reached: reached_tx,
+        release: Mutex::new(release_rx),
+    });
+    tracing::callsite::rebuild_interest_cache();
+    let result = tracing::subscriber::with_default(subscriber, || {
+        runtime.block_on(async {
+            let mut read = std::pin::pin!(read.instrument(tracing::info_span!("blocking_worker_test")));
+            let first = poll_fn(|context| Poll::Ready(read.as_mut().poll(context))).await;
+            let entered = first.is_pending() && reached_rx.recv_timeout(Duration::from_secs(5)).is_ok();
+            after_first_poll();
+            release_tx.send(()).unwrap();
+            match first {
+                Poll::Pending => (true, entered, read.await),
+                Poll::Ready(result) => (false, false, result),
+            }
+        })
+    });
+    tracing::callsite::rebuild_interest_cache();
+    result
 }
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -108,6 +230,90 @@ mod large_stack_tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn blocking_work_reports_cancellation_after_the_parser_returns() {
+        let token = crate::cancellation::CancellationToken::new();
+        let result = super::run_blocking(&tokio::runtime::Handle::current(), Some(&token), |cancel| {
+            cancel.unwrap().cancel();
+            Ok(17)
+        })
+        .await;
+        assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+    }
+
+    #[test]
+    fn dropping_a_queued_blocking_worker_prevents_parser_entry() {
+        use std::future::{Future, poll_fn};
+        use std::sync::mpsc;
+        use std::task::Poll;
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let (entered, wait_entered) = mpsc::sync_channel(1);
+        let (release, wait_release) = mpsc::sync_channel(1);
+        let blocker = runtime.spawn_blocking(move || {
+            entered.send(()).unwrap();
+            wait_release.recv_timeout(Duration::from_secs(5)).unwrap();
+        });
+        wait_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        let parsed = Arc::new(AtomicBool::new(false));
+        let parse_started = Arc::clone(&parsed);
+        runtime.block_on(async {
+            let mut read = Box::pin(super::run_blocking(runtime.handle(), None, move |_| {
+                parse_started.store(true, Ordering::SeqCst);
+                Ok(())
+            }));
+            assert!(poll_fn(|cx| Poll::Ready(read.as_mut().poll(cx))).await.is_pending());
+            drop(read);
+
+            let drained = runtime.spawn_blocking(|| {});
+            release.send(()).unwrap();
+            tokio::time::timeout(Duration::from_secs(5), async {
+                blocker.await.unwrap();
+                drained.await.unwrap();
+            })
+            .await
+            .unwrap();
+        });
+        assert!(!parsed.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn blocking_work_keeps_the_callers_thread_local_dispatcher_and_span() {
+        use tracing::Instrument;
+        use tracing::instrument::WithSubscriber;
+        use tracing_subscriber::{Layer, layer::Context, prelude::*};
+
+        struct Capture(Arc<AtomicBool>);
+        impl<S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>> Layer<S> for Capture {
+            fn on_event(&self, event: &tracing::Event<'_>, context: Context<'_, S>) {
+                if event.metadata().target() == "test.office_worker" {
+                    assert_eq!(context.event_span(event).unwrap().name(), "office_test");
+                    self.0.store(true, Ordering::SeqCst);
+                }
+            }
+        }
+
+        let captured = Arc::new(AtomicBool::new(false));
+        let subscriber = tracing_subscriber::registry().with(Capture(Arc::clone(&captured)));
+        async {
+            super::run_blocking(&tokio::runtime::Handle::current(), None, |_| {
+                tracing::info!(target: "test.office_worker", "event from the blocking parser");
+                Ok(())
+            })
+            .instrument(tracing::info_span!("office_test"))
+            .await
+            .unwrap();
+        }
+        .with_subscriber(subscriber)
+        .await;
+        assert!(captured.load(Ordering::SeqCst));
+    }
 
     #[tokio::test]
     async fn returns_the_task_output() {
