@@ -1,8 +1,45 @@
 use super::*;
-use std::sync::Mutex;
 use tempfile::TempDir;
+use xberg_child_test::{child_test_root, run_child_test};
 
-static ENV_LOCK: Mutex<()> = Mutex::new(());
+const CHILD_CASE: &str = "XBERG_BENCHMARK_FIXTURE_CHILD_CASE";
+const PROFILING_FIXTURES: &str = "PROFILING_FIXTURES";
+
+fn run_fixture_env_case(case: &str, filter: Option<&str>) {
+    let module = module_path!()
+        .strip_prefix("benchmark_harness::")
+        .expect("benchmark harness crate module prefix");
+    run_child_test(&format!("{module}::{case}::child"), CHILD_CASE, case, |command| {
+        if let Some(filter) = filter {
+            command.env(PROFILING_FIXTURES, filter);
+        } else {
+            command.env_remove(PROFILING_FIXTURES);
+        }
+    });
+}
+
+macro_rules! isolated_fixture_test {
+    (fn $case:ident [$filter:expr] $body:block) => {
+        #[test]
+        fn $case() {
+            run_fixture_env_case(stringify!($case), $filter);
+        }
+
+        mod $case {
+            use super::*;
+
+            #[test]
+            #[ignore = "run in an isolated subprocess"]
+            fn child() {
+                let Some(case) = child_test_root(CHILD_CASE) else {
+                    return;
+                };
+                assert_eq!(case.as_os_str(), std::ffi::OsStr::new(stringify!($case)));
+                $body
+            }
+        }
+    };
+}
 
 #[test]
 fn test_fixture_validation() {
@@ -251,184 +288,163 @@ fn test_fixture_manager_load() {
     assert_eq!(manager.len(), 1);
 }
 
-#[test]
-fn test_profiling_fixtures_with_env_var() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
+isolated_fixture_test! {
+    fn test_profiling_fixtures_with_env_var [Some("pdf_small,docx_simple")] {
+        let temp_dir = TempDir::new().unwrap();
 
-    let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple", "html_simple"];
-    for fixture_name in &fixtures {
-        let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
-        let fixture = Fixture {
-            document: PathBuf::from(format!("{}.pdf", fixture_name)),
-            file_type: "pdf".to_string(),
-            file_size: 1024,
-            expected_frameworks: vec![],
-            metadata: HashMap::new(),
-            ground_truth: None,
-        };
-        std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple", "html_simple"];
+        for fixture_name in &fixtures {
+            let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
+            let fixture = Fixture {
+                document: PathBuf::from(format!("{}.pdf", fixture_name)),
+                file_type: "pdf".to_string(),
+                file_size: 1024,
+                expected_frameworks: vec![],
+                metadata: HashMap::new(),
+                ground_truth: None,
+            };
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        }
+
+
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+
+        assert_eq!(manager.len(), 2);
+
+        let loaded_names: Vec<String> = manager
+            .fixtures()
+            .iter()
+            .filter_map(|(path, _)| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
+            .collect();
+
+        assert!(loaded_names.contains(&"pdf_small".to_string()));
+        assert!(loaded_names.contains(&"docx_simple".to_string()));
+        assert!(!loaded_names.contains(&"pdf_medium".to_string()));
+        assert!(!loaded_names.contains(&"html_simple".to_string()));
     }
+}
 
-    unsafe {
-        std::env::set_var("PROFILING_FIXTURES", "pdf_small,docx_simple");
-    }
+isolated_fixture_test! {
+    fn test_profiling_fixtures_all_when_env_not_set [None] {
+        let temp_dir = TempDir::new().unwrap();
 
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+        let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
+        for fixture_name in &fixtures {
+            let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
+            let fixture = Fixture {
+                document: PathBuf::from(format!("{}.pdf", fixture_name)),
+                file_type: "pdf".to_string(),
+                file_size: 1024,
+                expected_frameworks: vec![],
+                metadata: HashMap::new(),
+                ground_truth: None,
+            };
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        }
 
-    assert_eq!(manager.len(), 2);
 
-    let loaded_names: Vec<String> = manager
-        .fixtures()
-        .iter()
-        .filter_map(|(path, _)| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
-        .collect();
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-    assert!(loaded_names.contains(&"pdf_small".to_string()));
-    assert!(loaded_names.contains(&"docx_simple".to_string()));
-    assert!(!loaded_names.contains(&"pdf_medium".to_string()));
-    assert!(!loaded_names.contains(&"html_simple".to_string()));
-
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+        assert_eq!(manager.len(), 3, "all fixtures load with no profiling filter");
     }
 }
 
 #[test]
-fn test_profiling_fixtures_all_when_env_not_set() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-
-    let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
-    for fixture_name in &fixtures {
-        let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
-        let fixture = Fixture {
-            document: PathBuf::from(format!("{}.pdf", fixture_name)),
-            file_type: "pdf".to_string(),
-            file_size: 1024,
-            expected_frameworks: vec![],
-            metadata: HashMap::new(),
-            ground_truth: None,
-        };
-        std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
-    }
-
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
-    }
-
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
-
-    assert_eq!(manager.len(), 3);
+#[should_panic(expected = "all fixtures load with no profiling filter")]
+fn test_wrong_child_filter_fails_the_no_filter_case() {
+    run_fixture_env_case("test_profiling_fixtures_all_when_env_not_set", Some("pdf_small"));
 }
 
-#[test]
-fn test_fixture_discovery_is_sorted() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
-    }
+isolated_fixture_test! {
+    fn test_fixture_discovery_is_sorted [None] {
+        let temp_dir = TempDir::new().unwrap();
 
-    for fixture_name in ["zeta", "alpha", "middle"] {
-        let fixture = Fixture {
-            document: PathBuf::from(format!("{fixture_name}.pdf")),
-            file_type: "pdf".to_string(),
-            file_size: 1024,
-            expected_frameworks: vec![],
-            metadata: HashMap::new(),
-            ground_truth: None,
-        };
-        std::fs::write(
-            temp_dir.path().join(format!("{fixture_name}.json")),
-            serde_json::to_string(&fixture).unwrap(),
-        )
-        .unwrap();
-    }
+        for fixture_name in ["zeta", "alpha", "middle"] {
+            let fixture = Fixture {
+                document: PathBuf::from(format!("{fixture_name}.pdf")),
+                file_type: "pdf".to_string(),
+                file_size: 1024,
+                expected_frameworks: vec![],
+                metadata: HashMap::new(),
+                ground_truth: None,
+            };
+            std::fs::write(
+                temp_dir.path().join(format!("{fixture_name}.json")),
+                serde_json::to_string(&fixture).unwrap(),
+            )
+            .unwrap();
+        }
 
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
-    let loaded_names: Vec<_> = manager
-        .fixtures()
-        .iter()
-        .map(|(path, _)| path.file_stem().unwrap().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(loaded_names, ["alpha", "middle", "zeta"]);
-}
-
-#[test]
-fn test_profiling_fixtures_with_whitespace() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-
-    let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
-    for fixture_name in &fixtures {
-        let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
-        let fixture = Fixture {
-            document: PathBuf::from(format!("{}.pdf", fixture_name)),
-            file_type: "pdf".to_string(),
-            file_size: 1024,
-            expected_frameworks: vec![],
-            metadata: HashMap::new(),
-            ground_truth: None,
-        };
-        std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
-    }
-
-    unsafe {
-        std::env::set_var("PROFILING_FIXTURES", "pdf_small , pdf_medium , docx_simple");
-    }
-
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
-
-    assert_eq!(manager.len(), 3);
-
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+        let loaded_names: Vec<_> = manager
+            .fixtures()
+            .iter()
+            .map(|(path, _)| path.file_stem().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(loaded_names, ["alpha", "middle", "zeta"]);
     }
 }
 
-#[test]
-fn test_profiling_fixtures_partial_match() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
+isolated_fixture_test! {
+    fn test_profiling_fixtures_with_whitespace [Some("pdf_small , pdf_medium , docx_simple")] {
+        let temp_dir = TempDir::new().unwrap();
 
-    let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
-    for fixture_name in &fixtures {
-        let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
-        let fixture = Fixture {
-            document: PathBuf::from(format!("{}.pdf", fixture_name)),
-            file_type: "pdf".to_string(),
-            file_size: 1024,
-            expected_frameworks: vec![],
-            metadata: HashMap::new(),
-            ground_truth: None,
-        };
-        std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple", "html_simple"];
+        for fixture_name in &fixtures {
+            let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
+            let fixture = Fixture {
+                document: PathBuf::from(format!("{}.pdf", fixture_name)),
+                file_type: "pdf".to_string(),
+                file_size: 1024,
+                expected_frameworks: vec![],
+                metadata: HashMap::new(),
+                ground_truth: None,
+            };
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        }
+
+
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+
+        assert_eq!(manager.len(), 3);
     }
+}
 
-    unsafe {
-        std::env::set_var("PROFILING_FIXTURES", "pdf_small,nonexistent_fixture");
-    }
+isolated_fixture_test! {
+    fn test_profiling_fixtures_partial_match [Some("pdf_small,nonexistent_fixture")] {
+        let temp_dir = TempDir::new().unwrap();
 
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+        let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
+        for fixture_name in &fixtures {
+            let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
+            let fixture = Fixture {
+                document: PathBuf::from(format!("{}.pdf", fixture_name)),
+                file_type: "pdf".to_string(),
+                file_size: 1024,
+                expected_frameworks: vec![],
+                metadata: HashMap::new(),
+                ground_truth: None,
+            };
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        }
 
-    assert_eq!(manager.len(), 1);
 
-    let loaded_names: Vec<String> = manager
-        .fixtures()
-        .iter()
-        .filter_map(|(path, _)| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
-        .collect();
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-    assert!(loaded_names.contains(&"pdf_small".to_string()));
+        assert_eq!(manager.len(), 1);
 
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+        let loaded_names: Vec<String> = manager
+            .fixtures()
+            .iter()
+            .filter_map(|(path, _)| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
+            .collect();
+
+        assert!(loaded_names.contains(&"pdf_small".to_string()));
     }
 }
 
@@ -642,130 +658,118 @@ fn test_ground_truth_file_existence_validation_success() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_fixture_load_with_mixed_success_and_failure() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
+isolated_fixture_test! {
+    fn test_fixture_load_with_mixed_success_and_failure [None] {
+        let temp_dir = TempDir::new().unwrap();
 
-    let valid_fixture_path = temp_dir.path().join("valid.json");
-    let valid_fixture = Fixture {
-        document: PathBuf::from("test.pdf"),
-        file_type: "pdf".to_string(),
-        file_size: 1024,
-        expected_frameworks: vec![],
-        metadata: HashMap::new(),
-        ground_truth: None,
-    };
-    std::fs::write(&valid_fixture_path, serde_json::to_string(&valid_fixture).unwrap()).unwrap();
+        let valid_fixture_path = temp_dir.path().join("valid.json");
+        let valid_fixture = Fixture {
+            document: PathBuf::from("test.pdf"),
+            file_type: "pdf".to_string(),
+            file_size: 1024,
+            expected_frameworks: vec![],
+            metadata: HashMap::new(),
+            ground_truth: None,
+        };
+        std::fs::write(&valid_fixture_path, serde_json::to_string(&valid_fixture).unwrap()).unwrap();
 
-    let invalid_fixture_path = temp_dir.path().join("invalid.json");
-    let invalid_fixture = Fixture {
-        document: PathBuf::from("test.pdf"),
-        file_type: "pdf".to_string(),
-        file_size: 1024,
-        expected_frameworks: vec![],
-        metadata: HashMap::new(),
-        ground_truth: Some(GroundTruth {
-            text_file: Some(PathBuf::from("nonexistent.txt")),
-            markdown_file: None,
-            fields_json: None,
-            formulas_json: None,
-            source: "manual".to_string(),
-        }),
-    };
-    std::fs::write(&invalid_fixture_path, serde_json::to_string(&invalid_fixture).unwrap()).unwrap();
+        let invalid_fixture_path = temp_dir.path().join("invalid.json");
+        let invalid_fixture = Fixture {
+            document: PathBuf::from("test.pdf"),
+            file_type: "pdf".to_string(),
+            file_size: 1024,
+            expected_frameworks: vec![],
+            metadata: HashMap::new(),
+            ground_truth: Some(GroundTruth {
+                text_file: Some(PathBuf::from("nonexistent.txt")),
+                markdown_file: None,
+                fields_json: None,
+                formulas_json: None,
+                source: "manual".to_string(),
+            }),
+        };
+        std::fs::write(&invalid_fixture_path, serde_json::to_string(&invalid_fixture).unwrap()).unwrap();
 
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+
+        let mut manager = FixtureManager::new();
+        let result = manager.load_fixtures_from_dir(temp_dir.path());
+        assert!(result.is_err());
+
+        assert_eq!(manager.len(), 1);
     }
-
-    let mut manager = FixtureManager::new();
-    let result = manager.load_fixtures_from_dir(temp_dir.path());
-    assert!(result.is_err());
-
-    assert_eq!(manager.len(), 1);
 }
 
-#[test]
-fn nested_invalid_fixture_fails_the_entire_directory_load() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-    let nested_dir = temp_dir.path().join("nested");
-    std::fs::create_dir(&nested_dir).unwrap();
-    std::fs::write(
-        temp_dir.path().join("valid.json"),
-        serde_json::json!({
-            "document": "valid.pdf",
-            "file_type": "pdf",
-            "file_size": 1
-        })
-        .to_string(),
-    )
-    .unwrap();
-    std::fs::write(nested_dir.join("malformed.json"), "{not valid json").unwrap();
+isolated_fixture_test! {
+    fn nested_invalid_fixture_fails_the_entire_directory_load [None] {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("nested");
+        std::fs::create_dir(&nested_dir).unwrap();
+        std::fs::write(
+            temp_dir.path().join("valid.json"),
+            serde_json::json!({
+                "document": "valid.pdf",
+                "file_type": "pdf",
+                "file_size": 1
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(nested_dir.join("malformed.json"), "{not valid json").unwrap();
 
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+        let mut manager = FixtureManager::new();
+        let error = manager.load_fixtures_from_dir(temp_dir.path()).unwrap_err();
+
+        assert!(error.to_string().contains("malformed.json"));
+        assert_eq!(
+            manager.len(),
+            0,
+            "nested failure must abort before the parent corpus loads"
+        );
     }
-    let mut manager = FixtureManager::new();
-    let error = manager.load_fixtures_from_dir(temp_dir.path()).unwrap_err();
-
-    assert!(error.to_string().contains("malformed.json"));
-    assert_eq!(
-        manager.len(),
-        0,
-        "nested failure must abort before the parent corpus loads"
-    );
 }
 
-#[test]
-fn directory_load_skips_split_sidecars() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-    std::fs::write(
-        temp_dir.path().join("fixture.json"),
-        serde_json::json!({
-            "document": "document.pdf",
-            "file_type": "pdf",
-            "file_size": 1
-        })
-        .to_string(),
-    )
-    .unwrap();
-    std::fs::write(
-        temp_dir.path().join("document.split.json"),
-        serde_json::json!({
-            "document": "document.pdf",
-            "boundaries": [{"start_page": 1, "end_page": 2}]
-        })
-        .to_string(),
-    )
-    .unwrap();
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
-    }
-    let mut manager = FixtureManager::new();
-    manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+isolated_fixture_test! {
+    fn directory_load_skips_split_sidecars [None] {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(
+            temp_dir.path().join("fixture.json"),
+            serde_json::json!({
+                "document": "document.pdf",
+                "file_type": "pdf",
+                "file_size": 1
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("document.split.json"),
+            serde_json::json!({
+                "document": "document.pdf",
+                "boundaries": [{"start_page": 1, "end_page": 2}]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-    assert_eq!(manager.len(), 1);
-    assert_eq!(manager.fixtures()[0].0.file_name().unwrap(), "fixture.json");
+        assert_eq!(manager.len(), 1);
+        assert_eq!(manager.fixtures()[0].0.file_name().unwrap(), "fixture.json");
+    }
 }
 
-#[test]
-fn directory_load_rejects_partial_fixture_schema() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-    std::fs::write(
-        temp_dir.path().join("incomplete.json"),
-        serde_json::json!({"document": "document.pdf"}).to_string(),
-    )
-    .unwrap();
+isolated_fixture_test! {
+    fn directory_load_rejects_partial_fixture_schema [None] {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(
+            temp_dir.path().join("incomplete.json"),
+            serde_json::json!({"document": "document.pdf"}).to_string(),
+        )
+        .unwrap();
 
-    unsafe {
-        std::env::remove_var("PROFILING_FIXTURES");
+        let mut manager = FixtureManager::new();
+        let error = manager.load_fixtures_from_dir(temp_dir.path()).unwrap_err();
+
+        assert!(error.to_string().contains("incomplete.json"));
     }
-    let mut manager = FixtureManager::new();
-    let error = manager.load_fixtures_from_dir(temp_dir.path()).unwrap_err();
-
-    assert!(error.to_string().contains("incomplete.json"));
 }
