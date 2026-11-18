@@ -184,7 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Better paragraph reading order in scanned multi-column PDFs. (#2331)
 - **pdf:** Adjacent tables with aligned columns stay separate. (#2332)
 - **pdf:** Verified decimal column headers are preserved and decimal records stay in table bodies in HTML. (#2332)
-- **pdf:** Table recognition separates cells at source dividers and preserves source-supported row and column spans. (#2332)
+- **pdf:** Layout-assisted TATR recognizes source dividers and preserves source-supported row and column spans. (#2332)
 - **ocr:** False short words and repeated texture reads are removed from noisy scanned PDFs in Plain and Markdown output. (#2943)
 - **ocr:** Tall scanned PDFs: verified panel dimensions, headings, multiline headings, split words and lines that collapsed to punctuation are recovered. (#2502)
 - **tables:** Tables are recovered on forced-OCR PDF pages that need a rotation retry. (#2332)
