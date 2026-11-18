@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** Warning when a tall scanned page was read at reduced resolution and source-image strip recovery did not run or did not improve it. (#2502)
 
 - **ocr:** Warning when resizing a standalone tall image may leave text incomplete. (#2502)
+- **ocr:** `XBERG_TESSDATA_SYSTEM_PATHS=0` (or `false`) stops tessdata resolution from searching the system Tesseract directories.
 - **math:** Explicit math text annotations (`AnnotationKind::math(display)`, `math_display()` in Rust; `Custom` annotation `xberg.math` with value `inline` or `display` in other bindings) render as LaTeX in Markdown, HTML and Djot.
 - **ocr:** Corroborated Khmer numbers are recovered on eligible English-primary PDF pages when `khm.traineddata` is installed. (#2408)
 - **layout:** Experimental `LayoutDetectionConfig.model` (`--layout-model`) selects `rt_detr` (default) or `pp_doc_layout_v3`; PP-DocLayout-V3 requires ONNX Runtime and is an error on tract or WASM builds. (#2284)
@@ -99,6 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **llm:** Rust `xberg::llm::usage::usage_from_error` exposes token usage of failed structured responses. (#2139)
 
 ### Changed
+
+- **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
 - **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
 
@@ -155,7 +158,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
+  DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
+
+- **ocr:** TrOCR checks decode, resize and tensor buffers before allocating pixels. Previously accepted images can exceed the
+  configured budget. The standalone API exposes typed image errors and accepts decoded rasters through `process_decoded_image`.
+  The dimensions helper reads the header without validating pixels. (#3168)
+
+- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
+- **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
+- **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
+
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
+- **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
+- **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
 - **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
 
 - **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
