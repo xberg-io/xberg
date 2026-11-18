@@ -77,19 +77,28 @@ pub(crate) fn extract_ppt_embedded_objects_with_cancellation(
     let ppt_stream = read_stream_with_cancellation(&mut comp, "/PowerPoint Document", cancel)?;
     let current_user_stream = read_stream_with_cancellation(&mut comp, "/Current User", cancel).unwrap_or_default();
 
+    extract_embedded_from_streams(&ppt_stream, &current_user_stream, max_object_bytes, cancel)
+}
+
+pub(super) fn extract_embedded_from_streams(
+    ppt_stream: &[u8],
+    current_user_stream: &[u8],
+    max_object_bytes: usize,
+    cancel: super::PptReadCancellation<'_>,
+) -> Result<(Vec<PptEmbeddedObject>, Vec<ProcessingWarning>)> {
     let mut warnings = Vec::new();
     let mut objects = Vec::new();
 
     cancel.check()?;
     tracing::debug!(target: "xberg::ppt::embedding_walk", "discovering embedded PPT storage");
-    let live = live_slide_offsets_with_cancellation(&ppt_stream, &current_user_stream, cancel);
+    let live = live_slide_offsets_with_cancellation(ppt_stream, current_user_stream, cancel);
     cancel.check()?;
     let Some(live) = live else {
-        return read_unresolved_objects(&ppt_stream, max_object_bytes, cancel);
+        return read_unresolved_objects(ppt_stream, max_object_bytes, cancel);
     };
 
-    let slide_by_ex_obj_id = slide_numbers_by_ex_obj_id(&ppt_stream, &live, cancel)?;
-    for (ex_obj_id, persist_id_ref) in embedded_object_refs(&ppt_stream, &live, cancel)? {
+    let slide_by_ex_obj_id = slide_numbers_by_ex_obj_id(ppt_stream, &live, cancel)?;
+    for (ex_obj_id, persist_id_ref) in embedded_object_refs(ppt_stream, &live, cancel)? {
         cancel.check()?;
         let Some(&offset) = live.persist.get(&persist_id_ref) else {
             warnings.push(warning(format!(
@@ -97,7 +106,7 @@ pub(crate) fn extract_ppt_embedded_objects_with_cancellation(
             )));
             continue;
         };
-        let Some((rec_instance, rec_type)) = record_instance_and_type(&ppt_stream, offset) else {
+        let Some((rec_instance, rec_type)) = record_instance_and_type(ppt_stream, offset) else {
             warnings.push(warning(format!(
                 "Skipped embedded object {ex_obj_id}: storage offset {offset} is out of range"
             )));
@@ -110,7 +119,7 @@ pub(crate) fn extract_ppt_embedded_objects_with_cancellation(
             continue;
         }
         let data = read_storage(
-            &ppt_stream,
+            ppt_stream,
             offset,
             rec_instance,
             max_object_bytes,

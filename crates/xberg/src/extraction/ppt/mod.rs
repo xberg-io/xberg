@@ -216,25 +216,89 @@ fn assemble_full_text(slides: &[PptSlideText], loose_texts: &[String]) -> String
         .join("\n\n")
 }
 
-/// Extract embedded pictures from the `/Pictures` stream, if present and requested.
-fn extract_images_if_requested(
-    comp: &mut cfb::CompoundFile<Cursor<&[u8]>>,
-    ppt_stream: &[u8],
-    live_slides: Option<&LiveSlides>,
-    extract_images: bool,
-    warnings: &mut Vec<ProcessingWarning>,
+/// Read optional pictures without changing the existing best-effort error policy.
+fn read_pictures<R: std::io::Read + std::io::Seek>(
+    comp: &mut cfb::CompoundFile<R>,
+    requested: bool,
     cancel: PptReadCancellation<'_>,
-) -> Result<Vec<ExtractedImage>> {
-    if !extract_images {
-        return Ok(Vec::new());
+) -> Result<Option<Vec<u8>>> {
+    if !requested {
+        return Ok(None);
     }
-    match read_stream_with_cancellation(comp, "/Pictures", cancel) {
-        Ok(pictures_stream) if !pictures_stream.is_empty() => {
-            let slide_numbers = picture_slide_numbers(ppt_stream, live_slides.map(|l| l.offsets.as_slice()));
-            extract_pictures_with_cancellation(&pictures_stream, &slide_numbers, warnings, cancel)
+    let pictures = read_stream_with_cancellation(comp, "/Pictures", cancel).ok();
+    cancel.check()?;
+    Ok(pictures)
+}
+
+pub(crate) struct PptStreams {
+    document: Vec<u8>,
+    current_user: Vec<u8>,
+}
+
+impl PptStreams {
+    fn read<R: std::io::Read + std::io::Seek>(
+        comp: &mut cfb::CompoundFile<R>,
+        cancel: PptReadCancellation<'_>,
+    ) -> Result<Self> {
+        let document = read_stream_with_cancellation(comp, "/PowerPoint Document", cancel)?;
+        if document.is_empty() {
+            return Err(XbergError::parsing("PowerPoint Document stream is empty"));
         }
-        Err(XbergError::Cancelled) => Err(XbergError::Cancelled),
-        _ => Ok(Vec::new()),
+        // Missing Current User keeps the preexisting fallback to stream order. ~keep
+        let current_user = read_stream_with_cancellation(comp, "/Current User", cancel).unwrap_or_default();
+        cancel.check()?;
+        Ok(Self { document, current_user })
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) fn embedded_objects(
+        &self,
+        max_object_bytes: usize,
+        cancel: PptReadCancellation<'_>,
+    ) -> Result<(Vec<PptEmbeddedObject>, Vec<ProcessingWarning>)> {
+        embedded::extract_embedded_from_streams(&self.document, &self.current_user, max_object_bytes, cancel)
+    }
+}
+
+/// Streams owned by the native single-file worker before record parsing begins.
+/// A single open handle pins file identity if its path is replaced. Input is expected
+/// to stay stable during these reads, as it is for other local file extraction. Once
+/// the handle closes, a caller can modify the file without affecting parser input.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) struct PptFileStreams {
+    metadata: PptMetadata,
+    streams: PptStreams,
+    pictures: Option<Vec<u8>>,
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+impl PptFileStreams {
+    pub(crate) fn read(file: std::fs::File, extract_images: bool, cancel: PptReadCancellation<'_>) -> Result<Self> {
+        cancel.check()?;
+        let mut comp = cfb::CompoundFile::open(std::io::BufReader::new(file))
+            .map_err(|e| XbergError::parsing(format!("Failed to open PPT as OLE container: {e}")))?;
+        let metadata = extract_ppt_metadata(&mut comp, cancel)?;
+        let streams = PptStreams::read(&mut comp, cancel)?;
+        let pictures = read_pictures(&mut comp, extract_images, cancel)?;
+        Ok(Self {
+            metadata,
+            streams,
+            pictures,
+        })
+    }
+
+    pub(crate) fn parse(
+        self,
+        include_master_slides: bool,
+        cancel: PptReadCancellation<'_>,
+    ) -> Result<(PptExtractionResult, PptStreams)> {
+        let Self {
+            metadata,
+            streams,
+            pictures,
+        } = self;
+        let result = parse_ppt_streams(&streams, metadata, include_master_slides, || Ok(pictures), cancel)?;
+        Ok((result, streams))
     }
 }
 
@@ -264,18 +328,27 @@ pub(crate) fn extract_ppt_text_with_cancellation(
 
     let metadata = extract_ppt_metadata(&mut comp, cancel)?;
 
-    let ppt_stream = read_stream_with_cancellation(&mut comp, "/PowerPoint Document", cancel)?;
-    if ppt_stream.is_empty() {
-        return Err(XbergError::parsing("PowerPoint Document stream is empty"));
-    }
+    let streams = PptStreams::read(&mut comp, cancel)?;
+    parse_ppt_streams(
+        &streams,
+        metadata,
+        include_master_slides,
+        || read_pictures(&mut comp, extract_images, cancel),
+        cancel,
+    )
+}
 
+fn parse_ppt_streams(
+    streams: &PptStreams,
+    metadata: PptMetadata,
+    include_master_slides: bool,
+    pictures: impl FnOnce() -> Result<Option<Vec<u8>>>,
+    cancel: PptReadCancellation<'_>,
+) -> Result<PptExtractionResult> {
+    let ppt_stream = &streams.document;
     let mut processing_warnings = Vec::new();
-    // Absent or unreadable `Current User` stream leaves this `None`, and the walk keeps the
-    // stream order it always used. See [`live_slide_offsets`] for why a partial answer is
-    // deliberately not produced.
-    let current_user_stream = read_stream_with_cancellation(&mut comp, "/Current User", cancel).unwrap_or_default();
     cancel.check()?;
-    let live_slides = live_slide_offsets_with_cancellation(&ppt_stream, &current_user_stream, cancel);
+    let live_slides = live_slide_offsets_with_cancellation(ppt_stream, &streams.current_user, cancel);
     cancel.check()?;
     if live_slides.is_none() {
         tracing::debug!(
@@ -285,7 +358,7 @@ pub(crate) fn extract_ppt_text_with_cancellation(
     }
 
     let (mut slides, loose_texts, speaker_notes) = extract_texts_with_cancellation(
-        &ppt_stream,
+        ppt_stream,
         include_master_slides,
         live_slides.as_ref(),
         &mut processing_warnings,
@@ -309,14 +382,13 @@ pub(crate) fn extract_ppt_text_with_cancellation(
     let slide_count = slides.len();
 
     cancel.check()?;
-    let images = extract_images_if_requested(
-        &mut comp,
-        &ppt_stream,
-        live_slides.as_ref(),
-        extract_images,
-        &mut processing_warnings,
-        cancel,
-    )?;
+    let images = match pictures()? {
+        Some(data) if !data.is_empty() => {
+            let slide_numbers = picture_slide_numbers(ppt_stream, live_slides.as_ref().map(|l| l.offsets.as_slice()));
+            extract_pictures_with_cancellation(&data, &slide_numbers, &mut processing_warnings, cancel)?
+        }
+        _ => Vec::new(),
+    };
 
     cancel.check()?;
     Ok(PptExtractionResult {
@@ -1490,8 +1562,8 @@ fn cp1252_to_char(b: u8) -> char {
 }
 
 /// Read a named stream from the CFB compound file.
-pub(super) fn read_stream_with_cancellation(
-    comp: &mut cfb::CompoundFile<Cursor<&[u8]>>,
+pub(super) fn read_stream_with_cancellation<R: std::io::Read + std::io::Seek>(
+    comp: &mut cfb::CompoundFile<R>,
     name: &str,
     cancel: PptReadCancellation<'_>,
 ) -> Result<Vec<u8>> {
@@ -1506,8 +1578,8 @@ pub(super) fn read_stream_with_cancellation(
 }
 
 /// Extract metadata from OLE summary information streams.
-fn extract_ppt_metadata(
-    comp: &mut cfb::CompoundFile<Cursor<&[u8]>>,
+fn extract_ppt_metadata<R: std::io::Read + std::io::Seek>(
+    comp: &mut cfb::CompoundFile<R>,
     cancel: PptReadCancellation<'_>,
 ) -> Result<PptMetadata> {
     let mut meta = PptMetadata::default();

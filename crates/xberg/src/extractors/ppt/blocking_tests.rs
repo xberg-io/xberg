@@ -179,22 +179,48 @@ fn make_large_deck(path: &Path) {
 }
 
 #[test]
-fn owned_large_ppt_snapshot_survives_truncation_and_enforces_its_cap() {
+#[serial_test::serial(office_admission)]
+fn owned_ppt_streams_survive_truncation_and_keep_the_previous_file_limit_behavior() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("deck.ppt");
     make_large_deck(&path);
-    let limit = std::fs::metadata(&path).unwrap().len() as usize;
+    let runtime = crate::core::runtime::global_runtime().unwrap();
+    let config = ExtractionConfig {
+        max_archive_depth: 0,
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_archive_size: DECK.len(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let extractor = PptExtractor::new();
+    let file = runtime
+        .block_on(extractor.extract_path(&path, LEGACY_POWERPOINT_MIME_TYPE, &config))
+        .unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let in_memory = runtime
+        .block_on(extractor.extract_content(&bytes, LEGACY_POWERPOINT_MIME_TYPE, &config))
+        .unwrap();
+    let serialize = |document| {
+        serde_json::to_value(crate::extraction::derive::derive_extraction_result(
+            document,
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        ))
+        .unwrap()
+    };
+    assert_eq!(serialize(file), serialize(in_memory));
     let cancel = PptReadCancellation::default();
-    assert!(matches!(
-        PptExtractor::read_file_snapshot(&path, limit - 1, cancel),
-        Err(crate::XbergError::Validation { .. })
-    ));
-    let snapshot = PptExtractor::read_file_snapshot(&path, limit, cancel).unwrap();
+    let snapshot = crate::extraction::ppt::PptFileStreams::read(
+        crate::core::extractor::open_regular_file(&path).unwrap(),
+        false,
+        cancel,
+    )
+    .unwrap();
     std::fs::File::create(&path).unwrap();
-    let deck = crate::extraction::ppt::extract_ppt_text_with_cancellation(&snapshot, false, false, cancel).unwrap();
+    let (deck, streams) = snapshot.parse(false, cancel).unwrap();
     assert_eq!(deck.slide_count, 3);
-    let (objects, _) =
-        crate::extraction::ppt::extract_ppt_embedded_objects_with_cancellation(&snapshot, limit, cancel).unwrap();
+    let (objects, _) = streams.embedded_objects(DECK.len(), cancel).unwrap();
     assert_eq!(objects.len(), 1);
 }
 

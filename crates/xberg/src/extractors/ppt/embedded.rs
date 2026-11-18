@@ -1,6 +1,6 @@
 use super::PptExtractor;
 use crate::core::config::ExtractionConfig;
-use crate::extraction::ppt::{PptEmbeddedObject, PptReadCancellation};
+use crate::extraction::ppt::PptEmbeddedObject;
 use std::borrow::Cow;
 
 const EMBEDDED_WARNING_SOURCE: &str = "ppt_embedded_objects";
@@ -34,18 +34,13 @@ pub(super) struct PptEmbeddings {
 impl PptExtractor {
     /// Read the OLE storages from the same deck snapshot used by the slide parser.
     pub(super) fn discover_embedded_objects(
-        content: &[u8],
         limits: Option<PptEmbeddingLimits>,
-        cancel: PptReadCancellation<'_>,
+        read: impl FnOnce(usize) -> crate::Result<(Vec<PptEmbeddedObject>, Vec<crate::types::ProcessingWarning>)>,
     ) -> crate::Result<PptEmbeddings> {
         let Some(limits) = limits else {
             return Ok(PptEmbeddings::default());
         };
-        let (mut objects, mut warnings) = match crate::extraction::ppt::extract_ppt_embedded_objects_with_cancellation(
-            content,
-            limits.max_object_bytes,
-            cancel,
-        ) {
+        let (mut objects, mut warnings) = match read(limits.max_object_bytes) {
             Ok(parsed) => parsed,
             Err(crate::XbergError::Cancelled) => return Err(crate::XbergError::Cancelled),
             Err(e) => {
