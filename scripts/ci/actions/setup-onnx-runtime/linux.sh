@@ -39,10 +39,12 @@ case "$arch_id" in
 x64)
   ort_dir_name="onnxruntime-linux-x64-${ort_version}"
   archive="onnxruntime-linux-x64-${ort_version}.tgz"
+  nuget_rid="linux-x64"
   ;;
 arm64)
   ort_dir_name="onnxruntime-linux-aarch64-${ort_version}"
   archive="onnxruntime-linux-aarch64-${ort_version}.tgz"
+  nuget_rid="linux-arm64"
   ;;
 *)
   echo "Unsupported Linux arch-id: $arch_id" >&2
@@ -50,12 +52,21 @@ arm64)
   ;;
 esac
 
+# Fails only when GitHub cannot serve the archive; an unpinned or mismatched archive exits. ~keep
 download_ort_archive() {
   local path="$1"
-  bash "$script_dir/verify-archive.sh" "$path" "$checksums" --known
-  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$path" \
-    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"
-  bash "$script_dir/verify-archive.sh" "$path" "$checksums"
+  bash "$script_dir/verify-archive.sh" "$path" "$checksums" --known || exit 1
+  if ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$path" \
+    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"; then
+    rm -f "$path"
+    echo "::warning::GitHub release download of $archive failed; using the NuGet package" >&2
+    return 1
+  fi
+  bash "$script_dir/verify-archive.sh" "$path" "$checksums" || exit 1
+}
+
+stage_from_nuget() {
+  bash "$script_dir/nuget-fallback.sh" "$ort_version" "$nuget_rid" "$1/$ort_dir_name" "$checksums"
 }
 
 if [ "$verify_archive" = true ]; then
@@ -64,18 +75,24 @@ if [ "$verify_archive" = true ]; then
     echo "Removing invalid cached ONNX Runtime archive: $archive" >&2
     rm -f "$archive_path"
   fi
-  if [ ! -f "$archive_path" ]; then
-    download_ort_archive "$RUNNER_TEMP/$archive"
+  if [ ! -f "$archive_path" ] && download_ort_archive "$RUNNER_TEMP/$archive"; then
     mkdir -p "$extract_dir"
     mv "$RUNNER_TEMP/$archive" "$archive_path"
   fi
   extract_dir="$(mktemp -d "$RUNNER_TEMP/onnxruntime-verified.XXXXXX")"
-  tar -xzf "$archive_path" -C "$extract_dir"
+  if [ -f "$archive_path" ]; then
+    tar -xzf "$archive_path" -C "$extract_dir"
+  else
+    stage_from_nuget "$extract_dir"
+  fi
 elif [ ! -d "$extract_dir/$ort_dir_name" ]; then
   echo "Cache miss: Downloading ONNX Runtime ${ort_version}"
-  download_ort_archive "$RUNNER_TEMP/$archive"
-  mkdir -p "$extract_dir"
-  tar -xzf "$RUNNER_TEMP/$archive" -C "$extract_dir"
+  if download_ort_archive "$RUNNER_TEMP/$archive"; then
+    mkdir -p "$extract_dir"
+    tar -xzf "$RUNNER_TEMP/$archive" -C "$extract_dir"
+  else
+    stage_from_nuget "$extract_dir"
+  fi
 else
   # The extracted-tree cache does not retain the archive for re-verification. ~keep
   echo "Cache hit: Using cached ONNX Runtime ${ort_version}"
