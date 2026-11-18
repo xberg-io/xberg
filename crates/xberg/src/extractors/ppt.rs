@@ -500,6 +500,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn pre_cancelled_token_stops_ppt_extraction_before_parsing() {
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+        let read = run_ppt_extraction(b"not an OLE document", &config, false, false);
+        #[cfg(feature = "tokio-runtime")]
+        let result = crate::core::batch_mode::with_batch_mode(read).await;
+        #[cfg(not(feature = "tokio-runtime"))]
+        let result = read.await;
+        assert!(matches!(result, Err(crate::error::XbergError::Cancelled)));
+    }
+
+    #[tokio::test]
     async fn test_ppt_extractor_plugin_interface() {
         let extractor = PptExtractor::new();
         assert_eq!(extractor.name(), "ppt-extractor");

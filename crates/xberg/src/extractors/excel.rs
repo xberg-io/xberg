@@ -1291,6 +1291,24 @@ mod tests {
         }
     }
 
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn pre_cancelled_excel_bytes_return_cancellation_before_parsing() {
+        let extractor = ExcelExtractor::new();
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(token),
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        let read = || extractor.extract_content(b"not a workbook", XLSX_MIME, &config);
+        let foreign_runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for result in [futures::executor::block_on(read()), foreign_runtime.block_on(read())] {
+            assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+        }
+    }
+
     #[cfg(feature = "excel")]
     #[tokio::test]
     async fn test_xlsx_extract_content_honours_configured_archive_entry_limit() {
