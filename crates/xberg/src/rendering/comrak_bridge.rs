@@ -2399,8 +2399,8 @@ mod tests {
         let doc = b.build();
         let out = render(&doc);
         assert!(
-            out.contains("[***click***](https://example.com)"),
-            "bold italic link must render as [***text***](url); got: {out}"
+            out.contains("[**_click_**](https://example.com)"),
+            "bold italic link must render as [**_text_**](url); got: {out}"
         );
     }
 
@@ -3142,6 +3142,8 @@ mod tests {
     /// Re-parse `markdown` as plain CommonMark, which must show no HTML, as xberg's own options
     /// read it, and with dollar math only, the way remark-math reads it.
     fn assert_literals(markdown: &str, expected: &[&str]) {
+        // Comrak 1.0 reads CRLF in block content as LF, so a re-read literal never holds a CR before an LF.
+        let expected: Vec<String> = expected.iter().map(|literal| literal.replace("\r\n", "\n")).collect();
         assert_no_html(markdown, &Options::default());
         assert_eq!(
             literals(markdown, &crate::rendering::markdown::comrak_options()),
@@ -3513,7 +3515,7 @@ mod tests {
         builder.push_paragraph(watermark, vec![], None, None);
         push_math_paragraph(&mut builder, "Let $x^2$ hold.", &["$x^2$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "$5.\n\nLet $x^2$ hold.\n");
+        assert_eq!(markdown, "\\$5.\n\nLet $x^2$ hold.\n");
 
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(watermark, vec![], None, None);
@@ -3525,7 +3527,7 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_literals(&markdown, &["c$<img src=x onerror=alert(1)>"]);
-        assert!(markdown.starts_with("$5.\n\n- item"), "{markdown}");
+        assert!(markdown.starts_with("\\$5.\n\n- item"), "{markdown}");
     }
 
     #[test]
@@ -3710,7 +3712,7 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_literals(&markdown, &[""]);
-        assert!(markdown.starts_with("- $\n  1. $\n"), "{markdown}");
+        assert!(markdown.starts_with("- \\$\n  1. \\$\n"), "{markdown}");
     }
 
     #[test]
