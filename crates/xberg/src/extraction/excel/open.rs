@@ -1007,7 +1007,6 @@ mod zip_header_consistency_tests {
         let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         for (name, contents) in entries {
-            cancel.check()?;
             writer.start_file(*name, options).expect("start synthetic ZIP entry");
             writer.write_all(contents).expect("write synthetic ZIP payload");
         }
@@ -1068,7 +1067,6 @@ mod zip_header_consistency_tests {
         let mut archive = parsed.expect("constructor success checked above");
         assert_eq!(archive.len(), expected_entries, "unexpected retained entry count");
         for index in 0..archive.len() {
-            cancel.check()?;
             let entry = archive
                 .by_index_raw(index)
                 .expect("fixture raw entry must remain readable");
