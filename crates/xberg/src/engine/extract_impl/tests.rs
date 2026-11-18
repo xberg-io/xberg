@@ -507,6 +507,46 @@ async fn batch_scheduler_restores_public_result_order_after_prioritizing() {
     );
 }
 
+#[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn a_panicking_excel_read_leaves_sibling_batch_results_intact() {
+    let runtime = crate::core::runtime::global_runtime().unwrap();
+    let pending = [b"first sibling".as_slice(), b"panic workbook", b"last sibling"];
+    let mut completed = runtime
+        .block_on(run_bounded_batch_tasks(
+            VecDeque::from([0, 1, 2]),
+            2,
+            |index| async move {
+                run_batch_item(index, index.to_string(), None, None, || async move {
+                    if index == 1 {
+                        return crate::extractors::excel::run_excel_read(runtime.handle(), None, || {
+                            panic!("synthetic workbook reader panic")
+                        })
+                        .await;
+                    }
+                    let input = ExtractInput::from_bytes(pending[index].to_vec(), "text/plain", None);
+                    crate::extract(input, &ExtractionConfig::default()).await
+                })
+                .await
+            },
+        ))
+        .expect("Excel parser panic must be contained in its batch item");
+    completed.sort_by_key(|item| item.index);
+    assert_eq!(completed.iter().map(|item| item.index).collect::<Vec<_>>(), [0, 1, 2]);
+    for item in completed {
+        if item.index == 1 {
+            let error = item.result.unwrap_err();
+            assert_eq!(error_type(&error), "parsing");
+            assert_eq!(error_code(&error), 1001);
+        } else {
+            let item_output = item.result.unwrap();
+            assert!(item_output.errors.is_empty());
+            assert_eq!(item_output.results.len(), 1);
+            assert_eq!(item_output.results[0].content.trim().as_bytes(), pending[item.index]);
+        }
+    }
+}
+
 #[tokio::test]
 async fn bounded_batch_scheduler_caps_in_flight_tasks() {
     use std::sync::Arc;
