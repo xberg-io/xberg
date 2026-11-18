@@ -9,15 +9,16 @@
 mod helpers;
 use helpers::extract_uri_document;
 
-use helpers::{assert_non_empty_content, get_test_file_path};
+use helpers::{assert_non_empty_content, get_test_file_path, skip_if_missing};
 use xberg::{ExtractionConfig, OutputFormat};
 
 #[tokio::test]
 async fn test_docx_bold_rendered_as_markdown() {
-    let path = get_test_file_path("docx/unit_test_formatting.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_formatting.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -37,10 +38,11 @@ async fn test_docx_bold_rendered_as_markdown() {
 
 #[tokio::test]
 async fn test_docx_italic_rendered_as_markdown() {
-    let path = get_test_file_path("docx/unit_test_formatting.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_formatting.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -60,10 +62,11 @@ async fn test_docx_italic_rendered_as_markdown() {
 
 #[tokio::test]
 async fn test_docx_hyperlink_rendered_as_markdown() {
-    let path = get_test_file_path("docx/unit_test_formatting.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_formatting.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -88,10 +91,11 @@ async fn test_docx_hyperlink_rendered_as_markdown() {
 
 #[tokio::test]
 async fn test_docx_mixed_formatting_on_same_line() {
-    let path = get_test_file_path("docx/unit_test_formatting.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_formatting.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -112,10 +116,11 @@ async fn test_docx_mixed_formatting_on_same_line() {
 
 #[tokio::test]
 async fn test_docx_title_rendered_as_h1() {
-    let path = get_test_file_path("docx/unit_test_headers.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_headers.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -135,10 +140,11 @@ async fn test_docx_title_rendered_as_h1() {
 
 #[tokio::test]
 async fn test_docx_heading_hierarchy() {
-    let path = get_test_file_path("docx/unit_test_headers.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_headers.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -172,10 +178,11 @@ async fn test_docx_heading_hierarchy() {
 
 #[tokio::test]
 async fn test_docx_paragraphs_separated_by_blank_lines() {
-    let path = get_test_file_path("docx/unit_test_headers.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_headers.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default())
         .await
@@ -191,10 +198,11 @@ async fn test_docx_paragraphs_separated_by_blank_lines() {
 
 #[tokio::test]
 async fn test_docx_bullet_list_rendered() {
-    let path = get_test_file_path("docx/unit_test_lists.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_lists.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -214,10 +222,11 @@ async fn test_docx_bullet_list_rendered() {
 
 #[tokio::test]
 async fn test_docx_numbered_list_rendered() {
-    let path = get_test_file_path("docx/unit_test_lists.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_lists.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -237,10 +246,11 @@ async fn test_docx_numbered_list_rendered() {
 
 #[tokio::test]
 async fn test_docx_nested_list_indentation() {
-    let path = get_test_file_path("docx/unit_test_lists.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_lists.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -260,10 +270,11 @@ async fn test_docx_nested_list_indentation() {
 
 #[tokio::test]
 async fn test_docx_document_structure_populated() {
-    let path = get_test_file_path("docx/unit_test_headers.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_headers.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         include_document_structure: true,
@@ -285,10 +296,11 @@ async fn test_docx_document_structure_populated() {
 
 #[tokio::test]
 async fn test_docx_tables_in_markdown_output() {
-    let path = get_test_file_path("docx/docx_tables.docx");
-    if !path.exists() {
+    let fixture = "docx/docx_tables.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         output_format: OutputFormat::Markdown,
@@ -313,10 +325,11 @@ async fn test_docx_tables_in_markdown_output() {
 
 #[tokio::test]
 async fn test_docx_table_cell_formatting_preserved() {
-    let path = get_test_file_path("docx/tablecell.docx");
-    if !path.exists() {
+    let fixture = "docx/tablecell.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default())
         .await
@@ -331,10 +344,11 @@ async fn test_docx_table_cell_formatting_preserved() {
 
 #[tokio::test]
 async fn test_docx_produces_markdown_mime_type() {
-    let path = get_test_file_path("docx/unit_test_formatting.docx");
-    if !path.exists() {
+    let fixture = "docx/unit_test_formatting.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default())
         .await
