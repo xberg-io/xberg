@@ -223,25 +223,41 @@ fn extract_xlsx_office_metadata_from_archive<R: std::io::Read + std::io::Seek>(
 /// Returns `Some(vec![])` when the file exists but contains no `<header>`
 /// elements. On any parse error the function logs a warning and returns `None`
 /// so that the rest of extraction succeeds.
-pub(super) fn extract_xlsx_revisions_from_bytes(data: &[u8]) -> Option<Vec<DocumentRevision>> {
-    let cursor = Cursor::new(data);
-    let mut archive = zip::ZipArchive::new(cursor).ok()?;
-    extract_xlsx_revisions_from_archive(&mut archive)
+pub(super) fn extract_xlsx_revisions_from_bytes(
+    data: &[u8],
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<Vec<DocumentRevision>>> {
+    let result = (|| {
+        let cursor = Cursor::new(data);
+        let mut archive = zip::ZipArchive::new(cursor).ok()?;
+        extract_xlsx_revisions_from_archive(&mut archive, cancel)
+    })();
+    cancel.check()?;
+    Ok(result)
 }
 
 /// Extract revision headers from an `.xlsx`/`.xlsm`/`.xltm` file on disk.
 ///
 /// Same semantics as [`extract_xlsx_revisions_from_bytes`].
-pub(super) fn extract_xlsx_revisions_from_file(file_path: &str) -> Option<Vec<DocumentRevision>> {
-    let file = std::fs::File::open(file_path).ok()?;
-    let mut archive = zip::ZipArchive::new(file).ok()?;
-    extract_xlsx_revisions_from_archive(&mut archive)
+pub(super) fn extract_xlsx_revisions_from_file(
+    file_path: &str,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<Vec<DocumentRevision>>> {
+    let result = (|| {
+        let file = std::fs::File::open(file_path).ok()?;
+        let mut archive = zip::ZipArchive::new(file).ok()?;
+        extract_xlsx_revisions_from_archive(&mut archive, cancel)
+    })();
+    cancel.check()?;
+    Ok(result)
 }
 
 /// Core revision-header parser shared by the file and bytes paths.
 fn extract_xlsx_revisions_from_archive<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Option<Vec<DocumentRevision>> {
+    cancel.check().ok()?;
     const HEADERS_PATH: &str = "xl/revisions/revisionHeaders.xml";
 
     let xml_bytes = {
@@ -257,15 +273,12 @@ fn extract_xlsx_revisions_from_archive<R: Read + Seek>(
                 return None;
             }
         };
-        let mut buf = Vec::new();
-        if entry.take(MAX_EXCEL_ZIP_MEMBER_SIZE).read_to_end(&mut buf).is_err() {
-            return None;
-        }
-        buf
+        cancel.read_to_end(entry.take(MAX_EXCEL_ZIP_MEMBER_SIZE)).ok()?
     };
 
-    match parse_revision_headers_xml(&xml_bytes) {
+    match parse_revision_headers_xml(&xml_bytes, cancel) {
         Ok(revisions) => Some(revisions),
+        Err(XbergError::Cancelled) => None,
         Err(e) => {
             tracing::warn!(error = %e, "failed to parse xl/revisions/revisionHeaders.xml");
             None
@@ -283,7 +296,8 @@ fn extract_xlsx_revisions_from_archive<R: Read + Seek>(
 /// `RevisionKind::FormatChange` is used as the closest available variant
 /// because the header file does not distinguish what *kind* of changes the
 /// revision contains — that information is in the per-revision log file.
-fn parse_revision_headers_xml(xml_bytes: &[u8]) -> Result<Vec<DocumentRevision>> {
+fn parse_revision_headers_xml(xml_bytes: &[u8], cancel: ExcelReadCancellation<'_>) -> Result<Vec<DocumentRevision>> {
+    cancel.check()?;
     let xml_str = crate::text::utf8_validation::from_utf8(xml_bytes)
         .map_err(|e| XbergError::parsing(format!("invalid UTF-8 in revisionHeaders.xml: {e}")))?;
 
@@ -294,6 +308,7 @@ fn parse_revision_headers_xml(xml_bytes: &[u8]) -> Result<Vec<DocumentRevision>>
 
     let mut revisions = Vec::new();
     for node in doc.descendants() {
+        cancel.check()?;
         if !node.has_tag_name((SPREADSHEETML_NS, "header")) {
             continue;
         }
@@ -334,24 +349,42 @@ fn parse_revision_headers_xml(xml_bytes: &[u8]) -> Result<Vec<DocumentRevision>>
 /// `xl/worksheets/_rels/sheetN.xml.rels`, which is a follow-up (xberg-io/xberg#89).
 /// The cell reference in each entry is still enough to locate the comment
 /// inside the workbook.
-pub(super) fn extract_xlsx_comments_from_bytes(data: &[u8]) -> Option<String> {
-    let cursor = Cursor::new(data);
-    let mut archive = zip::ZipArchive::new(cursor).ok()?;
-    extract_xlsx_comments_from_archive(&mut archive)
+pub(super) fn extract_xlsx_comments_from_bytes(
+    data: &[u8],
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<String>> {
+    let result = (|| {
+        let cursor = Cursor::new(data);
+        let mut archive = zip::ZipArchive::new(cursor).ok()?;
+        extract_xlsx_comments_from_archive(&mut archive, cancel)
+    })();
+    cancel.check()?;
+    Ok(result)
 }
 
 /// Extract cell comments from an `.xlsx`/`.xlsm`/`.xltm` file on disk. Same
 /// semantics as [`extract_xlsx_comments_from_bytes`].
-pub(super) fn extract_xlsx_comments_from_file(file_path: &str) -> Option<String> {
-    let file = std::fs::File::open(file_path).ok()?;
-    let mut archive = zip::ZipArchive::new(file).ok()?;
-    extract_xlsx_comments_from_archive(&mut archive)
+pub(super) fn extract_xlsx_comments_from_file(
+    file_path: &str,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<Option<String>> {
+    let result = (|| {
+        let file = std::fs::File::open(file_path).ok()?;
+        let mut archive = zip::ZipArchive::new(file).ok()?;
+        extract_xlsx_comments_from_archive(&mut archive, cancel)
+    })();
+    cancel.check()?;
+    Ok(result)
 }
 
 /// Core comment-part scanner shared by the file and bytes paths.
-fn extract_xlsx_comments_from_archive<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Option<String> {
+fn extract_xlsx_comments_from_archive<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    cancel: ExcelReadCancellation<'_>,
+) -> Option<String> {
     let mut comment_parts: Vec<String> = Vec::new();
     for i in 0..archive.len() {
+        cancel.check().ok()?;
         let name = archive.by_index(i).ok()?.name().ok()?.into_owned();
         if name.starts_with("xl/comments") && name.ends_with(".xml") {
             comment_parts.push(name);
@@ -364,21 +397,21 @@ fn extract_xlsx_comments_from_archive<R: Read + Seek>(archive: &mut zip::ZipArch
 
     let mut entries = Vec::new();
     for part in comment_parts {
+        cancel.check().ok()?;
         let xml_bytes = {
             let entry = match archive.by_name(&part) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
-            let mut buf = Vec::new();
-            if entry.take(MAX_EXCEL_ZIP_MEMBER_SIZE).read_to_end(&mut buf).is_err() {
-                continue;
+            match cancel.read_to_end(entry.take(MAX_EXCEL_ZIP_MEMBER_SIZE)) {
+                Ok(bytes) => bytes,
+                Err(_) => continue,
             }
-            buf
         };
-        if let Ok(parsed) = parse_comments_xml(&xml_bytes) {
-            entries.extend(parsed);
-        } else {
-            tracing::warn!(part = %part, "failed to parse worksheet comments part");
+        match parse_comments_xml(&xml_bytes, cancel) {
+            Ok(parsed) => entries.extend(parsed),
+            Err(XbergError::Cancelled) => return None,
+            Err(_) => tracing::warn!(part = %part, "failed to parse worksheet comments part"),
         }
     }
 
@@ -393,7 +426,8 @@ fn extract_xlsx_comments_from_archive<R: Read + Seek>(archive: &mut zip::ZipArch
 /// strings, one per `<comment>` element with non-empty text. A comment's text
 /// may be split across multiple `<r><t>` runs (rich text); these are
 /// concatenated in document order.
-pub(super) fn parse_comments_xml(xml_bytes: &[u8]) -> Result<Vec<String>> {
+pub(super) fn parse_comments_xml(xml_bytes: &[u8], cancel: ExcelReadCancellation<'_>) -> Result<Vec<String>> {
+    cancel.check()?;
     let xml_str = crate::text::utf8_validation::from_utf8(xml_bytes)
         .map_err(|e| XbergError::parsing(format!("invalid UTF-8 in comments.xml: {e}")))?;
 
@@ -404,6 +438,7 @@ pub(super) fn parse_comments_xml(xml_bytes: &[u8]) -> Result<Vec<String>> {
 
     let mut entries = Vec::new();
     for node in doc.descendants() {
+        cancel.check()?;
         if !node.has_tag_name((SPREADSHEETML_NS, "comment")) {
             continue;
         }

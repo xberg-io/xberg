@@ -4,7 +4,7 @@ use std::io::{BufReader, Read, Seek};
 
 use quick_xml::events::Event;
 
-use super::{SecurityBudget, SecurityLimits};
+use super::{ExcelReadCancellation, SecurityBudget, SecurityLimits};
 use crate::{Result, XbergError};
 
 fn framing_error(error: impl std::fmt::Display) -> XbergError {
@@ -14,14 +14,16 @@ fn framing_error(error: impl std::fmt::Display) -> XbergError {
 pub(in crate::extraction::excel) fn validate_xlsb_parts<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<()> {
     let mut paths = ahash::AHashSet::from_iter([
         "xl/workbook.bin".to_string(),
         "xl/styles.bin".to_string(),
         "xl/sharedstrings.bin".to_string(),
     ]);
-    collect_sheet_paths(archive, limits, &mut paths)?;
+    collect_sheet_paths(archive, limits, &mut paths, cancel)?;
     for index in 0..archive.len() {
+        cancel.check()?;
         let member = archive.by_index(index).map_err(framing_error)?;
         let name = member.name().map_err(framing_error)?;
         let normalized = name.replace('\\', "/").to_ascii_lowercase();
@@ -30,7 +32,7 @@ pub(in crate::extraction::excel) fn validate_xlsb_parts<R: Read + Seek>(
         }
         drop(name);
         let size = member.size();
-        validate_records(BufReader::new(member), size, limits)?;
+        validate_records(BufReader::new(member), size, limits, cancel)?;
     }
     Ok(())
 }
@@ -39,6 +41,7 @@ fn collect_sheet_paths<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
     paths: &mut ahash::AHashSet<String>,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<()> {
     // ~keep Calamine resolves only this exact relationships member, then lowercases/backslash-normalizes target lookup.
     let Ok(member) = archive.by_name("xl/_rels/workbook.bin.rels") else {
@@ -51,6 +54,7 @@ fn collect_sheet_paths<R: Read + Seek>(
     let mut buffer = Vec::new();
     let mut budget = SecurityBudget::from_limits(limits);
     loop {
+        cancel.check()?;
         budget.step()?;
         buffer.clear();
         let event = reader.read_event_into(&mut buffer).map_err(framing_error)?;
@@ -91,9 +95,15 @@ fn read_byte(reader: &mut impl Read, remaining: &mut u64) -> Result<u8> {
     Ok(byte[0])
 }
 
-fn validate_records(mut reader: impl Read, mut remaining: u64, limits: &SecurityLimits) -> Result<()> {
+fn validate_records(
+    mut reader: impl Read,
+    mut remaining: u64,
+    limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<()> {
     let mut budget = SecurityBudget::from_limits(limits);
     while remaining > 0 {
+        cancel.check()?;
         budget.step()?;
         let kind = read_byte(&mut reader, &mut remaining)?;
         if kind & 0x80 != 0 {
@@ -115,7 +125,12 @@ fn validate_records(mut reader: impl Read, mut remaining: u64, limits: &Security
         if length > limits.max_content_size as u64 {
             return Err(framing_error("record buffer exceeds configured content size"));
         }
-        let copied = std::io::copy(&mut reader.by_ref().take(length), &mut std::io::sink()).map_err(framing_error)?;
+        let copied = std::io::copy(
+            &mut cancel.guard_reader(reader.by_ref().take(length)),
+            &mut std::io::sink(),
+        );
+        cancel.check()?;
+        let copied = copied.map_err(framing_error)?;
         if copied != length {
             return Err(framing_error("truncated record payload"));
         }
@@ -137,22 +152,41 @@ mod tests {
             ..Default::default()
         };
         assert!(
-            validate_records(Cursor::new(record), record.len() as u64, &low)
-                .unwrap_err()
-                .to_string()
-                .contains("record buffer exceeds")
+            validate_records(
+                Cursor::new(record),
+                record.len() as u64,
+                &low,
+                ExcelReadCancellation::default()
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("record buffer exceeds")
         );
         let exact = SecurityLimits {
             max_content_size: 5,
             ..Default::default()
         };
-        validate_records(Cursor::new(record), record.len() as u64, &exact).unwrap();
+        validate_records(
+            Cursor::new(record),
+            record.len() as u64,
+            &exact,
+            ExcelReadCancellation::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn should_reject_truncated_xlsb_framing_without_buffer_growth_gh2296() {
         for record in [&[0x80][..], &[1, 0x80][..], &[1, 5, 1][..]] {
-            assert!(validate_records(Cursor::new(record), record.len() as u64, &SecurityLimits::default()).is_err());
+            assert!(
+                validate_records(
+                    Cursor::new(record),
+                    record.len() as u64,
+                    &SecurityLimits::default(),
+                    ExcelReadCancellation::default()
+                )
+                .is_err()
+            );
         }
     }
 
@@ -166,6 +200,11 @@ mod tests {
         writer.write_all(&[0xd0, 0xcf, 0x11, 0xe0]).unwrap();
         let bytes = writer.finish().unwrap().into_inner();
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
-        validate_xlsb_parts(&mut archive, &SecurityLimits::default()).unwrap();
+        validate_xlsb_parts(
+            &mut archive,
+            &SecurityLimits::default(),
+            ExcelReadCancellation::default(),
+        )
+        .unwrap();
     }
 }

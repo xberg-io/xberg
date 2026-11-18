@@ -3,7 +3,11 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::runtime::check_blocking_cancelled;
-use crate::extraction::excel::{read_excel_bytes, read_excel_file};
+#[cfg(all(test, feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+use crate::extraction::excel::read_excel_bytes;
+use crate::extraction::excel::{
+    ExcelReadCancellation, read_excel_bytes_with_cancellation, read_excel_file_with_cancellation,
+};
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
@@ -370,12 +374,29 @@ impl ExcelExtractor {
 pub(crate) async fn run_excel_read<T: Send + 'static>(
     runtime: &tokio::runtime::Handle,
     cancel: Option<&crate::cancellation::CancellationToken>,
-    read: impl FnOnce() -> Result<T> + Send + 'static,
+    read: impl FnOnce(ExcelReadCancellation<'_>) -> Result<T> + Send + 'static,
 ) -> Result<T> {
     use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
+    struct CancelOnDrop(Arc<AtomicBool>);
+
+    impl Drop for CancelOnDrop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+
+    let abandoned = CancelOnDrop(Arc::new(AtomicBool::new(false)));
+    let worker_abandoned = Arc::clone(&abandoned.0);
     let batch = crate::core::batch_mode::is_batch_mode();
-    crate::core::runtime::run_blocking(runtime, cancel, move |_| {
+    crate::core::runtime::run_blocking(runtime, cancel, move |request| {
+        let cancellation = ExcelReadCancellation {
+            request,
+            abandoned: Some(&worker_abandoned),
+        };
+        let read = move || read(cancellation);
         if batch {
             // Keep a parser panic confined to its workbook's batch item. ~keep
             catch_unwind(AssertUnwindSafe(read))
@@ -424,17 +445,33 @@ impl InternalDocumentExtractor for ExcelExtractor {
             if let Some(pool) = crate::core::runtime::current_office_pool() {
                 let permit = crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?;
                 let content = content.to_vec();
-                run_excel_read(pool.runtime.handle(), cancel, move || {
+                run_excel_read(pool.runtime.handle(), cancel, move |cancel| {
                     let _permit = permit;
-                    read_excel_bytes(&content, extension, &security_limits)
+                    read_excel_bytes_with_cancellation(&content, extension, &security_limits, cancel)
                 })
                 .await?
             } else {
-                read_excel_bytes(content, extension, &security_limits)?
+                read_excel_bytes_with_cancellation(
+                    content,
+                    extension,
+                    &security_limits,
+                    ExcelReadCancellation {
+                        request: cancel,
+                        abandoned: None,
+                    },
+                )?
             }
 
             #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-            read_excel_bytes(content, extension, &security_limits)?
+            read_excel_bytes_with_cancellation(
+                content,
+                extension,
+                &security_limits,
+                ExcelReadCancellation {
+                    request: cancel,
+                    abandoned: None,
+                },
+            )?
         };
 
         let mut budget = SecurityBudget::from_config(config);
@@ -480,17 +517,31 @@ impl InternalDocumentExtractor for ExcelExtractor {
             if let Some(pool) = crate::core::runtime::current_office_pool() {
                 let permit = crate::core::runtime::acquire_office_slot(pool.admission.clone(), cancel).await?;
                 let path_str = path_str.to_owned();
-                run_excel_read(pool.runtime.handle(), cancel, move || {
+                run_excel_read(pool.runtime.handle(), cancel, move |cancel| {
                     let _permit = permit;
-                    read_excel_file(&path_str, &security_limits)
+                    read_excel_file_with_cancellation(&path_str, &security_limits, cancel)
                 })
                 .await?
             } else {
-                read_excel_file(path_str, &security_limits)?
+                read_excel_file_with_cancellation(
+                    path_str,
+                    &security_limits,
+                    ExcelReadCancellation {
+                        request: cancel,
+                        abandoned: None,
+                    },
+                )?
             }
 
             #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-            read_excel_file(path_str, &security_limits)?
+            read_excel_file_with_cancellation(
+                path_str,
+                &security_limits,
+                ExcelReadCancellation {
+                    request: cancel,
+                    abandoned: None,
+                },
+            )?
         };
         let mut budget = SecurityBudget::from_config(config);
         validate_workbook_budget(&workbook, &mut budget)?;
@@ -1267,7 +1318,7 @@ mod tests {
     fn single_excel_read_resumes_the_worker_panic() {
         let panic = std::panic::catch_unwind(|| {
             let runtime = crate::core::runtime::global_runtime().unwrap();
-            runtime.block_on(run_excel_read(runtime.handle(), None, || -> Result<()> {
+            runtime.block_on(run_excel_read(runtime.handle(), None, |_| -> Result<()> {
                 panic!("single workbook worker panic")
             }))
         })

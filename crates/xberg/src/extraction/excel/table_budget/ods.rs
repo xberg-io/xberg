@@ -6,6 +6,7 @@ use std::io::{BufReader, Read, Seek};
 use quick_xml::events::{BytesStart, Event};
 
 use super::{Charges, SecurityBudget, SecurityLimits, SheetAllocation, SkippedSheets, is_cell_limit};
+use crate::extraction::excel::ExcelReadCancellation;
 use crate::{Result, XbergError};
 
 // ~keep Match calamine0.37's ODS row/column caps so formatted empty tails are not charged as dense data.
@@ -129,6 +130,7 @@ fn account_cell(sheet: &mut Sheet, cell: Cell, budget: &mut SecurityBudget) -> R
 pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<SkippedSheets> {
     let member = archive.by_name("content.xml").map_err(xml_error)?;
     let mut reader = quick_xml::Reader::from_reader(BufReader::new(
@@ -146,6 +148,7 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
     // Open `table:table` elements left to close while the over-budget sheet is being passed over.
     let mut skipping_depth = 0usize;
     loop {
+        cancel.check()?;
         budget.step()?;
         buffer.clear();
         let event = reader.read_event_into(&mut buffer).map_err(xml_error)?;
@@ -202,6 +205,7 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     xml: &[u8],
     skipped: &SkippedSheets,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<(Vec<u8>, bool)> {
     let mut budget = SecurityBudget::from_limits(limits);
     let mut reader = quick_xml::Reader::from_reader(xml);
@@ -212,6 +216,7 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     let counts = skipped.name_counts();
     let mut taken: HashSet<String> = skipped.names.iter().cloned().collect();
     loop {
+        cancel.check()?;
         buffer.clear();
         let event = reader.read_event_into(&mut buffer).map_err(xml_error)?;
         match &event {

@@ -138,7 +138,7 @@ fn batch_pptx_paths_complete_inline_while_the_single_parse_pool_is_full() {
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
 #[serial_test::serial(office_admission)]
-fn the_public_pptx_deadline_times_out_while_admission_is_held() {
+fn the_public_pptx_deadline_still_applies_while_admission_is_held() {
     use std::time::Duration;
 
     let runtime = crate::core::runtime::global_runtime().unwrap();
@@ -261,6 +261,7 @@ fn dropped_pptx_future_stops_at_a_checkpoint_and_keeps_its_permit_until_then() {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
+#[serial_test::serial(office_admission)]
 fn pptx_single_and_batch_keep_exact_document_shape_per_route() {
     crate::core::runtime::global_runtime().unwrap().block_on(async {
         let extractor = PptxExtractor::new();
@@ -315,6 +316,7 @@ fn pptx_excel_and_docx_hold_the_same_blocking_admission_slot() {
     let document = include_bytes!("../../../tests/fixtures/office/word_footnote_ids.docx");
     for (mime, read) in [
         (MIME, pptx.extract_content(DECK, MIME, &cfg)),
+        (MIME, pptx.extract_path(fixture_path(), MIME, &cfg)),
         (XLSX, excel.extract_content(workbook, XLSX, &cfg)),
         (DOCX, docx.extract_content(document, DOCX, &cfg)),
     ] {
@@ -363,6 +365,7 @@ fn pptx_reads_the_same_fixture_without_a_tokio_runtime() {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
+#[serial_test::serial(office_admission)]
 fn pptx_keeps_archive_limit_and_missing_path_errors() {
     crate::core::runtime::global_runtime().unwrap().block_on(async {
         let extractor = PptxExtractor::new();
@@ -390,6 +393,7 @@ fn pptx_keeps_archive_limit_and_missing_path_errors() {
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[test]
+#[serial_test::serial(office_admission)]
 fn single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber() {
     use std::io::{self, Write};
     use std::sync::{Arc, Mutex};

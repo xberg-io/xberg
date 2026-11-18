@@ -125,7 +125,7 @@ fn should_return_none_revisions_when_xl_revisions_absent() {
         let _ = zip.finish().unwrap();
     }
 
-    let result = extract_xlsx_revisions_from_bytes(&buffer);
+    let result = extract_xlsx_revisions_from_bytes(&buffer, ExcelReadCancellation::default()).unwrap();
     assert!(result.is_none(), "expected None when xl/revisions/ is absent");
 }
 
@@ -136,7 +136,8 @@ fn should_parse_two_revision_headers_with_correct_fields() {
         ("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", "Bob", "2024-01-16T14:30:00Z"),
     ]);
 
-    let revisions = extract_xlsx_revisions_from_bytes(&xlsx)
+    let revisions = extract_xlsx_revisions_from_bytes(&xlsx, ExcelReadCancellation::default())
+        .unwrap()
         .expect("revisions should be Some when xl/revisions/revisionHeaders.xml is present");
 
     assert_eq!(revisions.len(), 2, "expected 2 revisions from 2 headers");
@@ -187,7 +188,9 @@ fn should_return_some_empty_vec_when_headers_xml_exists_but_has_no_header_elemen
         let _ = zip.finish().unwrap();
     }
 
-    let revisions = extract_xlsx_revisions_from_bytes(&buffer).expect("revisions should be Some when file exists");
+    let revisions = extract_xlsx_revisions_from_bytes(&buffer, ExcelReadCancellation::default())
+        .unwrap()
+        .expect("revisions should be Some when file exists");
     assert!(revisions.is_empty(), "expected empty vec when no <header> elements");
 }
 
@@ -238,7 +241,7 @@ fn test_revisions_read_is_bounded_for_oversized_member() {
         zip.finish().unwrap();
     }
 
-    let result = extract_xlsx_revisions_from_bytes(&buffer);
+    let result = extract_xlsx_revisions_from_bytes(&buffer, ExcelReadCancellation::default()).unwrap();
     assert!(
         result.is_none(),
         "a header sitting after MAX_EXCEL_ZIP_MEMBER_SIZE must never be reached; an \
