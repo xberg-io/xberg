@@ -4379,9 +4379,7 @@ fn merge_vertically_adjacent_tables(
                     if gap > ADJACENT_TABLE_MERGE_GAP {
                         return false;
                     }
-                    if (has_closed_restart_seam(pb, tb, h_edges, v_edges) && aligned_table_restarts(prev, &table))
-                        || independent_ruled_tables(prev, &table, h_edges, v_edges)
-                    {
+                    if separated_ruled_grids(prev, &table, (pb, tb), h_edges, v_edges) {
                         separated_restart = true;
                         return false;
                     }
@@ -4495,9 +4493,26 @@ fn finish_restart_chain(
     fragment_cuts[start..].reverse();
 }
 
-// Require a painted closing rule and opening rule, with no vertical ruling
-// connecting the two grids across the gap. ~keep
-fn has_closed_restart_seam(lower: Rect, upper: Rect, horizontal: &[Edge], vertical: &[Edge]) -> bool {
+// Both separations need an open seam, so its scan runs at most once per pair. ~keep
+fn separated_ruled_grids(
+    lower: &Table,
+    upper: &Table,
+    (lower_bounds, upper_bounds): (Rect, Rect),
+    horizontal: &[Edge],
+    vertical: &[Edge],
+) -> bool {
+    let mut open_seam = None;
+    let mut has_open_seam_once =
+        || *open_seam.get_or_insert_with(|| has_open_seam(lower_bounds, upper_bounds, vertical));
+    (has_closed_restart_rules(lower_bounds, upper_bounds, horizontal)
+        && has_open_seam_once()
+        && aligned_table_restarts(lower, upper))
+        || independent_ruled_tables(lower, upper, horizontal, vertical, has_open_seam_once)
+}
+
+// Require a painted closing rule and opening rule; the caller also requires
+// that no vertical ruling connects the two grids across the gap. ~keep
+fn has_closed_restart_rules(lower: Rect, upper: Rect, horizontal: &[Edge]) -> bool {
     let lower_end = lower.bottom();
     let upper_start = upper.top();
     let tol = BAND_RULE_SPAN_TOL;
@@ -4510,18 +4525,20 @@ fn has_closed_restart_seam(lower: Rect, upper: Rect, horizontal: &[Edge], vertic
         && (lower.right() - upper.right()).abs() <= tol
         && closed(lower_end, lower)
         && closed(upper_start, upper)
-        && has_open_seam(lower, upper, vertical)
 }
 
 // Each grid's own outline closes it, so the grids need not share outer edges.
 // Only a same-schema stack merges, because `record_stacked_join` can then
 // restore its fragments to top-down page order. ~keep
-fn independent_ruled_tables(lower: &Table, upper: &Table, horizontal: &[Edge], vertical: &[Edge]) -> bool {
-    let (Some(lower_bounds), Some(upper_bounds)) = (lower.bbox, upper.bbox) else {
-        return false;
-    };
-    has_open_seam(lower_bounds, upper_bounds, vertical)
-        && !stacks_as_one_grid(lower, upper)
+fn independent_ruled_tables(
+    lower: &Table,
+    upper: &Table,
+    horizontal: &[Edge],
+    vertical: &[Edge],
+    mut open_seam: impl FnMut() -> bool,
+) -> bool {
+    !stacks_as_one_grid(lower, upper)
+        && open_seam()
         && table_has_ruled_outline(lower, horizontal, vertical)
         && table_has_ruled_outline(upper, horizontal, vertical)
 }
