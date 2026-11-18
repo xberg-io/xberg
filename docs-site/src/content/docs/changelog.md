@@ -107,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
 
-- **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
+- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
+- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
