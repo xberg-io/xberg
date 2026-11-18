@@ -4,7 +4,7 @@ use std::fmt::{self, Write};
 
 use comrak::Arena;
 use comrak::html::{ChildRendering, Context, format_document_with_formatter, format_node_default};
-use comrak::nodes::{AstNode, NodeValue};
+use comrak::nodes::{AstNode, NodeTableRow, NodeValue};
 use comrak::options::Plugins;
 
 use crate::types::annotations::PdfAnnotation;
@@ -51,10 +51,10 @@ fn html_body_matches<'a>(root: &'a AstNode<'a>, plain: &str) -> bool {
         let value = &node.data.borrow().value;
         let piece = match value {
             NodeValue::Document
-            | NodeValue::Emph
-            | NodeValue::Strong
+            | NodeValue::Emph(..)
+            | NodeValue::Strong(..)
             | NodeValue::Underline
-            | NodeValue::Strikethrough
+            | NodeValue::Strikethrough(..)
             | NodeValue::Subscript
             | NodeValue::Superscript
             | NodeValue::Highlight
@@ -133,9 +133,12 @@ fn format_html_node<'a>(
     entering: bool,
 ) -> Result<ChildRendering, fmt::Error> {
     let headerless_table = matches!(node.data.borrow().value, NodeValue::Table(_))
-        && node
-            .first_child()
-            .is_some_and(|row| matches!(row.data.borrow().value, NodeValue::TableRow(false)));
+        && node.first_child().is_some_and(|row| {
+            matches!(
+                row.data.borrow().value,
+                NodeValue::TableRow(NodeTableRow { header: false, .. })
+            )
+        });
     if !headerless_table {
         return format_node_default(context, node, entering);
     }

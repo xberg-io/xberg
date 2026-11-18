@@ -49,7 +49,7 @@ fn render_qualified(doc: &InternalDocument) -> String {
 
 fn list_shape<'a>(node: &'a AstNode<'a>) -> (ListType, usize, usize) {
     let data = node.data.borrow();
-    let NodeValue::List(list) = data.value else {
+    let NodeValue::List(list) = &data.value else {
         panic!("expected an actual parsed CommonMark list");
     };
     let count = node

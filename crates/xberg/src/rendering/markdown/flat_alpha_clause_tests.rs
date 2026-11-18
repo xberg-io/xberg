@@ -41,7 +41,7 @@ fn lists(markdown: &str) -> Vec<(ListType, usize, usize)> {
     let arena = Arena::new();
     let root = parse_document(&arena, markdown, &comrak_options());
     root.children()
-        .filter_map(|node| match node.data.borrow().value {
+        .filter_map(|node| match &node.data.borrow().value {
             NodeValue::List(list) => Some((list.list_type, list.start, node.children().count())),
             _ => None,
         })
@@ -141,10 +141,10 @@ fn genuinely_nested_mixed_source_lists_keep_their_literal_list_items() {
     let item = paragraph.parent().unwrap();
     assert!(matches!(item.data.borrow().value, NodeValue::Item(_)));
     assert!(
-        matches!(item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Bullet)
+        matches!(&item.parent().unwrap().data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Bullet)
     );
     assert!(paragraph.ancestors().any(|node| {
-        matches!(node.data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Ordered && list.start == 1)
+        matches!(&node.data.borrow().value, NodeValue::List(list) if list.list_type == ListType::Ordered && list.start == 1)
     }));
     assert_eq!(
         paragraph
@@ -172,7 +172,7 @@ fn html_ast_keeps_mixed_source_list_items() {
     let shapes: Vec<_> = root
         .children()
         .map(|node| {
-            let NodeValue::List(list) = node.data.borrow().value else {
+            let NodeValue::List(list) = &node.data.borrow().value else {
                 panic!("HTML source list did not become a paragraph");
             };
             (list.list_type, list.start, node.children().count())

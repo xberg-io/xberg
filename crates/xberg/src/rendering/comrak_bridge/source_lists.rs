@@ -10,13 +10,13 @@ pub(super) use crate::rendering::common::decimal_ordinal;
 
 fn previous_ordinal<'a>(parent: &'a AstNode<'a>) -> Option<usize> {
     let item = parent.last_child()?;
-    match item.data.borrow().value {
+    match &item.data.borrow().value {
         NodeValue::Item(list) => Some(list.start),
         _ => None,
     }
 }
 
-fn compatible(existing: NodeList, requested: NodeList, ordinal: Option<usize>, previous: Option<usize>) -> bool {
+fn compatible(existing: &NodeList, requested: &NodeList, ordinal: Option<usize>, previous: Option<usize>) -> bool {
     let next = previous
         .and_then(|value| value.checked_add(1))
         .filter(|value| *value <= MAX_COMMONMARK_ORDINAL);
@@ -32,21 +32,21 @@ pub(super) fn item_parent<'a>(
     mut requested: NodeList,
     ordinal: Option<usize>,
 ) -> (&'a AstNode<'a>, NodeList) {
-    let existing = match parent.data.borrow().value {
-        NodeValue::List(list) => Some(list),
+    let existing = match &parent.data.borrow().value {
+        NodeValue::List(list) => Some(list.clone()),
         _ => None,
     };
     let Some(existing) = existing else {
-        let list = mk(arena, NodeValue::List(requested));
+        let list = mk(arena, NodeValue::List(requested.clone()));
         parent.append(list);
         return (list, requested);
     };
     if parent.first_child().is_none() {
-        parent.data.borrow_mut().value = NodeValue::List(requested);
+        parent.data.borrow_mut().value = NodeValue::List(requested.clone());
         return (parent, requested);
     }
     let previous = previous_ordinal(parent);
-    if compatible(existing, requested, ordinal, previous) {
+    if compatible(&existing, &requested, ordinal, previous) {
         // Item ordinals track only direct siblings; nested children never advance an outer run. ~keep
         if requested.list_type == ListType::Ordered {
             requested.start = previous
@@ -55,7 +55,7 @@ pub(super) fn item_parent<'a>(
         }
         return (parent, requested);
     }
-    let list = mk(arena, NodeValue::List(requested));
+    let list = mk(arena, NodeValue::List(requested.clone()));
     parent.insert_after(list);
     if let Some(entry) = stack.last_mut().filter(|entry| entry.node.same_node(parent)) {
         entry.node = list;

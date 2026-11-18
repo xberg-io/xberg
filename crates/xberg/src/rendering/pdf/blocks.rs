@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use comrak::arena_tree::NodeEdge;
-use comrak::nodes::{ListType, NodeValue, TableAlignment};
+use comrak::nodes::{ListType, NodeTableRow, NodeValue, TableAlignment};
 use comrak::{Arena, parse_document};
 
 use crate::rendering::common::external_link_target;
@@ -195,7 +195,7 @@ impl Builder {
                 self.text(block.literal.strip_suffix('\n').unwrap_or(&block.literal));
                 self.close_text();
             }
-            NodeValue::ThematicBreak => {
+            NodeValue::ThematicBreak(..) => {
                 self.close_text();
                 self.push_block(BlockKind::Rule);
             }
@@ -247,7 +247,7 @@ impl Builder {
                 self.close_text();
                 self.footnote_label = Some(definition.name.clone());
             }
-            NodeValue::Table(_) | NodeValue::TableRow(_) | NodeValue::TableCell => self.start_table_node(value),
+            NodeValue::Table(_) | NodeValue::TableRow(..) | NodeValue::TableCell => self.start_table_node(value),
             _ => self.start_inline(value),
         }
     }
@@ -267,7 +267,7 @@ impl Builder {
                     quotes: self.quotes.clone(),
                 });
             }
-            NodeValue::TableRow(header) => {
+            NodeValue::TableRow(NodeTableRow { header, .. }) => {
                 if let Some(open) = self.table.as_mut() {
                     open.table.rows.push(Row {
                         header: *header,
@@ -302,9 +302,9 @@ impl Builder {
                 self.text(&reference.name);
                 self.style.superscript -= 1;
             }
-            NodeValue::Emph => self.style.italic += 1,
-            NodeValue::Strong => self.style.bold += 1,
-            NodeValue::Strikethrough => self.style.strike += 1,
+            NodeValue::Emph(..) => self.style.italic += 1,
+            NodeValue::Strong(..) => self.style.bold += 1,
+            NodeValue::Strikethrough(..) => self.style.strike += 1,
             NodeValue::Underline | NodeValue::Insert => self.style.underline += 1,
             NodeValue::Highlight => self.style.highlight += 1,
             NodeValue::Superscript => self.style.superscript += 1,
@@ -357,9 +357,9 @@ impl Builder {
                     });
                 }
             }
-            NodeValue::Emph => self.style.italic -= 1,
-            NodeValue::Strong => self.style.bold -= 1,
-            NodeValue::Strikethrough => self.style.strike -= 1,
+            NodeValue::Emph(..) => self.style.italic -= 1,
+            NodeValue::Strong(..) => self.style.bold -= 1,
+            NodeValue::Strikethrough(..) => self.style.strike -= 1,
             NodeValue::Underline | NodeValue::Insert => self.style.underline -= 1,
             NodeValue::Highlight => self.style.highlight -= 1,
             NodeValue::Superscript => self.style.superscript -= 1,
