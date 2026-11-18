@@ -4344,6 +4344,7 @@ const MERGE_COL_DIFF_TOLERANCE: usize = 2;
 /// Merge tables that are vertically adjacent (small gap between bottom of one
 /// and top of another) and have similar column counts (difference <= `MERGE_COL_DIFF_TOLERANCE`).
 /// When column counts differ, the narrower table's rows are padded with empty cells.
+/// Independently outlined grids with a closed painted seam keep their own schemas.
 fn merge_vertically_adjacent_tables(
     tables: &mut Vec<Table>,
     h_edges: &[Edge],
@@ -4378,7 +4379,12 @@ fn merge_vertically_adjacent_tables(
                     if gap > ADJACENT_TABLE_MERGE_GAP {
                         return false;
                     }
-                    if has_closed_restart_seam(pb, tb, h_edges, v_edges) && aligned_table_restarts(prev, &table) {
+                    if has_closed_restart_seam(pb, tb, h_edges, v_edges)
+                        && (aligned_table_restarts(prev, &table)
+                            || (col_diff > 0
+                                && table_has_ruled_outline(prev, h_edges, v_edges)
+                                && table_has_ruled_outline(&table, h_edges, v_edges)))
+                    {
                         separated_restart = true;
                         return false;
                     }
@@ -9975,6 +9981,45 @@ mod tests {
         assert_eq!(tables[1].rows[3].cells[1].text, "$1,706");
         assert_eq!(tables[2].rows.len(), 8);
         assert_eq!(cuts, [None, None, Some(vec![4])]);
+    }
+
+    #[test]
+    fn unequal_ruled_schemas_require_independent_outlines_to_stay_separate() {
+        let mut lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        lower.col_count = 3;
+        for row in &mut lower.rows {
+            row.cells.truncate(3);
+        }
+        let upper = restart_grid(157.0, ["$1,130", "$1,767"]);
+        let horizontal = [100.0, 150.0, 157.0, 207.0].map(restart_rule);
+        let sides = |start, end| [0.0, 300.0].map(|coord| Edge { coord, start, end });
+        let vertical = [sides(100.0, 150.0), sides(157.0, 207.0)].concat();
+
+        let mut separate = vec![lower.clone(), upper.clone()];
+        merge_vertically_adjacent_tables(&mut separate, &horizontal, &vertical);
+        assert_eq!(separate.len(), 2, "independent closed grids must not merge");
+        assert_eq!(separate[0].col_count, 5);
+        assert_eq!(separate[1].col_count, 3);
+
+        let bridge = Edge {
+            coord: 150.0,
+            start: 100.0,
+            end: 207.0,
+        };
+        let mut bridged = vertical.clone();
+        bridged.push(bridge);
+        for (rules, sides) in [
+            (horizontal.as_slice(), bridged.as_slice()),
+            (&horizontal[1..], vertical.as_slice()),
+            (horizontal.as_slice(), &vertical[1..]),
+            (&horizontal[..2], vertical.as_slice()),
+        ] {
+            let mut continuing = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut continuing, rules, sides);
+            assert_eq!(continuing.len(), 1);
+            assert_eq!(continuing[0].rows.len(), 8);
+            assert!(continuing[0].rows.iter().all(|row| row.cells.len() == 5));
+        }
     }
 
     #[test]
