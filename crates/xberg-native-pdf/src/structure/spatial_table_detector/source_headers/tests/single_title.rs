@@ -115,6 +115,50 @@ fn single_merged_title_promotes_bold_native_leaf_labels_without_changing_cells()
 }
 
 #[test]
+fn single_merged_title_keeps_dark_rules_when_filled_dividers_are_painted_last() {
+    let mut paths = single_title_rules();
+    paths[1..].rotate_left(COLUMNS + 1);
+    assert_eq!(
+        single_title_roles(&mut single_title_rows(), &paths),
+        [true, true, false, false]
+    );
+
+    paths.push(filled_rect(2.5 * WIDTH, -2.0, FILLED_RULE_WIDTH, 4.0, Color::white()));
+    assert_eq!(single_title_roles(&mut single_title_rows(), &paths), [false; 4]);
+}
+
+#[test]
+fn single_merged_title_requires_two_numeric_body_cells() {
+    let paths = single_title_rules();
+    let mut rows = single_title_rows();
+    rows[2].cells[3] = cell("Low", 3, 1, -HEIGHT, false);
+    assert_eq!(
+        single_title_roles(&mut rows.clone(), &paths),
+        [true, true, false, false]
+    );
+
+    rows[2].cells[4] = cell("High", 4, 1, -HEIGHT, false);
+    assert_eq!(single_title_roles(&mut rows, &paths), [false; 4]);
+}
+
+#[test]
+fn single_merged_title_requires_empty_title_peers() {
+    let mut rows = single_title_rows();
+    rows[0].cells[1] = cell("Note", 2, 1, HEIGHT, false);
+    assert_eq!(single_title_roles(&mut rows, &single_title_rules()), [false; 4]);
+}
+
+#[test]
+fn single_merged_title_requires_the_upper_leaf_rule() {
+    let mut paths = single_title_rules();
+    paths.retain(|path| {
+        !(path.is_horizontal_line(FILLED_RULE_WIDTH * 2.0) && (path.bbox.center().y - HEIGHT).abs() <= f32::EPSILON)
+    });
+    assert_eq!(paths.len() + 1, single_title_rules().len());
+    assert_eq!(single_title_roles(&mut single_title_rows(), &paths), [false; 4]);
+}
+
+#[test]
 fn single_merged_title_does_not_promote_regular_leaves() {
     let mut rows = single_title_rows();
     rows[1] = leaves(["Form", "Device Type", "P1", "P2", "P3"], false);

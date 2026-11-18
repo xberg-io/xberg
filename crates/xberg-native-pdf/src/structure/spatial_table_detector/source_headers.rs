@@ -467,6 +467,14 @@ fn visible_rule_styles(
         } else if filled_rule && dark_fill(path) {
             visible.push((path.bbox.left(), path.bbox.right(), rule_style(path)));
         } else if stroked_rule || filled_rule || covering_fill(path, y) {
+            // A dark vertical bar preserves dark rule ink at the intersection. ~keep
+            if accept_filled_bars
+                && path.is_vertical_line(HEADER_RULE_TOLERANCE)
+                && fill_only_bar(path)
+                && dark_fill(path)
+            {
+                continue;
+            }
             visible = visible
                 .into_iter()
                 .flat_map(|(start, end, style)| {

@@ -86,6 +86,27 @@ run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  local single_title='structure::spatial_table_detector::source_headers::tests::single_title'
+  expected=$((expected + 15))
+  local single_title_case
+  for single_title_case in \
+    single_merged_title_promotes_bold_native_leaf_labels_without_changing_cells \
+    single_merged_title_keeps_dark_rules_when_filled_dividers_are_painted_last \
+    single_merged_title_requires_two_numeric_body_cells \
+    single_merged_title_requires_empty_title_peers \
+    single_merged_title_requires_the_upper_leaf_rule \
+    single_merged_title_does_not_promote_regular_leaves \
+    single_merged_title_refuses_a_divider_running_through_the_title \
+    single_merged_title_requires_a_continuous_lower_leaf_rule \
+    single_merged_title_refuses_a_divider_with_later_pale_or_dashed_stroke \
+    single_merged_title_refuses_ink_that_stays_in_the_first_track \
+    single_merged_title_refuses_dark_fill_extended_by_a_pale_stroke \
+    single_merged_title_accepts_measured_upper_font_metric_overhang \
+    single_merged_title_rejects_overhang_beyond_the_upper_metric_allowance \
+    single_merged_title_rejects_small_overhang_on_each_other_edge \
+    single_merged_title_allowance_does_not_change_the_legacy_grouped_proof; do
+    run_exact "$single_title::$single_title_case" --native-pdf --lib
+  done
   run_exact 'extractors::warnings::tests::nested_warning_scope_restores_the_outer_sink' --native-pdf --lib
   run_exact 'extractors::warnings::tests::unwinding_restores_the_outer_warning_scope' --native-pdf --lib
   run_exact 'extractors::warnings::tests::automatic_warning_outside_a_scope_is_not_retained' --native-pdf --lib
