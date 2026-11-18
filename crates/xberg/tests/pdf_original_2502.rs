@@ -6,6 +6,8 @@
 ))]
 #![allow(clippy::print_stdout)] // ~keep: the trace dumps print by design; org logging policy exempts tests
 
+mod helpers;
+
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
@@ -57,22 +59,46 @@ fn checked_pdf(path: &Path, expected_sha256: &str) -> Vec<u8> {
     bytes
 }
 
-fn guide_page(directory: &Path, number: u32, archive_env: &str, archive_sha256: &str) -> PathBuf {
-    if let Some(archive) = std::env::var_os(archive_env) {
+/// A page cut from the guide, pinned both as an archived file and as the bytes lopdf derives.
+struct GuidePage {
+    number: u32,
+    archive_env: &'static str,
+    archive_sha256: &'static str,
+    derived_sha256: &'static str,
+}
+
+const PAGE_FIVE: GuidePage = GuidePage {
+    number: 5,
+    archive_env: "XBERG_2502_PAGE5_ARCHIVE",
+    archive_sha256: "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c",
+    derived_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+};
+
+const PAGE_EIGHT: GuidePage = GuidePage {
+    number: 8,
+    archive_env: "XBERG_2502_PAGE8_ARCHIVE",
+    archive_sha256: "638d8968486a686e9a2e418c6dc7b538abe1bff779c74789786d0a050424c68f",
+    derived_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+};
+
+fn guide_page(directory: &Path, page: &GuidePage) -> PathBuf {
+    if let Some(archive) = std::env::var_os(page.archive_env) {
         let archive = PathBuf::from(archive);
-        checked_pdf(&archive, archive_sha256);
+        checked_pdf(&archive, page.archive_sha256);
         return archive;
     }
     let guide = PathBuf::from(std::env::var_os("XBERG_2502_GUIDE").expect("pinned public guide"));
-    let mut pdf = lopdf::Document::load_mem(&checked_pdf(&guide, GUIDE_SHA256)).unwrap();
-    let pages = pdf.get_pages();
-    let selected = pages[&number];
-    let other_pages: Vec<_> = pages.into_keys().filter(|page| *page != number).collect();
-    pdf.delete_pages(&other_pages);
-    assert_eq!(pdf.get_pages().into_values().collect::<Vec<_>>(), [selected]);
-    pdf.prune_objects();
-    let path = directory.join(format!("guide-page-{number}.pdf"));
-    pdf.save(&path).unwrap();
+    let (mut pdf, _) = helpers::isolate_pdf_page(&checked_pdf(&guide, GUIDE_SHA256), page.number);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        page.derived_sha256,
+        "page {} derived from the guide changed",
+        page.number
+    );
+    let path = directory.join(format!("guide-page-{}.pdf", page.number));
+    std::fs::write(&path, bytes).unwrap();
     path
 }
 
@@ -244,12 +270,7 @@ async fn public_page_eight_heading_keeps_structured_output_exact() {
     use xberg::OutputFormat;
 
     let d = tempfile::tempdir().unwrap();
-    let guide = guide_page(
-        d.path(),
-        8,
-        "XBERG_2502_PAGE8_ARCHIVE",
-        "638d8968486a686e9a2e418c6dc7b538abe1bff779c74789786d0a050424c68f",
-    );
+    let guide = guide_page(d.path(), &PAGE_EIGHT);
     let model = xberg_tesseract::bundled_eng_traineddata().unwrap();
     std::fs::write(d.path().join("eng.traineddata"), model).unwrap();
     let active = std::sync::Arc::new(std::sync::Mutex::new(TraceBuffer::default()));
@@ -315,12 +336,7 @@ async fn public_page_eight_heading_keeps_structured_output_exact() {
 #[ignore = "requires the pinned public guide or archived page five"]
 async fn public_page_five_undersampled_line_keeps_competing_owner() {
     let model = tempfile::tempdir().unwrap();
-    let path = guide_page(
-        model.path(),
-        5,
-        "XBERG_2502_PAGE5_ARCHIVE",
-        "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c",
-    );
+    let path = guide_page(model.path(), &PAGE_FIVE);
     std::fs::write(
         model.path().join("eng.traineddata"),
         xberg_tesseract::bundled_eng_traineddata().unwrap(),
@@ -375,12 +391,7 @@ async fn public_page_five_line_keeps_structured_output_exact() {
     use xberg::OutputFormat;
 
     let d = tempfile::tempdir().unwrap();
-    let guide = guide_page(
-        d.path(),
-        5,
-        "XBERG_2502_PAGE5_ARCHIVE",
-        "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c",
-    );
+    let guide = guide_page(d.path(), &PAGE_FIVE);
     let model = xberg_tesseract::bundled_eng_traineddata().unwrap();
     std::fs::write(d.path().join("eng.traineddata"), model).unwrap();
     let active = std::sync::Arc::new(std::sync::Mutex::new(TraceBuffer::default()));
