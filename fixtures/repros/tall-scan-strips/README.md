@@ -94,15 +94,22 @@ retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 D
 
 ## Integrated qualification
 
+CI does not run this check. Run it by hand before a release that changes
+tall-scan OCR.
+
 The release-feature run executes 38 synthetic tests covering encodings, DPI,
 PSM, language, cache behavior and standalone image warnings. The complete run
-adds ten tests for the public `sharable_web_guide.pdf`, including the paired
-whole-guide, Page 5 and 8, right-column and annotation checks.
+adds ten tests that read `sharable_web_guide.pdf` or a page derived from it:
+the paired whole-guide, Page 5 and 8, right-column and annotation checks. One
+of the five right-column tests,
+`synthetic_singleton_flate_spelling_preserves_the_certified_right_column_and_original_table`,
+reads Page 4 with its image filter respelled rather than the unmodified page.
 
 Both modes run offline. Provision ONNX Runtime as in Rust CI, then stage the
-pinned RT-DETR model in the Hugging Face cache before invoking the task.
-Use `-- synthetic` on the last line to run only the synthetic tests and skip
-the two corpus commands.
+pinned RT-DETR model in the Hugging Face cache before invoking the task. The
+task refuses to start unless that snapshot is present with the pinned
+SHA-256. Use `-- synthetic` on the last line to run only the synthetic tests
+and skip the two corpus commands.
 
 ```sh
 (
@@ -131,7 +138,12 @@ the two corpus commands.
 The task verifies the PDF against the pinned public test corpus. Page 5 and
 Page 8 are isolated in a temporary directory from that verified source. Set
 `XBERG_2502_PAGE5_ARCHIVE` or `XBERG_2502_PAGE8_ARCHIVE` to replay an existing
-exact archive. The corresponding test verifies its archive digest.
+exact archive. The corresponding test verifies its archive digest; a page
+derived from the guide is checked against its own pinned digest.
+
+The annotation test writes its Page 4 and 13 extraction JSON to
+`target/tall-scan-qualification/evidence`, or to `XBERG_2502_EVIDENCE` when
+set, and the task prints that path.
 
 Separate diagnostics reproduced the Guide Page 9 typo and both Nougat 009
 misses in Xberg. The matched Nougat 010 checks passed. These cases are tracked
