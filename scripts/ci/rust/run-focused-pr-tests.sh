@@ -95,6 +95,8 @@ run_pdf_cases() {
   run_exact 'ocr::processor::execution::dehyphenation::tests::narrow_sparse_blocks_do_not_licence_a_multiword_wrap' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::joins_a_short_paragraph_final_continuation_after_a_full_line' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::uses_a_spelling_witness_with_unicode_surrounding_punctuation' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::joins_an_accented_wrap_with_an_independent_case_insensitive_witness' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::keeps_an_accented_lexical_hyphen_when_both_spellings_are_witnessed' --lib
   run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_joins_with_bracketed_body_geometry' --lib
   run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_rejects_unproved_body_geometry' --lib
   run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_stops_at_a_right_lane_overrun' --lib
@@ -493,7 +495,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=136
+  expected=138
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases

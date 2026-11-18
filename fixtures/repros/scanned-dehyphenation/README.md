@@ -24,9 +24,10 @@ page independently spells “structures”. Sparse OCR puts the final fragment i
 a separate block. The join checks the near-aligned left edges and gap, a
 detached list marker, and surrounding body lines that corroborate the lane.
 
-This scanned-text path uses exact ASCII spellings from the selected Tesseract
-hOCR page. The hOCR stage has word boxes for just that page and can confirm
-that an unbroken token exists independently of the two fragments. Native PDF
-text has document-wide segments and uses a broader compound collector. The
-scanned path leaves cross-page spellings, ambiguous word boundaries, and soft
-hyphens unchanged.
+This scanned-text path compares lowercase Unicode alphabetic spellings within
+the selected Tesseract hOCR page. The word boxes can confirm that an
+unbroken token exists independently of the two fragments. The comparison
+retains accents and uses the ASCII hyphen at the line break. Native PDF text
+has document-wide segments and uses a broader compound collector. The scanned
+path leaves cross-page spellings, ambiguous word boundaries, and soft hyphens
+unchanged.

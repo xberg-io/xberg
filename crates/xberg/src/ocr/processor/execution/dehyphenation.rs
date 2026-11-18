@@ -109,21 +109,7 @@ pub(super) fn join_scanned_wraps(
     let Some(lines) = physical_lines(elements, words) else {
         return false;
     };
-    let spellings: HashSet<String> = words
-        .iter()
-        .filter_map(|word| word_text(elements, word))
-        .map(|word| lexical_core(word).to_ascii_lowercase())
-        .collect();
-    let compounds = spellings
-        .iter()
-        .filter_map(|word| word.split_once('-'))
-        .filter(|(left, right)| ascii_word_part(left) && ascii_word_part(right))
-        .map(|(left, right)| (left.to_owned(), right.to_owned()))
-        .collect();
-    let witnesses = SpellingWitnesses {
-        words: spellings,
-        compounds,
-    };
+    let witnesses = collect_spelling_witnesses(elements, words);
 
     let joins: Vec<_> = (0..lines.len().saturating_sub(1))
         .filter_map(|index| witnessed_join(&lines, index, elements, &witnesses, page_width, sparse))
@@ -136,6 +122,29 @@ pub(super) fn join_scanned_wraps(
         join.trailing.apply(elements);
     }
     changed
+}
+
+fn collect_spelling_witnesses(elements: &[InternalElement], words: &[HocrWordOccurrence]) -> SpellingWitnesses {
+    let mut spellings = HashSet::new();
+    let mut compounds = HyphenWitnesses::default();
+    for core in words
+        .iter()
+        .filter_map(|word| word_text(elements, word))
+        .map(lexical_core)
+    {
+        if alphabetic_word_part(core) {
+            spellings.insert(lowercase_spelling(core));
+        } else if let Some((left, right)) = core.split_once('-')
+            && alphabetic_word_part(left)
+            && alphabetic_word_part(right)
+        {
+            compounds.insert((lowercase_spelling(left), lowercase_spelling(right)));
+        }
+    }
+    SpellingWitnesses {
+        words: spellings,
+        compounds,
+    }
 }
 
 fn word_text<'a>(elements: &'a [InternalElement], word: &HocrWordOccurrence) -> Option<&'a str> {
@@ -197,7 +206,11 @@ fn witnessed_join(
     let leading = next.words.first()?;
     let former = word_text(elements, trailing)?;
     let latter = word_text(elements, leading)?;
-    if !latter.as_bytes().first().is_some_and(u8::is_ascii_lowercase) {
+    if !latter
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_alphabetic() && first.is_lowercase())
+    {
         return None;
     }
     let edit_start = witnessed_edit_start(former, lexical_core(latter), witnesses)?;
@@ -299,25 +312,30 @@ fn lexical_core(word: &str) -> &str {
     ])
 }
 
-fn ascii_word_part(word: &str) -> bool {
-    word.len() >= 2 && word.bytes().all(|byte| byte.is_ascii_alphabetic())
+fn alphabetic_word_part(word: &str) -> bool {
+    word.chars().count() >= 2 && word.chars().all(char::is_alphabetic)
+}
+
+fn lowercase_spelling(word: &str) -> String {
+    // Lowercase each scalar so the result is independent of the physical wrap. ~keep
+    word.chars().flat_map(char::to_lowercase).collect()
 }
 
 fn witnessed_edit_start(former: &str, continuation: &str, witnesses: &SpellingWitnesses) -> Option<usize> {
     let prefix = former.strip_suffix('-')?;
-    if !ascii_word_part(prefix) || !ascii_word_part(continuation) {
+    if !alphabetic_word_part(prefix) || !alphabetic_word_part(continuation) {
         return None;
     }
-    if should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds) {
+
+    let pair = (lowercase_spelling(prefix), lowercase_spelling(continuation));
+    if witnesses.compounds.contains(&pair) || should_preserve_lexical_hyphen(prefix, continuation, &witnesses.compounds)
+    {
         return Some(former.len());
     }
 
-    let prefix_lower = prefix.to_ascii_lowercase();
-    let continuation_lower = continuation.to_ascii_lowercase();
-    witnesses
-        .words
-        .contains(&format!("{prefix_lower}{continuation_lower}"))
-        .then_some(prefix.len())
+    let (mut joined, right) = pair;
+    joined.push_str(&right);
+    witnesses.words.contains(&joined).then_some(prefix.len())
 }
 
 #[cfg(test)]
@@ -447,6 +465,57 @@ mod tests {
             assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
             assert_eq!(elements[0].text, text);
         }
+    }
+
+    #[test]
+    fn joins_an_accented_wrap_with_an_independent_case_insensitive_witness() {
+        let text = "Le récit conclut sur une ré-\nélection discutée ce soir\nLa «RÉÉLECTION» figure ailleurs";
+        let full = (160, 840);
+        let (mut elements, words) = scan(text, &[full; 3]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(
+            elements[0].text,
+            "Le récit conclut sur une réélection\ndiscutée ce soir\nLa «RÉÉLECTION» figure ailleurs"
+        );
+
+        let (mut elements, words) = sparse_blocks(text, &[full; 3]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, true));
+        assert_eq!(elements[0].text, "Le récit conclut sur une réélection");
+        assert_eq!(elements[1].text, "discutée ce soir");
+        assert_eq!(elements[2].text, "La «RÉÉLECTION» figure ailleurs");
+
+        for control in [
+            text.replace("«RÉÉLECTION»", "«REELECTION»"),
+            text.replace("élection discutée", "Élection discutée"),
+            text.replace("ré-", "r-").replace("«RÉÉLECTION»", "«RÉLECTION»"),
+            text.replace("ré-", "é-").replace("«RÉÉLECTION»", "«ÉÉLECTION»"),
+            text.replace("ré-", "ré\u{2010}"),
+            text.replace("ré-", "re\u{301}-"),
+        ] {
+            let (mut elements, words) = scan(&control, &[full; 3]);
+            assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{control}");
+            assert_eq!(elements[0].text, control);
+        }
+    }
+
+    #[test]
+    fn keeps_an_accented_lexical_hyphen_when_both_spellings_are_witnessed() {
+        let text = "Le récit décrit un accord pré-\nétabli avant la réunion\nPRÉ-ÉTABLI et préétabli coexistent";
+        let full = (160, 840);
+        let (mut elements, words) = scan(text, &[full; 3]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(
+            elements[0].text,
+            "Le récit décrit un accord pré-établi\navant la réunion\nPRÉ-ÉTABLI et préétabli coexistent"
+        );
+
+        let without_compound = text.replace("PRÉ-ÉTABLI", "PRÉALABLE");
+        let (mut elements, words) = scan(&without_compound, &[full; 3]);
+        assert!(join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(
+            elements[0].text,
+            "Le récit décrit un accord préétabli\navant la réunion\nPRÉALABLE et préétabli coexistent"
+        );
     }
 
     #[test]
