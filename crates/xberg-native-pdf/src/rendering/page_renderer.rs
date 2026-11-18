@@ -750,7 +750,7 @@ impl PageRenderer {
         let data = match self.options.format {
             ImageFormat::Png => encode_png(&pixmap)?,
             ImageFormat::Jpeg => self.encode_jpeg(&pixmap)?,
-            ImageFormat::RawRgba8 => pixmap.data().to_vec(),
+            ImageFormat::RawRgba8 => pixmap.take(),
         };
 
         Ok((
@@ -10477,6 +10477,31 @@ mod tests {
             img.width,
             img.height
         );
+    }
+
+    #[test]
+    fn owned_ocr_canvas_has_the_same_pixels_and_admission_as_png() {
+        let doc = crate::document::PdfDocument::from_bytes(build_type3_rect_pdf()).unwrap();
+        let options = RenderOptions::with_dpi(150);
+        let raw_options = options.clone().as_raw();
+        let render = |options| super::super::render_ocr_page_with_budget_evidence(&doc, 0, options, 150, 32 << 20);
+        let (png, png_dpi, png_glyph_loss) = render(&options).unwrap();
+        let (raw, raw_dpi, raw_glyph_loss) = render(&raw_options).unwrap();
+        assert_eq!(raw.format, ImageFormat::RawRgba8);
+        assert_eq!(
+            (raw.width, raw.height, raw_dpi, raw_glyph_loss),
+            (png.width, png.height, png_dpi, png_glyph_loss)
+        );
+        let png_pixels = image::load_from_memory_with_format(&png.data, image::ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+        assert!(
+            raw.data == png_pixels.into_raw(),
+            "owned canvas must keep the stock pixels"
+        );
+        for options in [&options, &raw_options] {
+            assert!(super::super::render_ocr_page_with_budget_evidence(&doc, 0, options, 150, 1).is_err());
+        }
     }
 
     /// Columns of the page that hold a red pixel.

@@ -401,11 +401,32 @@ pub fn render_png_page_with_budget_evidence(
     minimum_dpi: u32,
     max_working_bytes: usize,
 ) -> std::result::Result<(RenderedImage, u32, bool), (crate::Error, bool)> {
+    render_ocr_page_with_budget_evidence(
+        doc,
+        page_num,
+        &RenderOptions::with_dpi(dpi),
+        minimum_dpi,
+        max_working_bytes,
+    )
+}
+
+/// Internal Core bridge for an OCR raster that must fit the existing PNG working set.
+///
+/// The encoded and owned raster routes use the same per-page admission. The error flag
+/// identifies a reported source-image budget excess.
+#[doc(hidden)]
+pub fn render_ocr_page_with_budget_evidence(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    options: &RenderOptions,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> std::result::Result<(RenderedImage, u32, bool), (crate::Error, bool)> {
     let budget = page_renderer::PngRenderBudget {
         max_working_bytes,
         minimum_dpi,
     };
-    render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi), Some(budget))
+    render_page_impl(doc, page_num, options, Some(budget))
 }
 
 /// One page rendered twice at the same size: as drawn, and with every glyph left unpainted.
