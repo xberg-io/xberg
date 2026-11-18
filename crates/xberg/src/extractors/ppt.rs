@@ -386,7 +386,10 @@ impl PptExtractor {
                 request,
                 abandoned: Some(&worker_abandoned),
             };
-            let file = crate::core::extractor::open_regular_file(&path)?;
+            cancel.check()?;
+            let opened = crate::core::extractor::open_regular_file(&path);
+            cancel.check()?;
+            let file = opened?;
             let snapshot = crate::extraction::ppt::PptFileStreams::read(file, extract_images, cancel)?;
             let (result, streams) = snapshot.parse(include_master_slides, cancel)?;
             cancel.check()?;

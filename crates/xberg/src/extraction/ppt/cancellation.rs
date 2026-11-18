@@ -9,7 +9,7 @@ pub(crate) struct PptReadCancellation<'a> {
     pub(crate) abandoned: Option<&'a AtomicBool>,
 }
 
-impl PptReadCancellation<'_> {
+impl<'a> PptReadCancellation<'a> {
     pub(crate) fn check(self) -> Result<()> {
         if self.request.is_some_and(CancellationToken::is_cancelled)
             || self.abandoned.is_some_and(|flag| flag.load(Ordering::Relaxed))
@@ -19,6 +19,15 @@ impl PptReadCancellation<'_> {
         Ok(())
     }
 
+    fn check_io(self) -> io::Result<()> {
+        self.check().map_err(|_| io::Error::other("PPT read cancelled"))
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(super) fn guard_reader<R: Read + io::Seek>(self, reader: R) -> CancellablePptReader<'a, R> {
+        CancellablePptReader { reader, cancel: self }
+    }
+
     pub(crate) fn read_into(self, mut reader: impl Read, output: &mut Vec<u8>) -> io::Result<()> {
         if self.request.is_none() && self.abandoned.is_none() {
             reader.read_to_end(output)?;
@@ -26,7 +35,7 @@ impl PptReadCancellation<'_> {
         }
         let mut buffer = [0; 16 * 1024];
         loop {
-            self.check().map_err(|_| io::Error::other("PPT read cancelled"))?;
+            self.check_io()?;
             match reader.read(&mut buffer) {
                 Ok(0) => return Ok(()),
                 Ok(count) => output.extend_from_slice(&buffer[..count]),
@@ -34,5 +43,27 @@ impl PptReadCancellation<'_> {
                 Err(error) => return Err(error),
             }
         }
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(super) struct CancellablePptReader<'a, R> {
+    reader: R,
+    cancel: PptReadCancellation<'a>,
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+impl<R: Read> Read for CancellablePptReader<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.cancel.check_io()?;
+        self.reader.read(buffer)
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+impl<R: io::Seek> io::Seek for CancellablePptReader<'_, R> {
+    fn seek(&mut self, position: io::SeekFrom) -> io::Result<u64> {
+        self.cancel.check_io()?;
+        self.reader.seek(position)
     }
 }

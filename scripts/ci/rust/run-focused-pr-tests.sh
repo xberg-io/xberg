@@ -405,6 +405,7 @@ run_office_page_cases() {
   run_exact 'core::runtime::large_stack_tests::blocking_work_reports_cancellation_after_the_parser_returns' --lib
   run_exact 'core::runtime::large_stack_tests::dropping_a_queued_blocking_worker_prevents_parser_entry' --lib
   run_exact 'core::runtime::large_stack_tests::blocking_work_keeps_the_callers_thread_local_dispatcher_and_span' --lib
+  run_exact 'extraction::ppt::file_stream_tests::native_ppt_cfb_scan_cancels_after_entering_allocation_sectors' --lib
   run_exact 'extractors::ppt::blocking_tests::native_ppt_path_cancels_before_opening_while_the_shared_pool_is_full' --lib
   run_exact 'extractors::ppt::blocking_tests::legacy_ppt_file_worker_releases_admission_before_extracting_the_real_word_child' --lib
   run_exact 'extractors::ppt::blocking_tests::native_ppt_file_worker_holds_a_slot_and_keeps_tracing_through_cancellation' --lib
@@ -508,7 +509,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=72
+  expected=73
   run_office_page_cases
   ;;
 api-jobs)

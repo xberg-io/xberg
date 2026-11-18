@@ -274,9 +274,18 @@ pub(crate) struct PptFileStreams {
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 impl PptFileStreams {
     pub(crate) fn read(file: std::fs::File, extract_images: bool, cancel: PptReadCancellation<'_>) -> Result<Self> {
+        Self::read_from(std::io::BufReader::new(file), extract_images, cancel)
+    }
+
+    fn read_from<R: std::io::Read + std::io::Seek>(
+        reader: R,
+        extract_images: bool,
+        cancel: PptReadCancellation<'_>,
+    ) -> Result<Self> {
         cancel.check()?;
-        let mut comp = cfb::CompoundFile::open(std::io::BufReader::new(file))
-            .map_err(|e| XbergError::parsing(format!("Failed to open PPT as OLE container: {e}")))?;
+        let opened = cfb::CompoundFile::open(cancel.guard_reader(reader));
+        cancel.check()?;
+        let mut comp = opened.map_err(|e| XbergError::parsing(format!("Failed to open PPT as OLE container: {e}")))?;
         let metadata = extract_ppt_metadata(&mut comp, cancel)?;
         let streams = PptStreams::read(&mut comp, cancel)?;
         let pictures = read_pictures(&mut comp, extract_images, cancel)?;
@@ -1567,9 +1576,11 @@ pub(super) fn read_stream_with_cancellation<R: std::io::Read + std::io::Seek>(
     name: &str,
     cancel: PptReadCancellation<'_>,
 ) -> Result<Vec<u8>> {
-    let stream = comp
-        .open_stream(name)
-        .map_err(|e| XbergError::parsing(format!("Failed to open stream '{name}': {e}")))?;
+    cancel.check()?;
+    let opened = comp.open_stream(name);
+    cancel.check()?;
+    let stream = opened.map_err(|e| XbergError::parsing(format!("Failed to open stream '{name}': {e}")))?;
+
     let mut data = Vec::new();
     let result = cancel.read_into(stream, &mut data);
     cancel.check()?;
@@ -1690,3 +1701,7 @@ fn read_property_value(data: &[u8], offset: usize) -> Option<String> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "tests/file_streams.rs"]
+mod file_stream_tests;
