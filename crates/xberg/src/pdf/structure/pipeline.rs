@@ -33,6 +33,8 @@ use super::text_repair::{
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 
+mod linked_footnote;
+
 const SPARSE_REPEATED_TIER_MIN_PAGES: usize = 2;
 const SPARSE_FONT_TIER_CLUSTER_COUNT: usize = 2;
 const MIN_BODY_SIZE_BOLD_SIGNALS: usize = 3;
@@ -3230,7 +3232,7 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size,
             is_bold,
             is_monospace,
@@ -3811,6 +3813,7 @@ fn build_document_structure(
     build_document_structure_with_native(
         all_page_segments,
         None,
+        None,
         NativeTableInputs::default(),
         config,
         #[cfg(feature = "layout-detection")]
@@ -3819,6 +3822,7 @@ fn build_document_structure(
 }
 
 pub(crate) fn extract_document_structure_from_native_pages(
+    native_document: &xberg_native_pdf::PdfDocument,
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     ruled_table_count: usize,
@@ -3829,6 +3833,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     build_document_structure_with_native(
         segments,
         Some(native_pages),
+        Some(native_document),
         NativeTableInputs {
             sources: table_sources,
             ruled_count: ruled_table_count,
@@ -3843,6 +3848,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
 fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
+    native_document: Option<&xberg_native_pdf::PdfDocument>,
     native_tables: NativeTableInputs<'_>,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
@@ -4519,6 +4525,26 @@ fn build_document_structure_with_native(
         &witnesses.hyphens,
         if inject_placeholders { image_positions } else { &[] },
     );
+
+    if let Some(native_document) = native_document {
+        for (page, paragraphs) in all_page_paragraphs.iter_mut().enumerate() {
+            linked_footnote::classify(
+                paragraphs,
+                include_footnotes,
+                || linked_footnote::page_separator(native_document, page),
+                || native_document.bounded_page_image_placements(page),
+                linked_footnote::PageRegions {
+                    page_number: (page + 1) as u32,
+                    tables: &emitted_tables,
+                    hints: layout_hints
+                        .and_then(|hints| hints.get(page))
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
+                },
+                &witnesses.hyphens,
+            );
+        }
+    }
 
     #[cfg(feature = "formula-recognition")]
     let inline_math_bounds: Vec<Vec<_>> = all_page_paragraphs
@@ -7777,21 +7803,11 @@ fn retain_page_furniture_safely(paragraphs: &mut Vec<PdfParagraph>) {
         return;
     }
 
-    let total_alphanum: usize = paragraphs.iter().map(paragraph_alphanum_len).sum();
-
-    if total_alphanum > 0 {
-        let furniture_alphanum: usize = paragraphs
-            .iter()
-            .filter(|p| p.is_page_furniture)
-            .map(paragraph_alphanum_len)
-            .sum();
-
-        if furniture_alphanum * 100 > total_alphanum * 30 {
-            for para in paragraphs.iter_mut() {
-                para.is_page_furniture = false;
-            }
-            return;
+    if page_furniture_exceeds_budget(paragraphs, |_, paragraph| paragraph.is_page_furniture) {
+        for para in paragraphs.iter_mut() {
+            para.is_page_furniture = false;
         }
+        return;
     }
 
     const MIN_SUBSTANTIVE_CHARS: usize = 80;
@@ -7802,6 +7818,20 @@ fn retain_page_furniture_safely(paragraphs: &mut Vec<PdfParagraph>) {
         }
         paragraph_alphanum_len(p) > MIN_SUBSTANTIVE_CHARS
     });
+}
+
+fn page_furniture_exceeds_budget(
+    paragraphs: &[PdfParagraph],
+    is_furniture: impl Fn(usize, &PdfParagraph) -> bool,
+) -> bool {
+    let total: usize = paragraphs.iter().map(paragraph_alphanum_len).sum();
+    let furniture: usize = paragraphs
+        .iter()
+        .enumerate()
+        .filter(|(index, paragraph)| is_furniture(*index, paragraph))
+        .map(|(_, paragraph)| paragraph_alphanum_len(paragraph))
+        .sum();
+    furniture * 100 > total * 30
 }
 
 /// Count alphanumeric characters in a paragraph's text content.

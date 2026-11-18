@@ -255,7 +255,7 @@ async fn extract_vlm_region(
             tracing::warn!(
                 page = page_index,
                 region_kind = ?region_kind,
-                error = %e,
+                error = %e.pdf_ocr_trace_category(),
                 "VLM region extraction failed; region suppressed"
             );
             None

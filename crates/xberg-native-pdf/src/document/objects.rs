@@ -500,6 +500,7 @@ impl PdfDocument {
     /// Runs at most once per document — guarded by `objstm_recovery_done`.
     /// Cost is amortised across every recovered object.
     pub(super) fn recover_from_object_streams(&self) {
+        let _warnings = self.warning_scope();
         use crate::objstm::parse_object_stream_with_decryption_outcome;
 
         {
@@ -1422,6 +1423,7 @@ impl PdfDocument {
             data.len()
         );
 
+        let _warnings = self.warning_scope();
         let mut obj = match parse_object(&data) {
             Ok((_, parsed_obj)) => parsed_obj,
             Err(e) => {
@@ -1518,6 +1520,7 @@ impl PdfDocument {
         if let Some(cached) = self.object_stream_cache.lock_or_recover().get(&stream_ref).cloned() {
             return Ok(Some((cached, false)));
         }
+        let _warnings = self.warning_scope();
         let Some(stream_entry) = self.xref.get(stream_obj_num) else {
             tracing::warn!(
                 target: crate::LOG_TARGET_ROOT,

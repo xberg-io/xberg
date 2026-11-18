@@ -289,6 +289,16 @@ fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[
     }
 }
 
+fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
+    let Some(remaining) = input.get(length..) else {
+        return false;
+    };
+    let Ok((remaining, _)) = crate::lexer::skip_ws(remaining.trim_ascii_start()) else {
+        return false;
+    };
+    remaining.starts_with(b"endstream") && matches!(token(remaining), Ok((_, Token::StreamEnd)))
+}
+
 /// Parse stream data after the `stream` keyword.
 ///
 /// Stream data starts after a newline following `stream` and ends with `endstream`.
@@ -303,37 +313,61 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     // We accept CR alone in lenient mode for compatibility with malformed PDFs,
     // but log a warning. In strict mode, this should be an error (requires ParserOptions). ~keep
 
-    let input = if input.starts_with(b"\r\n") {
-        &input[2..]
-    } else if input.starts_with(b"\n") {
-        &input[1..]
-    } else if input.starts_with(b"\r") {
-        let msg = "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
-            Accepting in lenient mode for compatibility. \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        // push into the process-wide structured sink
-        // so callers can retrieve via `flatten_warnings()` instead of
-        // parsing stderr from `tracing::warn`. ~keep
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        &input[1..]
-    } else {
-        let msg = "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        input
+    let padding = input.iter().take_while(|&&byte| matches!(byte, b' ' | b'\t')).count();
+    let after_padding = &input[padding..];
+    let payload = after_padding
+        .strip_prefix(b"\r\n")
+        .or_else(|| after_padding.strip_prefix(b"\n"));
+
+    // A nonstandard header can also be a missing EOL followed by whitespace in the payload. ~keep
+    let payload = payload.filter(|payload| {
+        if padding == 0 {
+            return true;
+        }
+        let declared_length = dict
+            .get("Length")
+            .and_then(Object::as_integer)
+            .and_then(|length| usize::try_from(length).ok());
+        !declared_length
+            .is_some_and(|length| !declared_stream_end_at(payload, length) && declared_stream_end_at(input, length))
+    });
+
+    let (input, warning) = match payload {
+        Some(payload) if padding == 0 => (payload, None),
+        Some(payload) => (
+            payload,
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by horizontal whitespace before its line ending \
+                 (should be immediate CRLF or LF). Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None if input.starts_with(b"\r") => (
+            &input[1..],
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
+                 Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None => (
+            input,
+            Some(
+                "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
     };
+
+    if let Some(msg) = warning {
+        tracing::warn!("{}", msg);
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
+            category: crate::extractors::warnings::WarningCategory::SpecViolation,
+            page: None,
+            message: msg.to_string(),
+            spec_section: Some("7.3.8.1"),
+        });
+    }
 
     if let Some(length_obj) = dict.get("Length")
         && let Some(length) = length_obj.as_integer()
@@ -355,7 +389,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
         // /Length was wrong — fall back to scanning for 'endstream' ~keep
         let msg = format!("Stream /Length {} is incorrect, falling back to endstream scan", length);
         tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
             category: crate::extractors::warnings::WarningCategory::SpecViolation,
             page: None,
             message: msg,

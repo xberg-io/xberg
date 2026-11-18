@@ -38,7 +38,7 @@ async fn test_batch_extract_file_multiple_formats() {
     }
 
     if skip_if_missing("pdf/fake_memo.pdf")
-        || skip_if_missing("documents/fake.docx")
+        || skip_if_missing("docx/word_sample.docx")
         || skip_if_missing("text/fake_text.txt")
     {
         return;
@@ -48,7 +48,7 @@ async fn test_batch_extract_file_multiple_formats() {
 
     let paths: Vec<UriBatchInput> = vec![
         get_test_file_path("pdf/fake_memo.pdf"),
-        get_test_file_path("documents/fake.docx"),
+        get_test_file_path("docx/word_sample.docx"),
         get_test_file_path("text/fake_text.txt"),
     ]
     .into_iter()

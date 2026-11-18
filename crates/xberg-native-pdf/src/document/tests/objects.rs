@@ -131,19 +131,18 @@ fn warm_object_reads_share_the_cache_and_owned_loads_stay_independent() {
     let cold = document.load_object_for_read(reference).unwrap();
     assert!(matches!(cold, super::super::objects::LoadedObject::Owned(_)));
 
-    let first = document.load_object_for_read(reference).unwrap();
-    let second = document.load_object_for_read(reference).unwrap();
-    assert!(std::ptr::eq(first.as_ref(), second.as_ref()));
-
-    let mut owned = document.load_object(reference).unwrap();
-    assert!(!std::ptr::eq(first.as_ref(), &owned));
-    let Object::Dictionary(ref mut entries) = owned else {
-        panic!("the catalogue must be a dictionary");
+    let super::super::objects::LoadedObject::Cached(first) = document.load_object_for_read(reference).unwrap() else {
+        panic!("the warm object must share the cached allocation");
     };
-    entries.remove("Type");
-    assert_eq!(owned.as_dict().unwrap().get("Type"), None);
-    assert_eq!(first.as_ref().as_dict().unwrap()["Type"].as_name(), Some("Catalog"));
-    assert_eq!(document.load_object(reference).unwrap(), *first.as_ref());
+    let super::super::objects::LoadedObject::Cached(second) = document.load_object_for_read(reference).unwrap() else {
+        panic!("a second warm read must share the cached allocation");
+    };
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+
+    let count = std::sync::Arc::strong_count(&first);
+    let owned = document.load_object(reference).unwrap();
+    assert_eq!(std::sync::Arc::strong_count(&first), count);
+    assert_eq!(owned, *first);
 }
 
 #[test]

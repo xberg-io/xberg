@@ -710,9 +710,20 @@ impl PdfDocument {
                             && !is_document_local
                             && let Some(cached) = crate::fonts::global_cache::global_font_cache_get(id_hash)
                         {
-                            self.font_identity_cache
-                                .lock_or_recover()
-                                .insert(id_hash, Arc::clone(&cached));
+                            let mut identity_cache = self.font_identity_cache.lock_or_recover();
+                            if identity_cache.get(&id_hash).is_none() {
+                                if cached.subtype == "Type0"
+                                    && font
+                                        .as_dict()
+                                        .and_then(|dict| dict.get("ToUnicode"))
+                                        .and_then(Object::as_reference)
+                                        .is_none()
+                                {
+                                    crate::fonts::font_dict::record_missing_tounicode_warning(self, &cached.base_font);
+                                }
+                                identity_cache.insert(id_hash, Arc::clone(&cached));
+                            }
+                            drop(identity_cache);
                             self.font_cache.lock_or_recover().insert(font_ref, Arc::clone(&cached));
                             resolved.push(((*name).clone(), Arc::clone(&cached)));
                             extractor.add_font_shared((*name).clone(), cached);

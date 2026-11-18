@@ -709,8 +709,20 @@ jobs:
             # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
             ort_version=1.24.2
             case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
-            curl -fsSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
-            mkdir -p /opt/msort && tar -xzf /tmp/ort.tgz -C /opt/msort --strip-components=1
+            ort_integrity="{project}/scripts/ci/actions/setup-onnx-runtime"
+            ort_tmp=$(mktemp -d)
+            ort_archive="$ort_tmp/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
+            trap 'rm -f -- "$ort_archive"; rmdir -- "$ort_tmp"' EXIT
+            bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256" --known
+            set -- --retry 5 --retry-delay 5
+            if curl --retry-all-errors --version >/dev/null 2>&1; then
+              set -- "$@" --retry-all-errors
+            fi
+            curl --proto '=https' --proto-redir '=https' "$@" -fsSL -o "$ort_archive" \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"
+            bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
+            mkdir -p /opt/msort
+            tar -xzf "$ort_archive" -C /opt/msort --strip-components=1
           cibw-environment: >-
             MATURIN_BUILD_ARGS="--compatibility manylinux_2_28"
             CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc
@@ -1483,7 +1495,7 @@ jobs:
 
       # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
       # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1.339.0
         if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"

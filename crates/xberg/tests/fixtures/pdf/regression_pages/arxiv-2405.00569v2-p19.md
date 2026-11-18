@@ -92,15 +92,19 @@ F-8
 F-10 F-10 F-10 F-10
 -1.99 -1.99
 -2 F-12 F-12 -2 F-12 F-12
--2 -2
--10 -5 0 5 10 15 0.3 0.35 0.4 0.45 0.5 0.55 0.6 -10 -5 0 5 10 15 0.3 0.35 0.4 0.45 0.5 0.55 0.6
-x x x x
+-10 -5 0 5 10 0.35 0.4 0.45 0.5 0.55 0.6
+x x
 ```
 
 | -1.6 Exact-CCS | Exact-CCS -1.98 |
 | --- | --- |
 | F-0 | F-0 |
 | -1.8 | F-8 |
+
+| -2 |  |  |  | -2 |
+| --- | --- | --- | --- | --- |
+| 15 0.3 | 0.35 0.4 0.45 0.5 0.55 | -10 0.6 | -5 0 5 10 | 15 0.3 |
+|  | x |  | x |  |
 
 - (e) TDCCS, filtered every (f) Zoom in near smooth (g) TDCCS, filtered every (h) Zoom in near smooth 2 time steps extrema 10 time steps extrema
 

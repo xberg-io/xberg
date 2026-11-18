@@ -112,6 +112,32 @@ fn automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_k
 }
 
 #[test]
+fn mixed_ocr_recovers_ordered_khmer_with_explicit_zero_margins() {
+    let pdf = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
+    let config = ExtractionConfig {
+        pdf_options: Some(xberg::PdfConfig {
+            top_margin_fraction: Some(0.0),
+            bottom_margin_fraction: Some(0.0),
+            ..Default::default()
+        }),
+        ..automatic_english()
+    };
+
+    let result = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
+    assert!(result.metadata.ocr_used);
+    let [page] = result.pages.as_deref().expect("page output requested") else {
+        panic!("expected one page");
+    };
+    for content in [&result.content, &page.content] {
+        assert_eq!(khmer(content).chars().count(), 222);
+        let first = content.find(is_khmer).expect("first recovered Khmer glyph");
+        let last = content.rfind(is_khmer).expect("last recovered Khmer glyph");
+        assert!(content[..first].contains("auditorium"), "{content}");
+        assert!(content[last..].contains("reception"), "{content}");
+    }
+}
+
+#[test]
 fn mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink() {
     const ORDERED: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
     const OVERLAP: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/overlap.pdf");

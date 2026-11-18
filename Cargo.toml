@@ -16,6 +16,7 @@ members = [
     "crates/xberg-py",
     "crates/xberg-tesseract",
     "crates/xberg-wasm",
+    "crates/xberg/tests/support/child-process",
     "packages/dart/rust",
     "packages/swift/rust",
     "tools/benchmark-harness",
@@ -153,6 +154,8 @@ url = "2.5.8"
 # `writer` feature, so usvg is enabled directly at the matching version. ~keep
 usvg = { version = "0.50", default-features = false, features = ["writer"] }
 xberg = { path = "./crates/xberg", version = "1.4.1", default-features = false }
+# A versionless path dev-dependency is omitted from published Cargo manifests. ~keep
+xberg-child-test = { path = "crates/xberg/tests/support/child-process" }
 xberg-gliner = { path = "./crates/xberg-gliner", version = "1.4.1", default-features = false }
 # The native PDF engine, vendored into this workspace at crates/xberg-native-pdf. It began as
 # a fork of a third-party project; see ATTRIBUTIONS.md, which is now the ONLY place in this
