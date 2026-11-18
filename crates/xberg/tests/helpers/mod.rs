@@ -461,3 +461,17 @@ pub mod pdf_panels;
 
 #[cfg(feature = "pdf")]
 pub mod pdf_picture;
+
+/// Load `source` and keep only its page `number`, dropping every object no remaining page uses.
+///
+/// Returns the kept page's object id so a caller can amend the page before saving.
+#[cfg(feature = "pdf-native")]
+pub fn isolate_pdf_page(source: &[u8], number: u32) -> (lopdf::Document, lopdf::ObjectId) {
+    let mut document = lopdf::Document::load_mem(source).expect("load source PDF");
+    let pages = document.get_pages();
+    let selected = pages[&number];
+    document.delete_pages(&pages.into_keys().filter(|page| *page != number).collect::<Vec<_>>());
+    assert_eq!(document.get_pages().into_values().collect::<Vec<_>>(), [selected]);
+    document.prune_objects();
+    (document, selected)
+}

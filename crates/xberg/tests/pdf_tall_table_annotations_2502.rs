@@ -5,6 +5,8 @@
     feature = "bundle-tessdata-eng"
 ))]
 
+mod helpers;
+
 use lopdf::{Object, dictionary};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -14,12 +16,8 @@ const NOTE: &str = "Pinned tall guide annotation control";
 const GUIDE: &str = "04c76db01e20d7641e886b2403bea2df5757dfe9b4be7a283ee44d1861081a06";
 
 fn isolated(source: &[u8], number: u32, annotated: bool) -> Vec<u8> {
-    let mut pdf = lopdf::Document::load_mem(source).unwrap();
-    let pages = pdf.get_pages();
-    let page = pages[&number];
+    let (mut pdf, page) = helpers::isolate_pdf_page(source, number);
     assert!(!pdf.get_object(page).unwrap().as_dict().unwrap().has(b"Annots"));
-    pdf.delete_pages(&pages.into_keys().filter(|n| *n != number).collect::<Vec<_>>());
-    pdf.prune_objects();
     if annotated {
         let annotation = pdf.add_object(dictionary! {
             "Type" => "Annot", "Subtype" => "Text", "Rect" => vec![10.into(), 10.into(), 30.into(), 30.into()],
