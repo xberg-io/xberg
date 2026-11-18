@@ -126,17 +126,41 @@ pub(crate) fn record_at(data: &[u8], pos: usize, end: usize) -> Option<ArtRecord
 /// over-reading -- the stream is untrusted, and a truncated tail is the common shape of a
 /// salvageable corrupt file.
 pub(crate) fn collect_art_records(data: &[u8], start: usize, end: usize, depth: usize, out: &mut Vec<ArtRecord>) {
+    collect_art_records_while(data, start, end, depth, out, &mut || true);
+}
+
+pub(crate) fn collect_art_records_while(
+    data: &[u8],
+    start: usize,
+    end: usize,
+    depth: usize,
+    out: &mut Vec<ArtRecord>,
+    keep_going: &mut impl FnMut() -> bool,
+) -> bool {
     if depth > MAX_OFFICE_ART_DEPTH {
-        return;
+        return true;
     }
     let mut pos = start;
     while let Some(record) = record_at(data, pos, end) {
+        if !keep_going() {
+            return false;
+        }
         out.push(record);
-        if record.is_container() {
-            collect_art_records(data, record.content_start, record.content_end, depth + 1, out);
+        if record.is_container()
+            && !collect_art_records_while(
+                data,
+                record.content_start,
+                record.content_end,
+                depth + 1,
+                out,
+                keep_going,
+            )
+        {
+            return false;
         }
         pos = record.content_end;
     }
+    true
 }
 
 /// The records directly inside `data[start..end]`, without descending into containers.

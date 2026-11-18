@@ -5,8 +5,10 @@
 //!
 //! Supports PowerPoint 97, 2000, XP, and 2003 (.ppt) files.
 
+mod cancellation;
+pub(crate) use cancellation::PptReadCancellation;
 mod embedded;
-pub(crate) use embedded::{PptEmbeddedObject, extract_ppt_embedded_objects};
+pub(crate) use embedded::{PptEmbeddedObject, extract_ppt_embedded_objects_with_cancellation};
 
 use crate::error::{Result, XbergError};
 use crate::extraction::office_art::{
@@ -221,16 +223,18 @@ fn extract_images_if_requested(
     live_slides: Option<&LiveSlides>,
     extract_images: bool,
     warnings: &mut Vec<ProcessingWarning>,
-) -> Vec<ExtractedImage> {
+    cancel: PptReadCancellation<'_>,
+) -> Result<Vec<ExtractedImage>> {
     if !extract_images {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    match read_stream(comp, "/Pictures") {
+    match read_stream_with_cancellation(comp, "/Pictures", cancel) {
         Ok(pictures_stream) if !pictures_stream.is_empty() => {
             let slide_numbers = picture_slide_numbers(ppt_stream, live_slides.map(|l| l.offsets.as_slice()));
-            extract_pictures_from_stream(&pictures_stream, &slide_numbers, warnings)
+            extract_pictures_with_cancellation(&pictures_stream, &slide_numbers, warnings, cancel)
         }
-        _ => Vec::new(),
+        Err(XbergError::Cancelled) => Err(XbergError::Cancelled),
+        _ => Ok(Vec::new()),
     }
 }
 
@@ -239,13 +243,28 @@ pub(crate) fn extract_ppt_text_with_options(
     include_master_slides: bool,
     extract_images: bool,
 ) -> Result<PptExtractionResult> {
+    extract_ppt_text_with_cancellation(
+        content,
+        include_master_slides,
+        extract_images,
+        PptReadCancellation::default(),
+    )
+}
+
+pub(crate) fn extract_ppt_text_with_cancellation(
+    content: &[u8],
+    include_master_slides: bool,
+    extract_images: bool,
+    cancel: PptReadCancellation<'_>,
+) -> Result<PptExtractionResult> {
+    cancel.check()?;
     let cursor = Cursor::new(content);
     let mut comp = cfb::CompoundFile::open(cursor)
         .map_err(|e| XbergError::parsing(format!("Failed to open PPT as OLE container: {e}")))?;
 
-    let metadata = extract_ppt_metadata(&mut comp);
+    let metadata = extract_ppt_metadata(&mut comp, cancel)?;
 
-    let ppt_stream = read_stream(&mut comp, "/PowerPoint Document")?;
+    let ppt_stream = read_stream_with_cancellation(&mut comp, "/PowerPoint Document", cancel)?;
     if ppt_stream.is_empty() {
         return Err(XbergError::parsing("PowerPoint Document stream is empty"));
     }
@@ -254,8 +273,10 @@ pub(crate) fn extract_ppt_text_with_options(
     // Absent or unreadable `Current User` stream leaves this `None`, and the walk keeps the
     // stream order it always used. See [`live_slide_offsets`] for why a partial answer is
     // deliberately not produced.
-    let current_user_stream = read_stream(&mut comp, "/Current User").unwrap_or_default();
-    let live_slides = live_slide_offsets(&ppt_stream, &current_user_stream);
+    let current_user_stream = read_stream_with_cancellation(&mut comp, "/Current User", cancel).unwrap_or_default();
+    cancel.check()?;
+    let live_slides = live_slide_offsets_with_cancellation(&ppt_stream, &current_user_stream, cancel);
+    cancel.check()?;
     if live_slides.is_none() {
         tracing::debug!(
             target: "xberg::ppt",
@@ -263,11 +284,12 @@ pub(crate) fn extract_ppt_text_with_options(
         );
     }
 
-    let (mut slides, loose_texts, speaker_notes) = extract_texts_from_records(
+    let (mut slides, loose_texts, speaker_notes) = extract_texts_with_cancellation(
         &ppt_stream,
         include_master_slides,
         live_slides.as_ref(),
         &mut processing_warnings,
+        cancel,
     )?;
 
     let text = assemble_full_text(&slides, &loose_texts);
@@ -286,14 +308,17 @@ pub(crate) fn extract_ppt_text_with_options(
     }
     let slide_count = slides.len();
 
+    cancel.check()?;
     let images = extract_images_if_requested(
         &mut comp,
         &ppt_stream,
         live_slides.as_ref(),
         extract_images,
         &mut processing_warnings,
-    );
+        cancel,
+    )?;
 
+    cancel.check()?;
     Ok(PptExtractionResult {
         text: text.trim().to_string(),
         slides,
@@ -364,7 +389,16 @@ pub(super) struct LiveSlides {
 /// slide list naming an id no directory resolves. The caller then keeps stream order, which
 /// is what this extractor did unconditionally before. A partial answer would be worse than
 /// the old behaviour: it would drop real slides. See GH#1614. ~keep
+#[cfg(test)]
 pub(super) fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<LiveSlides> {
+    live_slide_offsets_with_cancellation(ppt_stream, current_user_stream, PptReadCancellation::default())
+}
+
+pub(super) fn live_slide_offsets_with_cancellation(
+    ppt_stream: &[u8],
+    current_user_stream: &[u8],
+    cancel: PptReadCancellation<'_>,
+) -> Option<LiveSlides> {
     let first_edit = read_u32_le(current_user_stream, CURRENT_USER_OFFSET_TO_CURRENT_EDIT)? as usize;
 
     // persist id -> stream offset, newest save wins.
@@ -374,6 +408,7 @@ pub(super) fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) 
     let mut hops = 0usize;
 
     while let Some(edit_offset) = next_edit {
+        cancel.check().ok()?;
         hops += 1;
         if hops > MAX_USER_EDIT_CHAIN {
             return None;
@@ -656,11 +691,28 @@ fn commit_notes(
     }
 }
 
+#[cfg(test)]
 fn extract_texts_from_records(
     data: &[u8],
     include_master_slides: bool,
     live: Option<&LiveSlides>,
     warnings: &mut Vec<ProcessingWarning>,
+) -> Result<(Vec<PptSlideText>, Vec<String>, Vec<String>)> {
+    extract_texts_with_cancellation(
+        data,
+        include_master_slides,
+        live,
+        warnings,
+        PptReadCancellation::default(),
+    )
+}
+
+fn extract_texts_with_cancellation(
+    data: &[u8],
+    include_master_slides: bool,
+    live: Option<&LiveSlides>,
+    warnings: &mut Vec<ProcessingWarning>,
+    cancel: PptReadCancellation<'_>,
 ) -> Result<(Vec<PptSlideText>, Vec<String>, Vec<String>)> {
     let live_slides = live.map(|l| l.offsets.as_slice());
     // The only `SlideListWithText` occurrence outline text may be harvested from; `None`
@@ -706,7 +758,9 @@ fn extract_texts_from_records(
     // atom so an untyped run never inherits a stale type from an earlier one. ~keep
     let mut outline_text_type: Option<u32> = None;
 
+    tracing::debug!(target: "xberg::ppt::record_walk", "walking PPT slide records");
     while pos + 8 <= data.len() {
+        cancel.check()?;
         // A slide/notes container's text only spans its own declared byte
         // range; close it out as soon as the walk passes that range's end,
         // rather than leaving `in_slide_text`/`in_notes` stuck on until the
@@ -1181,16 +1235,28 @@ fn extract_blip_image(
     })
 }
 
+#[cfg(test)]
 fn extract_pictures_from_stream(
     data: &[u8],
     slide_numbers: &std::collections::HashMap<u32, u32>,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Vec<ExtractedImage> {
+    extract_pictures_with_cancellation(data, slide_numbers, warnings, PptReadCancellation::default())
+        .expect("uncancelled picture extraction")
+}
+
+fn extract_pictures_with_cancellation(
+    data: &[u8],
+    slide_numbers: &std::collections::HashMap<u32, u32>,
+    warnings: &mut Vec<ProcessingWarning>,
+    cancel: PptReadCancellation<'_>,
+) -> Result<Vec<ExtractedImage>> {
     let mut images = Vec::new();
     let mut pos = 0usize;
     let mut image_index: u32 = 0;
 
     while pos + 8 <= data.len() {
+        cancel.check()?;
         let rec_ver_instance = u16::from_le_bytes([data[pos], data[pos + 1]]);
         // recInstance occupies the upper 12 bits of the packed 16-bit field
         // (recVer, the low 4 bits, is checked nowhere here -- MS-ODRAW
@@ -1232,7 +1298,7 @@ fn extract_pictures_from_stream(
         pos = content_end;
     }
 
-    images
+    Ok(images)
 }
 
 /// `OfficeArtChildAnchor`: a shape's rectangle (left, top, right, bottom) inside its group.
@@ -1424,27 +1490,34 @@ fn cp1252_to_char(b: u8) -> char {
 }
 
 /// Read a named stream from the CFB compound file.
-pub(super) fn read_stream(comp: &mut cfb::CompoundFile<Cursor<&[u8]>>, name: &str) -> Result<Vec<u8>> {
-    use std::io::Read;
-    let mut stream = comp
+pub(super) fn read_stream_with_cancellation(
+    comp: &mut cfb::CompoundFile<Cursor<&[u8]>>,
+    name: &str,
+    cancel: PptReadCancellation<'_>,
+) -> Result<Vec<u8>> {
+    let stream = comp
         .open_stream(name)
         .map_err(|e| XbergError::parsing(format!("Failed to open stream '{name}': {e}")))?;
     let mut data = Vec::new();
-    stream
-        .read_to_end(&mut data)
-        .map_err(|e| XbergError::parsing(format!("Failed to read stream '{name}': {e}")))?;
+    let result = cancel.read_into(stream, &mut data);
+    cancel.check()?;
+    result.map_err(|e| XbergError::parsing(format!("Failed to read stream '{name}': {e}")))?;
     Ok(data)
 }
 
 /// Extract metadata from OLE summary information streams.
-fn extract_ppt_metadata(comp: &mut cfb::CompoundFile<Cursor<&[u8]>>) -> PptMetadata {
+fn extract_ppt_metadata(
+    comp: &mut cfb::CompoundFile<Cursor<&[u8]>>,
+    cancel: PptReadCancellation<'_>,
+) -> Result<PptMetadata> {
     let mut meta = PptMetadata::default();
 
-    if let Ok(data) = read_stream(comp, "/\x05SummaryInformation") {
+    if let Ok(data) = read_stream_with_cancellation(comp, "/\x05SummaryInformation", cancel) {
         parse_summary_info(&data, &mut meta);
     }
 
-    meta
+    cancel.check()?;
+    Ok(meta)
 }
 
 /// Parse OLE SummaryInformation for PPT metadata.

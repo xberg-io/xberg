@@ -9,6 +9,8 @@ mod bytes;
 pub(crate) mod cache_context;
 pub(crate) mod cacheability;
 mod file;
+#[cfg(all(feature = "office", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use file::open_regular_file;
 mod helpers;
 mod lenient;
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]

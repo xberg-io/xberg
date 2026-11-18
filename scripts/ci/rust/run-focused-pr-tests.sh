@@ -408,6 +408,8 @@ run_office_page_cases() {
   run_exact 'extractors::ppt::blocking_tests::native_ppt_path_cancels_before_opening_while_the_shared_pool_is_full' --lib
   run_exact 'extractors::ppt::blocking_tests::legacy_ppt_file_worker_releases_admission_before_extracting_the_real_word_child' --lib
   run_exact 'extractors::ppt::blocking_tests::native_ppt_file_worker_holds_a_slot_and_keeps_tracing_through_cancellation' --lib
+  run_exact 'extractors::ppt::blocking_tests::owned_large_ppt_snapshot_survives_truncation_and_enforces_its_cap' --lib
+  run_exact 'extractors::ppt::blocking_tests::public_ppt_uri_timeout_leaves_an_owned_snapshot_and_abandons_active_records' --lib
   run_exact 'extractors::ppt::blocking_tests::native_ppt_single_bytes_and_batch_paths_bypass_file_admission' --lib
   run_exact 'extractors::pptx::blocking_tests::single_pptx_paths_and_bytes_wait_for_admission_and_observe_cancellation' --lib
   run_exact 'extractors::pptx::blocking_tests::batch_pptx_paths_complete_inline_while_the_single_parse_pool_is_full' --lib
@@ -506,7 +508,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=66
+  expected=72
   run_office_page_cases
   ;;
 api-jobs)

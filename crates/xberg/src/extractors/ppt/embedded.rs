@@ -1,6 +1,6 @@
 use super::PptExtractor;
 use crate::core::config::ExtractionConfig;
-use crate::extraction::ppt::PptEmbeddedObject;
+use crate::extraction::ppt::{PptEmbeddedObject, PptReadCancellation};
 use std::borrow::Cow;
 
 const EMBEDDED_WARNING_SOURCE: &str = "ppt_embedded_objects";
@@ -33,23 +33,31 @@ pub(super) struct PptEmbeddings {
 
 impl PptExtractor {
     /// Read the OLE storages from the same deck snapshot used by the slide parser.
-    pub(super) fn discover_embedded_objects(content: &[u8], limits: Option<PptEmbeddingLimits>) -> PptEmbeddings {
+    pub(super) fn discover_embedded_objects(
+        content: &[u8],
+        limits: Option<PptEmbeddingLimits>,
+        cancel: PptReadCancellation<'_>,
+    ) -> crate::Result<PptEmbeddings> {
         let Some(limits) = limits else {
-            return PptEmbeddings::default();
+            return Ok(PptEmbeddings::default());
         };
-        let (mut objects, mut warnings) =
-            match crate::extraction::ppt::extract_ppt_embedded_objects(content, limits.max_object_bytes) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    return PptEmbeddings {
-                        objects: Vec::new(),
-                        warnings: vec![crate::types::ProcessingWarning {
-                            source: Cow::Borrowed(EMBEDDED_WARNING_SOURCE),
-                            message: Cow::Owned(format!("Failed to read embedded objects: {e}")),
-                        }],
-                    };
-                }
-            };
+        let (mut objects, mut warnings) = match crate::extraction::ppt::extract_ppt_embedded_objects_with_cancellation(
+            content,
+            limits.max_object_bytes,
+            cancel,
+        ) {
+            Ok(parsed) => parsed,
+            Err(crate::XbergError::Cancelled) => return Err(crate::XbergError::Cancelled),
+            Err(e) => {
+                return Ok(PptEmbeddings {
+                    objects: Vec::new(),
+                    warnings: vec![crate::types::ProcessingWarning {
+                        source: Cow::Borrowed(EMBEDDED_WARNING_SOURCE),
+                        message: Cow::Owned(format!("Failed to read embedded objects: {e}")),
+                    }],
+                });
+            }
+        };
         if objects.len() > limits.max_objects {
             let skipped = objects.len() - limits.max_objects;
             warnings.push(crate::types::ProcessingWarning {
@@ -62,7 +70,7 @@ impl PptExtractor {
             objects.truncate(limits.max_objects);
         }
 
-        PptEmbeddings { objects, warnings }
+        Ok(PptEmbeddings { objects, warnings })
     }
 
     pub(super) async fn extract_embedded_objects(

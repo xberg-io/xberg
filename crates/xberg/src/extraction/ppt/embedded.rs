@@ -7,9 +7,11 @@
 //! and the slide whose shape displays it so the caller can hand them to the matching
 //! extractor.
 
-use super::{LiveSlides, PPT_WARNING_SOURCE, live_slide_offsets, read_stream, read_u32_le};
+use super::{
+    LiveSlides, PPT_WARNING_SOURCE, live_slide_offsets_with_cancellation, read_stream_with_cancellation, read_u32_le,
+};
 use crate::error::{Result, XbergError};
-use crate::extraction::office_art::{ArtRecord, collect_art_records};
+use crate::extraction::office_art::{ArtRecord, collect_art_records_while};
 use crate::types::ProcessingWarning;
 use std::borrow::Cow;
 use std::io::{Cursor, Read};
@@ -56,34 +58,39 @@ pub(crate) struct PptEmbeddedObject {
 /// never returned; when the chain cannot be resolved the stream's `ExOleObjStg` records are
 /// returned in stream order with no slide attribution, which is better than losing the
 /// tables outright. ~keep
-pub(crate) fn extract_ppt_embedded_objects(
+#[cfg(test)]
+fn extract_ppt_embedded_objects(
     content: &[u8],
     max_object_bytes: usize,
 ) -> Result<(Vec<PptEmbeddedObject>, Vec<ProcessingWarning>)> {
+    extract_ppt_embedded_objects_with_cancellation(content, max_object_bytes, super::PptReadCancellation::default())
+}
+
+pub(crate) fn extract_ppt_embedded_objects_with_cancellation(
+    content: &[u8],
+    max_object_bytes: usize,
+    cancel: super::PptReadCancellation<'_>,
+) -> Result<(Vec<PptEmbeddedObject>, Vec<ProcessingWarning>)> {
+    cancel.check()?;
     let mut comp = cfb::CompoundFile::open(Cursor::new(content))
         .map_err(|e| XbergError::parsing(format!("Failed to open PPT as OLE container: {e}")))?;
-    let ppt_stream = read_stream(&mut comp, "/PowerPoint Document")?;
-    let current_user_stream = read_stream(&mut comp, "/Current User").unwrap_or_default();
+    let ppt_stream = read_stream_with_cancellation(&mut comp, "/PowerPoint Document", cancel)?;
+    let current_user_stream = read_stream_with_cancellation(&mut comp, "/Current User", cancel).unwrap_or_default();
 
     let mut warnings = Vec::new();
     let mut objects = Vec::new();
 
-    let Some(live) = live_slide_offsets(&ppt_stream, &current_user_stream) else {
-        for (offset, rec_instance) in all_object_storages(&ppt_stream) {
-            let Some(data) = read_storage(&ppt_stream, offset, rec_instance, max_object_bytes, &mut warnings) else {
-                continue;
-            };
-            objects.push(PptEmbeddedObject {
-                ex_obj_id: objects.len() as u32 + 1,
-                slide_number: None,
-                data,
-            });
-        }
-        return Ok((objects, warnings));
+    cancel.check()?;
+    tracing::debug!(target: "xberg::ppt::embedding_walk", "discovering embedded PPT storage");
+    let live = live_slide_offsets_with_cancellation(&ppt_stream, &current_user_stream, cancel);
+    cancel.check()?;
+    let Some(live) = live else {
+        return read_unresolved_objects(&ppt_stream, max_object_bytes, cancel);
     };
 
-    let slide_by_ex_obj_id = slide_numbers_by_ex_obj_id(&ppt_stream, &live);
-    for (ex_obj_id, persist_id_ref) in embedded_object_refs(&ppt_stream, &live) {
+    let slide_by_ex_obj_id = slide_numbers_by_ex_obj_id(&ppt_stream, &live, cancel)?;
+    for (ex_obj_id, persist_id_ref) in embedded_object_refs(&ppt_stream, &live, cancel)? {
+        cancel.check()?;
         let Some(&offset) = live.persist.get(&persist_id_ref) else {
             warnings.push(warning(format!(
                 "Skipped embedded object {ex_obj_id}: persist id {persist_id_ref} is not in the persist directory"
@@ -102,7 +109,16 @@ pub(crate) fn extract_ppt_embedded_objects(
             )));
             continue;
         }
-        let Some(data) = read_storage(&ppt_stream, offset, rec_instance, max_object_bytes, &mut warnings) else {
+        let data = read_storage(
+            &ppt_stream,
+            offset,
+            rec_instance,
+            max_object_bytes,
+            &mut warnings,
+            cancel,
+        );
+        cancel.check()?;
+        let Some(data) = data else {
             continue;
         };
         objects.push(PptEmbeddedObject {
@@ -112,6 +128,29 @@ pub(crate) fn extract_ppt_embedded_objects(
         });
     }
     Ok((objects, warnings))
+}
+
+fn read_unresolved_objects(
+    ppt_stream: &[u8],
+    max_object_bytes: usize,
+    cancel: super::PptReadCancellation<'_>,
+) -> Result<(Vec<PptEmbeddedObject>, Vec<ProcessingWarning>)> {
+    let mut warnings = Vec::new();
+    let mut objects = Vec::new();
+    for (offset, rec_instance) in all_object_storages(ppt_stream, cancel)? {
+        cancel.check()?;
+        let data = read_storage(
+            ppt_stream,
+            offset,
+            rec_instance,
+            max_object_bytes,
+            &mut warnings,
+            cancel,
+        );
+        cancel.check()?;
+        let Some(data) = data else {
+            continue;
+
 }
 
 fn warning(message: String) -> ProcessingWarning {
@@ -130,21 +169,27 @@ fn record_instance_and_type(data: &[u8], offset: usize) -> Option<(u16, u16)> {
 
 /// `(exObjId, persistIdRef)` for every embedded `ExEmbed` in the live document's
 /// `ExObjList`, in list order. Linked objects and controls have no storage and are skipped.
-fn embedded_object_refs(ppt_stream: &[u8], live: &LiveSlides) -> Vec<(u32, u32)> {
+fn embedded_object_refs(
+    ppt_stream: &[u8],
+    live: &LiveSlides,
+    cancel: super::PptReadCancellation<'_>,
+) -> Result<Vec<(u32, u32)>> {
     let (start, end) = live.document_payload;
     let mut records = Vec::new();
-    collect_art_records(ppt_stream, start, end, 0, &mut records);
+    collect_art_records_while(ppt_stream, start, end, 0, &mut records, &mut || cancel.check().is_ok());
+    cancel.check()?;
     let Some(list) = records.iter().find(|r| r.rec_type == RT_EXTERNAL_OBJECT_LIST) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let (list_start, list_end) = (list.content_start, list.content_end);
     let embeds: Vec<&ArtRecord> = records
         .iter()
         .filter(|r| r.rec_type == RT_EXTERNAL_OLE_EMBED && r.content_start >= list_start && r.content_end <= list_end)
         .collect();
-    embeds
-        .iter()
-        .filter_map(|embed| {
+    let mut output = Vec::new();
+    for embed in embeds {
+        cancel.check()?;
+        let parsed = (|| {
             let atom = records.iter().find(|r| {
                 r.rec_type == RT_EXTERNAL_OLE_OBJECT_ATOM
                     && r.content_start >= embed.content_start
@@ -160,15 +205,22 @@ fn embedded_object_refs(ppt_stream: &[u8], live: &LiveSlides) -> Vec<(u32, u32)>
             let ex_obj_id = read_u32_le(ppt_stream, atom.content_start + EX_OLE_OBJECT_ATOM_EX_OBJ_ID)?;
             let persist_id_ref = read_u32_le(ppt_stream, atom.content_start + EX_OLE_OBJECT_ATOM_PERSIST_ID_REF)?;
             Some((ex_obj_id, persist_id_ref))
-        })
-        .collect()
+        })();
+        output.extend(parsed);
+    }
+    Ok(output)
 }
 
 /// `exObjId -> 1-based live slide number`, from the `ExObjRefAtom` in each slide's shapes.
 /// The first slide that references an object wins.
-fn slide_numbers_by_ex_obj_id(ppt_stream: &[u8], live: &LiveSlides) -> ahash::AHashMap<u32, u32> {
+fn slide_numbers_by_ex_obj_id(
+    ppt_stream: &[u8],
+    live: &LiveSlides,
+    cancel: super::PptReadCancellation<'_>,
+) -> Result<ahash::AHashMap<u32, u32>> {
     let mut map = ahash::AHashMap::new();
     for (index, &slide_offset) in live.offsets.iter().enumerate() {
+        cancel.check()?;
         let Some(len) = read_u32_le(ppt_stream, slide_offset + 4) else {
             continue;
         };
@@ -177,26 +229,30 @@ fn slide_numbers_by_ex_obj_id(ppt_stream: &[u8], live: &LiveSlides) -> ahash::AH
             continue;
         };
         let mut records = Vec::new();
-        collect_art_records(ppt_stream, start, end, 0, &mut records);
+        collect_art_records_while(ppt_stream, start, end, 0, &mut records, &mut || cancel.check().is_ok());
+        cancel.check()?;
         for record in records.iter().filter(|r| r.rec_type == RT_EXTERNAL_OBJECT_REF_ATOM) {
             if let Some(ex_obj_id) = read_u32_le(ppt_stream, record.content_start) {
                 map.entry(ex_obj_id).or_insert(index as u32 + 1);
             }
         }
     }
-    map
+    Ok(map)
 }
 
 /// `(offset, recInstance)` of every top-level `ExOleObjStg` in stream order -- the fallback
 /// when the persist chain cannot be read.
-fn all_object_storages(ppt_stream: &[u8]) -> Vec<(usize, u16)> {
+fn all_object_storages(ppt_stream: &[u8], cancel: super::PptReadCancellation<'_>) -> Result<Vec<(usize, u16)>> {
     let mut records = Vec::new();
-    collect_art_records(ppt_stream, 0, ppt_stream.len(), 0, &mut records);
-    records
+    collect_art_records_while(ppt_stream, 0, ppt_stream.len(), 0, &mut records, &mut || {
+        cancel.check().is_ok()
+    });
+    cancel.check()?;
+    Ok(records
         .iter()
         .filter(|r| r.rec_type == RT_EXTERNAL_OLE_OBJECT_STG)
         .map(|r| (r.content_start - 8, r.rec_instance))
-        .collect()
+        .collect())
 }
 
 /// The storage's compound-file bytes, decompressed when the record says so. `None` (with a
@@ -207,6 +263,7 @@ fn read_storage(
     rec_instance: u16,
     max_object_bytes: usize,
     warnings: &mut Vec<ProcessingWarning>,
+    cancel: super::PptReadCancellation<'_>,
 ) -> Option<Vec<u8>> {
     let len = read_u32_le(ppt_stream, offset + 4)? as usize;
     let start = offset + 8;
@@ -224,7 +281,9 @@ fn read_storage(
             )));
             return None;
         }
-        return Some(payload.to_vec());
+        let mut data = Vec::new();
+        cancel.read_into(payload, &mut data).ok()?;
+        return Some(data);
     }
     let declared = read_u32_le(payload, 0)? as usize;
     if declared > max_object_bytes {
@@ -238,8 +297,8 @@ fn read_storage(
     // allocate more than the cap up front. ~keep
     let mut data = Vec::with_capacity(declared);
     let read_cap = (max_object_bytes as u64).saturating_add(1);
-    let mut decoder = flate2::read::ZlibDecoder::new(&payload[EX_OLE_OBJECT_STG_SIZE_PREFIX..]).take(read_cap);
-    if let Err(e) = decoder.read_to_end(&mut data) {
+    let decoder = flate2::read::ZlibDecoder::new(&payload[EX_OLE_OBJECT_STG_SIZE_PREFIX..]).take(read_cap);
+    if let Err(e) = cancel.read_into(decoder, &mut data) {
         warnings.push(warning(format!(
             "Skipped embedded object storage at {offset}: zlib stream is invalid: {e}"
         )));
@@ -315,7 +374,14 @@ mod tests {
         stream.extend_from_slice(&payload);
 
         let mut warnings = Vec::new();
-        let result = read_storage(&stream, 0, EX_OLE_OBJECT_STG_COMPRESSED_INSTANCE, 4096, &mut warnings);
+        let result = read_storage(
+            &stream,
+            0,
+            EX_OLE_OBJECT_STG_COMPRESSED_INSTANCE,
+            4096,
+            &mut warnings,
+            super::super::PptReadCancellation::default(),
+        );
 
         assert!(result.is_none());
         assert_eq!(warnings.len(), 1);

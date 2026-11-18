@@ -5,7 +5,7 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::LEGACY_POWERPOINT_MIME_TYPE;
-use crate::extraction::ppt::{PptExtractionResult, PptSlideText};
+use crate::extraction::ppt::{PptExtractionResult, PptReadCancellation, PptSlideText};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::ExtractedImage;
 use crate::types::internal::InternalDocument;
@@ -319,7 +319,11 @@ impl InternalDocumentExtractor for PptExtractor {
         let extract_images = config.needs_image_data();
 
         let result = run_ppt_extraction(content, config, include_master_slides, extract_images).await?;
-        let objects = Self::discover_embedded_objects(content, PptEmbeddingLimits::from_config(config));
+        let objects = Self::discover_embedded_objects(
+            content,
+            PptEmbeddingLimits::from_config(config),
+            PptReadCancellation::default(),
+        )?;
         Ok(Self::finish_document(result, objects, mime_type, config).await)
     }
 
@@ -351,7 +355,19 @@ impl PptExtractor {
         config: &ExtractionConfig,
         pool: &crate::core::runtime::OfficeBlockingPool,
     ) -> Result<(PptExtractionResult, PptEmbeddings)> {
-        use crate::core::runtime::{acquire_office_slot, check_blocking_cancelled, run_blocking};
+        use crate::core::runtime::{acquire_office_slot, run_blocking};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        struct CancelOnDrop(Arc<AtomicBool>);
+
+        impl Drop for CancelOnDrop {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Relaxed);
+            }
+        }
 
         let cancel = config.cancel_token.as_ref();
         let permit = acquire_office_slot(pool.admission.clone(), cancel).await?;
@@ -359,16 +375,54 @@ impl PptExtractor {
         let limits = PptEmbeddingLimits::from_config(config);
         let include_master_slides = config.content_filter.as_ref().is_some_and(|f| f.include_headers);
         let extract_images = config.needs_image_data();
-        run_blocking(pool.runtime.handle(), cancel, move |cancel| {
+        let max_file_bytes = config.security_limits.as_ref().map_or_else(
+            || crate::extractors::security::SecurityLimits::default().max_archive_size,
+            |limits| limits.max_archive_size,
+        );
+        let abandoned = CancelOnDrop(Arc::new(AtomicBool::new(false)));
+        let worker_abandoned = Arc::clone(&abandoned.0);
+        run_blocking(pool.runtime.handle(), cancel, move |request| {
             // Only synchronous reads are admitted. Child extraction can need this same pool. ~keep
             let _permit = permit;
-            let content = crate::core::io::open_file_bytes(&path)?;
-            let result =
-                crate::extraction::ppt::extract_ppt_text_with_options(&content, include_master_slides, extract_images)?;
-            check_blocking_cancelled(cancel)?;
-            Ok((result, Self::discover_embedded_objects(&content, limits)))
+            let cancel = PptReadCancellation {
+                request,
+                abandoned: Some(&worker_abandoned),
+            };
+            let content = Self::read_file_snapshot(&path, max_file_bytes, cancel)?;
+            let result = crate::extraction::ppt::extract_ppt_text_with_cancellation(
+                &content,
+                include_master_slides,
+                extract_images,
+                cancel,
+            )?;
+            cancel.check()?;
+            Ok((result, Self::discover_embedded_objects(&content, limits, cancel)?))
         })
         .await
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn read_file_snapshot(path: &Path, cap: usize, cancel: PptReadCancellation<'_>) -> Result<Vec<u8>> {
+        use std::io::Read as _;
+
+        cancel.check()?;
+        let file = crate::core::extractor::open_regular_file(path)?;
+        let cap = cap as u64;
+        if file.metadata()?.len() > cap {
+            return Err(crate::XbergError::validation(
+                "PPT file exceeds the configured archive size",
+            ));
+        }
+        let mut data = Vec::new();
+        let result = cancel.read_into(file.take(cap.saturating_add(1)), &mut data);
+        cancel.check()?;
+        result?;
+        if data.len() as u64 > cap {
+            return Err(crate::XbergError::validation(
+                "PPT file exceeds the configured archive size",
+            ));
+        }
+        Ok(data)
     }
 
     async fn finish_document(

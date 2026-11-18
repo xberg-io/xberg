@@ -163,3 +163,112 @@ fn native_ppt_single_bytes_and_batch_paths_bypass_file_admission() {
         }
     });
 }
+
+fn make_large_deck(path: &Path) {
+    use std::io::Write as _;
+
+    std::fs::write(path, DECK).unwrap();
+    let mut compound = cfb::open_rw(path).unwrap();
+    compound
+        .create_stream("/QualificationPadding")
+        .unwrap()
+        .write_all(&vec![0; 1024 * 1024])
+        .unwrap();
+    compound.flush().unwrap();
+    assert!(std::fs::metadata(path).unwrap().len() > 1024 * 1024);
+}
+
+#[test]
+fn owned_large_ppt_snapshot_survives_truncation_and_enforces_its_cap() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("deck.ppt");
+    make_large_deck(&path);
+    let limit = std::fs::metadata(&path).unwrap().len() as usize;
+    let cancel = PptReadCancellation::default();
+    assert!(matches!(
+        PptExtractor::read_file_snapshot(&path, limit - 1, cancel),
+        Err(crate::XbergError::Validation { .. })
+    ));
+    let snapshot = PptExtractor::read_file_snapshot(&path, limit, cancel).unwrap();
+    std::fs::File::create(&path).unwrap();
+    let deck = crate::extraction::ppt::extract_ppt_text_with_cancellation(&snapshot, false, false, cancel).unwrap();
+    assert_eq!(deck.slide_count, 3);
+    let (objects, _) =
+        crate::extraction::ppt::extract_ppt_embedded_objects_with_cancellation(&snapshot, limit, cancel).unwrap();
+    assert_eq!(objects.len(), 1);
+}
+
+#[test]
+#[serial_test::serial(office_admission)]
+fn public_ppt_uri_timeout_leaves_an_owned_snapshot_and_abandons_active_records() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex, mpsc};
+    use tracing_subscriber::layer::{Context, SubscriberExt};
+
+    struct RecordGate {
+        reached: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+        release: Mutex<mpsc::Receiver<()>>,
+        discovered: Arc<AtomicBool>,
+    }
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for RecordGate {
+        fn on_event(&self, event: &tracing::Event<'_>, _: Context<'_, S>) {
+            match event.metadata().target() {
+                "xberg::ppt::record_walk" => {
+                    if let Some(reached) = self.reached.lock().unwrap().take() {
+                        reached.send(()).unwrap();
+                        let _ = self.release.lock().unwrap().recv_timeout(Duration::from_secs(10));
+                    }
+                }
+                "xberg::ppt::embedding_walk" => self.discovered.store(true, Ordering::Relaxed),
+                _ => {}
+            }
+        }
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("deck.ppt");
+    make_large_deck(&path);
+    let (reached, ready) = tokio::sync::oneshot::channel();
+    let (release, gate) = mpsc::sync_channel(1);
+    let discovered = Arc::new(AtomicBool::new(false));
+    let subscriber = tracing_subscriber::registry().with(RecordGate {
+        reached: Mutex::new(Some(reached)),
+        release: Mutex::new(gate),
+        discovered: Arc::clone(&discovered),
+    });
+    tracing::callsite::rebuild_interest_cache();
+    let runtime = crate::core::runtime::global_runtime().unwrap();
+    tracing::subscriber::with_default(subscriber, || {
+        runtime.block_on(async {
+            let pool = crate::core::runtime::current_office_pool().unwrap();
+            let _remaining = pool
+                .admission
+                .acquire_many((pool.slots - 1).try_into().unwrap())
+                .await
+                .unwrap();
+            let config = ExtractionConfig {
+                use_cache: false,
+                extraction_timeout_secs: Some(1),
+                ..Default::default()
+            };
+            let input = crate::ExtractInput::from_uri(path.to_str().unwrap());
+            let mut read = std::pin::pin!(crate::extract(input, &config));
+            tokio::select! {
+                ready = tokio::time::timeout(Duration::from_secs(5), ready) => ready.unwrap().unwrap(),
+                result = &mut read => panic!("PPT parser never entered the active record walk: {result:?}"),
+            }
+            assert_eq!(pool.admission.available_permits(), 0);
+            let result = tokio::time::timeout(Duration::from_secs(5), read).await.unwrap();
+            assert!(matches!(result, Err(crate::XbergError::Timeout { limit_ms: 1000, .. })));
+            std::fs::File::create(&path).unwrap();
+            release.send(()).unwrap();
+            let _worker_exited = tokio::time::timeout(Duration::from_secs(5), pool.admission.acquire())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(!discovered.load(Ordering::Relaxed));
+        })
+    });
+    tracing::callsite::rebuild_interest_cache();
+}

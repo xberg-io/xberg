@@ -46,7 +46,7 @@ struct FileDetectionChecks {
     scanned_pages_ocr_conflict: bool,
 }
 
-fn open_regular_file(path: &Path) -> Result<File> {
+pub(crate) fn open_regular_file(path: &Path) -> Result<File> {
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
