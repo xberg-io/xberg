@@ -20,7 +20,7 @@
 #![cfg(feature = "image-encode")]
 
 mod helpers;
-use helpers::extract_uri_document_blocking;
+use helpers::{extract_uri_document_blocking, get_test_file_path, skip_if_missing};
 
 use xberg::core::config::extraction::ImageOutputFormat;
 use xberg::core::config::{ExtractionConfig, ImageExtractionConfig, OutputFormat};
@@ -37,19 +37,6 @@ const JPEG_MAGIC: &[u8] = b"\xFF\xD8\xFF";
 #[cfg(feature = "pdf")]
 fn is_webp(data: &[u8]) -> bool {
     data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP"
-}
-
-fn test_documents_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("test_documents")
-}
-
-fn fixture_path(relative: &str) -> std::path::PathBuf {
-    test_documents_dir().join(relative)
 }
 
 /// Build an `ExtractionConfig` that enables image extraction with the given
@@ -78,11 +65,11 @@ fn config_with_output_format(output_format: ImageOutputFormat) -> ExtractionConf
 #[cfg(feature = "pdf")]
 #[test]
 fn pdf_native_passthrough() {
-    let path = fixture_path("pdf/embedded_images_tables.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/embedded_images_tables.pdf not present");
+    let fixture = "pdf/embedded_images_tables.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config_explicit_native = config_with_output_format(ImageOutputFormat::Native);
 
@@ -133,11 +120,11 @@ fn pdf_native_passthrough() {
 #[cfg(feature = "pdf")]
 #[test]
 fn pdf_force_png() {
-    let path = fixture_path("pdf/embedded_images_tables.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/embedded_images_tables.pdf not present");
+    let fixture = "pdf/embedded_images_tables.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Png);
     let result = extract_uri_document_blocking(&path, None, &config).expect("PNG extraction must succeed");
@@ -175,11 +162,11 @@ fn pdf_force_png() {
 #[cfg(feature = "pdf")]
 #[test]
 fn pdf_force_jpeg() {
-    let path = fixture_path("pdf/embedded_images_tables.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/embedded_images_tables.pdf not present");
+    let fixture = "pdf/embedded_images_tables.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Jpeg { quality: 85 });
     let result = extract_uri_document_blocking(&path, None, &config).expect("JPEG extraction must succeed");
@@ -217,11 +204,11 @@ fn pdf_force_jpeg() {
 #[cfg(feature = "pdf")]
 #[test]
 fn pdf_force_webp() {
-    let path = fixture_path("pdf/embedded_images_tables.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/embedded_images_tables.pdf not present");
+    let fixture = "pdf/embedded_images_tables.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Webp { quality: 80 });
     let result = extract_uri_document_blocking(&path, None, &config).expect("WebP extraction must succeed");
@@ -261,11 +248,11 @@ fn pdf_force_webp() {
 #[cfg(feature = "office")]
 #[test]
 fn office_mixed_to_png() {
-    let path = fixture_path("docx/word_image_anchors.docx");
-    if !path.exists() {
-        eprintln!("skipped: docx/word_image_anchors.docx not present");
+    let fixture = "docx/word_image_anchors.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Png);
     let result = extract_uri_document_blocking(&path, None, &config).expect("DOCX PNG extraction must succeed");
@@ -321,11 +308,11 @@ fn office_mixed_to_png() {
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 #[test]
 fn image_extractor_jpeg_to_png() {
-    let path = fixture_path("images/example.jpg");
-    if !path.exists() {
-        eprintln!("skipped: images/example.jpg not present");
+    let fixture = "images/example.jpg";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let native_config = ExtractionConfig {
         images: Some(ImageExtractionConfig {
@@ -397,11 +384,11 @@ fn image_extractor_jpeg_to_png() {
 fn ocr_runs_before_reencode() {
     use xberg::core::config::OcrConfig;
 
-    let path = fixture_path("images/test_hello_world.png");
-    if !path.exists() {
-        eprintln!("skipped: images/test_hello_world.png not present");
+    let fixture = "images/test_hello_world.png";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
@@ -462,11 +449,11 @@ fn ocr_runs_before_reencode() {
 #[cfg(feature = "pdf")]
 #[test]
 fn quality_change_alters_byte_size() {
-    let path = fixture_path("pdf/multipage_marketing.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/multipage_marketing.pdf not present");
+    let fixture = "pdf/multipage_marketing.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config_high = config_with_output_format(ImageOutputFormat::Jpeg { quality: 95 });
     let config_low = config_with_output_format(ImageOutputFormat::Jpeg { quality: 30 });
@@ -522,11 +509,11 @@ fn quality_change_alters_byte_size() {
 #[cfg(feature = "office")]
 #[test]
 fn unsupported_source_format_warns_and_preserves() {
-    let path = fixture_path("docx/word_image_anchors.docx");
-    if !path.exists() {
-        eprintln!("skipped: docx/word_image_anchors.docx not present");
+    let fixture = "docx/word_image_anchors.docx";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Png);
     let result = extract_uri_document_blocking(&path, None, &config).expect("DOCX extraction must not error out");
@@ -574,11 +561,11 @@ fn unsupported_source_format_warns_and_preserves() {
 fn heif_output() {
     use xberg::core::config::extraction::ImageOutputFormat;
 
-    let path = fixture_path("pdf/embedded_images_tables.pdf");
-    if !path.exists() {
-        eprintln!("skipped: pdf/embedded_images_tables.pdf not present");
+    let fixture = "pdf/embedded_images_tables.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = config_with_output_format(ImageOutputFormat::Heif { quality: 80 });
     let result = extract_uri_document_blocking(&path, None, &config).expect("HEIF extraction must succeed");

@@ -22,7 +22,7 @@ use helpers::extract_uri_document_blocking;
 use html::strip_html;
 use markdown::SourceRanges;
 
-use helpers::{get_test_file_path, test_documents_available};
+use helpers::{get_test_file_path, skip_if_missing, test_documents_available};
 use std::collections::HashMap;
 use std::path::Path;
 use xberg::core::config::{ExtractionConfig, OutputFormat};
@@ -565,11 +565,10 @@ fn cross_format_parity_all_documents() {
             continue;
         }
 
-        let path = get_test_file_path(doc.relative_path);
-        if !path.exists() {
-            eprintln!("  [SKIP] {} — file not found: {}", doc.label, path.display());
+        if skip_if_missing(doc.relative_path) {
             continue;
         }
+        let path = get_test_file_path(doc.relative_path);
 
         eprintln!("\n--- {} ---", doc.label);
 
@@ -706,11 +705,10 @@ fn cross_format_table_content_parity() {
             continue;
         }
 
-        let path = get_test_file_path(relative_path);
-        if !path.exists() {
-            eprintln!("  [SKIP] {} — file not found", relative_path);
+        if skip_if_missing(relative_path) {
             continue;
         }
+        let path = get_test_file_path(relative_path);
 
         eprintln!("\n--- table test: {} ---", relative_path);
         tested += 1;
@@ -763,11 +761,10 @@ fn markdown_gfm_lint_validation() {
             continue;
         }
 
-        let path = get_test_file_path(doc.relative_path);
-        if !path.exists() {
-            eprintln!("  [SKIP] {} — file not found: {}", doc.label, path.display());
+        if skip_if_missing(doc.relative_path) {
             continue;
         }
+        let path = get_test_file_path(doc.relative_path);
 
         if let Some(md_content) = extract_with_format(&path, OutputFormat::Markdown) {
             tested += 1;
@@ -826,10 +823,10 @@ fn structural_block_comparison() {
             continue;
         }
 
-        let path = get_test_file_path(doc.relative_path);
-        if !path.exists() {
+        if skip_if_missing(doc.relative_path) {
             continue;
         }
+        let path = get_test_file_path(doc.relative_path);
 
         let md_content = extract_with_format(&path, OutputFormat::Markdown);
         let djot_content = extract_with_format(&path, OutputFormat::Djot);
@@ -899,11 +896,10 @@ fn no_escaped_brackets_in_markdown() {
             continue;
         }
 
-        let path = get_test_file_path(relative_path);
-        if !path.exists() {
-            eprintln!("  [SKIP] {} — file not found", relative_path);
+        if skip_if_missing(relative_path) {
             continue;
         }
+        let path = get_test_file_path(relative_path);
 
         if let Some(md_content) = extract_with_format(&path, OutputFormat::Markdown) {
             tested += 1;
