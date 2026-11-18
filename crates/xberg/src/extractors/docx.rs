@@ -3,9 +3,8 @@
 //! Supports: Microsoft Word (.docx)
 
 use crate::Result;
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
-use crate::core::runtime::check_blocking_cancelled;
 use crate::extraction::office_metadata;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -875,10 +874,10 @@ fn parse_docx_core(
     limits: crate::extractors::security::SecurityLimits,
     cancel: Option<&CancellationToken>,
 ) -> crate::error::Result<DocxParseResult> {
-    check_blocking_cancelled(cancel)?;
+    check_cancelled(cancel)?;
     let (mut doc, hyperlinks) =
         crate::extraction::docx::parser::parse_document_with_hyperlinks(content, &mut budget, &limits)?;
-    check_blocking_cancelled(cancel)?;
+    check_cancelled(cancel)?;
     // `is_markdown` gates `to_markdown()` vs. `to_plain_text()` for the flat text; DocTags takes
     // the markdown branch because it wants the same rendered shape. It no longer has any bearing
     // on image page numbers: those come from `Document::drawing_page_numbers()`, walked from the
@@ -891,7 +890,7 @@ fn parse_docx_core(
         ),
         inject_placeholders,
     );
-    check_blocking_cancelled(cancel)?;
+    check_cancelled(cancel)?;
 
     let table_page_nums = doc.table_page_numbers();
     let tables: Vec<Table> = doc
@@ -910,7 +909,7 @@ fn parse_docx_core(
         None
     };
 
-    check_blocking_cancelled(cancel)?;
+    check_cancelled(cancel)?;
     let mut internal_doc = build_internal_document(&doc, &hyperlinks, inject_placeholders);
     if !doc.revisions.is_empty() {
         internal_doc.revisions = Some(std::mem::take(&mut doc.revisions));
@@ -926,7 +925,7 @@ fn parse_docx_core(
     let drawing_page_nums = doc.drawing_page_numbers();
     let drawings = std::mem::take(&mut doc.drawings);
     let image_rels = std::mem::take(&mut doc.image_relationships);
-    check_blocking_cancelled(cancel)?;
+    check_cancelled(cancel)?;
     Ok((
         text,
         tables,
@@ -1035,7 +1034,7 @@ impl InternalDocumentExtractor for DocxExtractor {
         tracing::debug!("extract_docx: starting");
 
         let cancel = config.cancel_token.as_ref();
-        check_blocking_cancelled(cancel)?;
+        check_cancelled(cancel)?;
         let output_format = if config.images.as_ref().is_some_and(|i| i.extract_images) {
             crate::core::config::OutputFormat::Markdown
         } else {
@@ -1084,7 +1083,7 @@ impl InternalDocumentExtractor for DocxExtractor {
             )?
         };
 
-        check_blocking_cancelled(cancel)?;
+        check_cancelled(cancel)?;
         let open_archive = |content: Arc<[u8]>| {
             zip::ZipArchive::new(Cursor::new(content))
                 .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))
