@@ -218,6 +218,8 @@ pub struct EncodingOptions {
 #[allow(unsafe_code)]
 impl EncodingOptions {
     pub fn new() -> Result<Self> {
+        // SAFETY: The allocator takes no pointers and initializes the native defaults.
+        // The wrapper only takes ownership of a non-null result. ~keep
         let inner_ptr = unsafe { lh::heif_encoding_options_alloc() };
         match ptr::NonNull::new(inner_ptr) {
             Some(inner) => Ok(Self { inner }),
@@ -239,6 +241,8 @@ impl Default for EncodingOptions {
 #[allow(unsafe_code)]
 impl Drop for EncodingOptions {
     fn drop(&mut self) {
+        // SAFETY: self owns this allocation from heif_encoding_options_alloc. The matching
+        // deallocator consumes it once, after all borrows of self have ended. ~keep
         unsafe {
             lh::heif_encoding_options_free(self.inner.as_ptr());
         }
@@ -250,12 +254,16 @@ impl EncodingOptions {
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_ref(&self) -> &lh::heif_encoding_options {
+        // SAFETY: The initialized native allocation must cover the layout in the active
+        // libheif-sys bindings. self keeps it alive for this shared borrow. ~keep
         unsafe { self.inner.as_ref() }
     }
 
     #[inline(always)]
     #[allow(unsafe_code)]
     fn inner_mut(&mut self) -> &mut lh::heif_encoding_options {
+        // SAFETY: The native allocation must cover the layout in the active libheif-sys
+        // bindings. self owns the allocation and &mut self grants exclusive access. ~keep
         unsafe { self.inner.as_mut() }
     }
 
