@@ -20,8 +20,8 @@ use crate::types::internal::{ElementKind, InternalDocument, InternalElement, lis
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, has_tex_comment,
-    is_body_element, is_container_end, join_tex_lines, parse_metadata_entries, sorted_inline_annotations,
-    valid_math_annotation,
+    is_body_element, is_container_end, join_tex_lines, parse_metadata_entries, safe_image_url, safe_link_url,
+    sorted_inline_annotations, valid_math_annotation,
 };
 
 pub(super) fn admonition_alert_type(kind: &str) -> Option<comrak::nodes::AlertType> {
@@ -938,14 +938,17 @@ fn append_annotated_span<'a>(
             build_inlines(arena, hl, trimmed, inner_for_node);
             parent.append(hl);
         }
-        AnnotationKind::Link { url, title } => {
-            let link = mk(
-                arena,
-                NodeValue::Link(Box::new(NodeLink::new(url.clone(), title.as_deref().unwrap_or("")))),
-            );
-            build_inlines(arena, link, trimmed, inner);
-            parent.append(link);
-        }
+        AnnotationKind::Link { url, title } => match safe_link_url(url) {
+            Some(url) => {
+                let link = mk(
+                    arena,
+                    NodeValue::Link(Box::new(NodeLink::new(url.to_owned(), title.as_deref().unwrap_or("")))),
+                );
+                build_inlines(arena, link, trimmed, inner);
+                parent.append(link);
+            }
+            None => build_inlines(arena, parent, trimmed, inner),
+        },
         AnnotationKind::Color { .. } | AnnotationKind::FontSize { .. } | AnnotationKind::Custom { .. } => {
             if inner_for_node
                 .iter()
@@ -1458,8 +1461,8 @@ fn build_comrak_ast_with_table_mode<'a>(
                     Some(img) => {
                         if !img.data.is_empty() {
                             format!("image_{}.{}", image_index, img.format)
-                        } else if let Some(ref path) = img.source_path {
-                            path.clone()
+                        } else if let Some(path) = img.source_path.as_deref().and_then(safe_image_url) {
+                            path.to_owned()
                         } else {
                             format!("image_{}.bin", image_index)
                         }
@@ -2600,6 +2603,98 @@ mod tests {
             out.contains("[world](https://example.com)"),
             "link must still render; got: {out}"
         );
+    }
+
+    fn link_doc(text: &str, url: &str) -> InternalDocument {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(
+            text,
+            vec![TextAnnotation {
+                start: 0,
+                end: text.len() as u32,
+                kind: AnnotationKind::Link {
+                    url: url.to_string(),
+                    title: None,
+                },
+            }],
+            None,
+            None,
+        );
+        b.build()
+    }
+
+    #[test]
+    fn should_drop_script_link_href_and_keep_text_in_html() {
+        let doc = link_doc("click me", "javascript:alert(1)");
+        let html = crate::rendering::render_html(&doc);
+        assert!(!html.contains("javascript"), "script URL must not reach HTML: {html}");
+        assert!(!html.contains("<a "), "unsafe link must be dropped: {html}");
+        assert!(html.contains("<p>click me</p>"), "link text must survive: {html}");
+    }
+
+    #[test]
+    fn should_drop_script_link_destinations_in_markdown() {
+        for url in [
+            "javascript:alert(1)",
+            " JaVaScRiPt:alert(1)",
+            "java\tscript:alert(1)",
+            "\u{1}javascript:alert(1)",
+            "vbscript:msgbox(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "&#106;avascript:alert(1)",
+            "javascript&#58;alert(1)",
+            "javascript\\:alert(1)",
+        ] {
+            let doc = link_doc("click me", url);
+            let markdown = render(&doc);
+            assert_eq!(markdown, "click me\n", "{url:?} must lose its link");
+            let html = crate::rendering::render_html(&doc);
+            assert_eq!(html, "<p>click me</p>\n", "{url:?} must lose its link");
+        }
+    }
+
+    #[test]
+    fn should_keep_allowed_link_destinations() {
+        for url in [
+            "https://example.com",
+            "HTTP://example.com",
+            "mailto:a@example.com",
+            "tel:+15551234",
+            "ftp://example.com/f",
+            "//example.com/x",
+            "docs/page.html?a=1&b=2",
+            "#section",
+            "../up:colon",
+        ] {
+            let html = crate::rendering::render_html(&link_doc("go", url));
+            assert!(html.contains("<a href="), "{url:?} must stay a link: {html}");
+        }
+    }
+
+    fn image_doc(source_path: &str) -> InternalDocument {
+        let mut doc = InternalDocument::new("html");
+        doc.images.push(crate::types::ExtractedImage {
+            source_path: Some(source_path.to_string()),
+            description: Some("pic".into()),
+            ..Default::default()
+        });
+        doc.push_element(crate::types::internal::InternalElement::text(
+            ElementKind::Image { image_index: 0 },
+            "",
+            0,
+        ));
+        doc
+    }
+
+    #[test]
+    fn should_not_emit_script_image_sources() {
+        let html = crate::rendering::render_html(&image_doc("javascript:alert(1)"));
+        assert!(!html.contains("javascript"), "script URL must not reach HTML: {html}");
+        assert!(html.contains("image_0.bin"), "fallback reference expected: {html}");
+        let html = crate::rendering::render_html(&image_doc("data:image/png;base64,AAAA"));
+        assert!(html.contains(r#"src="data:image/png;base64,AAAA""#), "{html}");
+        let html = crate::rendering::render_html(&image_doc("media/a.png"));
+        assert!(html.contains(r#"src="media/a.png""#), "{html}");
     }
 
     /// OCR-derived structure detection reads a numbered list marker as part of
