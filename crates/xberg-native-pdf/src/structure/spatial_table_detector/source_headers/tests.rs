@@ -854,3 +854,5 @@ fn overlapping_overpaint_counts_shared_area_once() {
     assert!(cell_has_visible_shading(&cell, &[&background, &first, &overlapping]));
     assert!(!cell_has_visible_shading(&cell, &[&background, &first, &disjoint]));
 }
+
+mod single_title;
