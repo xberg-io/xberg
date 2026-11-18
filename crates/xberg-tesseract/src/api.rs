@@ -1063,10 +1063,14 @@ impl TesseractAPI {
     /// Returns the initial languages as a string.
     pub fn get_init_languages_as_string(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The query requires a live, in-use handle. The mutex serializes access
+        // while the native query borrows this engine's language string. ~keep
         let result = unsafe { TessBaseAPIGetInitLanguagesAsString(*handle) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
         } else {
+            // SAFETY: The non-null pointer refers to the engine's NUL-terminated string.
+            // The lock keeps it stable until Rust copies it. The engine retains ownership. ~keep
             let c_str = unsafe { CStr::from_ptr(result) };
             Ok(c_str.to_str()?.to_owned())
         }
@@ -1079,6 +1083,8 @@ impl TesseractAPI {
     /// Returns a vector of loaded languages.
     pub fn get_loaded_languages(&self) -> Result<Vec<String>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The query requires a live, in-use handle. The mutex serializes the read,
+        // and string_vec_to_rust consumes the owned array terminated by a null pointer. ~keep
         let vec_ptr = unsafe { TessBaseAPIGetLoadedLanguagesAsVector(*handle) };
         self.string_vec_to_rust(vec_ptr)
     }
@@ -1090,6 +1096,8 @@ impl TesseractAPI {
     /// Returns a vector of available languages.
     pub fn get_available_languages(&self) -> Result<Vec<String>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The query requires a live, in-use handle. The mutex serializes the read,
+        // and string_vec_to_rust consumes the owned array terminated by a null pointer. ~keep
         let vec_ptr = unsafe { TessBaseAPIGetAvailableLanguagesAsVector(*handle) };
         self.string_vec_to_rust(vec_ptr)
     }
@@ -1110,8 +1118,9 @@ impl TesseractAPI {
         struct TextArrayGuard(*mut *mut c_char);
         impl Drop for TextArrayGuard {
             fn drop(&mut self) {
-                // SAFETY: `TessDeleteTextArray()` deallocates both the array
-                // and all contained strings.
+                // SAFETY: This guard owns the original non-null array from a native language
+                // query. The matching deleter releases the array and its strings once,
+                // including when a string fails UTF-8 conversion. ~keep
                 unsafe { TessDeleteTextArray(self.0) };
             }
         }
@@ -1119,10 +1128,14 @@ impl TesseractAPI {
         let mut result = Vec::new();
         let mut i = 0;
         loop {
+            // SAFETY: The guard keeps the array alive. The index starts at zero and
+            // advances only after a non-null entry, so it reaches at most the final null. ~keep
             let str_ptr = unsafe { *vec_ptr.offset(i) };
             if str_ptr.is_null() {
                 break;
             }
+            // SAFETY: Each non-null array entry points to a NUL-terminated allocation.
+            // It stays live under the guard while Rust copies it. ~keep
             let c_str = unsafe { CStr::from_ptr(str_ptr) };
             result.push(c_str.to_str()?.to_owned());
             i += 1;
