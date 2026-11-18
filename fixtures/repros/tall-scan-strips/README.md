@@ -94,22 +94,38 @@ retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 D
 
 ## Integrated qualification
 
-The release-feature run collects and executes 38 synthetic tests covering
-encodings, DPI, PSM, language, cache behavior and standalone image warnings.
+The release-feature run executes 38 synthetic tests covering encodings, DPI,
+PSM, language, cache behavior and standalone image warnings. The complete run
+adds ten tests for the public `sharable_web_guide.pdf`, including the paired
+whole-guide, Page 5 and 8, right-column and annotation checks.
+
+Both modes run offline. Provision ONNX Runtime as in Rust CI, then stage the
+pinned RT-DETR model in the Hugging Face cache before invoking the task.
+Use `-- synthetic` on the last line to run only the synthetic tests and skip
+the two corpus commands.
 
 ```sh
-mise run rust:test:tall-scan-qualification -- synthetic
-```
+(
+  set -eu
+  git submodule update --init test_documents
+  python3 test_documents/scripts/fetch_corpus.py --include 'pdf/sharable_web_guide.pdf'
 
-The complete run adds ten tests for the public `sharable_web_guide.pdf`.
-They cover the whole-guide cold and warm cache arms, the Page 5 and 8 markup
-projections, the right-column recovery and the annotation control. Provision
-the release feature set's ONNX Runtime as in Rust CI before running:
-
-```sh
-git submodule update --init test_documents
-python3 test_documents/scripts/fetch_corpus.py --include 'pdf/sharable_web_guide.pdf'
-mise run rust:test:tall-scan-qualification
+  scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
+  export HF_HOME="$scratch/hf" HF_HUB_CACHE="$scratch/hub" HUGGINGFACE_HUB_CACHE="$scratch/hub"
+  export XDG_CACHE_HOME="$scratch/xdg"
+  revision=c6bf493e2f7b0b9a29a5870da9880c14e20ff0a3
+  model="$HF_HUB_CACHE/models--xberg-io--layout-models/snapshots/$revision/rtdetr/model.onnx"
+  mkdir -p "$(dirname "$model")"
+  curl --fail --silent --show-error --location --retry 3 --connect-timeout 30 --max-time 600 \
+    --proto '=https' --proto-redir '=https' \
+    "https://huggingface.co/xberg-io/layout-models/resolve/$revision/rtdetr/model.onnx" \
+    --output "$model"
+  test "$(wc -c <"$model")" -eq 169089059
+  printf '%s  %s\n' 3bf2fb0ee6df87435b7ae47f0f3930ec3dc97ec56fd824acc6d57bc7a6b89ef2 "$model" \
+    | shasum -a 256 -c
+  mise run rust:test:tall-scan-qualification
+)
 ```
 
 The task verifies the PDF against the pinned public test corpus. Page 5 and
@@ -117,6 +133,6 @@ Page 8 are isolated in a temporary directory from that verified source. Set
 `XBERG_2502_PAGE5_ARCHIVE` or `XBERG_2502_PAGE8_ARCHIVE` to replay an existing
 exact archive. The corresponding test verifies its archive digest.
 
-The Page 9 and Nougat 009/010 misses still need paired reference receipts with
-the exact intended page, input variant, configuration and text span. The
-public corpus lock lists both original and OCR-rasterized Nougat PDFs.
+Separate diagnostics reproduced the Guide Page 9 typo and both Nougat 009
+misses in Xberg. The matched Nougat 010 checks passed. These cases are tracked
+in [#2502](https://github.com/xberg-io/xberg/issues/2502).
