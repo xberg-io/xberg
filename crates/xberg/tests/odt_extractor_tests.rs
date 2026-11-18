@@ -17,47 +17,24 @@
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 #![cfg(feature = "office")]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 
 mod helpers;
-use helpers::extract_uri_document;
+use helpers::{extract_uri_document, get_test_file_path, skip_if_missing};
 
-/// Helper function to get the workspace root and construct test file paths
-fn get_test_file_path(filename: &str) -> PathBuf {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed");
-    workspace_root.join(format!("test_documents/odt/{}", filename))
-}
-
-/// Helper to verify a test file exists before running test
-fn ensure_test_file_exists(path: &Path) -> bool {
-    if !path.exists() {
-        println!("Skipping test: Test file not found at {:?}", path);
-        false
-    } else {
-        true
-    }
+fn get_odt_fixture(filename: &str) -> Option<PathBuf> {
+    let relative = format!("odt/{filename}");
+    (!skip_if_missing(&relative)).then(|| get_test_file_path(&relative))
 }
 
 /// Tests extraction of document metadata from ODT meta.xml
 /// Validates: title, subject, creator, dates, generator
 #[tokio::test]
 async fn test_odt_metadata_extraction() {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed");
-    let test_file = workspace_root.join("test_documents/odt/metadata_test.odt");
-
-    if !ensure_test_file_exists(&test_file) {
-        println!("Skipping metadata test: metadata_test.odt not found");
+    let Some(test_file) = get_odt_fixture("metadata_test.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -122,10 +99,9 @@ async fn test_odt_metadata_extraction() {
 /// ```
 #[tokio::test]
 async fn test_odt_table_with_caption_extraction() {
-    let test_file = get_test_file_path("simpleTableWithCaption.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("simpleTableWithCaption.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config).await;
@@ -150,10 +126,9 @@ async fn test_odt_table_with_caption_extraction() {
 /// Expected: Table with "Content" and "More content" cells
 #[tokio::test]
 async fn test_odt_simple_table_extraction() {
-    let test_file = get_test_file_path("simpleTable.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("simpleTable.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config).await;
@@ -180,10 +155,9 @@ async fn test_odt_simple_table_extraction() {
 /// - H1: "Back to Level 1"
 #[tokio::test]
 async fn test_odt_heading_structure_extraction() {
-    let test_file = get_test_file_path("headers.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("headers.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -210,10 +184,9 @@ async fn test_odt_heading_structure_extraction() {
 /// Expected Pandoc output: "Here comes **bold** text"
 #[tokio::test]
 async fn test_odt_bold_formatting_extraction() {
-    let test_file = get_test_file_path("bold.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("bold.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -238,10 +211,9 @@ async fn test_odt_bold_formatting_extraction() {
 /// Expected Pandoc output: "Here comes *italic* text"
 #[tokio::test]
 async fn test_odt_italic_formatting_extraction() {
-    let test_file = get_test_file_path("italic.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("italic.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -266,10 +238,9 @@ async fn test_odt_italic_formatting_extraction() {
 /// Expected Pandoc output: "Here comes text that was ~~striken out~~."
 #[tokio::test]
 async fn test_odt_strikeout_formatting_extraction() {
-    let test_file = get_test_file_path("strikeout.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("strikeout.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -297,10 +268,9 @@ async fn test_odt_strikeout_formatting_extraction() {
 /// ```
 #[tokio::test]
 async fn test_odt_image_with_caption_extraction() {
-    let test_file = get_test_file_path("imageWithCaption.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("imageWithCaption.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config).await;
@@ -327,10 +297,9 @@ async fn test_odt_image_with_caption_extraction() {
 /// Expected Pandoc output: "$$E = {m \\cdot c^{2}}$$"
 #[tokio::test]
 async fn test_odt_formula_extraction() {
-    let test_file = get_test_file_path("formula.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("formula.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -356,10 +325,9 @@ async fn test_odt_formula_extraction() {
 /// into the converted output.
 #[tokio::test]
 async fn test_odt_formula_extraction_produces_real_latex() {
-    let test_file = get_test_file_path("formula.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("formula.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -389,10 +357,9 @@ async fn test_odt_formula_extraction_produces_real_latex() {
 /// ```
 #[tokio::test]
 async fn test_odt_footnote_extraction() {
-    let test_file = get_test_file_path("footnote.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("footnote.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -415,10 +382,9 @@ async fn test_odt_footnote_extraction() {
 /// Expected: Endnote content with reference (similar to footnotes)
 #[tokio::test]
 async fn test_odt_endnote_extraction() {
-    let test_file = get_test_file_path("endnote.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("endnote.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -441,10 +407,9 @@ async fn test_odt_endnote_extraction() {
 /// Expected Pandoc output: "Some text[@Ex] with a citation."
 #[tokio::test]
 async fn test_odt_citation_extraction() {
-    let test_file = get_test_file_path("citation.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("citation.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -468,10 +433,9 @@ async fn test_odt_citation_extraction() {
 /// Expected Pandoc output: ""'çӨ©¼вбФШöÉµ"
 #[tokio::test]
 async fn test_odt_unicode_extraction() {
-    let test_file = get_test_file_path("unicode.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("unicode.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -491,10 +455,9 @@ async fn test_odt_unicode_extraction() {
 /// Expected Pandoc output: "Here comes `inlined code` text and `an another` one."
 #[tokio::test]
 async fn test_odt_inlined_code_extraction() {
-    let test_file = get_test_file_path("inlinedCode.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("inlinedCode.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -517,10 +480,9 @@ async fn test_odt_inlined_code_extraction() {
 /// Expected: Multiple paragraphs separated by blank lines
 #[tokio::test]
 async fn test_odt_paragraph_structure_extraction() {
-    let test_file = get_test_file_path("paragraph.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("paragraph.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -542,10 +504,9 @@ async fn test_odt_paragraph_structure_extraction() {
 /// Integration test: Verify ODT extraction works with standard API
 #[tokio::test]
 async fn test_odt_extraction_api_integration() {
-    let test_file = get_test_file_path("bold.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("bold.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -561,7 +522,7 @@ async fn test_odt_extraction_api_integration() {
 /// Test error handling for non-existent files
 #[tokio::test]
 async fn test_odt_extraction_missing_file_handling() {
-    let test_file = get_test_file_path("nonexistent.odt");
+    let test_file = get_test_file_path("odt/nonexistent.odt");
     let config = ExtractionConfig::default();
 
     let result = extract_uri_document(&test_file, None, &config).await;
@@ -586,10 +547,9 @@ async fn test_odt_extraction_variety() {
     let mut successful_extractions = 0;
 
     for filename in &test_files {
-        let test_file = get_test_file_path(filename);
-        if !test_file.exists() {
+        let Some(test_file) = get_odt_fixture(filename) else {
             continue;
-        }
+        };
 
         if let Ok(result) = extract_uri_document(&test_file, None, &config).await
             && !result.content.is_empty()
@@ -616,10 +576,9 @@ async fn test_odt_extraction_variety() {
 /// once as markdown tables and once as raw cell text
 #[tokio::test]
 async fn test_odt_table_no_duplicate_content() {
-    let test_file = get_test_file_path("simpleTable.odt");
-    if !ensure_test_file_exists(&test_file) {
+    let Some(test_file) = get_odt_fixture("simpleTable.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig::default();
     let result = extract_uri_document(&test_file, None, &config)
@@ -645,17 +604,9 @@ async fn test_odt_table_no_duplicate_content() {
 /// Uses the extraction_test document created with pandoc to ensure complete content
 #[tokio::test]
 async fn test_odt_comprehensive_table_extraction() {
-    let test_file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed")
-        .join("test_documents/odt/extraction_test.odt");
-
-    if !test_file.exists() {
-        println!("⚠️  Test document not found at {:?}, skipping", test_file);
+    let Some(test_file) = get_odt_fixture("extraction_test.odt") else {
         return;
-    }
+    };
 
     let config = ExtractionConfig {
         output_format: xberg::core::config::OutputFormat::Markdown,
