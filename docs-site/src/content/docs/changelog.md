@@ -103,6 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **cli:** The wrapped Linux musl tarball uses mimalloc with immediate purging and process-wide transparent huge pages disabled by default, including for native libraries and inherited by child processes. The Docker CLI image and static binstall binaries keep their existing allocator. (#3171)
+  Set `MIMALLOC_PURGE_DELAY` or `MIMALLOC_ALLOW_THP` before launching to override either setting.
+
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
 - **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)

@@ -1689,8 +1689,36 @@ def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
         assert "continue-on-error" not in gate
         if libc == "gnu":
             assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
+            assert "SMOKE_REQUIRE_MIMALLOC" not in gate
         else:
             assert "if:" not in gate
+            assert '-e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required"' in gate
+
+
+def test_musl_smoke_uses_the_packaged_source_allocator_policy() -> None:
+    steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["cli-binaries-musl"]["steps"]
+    [smoke] = [
+        step["run"] for step in steps if step.get("name") == "Smoke test packaged Linux CLI in a clean container"
+    ]
+    source = (DOCKER_DIR / "Dockerfile.musl-build").read_text()
+    marker = "# xberg-release-smoke: mimalloc-required ~keep"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "docker").mkdir()
+        (root / "Cargo.toml").write_text('[workspace.package]\nversion = "1.4.1"\n')
+        docker = root / "docker-stub"
+        docker.mkdir()
+        command = docker / "docker"
+        command.write_text('#!/bin/sh\n[ "$1" = run ] || exit 0\nprintf "%s\\n" "$@"\n')
+        command.chmod(0o755)
+        env = {**os.environ, "PATH": f"{docker}:{os.environ['PATH']}", "TARGET": "aarch64-unknown-linux-musl"}
+        for checkout_policy, expected in [(source.replace(f"{marker}\n", ""), 0), (source, 1)]:
+            (root / "docker/Dockerfile.musl-build").write_text(checkout_policy)
+            result = run(["bash", "-c", smoke], root, env)
+            assert result.returncode == 0, result.stderr
+            [observed] = [line for line in result.stdout.splitlines() if line.startswith("SMOKE_REQUIRE_MIMALLOC=")]
+            assert observed == f"SMOKE_REQUIRE_MIMALLOC={expected}"
 
 
 DOCKER_DIR = Path(__file__).parents[2] / "docker"

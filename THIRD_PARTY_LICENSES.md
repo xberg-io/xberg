@@ -160,6 +160,37 @@ unaffected.
   (system `libonnxruntime.so`) in the musl/container builds; bundled per the
   `ort-bundled` feature (official Microsoft binaries) otherwise.
 
+## mimalloc (musl CLI) — MIT
+
+The musl CLI statically links the native mimalloc allocator through the
+`mimalloc` Rust crate and `libmimalloc-sys`. The wrapper and bundled C
+allocator use the same MIT terms with the copyright notices below.
+
+```text
+MIT License
+
+Copyright (c) 2018-2025 Microsoft Corporation, Daan Leijen
+Copyright 2019 Octavian Oncescu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Tesseract OCR + Leptonica
 
 - **Feature:** `xberg-tesseract` builds Tesseract 5.5.4 at commit
