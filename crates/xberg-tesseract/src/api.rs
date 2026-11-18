@@ -1062,11 +1062,21 @@ impl TesseractAPI {
     ///
     /// Returns the initial languages as a string.
     pub fn get_init_languages_as_string(&self) -> Result<String> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The
+        // query then returns a pointer into the engine-owned `language_` string and
+        // transfers no ownership. ~keep
         let result = unsafe { TessBaseAPIGetInitLanguagesAsString(*handle) };
         if result.is_null() {
             Err(TesseractError::NullPointerError)
         } else {
+            // SAFETY: The pointer is non-null and NUL-terminated. `language_` changes only
+            // through the Init and End calls, which take the handle lock held here, and
+            // the `mark_idle` contract keeps `finalize_idle_engines` from freeing an
+            // engine in use, so the string outlives this copy. The engine keeps ownership. ~keep
             let c_str = unsafe { CStr::from_ptr(result) };
             Ok(c_str.to_str()?.to_owned())
         }
@@ -1078,7 +1088,13 @@ impl TesseractAPI {
     ///
     /// Returns a vector of loaded languages.
     pub fn get_loaded_languages(&self) -> Result<Vec<String>> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The
+        // query then returns a new null-terminated array from MakeTextArray, which
+        // string_vec_to_rust takes ownership of and frees. ~keep
         let vec_ptr = unsafe { TessBaseAPIGetLoadedLanguagesAsVector(*handle) };
         self.string_vec_to_rust(vec_ptr)
     }
@@ -1089,7 +1105,13 @@ impl TesseractAPI {
     ///
     /// Returns a vector of available languages.
     pub fn get_available_languages(&self) -> Result<Vec<String>> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The
+        // query then returns a new null-terminated array from MakeTextArray, which
+        // string_vec_to_rust takes ownership of and frees. ~keep
         let vec_ptr = unsafe { TessBaseAPIGetAvailableLanguagesAsVector(*handle) };
         self.string_vec_to_rust(vec_ptr)
     }
@@ -1107,11 +1129,13 @@ impl TesseractAPI {
         if vec_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // The guard frees the array on every exit, including a UTF-8 conversion error. ~keep
         struct TextArrayGuard(*mut *mut c_char);
         impl Drop for TextArrayGuard {
             fn drop(&mut self) {
-                // SAFETY: `TessDeleteTextArray()` deallocates both the array
-                // and all contained strings.
+                // SAFETY: The guard holds the original non-null, null-terminated array
+                // from MakeTextArray and drops once, so TessDeleteTextArray frees the
+                // array and its strings exactly once. ~keep
                 unsafe { TessDeleteTextArray(self.0) };
             }
         }
@@ -1119,10 +1143,14 @@ impl TesseractAPI {
         let mut result = Vec::new();
         let mut i = 0;
         loop {
+            // SAFETY: The guard keeps the array alive. The index starts at zero and
+            // advances only after a non-null entry, so it reaches at most the final null. ~keep
             let str_ptr = unsafe { *vec_ptr.offset(i) };
             if str_ptr.is_null() {
                 break;
             }
+            // SAFETY: Each non-null array entry points to a NUL-terminated allocation.
+            // It stays live under the guard while Rust copies it. ~keep
             let c_str = unsafe { CStr::from_ptr(str_ptr) };
             result.push(c_str.to_str()?.to_owned());
             i += 1;
