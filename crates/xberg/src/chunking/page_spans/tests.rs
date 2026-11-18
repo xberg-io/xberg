@@ -749,10 +749,11 @@ fn should_not_match_pure_container_node_with_no_text() {
 }
 
 /// One page holding every node is the worst case for the per-page node scan: each chunk is
-/// matched against all of them.
+/// matched against all of them. The work is counted, not timed: a scan of every node per chunk
+/// considers `nodes * nodes / 8` of them, the trie only the eight nodes each chunk holds.
 #[test]
 fn bbox_population_scales_linearly_when_all_nodes_share_one_page() {
-    fn time_for(nodes: usize) -> f64 {
+    fn nodes_examined_for(nodes: usize) -> usize {
         let texts: Vec<String> = (0..nodes)
             .map(|i| format!("paragraph number {i} with some filler words"))
             .collect();
@@ -771,19 +772,22 @@ fn bbox_population_scales_linearly_when_all_nodes_share_one_page() {
             .chunks(per_chunk)
             .map(|group| chunk_with_spans(&group.join("\n\n"), vec![PageSpan { page: 1, bbox: None }]))
             .collect();
-        let start = std::time::Instant::now();
+        NODES_EXAMINED.with(|examined| examined.set(0));
         populate_page_span_bboxes(&mut chunks, &structure);
-        start.elapsed().as_secs_f64() * 1e3
+        assert!(
+            chunks.iter().all(|chunk| chunk.metadata.page_spans[0].bbox.is_some()),
+            "every chunk must match its own nodes"
+        );
+        NODES_EXAMINED.with(std::cell::Cell::get)
     }
-    // ~keep Best of several runs: a single wall-clock sample flaked on loaded CI runners (macOS).
-    let best = |nodes: usize| (0..5).map(|_| time_for(nodes)).fold(f64::INFINITY, f64::min);
-    let small = best(1_000).max(0.05);
-    let large = best(8_000);
-    assert!(
-        large / small < 24.0,
-        "8x nodes took {:.1}x as long ({small:.2}ms -> {large:.2}ms)",
-        large / small
-    );
+
+    for nodes in [1_000, 8_000] {
+        assert_eq!(
+            nodes_examined_for(nodes),
+            nodes,
+            "{nodes} nodes on one page: each chunk must consider only the nodes it holds"
+        );
+    }
 }
 
 #[test]

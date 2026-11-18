@@ -188,6 +188,7 @@ mod engine {
     use super::{connector::VisionConnector, decoder::Glm4Decoder, vision::CogVit};
     use super::{preprocess, tokenizer};
     use crate::error::Result;
+    use crate::models::image_processor::{DEFAULT_IMAGE_DECODE_BUDGET, decode_image_with_budget};
     use crate::{CandleOcrError, CandleOcrOutput};
 
     /// GLM-OCR inference engine. Owns the loaded model components and runs
@@ -265,6 +266,15 @@ mod engine {
         };
 
         Ok((config, tokenizer, vb))
+    }
+
+    pub(super) fn process_encoded_image<T>(
+        image_bytes: &[u8],
+        decode_budget: u64,
+        process_rgb: impl FnOnce(&image::RgbImage) -> Result<T>,
+    ) -> Result<T> {
+        let img = decode_image_with_budget(image_bytes, decode_budget, true)?.into_rgb8();
+        process_rgb(&img)
     }
 
     impl GlmOcrEngine {
@@ -357,9 +367,12 @@ mod engine {
         /// Run inference over a single image with a specified task and return the recognised content.
         ///
         /// This mirrors `process_image` but uses the supplied task for prompt construction
-        /// instead of `self.task`. Useful for overriding the engine's default task per invocation.
+        /// instead of `self.task`. Encoded input, decoding and RGB conversion share a 100 MiB
+        /// budget. Image decode failures return [`CandleOcrError::Image`].
         pub fn process_image_with_task(&self, image_bytes: &[u8], task: GlmOcrTask) -> Result<CandleOcrOutput> {
-            self.process_image_inner(image_bytes, task)
+            process_encoded_image(image_bytes, DEFAULT_IMAGE_DECODE_BUDGET, |img| {
+                self.process_rgb_image_with_task(img, task)
+            })
         }
 
         /// Run inference over a single image and return the recognised content.
@@ -375,13 +388,13 @@ mod engine {
         /// 8. Run autoregressive generation with MTP decoding
         /// 9. Decode token sequence to markdown text
         pub fn process_image(&self, image_bytes: &[u8]) -> Result<CandleOcrOutput> {
-            self.process_image_inner(image_bytes, self.task)
+            self.process_image_with_task(image_bytes, self.task)
         }
 
         /// Run the vision encoder and connector over `pixel_values`, returning the projected
         /// vision embeddings plus the merged patch grid `(h_merged, w_merged)` and the
         /// resulting image-token count after spatial merge. Split out of
-        /// [`Self::process_image_inner`] to keep that function under the workspace line-count
+        /// [`Self::process_rgb_image_with_task`] to keep that function under the workspace line-count
         /// limit. ~keep
         fn encode_and_project(
             &self,
@@ -415,7 +428,7 @@ mod engine {
 
         /// Build the token sequence with image placeholders, embed it, and splice the
         /// projected vision embeddings into the placeholder positions. Returns
-        /// `(input_embeds, image_tokens_start)`. Split out of [`Self::process_image_inner`] to
+        /// `(input_embeds, image_tokens_start)`. Split out of [`Self::process_rgb_image_with_task`] to
         /// keep that function under the workspace line-count limit. ~keep
         fn build_input_embeds(
             &self,
@@ -460,7 +473,7 @@ mod engine {
         /// before `image_tokens_start` and after the vision region are plain sequential
         /// offsets; positions inside the vision region encode `(t, h, w)` via
         /// `image_tokens_start` plus the row/column within the merged patch grid. Split out of
-        /// [`Self::process_image_inner`] to keep that function under the workspace line-count
+        /// [`Self::process_rgb_image_with_task`] to keep that function under the workspace line-count
         /// limit. ~keep
         fn build_mrope_position_ids(
             &self,
@@ -512,8 +525,9 @@ mod engine {
             Ok((prefill_position_ids, next_text_pos_start))
         }
 
-        fn process_image_inner(&self, image_bytes: &[u8], task: GlmOcrTask) -> Result<CandleOcrOutput> {
-            tracing::debug!(image_size = image_bytes.len(), task = %task, "GLM-OCR: starting inference");
+        /// Run the chosen task on an RGB image decoded and budgeted by the caller.
+        pub fn process_rgb_image_with_task(&self, img: &image::RgbImage, task: GlmOcrTask) -> Result<CandleOcrOutput> {
+            tracing::debug!(width = img.width(), height = img.height(), task = %task, "GLM-OCR: starting inference");
             // `patch_size`/`t_patch_size` must match the vision encoder's `config.json`-derived
             // values (the encoder rejects pixel_values whose H/W are not multiples of
             // `patch_size`), so they are taken from the same deserialized `VisionConfig` rather
@@ -525,7 +539,7 @@ mod engine {
                 ..preprocess::PreprocessConfig::default()
             };
             let (pixel_values, grid_thw) =
-                preprocess::preprocess(image_bytes, &preprocess_config, &self.device, self.dtype)?;
+                preprocess::preprocess_rgb(img, &preprocess_config, &self.device, self.dtype)?;
             super::glm_debug_tensor("pixel_values", &pixel_values);
 
             let grid_vec = grid_thw
@@ -697,6 +711,137 @@ pub use engine::GlmOcrEngine;
 #[cfg(test)]
 mod tests {
     use super::engine;
+    use crate::CandleOcrError;
+    use crate::models::image_processor::DEFAULT_IMAGE_DECODE_BUDGET;
+
+    const PNG_SIDE: u32 = 16;
+    const PIXEL: image::Rgb<u8> = image::Rgb([60, 110, 190]);
+
+    pub(super) fn small_rgb_png() -> (Vec<u8>, u64) {
+        let image = image::RgbImage::from_pixel(PNG_SIDE, PNG_SIDE, PIXEL);
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        let png = encoded.into_inner();
+        let encoded_bytes = u64::try_from(png.len()).unwrap();
+        let raster_bytes = u64::from(PNG_SIDE).pow(2) * u64::from(image::ColorType::Rgb8.bytes_per_pixel());
+        (png, encoded_bytes + raster_bytes - 1)
+    }
+
+    #[test]
+    fn standalone_glm_encoded_engine_checks_budget_before_inference() {
+        let (png, budget) = small_rgb_png();
+        let result = engine::process_encoded_image(&png, budget, |_| -> crate::error::Result<()> {
+            panic!("the inference continuation ran after a failed budget check")
+        });
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) = result else {
+            panic!("valid PNG must exceed the test budget with a typed image limit");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+
+        let size = engine::process_encoded_image(&png, DEFAULT_IMAGE_DECODE_BUDGET, |img| {
+            assert_eq!(*img.get_pixel(0, 0), PIXEL);
+            Ok(img.dimensions())
+        })
+        .unwrap();
+        assert_eq!(size, (PNG_SIDE, PNG_SIDE));
+    }
+
+    pub(super) fn assert_uses_default_image_budget<T>(run: impl FnOnce() -> crate::error::Result<T>) {
+        use crate::models::image_processor::decode_probe;
+
+        let (result, dispatch) = decode_probe::intercept(run);
+        assert_eq!(dispatch, Some((104_857_600, true)));
+        let Err(CandleOcrError::Image(image::ImageError::Limits(error))) = result else {
+            panic!("the public entry point must return the decoder's typed refusal");
+        };
+        assert_eq!(error.kind(), image::error::LimitErrorKind::InsufficientMemory);
+    }
+
+    #[test]
+    fn standalone_glm_public_encoded_task_uses_the_default_decode_budget() {
+        let (png, _) = small_rgb_png();
+        let engine = cpu_engine_with_zero_weights();
+        assert_uses_default_image_budget(|| engine.process_image_with_task(&png, super::GlmOcrTask::Table));
+    }
+
+    fn cpu_engine_with_zero_weights() -> super::GlmOcrEngine {
+        use std::sync::Arc;
+
+        use candle_core::{DType, Device};
+        use candle_nn::VarBuilder;
+        use parking_lot::Mutex;
+        use tokenizers::{Tokenizer, models::bpe::BPE};
+
+        use super::{GlmOcrConfig, GlmOcrEngine, GlmOcrTask, connector, decoder, tokenizer, vision};
+
+        const WIDTH: usize = 8;
+        let device = Device::Cpu;
+        let weights = VarBuilder::zeros(DType::F32, &device);
+        let config = GlmOcrConfig {
+            vision_config: vision::VisionConfig {
+                hidden_size: WIDTH,
+                out_hidden_size: WIDTH,
+                intermediate_size: WIDTH,
+                num_attention_heads: 1,
+                num_hidden_layers: 0,
+                ..Default::default()
+            },
+            text_config: decoder::DecoderConfig {
+                hidden_size: WIDTH,
+                intermediate_size: WIDTH,
+                num_attention_heads: 1,
+                num_key_value_heads: 1,
+                num_hidden_layers: 0,
+                vocab_size: WIDTH,
+                max_position_embeddings: WIDTH,
+                head_dim: WIDTH,
+                rope_parameters: decoder::RopeParameters {
+                    mrope_section: Vec::new(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            connector_config: connector::ConnectorConfig {
+                vision_hidden_size: WIDTH,
+                text_hidden_size: WIDTH,
+                merger_intermediate_size: WIDTH,
+                spatial_merge_size: 2,
+            },
+            mtp_config: Default::default(),
+            max_new_tokens: 0,
+            image_token_id: 3,
+            image_start_token_id: 1,
+            image_end_token_id: 2,
+        };
+        let vision = vision::CogVit::new(&config.vision_config, weights.clone(), device.clone()).unwrap();
+        let connector = connector::VisionConnector::new(&config.connector_config, weights.clone()).unwrap();
+        let decoder = decoder::Glm4Decoder::new(&config.text_config, weights.clone(), weights).unwrap();
+        GlmOcrEngine {
+            vision: Arc::new(Mutex::new(vision)),
+            connector: Arc::new(Mutex::new(connector)),
+            decoder: Arc::new(Mutex::new(decoder)),
+            tokenizer: Tokenizer::new(BPE::default()),
+            config,
+            task: GlmOcrTask::Ocr,
+            device,
+            dtype: DType::F32,
+            special: tokenizer::SpecialTokens {
+                eos: 0,
+                eos_token_ids: vec![0],
+                image_start: 1,
+                image_end: 2,
+                image_token: 3,
+            },
+        }
+    }
+
+    #[test]
+    fn standalone_glm_default_decode_budget_is_100_mib() {
+        const MIB: u64 = 1024 * 1024;
+        assert_eq!(DEFAULT_IMAGE_DECODE_BUDGET, 100 * MIB);
+    }
 
     #[test]
     fn detect_structured_markdown_recognises_table() {

@@ -18,6 +18,17 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub(crate) fn record_missing_tounicode_warning(doc: &PdfDocument, base_font: &str) {
+    use crate::extractors::warnings::{Warning, WarningCategory};
+
+    doc.push_structured_warning(Warning {
+        category: WarningCategory::ToUnicodeMissing,
+        page: None,
+        message: format!("Type0 font '{base_font}' has no ToUnicode entry!"),
+        spec_section: Some("9.10.2"),
+    });
+}
+
 #[path = "unmapped_minus.rs"]
 mod unmapped_minus;
 #[cfg(test)]
@@ -807,7 +818,7 @@ impl FontInfo {
             // user-defined CharProcs glyph-program model; the
             // standard glyph name registry doesn't apply, so
             // extraction may fall back to glyph-name heuristics. ~keep
-            crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+            doc.push_structured_warning(crate::extractors::warnings::Warning {
                 category: crate::extractors::warnings::WarningCategory::Type3Font,
                 page: None,
                 message: msg,
@@ -924,23 +935,13 @@ impl FontInfo {
             }
         } else {
             if subtype == "Type0" {
-                let msg = format!("Type0 font '{}' has no ToUnicode entry!", base_font);
                 tracing::warn!(
                     target: crate::LOG_TARGET_ROOT,
                     operation = "load_font",
                     error_code = "missing_tounicode",
                     "using composite-font fallback mapping"
                 );
-                // push to the structured sink. PDF
-                // Spec §9.10.2 "ToUnicode CMaps" describes the
-                // mapping; absent ToUnicode triggers the fallback
-                // chain (Encoding → AGL → CID-as-Unicode) per §9.10.3. ~keep
-                crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-                    category: crate::extractors::warnings::WarningCategory::ToUnicodeMissing,
-                    page: None,
-                    message: msg,
-                    spec_section: Some("9.10.2"),
-                });
+                record_missing_tounicode_warning(doc, &base_font);
             }
             None
         };
@@ -1525,6 +1526,7 @@ impl FontInfo {
         let Some(decoded) = decoded else {
             return false;
         };
+        let _warnings = doc.warning_scope();
         let Ok(operators) = crate::content::parse_content_stream(&decoded)
             .inspect_err(|error| crate::error::trace_recovery("parse_type3_charproc", error))
         else {
@@ -7012,9 +7014,6 @@ mod tests {
             Object::Array(vec![Object::String(SECRET_OBJECT.as_bytes().to_vec())]),
         )]));
 
-        // This test asserts on tracing output only. It used to bracket the run with
-        // drain_global_warnings() as tidy-up, but that sink is process-wide: the drain
-        // emptied it for whichever peer test was mid-assertion on its own warnings. ~keep
         let logs = capture_warnings(|| {
             FontInfo::from_dict(&type3, &doc).expect("minimal Type3 dictionary must parse");
             FontInfo::parse_encoding(&encoding, &doc, None, false).expect("malformed differences must recover");

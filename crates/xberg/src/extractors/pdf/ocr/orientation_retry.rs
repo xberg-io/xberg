@@ -409,7 +409,7 @@ impl OrientationRetry {
             }
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
-                tracing::warn!(%error, "Optional recognition-orientation OCR failed; retaining primary OCR");
+                tracing::warn!(error = %error.pdf_ocr_trace_category(), "Optional recognition-orientation OCR failed; retaining primary OCR");
                 Ok(original)
             }
         }
@@ -464,7 +464,7 @@ impl OrientationRetry {
             )),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
-                tracing::warn!(%error, "Optional half-turn OCR failed; retaining primary OCR");
+                tracing::warn!(error = %error.pdf_ocr_trace_category(), "Optional half-turn OCR failed; retaining primary OCR");
                 Ok(original)
             }
         }

@@ -136,8 +136,7 @@ pub(crate) fn eligible(config: &ExtractionConfig) -> bool {
                 && !pdf.ocr_inline_images
                 && !pdf.reading_order
                 && pdf.hierarchy.is_none()
-                && pdf.top_margin_fraction.is_none()
-                && pdf.bottom_margin_fraction.is_none()
+                && !pdf.has_nonzero_raw_margins()
         })
         && config.ocr.as_ref().is_some_and(eligible_tesseract)
 }
@@ -321,6 +320,31 @@ mod tests {
         })
         .await;
         assert!(absent.is_none());
+    }
+
+    #[test]
+    fn omitted_and_explicit_zero_margins_are_eligible_for_pdf_gap() {
+        let mut config = ExtractionConfig {
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        assert!(eligible(&config));
+
+        for (top, bottom, expected) in [
+            (None, None, true),
+            (Some(0.0), None, true),
+            (None, Some(0.0), true),
+            (Some(-0.0), Some(0.0), true),
+            (Some(f32::EPSILON), None, false),
+            (None, Some(0.10), false),
+        ] {
+            config.pdf_options = Some(crate::PdfConfig {
+                top_margin_fraction: top,
+                bottom_margin_fraction: bottom,
+                ..Default::default()
+            });
+            assert_eq!(eligible(&config), expected, "margins: {top:?}, {bottom:?}");
+        }
     }
 
     #[test]

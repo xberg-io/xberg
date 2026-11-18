@@ -1415,26 +1415,13 @@ impl PdfDocument {
     /// plus any new ones pushed since the last call. Use
     /// [`Self::take_structured_warnings`] to drain.
     ///
-    /// Merges the process-wide `GLOBAL_WARNING_SINK` (where
-    /// free-function log sites like `SPEC VIOLATION`,
-    /// operator-cap-exceeded, and Type0/Type3 font fallbacks push
-    /// their structured records) into the per-document sink on each
-    /// call. The drain attribution follows the "first caller wins"
-    /// rule documented at the global sink — process-wide scope means
-    /// the first document to call `structured_warnings` collects
-    /// the global tail that accumulated since the last drain.
-    ///
-    /// Renamed from `flatten_warnings` in to avoid colliding
-    /// with the pre-existing `DocumentEditor::flatten_warnings`
-    /// (which returns the form-flattening side-effect log, a
-    /// `&[String]` — different feature). Both the Rust and Python
-    /// (`PyDocument`) surfaces now agree on `structured_warnings`.
+    /// Warnings from other documents and standalone operations are excluded.
     pub fn structured_warnings(&self) -> Vec<crate::extractors::warnings::Warning> {
-        let global = crate::extractors::warnings::drain_global_warnings();
-        if !global.is_empty() {
-            self.warning_sink.extend(global);
-        }
         self.warning_sink.snapshot()
+    }
+
+    pub(crate) fn warning_scope(&self) -> crate::extractors::warnings::WarningScope {
+        self.warning_sink.enter()
     }
 
     /// Drain and return all accumulated structured warnings.
@@ -1915,6 +1902,7 @@ mod key_value_rows;
 mod objects;
 mod open;
 mod pages;
+mod pagination_separators;
 mod paths;
 mod picture_text;
 mod reading_order;

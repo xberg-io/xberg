@@ -6,6 +6,8 @@
     not(target_arch = "wasm32")
 ))]
 
+mod helpers;
+
 use sha2::{Digest, Sha256};
 use xberg::core::config::OcrQualityThresholds;
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, extract};
@@ -252,52 +254,23 @@ async fn preserves_markdown_table_and_protected_words_with_photo_title_policy() 
 
 const CACHE_CASE: &str = "recovers_the_photo_title_with_extraction_cache_enabled";
 const MARKDOWN_CACHE_CASE: &str = "recovers_markdown_photo_title_with_extraction_cache_enabled";
-const CACHE_CHILD: &str = "XBERG_PHOTO_TITLE_CACHE_TEST_CHILD";
 
 #[tokio::test]
 async fn recovers_the_photo_title_with_extraction_cache_enabled() {
-    if std::env::var(CACHE_CHILD).as_deref() == Ok(CACHE_CASE) {
+    if helpers::is_bundled_english_tessdata_child(CACHE_CASE) {
         check_photo_title_cache_paths(png_config()).await;
     } else {
-        run_isolated_cache_test(CACHE_CASE);
+        helpers::run_with_bundled_english_tessdata_only(CACHE_CASE);
     }
 }
 
 #[tokio::test]
 async fn recovers_markdown_photo_title_with_extraction_cache_enabled() {
-    if std::env::var(CACHE_CHILD).as_deref() == Ok(MARKDOWN_CACHE_CASE) {
+    if helpers::is_bundled_english_tessdata_child(MARKDOWN_CACHE_CASE) {
         check_photo_title_cache_paths(markdown_config()).await;
     } else {
-        run_isolated_cache_test(MARKDOWN_CACHE_CASE);
+        helpers::run_with_bundled_english_tessdata_only(MARKDOWN_CACHE_CASE);
     }
-}
-
-fn run_isolated_cache_test(case: &str) {
-    let root = tempfile::tempdir().expect("isolated OCR data and cache");
-    let tessdata = root.path().join("tessdata");
-    std::fs::create_dir(&tessdata).expect("create isolated tessdata");
-    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English fixture");
-    assert_eq!(
-        hex::encode(Sha256::digest(english)),
-        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
-    );
-    std::fs::write(tessdata.join("eng.traineddata"), english).expect("write bundled English fixture");
-    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-        .args(["--exact", case, "--nocapture"])
-        .env(CACHE_CHILD, case)
-        .env("TESSDATA_PREFIX", tessdata)
-        .env("XBERG_CACHE_DIR", root.path().join("cache"))
-        .output()
-        .expect("run isolated OCR test");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success()
-            && stdout
-                .lines()
-                .any(|line| { line.starts_with("test result: ok. 1 passed; 0 failed; 0 ignored;") }),
-        "isolated OCR test failed: {stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {

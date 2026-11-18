@@ -3,6 +3,7 @@
 use crate::Result;
 use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
+use crate::extraction::excel::{read_excel_bytes, read_excel_file};
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
@@ -365,6 +366,27 @@ impl ExcelExtractor {
     }
 }
 
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) async fn run_excel_read<T: Send + 'static>(
+    runtime: &tokio::runtime::Handle,
+    cancel: Option<&crate::cancellation::CancellationToken>,
+    read: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let batch = crate::core::batch_mode::is_batch_mode();
+    crate::core::runtime::run_blocking(runtime, cancel, move |_| {
+        if batch {
+            // Keep a parser panic confined to its workbook's batch item. ~keep
+            catch_unwind(AssertUnwindSafe(read))
+                .map_err(|_| crate::XbergError::parsing("Excel extraction task failed: worker panicked"))?
+        } else {
+            read()
+        }
+    })
+    .await
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl InternalDocumentExtractor for ExcelExtractor {
@@ -395,30 +417,22 @@ impl InternalDocumentExtractor for ExcelExtractor {
 
         let security_limits = config.security_limits.clone().unwrap_or_default();
 
+        let cancel = config.cancel_token.as_ref();
+        check_cancelled(cancel)?;
         let (workbook, read_warnings) = {
-            #[cfg(feature = "tokio-runtime")]
-            {
-                if crate::core::batch_mode::is_batch_mode() {
-                    check_cancelled(config.cancel_token.as_ref())?;
-                    let content_owned = content.to_vec();
-                    let extension_owned = extension.to_string();
-                    let limits_owned = security_limits.clone();
-                    let span = tracing::Span::current();
-                    tokio::task::spawn_blocking(move || {
-                        let _guard = span.entered();
-                        crate::extraction::excel::read_excel_bytes(&content_owned, &extension_owned, &limits_owned)
-                    })
-                    .await
-                    .map_err(|e| crate::error::XbergError::parsing(format!("Excel extraction task failed: {}", e)))??
-                } else {
-                    crate::extraction::excel::read_excel_bytes(content, extension, &security_limits)?
-                }
+            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(runtime) = crate::core::runtime::current_global_runtime() {
+                let content = content.to_vec();
+                run_excel_read(&runtime, cancel, move || {
+                    read_excel_bytes(&content, extension, &security_limits)
+                })
+                .await?
+            } else {
+                read_excel_bytes(content, extension, &security_limits)?
             }
-            #[cfg(not(feature = "tokio-runtime"))]
-            {
-                check_cancelled(config.cancel_token.as_ref())?;
-                crate::extraction::excel::read_excel_bytes(content, extension, &security_limits)?
-            }
+
+            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+            read_excel_bytes(content, extension, &security_limits)?
         };
 
         let mut budget = SecurityBudget::from_config(config);
@@ -457,7 +471,20 @@ impl InternalDocumentExtractor for ExcelExtractor {
             .ok_or_else(|| crate::XbergError::validation("Invalid file path".to_string()))?;
 
         let security_limits = config.security_limits.clone().unwrap_or_default();
-        let (workbook, read_warnings) = crate::extraction::excel::read_excel_file(path_str, &security_limits)?;
+        let cancel = config.cancel_token.as_ref();
+        check_cancelled(cancel)?;
+        let (workbook, read_warnings) = {
+            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(runtime) = crate::core::runtime::current_global_runtime() {
+                let path_str = path_str.to_owned();
+                run_excel_read(&runtime, cancel, move || read_excel_file(&path_str, &security_limits)).await?
+            } else {
+                read_excel_file(path_str, &security_limits)?
+            }
+
+            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+            read_excel_file(path_str, &security_limits)?
+        };
         let mut budget = SecurityBudget::from_config(config);
         validate_workbook_budget(&workbook, &mut budget)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
@@ -1017,11 +1044,253 @@ mod tests {
         buffer
     }
 
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    const XLSX_MIME: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn single_excel_reads_queue_and_return_typed_cancellation() {
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let extractor = ExcelExtractor::new();
+        let runtime = crate::core::runtime::global_runtime().unwrap();
+
+        for file in [false, true] {
+            for (before_poll, while_queued) in [(false, false), (false, true), (true, false)] {
+                let cancel = crate::cancellation::CancellationToken::new();
+                if before_poll {
+                    cancel.cancel();
+                }
+                let config = ExtractionConfig {
+                    cancel_token: Some(cancel.clone()),
+                    max_archive_depth: 0,
+                    ..Default::default()
+                };
+                let read = if file {
+                    extractor.extract_path(path.path(), XLSX_MIME, &config)
+                } else {
+                    extractor.extract_content(&data, XLSX_MIME, &config)
+                };
+                let (queued, worker_entered, result) =
+                    crate::core::runtime::poll_with_blocking_worker_held(runtime, read, || {
+                        if while_queued {
+                            cancel.cancel();
+                        }
+                    });
+                assert_eq!(queued, !before_poll, "file input {file}, pre-cancelled {before_poll}");
+                assert_eq!(
+                    worker_entered, !before_poll,
+                    "file input {file}, pre-cancelled {before_poll}"
+                );
+                if before_poll || while_queued {
+                    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+                } else {
+                    assert_hello_workbook(result.unwrap());
+                }
+            }
+        }
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn assert_hello_workbook(document: InternalDocument) {
+        let pages = document.prebuilt_pages.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].content.contains("Hello"), "{:?}", pages[0].content);
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn direct_excel_reads_from_the_only_foreign_blocking_worker_complete() {
+        use std::time::Duration;
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .enable_time()
+            .build()
+            .unwrap();
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let handle = runtime.handle().clone();
+        let task = runtime.spawn_blocking(move || {
+            handle.block_on(async {
+                let extractor = ExcelExtractor::new();
+                let config = ExtractionConfig {
+                    max_archive_depth: 0,
+                    ..Default::default()
+                };
+                for file in [false, true] {
+                    let read = if file {
+                        extractor.extract_path(path.path(), XLSX_MIME, &config)
+                    } else {
+                        extractor.extract_content(&data, XLSX_MIME, &config)
+                    };
+                    let document = tokio::time::timeout(Duration::from_secs(5), read)
+                        .await
+                        .unwrap_or_else(|_| panic!("direct Excel read waited on its own worker; file input {file}"))
+                        .unwrap();
+                    assert_hello_workbook(document);
+                }
+            });
+        });
+        runtime.block_on(task).unwrap();
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn excel_batch_runs_bytes_and_paths_on_a_blocking_worker() {
+        let runtime = crate::core::runtime::global_runtime().unwrap();
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let extractor = ExcelExtractor::new();
+        let config = ExtractionConfig {
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        for file in [false, true] {
+            let read = if file {
+                extractor.extract_path(path.path(), XLSX_MIME, &config)
+            } else {
+                extractor.extract_content(&data, XLSX_MIME, &config)
+            };
+            let batch_read = crate::core::batch_mode::with_batch_mode(read);
+            let (queued, worker_entered, result) =
+                crate::core::runtime::poll_with_blocking_worker_held(runtime, batch_read, || {});
+            assert!(queued, "file input {file}");
+            assert!(worker_entered, "file input {file}");
+            assert_hello_workbook(result.unwrap());
+        }
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn cancelled_excel_worker_does_not_call_the_parser() {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let cancel = crate::cancellation::CancellationToken::new();
+        cancel.cancel();
+        let data = build_test_xlsx(&[]);
+        let result = crate::core::runtime::run_blocking(&tokio::runtime::Handle::current(), Some(&cancel), move |_| {
+            started_tx.send(()).unwrap();
+            read_excel_bytes(&data, ".xlsx", &Default::default())
+        })
+        .await;
+        assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+        assert_eq!(started_rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Disconnected));
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn single_and_batch_excel_outputs_match_for_bytes_and_paths() {
+        crate::core::runtime::global_runtime().unwrap().block_on(async {
+            let data = build_test_xlsx(&[]);
+            let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+            std::fs::write(path.path(), &data).unwrap();
+            let config = ExtractionConfig {
+                include_document_structure: true,
+                ..Default::default()
+            };
+            let extractor = ExcelExtractor::new();
+            let make_json = |doc| serde_json::to_value(doc).unwrap();
+
+            let bytes = || extractor.extract_content(&data, XLSX_MIME, &config);
+            let file = || extractor.extract_path(path.path(), XLSX_MIME, &config);
+            let single_content = make_json(bytes().await.unwrap());
+            let single_path = make_json(file().await.unwrap());
+            assert_eq!(
+                single_content,
+                make_json(crate::core::batch_mode::with_batch_mode(bytes()).await.unwrap())
+            );
+            assert_eq!(
+                single_path,
+                make_json(crate::core::batch_mode::with_batch_mode(file()).await.unwrap())
+            );
+
+            let inputs = vec![
+                crate::ExtractInput::from_uri(path.path().to_str().unwrap()),
+                crate::ExtractInput::from_bytes(data.clone(), XLSX_MIME, None),
+            ];
+            let config = ExtractionConfig {
+                use_cache: false,
+                max_archive_depth: 0,
+                ..config
+            };
+            let batch = crate::extract_batch(inputs.clone(), &config).await.unwrap();
+            assert_eq!(batch.results.len(), inputs.len());
+            for (input, from_batch) in inputs.into_iter().zip(batch.results) {
+                let single = crate::extract(input, &config).await.unwrap();
+                assert_eq!(single.results.len(), 1);
+                let from_single = &single.results[0];
+                assert_eq!(from_batch.content, from_single.content);
+                assert_eq!(from_batch.document, from_single.document);
+                assert_eq!(from_batch.mime_type, XLSX_MIME);
+                assert!(from_batch.content.contains("Hello"));
+            }
+        });
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn excel_reads_inline_without_a_tokio_runtime() {
+        let data = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), &data).unwrap();
+        let extractor = ExcelExtractor::new();
+        let config = ExtractionConfig::default();
+        for result in [
+            futures::executor::block_on(extractor.extract_content(&data, XLSX_MIME, &config)),
+            futures::executor::block_on(extractor.extract_path(path.path(), XLSX_MIME, &config)),
+        ] {
+            let pages = result.unwrap().prebuilt_pages.unwrap();
+            assert_eq!(pages.len(), 1);
+            assert!(pages[0].content.contains("Hello"), "{:?}", pages[0].content);
+        }
+    }
+
     /// GH#642: the archive entry-count ceiling for XLSX must come from
     /// `config.security_limits.max_files_in_archive`, the same as the DOCX/PPTX top-level
     /// containers, not be silently unenforced. This uses a limit (3) well below the base
     /// 5-entry archive, so the unfixed code (no entry-count check at all in
     /// `read_excel_bytes`) always extracts successfully here, while the fixed code rejects it.
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn single_excel_read_resumes_the_worker_panic() {
+        let panic = std::panic::catch_unwind(|| {
+            let runtime = crate::core::runtime::global_runtime().unwrap();
+            runtime.block_on(run_excel_read(runtime.handle(), None, || -> Result<()> {
+                panic!("single workbook worker panic")
+            }))
+        })
+        .expect_err("the worker panic must reach the single caller");
+        assert_eq!(
+            panic.downcast_ref::<&str>().copied(),
+            Some("single workbook worker panic")
+        );
+    }
+
+    #[cfg(all(feature = "excel", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[test]
+    fn pre_cancelled_excel_path_returns_cancellation_inline() {
+        let valid_workbook = build_test_xlsx(&[]);
+        let path = tempfile::Builder::new().suffix(".xlsx").tempfile().unwrap();
+        std::fs::write(path.path(), valid_workbook).unwrap();
+
+        let extractor = ExcelExtractor::new();
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(token),
+            max_archive_depth: 0,
+            ..Default::default()
+        };
+        let read = || extractor.extract_path(path.path(), XLSX_MIME, &config);
+        let foreign_runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for result in [futures::executor::block_on(read()), foreign_runtime.block_on(read())] {
+            assert!(matches!(result, Err(crate::XbergError::Cancelled)));
+        }
+    }
+
     #[cfg(feature = "excel")]
     #[tokio::test]
     async fn test_xlsx_extract_content_honours_configured_archive_entry_limit() {

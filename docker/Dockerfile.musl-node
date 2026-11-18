@@ -8,10 +8,7 @@ ARG TARGET=x86_64-unknown-linux-musl
 
 WORKDIR /build
 
-# Alpine's /bin/sh is busybox ash, which supports `-o pipefail`. Without it the
-# `curl ... | sh` rustup bootstrap below reports only sh's status, so a failed or
-# truncated download silently installs nothing, and the `readelf ... | grep`
-# linkage diagnostic reports success on an empty pipe. (hadolint DL4006)
+# Propagate failures through the linkage diagnostic pipelines. (hadolint DL4006)
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 RUN apk add --no-cache \
@@ -24,8 +21,8 @@ RUN apk add --no-cache \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+COPY docker/install-rustup-musl.sh /tmp/install-rustup-musl.sh
+RUN sh /tmp/install-rustup-musl.sh "${RUST_TOOLCHAIN}" && \
     echo "Rust host: $(~/.cargo/bin/rustc -vV | grep host)" && \
     echo "Default target: $(~/.cargo/bin/rustc --print cfg | grep target)"
 ENV PATH="/root/.cargo/bin:${PATH}"

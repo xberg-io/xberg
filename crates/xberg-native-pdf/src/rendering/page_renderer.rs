@@ -39,6 +39,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
+#[path = "color_operators.rs"]
+mod color_operators;
+#[path = "path_operators.rs"]
+mod path_operators;
+const COLOR_OPERATOR_TRACE_TARGET: &str = module_path!();
+
 #[path = "image_budget.rs"]
 mod image_budget;
 #[path = "knockout.rs"]
@@ -527,6 +533,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        let _warnings = doc.warning_scope();
         self.render_page_with_workspace_retries(page_num, doc, png_budget, raster_budget::MAX_WORKSPACE_DPI_RETRIES)
     }
 
@@ -1212,142 +1219,42 @@ impl PageRenderer {
                 }
 
                 Operator::SetFillRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (*r, *g, *b);
-                    gs.fill_color_space = "DeviceRGB".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*r, *g, *b]);
-                    // Device-family fill paint: per §11.7.3 the source
-                    // covers only the process channels, so any spot ink
-                    // identity recorded by a prior /Separation or
-                    // /DeviceN paint is no longer the active source.
-                    // The sidecar's per-paint spot mirror reads this
-                    // empty list as "no spot lane writes for this paint". ~keep
-                    gs.fill_spot_inks.clear();
-                    // ISO 32000-1 §8.6.3: the fill colour and colour
-                    // space are coupled — switching to /DeviceRGB
-                    // invalidates any prior /DeviceCMYK identity. Failing
-                    // to clear `fill_color_cmyk` here means the §11.7.4.3
-                    // overprint path would still see the prior paint's
-                    // CMYK quadruple as the "current source colour",
-                    // producing wrong B(c_b, c_s) = c_s values for the
-                    // new RGB paint's region. ~keep
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_fill_rgb(gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetStrokeRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (*r, *g, *b);
-                    gs.stroke_color_space = "DeviceRGB".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*r, *g, *b]);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_stroke_rgb(gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetFillGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (g, g, g);
-                    gs.fill_color_space = "DeviceGray".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.push(g);
-                    gs.fill_spot_inks.clear();
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillGray: {}", g);
+                    color_operators::set_fill_gray(gs_stack.current_mut(), *gray);
                 }
                 Operator::SetStrokeGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (g, g, g);
-                    gs.stroke_color_space = "DeviceGray".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.push(g);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeGray: {}", g);
+                    color_operators::set_stroke_gray(gs_stack.current_mut(), *gray);
                 }
                 Operator::SetFillCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (r, g, b);
-                    gs.fill_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.fill_color_space = "DeviceCMYK".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.fill_spot_inks.clear();
-                    tracing::trace!("SetFillCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_fill_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
                 }
                 Operator::SetStrokeCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (r, g, b);
-                    gs.stroke_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.stroke_color_space = "DeviceCMYK".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.stroke_spot_inks.clear();
-                    tracing::trace!("SetStrokeCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_stroke_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
                 }
 
-                Operator::SetFillColorSpace { name } => {
-                    // ISO 32000-1 §8.6.8: the `cs` operator shall also
-                    // set the current colour to its initial value, which
-                    // depends on the colour space. For Separation /
-                    // DeviceN the initial tint is 1.0 per colorant
-                    // (§8.6.6.4 / §8.6.6.5); for DeviceCMYK the initial
-                    // colour is (0, 0, 0, 1); device-family RGB / Gray
-                    // start at all-zeros. Failing to reset the colour
-                    // here means a paint after `cs /CS_B` without an
-                    // intervening `scn` would carry the prior space's
-                    // identity and tint, including its spot ink list —
-                    // round 2 QA pinned that the spot mirror would then
-                    // write the prior /CS_A's spot lane. ~keep
-                    let resolved = self.color_spaces.get(name).cloned();
-                    // §10.7.3: the §8.6.8 initial-colour evaluation runs an
-                    // ICC retarget for DeviceN /Process /ICCBased; thread
-                    // the live gs intent through so a prior `/Perceptual ri`
-                    // / ExtGState /RI propagates into the retarget tag pick. ~keep
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                Operator::SetFillColorSpace { name } => color_operators::set_fill_color_space(
+                    gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_space = name.clone();
-                    gs.fill_color_rgb = initial.rgb;
-                    gs.fill_color_cmyk = initial.cmyk;
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&initial.components);
-                    gs.fill_spot_inks = initial.spot_inks;
-                    // Selecting a colour space clears any previously selected
-                    // fill pattern; a fresh scn must re-name it (§8.7.3). ~keep
-                    gs.fill_pattern_name = None;
-                    tracing::trace!("SetFillColorSpace: {}", name);
-                }
-                Operator::SetStrokeColorSpace { name } => {
-                    let resolved = self.color_spaces.get(name).cloned();
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
+                Operator::SetStrokeColorSpace { name } => color_operators::set_stroke_color_space(
+                    gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_space = name.clone();
-                    gs.stroke_color_rgb = initial.rgb;
-                    gs.stroke_color_cmyk = initial.cmyk;
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&initial.components);
-                    gs.stroke_spot_inks = initial.spot_inks;
-                }
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
                 Operator::SetFillColor { components } => {
                     let gs = gs_stack.current_mut();
                     let space_name = gs.fill_color_space.clone();
@@ -1596,43 +1503,15 @@ impl PageRenderer {
                     gs_stack.current_mut().rendering_intent = intent.clone();
                 }
 
-                Operator::MoveTo { x, y } => {
-                    current_path.move_to(*x, *y);
-                }
-                Operator::LineTo { x, y } => {
-                    current_path.line_to(*x, *y);
-                }
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3);
-                }
-                Operator::CurveToV { x2, y2, x3, y3 } => {
-                    if let Some(last) = current_path.last_point() {
-                        current_path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
-                    }
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3);
-                }
-                Operator::Rectangle { x, y, width, height } => {
-                    // Normalize negative width/height per PDF spec:
-                    // re with negative dimensions means the rect extends in the opposite direction
-                    // ~keep
-                    let (nx, nw) = if *width < 0.0 {
-                        (x + width, -width)
-                    } else {
-                        (*x, *width)
-                    };
-                    let (ny, nh) = if *height < 0.0 {
-                        (y + height, -height)
-                    } else {
-                        (*y, *height)
-                    };
-                    if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
-                        current_path.push_rect(rect);
-                    }
-                }
-                Operator::ClosePath => {
-                    current_path.close();
+                Operator::MoveTo { .. }
+                | Operator::LineTo { .. }
+                | Operator::CurveTo { .. }
+                | Operator::CurveToV { .. }
+                | Operator::CurveToY { .. }
+                | Operator::Rectangle { .. }
+                | Operator::ClosePath => {
+                    let handled = path_operators::construct(&mut current_path, op);
+                    debug_assert!(handled, "only path construction operators are dispatched here");
                 }
 
                 Operator::Stroke | Operator::CloseStroke => {
@@ -4221,6 +4100,9 @@ impl PageRenderer {
         let actual = u32::try_from(integer)
             .map_err(|_| Error::Image(format!("CCITT ImageMask /DecodeParms /{key} must be positive")))?;
         if actual == 0 {
+            if key == "Rows" {
+                return Ok(());
+            }
             return Err(Error::Image(format!(
                 "CCITT ImageMask /DecodeParms /{key} must be positive"
             )));
@@ -9612,7 +9494,7 @@ mod tests {
         PdfDocument::from_bytes(pdf).expect("open minimal PDF")
     }
 
-    fn minimal_pdf_doc() -> PdfDocument {
+    pub(super) fn minimal_pdf_doc() -> PdfDocument {
         pdf_doc_with_extra_object(None)
     }
 
@@ -9800,6 +9682,15 @@ mod tests {
     }
 
     #[test]
+    fn ccitt_image_mask_uses_image_height_for_zero_rows() {
+        let dict = ccitt_mask_dict(8, 3, 8, 0);
+        let params = PageRenderer::image_mask_ccitt_params(&dict, 8, 3, &minimal_pdf_doc())
+            .unwrap()
+            .unwrap();
+        assert_eq!(params.rows, Some(3));
+    }
+
+    #[test]
     fn ccitt_image_mask_rejects_dimension_mismatches() {
         let columns = ccitt_mask_dict(8, 1, 7, 1);
         let doc = minimal_pdf_doc();
@@ -9982,35 +9873,6 @@ mod tests {
         let (r, g, b) = cmyk_to_rgb(1.0, 0.0, 0.0, 0.0);
         let q = |v: f32| (v * 255.0).round() as u8;
         assert_eq!([q(r), q(g), q(b)], [0x00, 0xAD, 0xEF]);
-    }
-
-    #[test]
-    fn test_negative_rect_normalization() {
-        // Negative height: re 100 200 50 -30 → should normalize to (100, 170, 50, 30) ~keep
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = 50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 100.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_negative_rect_both_negative() {
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = -50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 50.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
     }
 
     /// The crux of the ET application: the accumulated glyph silhouette is
@@ -10799,6 +10661,10 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "path_operators_tests.rs"]
+mod path_operators_tests;
 
 #[cfg(test)]
 #[path = "sampled_function_tests.rs"]

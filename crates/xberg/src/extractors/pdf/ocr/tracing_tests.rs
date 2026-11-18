@@ -512,3 +512,136 @@ fn should_report_each_page_once_when_the_quality_check_sends_it_to_a_fallback_ba
         assert_eq!(page.backend, FALLBACK_BACKENDS[0]);
     }
 }
+
+const PRIVATE_OCR_ERROR: &str = "private:/synthetic/ocr/backend-model";
+const OCR_FAILURE_TRACE_BACKEND: &str = "pdf-failure-trace-3175";
+
+#[derive(Default)]
+struct FailingTraceBackend(std::sync::atomic::AtomicUsize);
+
+impl Plugin for FailingTraceBackend {
+    fn name(&self) -> &str {
+        OCR_FAILURE_TRACE_BACKEND
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for FailingTraceBackend {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    fn supports_document_processing(&self) -> bool {
+        false
+    }
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, PRIVATE_OCR_ERROR).into())
+    }
+}
+
+#[derive(Clone, Default)]
+struct ExtractionWarnings(Arc<Mutex<Vec<BTreeMap<String, String>>>>);
+
+impl<S: tracing::Subscriber> Layer<S> for ExtractionWarnings {
+    fn on_event(&self, event: &tracing::Event<'_>, _: Context<'_, S>) {
+        if *event.metadata().level() == tracing::Level::WARN {
+            let mut fields = Fields::default();
+            event.record(&mut fields);
+            self.0.lock().expect("warn capture lock").push(fields.0);
+        }
+    }
+}
+
+fn assert_public_ocr_warning(pdf: Vec<u8>, config: &ExtractionConfig, message: &str) -> crate::ExtractedDocument {
+    let backend = Arc::new(FailingTraceBackend::default());
+    register_ocr_backend(backend.clone()).expect("register failing backend");
+    let capture = ExtractionWarnings::default();
+    let result = tracing::subscriber::with_default(Registry::default().with(capture.clone()), || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime")
+            .block_on(crate::extract(
+                crate::ExtractInput::from_bytes(pdf, "application/pdf", None),
+                config,
+            ))
+    });
+    unregister_ocr_backend(OCR_FAILURE_TRACE_BACKEND).expect("unregister failing backend");
+    assert!(
+        backend.0.load(std::sync::atomic::Ordering::Relaxed) > 0,
+        "backend must return its error"
+    );
+    let mut result = result.expect("the native result survives OCR failure");
+    assert!(result.errors.is_empty());
+    assert_eq!(result.results.len(), 1);
+    let warnings = capture.0.lock().expect("warn capture lock");
+    let categories: Vec<_> = warnings
+        .iter()
+        .filter(|event| event.get("message").is_some_and(|value| value == message))
+        .map(|event| event["error"].as_str())
+        .collect();
+    assert_eq!(
+        categories.len(),
+        1,
+        "public extraction must emit exactly one {message} warning"
+    );
+    assert!(
+        warnings
+            .iter()
+            .flat_map(|event| event.values())
+            .all(|value| !value.contains(PRIVATE_OCR_ERROR)),
+        "backend error text reached an extraction warning"
+    );
+    assert_eq!(categories, ["io (PermissionDenied)"]);
+    result.results.pop().expect("one PDF result")
+}
+
+#[test]
+fn public_mixed_pdf_fallback_warns_without_exposing_the_backend_error() {
+    if !in_registry_child("public_mixed_pdf_fallback_warns_without_exposing_the_backend_error") {
+        return;
+    }
+    let mut config = config(OCR_FAILURE_TRACE_BACKEND, false);
+    config.ocr.as_mut().unwrap().quality_thresholds = Some(OcrQualityThresholds {
+        min_total_non_whitespace: 1000,
+        ..Default::default()
+    });
+    let result = assert_public_ocr_warning(
+        mixed_pdf(),
+        &config,
+        "OCR fallback failed; using native text extraction result",
+    );
+    assert!(
+        result.content.contains("Native invoice"),
+        "native text must survive the failed OCR"
+    );
+}
+
+#[test]
+fn public_inline_image_ocr_warns_without_exposing_the_backend_error() {
+    if !in_registry_child("public_inline_image_ocr_warns_without_exposing_the_backend_error") {
+        return;
+    }
+    let mut config = config(OCR_FAILURE_TRACE_BACKEND, false);
+    config.force_ocr_pages = Some(Vec::new());
+    config.pdf_options = Some(crate::core::config::pdf::PdfConfig {
+        extract_images: true,
+        ocr_inline_images: true,
+        ..Default::default()
+    });
+    let result = assert_public_ocr_warning(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ocr/scanned_hello.pdf"
+        ))
+        .to_vec(),
+        &config,
+        "inline image OCR failed; image returned without OCR result",
+    );
+    let images = result.images.expect("PDF includes its raster image");
+    assert_eq!(images.len(), 1);
+    assert!(images[0].ocr_result.is_none());
+}
