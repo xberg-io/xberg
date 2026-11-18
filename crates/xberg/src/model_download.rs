@@ -120,9 +120,8 @@ pub(crate) fn hf_client_builder() -> hf_hub::HFClientBuilder {
 /// Resolve the model-download deadline, honoring `XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS` (seconds; a
 /// value of 0 or unparseable falls back to the default).
 ///
-/// Callers are [`with_download_deadline`] (same gate) and [`acquire_artifact_file_lock`] (a strict
-/// subset of it), plus the always-compiled `download_deadline_tests` module — hence `test` in the
-/// gate below rather than the bare feature disjunction most siblings in this file use.
+/// Ungated inside the module: its `test` arm builds the watchdog tests without any
+/// `model_download` feature.
 pub(crate) fn model_download_timeout() -> Duration {
     std::env::var("XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS")
         .ok()
@@ -166,10 +165,8 @@ fn offline_cache_miss(repo_id: &str, remote_filename: &str, revision: Option<&st
 /// force-killed — it stays parked on the socket until the OS tears the connection down — but it
 /// holds no lock the pipeline needs, so progress resumes. `label` names the fetch in the log/error.
 ///
-/// Feature-gated callers (`hf_resolve_file_with_progress`, `hf_download_at_revision`,
-/// `hf_force_download_revision`) all fall within the model-download feature set below; the
-/// always-compiled `download_deadline_tests` module below exercises this watchdog directly under
-/// plain `#[cfg(test)]`, hence `test` in the gate rather than the bare feature disjunction.
+/// Ungated inside the module: its `test` arm builds the watchdog tests without any
+/// `model_download` feature.
 pub(crate) fn with_download_deadline<T, F>(label: &str, f: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
