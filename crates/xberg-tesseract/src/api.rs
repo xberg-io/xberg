@@ -657,9 +657,12 @@ impl TesseractAPI {
     ///
     /// Returns the source Y resolution as an integer.
     pub fn get_source_y_resolution(&self) -> Result<i32> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: This call requires a live, in-use API handle. The mutex serializes the query,
-        // which returns a scalar, including -1 when the thresholder has not been created.
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The call
+        // then returns a scalar, -1 when no image has created a thresholder.
         Ok(unsafe { TessBaseAPIGetSourceYResolution(*handle) })
     }
 
@@ -667,13 +670,18 @@ impl TesseractAPI {
     ///
     /// # Returns
     ///
-    /// Returns a caller-owned reference that may share the engine's native image.
-    /// Use `thresholded_image` for an independent typed allocation.
+    /// Returns one extra reference to the engine's own binary `PIX`, not a copy. The caller
+    /// releases it with `pixDestroy` and must not read its pixels while or after `recognize`
+    /// runs on this engine, which edits them in place. Use `thresholded_image` for an
+    /// independent copy.
     pub fn get_thresholded_image(&self) -> Result<*mut c_void> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: This call requires a live, in-use API handle. The mutex serializes the query.
-        // A non-null result owns one PIX reference that the caller releases with pixDestroy,
-        // even when it shares engine pixels.
+        // SAFETY: Sound only if the handle is a live engine, per the note above. This is not a
+        // pure query: it thresholds lazily, writing the engine's binary image under the lock.
+        // A non-null result is pixClone of that PIX, the same object with one more reference.
         let pix = unsafe { TessBaseAPIGetThresholdedImage(*handle) };
         if pix.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1020,9 +1028,12 @@ impl TesseractAPI {
     ///
     /// Returns the thresholded image scale factor as an integer.
     pub fn get_thresholded_image_scale_factor(&self) -> Result<i32> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: This call requires a live, in-use API handle. The mutex serializes the query,
-        // which returns a scalar, including zero when the thresholder has not been created.
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The call
+        // then returns a scalar, zero when no image has created a thresholder.
         Ok(unsafe { TessBaseAPIGetThresholdedImageScaleFactor(*handle) })
     }
 
@@ -1378,8 +1389,15 @@ impl TesseractAPI {
     ) -> Result<()> {
         validate_image_buffer(image_data.len(), width, height, bytes_per_pixel, bytes_per_line)?;
 
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
 
+        // SAFETY: Sound only if the handle is a live engine, per the note above.
+        // validate_image_buffer checked that `image_data` holds `height` rows of
+        // `bytes_per_line` bytes, each at least `width * bytes_per_pixel` wide. The
+        // thresholder copies the buffer into its own PIX and keeps no pointer to it.
         unsafe {
             TessBaseAPISetImage(
                 *handle,
@@ -1406,7 +1424,14 @@ impl TesseractAPI {
     /// The caller must also exclude concurrent access while Tesseract can mutate
     /// the input. This raw-pointer contract is tracked in #3228.
     pub fn set_image_2(&self, pix: *mut c_void) -> Result<()> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // This safe function cannot check `pix`. Soundness rests on the caller passing a live
+        // PIX that no other thread uses during the call, the contract tracked in #3228. The
+        // thresholder copies the image and keeps no reference to `pix`, but Tesseract strips
+        // a PNG alpha channel by rewriting `pix` in place first. ~keep
         unsafe { TessBaseAPISetImage2(*handle, pix) };
         Ok(())
     }
@@ -1419,11 +1444,15 @@ impl TesseractAPI {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(())` if setting the source resolution is successful, otherwise returns an error.
+    /// Always returns `Ok(())`. Tesseract ignores the value when no image is set, and every
+    /// `set_image` resets it, so call this after `set_image`.
     pub fn set_source_resolution(&self, ppi: i32) -> Result<()> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: This call requires a live, in-use API handle. The mutex serializes the setter,
-        // which passes a scalar to the thresholder when present.
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The call
+        // passes only a scalar to the thresholder, if one exists.
         unsafe { TessBaseAPISetSourceResolution(*handle, ppi) };
         Ok(())
     }
@@ -1441,7 +1470,12 @@ impl TesseractAPI {
     ///
     /// Returns `Ok(())` if setting the rectangle is successful, otherwise returns an error.
     pub fn set_rectangle(&self, left: i32, top: i32, width: i32, height: i32) -> Result<()> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI, and a Clone
+        // whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Sound only if the handle is a live engine, per the note above. The call
+        // passes only scalars to the thresholder and is a no-op when none exists.
         unsafe { TessBaseAPISetRectangle(*handle, left, top, width, height) };
         Ok(())
     }
