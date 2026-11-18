@@ -80,12 +80,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-18
+
 ### Added
 
 - **pdf:** Warning when a tall scanned page was read at reduced resolution and source-image strip recovery did not run or did not improve it. (#2502)
+- **ocr:** `XBERG_TESSDATA_SYSTEM_PATHS=0` (or `false`) stops tessdata resolution from searching the system Tesseract directories.
+
+### Changed
+
+- **cli:** The wrapped Linux musl tarball uses mimalloc with immediate purging and process-wide transparent huge pages disabled by default, including for native libraries and inherited by child processes. The Docker CLI image and static binstall binaries keep their existing allocator. (#3171)
+  Set `MIMALLOC_PURGE_DELAY` or `MIMALLOC_ALLOW_THP` before launching to override either setting.
+- **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
+- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`, except for a custom Python OCR backend, whose own exception is raised instead (below). REST and batch retain their previous plugin classification. (#3175)
+- **Breaking (python):** An exception raised by any custom Python OCR backend callback reaches the caller as the original exception object, including `initialize()` in `register_ocr_backend`, `shutdown()` in `unregister_ocr_backend` and `clear_ocr_backends`, and the `AttributeError` for a missing `process_image*` method. Extraction previously raised `OtherError`, or `OcrError` when every PDF page failed, and the registry functions raised `RuntimeError`. `except xberg.XbergError` no longer catches these failures unless the backend raises an `XbergError` subclass. In `extract_batch` a failed image OCR callback is reported as `ocr` (1002) instead of `other` (1017); an all-page PDF failure keeps `plugin` (1008). A callback raising `xberg.CancelledError` is an ordinary page failure, not a typed cancellation: PDF OCR continues with the remaining pages. Other bindings are unchanged. (#3175)
+- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
+- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
+- **markdown:** A literal `$` in prose is written as `\$`. Both forms are valid CommonMark, but consumers matching output text see different bytes.
+- **markdown:** Bold-italic text is written as `**_text_**` instead of `***text***`. Both forms are valid CommonMark, but consumers matching output text see different bytes.
+
+### Security
+
+- **install:** The install script verifies CLI release archives against SHA-256 digests from GitHub release metadata before extraction. (#3168)
+- **ocr:** Runtime Tesseract language-pack downloads are verified against pinned SHA-256 digests and use bounded timeouts. (#3168)
+
+### Fixed
+
+- **chunking:** `ChunkSizing::Tokenizer` with a registered tokenizer backend whose `count_tokens` includes special tokens keeps every chunk within `max_characters` tokens; chunks were over by up to the special-token count. (#3291)
+- **pdf:** Native extraction keeps two separately outlined ruled tables with a blank gap between them apart and in page order in Plain and Markdown, unless they share both width and column count. (#3286)
+- **ocr:** A process no longer crashes at exit when a page abandoned by the extraction time limit releases its Tesseract engine after `exit()` has begun. Recognitions still in flight at exit are stopped and get up to 2 seconds to return. (#3290)
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
+- **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
+  DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
+- **ocr:** TrOCR checks decode, resize and tensor buffers before allocating pixels. Previously accepted images can exceed the
+  configured budget. The standalone API exposes typed image errors and accepts decoded rasters through `process_decoded_image`.
+  The dimensions helper reads the header without validating pixels. (#3168)
+- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
+- **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
+- **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
+- **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
+- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
+- **ocr:** In Plain output, scanned PDFs rejoin witnessed words split across eligible lines and retain lexical hyphens; Markdown already joined line-end hyphens. (#3170)
+- **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
+- **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
+- **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
+- **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
+- **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
+- **pdf:** Bold column labels under a single merged table title are kept as headers in HTML and Markdown. (#2332)
+- **pdf:** Layout-assisted TATR recognizes source dividers and preserves source-supported row and column spans. (#2332)
+- **ocr:** Default sparse-text OCR keeps a certified standalone table with one unreadable value as a table. (#2503)
+- **ocr:** Tesseract PSM 6 preserves verified table row breaks in unified HTML for single-page PDF scans. (#2503)
+- **pdf:** Recover sparse missing glyphs with a 120 DPI trial on eligible Tesseract pages in the default OCR pipeline. (Closes #3238)
+
+## [1.4.1] - 2026-11-16
+
+### Added
 
 - **ocr:** Warning when resizing a standalone tall image may leave text incomplete. (#2502)
-- **ocr:** `XBERG_TESSDATA_SYSTEM_PATHS=0` (or `false`) stops tessdata resolution from searching the system Tesseract directories.
+
+### Security
+
+- **api, mcp:** REST and MCP requests are rejected when their config names a server file, directory or model source (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids, `concurrency`); `/extract` merges the request config over the server config, and a request can only lower security limits, archive depth, timeouts and URL caps.
+- **api:** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs run at once, separately from synchronous requests; further jobs stay `pending`.
+- **api, mcp:** Remote REST or MCP-over-HTTP configs that add or change an LLM stage are rejected unless `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1` is set, so callers cannot use the server's LLM credentials.
+- **mcp:** Over HTTP, `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused, unless `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1` is set.
+- **mcp:** Over HTTP, tool errors, per-input errors and `cache_stats`/`cache_clear`/`cache_warm` no longer reveal server filesystem paths; `cache_warm` no longer names model cache paths on either transport.
+- **api:** Error responses, batch per-input errors and `/cache/stats`, `/cache/clear`, `/cache/warm` no longer reveal server filesystem paths.
+- **hwp:** Compressed HWP body-text sections are inflated under `security_limits.max_content_size` each and `max_archive_size` in total.
+- **archive:** `max_archive_size` caps decompressed bytes across all nesting levels of an archive and `max_content_size` caps the combined output of its children; what does not fit is skipped with a warning.
+
+### Fixed
+
+- **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
+- Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
+- **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
+- **onnx:** Concurrent ONNX inference no longer shares a session mutably (undefined behavior). (#3166)
+- **fictionbook:** Security-limit violations inside paragraphs are reported instead of silently accepted.
+- **pdf:** Better paragraph reading order in scanned multi-column PDFs. (#2331)
+- **pdf:** Adjacent tables with aligned columns stay separate. (#2332)
+- **pdf:** Verified decimal column headers are preserved and decimal records stay in table bodies in HTML. (#2332)
+- **ocr:** False short words and repeated texture reads are removed from noisy scanned PDFs in Plain and Markdown output. (#2943)
+- **ocr:** Tall scanned PDFs: verified panel dimensions, headings, multiline headings, split words and lines that collapsed to punctuation are recovered. (#2502)
+- **tables:** Tables are recovered on forced-OCR PDF pages that need a rotation retry. (#2332)
+- **tables:** Verified column headers above repeated numeric groups in PDF tables are preserved. (#2332)
+- **ocr:** Tesseract table output for standalone images and embedded PDF images no longer duplicates rows and keeps rows, row breaks and dot leaders intact (PSM 3, 6 and 11). (#2503)
+- **ocr:** Opt-in recovery for PaddleOCR ruled JPEG table cells (English PP-OCRv6 Small, ONNX Runtime), off by default. (#2503)
+
+## [1.4.0] - 2026-11-13
+
+### Added
+
 - **math:** Explicit math text annotations (`AnnotationKind::math(display)`, `math_display()` in Rust; `Custom` annotation `xberg.math` with value `inline` or `display` in other bindings) render as LaTeX in Markdown, HTML and Djot.
 - **ocr:** Corroborated Khmer numbers are recovered on eligible English-primary PDF pages when `khm.traineddata` is installed. (#2408)
 - **layout:** Experimental `LayoutDetectionConfig.model` (`--layout-model`) selects `rt_detr` (default) or `pp_doc_layout_v3`; PP-DocLayout-V3 requires ONNX Runtime and is an error on tract or WASM builds. (#2284)
@@ -102,17 +186,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **llm:** Rust `xberg::llm::usage::usage_from_error` exposes token usage of failed structured responses. (#2139)
 
 ### Changed
-
-- **cli:** The wrapped Linux musl tarball uses mimalloc with immediate purging and process-wide transparent huge pages disabled by default, including for native libraries and inherited by child processes. The Docker CLI image and static binstall binaries keep their existing allocator. (#3171)
-  Set `MIMALLOC_PURGE_DELAY` or `MIMALLOC_ALLOW_THP` before launching to override either setting.
-
-- **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
-
-- **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`, except for a custom Python OCR backend, whose own exception is raised instead (below). REST and batch retain their previous plugin classification. (#3175)
-- **Breaking (python):** An exception raised by any custom Python OCR backend callback reaches the caller as the original exception object, including `initialize()` in `register_ocr_backend`, `shutdown()` in `unregister_ocr_backend` and `clear_ocr_backends`, and the `AttributeError` for a missing `process_image*` method. Extraction previously raised `OtherError`, or `OcrError` when every PDF page failed, and the registry functions raised `RuntimeError`. `except xberg.XbergError` no longer catches these failures unless the backend raises an `XbergError` subclass. In `extract_batch` a failed image OCR callback is reported as `ocr` (1002) instead of `other` (1017); an all-page PDF failure keeps `plugin` (1008). A callback raising `xberg.CancelledError` is an ordinary page failure, not a typed cancellation: PDF OCR continues with the remaining pages. Other bindings are unchanged. (#3175)
-
-- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
-- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
@@ -139,17 +212,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **install:** The install script verifies CLI release archives against SHA-256 digests from GitHub release metadata before extraction. (#3168)
-- **ocr:** Runtime Tesseract language-pack downloads are verified against pinned SHA-256 digests and use bounded timeouts. (#3168)
-
-- **api, mcp:** REST and MCP requests are rejected when their config names a server file, directory or model source (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids, `concurrency`); `/extract` merges the request config over the server config, and a request can only lower security limits, archive depth, timeouts and URL caps.
-- **api:** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs run at once, separately from synchronous requests; further jobs stay `pending`.
-- **api, mcp:** Remote REST or MCP-over-HTTP configs that add or change an LLM stage are rejected unless `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1` is set, so callers cannot use the server's LLM credentials.
-- **mcp:** Over HTTP, `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused, unless `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1` is set.
-- **mcp:** Over HTTP, tool errors, per-input errors and `cache_stats`/`cache_clear`/`cache_warm` no longer reveal server filesystem paths; `cache_warm` no longer names model cache paths on either transport.
-- **api:** Error responses, batch per-input errors and `/cache/stats`, `/cache/clear`, `/cache/warm` no longer reveal server filesystem paths.
-- **hwp:** Compressed HWP body-text sections are inflated under `security_limits.max_content_size` each and `max_archive_size` in total.
-- **archive:** `max_archive_size` caps decompressed bytes across all nesting levels of an archive and `max_content_size` caps the combined output of its children; what does not fit is skipped with a warning.
 - **deps:** `rmcp` 3.9.0 fixes unbounded response-body reads (RUSTSEC-2026-0462).
 - **pdf:** Whole-document OCR retries share stored JPEG payloads, bounding retained bytes. (#2339)
 - **pdf:** OCR retries of embedded scans after a pipeline failure honor image decode limits and cancellation. (#2339)
@@ -167,57 +229,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **chunking:** `ChunkSizing::Tokenizer` with a registered tokenizer backend whose `count_tokens` includes special tokens keeps every chunk within `max_characters` tokens; chunks were over by up to the special-token count. (#3291)
-- **pdf:** Native extraction keeps two separately outlined ruled tables with a blank gap between them apart and in page order in Plain and Markdown, unless they share both width and column count. (#3286)
-- **ocr:** A process no longer crashes at exit when a page abandoned by the extraction time limit releases its Tesseract engine after `exit()` has begun. Recognitions still in flight at exit are stopped and get up to 2 seconds to return. (#3290)
-- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
-
-- **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
-  DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
-
-- **ocr:** TrOCR checks decode, resize and tensor buffers before allocating pixels. Previously accepted images can exceed the
-  configured budget. The standalone API exposes typed image errors and accepts decoded rasters through `process_decoded_image`.
-  The dimensions helper reads the header without validating pixels. (#3168)
-
-- **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
-- **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
-- **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
-
-- **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
-- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
-- **ocr:** Scanned PDFs rejoin witnessed words split across eligible lines and retain lexical hyphens. (#3170)
-
-- **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
-- **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.
-- **pdf:** Tick labels under a row of plot panels are no longer emitted as a Markdown table.
-- **rtf:** No space is inserted where an inline group closes, so `12{\i 34}56` extracts as `123456`. (#3176)
-
-- **ocr:** OCR progress is reported once per page, even when a fallback backend or retry reads it again. (#3174)
-- **ocr:** Typed backend cancellation stops PDF OCR before further page batches or fallback and returns `XbergError::Cancelled`. (#3175)
-- Output is stable between runs: heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order.
-- **rtf:** `\deleted` tracked-change text is dropped from extracted content. (#3164)
-- **onnx:** Concurrent ONNX inference no longer shares a session mutably (undefined behavior). (#3166)
-- **fictionbook:** Security-limit violations inside paragraphs are reported instead of silently accepted.
-- **pdf:** Better paragraph reading order in scanned multi-column PDFs. (#2331)
-- **pdf:** Adjacent tables with aligned columns stay separate. (#2332)
-- **pdf:** Verified decimal column headers are preserved and decimal records stay in table bodies in HTML. (#2332)
-- **pdf:** Bold column labels under a single merged table title are kept as headers in HTML and Markdown. (#2332)
-- **pdf:** Layout-assisted TATR recognizes source dividers and preserves source-supported row and column spans. (#2332)
-- **ocr:** False short words and repeated texture reads are removed from noisy scanned PDFs in Plain and Markdown output. (#2943)
-- **ocr:** Tall scanned PDFs: verified panel dimensions, headings, multiline headings, split words and lines that collapsed to punctuation are recovered. (#2502)
-- **tables:** Tables are recovered on forced-OCR PDF pages that need a rotation retry. (#2332)
-- **tables:** Verified column headers above repeated numeric groups in PDF tables are preserved. (#2332)
-- **ocr:** Tesseract table output for standalone images and embedded PDF images no longer duplicates rows and keeps rows, row breaks and dot leaders intact (PSM 3, 6 and 11). (#2503)
-- **ocr:** Default sparse-text OCR keeps a certified standalone table with one unreadable value as a table. (#2503)
-- **ocr:** Tesseract PSM 6 preserves verified table row breaks in unified HTML for single-page PDF scans. (#2503)
-- **ocr:** Opt-in recovery for PaddleOCR ruled JPEG table cells (English PP-OCRv6 Small, ONNX Runtime), off by default. (#2503)
 - **pdf:** The page failure record and warning agree when native text is restored after forced OCR fails. (#3148)
 - **ocr:** Automatic script retries reuse Tesseract engines; OCR caches refresh when the installed model changes. (#3153)
 - **pdf:** Pages with a few unmapped glyphs are OCR'd at a lower resolution first. (#3150)
 - **extraction:** Exact page byte ranges are preserved when page text cannot be located or is out of order; ambiguous ranges are omitted. (#3149)
 - **pdf:** Standard Latin Type 1 fonts render with WinAnsi glyphs when the text map disagrees, so OCR reads the visible text. (Refs #2826, #3147)
 - **pdf:** Overprinted process-color text stays visible in rasters used for OCR. (Refs #2817)
-- **pdf:** Recover sparse missing glyphs with a 120 DPI trial on eligible Tesseract pages in the default OCR pipeline. (Closes #3238)
 - **pdf:** Tables on rotated scanned pages are recovered during forced layout OCR, with bounds in page points. (#3131)
 - **pdf:** Packed RGB pixels with indirect predictor settings are preserved in PNG export; predictor-wrapped JPEGs keep their original bytes. (#3115)
 - **elixir:** Binary extraction input, including non-UTF-8 bytes, is passed through unchanged.
