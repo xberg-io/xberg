@@ -652,9 +652,18 @@ impl PdfDocument {
     /// ```
     pub fn load_object(&self, obj_ref: ObjectRef) -> Result<Object> {
         self.load_object_for_read(obj_ref).map(|loaded| match loaded {
-            LoadedObject::Cached(object) => Object::clone(&object),
+            LoadedObject::Cached(object) => {
+                #[cfg(test)]
+                self.cached_object_clone_count.fetch_add(1, Ordering::Relaxed);
+                Object::clone(&object)
+            }
             LoadedObject::Owned(object) => object,
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn cached_object_clone_count(&self) -> usize {
+        self.cached_object_clone_count.load(Ordering::Relaxed)
     }
 
     pub(super) fn load_object_for_read(&self, obj_ref: ObjectRef) -> Result<LoadedObject> {
