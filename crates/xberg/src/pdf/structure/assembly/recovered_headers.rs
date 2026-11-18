@@ -15,8 +15,8 @@ pub(super) fn order(page: &mut [PdfParagraph], tracks: &[(f32, f32)], table: Bou
     if header_band(page, tracks, table).is_some() {
         page.sort_by(|left, right| {
             right.lines[0]
-                .baseline_y
-                .total_cmp(&left.lines[0].baseline_y)
+                .baseline_or_zero()
+                .total_cmp(&left.lines[0].baseline_or_zero())
                 .then_with(|| left.lines[0].segments[0].x.total_cmp(&right.lines[0].segments[0].x))
         });
     }
@@ -53,6 +53,7 @@ fn source_line(paragraph: &PdfParagraph, table: BoundingBox) -> Option<&[Segment
     let [line] = paragraph.lines.as_slice() else {
         return None;
     };
+    let baseline = line.baseline_or_zero();
     if !paragraph.text.is_empty()
         || paragraph.is_list_item
         || paragraph.is_code_block
@@ -62,14 +63,14 @@ fn source_line(paragraph: &PdfParagraph, table: BoundingBox) -> Option<&[Segment
         || paragraph.layout_region_path.is_some()
         || paragraph.caption_for.is_some()
         || !line.native_scripts.is_empty()
-        || !line.baseline_y.is_finite()
+        || !baseline.is_finite()
     {
         return None;
     }
     let valid = line.segments.iter().all(|segment| {
         segment.rotation_degrees == 0.0
             && segment.assigned_role.is_none()
-            && segment.y == line.baseline_y
+            && segment.y == baseline
             && segment.baseline_y == segment.y
             && segment.width.is_finite()
             && segment.width > 0.0

@@ -165,8 +165,9 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     # cli/amd64 (cross-compiled Rust+ONNX from source) hit the 90m ceiling in rc.36 and was
     # CANCELLED; give the from-source builds headroom. merge-docker is decoupled below so even
-    # a timed-out leg no longer suppresses the core manifest publish (#1299). ~keep
-    timeout-minutes: 120
+    # a timed-out leg no longer suppresses the core manifest publish (#1299). v1.4.1 legs were
+    # cancelled at 120m while still in their final cargo build. ~keep
+    timeout-minutes: 240
     permissions:
       contents: read
       packages: write
@@ -224,12 +225,10 @@ jobs:
 
       # fetch-test-documents stages every object through `mktemp` (mode 0600) and
       # copies it into place with plain `cp`, so the corpus lands readable only by
-      # the runner user. The core and full images run as the unprivileged `xberg`
-      # user (`USER xberg`), which then cannot read the /data:ro mount at all --
-      # both failed with `Cache error: Failed to open file for hashing: Permission
-      # denied (os error 13)` while the cli image, which has no USER directive and
-      # so runs as root, passed. The durable fix belongs upstream in
-      # xberg-io/actions/fetch-test-documents; this keeps the mount readable meanwhile.
+      # the runner user. Core, Full, and CLI run as the unprivileged `xberg` user
+      # and can fail to read the /data:ro mount with `Cache error: Failed to open
+      # file for hashing: Permission denied (os error 13)`. The durable fix belongs
+      # upstream in xberg-io/actions/fetch-test-documents; this keeps the mount readable meanwhile. ~keep
       - name: Make fetched fixtures readable inside the container
         run: chmod -R a+rX test_documents
 

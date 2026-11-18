@@ -31,40 +31,9 @@
 
 #![allow(dead_code)]
 
-use std::sync::Mutex;
+use xberg_child_test::{child_test_root, run_child_test};
 use xberg_native_pdf::document::PdfDocument;
 use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
-
-/// Process-wide lock for env-var orchestration. Wave 5 removed the
-/// pipeline toggle, but we still set `NATIVE_PDF_RESOLUTION_PIPELINE` in
-/// the "toggle removal sanity" probes to verify the value is ignored.
-/// Cargo runs integration tests in parallel; serialising the env-var
-/// writes via this mutex keeps two tests' settings from colliding.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-/// Clear `NATIVE_PDF_RESOLUTION_PIPELINE` from the process environment.
-///
-/// # Safety
-/// `std::env::remove_var` is `unsafe` because mutating the process
-/// environment races with any other thread reading or writing it. Every
-/// call site in this file holds `ENV_LOCK` for the full
-/// clear/set/render/reset sequence, and this test binary is the only
-/// reader or writer of this specific variable, so no other thread can
-/// observe or race the mutation.
-#[allow(unsafe_code)]
-fn clear_pipeline_env_var() {
-    unsafe { std::env::remove_var("NATIVE_PDF_RESOLUTION_PIPELINE") };
-}
-
-/// Set `NATIVE_PDF_RESOLUTION_PIPELINE` to `value` in the process environment.
-///
-/// # Safety
-/// See [`clear_pipeline_env_var`]: every call site holds `ENV_LOCK` for the
-/// whole sequence and no other thread touches this variable.
-#[allow(unsafe_code)]
-fn set_pipeline_env_var(value: &str) {
-    unsafe { std::env::set_var("NATIVE_PDF_RESOLUTION_PIPELINE", value) };
-}
 
 /// Build a one-page PDF whose content stream is `content_ops`, with a
 /// fixed 100×100 MediaBox and the provided `/Resources` dict body.
@@ -397,24 +366,76 @@ fn type4_magenta_content_stream() -> &'static str {
     "/CS1 cs\n1 scn\n10 10 80 80 re\nf\n"
 }
 
-/// Probe 9 — `NATIVE_PDF_RESOLUTION_PIPELINE=1` must have no effect.
-/// Pre-wave-5 this would force the pipeline on; post-wave-5 the var is
-/// not consulted at all. We compare against a render with the var unset.
+const PIPELINE_ENV: &str = "NATIVE_PDF_RESOLUTION_PIPELINE";
+const CHILD_EXPECTED_ENV: &str = "XBERG_QA_WAVE5_EXPECTED_PIPELINE";
+const CHILD_ROOT: &str = "XBERG_QA_WAVE5_RENDER_ROOT";
+const CHILD_TEST: &str = "render_pipeline_env_child";
+const CHILD_MISMATCH: &str = "wave-5 child received the wrong pipeline value";
+const CHILD_PIXELS: &str = "page.rgba";
+
+fn run_render_pipeline_child(root: &std::path::Path, value: Option<&str>, expected: Option<&str>) {
+    run_child_test(CHILD_TEST, CHILD_ROOT, root, |command| {
+        command.env_remove(PIPELINE_ENV).env_remove(CHILD_EXPECTED_ENV);
+        if let Some(value) = value {
+            command.env(PIPELINE_ENV, value);
+        }
+        if let Some(expected) = expected {
+            command.env(CHILD_EXPECTED_ENV, expected);
+        }
+    });
+}
+
+fn render_with_pipeline_env(value: Option<&str>) -> Vec<u8> {
+    let root = tempfile::tempdir().expect("create scratch directory for the rendered pixels");
+    run_render_pipeline_child(root.path(), value, value);
+    let rgba = std::fs::read(root.path().join(CHILD_PIXELS)).expect("read the isolated child's render");
+    assert_eq!(rgba.len(), 100 * 100 * 4, "expected a 100×100 RGBA render");
+    rgba
+}
+
 #[test]
-fn qa_wave5_env_var_one_is_inert() {
+#[ignore = "subprocess entry point for the wave-5 environment probes"]
+fn render_pipeline_env_child() {
+    let Some(root) = child_test_root(CHILD_ROOT) else {
+        return;
+    };
+    let expected = std::env::var_os(CHILD_EXPECTED_ENV);
+    let value = std::env::var_os(PIPELINE_ENV);
+    assert!(value == expected, "{CHILD_MISMATCH}");
     let bytes = build_pdf_with_type4(
         type4_magenta_content_stream(),
         TYPE4_MAGENTA,
         type4_magenta_separation_resources(),
     );
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
+    std::fs::write(root.join(CHILD_PIXELS), render(&doc)).expect("write the rendered pixels");
+}
 
-    let _guard = ENV_LOCK.lock().unwrap();
-    clear_pipeline_env_var();
-    let baseline = render(&doc);
-    set_pipeline_env_var("1");
-    let with_one = render(&doc);
-    clear_pipeline_env_var();
+#[test]
+fn qa_wave5_render_child_rejects_a_wrong_pipeline_value() {
+    let root = tempfile::tempdir().expect("create scratch directory for the render check");
+    let panic = std::panic::catch_unwind(|| run_render_pipeline_child(root.path(), Some("1"), Some("0")))
+        .expect_err("the render child must reject a wrong pipeline value");
+    let diagnostic = panic
+        .downcast::<String>()
+        .expect("child helper reports an owned diagnostic");
+    assert!(
+        diagnostic.contains("test render_pipeline_env_child ... FAILED"),
+        "{diagnostic}"
+    );
+    assert!(
+        diagnostic.contains("test result: FAILED. 0 passed; 1 failed; 0 ignored;"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains(CHILD_MISMATCH), "{diagnostic}");
+    assert!(!root.path().join(CHILD_PIXELS).exists(), "the child must not render");
+}
+
+/// The retired toggle must not affect the output when set to 1.
+#[test]
+fn qa_wave5_env_var_one_is_inert() {
+    let baseline = render_with_pipeline_env(None);
+    let with_one = render_with_pipeline_env(Some("1"));
 
     assert_eq!(
         baseline, with_one,
@@ -428,25 +449,11 @@ fn qa_wave5_env_var_one_is_inert() {
     );
 }
 
-/// Probe 10 — `NATIVE_PDF_RESOLUTION_PIPELINE=0` must have no effect.
-/// Pre-wave-5 this would force the pipeline off and the fallback
-/// `1.0 - tint = 0` solid-black would surface; post-wave-5 the var is
-/// not consulted at all.
+/// The retired toggle must not affect the output when set to 0.
 #[test]
 fn qa_wave5_env_var_zero_is_inert() {
-    let bytes = build_pdf_with_type4(
-        type4_magenta_content_stream(),
-        TYPE4_MAGENTA,
-        type4_magenta_separation_resources(),
-    );
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-
-    let _guard = ENV_LOCK.lock().unwrap();
-    clear_pipeline_env_var();
-    let baseline = render(&doc);
-    set_pipeline_env_var("0");
-    let with_zero = render(&doc);
-    clear_pipeline_env_var();
+    let baseline = render_with_pipeline_env(None);
+    let with_zero = render_with_pipeline_env(Some("0"));
 
     assert_eq!(
         baseline, with_zero,
@@ -460,31 +467,16 @@ fn qa_wave5_env_var_zero_is_inert() {
     );
 }
 
-/// Probe 11 — Two different non-empty values for the toggle must both
-/// produce the same output as no value at all. Exercises the
-/// "unconditional pipeline" claim from a different angle than probes
-/// 9-10: we don't care that "1" / "0" specifically are inert, we care
-/// that the value space the var could carry is uniformly inert.
+/// The retired toggle ignores empty and nonnumeric values as well.
 #[test]
 fn qa_wave5_env_var_arbitrary_values_inert() {
-    let bytes = build_pdf_with_type4(
-        type4_magenta_content_stream(),
-        TYPE4_MAGENTA,
-        type4_magenta_separation_resources(),
-    );
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
+    let baseline = render_with_pipeline_env(None);
+    let with_empty = render_with_pipeline_env(Some(""));
+    let with_true = render_with_pipeline_env(Some("true"));
+    let with_false_caps = render_with_pipeline_env(Some("FALSE"));
+    let with_garbage = render_with_pipeline_env(Some("garbage-string"));
 
-    let _guard = ENV_LOCK.lock().unwrap();
-    clear_pipeline_env_var();
-    let baseline = render(&doc);
-    set_pipeline_env_var("true");
-    let with_true = render(&doc);
-    set_pipeline_env_var("FALSE");
-    let with_false_caps = render(&doc);
-    set_pipeline_env_var("garbage-string");
-    let with_garbage = render(&doc);
-    clear_pipeline_env_var();
-
+    assert_eq!(baseline, with_empty);
     assert_eq!(baseline, with_true);
     assert_eq!(baseline, with_false_caps);
     assert_eq!(baseline, with_garbage);

@@ -23,27 +23,20 @@ use std::path::PathBuf;
 use xberg::core::config::{ExtractionConfig, OcrConfig};
 
 fn fixture(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/ocr")
-        .join(name)
-}
-
-fn skip_if_missing(name: &str) -> bool {
-    if !fixture(name).exists() {
-        eprintln!("fixture {name} not found, skipping");
-        true
-    } else {
-        false
-    }
+        .join(name);
+    assert!(
+        path.is_file(),
+        "required committed OCR fixture is missing at {}",
+        path.display()
+    );
+    path
 }
 
 /// (a) With tessdata present, a scanned/image-only PDF extracts real text via OCR.
 #[test]
 fn test_scanned_pdf_ocr_extracts_text() {
-    if skip_if_missing("scanned_hello.pdf") {
-        return;
-    }
-
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
@@ -76,10 +69,6 @@ fn test_scanned_pdf_ocr_extracts_text() {
 /// silently return an empty success — it either errors or flags a ProcessingWarning.
 #[test]
 fn test_scanned_pdf_ocr_failure_is_not_silent() {
-    if skip_if_missing("scanned_hello.pdf") {
-        return;
-    }
-
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "definitely-not-a-real-ocr-backend".to_string(),
@@ -113,10 +102,6 @@ fn test_scanned_pdf_ocr_failure_is_not_silent() {
 /// scanned page. Proves the native page-1 text is not lost when page 2 is OCR'd.
 #[test]
 fn test_mixed_native_and_scanned_preserves_native_text() {
-    if skip_if_missing("mixed_native_scanned.pdf") {
-        return;
-    }
-
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
