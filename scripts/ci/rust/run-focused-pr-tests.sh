@@ -504,7 +504,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=66
+  expected=68
   run_office_page_cases
   ;;
 api-jobs)

@@ -194,7 +194,8 @@ fn read_zip_member_bounded<R: Read + Seek>(
 fn rewrite_spreadsheet_zip(
     data: &[u8],
     limits: &SecurityLimits,
-    mut transform: impl FnMut(&str, &[u8], cancel: ExcelReadCancellation<'_>) -> Result<(Vec<u8>, bool)>,
+    mut transform: impl FnMut(&str, &[u8]) -> Result<(Vec<u8>, bool)>,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<Option<Vec<u8>>> {
     let archive = zip::ZipArchive::new(Cursor::new(data))
         .map_err(|error| XbergError::parsing(format!("Invalid spreadsheet ZIP: {error}")))?;
