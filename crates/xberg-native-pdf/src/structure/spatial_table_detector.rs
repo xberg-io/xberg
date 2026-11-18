@@ -4514,12 +4514,38 @@ fn has_closed_restart_seam(lower: Rect, upper: Rect, horizontal: &[Edge], vertic
         && (lower.right() - upper.right()).abs() <= tol
         && closed(lower_end, lower)
         && closed(upper_start, upper)
-        && !vertical.iter().any(|edge| {
-            edge.coord >= lower.left() - tol
-                && edge.coord <= lower.right() + tol
-                && edge.start <= lower_end + tol
-                && edge.end >= upper_start - tol
-        })
+        && !has_vertical_seam_connector(
+            vertical,
+            lower.left() - tol,
+            lower.right() + tol,
+            lower_end + tol,
+            upper_start - tol,
+        )
+}
+
+fn has_vertical_seam_connector(vertical: &[Edge], left: f32, right: f32, bottom: f32, top: f32) -> bool {
+    let mut segments: Vec<_> = vertical
+        .iter()
+        .copied()
+        .filter(|edge| edge.coord >= left && edge.coord <= right && edge.end >= bottom && edge.start <= top)
+        .collect();
+    segments.sort_unstable_by(|a, b| a.coord.total_cmp(&b.coord).then_with(|| a.start.total_cmp(&b.start)));
+
+    // Coordinates are already snapped. A real gap between two segments must stay open. ~keep
+    let mut coverage: Option<Edge> = None;
+    for edge in segments {
+        let span = match coverage.as_mut() {
+            Some(span) if span.coord == edge.coord && edge.start <= span.end => {
+                span.end = span.end.max(edge.end);
+                *span
+            }
+            _ => *coverage.insert(edge),
+        };
+        if span.start <= bottom && span.end >= top {
+            return true;
+        }
+    }
+    false
 }
 
 // A separated grid that restarts the same two-band schema after populated
@@ -10019,6 +10045,58 @@ mod tests {
             assert_eq!(continuing.len(), 1);
             assert_eq!(continuing[0].rows.len(), 8);
             assert!(continuing[0].rows.iter().all(|row| row.cells.len() == 5));
+        }
+
+        let merges = |parts: [Edge; 2], reverse: bool| {
+            let mut ruling = vertical.clone();
+            ruling.extend(parts);
+            if reverse {
+                ruling.reverse();
+            }
+            snap_edges(&mut ruling);
+            let mut tables = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut tables, &horizontal, &ruling);
+            tables.len()
+        };
+        let first = Edge {
+            coord: 150.0,
+            start: 100.0,
+            end: 153.5,
+        };
+        let touching = Edge {
+            coord: 151.0,
+            start: 153.5,
+            end: 207.0,
+        };
+        let overlapping = Edge {
+            start: 153.0,
+            ..touching
+        };
+        assert_eq!(
+            [
+                merges([first, touching], false),
+                merges([first, touching], true),
+                merges([first, overlapping], false),
+                merges([first, overlapping], true),
+            ],
+            [1; 4],
+            "collinear segments that touch or overlap must connect the grids in either paint order",
+        );
+        let blank_gap = Edge {
+            start: 154.0,
+            ..touching
+        };
+        let different_axis = Edge {
+            coord: 165.0,
+            ..touching
+        };
+        for reverse in [false, true] {
+            assert_eq!(merges([first, blank_gap], reverse), 2, "a real blank gap remains open");
+            assert_eq!(
+                merges([first, different_axis], reverse),
+                2,
+                "different axes do not join"
+            );
         }
     }
 

@@ -166,6 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** Native extraction keeps adjacent ruled tables with different column counts separate and in page order in Plain and Markdown. (#3286)
+
 - **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
 
 - **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
