@@ -101,7 +101,12 @@ use table_budget::SkippedSheets;
 /// Format dispatch and the `read_excel_file`/`read_excel_bytes` entry points, split out to
 /// keep this file under the line-count limit.
 mod open;
+#[cfg(test)]
 pub(crate) use open::{read_excel_bytes, read_excel_file};
+pub(crate) use open::{read_excel_bytes_with_cancellation, read_excel_file_with_cancellation};
+
+mod cancellation;
+pub(crate) use cancellation::ExcelReadCancellation;
 
 /// Result of reading a spreadsheet: the parsed workbook plus any
 /// [`ProcessingWarning`]s accumulated while reading it (a sheet that failed
@@ -121,12 +126,14 @@ fn process_xlsx_workbook<RS: Read + Seek>(
     office_metadata: Option<HashMap<String, String>>,
     warnings: &mut Vec<ProcessingWarning>,
     skipped: &SkippedSheets,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelWorkbook> {
     let sheet_names = workbook.sheet_names();
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
     for (index, name) in sheet_names.iter().enumerate() {
+        cancel.start_sheet(index)?;
         if let Some(sheet) = skipped.placeholder(index, name, warnings) {
             sheets.push(sheet);
             continue;
@@ -143,9 +150,11 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             }
         }
 
+        cancel.check()?;
         if let Some(formulas) = collect_sheet_formulas(&mut workbook, name) {
             extra_metadata.insert(format!("formulas_{name}"), formulas);
         }
+        cancel.check()?;
         if let Some(hyperlinks) = collect_sheet_hyperlinks(&mut workbook, name) {
             extra_metadata.insert(format!("hyperlinks_{name}"), hyperlinks);
         }
@@ -486,6 +495,7 @@ fn process_workbook<RS, R>(
     office_metadata: Option<HashMap<String, String>>,
     warnings: &mut Vec<ProcessingWarning>,
     skipped: &SkippedSheets,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<ExcelWorkbook>
 where
     RS: std::io::Read + std::io::Seek,
@@ -494,7 +504,7 @@ where
     R::Error: std::fmt::Display,
 {
     let sheet_names = workbook.sheet_names();
-    let (sheets, extra_metadata) = process_named_sheets(&mut workbook, &sheet_names, warnings, skipped);
+    let (sheets, extra_metadata) = process_named_sheets(&mut workbook, &sheet_names, warnings, skipped, cancel)?;
 
     let mut metadata = extract_metadata(&workbook, &sheet_names, office_metadata);
     metadata.extend(extra_metadata);
@@ -523,7 +533,8 @@ fn process_named_sheets<RS, R>(
     sheet_names: &[String],
     warnings: &mut Vec<ProcessingWarning>,
     skipped: &SkippedSheets,
-) -> (Vec<ExcelSheet>, HashMap<String, String>)
+    cancel: ExcelReadCancellation<'_>,
+) -> Result<(Vec<ExcelSheet>, HashMap<String, String>)>
 where
     RS: std::io::Read + std::io::Seek,
     R: Reader<RS>,
@@ -535,6 +546,7 @@ where
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
     for (index, name) in sheet_names.iter().enumerate() {
+        cancel.start_sheet(index)?;
         if let Some(sheet) = skipped.placeholder(index, name, warnings) {
             sheets.push(sheet);
             continue;
@@ -551,12 +563,13 @@ where
             }
         }
 
+        cancel.check()?;
         if let Some(formulas) = collect_sheet_formulas(workbook, name) {
             extra_metadata.insert(format!("formulas_{name}"), formulas);
         }
     }
 
-    (sheets, extra_metadata)
+    Ok((sheets, extra_metadata))
 }
 
 #[inline]

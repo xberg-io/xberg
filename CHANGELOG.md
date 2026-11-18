@@ -105,9 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
 
-- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
-- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
-- **pptx:** Native single-file and byte parses share a dedicated Office blocking pool with Excel and DOCX. The pool admits one parser per available CPU. Hard cancellation wakes queued reads and active PPTX reads stop before reading the next slide. (#3171)
+- **office:** Native DOCX, Excel, and PPTX parsing share a dedicated blocking pool with one slot per available CPU. The cap also applies to admitted batch parses when `max_concurrent_extractions` exceeds the CPU count. PPTX batch file reads stay on the existing batch scheduler. Hard cancellation wakes queued reads. Active DOCX checks between stages, PPTX before each slide, and Excel between worksheets. An in-progress Calamine constructor or worksheet operation can still delay other Office reads until the next check. The prior matched 14-CPU run measured throughput decreases of 9.1% for Excel bytes at four callers, and 2.8% for PPTX files and 0.6% for PPTX bytes at 16 callers. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.

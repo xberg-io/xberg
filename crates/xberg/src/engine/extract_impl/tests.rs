@@ -519,7 +519,7 @@ fn a_panicking_excel_read_leaves_sibling_batch_results_intact() {
             |index| async move {
                 run_batch_item(index, index.to_string(), None, None, || async move {
                     if index == 1 {
-                        return crate::extractors::excel::run_excel_read(runtime.handle(), None, || {
+                        return crate::extractors::excel::run_excel_read(runtime.handle(), None, |_| {
                             panic!("synthetic workbook reader panic")
                         })
                         .await;

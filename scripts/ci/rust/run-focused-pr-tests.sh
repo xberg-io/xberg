@@ -407,7 +407,7 @@ run_office_page_cases() {
   run_exact 'core::runtime::large_stack_tests::blocking_work_keeps_the_callers_thread_local_dispatcher_and_span' --lib
   run_exact 'extractors::pptx::blocking_tests::single_pptx_paths_and_bytes_wait_for_admission_and_observe_cancellation' --lib
   run_exact 'extractors::pptx::blocking_tests::batch_pptx_paths_complete_inline_while_the_single_parse_pool_is_full' --lib
-  run_exact 'extractors::pptx::blocking_tests::the_public_pptx_deadline_times_out_while_admission_is_held' --lib
+  run_exact 'extractors::pptx::blocking_tests::the_public_pptx_deadline_still_applies_while_admission_is_held' --lib
   run_exact 'extractors::pptx::blocking_tests::direct_foreign_pptx_calls_complete_with_their_only_blocking_worker_occupied' --lib
   run_exact 'extractors::pptx::blocking_tests::dropped_pptx_future_stops_at_a_checkpoint_and_keeps_its_permit_until_then' --lib
   run_exact 'extractors::pptx::blocking_tests::pptx_single_and_batch_keep_exact_document_shape_per_route' --lib
@@ -416,6 +416,7 @@ run_office_page_cases() {
   run_exact 'extractors::pptx::blocking_tests::single_pptx_parse_warnings_reach_the_callers_thread_local_subscriber' --lib
   run_exact 'extraction::pptx::container::tests::cancellation_during_one_slide_stops_before_reading_the_next' --lib
   run_exact 'cancellation::tests::hard_cancellation_wakes_waiters_on_all_scoped_clones' --lib
+  run_exact 'extraction::excel::tests::office_cancellation::cancelled_and_abandoned_excel_read_release_shared_admission_before_remaining_sheets' --lib
   run_exact 'extractors::pptx::blocking_tests::pptx_excel_and_docx_hold_the_same_blocking_admission_slot' --lib
   run_exact 'extractors::pptx::blocking_tests::pptx_byte_batch_worker_panic_stays_a_parsing_error' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib

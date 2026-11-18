@@ -1,5 +1,7 @@
 //! Preflight dense worksheet allocation using the backend's streaming cell readers.
 
+use super::ExcelReadCancellation;
+
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
@@ -264,10 +266,12 @@ impl SheetAllocation {
 pub(super) fn validate_xlsx<R: Read + Seek>(
     workbook: &mut calamine::Xlsx<R>,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
+        cancel.check()?;
         preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             validate_xlsx_sheet(workbook, &name, limits, budget)
         })?;
@@ -366,10 +370,12 @@ fn formula_occupies_range(
 pub(super) fn validate_xlsb<R: Read + Seek>(
     workbook: &mut calamine::Xlsb<R>,
     limits: &SecurityLimits,
+    cancel: ExcelReadCancellation<'_>,
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
+        cancel.check()?;
         preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             validate_xlsb_sheet(workbook, &name, limits, budget)
         })?;
