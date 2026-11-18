@@ -2403,6 +2403,27 @@ pub(super) fn certify_scan_html_paragraph(doc: &mut crate::types::internal::Inte
         .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
 }
 
+/// Certify `rebuilt` again when `previous`, the page document it replaces, held a certified
+/// paragraph. The mixed route rebuilds each page from its paragraphs for structured output,
+/// which drops the certificate the page read earned. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn recertify_scan_html_paragraph(
+    previous: &crate::types::internal::InternalDocument,
+    rebuilt: &mut crate::types::internal::InternalDocument,
+) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    if let [paragraph] = previous.elements.as_slice()
+        && paragraph.kind == ElementKind::Paragraph
+        && paragraph
+            .attributes
+            .as_ref()
+            .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+    {
+        certify_scan_html_paragraph(rebuilt, &paragraph.text);
+    }
+}
+
 /// Copy the payload fields that a page document already carried before the document-global
 /// restructuring heuristic (`heuristically_restructured_ocr_pages`, in `pipeline.rs`) rebuilt
 /// it: the heuristic's combined document has no notion of the backend's raw per-word OCR
@@ -5235,6 +5256,38 @@ mod tests {
         let extra = marked.elements[0].clone();
         marked.push_element(extra);
         assert_eq!(certified_scan_html_rows(&html, 1, true, &marked), None);
+    }
+
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+    #[test]
+    fn rebuilt_page_keeps_the_certificate_of_the_page_it_replaces() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        const ROWS: &str = "Item Count\nLibrary 11";
+        let is_certified = |doc: &InternalDocument| {
+            doc.elements[0]
+                .attributes
+                .as_ref()
+                .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+        };
+        let mut certified = doc_with_paragraph("Item Count Library 11");
+        certify_scan_html_paragraph(&mut certified, ROWS);
+        assert!(is_certified(&certified));
+
+        let mut rebuilt = doc_with_paragraph("Item Count Library 11");
+        recertify_scan_html_paragraph(&certified, &mut rebuilt);
+        assert_eq!(rebuilt.elements[0].text, ROWS);
+        assert!(is_certified(&rebuilt));
+
+        let mut rebuilt = doc_with_paragraph("Item Count Library 11");
+        recertify_scan_html_paragraph(&doc_with_paragraph(ROWS), &mut rebuilt);
+        assert_eq!(rebuilt.elements[0].text, "Item Count Library 11");
+        assert!(!is_certified(&rebuilt));
+
+        let mut reworded = doc_with_paragraph("Item Count Library 12");
+        recertify_scan_html_paragraph(&certified, &mut reworded);
+        assert_eq!(reworded.elements[0].text, "Item Count Library 12");
+        assert!(!is_certified(&reworded));
     }
 
     /// GH#1622, direction 1: a heuristic-restructured document that dropped a word the
