@@ -32,7 +32,11 @@ fn filled_rect(x: f32, y: f32, width: f32, height: f32, color: Color) -> PathCon
 }
 
 fn single_title_rules() -> Vec<PathContent> {
-    let width = COLUMNS as f32 * WIDTH;
+    single_title_rules_for(COLUMNS)
+}
+
+fn single_title_rules_for(columns: usize) -> Vec<PathContent> {
+    let width = columns as f32 * WIDTH;
     let mut paths = vec![filled_rect(
         0.0,
         -2.0 * HEIGHT,
@@ -40,7 +44,7 @@ fn single_title_rules() -> Vec<PathContent> {
         4.0 * HEIGHT,
         Color::new(1.0, 1.0, 0.0),
     )];
-    paths.extend((0..=COLUMNS).map(|column| {
+    paths.extend((0..=columns).map(|column| {
         // The first divider ends at the title boundary; the others span the full table. ~keep
         let height = if column == 1 { 3.0 * HEIGHT } else { 4.0 * HEIGHT };
         filled_rect(
@@ -64,8 +68,28 @@ fn single_title_rules() -> Vec<PathContent> {
 }
 
 fn single_title_roles(rows: &mut [TableRow], paths: &[PathContent]) -> Vec<bool> {
-    retain_grouped_leaf_header(rows, paths, COLUMNS);
+    single_title_roles_for(rows, paths, COLUMNS)
+}
+
+fn single_title_roles_for(rows: &mut [TableRow], paths: &[PathContent], columns: usize) -> Vec<bool> {
+    retain_grouped_leaf_header(rows, paths, columns);
     rows.iter().map(|row| row.is_header).collect()
+}
+
+/// A single-title table of any width whose leaves are alphabetic and whose body is all numeric. ~keep
+fn numeric_single_title_rows(columns: usize) -> [TableRow; 4] {
+    let mut title = vec![cell("Discount Factor", 0, 2, HEIGHT, true)];
+    title.extend((2..columns).map(|column| cell("", column, 1, HEIGHT, false)));
+    let labels = ["Form", "Type", "Low", "Mid", "High"];
+    let body = |y: f32| row((0..columns).map(|column| cell("1.000", column, 1, y, false)).collect());
+    [
+        row(title),
+        row((0..columns)
+            .map(|column| cell(labels[column], column, 1, 0.0, true))
+            .collect()),
+        body(-HEIGHT),
+        body(-2.0 * HEIGHT),
+    ]
 }
 
 /// ParseBench 8097f387f220a9b3dbd9, source PDF SHA-256
@@ -353,4 +377,57 @@ fn single_merged_title_allowance_does_not_change_the_legacy_grouped_proof() {
     assert!(retained(rows.clone(), &paths));
     set_upper_span_overhang(&mut rows[2], 0.36);
     assert!(!retained(rows, &paths));
+}
+
+#[test]
+fn single_merged_title_requires_at_least_three_columns() {
+    for (columns, expected) in [(3, [true, true, false, false]), (2, [false; 4])] {
+        let mut rows = numeric_single_title_rows(columns);
+        let paths = single_title_rules_for(columns);
+        assert_eq!(
+            single_title_roles_for(&mut rows, &paths, columns),
+            expected,
+            "{columns} columns"
+        );
+    }
+}
+
+#[test]
+fn single_merged_title_requires_a_title_declared_over_two_columns() {
+    let mut rows = single_title_rows();
+    rows[0].cells[0].colspan = 1;
+    assert_eq!(rows[0].cells[0].bbox.map(|bounds| bounds.width), Some(2.0 * WIDTH));
+    assert_eq!(single_title_roles(&mut rows, &single_title_rules()), [false; 4]);
+}
+
+#[test]
+fn single_merged_title_requires_alphabetic_title_and_leaves() {
+    let numeric = |cell: &mut TableCell| {
+        cell.text = "2024".to_string();
+        cell.spans[0].text.clone_from(&cell.text);
+    };
+    let mut title = single_title_rows();
+    numeric(&mut title[0].cells[0]);
+    assert_eq!(single_title_roles(&mut title, &single_title_rules()), [false; 4]);
+
+    let mut leaf = single_title_rows();
+    numeric(&mut leaf[1].cells[2]);
+    assert_eq!(single_title_roles(&mut leaf, &single_title_rules()), [false; 4]);
+}
+
+#[test]
+fn single_merged_title_accepts_overhang_at_exactly_the_upper_metric_allowance() {
+    let paths = single_title_rules();
+    for row in 0..3 {
+        let mut rows = single_title_rows();
+        set_upper_span_overhang(&mut rows[row], 0.5);
+        let cell = &rows[row].cells[0];
+        let bounds = cell.bbox.expect("fixture cell bounds");
+        assert_eq!(cell.spans[0].bbox.bottom(), bounds.bottom() + 0.5);
+        assert_eq!(
+            single_title_roles(&mut rows, &paths),
+            [true, true, false, false],
+            "row {row}"
+        );
+    }
 }

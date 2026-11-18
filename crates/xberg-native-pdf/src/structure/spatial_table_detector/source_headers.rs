@@ -467,7 +467,7 @@ fn visible_rule_styles(
         } else if filled_rule && dark_fill(path) {
             visible.push((path.bbox.left(), path.bbox.right(), rule_style(path)));
         } else if stroked_rule || filled_rule || covering_fill(path, y) {
-            // A dark vertical bar preserves dark rule ink at the intersection. ~keep
+            // A vertical bar filled at or below MAX_HEADER_RULE_CHANNEL cannot hide a dark rule it crosses. ~keep
             if accept_filled_bars
                 && path.is_vertical_line(HEADER_RULE_TOLERANCE)
                 && fill_only_bar(path)

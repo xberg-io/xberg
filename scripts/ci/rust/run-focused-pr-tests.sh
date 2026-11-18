@@ -90,7 +90,7 @@ run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
   local single_title='structure::spatial_table_detector::source_headers::tests::single_title'
-  expected=$((expected + 15))
+  expected=$((expected + 19))
   local single_title_case
   for single_title_case in \
     single_merged_title_promotes_bold_native_leaf_labels_without_changing_cells \
@@ -107,7 +107,11 @@ run_pdf_cases() {
     single_merged_title_accepts_measured_upper_font_metric_overhang \
     single_merged_title_rejects_overhang_beyond_the_upper_metric_allowance \
     single_merged_title_rejects_small_overhang_on_each_other_edge \
-    single_merged_title_allowance_does_not_change_the_legacy_grouped_proof; do
+    single_merged_title_allowance_does_not_change_the_legacy_grouped_proof \
+    single_merged_title_requires_at_least_three_columns \
+    single_merged_title_requires_a_title_declared_over_two_columns \
+    single_merged_title_requires_alphabetic_title_and_leaves \
+    single_merged_title_accepts_overhang_at_exactly_the_upper_metric_allowance; do
     run_exact "$single_title::$single_title_case" --native-pdf --lib
   done
   run_exact 'extractors::warnings::tests::nested_warning_scope_restores_the_outer_sink' --native-pdf --lib
