@@ -8544,7 +8544,7 @@ wheels = [
 
 [[package]]
 name = "xberg"
-version = "1.4.1"
+version = "1.4.2"
 source = { editable = "packages/python" }
 
 [package.dev-dependencies]
@@ -8559,7 +8559,7 @@ dev = [{ name = "pyrefly", specifier = ">=1.4" }]
 
 [[package]]
 name = "xberg-dev"
-version = "1.4.1"
+version = "1.4.2"
 source = { virtual = "." }
 dependencies = [
     { name = "xberg" },

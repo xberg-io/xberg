@@ -1158,9 +1158,9 @@ checksum = "2ebdda89edc534bf8d5dd2857562633b6495557e5846552ade994b99ed13c36a"
 
 [[package]]
 name = "comrak"
-version = "0.59.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3adf553d37681e21753316065ad5a763d9513f81c910e250576c572114a8eb06"
+checksum = "d981d666dca19afb3cc090dc7c381560cb8ba76582dda6e2c14686ff39fd547f"
 dependencies = [
  "caseless",
  "entities",
@@ -1326,9 +1326,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6056c5ff22fb7e7f4a3b1e30376217a728b3a9f7532459f6b8d162af6798cbef"
+checksum = "22e2d11bbd0988379abc4563f69d8299cbb7dfffdbb920dc6130884e68ebbeb0"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1383,9 +1383,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c503c57dc1adab25a8d384b7b00d0e4bb9febe6b2d60fb34af67f1bdd8a4907"
+checksum = "09b580aa91f6a6d040b495ce1467a54ac642a28adcef35def6803a3acc13e5c2"
 
 [[package]]
 name = "crc-fast"
@@ -5786,9 +5786,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+checksum = "9807af0e638c12e753aa1b4e601791bf2a8f71274023c8bbeec12fc149950857"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -5798,9 +5798,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.18"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
+checksum = "41d60ef07df457506a0a1a2073112eb4aae5733dbd2813c3da77d1b0fd441158"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -5815,9 +5815,9 @@ checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.11"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
 
 [[package]]
 name = "reqwest"
@@ -5924,9 +5924,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.10.0"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5949e504d5ab9944a168259afc0c39ac0230627b6ec5367ace194c59bcbe163"
+checksum = "391f153431ab68664d946513ea0cb3edbca78eaf99c5a983036cacab6220d85b"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5939,6 +5939,7 @@ dependencies = [
  "indexmap",
  "libc",
  "pastey 0.2.3",
+ "percent-encoding",
  "pin-project-lite",
  "rand 0.10.3",
  "rmcp-macros",
@@ -5953,14 +5954,16 @@ dependencies = [
  "tokio-util",
  "tower-service",
  "tracing",
+ "unicode-general-category",
+ "unicode-normalization",
  "uuid",
 ]
 
 [[package]]
 name = "rmcp-macros"
-version = "3.10.0"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b98a686693ee91b665c6f89f182fca6e141c8a63dc113b11b38c1bf3491606b7"
+checksum = "3598e3f36f4af2b5219b133baf7d97a2197039225adc3d4acf3dd8805b5a2aef"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
@@ -8836,7 +8839,7 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -8978,7 +8981,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "base64 0.23.1",
  "candle-core",
@@ -8998,7 +9001,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
@@ -9012,7 +9015,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "cfg-if",
  "enumn",
@@ -9023,7 +9026,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libwpd"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "cc",
  "flate2",
@@ -9036,7 +9039,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-native-pdf"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -9081,7 +9084,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -9096,7 +9099,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-pdfium-render"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -9113,7 +9116,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "cc",
  "cmake",
@@ -9128,7 +9131,7 @@ dependencies = [
 
 [[package]]
 name = "xberg_nif"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
@@ -9431,9 +9434,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.6.0"
+version = "9.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80cc68510ea7553c30a69c732de5278e94183f68765af6c642dbccefd6ec777e"
+checksum = "08687262e7c0f1284b259686f322805a8adaa8ef4d7210e76448950b3f083bf7"
 dependencies = [
  "bzip2",
  "constant_time_eq 0.6.1",
