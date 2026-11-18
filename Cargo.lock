@@ -756,6 +756,7 @@ dependencies = [
  "url",
  "which 8.0.6",
  "xberg",
+ "xberg-child-test",
 ]
 
 [[package]]
