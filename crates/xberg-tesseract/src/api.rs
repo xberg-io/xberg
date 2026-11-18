@@ -205,6 +205,8 @@ impl TesseractAPI {
     /// Returns [`TesseractError::NullPointerError`] when `TessBaseAPICreate` returns a
     /// null pointer, which indicates an allocation failure in the Tesseract C library.
     pub fn new() -> Result<Self> {
+        // SAFETY: The constructor takes no pointers. A non-null result is a new
+        // engine allocation to be released by TessBaseAPIDelete. ~keep
         let handle = unsafe { TessBaseAPICreate() };
         if handle.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -282,7 +284,10 @@ impl TesseractAPI {
     ///
     /// Returns the version of the Tesseract engine as a string.
     pub fn version() -> String {
+        // SAFETY: This query takes no pointers and returns a library-owned version string. ~keep
         let version = unsafe { TessVersion() };
+        // SAFETY: TessVersion returns a non-null, NUL-terminated static string.
+        // Copy it without taking ownership of the native storage. ~keep
         unsafe { CStr::from_ptr(version) }.to_string_lossy().into_owned()
     }
 
@@ -327,6 +332,8 @@ impl TesseractAPI {
     ///
     /// Returns a vector of confidence values (0-100) for each recognized word.
     pub fn get_word_confidences(&self) -> Result<Vec<i32>> {
+        // The lock serializes access to the pointer slot. It cannot prove that the
+        // publicly replaceable pointer still identifies a live TessBaseAPI (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
 
         let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
@@ -335,10 +342,17 @@ impl TesseractAPI {
         }
         let mut confidences = Vec::new();
         let mut i = 0;
+        // SAFETY: A non-null result from a valid native call is an owned int array
+        // terminated by -1. Starting at zero and advancing only past a non-sentinel
+        // entry keeps the read within the allocation, including the sentinel. ~keep
         while unsafe { *confidences_ptr.offset(i) } != -1 {
+            // SAFETY: The loop condition just read this entry. The index and owning
+            // pointer have not changed since that in-bounds read. ~keep
             confidences.push(unsafe { *confidences_ptr.offset(i) });
             i += 1;
         }
+        // SAFETY: This passes the original returned allocation to its matching
+        // native deleter once, after all confidence values have been copied. ~keep
         unsafe { TessDeleteIntArray(confidences_ptr) };
         Ok(confidences)
     }
