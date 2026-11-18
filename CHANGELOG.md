@@ -160,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** CCITT-compressed scans with `/Rows 0` use the image height, so their pages render and can be read by OCR. (#3253)
+
 - **ocr:** PaddleOCR-VL and DeepSeek OCR reject images over their decoding budget before model loading.
   DeepSeek also budgets local crop resizing, so images accepted before may exceed the limit. (#3168)
 
@@ -168,7 +170,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The dimensions helper reads the header without validating pixels. (#3168)
 
 - **ocr:** GLM-OCR honors the configured image budget in both modes. Its standalone byte APIs use a 100 MiB decode and RGB-conversion budget. GLM decode failures now return `CandleOcrError::Image` in place of `InferenceFailed`. Use `GlmOcrEngine::process_rgb_image_with_task` for decoded RGB input. (#3168)
+- **pdf:** Native extraction handles scanner PDFs that add spaces or tabs between `stream` and the line ending, preserving the declared stream bytes. (#3252)
 - **pdf:** Native structured extraction keeps verified footnotes as `Footnote` content and omits them from Plain and Markdown bodies unless `include_footnotes` is set. (#2331)
+
+- **runtime:** Dynamically loaded ONNX Runtime libraries are discovered without changing the process environment. Sceptre OCR reports the native loader error if a discovered library cannot be loaded. (#3172)
+- **pdf:** Explicit zero page margins preserve the same OCR text recovery as omitted margins. (#3172)
 
 - **pdf:** Structured warnings stay with the document that produced them, including when fonts are shared across documents. (#3172)
 - **pdf:** A running head whose page number is set off by spaces no longer makes a two-column page interleave its columns.

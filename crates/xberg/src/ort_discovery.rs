@@ -1,16 +1,10 @@
 //! ONNX Runtime library auto-discovery and execution provider configuration.
 //!
-//! Scans common installation paths and sets `ORT_DYLIB_PATH` so the `ort` crate
-//! can find `libonnxruntime` via `dlopen`. Called once at init time.
+//! Preloads a discovered native runtime for dynamic ONNX consumers without
+//! changing the process environment.
 //!
 //! Also provides `apply_execution_providers` for configuring GPU acceleration
 //! on ORT session builders across all subsystems (layout, embeddings, OCR, etc.).
-
-#[cfg(not(feature = "ort-bundled"))]
-use std::sync::Once;
-
-#[cfg(not(feature = "ort-bundled"))]
-static ORT_INIT: Once = Once::new();
 
 const XBERG_ORT_EP_ENV_VAR: &str = "XBERG_ORT_EP";
 
@@ -42,50 +36,49 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
         .and_then(|value| parse_execution_provider_override(&value))
 }
 
-/// Ensure ONNX Runtime is discoverable. Safe to call multiple times (no-op after first).
-///
-/// When the `ort-bundled` feature is enabled the ORT binaries are embedded via the
-/// official Microsoft release and no system library search is needed.
+/// Prepare the runtime before callers that may create their own session builders.
 #[allow(dead_code)]
 pub(crate) fn ensure_ort_available() {
-    #[cfg(feature = "ort-bundled")]
-    {
-        tracing::debug!("ONNX Runtime is bundled; skipping system library discovery");
-    }
+    #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
+    tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
 
-    #[cfg(not(feature = "ort-bundled"))]
-    ORT_INIT.call_once(|| {
-        if let Err(msg) = try_discover_ort() {
-            tracing::warn!("ONNX Runtime not found: {msg}");
-        }
-    });
+    #[cfg(ort_dynamic_discovery)]
+    if let Err(error) = preload_ort_runtime() {
+        tracing::warn!(%error, "Could not preload the discovered ONNX Runtime");
+    }
 }
 
-#[cfg(not(feature = "ort-bundled"))]
-fn try_discover_ort() -> Result<(), &'static str> {
-    if let Ok(path) = std::env::var("ORT_DYLIB_PATH")
-        && std::path::Path::new(&path).exists()
-    {
+#[cfg(ort_dynamic_discovery)]
+pub(crate) fn preload_ort_runtime() -> Result<(), ort::LoadDynamicError> {
+    static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
+    INIT.get_or_try_init(|| {
+        let explicit = std::env::var("ORT_DYLIB_PATH").ok();
+        preload_ort_runtime_from(
+            explicit.as_deref().map(std::path::Path::new),
+            platform_candidates().iter().map(std::path::Path::new),
+        )
+    })
+    .copied()
+}
+
+#[cfg(ort_dynamic_discovery)]
+fn preload_ort_runtime_from<'a>(
+    explicit: Option<&std::path::Path>,
+    mut candidates: impl Iterator<Item = &'a std::path::Path>,
+) -> Result<(), ort::LoadDynamicError> {
+    // Leave explicit existing paths and the default search to ort. A bare library
+    // name may resolve through the executable directory or the system loader. ~keep
+    if explicit.is_some_and(std::path::Path::exists) {
         return Ok(());
     }
-
-    let candidates: &[&str] = platform_candidates();
-
-    for path in candidates {
-        if std::path::Path::new(path).exists() {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::env::set_var("ORT_DYLIB_PATH", path);
-            }
-            tracing::debug!("Auto-discovered ONNX Runtime at {path}");
-            return Ok(());
-        }
+    if let Some(path) = candidates.find(|path| path.exists()) {
+        // Load the library and leave environment creation to the caller. ~keep
+        let _builder = ort::init_from(path)?;
     }
-
-    Err("ONNX Runtime library not found in common installation paths")
+    Ok(())
 }
 
-#[cfg(all(not(feature = "ort-bundled"), target_os = "macos"))]
+#[cfg(all(ort_dynamic_discovery, target_os = "macos"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "/opt/homebrew/lib/libonnxruntime.dylib",
@@ -93,7 +86,7 @@ fn platform_candidates() -> &'static [&'static str] {
     ]
 }
 
-#[cfg(all(not(feature = "ort-bundled"), target_os = "linux"))]
+#[cfg(all(ort_dynamic_discovery, target_os = "linux"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "/usr/lib/libonnxruntime.so",
@@ -103,7 +96,7 @@ fn platform_candidates() -> &'static [&'static str] {
     ]
 }
 
-#[cfg(all(not(feature = "ort-bundled"), target_os = "windows"))]
+#[cfg(all(ort_dynamic_discovery, target_os = "windows"))]
 fn platform_candidates() -> &'static [&'static str] {
     &[
         "C:\\Program Files\\onnxruntime\\bin\\onnxruntime.dll",
@@ -112,7 +105,7 @@ fn platform_candidates() -> &'static [&'static str] {
 }
 
 #[cfg(all(
-    not(feature = "ort-bundled"),
+    ort_dynamic_discovery,
     not(any(target_os = "macos", target_os = "linux", target_os = "windows"))
 ))]
 fn platform_candidates() -> &'static [&'static str] {
@@ -778,3 +771,15 @@ mod shared_environment_tests {
 #[cfg(all(test, feature = "sceptre-ocr-ort", feature = "auto-rotate"))]
 #[path = "ort_discovery/sceptre_tests.rs"]
 mod sceptre_tests;
+
+#[cfg(all(test, feature = "sceptre-ocr-ort", ort_dynamic_discovery))]
+#[path = "ort_discovery/dynamic_sceptre_tests.rs"]
+mod dynamic_sceptre_tests;
+
+#[cfg(all(
+    test,
+    feature = "ort-dynamic",
+    any(feature = "sceptre-ocr-ort", feature = "auto-rotate")
+))]
+#[path = "ort_discovery/runtime_route_tests.rs"]
+mod runtime_route_tests;

@@ -2470,6 +2470,81 @@ fn underscore_word_symbols(api: &TesseractAPI) -> Vec<xberg_tesseract::WordSymbo
     }
 }
 
+#[cfg(auto_rotate)]
+fn detect_rgb_orientation(
+    image_data: &mut Vec<u8>,
+    width: u32,
+    height: u32,
+    bytes_per_pixel: u32,
+) -> crate::Result<(i32, f32)> {
+    let expected_rgb_len = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(bytes_per_pixel as usize));
+    if expected_rgb_len != Some(image_data.len()) {
+        return Err(crate::error::XbergError::Ocr {
+            message: "auto_rotate: image buffer does not match dimensions".to_string(),
+            source: None,
+        });
+    }
+
+    let image = image::RgbImage::from_raw(width, height, std::mem::take(image_data))
+        .expect("validated RGB buffer length must match dimensions");
+    let result = crate::doc_orientation::detector::tesseract_detector().detect(&image);
+    *image_data = image.into_raw();
+    result.map(|orientation| (orientation.degrees as i32, orientation.confidence))
+}
+
+#[cfg(auto_rotate)]
+fn auto_rotate_rgb(
+    image_data: &mut Vec<u8>,
+    width: &mut u32,
+    height: &mut u32,
+    bytes_per_pixel: u32,
+    ci_debug_enabled: bool,
+) -> Option<(i32, f32)> {
+    let (orient_deg, orient_conf) = match detect_rgb_orientation(image_data, *width, *height, bytes_per_pixel) {
+        Ok(orientation) => orientation,
+        Err(e) => {
+            tracing::warn!("Orientation detection failed, proceeding without rotation: {}", e);
+            return None;
+        }
+    };
+    log_ci_debug(ci_debug_enabled, "orientation_detection", || {
+        format!("orientation={}° confidence={:.2}", orient_deg, orient_conf)
+    });
+
+    if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
+        tracing::info!(
+            "Auto-rotating image by {} degrees (confidence: {:.2})",
+            orient_deg,
+            orient_conf
+        );
+
+        let correction_deg = (360 - orient_deg).rem_euclid(360);
+        let (rotated_data, new_width, new_height) = rotate_rgb_image_data(image_data, *width, *height, correction_deg);
+        *image_data = rotated_data;
+        *width = new_width;
+        *height = new_height;
+
+        log_ci_debug(ci_debug_enabled, "auto_rotate", || {
+            format!("rotated={}° new_dimensions={}x{}", orient_deg, new_width, new_height)
+        });
+    } else {
+        tracing::debug!(
+            degrees = orient_deg,
+            confidence = orient_conf,
+            threshold = MIN_ORIENTATION_CONFIDENCE,
+            "auto_rotate: keeping original orientation"
+        );
+    }
+    Some((orient_deg, orient_conf))
+}
+
 fn read_native_word_confidence_stats(api: &TesseractAPI, output_format: &str) -> Option<(i32, i32, usize, usize)> {
     if matches!(output_format, "markdown" | "text") {
         None
@@ -2562,10 +2637,6 @@ pub(super) fn perform_ocr(
     let raw_ocr_source_frame = prepared_image.raw_ocr_source_frame;
     let preprocessing = prepared_image.preprocessing;
     let image_preprocessing = prepared_image.image_preprocessing;
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut ocr_image_width = width;
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut ocr_image_height = height;
 
     let bytes_per_pixel: u32 = 3;
 
@@ -2660,69 +2731,16 @@ pub(super) fn perform_ocr(
 
     #[cfg(auto_rotate)]
     if auto_rotate_enabled {
-        let expected_rgb_len = usize::try_from(width)
-            .ok()
-            .and_then(|width| {
-                usize::try_from(height)
-                    .ok()
-                    .and_then(|height| width.checked_mul(height))
-            })
-            .and_then(|pixels| pixels.checked_mul(bytes_per_pixel as usize));
-        let orientation_result = if expected_rgb_len != Some(image_data.len()) {
-            Err(crate::error::XbergError::Ocr {
-                message: "auto_rotate: image buffer does not match dimensions".to_string(),
-                source: None,
-            })
-        } else {
-            let image = image::RgbImage::from_raw(width, height, std::mem::take(&mut image_data))
-                .expect("validated RGB buffer length must match dimensions");
-            let result = crate::doc_orientation::detector::tesseract_detector().detect(&image);
-            image_data = image.into_raw();
-            result
-        };
-
-        match orientation_result {
-            Err(e) => {
-                tracing::warn!("Orientation detection failed, proceeding without rotation: {}", e);
-            }
-            Ok(orientation) => {
-                let orient_deg = orientation.degrees as i32;
-                let orient_conf = orientation.confidence;
-                log_ci_debug(ci_debug_enabled, "orientation_detection", || {
-                    format!("orientation={}° confidence={:.2}", orient_deg, orient_conf)
-                });
-                detected_orientation = Some((orient_deg, orient_conf));
-
-                if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
-                    tracing::info!(
-                        "Auto-rotating image by {} degrees (confidence: {:.2})",
-                        orient_deg,
-                        orient_conf
-                    );
-
-                    let correction_deg = (360 - orient_deg).rem_euclid(360);
-                    let (rotated_data, new_width, new_height) =
-                        rotate_rgb_image_data(&image_data, width, height, correction_deg);
-                    image_data = rotated_data;
-                    width = new_width;
-                    height = new_height;
-                    ocr_image_width = new_width;
-                    ocr_image_height = new_height;
-
-                    log_ci_debug(ci_debug_enabled, "auto_rotate", || {
-                        format!("rotated={}° new_dimensions={}x{}", orient_deg, new_width, new_height)
-                    });
-                } else {
-                    tracing::debug!(
-                        degrees = orient_deg,
-                        confidence = orient_conf,
-                        threshold = MIN_ORIENTATION_CONFIDENCE,
-                        "auto_rotate: keeping original orientation"
-                    );
-                }
-            }
-        }
+        detected_orientation = auto_rotate_rgb(
+            &mut image_data,
+            &mut width,
+            &mut height,
+            bytes_per_pixel,
+            ci_debug_enabled,
+        );
     }
+    let ocr_image_width = width;
+    let ocr_image_height = height;
 
     let processed_pix: Option<xberg_tesseract::Pix> = if let (true, Some(preprocessing)) =
         (prepared_image.apply_pix_preprocessing, preprocessing.as_ref())

@@ -3050,10 +3050,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if correction_degrees == 0
                     && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-                    && config.pdf_options.as_ref().is_none_or(|pdf| {
-                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
-                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
-                    })
+                    && config
+                        .pdf_options
+                        .as_ref()
+                        .is_none_or(|pdf| !pdf.has_nonzero_raw_margins())
                     && !khmer_supplements.contains_key(&((page_idx + 1) as u32))
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
@@ -7177,10 +7177,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                 };
                 let additions = if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-                    && config.pdf_options.as_ref().is_none_or(|pdf| {
-                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
-                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
-                    })
+                    && config
+                        .pdf_options
+                        .as_ref()
+                        .is_none_or(|pdf| !pdf.has_nonzero_raw_margins())
                     && !forced_khmer_supplements.contains_key(&page_idx)
                     && super::layer_token_recovery::is_english_read(&ocr_result)
                 {
@@ -11328,9 +11328,10 @@ fn recover_automatic_latin_rows(
     if config.ocr_strategy != crate::core::config::OcrStrategy::Auto
         || !super::document::automatic_tesseract_page(config, page_number)
         || super::document::resolved_ocr_correction_degrees(&read.metadata).is_some_and(|angle| angle != 0)
-        || config.pdf_options.as_ref().is_some_and(|pdf| {
-            pdf.top_margin_fraction.unwrap_or_default() != 0.0 || pdf.bottom_margin_fraction.unwrap_or_default() != 0.0
-        })
+        || config
+            .pdf_options
+            .as_ref()
+            .is_some_and(|pdf| pdf.has_nonzero_raw_margins())
     {
         return;
     }

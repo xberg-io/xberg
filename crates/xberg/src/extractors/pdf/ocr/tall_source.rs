@@ -724,9 +724,7 @@ fn certify(
         )?),
         _ => return None,
     };
-    if !source_density_allowed(dpi, packing) {
-        return None;
-    }
+    source_density_or_refusal(packing, (width, height, dpi), (data.len(), byte_limit), source_refusal)?;
     let (samples, retained_bytes) = if let Some(packing) = packing {
         decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?
     } else {
@@ -743,6 +741,26 @@ fn certify(
         certify_rows: dpi < MIN_STANDARD_SOURCE_DPI || packing.is_none_or(GrayPacking::requires_line_certificate),
         reread_split_row: dpi < MIN_STANDARD_SOURCE_DPI && packing == Some(GrayPacking::NeutralRgb),
     })
+}
+
+fn source_density_or_refusal(
+    packing: Option<GrayPacking>,
+    (width, height, dpi): (u32, u32, f64),
+    (compressed_len, byte_limit): (usize, usize),
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<()> {
+    if source_density_allowed(dpi, packing) {
+        return Some(());
+    }
+    let (width, height) = (width as usize, height as usize);
+    if packing == Some(GrayPacking::Bilevel)
+        && dpi < MIN_STANDARD_SOURCE_DPI
+        && packed_gray_peak_bytes(compressed_len, width, height, width.div_ceil(8))
+            .is_some_and(|peak| peak <= byte_limit)
+    {
+        *source_refusal = Some(Unrecovered::BilevelBelowDensity(dpi));
+    }
+    None
 }
 
 fn flate_packing_or_refusal(
@@ -765,15 +783,18 @@ fn flate_refusal(
     byte_limit: usize,
 ) -> Option<Unrecovered> {
     let (width, height) = (width as usize, height as usize);
-    let packed_bytes = width.div_ceil(2).checked_mul(height)?;
-    let retained_bytes = retained_gray_bytes(compressed_len, width.checked_mul(height)?)?;
-    let peak_bytes = retained_bytes.checked_add(packed_bytes)?;
+    let peak_bytes = packed_gray_peak_bytes(compressed_len, width, height, width.div_ceil(2))?;
     (dict.get("ColorSpace").and_then(Object::as_name) == Some("DeviceGray")
         && dict.get("BitsPerComponent").and_then(Object::as_integer) == Some(4)
         && !dict.contains_key("DecodeParms")
         && source_density_allowed(dpi, Some(GrayPacking::Byte))
         && peak_bytes <= byte_limit)
         .then_some(Unrecovered::FourBitGrayFlate)
+}
+
+fn packed_gray_peak_bytes(compressed: usize, width: usize, height: usize, stride: usize) -> Option<usize> {
+    let packed = stride.checked_mul(height)?;
+    retained_gray_bytes(compressed, width.checked_mul(height)?)?.checked_add(packed)
 }
 
 pub(super) fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
@@ -1296,6 +1317,72 @@ mod tests {
         let mut bytes = Vec::new();
         pdf.save_to(&mut bytes).unwrap();
         PdfDocument::from_bytes(bytes).expect("read valid synthetic PDF")
+    }
+
+    #[test]
+    fn existing_bilevel_scans_reach_the_source_density_gate() {
+        let low = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-120.pdf");
+        let standard = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+        const BUDGET: usize = 32 * 1024 * 1024;
+        const READ_WIDTH: Option<u32> = Some(435);
+        for (bytes, expected_dpi, allowed) in [(low.as_slice(), 120.0, false), (standard.as_slice(), 150.0, true)] {
+            let document = PdfDocument::from_bytes(bytes.to_vec()).expect("open tagged bilevel scan");
+            let (frame, Object::Stream { dict, data }) =
+                page_frame_and_contents(&document, 0).expect("single page content")
+            else {
+                panic!("expected the page's content stream");
+            };
+            assert!(!dict.contains_key("DecodeParms"));
+            let filters = stream_filters(dict.get("Filter")).expect("page stream filter");
+            let paint = decode_probe_stream(&data, filters, 4096, BUDGET).expect("certified page paint");
+            let name = image_name(&paint, frame).expect("full-page scan paint");
+            let resources = document.get_page_resources(0).unwrap();
+            let xobjects = document
+                .resolve_object(&resources.as_dict().unwrap()["XObject"])
+                .unwrap();
+            let image = document.resolve_object(&xobjects.as_dict().unwrap()[&name]).unwrap();
+            let Object::Stream { dict, data } = image else {
+                panic!("expected the painted image stream");
+            };
+            assert_eq!(dict.get("Filter").and_then(Object::as_name), Some("FlateDecode"));
+            let (width, height, dpi) = source_frame(&dict, frame, READ_WIDTH).expect("eligible source frame");
+            assert!((dpi - expected_dpi).abs() < 0.01);
+            assert!(flate_packing(&dict, width) == Some(GrayPacking::Bilevel));
+            let expanded = width as usize * height as usize;
+            let packed = (width as usize).div_ceil(8) * height as usize;
+            let peak = retained_gray_bytes(data.len(), expanded).unwrap() + packed;
+            assert!(peak < BUDGET);
+            assert_eq!(source_density_allowed(dpi, Some(GrayPacking::Bilevel)), allowed);
+            let mut refusal = None;
+            let accepted = certify(&document, 0, READ_WIDTH, BUDGET, &mut refusal).is_some();
+            assert_eq!(accepted, allowed);
+            if allowed {
+                assert!(refusal.is_none());
+            } else {
+                assert!(matches!(refusal, Some(Unrecovered::BilevelBelowDensity(dpi)) if dpi == expected_dpi));
+                for (budget, specific) in [(peak - 1, false), (peak, true)] {
+                    let mut refusal = None;
+                    assert!(certify(&document, 0, READ_WIDTH, budget, &mut refusal).is_none());
+                    assert_eq!(matches!(refusal, Some(Unrecovered::BilevelBelowDensity(_))), specific);
+                    if !specific {
+                        assert!(refusal.is_none());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bilevel_above_maximum_density_is_not_reported_as_below_minimum() {
+        let mut refusal = None;
+        let accepted = source_density_or_refusal(
+            Some(GrayPacking::Bilevel),
+            (1275, 12000, 300.01),
+            (1, 32 * 1024 * 1024),
+            &mut refusal,
+        );
+        assert!(accepted.is_none());
+        assert!(refusal.is_none());
     }
 
     const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
