@@ -10,7 +10,7 @@
 mod helpers;
 use helpers::extract_uri_document;
 
-use helpers::{assert_mime_type, get_test_file_path, test_documents_available};
+use helpers::{assert_mime_type, get_test_file_path, skip_if_missing, test_documents_available};
 
 #[cfg(any(feature = "office", feature = "ocr"))]
 use helpers::assert_non_empty_content;
@@ -26,11 +26,11 @@ async fn test_pdf_password_protected_async() {
         return;
     }
 
-    let path = get_test_file_path("pdf/copy_protected.pdf");
-    if !path.exists() {
-        tracing::debug!("Skipping test: protected PDF not available");
+    let fixture = "pdf/copy_protected.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default()).await;
 
@@ -55,11 +55,11 @@ async fn test_legacy_doc_extraction_async() {
         return;
     }
 
-    let path = get_test_file_path("doc/simple.doc");
-    if !path.exists() {
-        tracing::debug!("Skipping test: legacy .doc file not available");
+    let fixture = "vendored/unstructured/doc/simple.doc";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default()).await;
 
@@ -89,11 +89,11 @@ async fn test_ocr_simple_english_image_async() {
         return;
     }
 
-    let path = get_test_file_path("images/test_hello_world.png");
-    if !path.exists() {
-        tracing::debug!("Skipping test: OCR sample image not available");
+    let fixture = "images/test_hello_world.png";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
@@ -131,11 +131,11 @@ async fn test_ocr_image_without_text_async() {
         return;
     }
 
-    let path = get_test_file_path("images/flower_no_text.jpg");
-    if !path.exists() {
-        tracing::debug!("Skipping test: OCR flower image not available");
+    let fixture = "images/flower_no_text.jpg";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
