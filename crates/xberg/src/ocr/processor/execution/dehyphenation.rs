@@ -91,7 +91,7 @@ struct SpellingWitnesses {
 }
 
 pub(super) fn join_scanned_wraps(
-    elements: &mut [InternalElement],
+    elements: &mut Vec<InternalElement>,
     words: &[HocrWordOccurrence],
     page_width: u32,
     sparse: bool,
@@ -115,9 +115,15 @@ pub(super) fn join_scanned_wraps(
         .filter_map(|index| witnessed_join(&lines, index, elements, &witnesses, page_width, sparse))
         .collect();
     let changed = !joins.is_empty();
+    // Joins apply last to first, so removing a later element leaves earlier edit indices valid. ~keep
     for join in joins.into_iter().rev() {
         if let Some(leading) = join.leading {
+            let element = leading.element;
             leading.apply(elements);
+            // A sparse block whose only word moved up would otherwise become an empty paragraph. ~keep
+            if elements[element].text.is_empty() {
+                elements.remove(element);
+            }
         }
         join.trailing.apply(elements);
     }
@@ -464,6 +470,39 @@ mod tests {
             let (mut elements, words) = scan(text, &[full, (550, 940), full]);
             assert!(!join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
             assert_eq!(elements[0].text, text);
+        }
+    }
+
+    #[test]
+    fn hard_hyphen_wraps_keep_their_dash() {
+        let full = (160, 840);
+        let email = "Send the report by e-\nmail to the office today\nThe email address is listed";
+        let (mut elements, words) = scan(email, &[full; 3]);
+        assert!(!join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(elements[0].text, email);
+
+        let unwitnessed = "We hope both groups will co-\noperate on the next step\nThey have agreed already";
+        let (mut elements, words) = scan(unwitnessed, &[full; 3]);
+        assert!(!join_scanned_wraps(&mut elements, &words, 1000, false));
+        assert_eq!(elements[0].text, unwitnessed);
+
+        for (text, expected) in [
+            (
+                "We hope both groups will co-\noperate on the next step\nThey co-operate already",
+                "We hope both groups will co-operate\non the next step\nThey co-operate already",
+            ),
+            (
+                "We hope both groups will co-\noperate on the next step\nThey co-operate and cooperate",
+                "We hope both groups will co-operate\non the next step\nThey co-operate and cooperate",
+            ),
+            (
+                "It is a well-\nknown result in the field\nNo other spelling occurs here",
+                "It is a well-known\nresult in the field\nNo other spelling occurs here",
+            ),
+        ] {
+            let (mut elements, words) = scan(text, &[full; 3]);
+            assert!(join_scanned_wraps(&mut elements, &words, 1000, false), "{text}");
+            assert_eq!(elements[0].text, expected);
         }
     }
 

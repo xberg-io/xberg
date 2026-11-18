@@ -82,7 +82,7 @@ fn sparse_terminal_wrap_joins_with_bracketed_body_geometry() {
     let (mut elements, words) = sparse_body();
     let mut expected = elements.clone();
     expected[PRIOR as usize].text = "This example still ends with recognition".to_owned();
-    expected[SUFFIX as usize].text.clear();
+    expected.remove(SUFFIX as usize);
 
     assert!(join_scanned_wraps(&mut elements, &words, 1700, true));
     assert_eq!(elements, expected);

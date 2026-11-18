@@ -99,6 +99,7 @@ run_pdf_cases() {
   run_exact scanned_lexical_wrap_keeps_hyphen_despite_closed_spelling --test pdf_scanned_hyphenation_3170
   run_exact 'ocr::processor::execution::dehyphenation::tests::joins_only_witnessed_aligned_page_width_wraps' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::joins_lexical_hyphen_wraps_without_dropping_the_dash' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::hard_hyphen_wraps_keep_their_dash' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::a_soft_hyphen_is_outside_the_scanned_wrap_policy' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::repairs_only_a_witnessed_terminal_word_within_the_same_block' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_do_not_consume_an_entire_following_block' --lib
@@ -548,7 +549,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=138
+  expected=139
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
