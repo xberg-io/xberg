@@ -128,8 +128,14 @@ jobs:
           install-args: cargo-deny
           cache: "false"
 
-      - name: Setup ONNX Runtime for NLI and PDF table tests
-        if: matrix.suite == 'nli' || matrix.suite == 'pdf-table-paint'
+      - name: Setup ONNX Runtime for NLI admission tests
+        if: matrix.suite == 'nli'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+
+      - name: Setup ONNX Runtime for PDF table paint tests
+        if: matrix.suite == 'pdf-table-paint'
         uses: ./.github/actions/setup-onnx-runtime
         with:
           verify-linux-archive: "true"
