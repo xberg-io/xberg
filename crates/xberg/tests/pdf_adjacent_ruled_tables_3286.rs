@@ -21,6 +21,16 @@ const BOTTOM: [[&str; 2]; 5] = [
     ["Beacon", "Week four"],
 ];
 
+fn markdown_block<const N: usize>(rows: &[[&str; N]]) -> String {
+    let line = |cells: &[&str]| format!("| {} |\n", cells.join(" | "));
+    let mut block = line(&rows[0]);
+    block.push_str(&line(&["---"; N]));
+    for row in &rows[1..] {
+        block.push_str(&line(row));
+    }
+    block
+}
+
 fn extract(compressed_pdf: &[u8], output_format: OutputFormat) -> ExtractedDocument {
     let mut pdf = Vec::new();
     GzDecoder::new(compressed_pdf).read_to_end(&mut pdf).unwrap();
@@ -51,10 +61,15 @@ fn adjacent_ruled_tables_follow_page_order_in_plain_and_markdown() {
             assert_eq!(lower.cells, BOTTOM);
             assert!(upper.bounding_box.unwrap().y0 > lower.bounding_box.unwrap().y1);
             if markdown {
-                let upper = result.content.find("| Service | Zone | Period | Capacity |").unwrap();
-                let lower = result.content.find("| Review | Cadence |").unwrap();
-                assert!(upper < lower, "the physically higher table renders first");
-                assert_eq!(result.content.matches("\n| --- | --- |").count(), 2);
+                let (upper, lower) = (markdown_block(&TOP), markdown_block(&BOTTOM));
+                assert_eq!(result.content.matches(&upper).count(), 1, "{}", result.content);
+                assert_eq!(result.content.matches(&lower).count(), 1, "{}", result.content);
+                let separators = result.content.lines().filter(|line| line.starts_with("| --- |"));
+                assert_eq!(separators.count(), 2, "{}", result.content);
+                assert!(
+                    result.content.find(&upper) < result.content.find(&lower),
+                    "the physically higher table renders first"
+                );
             }
         }
     }
