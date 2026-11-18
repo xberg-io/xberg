@@ -2504,7 +2504,6 @@ fn read_native_word_confidence_stats(api: &TesseractAPI, output_format: &str) ->
     }
 }
 
-#[path = "execution/primary_read_metadata.rs"]
 mod primary_read_metadata;
 
 /// Perform OCR on an image using Tesseract.
