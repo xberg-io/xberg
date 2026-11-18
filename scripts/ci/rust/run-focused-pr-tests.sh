@@ -92,6 +92,7 @@ run_pdf_cases() {
   run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_do_not_consume_an_entire_following_block' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::digits_and_non_ascii_edges_do_not_license_joins' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::sparse_lines_can_share_a_wrap_without_merging_their_elements' --lib
+  run_exact 'ocr::processor::execution::dehyphenation::tests::narrow_sparse_blocks_do_not_licence_a_multiword_wrap' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::joins_a_short_paragraph_final_continuation_after_a_full_line' --lib
   run_exact 'ocr::processor::execution::dehyphenation::tests::uses_a_spelling_witness_with_unicode_surrounding_punctuation' --lib
   run_exact 'ocr::processor::execution::dehyphenation::continuation_tests::sparse_terminal_wrap_joins_with_bracketed_body_geometry' --lib
@@ -464,7 +465,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=135
+  expected=136
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases

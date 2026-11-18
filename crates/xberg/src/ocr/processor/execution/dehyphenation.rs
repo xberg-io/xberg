@@ -277,7 +277,12 @@ fn same_body_flow(prior: &Line<'_>, next: &Line<'_>, page_width: u32, terminal_w
         after.left >= before.left && after.right <= before.right
     } else {
         let tolerance = before.height().max(after.height()).saturating_mul(2);
-        after.right <= before.right.saturating_add(tolerance).min(page_width)
+        if prior.element == next.element {
+            after.right <= before.right.saturating_add(tolerance).min(page_width)
+        } else {
+            // Separate sparse blocks still need full-width geometry on both sides. ~keep
+            after.full_width(page_width) && before.right.abs_diff(after.right) <= tolerance
+        }
     };
     (prior.words.last()?.bounds[2] == before.right
         && next.words.first()?.bounds[0] == after.left
@@ -345,11 +350,8 @@ mod tests {
         (vec![InternalElement::text(block, text, 0)], words)
     }
 
-    #[test]
-    fn sparse_lines_can_share_a_wrap_without_merging_their_elements() {
-        let text = "A passage ends with recog-\nnition and explanatory text\nEarlier recognition supports it";
-        let full = (160, 840);
-        let (_, mut words) = scan(text, &[full; 3]);
+    fn sparse_blocks(text: &str, spans: &[(u32, u32)]) -> (Vec<InternalElement>, Vec<HocrWordOccurrence>) {
+        let (_, mut words) = scan(text, spans);
         let mut elements = Vec::new();
         let mut start = 0;
         for line in text.lines() {
@@ -358,20 +360,47 @@ mod tests {
                 word.element = elements.len() as u32;
                 word.bytes = word.bytes.start - start..word.bytes.end - start;
             }
-            elements.push(InternalElement::text(
+            let mut block = InternalElement::text(
                 ElementKind::OcrText {
                     level: OcrElementLevel::Block,
                 },
                 line,
                 0,
-            ));
+            );
+            block.attributes = Some(
+                [(
+                    crate::ocr::hocr_parser::HOCR_BLOCK_ID_ATTRIBUTE.to_owned(),
+                    elements.len().to_string(),
+                )]
+                .into_iter()
+                .collect(),
+            );
+            elements.push(block);
             start = end + 1;
         }
+        (elements, words)
+    }
+
+    #[test]
+    fn sparse_lines_can_share_a_wrap_without_merging_their_elements() {
+        let text = "A passage ends with recog-\nnition and explanatory text\nEarlier recognition supports it";
+        let full = (160, 840);
+        let (mut elements, words) = sparse_blocks(text, &[full; 3]);
         assert!(!join_scanned_wraps(&mut elements, &words, 1000, false));
         assert!(join_scanned_wraps(&mut elements, &words, 1000, true));
         assert_eq!(elements[0].text, "A passage ends with recognition");
         assert_eq!(elements[1].text, "and explanatory text");
         assert_eq!(elements[2].text, "Earlier recognition supports it");
+    }
+
+    #[test]
+    fn narrow_sparse_blocks_do_not_licence_a_multiword_wrap() {
+        let text = "A passage ends with recog-\nnition and explanatory text\nEarlier recognition supports it";
+        let full = (160, 840);
+        let (mut elements, words) = sparse_blocks(text, &[full, (160, 420), full]);
+        let original = elements.clone();
+        assert!(!join_scanned_wraps(&mut elements, &words, 1000, true));
+        assert_eq!(elements, original);
     }
 
     #[test]
