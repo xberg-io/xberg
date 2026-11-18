@@ -3369,13 +3369,10 @@ pub(super) fn perform_ocr(
         && content == raw_content
         && let Some(words) = dehyphenation_words.as_deref()
         && let Some(doc) = hocr_document.as_mut()
+        && let sparse = config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+        && dehyphenation::may_join_scanned_wraps(&doc.elements, sparse)
         && content == flatten_hocr_elements_to_text(&doc.elements)
-        && dehyphenation::join_scanned_wraps(
-            &mut doc.elements,
-            words,
-            ocr_image_width,
-            config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8,
-        )
+        && dehyphenation::join_scanned_wraps(&mut doc.elements, words, ocr_image_width, sparse)
     {
         content = flatten_hocr_elements_to_text(&doc.elements);
     }
