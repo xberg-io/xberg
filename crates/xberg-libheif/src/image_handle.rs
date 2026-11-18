@@ -408,10 +408,14 @@ impl ImageHandle {
     #[allow(unsafe_code)]
     pub fn auxiliary_type(&self) -> Result<String> {
         let mut type_str_ptr = ptr::null();
+        // SAFETY: self.inner must name a live image handle. The local out slot is writable, and
+        // success transfers ownership of a NUL-terminated allocation to this caller. ~keep
         let err = unsafe { lh::heif_image_handle_get_auxiliary_type(self.inner, &mut type_str_ptr) };
         HeifError::from_heif_error(err)?;
         let res = cstr_to_str(type_str_ptr).unwrap_or("").to_owned();
         if !type_str_ptr.is_null() {
+            // SAFETY: The writable slot holds the non-null allocation returned by the getter.
+            // The Rust result is owned before libheif frees the allocation and clears the slot. ~keep
             unsafe { lh::heif_image_handle_release_auxiliary_type(self.inner, &mut type_str_ptr) };
         }
         Ok(res)
