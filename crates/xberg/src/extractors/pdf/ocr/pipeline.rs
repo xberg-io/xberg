@@ -4016,7 +4016,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             if !ocr_page_paragraphs.contains_key(page_number) {
                 continue;
             }
-            let new_page_doc = match split_pages.remove(page_number) {
+            let mut new_page_doc = match split_pages.remove(page_number) {
                 // The heuristic's combined document has no notion of the backend's raw
                 // per-word OCR elements, this page's earlier warnings, or its OCR coordinate
                 // frame -- all three come from the fallback per-page document already built
@@ -4102,6 +4102,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     new_page_doc
                 }
             };
+            super::document::recertify_scan_html_paragraph(existing, &mut new_page_doc);
             structured_ocr_pages.insert(*page_number, new_page_doc);
         }
     }
@@ -7007,10 +7008,18 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            // Only the complete source supplies this count. Detached and stored-scan calls omit
-            // the source, and layout-guided calls pass pre-rendered images, so they have zero. ~keep
+            // The complete source supplies this count. A detached page counts the document it came
+            // from: a build with an automatic fallback stage reads a one-page scan through the
+            // per-page pipeline, which detaches it. Stored-scan and layout-guided calls have zero. ~keep
             if let Some(rows) = ocr_result.ocr_internal_document.as_ref().and_then(|doc| {
-                super::document::certified_scan_html_rows(config, lazy_pdf_page_count, builtin_tesseract, doc)
+                let source_page_count = match detached_page {
+                    _ if lazy_pdf_page_count != 0 => lazy_pdf_page_count,
+                    Some(page) if !has_stored_scan && !has_layout_detections => {
+                        page.document.page_count().unwrap_or_default()
+                    }
+                    _ => 0,
+                };
+                super::document::certified_scan_html_rows(config, source_page_count, builtin_tesseract, doc)
             }) {
                 owned_scan_rows = Some(rows.to_owned());
             }
