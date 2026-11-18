@@ -488,9 +488,9 @@ api-jobs)
 pdf-table-paint)
   expected=24
   table_module="pdf::structure::regions::table_recognition"
-  run_exact "$table_module::row_span_closure::tests::closed_native_rowspan_preserves_heading_and_rejects_incomplete_evidence" --lib
-  run_exact "$table_module::column_spans::tests::split_rowspan_retains_only_column_spans_with_open_source_rules" --lib
-  run_exact "$table_module::column_spans::tests::split_header_rejects_a_displaced_rule_between_native_words" --lib
+  run_exact "$table_module::structure::row_span_closure::tests::closed_native_rowspan_preserves_heading_and_rejects_incomplete_evidence" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_rowspan_retains_only_column_spans_with_open_source_rules" --lib
+  run_exact "$table_module::structure::column_spans::tests::split_header_rejects_a_displaced_rule_between_native_words" --lib
   for name in \
     native_tatr_vertical_span_stops_at_a_painted_rule \
     native_tatr_vertical_span_survives_a_rule_outside_the_merged_track \
