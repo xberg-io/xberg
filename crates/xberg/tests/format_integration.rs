@@ -10,7 +10,9 @@
 mod helpers;
 use helpers::extract_uri_document;
 
-use helpers::{assert_mime_type, get_test_file_path, test_documents_available};
+#[cfg(feature = "ocr")]
+use helpers::require_test_fixtures;
+use helpers::{assert_mime_type, get_test_file_path, skip_if_missing, test_documents_available};
 
 #[cfg(any(feature = "office", feature = "ocr"))]
 use helpers::assert_non_empty_content;
@@ -26,11 +28,11 @@ async fn test_pdf_password_protected_async() {
         return;
     }
 
-    let path = get_test_file_path("pdf/copy_protected.pdf");
-    if !path.exists() {
-        tracing::debug!("Skipping test: protected PDF not available");
+    let fixture = "pdf/copy_protected.pdf";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let result = extract_uri_document(&path, None, &ExtractionConfig::default()).await;
 
@@ -55,31 +57,30 @@ async fn test_legacy_doc_extraction_async() {
         return;
     }
 
-    let path = get_test_file_path("doc/simple.doc");
-    if !path.exists() {
-        tracing::debug!("Skipping test: legacy .doc file not available");
+    let fixture = "vendored/unstructured/doc/simple.doc";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
-    let result = extract_uri_document(&path, None, &ExtractionConfig::default()).await;
+    let extracted = extract_uri_document(&path, None, &ExtractionConfig::default())
+        .await
+        .expect("legacy .doc extraction must succeed");
 
-    match result {
-        Ok(extracted) => {
-            assert_mime_type(&extracted, "application/msword");
-            assert_non_empty_content(&extracted);
-            assert!(
-                extracted.chunks.is_none(),
-                "Chunks should be None without chunking config"
-            );
-            assert!(extracted.detected_languages.is_none(), "Language detection not enabled");
-        }
-        Err(err) => {
-            tracing::debug!(
-                "Legacy Office extraction failed (office feature may not be enabled): {}",
-                err
-            );
-        }
+    assert_mime_type(&extracted, "application/msword");
+    assert_non_empty_content(&extracted);
+    for expected in ["Parrots", "Hockey", "DOYLESTOWN"] {
+        assert!(
+            extracted.content.contains(expected),
+            "legacy .doc content {:?} should contain {expected:?}",
+            extracted.content
+        );
     }
+    assert!(
+        extracted.chunks.is_none(),
+        "Chunks should be None without chunking config"
+    );
+    assert!(extracted.detected_languages.is_none(), "Language detection not enabled");
 }
 
 #[cfg(feature = "ocr")]
@@ -89,11 +90,11 @@ async fn test_ocr_simple_english_image_async() {
         return;
     }
 
-    let path = get_test_file_path("images/test_hello_world.png");
-    if !path.exists() {
-        tracing::debug!("Skipping test: OCR sample image not available");
+    let fixture = "images/test_hello_world.png";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
@@ -119,6 +120,10 @@ async fn test_ocr_simple_english_image_async() {
             );
         }
         Err(err) => {
+            assert!(
+                !require_test_fixtures(),
+                "OCR must succeed when XBERG_REQUIRE_TEST_FIXTURES=1: {err}"
+            );
             tracing::debug!("OCR test failed (Tesseract may not be installed): {}", err);
         }
     }
@@ -131,11 +136,11 @@ async fn test_ocr_image_without_text_async() {
         return;
     }
 
-    let path = get_test_file_path("images/flower_no_text.jpg");
-    if !path.exists() {
-        tracing::debug!("Skipping test: OCR flower image not available");
+    let fixture = "images/flower_no_text.jpg";
+    if skip_if_missing(fixture) {
         return;
     }
+    let path = get_test_file_path(fixture);
 
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
@@ -159,6 +164,10 @@ async fn test_ocr_image_without_text_async() {
             );
         }
         Err(err) => {
+            assert!(
+                !require_test_fixtures(),
+                "OCR must succeed when XBERG_REQUIRE_TEST_FIXTURES=1: {err}"
+            );
             tracing::debug!("OCR fallback test failed (Tesseract may not be installed): {}", err);
         }
     }
