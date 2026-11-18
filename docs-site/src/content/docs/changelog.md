@@ -215,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **extraction:** Exact page byte ranges are preserved when page text cannot be located or is out of order; ambiguous ranges are omitted. (#3149)
 - **pdf:** Standard Latin Type 1 fonts render with WinAnsi glyphs when the text map disagrees, so OCR reads the visible text. (Refs #2826, #3147)
 - **pdf:** Overprinted process-color text stays visible in rasters used for OCR. (Refs #2817)
+- **pdf:** Recover sparse missing glyphs with a 120 DPI trial on eligible Tesseract pages in the default OCR pipeline. (Closes #3238)
 - **pdf:** Tables on rotated scanned pages are recovered during forced layout OCR, with bounds in page points. (#3131)
 - **pdf:** Packed RGB pixels with indirect predictor settings are preserved in PNG export; predictor-wrapped JPEGs keep their original bytes. (#3115)
 - **elixir:** Binary extraction input, including non-UTF-8 bytes, is passed through unchanged.

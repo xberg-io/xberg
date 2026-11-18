@@ -165,16 +165,10 @@ fn mixed_size_type0_text_keeps_the_exact_transcript_at_normal_density() {
 }
 
 fn assert_ocr_raster(raster: &xberg::types::ImagePreprocessingMetadata, label: &str) {
-    // ~keep PaddleOCR builds turn the default "tesseract" backend into the implicit
-    // [tesseract, paddleocr] pipeline, which skips the sparse-glyph 120 DPI read and renders
-    // the 8.5in page at 150 DPI (#3238).
-    if cfg!(any(feature = "paddle-ocr-ort", feature = "paddle-ocr-tract")) {
-        assert_eq!(raster.original_dimensions.width, 1275, "{label}");
-    } else {
-        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
-        assert_eq!(raster.target_dpi, 120, "{label}");
-        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
-    }
+    assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+    assert_eq!(raster.original_dimensions.height, 1320, "{label}");
+    assert_eq!(raster.target_dpi, 120, "{label}");
+    assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
 }
 
 fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method: ExtractionMethod, label: &str) {
