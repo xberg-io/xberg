@@ -77,6 +77,17 @@ rm -rf "$work/archive"
 cd "$work"
 cli="$XBERG_INSTALL/xberg"
 [ "$("$cli" --version)" = "xberg $version" ]
+if [ "${SMOKE_REQUIRE_MIMALLOC:-0}" = 1 ]; then
+  MIMALLOC_VERBOSE=1 "$cli" --version >"$work/allocator-version" 2>"$work/allocator-stderr"
+  [ "$(cat "$work/allocator-version")" = "xberg $version" ]
+  if ! grep -q "^mimalloc:" "$work/allocator-stderr" ||
+    ! grep -Eq "^option 'verbose': 1([[:space:]]|$)" "$work/allocator-stderr"; then
+    echo "Packaged CLI did not report mimalloc's verbose option" >&2
+    cat "$work/allocator-stderr" >&2
+    exit 1
+  fi
+  echo "Verified: packaged CLI reports mimalloc"
+fi
 printf '%s\n' 'Xberg installed layout smoke test' >document.txt
 "$cli" extract document.txt | grep -F 'Xberg installed layout smoke test'
 "$cli" extract "$root/scripts/ci/fixtures/musl-python-smoke.pdf" | grep -F 'XBERG MUSL SMOKE 490'

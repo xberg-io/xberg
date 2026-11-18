@@ -75,6 +75,8 @@ for version in versions:
     for asset in ("linux-x64", "linux-aarch64", "osx-arm64", "win-x64", "win-arm64"):
         ext = "zip" if asset.startswith("win-") else "tgz"
         expected.add(f"onnxruntime-{asset}-{version}.{ext}")
+for version in versions | {intel}:
+    expected.add(f"microsoft.ml.onnxruntime.{version}.nupkg")
 assert all(manifest[name] == 1 for name in expected), {name: manifest[name] for name in expected if manifest[name] != 1}
 print(f"{len(expected)} pinned archives checked across {callers} action call sites")
 PYTHON
@@ -246,10 +248,128 @@ prepare_ort_archive() {
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
 }
 
-@test "Linux ORT setup should preserve a failed download without reporting runtime success" {
+@test "Linux ORT setup should fail without exports when both GitHub and NuGet downloads fail" {
 	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
 	xberg_assert_status 93
 	xberg_assert_github_env ''
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
+	[ ! -e "$(runtime_root x64)" ]
+	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
+	grep -v -e '--version' "$XBERG_TRACE" | sed -n 1p | grep -Fq 'github.com/microsoft/onnxruntime/releases/download/v1.24.2/'
+	grep -v -e '--version' "$XBERG_TRACE" | sed -n 2p | grep -Fq 'api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg'
+}
+
+prepare_nuget_package() {
+	local rid="$1" version="$2" checksum
+	export ORT_FIXTURE_PACKAGE="$BATS_TEST_TMPDIR/package.nupkg"
+	export ORT_CHECKSUMS_FILE="$BATS_TEST_TMPDIR/trusted.sha256"
+	python3 - "$ORT_FIXTURE_PACKAGE" "$rid" <<'PYTHON'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as package:
+    package.writestr(f"runtimes/{sys.argv[2]}/native/libonnxruntime.so", "nuget runtime\n")
+    package.writestr(f"runtimes/{sys.argv[2]}/native/libonnxruntime_providers_shared.so", "nuget providers\n")
+    package.writestr("runtimes/linux-other/native/libonnxruntime.so", "wrong runtime\n")
+    package.writestr("build/native/include/onnxruntime_c_api.h", "header\n")
+PYTHON
+	checksum="$(shasum -a 256 "$ORT_FIXTURE_PACKAGE")"
+	{
+		printf '%s  onnxruntime-linux-x64-%s.tgz\n' "$(printf 'a%.0s' {1..64})" "$version"
+		printf '%s  onnxruntime-linux-aarch64-%s.tgz\n' "$(printf 'a%.0s' {1..64})" "$version"
+		printf '%s  microsoft.ml.onnxruntime.%s.nupkg\n' "${checksum%% *}" "$version"
+	} >"$ORT_CHECKSUMS_FILE"
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *github.com*) exit 22 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+}
+
+@test "Linux ORT setup should rebuild the release layout from the pinned NuGet package when GitHub fails" {
+	root="$(runtime_root aarch64)"
+	prepare_nuget_package linux-arm64 1.24.2
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output arm64
+	xberg_assert_status 0
+	xberg_assert_output_contains 'GitHub release download of onnxruntime-linux-aarch64-1.24.2.tgz failed'
+	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.24.2.nupkg: SHA-256 verified'
+	xberg_assert_file "$root/lib/libonnxruntime.so.1.24.2" 'nuget runtime'
+	[ "$(readlink "$root/lib/libonnxruntime.so.1")" = libonnxruntime.so.1.24.2 ]
+	[ "$(readlink "$root/lib/libonnxruntime.so")" = libonnxruntime.so.1 ]
+	xberg_assert_file "$root/include/onnxruntime_c_api.h" 'header'
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so.1" 'nuget runtime'
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime_providers_shared.so" 'nuget providers'
+	grep -Fxq "ORT_LIB_LOCATION=$root/lib" "$GITHUB_ENV"
+	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
+}
+
+@test "Linux ORT verified archive mode should fall back to NuGet without caching a release archive" {
+	prepare_nuget_package linux-x64 1.24.2
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system true
+	xberg_assert_status 0
+	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.24.2.nupkg: SHA-256 verified'
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so.1.24.2" 'nuget runtime'
+	location="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
+	[[ "$location" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-1.24.2/lib ]]
+	[ ! -e "$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-1.24.2.tgz" ]
+}
+
+@test "Linux ORT NuGet fallback should reject tampered package bytes without staging" {
+	prepare_nuget_package linux-x64 1.24.2
+	printf 'tampered package\n' >"$ORT_FIXTURE_PACKAGE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains 'SHA-256 mismatch for microsoft.ml.onnxruntime.1.24.2.nupkg'
+	xberg_assert_github_env ''
+	[ ! -e "$(runtime_root x64)" ]
+	[ ! -e "$GITHUB_WORKSPACE/output" ]
+}
+
+run_nuget_fallback() {
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh" \
+		1.24.2 linux-x64 "$BATS_TEST_TMPDIR/ort-root" "$ORT_CHECKSUMS_FILE"
+}
+
+@test "NuGet fallback should force HTTPS and omit --retry-all-errors when curl predates it" {
+	prepare_nuget_package linux-x64 1.24.2
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *--version*) exit 2 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	run_nuget_fallback
+	xberg_assert_status 0
+	download="$(grep -v -e '--version' "$XBERG_TRACE")"
+	[[ "$download" == '--proto =https --proto-redir =https --retry 5 --retry-delay 5 -fsSL -o '* ]]
+	[[ "$download" != *--retry-all-errors* ]]
+}
+
+@test "NuGet fallback should retry all errors when curl supports it" {
+	prepare_nuget_package linux-x64 1.24.2
+	xberg_stub curl \
+		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
+		'case "$*" in *--version*) exit 0 ;; esac' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'exit 91'
+	run_nuget_fallback
+	xberg_assert_status 0
+	grep -v -e '--version' "$XBERG_TRACE" | grep -Fq -e '--proto =https --proto-redir =https --retry 5 --retry-delay 5 --retry-all-errors -fsSL'
+}
+
+@test "NuGet fallback should extract with python3 when unzip is missing" {
+	prepare_nuget_package linux-x64 1.24.2
+	bin="$BATS_TEST_TMPDIR/no-unzip-bin"
+	mkdir -p "$bin"
+	for tool in bash env dirname mktemp mkdir cp mv ln rm cat sed grep awk tr cut head tail wc basename sort uname shasum sha256sum python3 chmod readlink; do
+		path="$(command -v "$tool" || true)"
+		[ -z "$path" ] || ln -s "$path" "$bin/$tool"
+	done
+	cp "$XBERG_STUB_BIN/curl" "$bin/curl"
+	PATH="$bin"
+	! command -v unzip
+	run_nuget_fallback
+	xberg_assert_status 0
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime.so.1.24.2" 'nuget runtime'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/include/onnxruntime_c_api.h" 'header'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime_providers_shared.so" 'nuget providers'
 }

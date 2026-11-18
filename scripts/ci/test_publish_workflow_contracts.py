@@ -1046,6 +1046,11 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
     integrity = project / integrity_path
     integrity.mkdir(parents=True)
     shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
+    assert (repo_root / integrity_path / "nuget-fallback.sh").is_file()
+    (integrity / "nuget-fallback.sh").write_text(
+        '#!/usr/bin/env bash\nprintf "nuget %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
+        'exit "${TEST_NUGET_STATUS:-0}"\n'
+    )
     pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
     fixture_manifest = integrity / "checksums.sha256"
     stub = r"""
@@ -1083,6 +1088,7 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
         assert hook.startswith("set -euo pipefail\n"), filename
         prefix, boundary, stage = hook.partition("\nort_version=")
         assert boundary and "curl " not in prefix and "tar " not in prefix, filename
+        assert stage.count("nuget-fallback.sh") == 1, filename
         assert f'ort_integrity="{{project}}/{integrity_path}"' in stage, filename
         script = textwrap.dedent(stub) + boundary + stage.replace("{project}", str(project))
         for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
@@ -1119,8 +1125,26 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
             assert f"SHA-256 mismatch for {archive}" in tampered.stderr
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
-            interrupted = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": "18"})
-            assert interrupted.returncode == 18 and interrupted.stdout.splitlines() == [f"curl {url}"]
+            rid = "linux-arm64" if asset_arch == "aarch64" else "linux-x64"
+            nuget = f"nuget 1.24.2 {rid} /opt/msort {integrity}/checksums.sha256"
+            for curl_status in ("18", "22"):
+                fell_back = run(
+                    ["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": curl_status}
+                )
+                assert fell_back.returncode == 0, (filename, uname, curl_status, fell_back.stderr)
+                assert fell_back.stdout.splitlines() == [f"curl {url}", nuget, "runner_temp ort-download"], (
+                    filename,
+                    uname,
+                    fell_back,
+                )
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rejected = run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                tmp_path,
+                {**env, "TEST_CURL_STATUS": "22", "TEST_NUGET_STATUS": "7"},
+            )
+            assert rejected.returncode == 7 and rejected.stdout.splitlines()[:2] == [f"curl {url}", nuget], rejected
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
 
@@ -1689,8 +1713,36 @@ def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
         assert "continue-on-error" not in gate
         if libc == "gnu":
             assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
+            assert "SMOKE_REQUIRE_MIMALLOC" not in gate
         else:
             assert "if:" not in gate
+            assert '-e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required"' in gate
+
+
+def test_musl_smoke_uses_the_packaged_source_allocator_policy() -> None:
+    steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["cli-binaries-musl"]["steps"]
+    [smoke] = [
+        step["run"] for step in steps if step.get("name") == "Smoke test packaged Linux CLI in a clean container"
+    ]
+    source = (DOCKER_DIR / "Dockerfile.musl-build").read_text()
+    marker = "# xberg-release-smoke: mimalloc-required ~keep"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "docker").mkdir()
+        (root / "Cargo.toml").write_text('[workspace.package]\nversion = "1.4.1"\n')
+        docker = root / "docker-stub"
+        docker.mkdir()
+        command = docker / "docker"
+        command.write_text('#!/bin/sh\n[ "$1" = run ] || exit 0\nprintf "%s\\n" "$@"\n')
+        command.chmod(0o755)
+        env = {**os.environ, "PATH": f"{docker}:{os.environ['PATH']}", "TARGET": "aarch64-unknown-linux-musl"}
+        for checkout_policy, expected in [(source.replace(f"{marker}\n", ""), 0), (source, 1)]:
+            (root / "docker/Dockerfile.musl-build").write_text(checkout_policy)
+            result = run(["bash", "-c", smoke], root, env)
+            assert result.returncode == 0, result.stderr
+            [observed] = [line for line in result.stdout.splitlines() if line.startswith("SMOKE_REQUIRE_MIMALLOC=")]
+            assert observed == f"SMOKE_REQUIRE_MIMALLOC={expected}"
 
 
 DOCKER_DIR = Path(__file__).parents[2] / "docker"

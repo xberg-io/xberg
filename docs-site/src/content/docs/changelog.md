@@ -103,11 +103,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **cli:** The wrapped Linux musl tarball uses mimalloc with immediate purging and process-wide transparent huge pages disabled by default, including for native libraries and inherited by child processes. The Docker CLI image and static binstall binaries keep their existing allocator. (#3171)
+  Set `MIMALLOC_PURGE_DELAY` or `MIMALLOC_ALLOW_THP` before launching to override either setting.
+
 - **docker:** The CLI image uses stable Alpine packages and runs as UID/GID 10001. (#3168)
 
 - **Breaking (ocr):** All-page PDF OCR failures retain the typed backend source and use Rust `XbergError::Ocr`. The raw FFI code changes from 1008 (Plugin) to 1002 (OCR). Python callers should catch `OcrError` where they previously caught `PluginError`. REST and batch retain their previous plugin classification. (#3175)
 
-- **docx:** Parsing and document assembly run on a blocking worker under native Tokio; extraction timeouts and cancellation now take effect while a DOCX is being parsed. (#3171)
+- **docx:** Parsing and document assembly run on Xberg’s shared native Tokio blocking pool and check for cancellation between parsing stages. (#3171)
+- **excel:** Single and batch workbook reads use the shared native blocking pool. Timeouts abort queued reads while in-progress Calamine reads finish before releasing their resources. (#3171)
 
 - **mcp:** Extraction responses omit empty error and crawl URL lists and a zero redirect count. (#2785)
 - **python:** Archived releases are installable from the GitHub package index `https://xberg-io.github.io/python-wheels/simple/`; PyPI keeps all releases of the current minor and the latest stable patch of each older minor.
@@ -198,6 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tables:** Tables are recovered on forced-OCR PDF pages that need a rotation retry. (#2332)
 - **tables:** Verified column headers above repeated numeric groups in PDF tables are preserved. (#2332)
 - **ocr:** Tesseract table output for standalone images and embedded PDF images no longer duplicates rows and keeps rows, row breaks and dot leaders intact (PSM 3, 6 and 11). (#2503)
+- **ocr:** Default sparse-text OCR keeps a certified standalone table with one unreadable value as a table. (#2503)
 - **ocr:** Opt-in recovery for PaddleOCR ruled JPEG table cells (English PP-OCRv6 Small, ONNX Runtime), off by default. (#2503)
 - **pdf:** The page failure record and warning agree when native text is restored after forced OCR fails. (#3148)
 - **ocr:** Automatic script retries reuse Tesseract engines; OCR caches refresh when the installed model changes. (#3153)

@@ -1,3 +1,4 @@
+# xberg-release-smoke: mimalloc-required ~keep
 # =============================================================================
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS builder
 
@@ -96,7 +97,7 @@ RUN sed -i '/xberg-py/d; /xberg_rb/d; /xberg-node/d; /xberg-ffi/d; /xberg-jni/d;
 ARG XBERG_BUILD_ID
 
 RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
-    cargo build --profile release-musl --package xberg-cli --features all && \
+    cargo build --profile release-musl --package xberg-cli --features all,mimalloc && \
     cp target/release-musl/xberg /build/xberg && \
     strip /build/xberg
 
@@ -149,7 +150,7 @@ RUN set -eu; \
 
 RUN mv /build/xberg /build/xberg.bin && \
     INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \
-    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
+    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nif [ -z "${MIMALLOC_PURGE_DELAY+x}${MIMALLOC_RESET_DELAY+x}" ]; then export MIMALLOC_PURGE_DELAY=0; fi\nexport MIMALLOC_ALLOW_THP="${MIMALLOC_ALLOW_THP-0}"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
         "$INTERP_NAME" > /build/xberg && \
     chmod +x /build/xberg
 

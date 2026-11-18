@@ -83,6 +83,7 @@ jobs:
               pdf/regression_pages/nist-sp811-2008-p7.pdf
               pdf/regression_pages/irs-fw9--2024-p1.pdf
               pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf
+              pdf/with_images.pdf
           - suite: office-pages
             documents: |
               docx/budget_fy2027_memo.docx
