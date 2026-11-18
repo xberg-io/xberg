@@ -135,6 +135,7 @@ pub(crate) fn render_markdown_observed(
     if !doc.escape_markdown {
         keep_text_tildes_unescaped(root, &arena);
     }
+    keep_intraword_emphasis_asterisks(root, &arena);
 
     if root.first_child().is_none() {
         tracing::debug!("markdown rendering: empty AST, returning empty string");
@@ -188,6 +189,27 @@ fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>)
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn is_emphasis(node: &AstNode<'_>) -> bool {
+    matches!(node.data.borrow().value, NodeValue::Emph(..) | NodeValue::Strong(..))
+}
+
+/// ~keep comrak 1.0 switches an emphasis that directly follows another to `_`, but an `_` run closes only before a
+/// non-alphanumeric character, so `**lo**_wor_ld` reads back without its emphasis. An empty text node between the two
+/// keeps comrak on `*`, which closes intraword.
+fn keep_intraword_emphasis_asterisks<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+    for node in root.descendants().collect::<Vec<_>>() {
+        if !is_emphasis(node) || !node.previous_sibling().is_some_and(is_emphasis) {
+            continue;
+        }
+        let intraword = node.next_sibling().is_some_and(|next| {
+            matches!(&next.data.borrow().value, NodeValue::Text(text) if text.starts_with(char::is_alphanumeric))
+        });
+        if intraword {
+            node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(String::new().into()))));
+        }
+    }
 }
 
 /// ~keep Only constant tildes bypass escaping; code literals and every other text byte stay on their own AST paths.
