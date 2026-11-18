@@ -4,6 +4,9 @@ use super::{
 };
 use xberg_native_pdf::content::parser::visit_complete_content_stream;
 
+#[path = "projection_tests.rs"]
+mod projection_tests;
+
 #[test]
 fn visible_native_line_audit_rejects_hidden_or_unowned_paint() {
     let prove = |stream: &str, text| super::painted_literal_image(stream.as_bytes(), text, |font| font == "F");
@@ -384,6 +387,8 @@ fn ccitt_group4_parameters_require_exact_geometry_and_grammar() {
     let mut defaults = params.clone();
     defaults.remove("Rows");
     defaults.remove("BlackIs1");
+    assert_eq!(super::supported_group4_params(&defaults, 1275, 1650), Some(false));
+    defaults.insert("Rows".to_owned(), Object::Integer(0));
     assert_eq!(super::supported_group4_params(&defaults, 1275, 1650), Some(false));
     let mut other_group = defaults.clone();
     other_group.insert("K".to_owned(), Object::Integer(0));

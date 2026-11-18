@@ -16,10 +16,11 @@ if TYPE_CHECKING:
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
 EXPECTED_WORKFLOWS = 19
-EXPECTED_JOBS = 80
-EXPECTED_CHECKOUTS = 80
+EXPECTED_JOBS = 81
+EXPECTED_CHECKOUTS = 81
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
+ACTIONS_BUMP_WORKFLOW = "maintenance-actions-bump.yaml"
 FOCUSED_PR_GUARDS = (
     "github.event_name == 'push' && github.ref == 'refs/heads/main'",
     "github.repository == 'xberg-io/xberg'",
@@ -38,11 +39,12 @@ def requires_main(expression: str) -> bool:
 
 
 def ci_workflows() -> list[Path]:
-    """Exclude publishing entrypoints, including the tagged plugin-asset publisher."""
+    """Exclude publishing, including tagged plugin assets, and separately tested workflows."""
     return sorted(
         path
         for path in WORKFLOWS.iterdir()
-        if not path.name.startswith("publish") and path.name not in {"plugin-artifacts.yaml", FOCUSED_PR_WORKFLOW}
+        if not path.name.startswith("publish")
+        and path.name not in {"plugin-artifacts.yaml", FOCUSED_PR_WORKFLOW, ACTIONS_BUMP_WORKFLOW}
     )
 
 
@@ -104,6 +106,18 @@ def focused_pr_violations(workflow: dict) -> list[str]:
 
 
 class MainOnlyCiTests(unittest.TestCase):
+    def test_actions_bump_is_scheduled_maintenance_on_main(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / ACTIONS_BUMP_WORKFLOW).read_text())
+        assert set(workflow[True]) == {"schedule", "workflow_dispatch"}
+        assert workflow["concurrency"]["cancel-in-progress"] is False
+        bump = workflow["jobs"]["bump"]
+        assert requires_main(bump["if"])
+        assert "github.repository == 'xberg-io/xberg'" in bump["if"]
+        assert workflow["permissions"] == {"contents": "read"}
+        assert bump["permissions"] == {"contents": "write", "pull-requests": "write"}
+        assert bump["uses"] == "xberg-io/actions/.github/workflows/reusable-actions-bump.yml@v1"
+        assert bump["with"]["mode"] == "pr"
+
     def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []

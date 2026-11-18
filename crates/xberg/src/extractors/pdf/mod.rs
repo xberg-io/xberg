@@ -2249,8 +2249,12 @@ async fn recognize_pdf_formula_page_inputs(
                         }
                     }
                     Ok(None) => {}
-                    Err(error) => {
-                        tracing::warn!(error = %error, page = page_number, "pdf formula recognition failed; keeping OCR text");
+                    Err(_) => {
+                        tracing::warn!(
+                            error = "formula_recognition",
+                            page = page_number,
+                            "pdf formula recognition failed; keeping OCR text"
+                        );
                     }
                 }
             }
@@ -3176,11 +3180,12 @@ impl PdfExtractor {
                         ocr_config.apply_public_element_policy(&mut ocr_result);
                         img.ocr_result = Some(Box::new(ocr_result));
                     }
+                    Err(e @ crate::XbergError::Cancelled) => return Err(e),
                     Err(e) => {
                         tracing::warn!(
                             page = img.page_number,
                             image_index = img.image_index,
-                            error = %e,
+                            error = %e.pdf_ocr_trace_category(),
                             "inline image OCR failed; image returned without OCR result"
                         );
                     }
@@ -3525,9 +3530,10 @@ impl PdfExtractor {
                             (mixed, ExtractionMethod::Native)
                         }
                     }
+                    Err(e @ crate::XbergError::Cancelled) => return Err(e),
                     Err(e) => {
                         tracing::warn!(
-                            error = %e,
+                            error = %e.pdf_ocr_trace_category(),
                             candidate_pages = ?scanned_pages,
                             "Automatic OCR of detected scanned pages failed; using native text extraction result"
                         );
@@ -3850,9 +3856,10 @@ impl PdfExtractor {
                                 Some(apply_targeted_mixed_run!(mixed_run))
                             }
                         }
+                        Some(Err(error @ crate::XbergError::Cancelled)) => return Err(error),
                         Some(Err(error)) => {
                             tracing::warn!(
-                                error = %error,
+                                error = %error.pdf_ocr_trace_category(),
                                 failing_pages = ?decision.failing_pages,
                                 "Targeted OCR of the pages that dropped their native script failed; \
                                  using the whole-document read"
@@ -3983,16 +3990,16 @@ impl PdfExtractor {
                                 (native_text, ExtractionMethod::Native)
                             }
                             Err(failed_run) => {
+                                if matches!(failed_run.error, crate::XbergError::Cancelled) {
+                                    return Err(failed_run.error);
+                                }
                                 tracing::warn!(
-                                    error = %failed_run.error,
+                                    error = %failed_run.error.pdf_ocr_trace_category(),
                                     "OCR fallback failed; using native text extraction result"
                                 );
                                 if failed_ocr_fallback_is_total_loss(&native_text) {
                                     return Err(failed_run.error);
                                 }
-                                // ~keep A cancelled run did not fail to read its pages, so it adds no
-                                // record. The token decides: a pipeline run reports a cancellation as
-                                // the failure of each of its stages, not as the cancellation error.
                                 if ensure_pdf_not_cancelled(config).is_ok() {
                                     ocr_page_failures.extend(ocr::failed_run_page_failures(
                                         &failed_run,
@@ -4061,9 +4068,10 @@ impl PdfExtractor {
                         .await;
                         match selected_run {
                             Ok(mixed_run) => apply_targeted_mixed_run!(mixed_run),
+                            Err(e @ crate::XbergError::Cancelled) => return Err(e),
                             Err(e) => {
                                 tracing::warn!(
-                                    error = %e,
+                                    error = %e.pdf_ocr_trace_category(),
                                     failing_pages = ?pages,
                                     "Targeted OCR fallback failed; using native text extraction result"
                                 );

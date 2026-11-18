@@ -135,6 +135,17 @@ fn test_try_assemble_vertical_cjk_orders_columns_right_to_left() {
 }
 
 #[test]
+fn vertical_cjk_assembly_excludes_hangul_syllables() {
+    let spans: Vec<TextSpan> = "가나다라마바사아자"
+        .chars()
+        .enumerate()
+        .map(|(i, glyph)| make_test_span(&glyph.to_string(), 116.0, 719.0 - i as f32 * 18.0, 18.0, 18.0))
+        .collect();
+
+    assert_eq!(PdfDocument::try_assemble_vertical_cjk(&spans), None);
+}
+
+#[test]
 fn test_try_assemble_vertical_cjk_horizontal_returns_none() {
     // A horizontal CJK row (glyphs advance in X at a fixed Y) must NOT be
     // detected as vertical — horizontal documents stay on the normal path. ~keep

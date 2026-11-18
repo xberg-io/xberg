@@ -6,6 +6,7 @@ use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
 const SOURCE: &str = include_str!("fixtures/ocr/hidden_layer_ccitt_2425/source.txt");
 const CCITT_PARTIAL: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-partial.pdf");
 const CCITT_COMPLETE: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-complete.pdf");
+const CCITT_PARTIAL_SPLIT: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-partial-split.pdf");
 const FLATE_PARTIAL: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/flate8-partial.pdf");
 const FLATE_COMPLETE: &[u8] = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/flate8-complete.pdf");
 
@@ -70,10 +71,9 @@ async fn ccitt_partial_hidden_layer_recovers_all_raster_words_in_order() {
 
 #[tokio::test]
 async fn ccitt_hidden_layer_in_separate_content_stream_preserves_exact_words() {
-    let partial = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-partial-split.pdf");
     let complete = include_bytes!("fixtures/ocr/hidden_layer_ccitt_2425/ccitt-complete-split.pdf");
     assert_fixture(
-        partial,
+        CCITT_PARTIAL_SPLIT,
         "f15c24652fe73b2f430254ce56d5702e0dfca2e3f78f6b94b0999dfa9b5d2d6d",
     );
     assert_fixture(
@@ -81,8 +81,20 @@ async fn ccitt_hidden_layer_in_separate_content_stream_preserves_exact_words() {
         "d3f95ed8eec386a4f6c87025db43fa356d7da934f448a1c7cccdb4d543090402",
     );
     assert_read(complete, false, false).await;
-    assert_read(partial, true, true).await;
-    assert_read(partial, false, true).await;
+    assert_read(CCITT_PARTIAL_SPLIT, true, true).await;
+    assert_read(CCITT_PARTIAL_SPLIT, false, true).await;
+}
+
+#[tokio::test]
+async fn ccitt_partial_split_recovers_all_words_with_explicit_zero_margins() {
+    let mut config = config(false);
+    assert_read_with_config(CCITT_PARTIAL_SPLIT, &config, true).await;
+    config.pdf_options = Some(xberg::PdfConfig {
+        top_margin_fraction: Some(0.0),
+        bottom_margin_fraction: Some(0.0),
+        ..Default::default()
+    });
+    assert_read_with_config(CCITT_PARTIAL_SPLIT, &config, true).await;
 }
 
 #[tokio::test]
