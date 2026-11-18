@@ -159,7 +159,14 @@ fn read_unresolved_objects(
         cancel.check()?;
         let Some(data) = data else {
             continue;
-
+        };
+        objects.push(PptEmbeddedObject {
+            ex_obj_id: objects.len() as u32 + 1,
+            slide_number: None,
+            data,
+        });
+    }
+    Ok((objects, warnings))
 }
 
 fn warning(message: String) -> ProcessingWarning {
