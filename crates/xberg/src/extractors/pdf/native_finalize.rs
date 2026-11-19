@@ -1,5 +1,9 @@
 //! Stages that finish the `InternalDocument` built by `PdfExtractor::extract_core_native_with_layout_pages`.
 
+#[cfg_attr(
+    all(feature = "layout-detection", not(any(feature = "ocr", feature = "ocr-pipeline"))),
+    allow(unused_imports)
+)]
 use super::OcrLayoutGateDecisions;
 use super::apply_extracted_pdf_metadata;
 use super::extraction;

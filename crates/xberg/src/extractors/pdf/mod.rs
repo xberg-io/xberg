@@ -18,6 +18,8 @@ mod layout_runner;
 mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod native_auto_route;
 #[cfg(feature = "pdf")]
 mod native_finalize;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
