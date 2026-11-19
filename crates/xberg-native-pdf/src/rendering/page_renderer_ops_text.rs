@@ -46,15 +46,7 @@ impl PageRenderer {
             // CharProcs content stream painted under FontMatrix ×
             // text-space × CTM (ISO 32000-1 §9.6.5). It is handled
             // here because it re-enters the content-stream renderer. ~keep
-            if self.current_font_is_type3(st.gs_stack.current()) {
-                let advance = if st.excluded_layer_depth == 0 {
-                    let gs_snap = st.gs_stack.current().clone();
-                    self.render_type3_text(pixmap, text, base_transform, &gs_snap, doc, page_num, resources)?
-                } else {
-                    self.text_rasterizer
-                        .measure_text(text, st.gs_stack.current(), &self.fonts)
-                };
-                st.gs_stack.current_mut().advance_text_matrix(advance);
+            if self.try_show_type3_text(pixmap, st, env, text)? {
                 return Ok(());
             }
             let gs = st.gs_stack.current();
@@ -126,20 +118,9 @@ impl PageRenderer {
         if st.in_text_object {
             // Quote (') is T* followed by Tj — always advance line ~keep
             let gs_mut = st.gs_stack.current_mut();
-            let leading = gs_mut.leading;
-            let translation = Matrix::translation(0.0, -leading);
-            gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
-            gs_mut.text_matrix = gs_mut.text_line_matrix;
+            Self::advance_to_next_line(gs_mut);
 
-            if self.current_font_is_type3(st.gs_stack.current()) {
-                let advance = if st.excluded_layer_depth == 0 {
-                    let gs_snap = st.gs_stack.current().clone();
-                    self.render_type3_text(pixmap, text, base_transform, &gs_snap, doc, page_num, resources)?
-                } else {
-                    self.text_rasterizer
-                        .measure_text(text, st.gs_stack.current(), &self.fonts)
-                };
-                st.gs_stack.current_mut().advance_text_matrix(advance);
+            if self.try_show_type3_text(pixmap, st, env, text)? {
                 return Ok(());
             }
 
@@ -294,20 +275,9 @@ impl PageRenderer {
             gs_mut.word_space = *word_space;
             gs_mut.char_space = *char_space;
 
-            let leading = gs_mut.leading;
-            let translation = Matrix::translation(0.0, -leading);
-            gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
-            gs_mut.text_matrix = gs_mut.text_line_matrix;
+            Self::advance_to_next_line(gs_mut);
 
-            if self.current_font_is_type3(st.gs_stack.current()) {
-                let advance = if st.excluded_layer_depth == 0 {
-                    let gs_snap = st.gs_stack.current().clone();
-                    self.render_type3_text(pixmap, text, base_transform, &gs_snap, doc, page_num, resources)?
-                } else {
-                    self.text_rasterizer
-                        .measure_text(text, st.gs_stack.current(), &self.fonts)
-                };
-                st.gs_stack.current_mut().advance_text_matrix(advance);
+            if self.try_show_type3_text(pixmap, st, env, text)? {
                 return Ok(());
             }
 
@@ -418,5 +388,39 @@ impl PageRenderer {
         gs.font_name = Some(font.clone());
         gs.font_size = *size;
         gs.text_wmode = wmode;
+    }
+
+    fn try_show_type3_text(
+        &mut self,
+        pixmap: &mut Pixmap,
+        st: &mut OpLoopState<'_>,
+        env: OpEnv<'_>,
+        text: &[u8],
+    ) -> Result<bool> {
+        let OpEnv {
+            base_transform,
+            doc,
+            page_num,
+            resources,
+        } = env;
+        if self.current_font_is_type3(st.gs_stack.current()) {
+            let advance = if st.excluded_layer_depth == 0 {
+                let gs_snap = st.gs_stack.current().clone();
+                self.render_type3_text(pixmap, text, base_transform, &gs_snap, doc, page_num, resources)?
+            } else {
+                self.text_rasterizer
+                    .measure_text(text, st.gs_stack.current(), &self.fonts)
+            };
+            st.gs_stack.current_mut().advance_text_matrix(advance);
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    fn advance_to_next_line(gs_mut: &mut GraphicsState) {
+        let leading = gs_mut.leading;
+        let translation = Matrix::translation(0.0, -leading);
+        gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
+        gs_mut.text_matrix = gs_mut.text_line_matrix;
     }
 }
