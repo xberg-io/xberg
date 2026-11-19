@@ -30,7 +30,46 @@ fn paddle_accel_builder_fn(
     builder: ort::session::builder::SessionBuilder,
 ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error> {
     let accel = PADDLE_TL_ACCEL.with(|cell| cell.borrow().clone());
-    crate::ort_discovery::apply_execution_providers(builder, accel.as_ref())
+    let builder = if accel.is_some() {
+        crate::ort_discovery::apply_execution_providers(builder, accel.as_ref())?
+    } else {
+        builder
+    };
+    apply_paddle_session_options(builder, &crate::ort_options::ort_session_options())
+}
+
+/// Apply the process-wide memory options to a PaddleOCR session builder; a default
+/// option set leaves the builder untouched.
+#[cfg(feature = "paddle-ocr-ort")]
+fn apply_paddle_session_options(
+    mut builder: ort::session::builder::SessionBuilder,
+    options: &crate::ort_options::OrtSessionOptions,
+) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error> {
+    if !options.memory_pattern {
+        builder = builder
+            .with_memory_pattern(false)
+            .map_err(|e| ort::Error::new(e.message()))?;
+    }
+    if !options.cpu_arena {
+        builder = builder
+            .with_execution_providers([ort::ep::CPU::default().with_arena_allocator(false).build()])
+            .map_err(|e| ort::Error::new(e.message()))?;
+    }
+    Ok(builder)
+}
+
+/// Pool-key suffix for a non-default option set; empty for the defaults so existing keys
+/// are unchanged.
+fn session_options_pool_suffix(options: &crate::ort_options::OrtSessionOptions) -> String {
+    if options.memory_pattern && options.cpu_arena {
+        String::new()
+    } else {
+        format!(
+            "/mp{}-arena{}",
+            u8::from(options.memory_pattern),
+            u8::from(options.cpu_arena)
+        )
+    }
 }
 
 use crate::Result;
@@ -235,16 +274,17 @@ fn engine_pool_key(
     model_key: &str,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     backend: PaddleInferenceBackend,
+    options: &crate::ort_options::OrtSessionOptions,
 ) -> String {
     let accel_key = acceleration_pool_key(accel);
     // ~keep A build can compile both `paddle-ocr-ort` and `paddle-ocr-tract` together (native
     // parity benchmarks); fold the resolved backend into the key so the pool never hands
     // back an engine constructed on the other engine.
-    let backend_key = match backend {
-        PaddleInferenceBackend::Ort => "ort",
-        PaddleInferenceBackend::Tract => "tract",
+    let (backend_key, options_suffix) = match backend {
+        PaddleInferenceBackend::Ort => ("ort", session_options_pool_suffix(options)),
+        PaddleInferenceBackend::Tract => ("tract", String::new()),
     };
-    format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}")
+    format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}{options_suffix}")
 }
 
 fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::AccelerationConfig>) -> String {
@@ -741,7 +781,14 @@ impl PaddleOcrBackend {
         let version = &config.model_version;
         let backend = Self::effective_backend(config)?;
         let resolved = model_manager.resolve_rec_model_versioned(version, family, tier)?;
-        let pool_key = engine_pool_key(version, tier, &resolved.model_key, accel, backend);
+        let pool_key = engine_pool_key(
+            version,
+            tier,
+            &resolved.model_key,
+            accel,
+            backend,
+            &crate::ort_options::ort_session_options(),
+        );
 
         let init_cell = init_cell_for_key(engine_pool, &pool_key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire engine pool lock: {error}"),
@@ -896,7 +943,9 @@ impl PaddleOcrBackend {
             fn(
                 ort::session::builder::SessionBuilder,
             ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>,
-        > = if PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()) {
+        > = if PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some())
+            || crate::ort_options::ort_session_options() != crate::ort_options::OrtSessionOptions::default()
+        {
             Some(paddle_accel_builder_fn)
         } else {
             None
@@ -2279,6 +2328,7 @@ mod tests {
     fn engine_pool_key_distinguishes_gpu_devices() {
         use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
 
+        let defaults = crate::ort_options::OrtSessionOptions::default();
         let first_gpu = AccelerationConfig {
             provider: ExecutionProviderType::Cuda,
             device_id: 0,
@@ -2289,20 +2339,69 @@ mod tests {
         };
 
         assert_eq!(
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort),
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
             "v6/small/latin/cpu/ort"
         );
         assert_ne!(
-            engine_pool_key("v6", "small", "latin", Some(&first_gpu), PaddleInferenceBackend::Ort),
-            engine_pool_key("v6", "small", "latin", Some(&second_gpu), PaddleInferenceBackend::Ort)
+            engine_pool_key(
+                "v6",
+                "small",
+                "latin",
+                Some(&first_gpu),
+                PaddleInferenceBackend::Ort,
+                &defaults
+            ),
+            engine_pool_key(
+                "v6",
+                "small",
+                "latin",
+                Some(&second_gpu),
+                PaddleInferenceBackend::Ort,
+                &defaults
+            )
         );
     }
 
     #[test]
     fn engine_pool_key_distinguishes_inference_backends() {
+        let defaults = crate::ort_options::OrtSessionOptions::default();
         assert_ne!(
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort),
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract)
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &defaults)
+        );
+    }
+
+    #[test]
+    fn engine_pool_key_separates_ort_session_options() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let defaults = OrtSessionOptions::default();
+        let no_arena = OrtSessionOptions {
+            cpu_arena: false,
+            ..defaults
+        };
+        let no_pattern = OrtSessionOptions {
+            memory_pattern: false,
+            ..defaults
+        };
+        let key = |options| engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, options);
+        assert_eq!(key(&defaults), "v6/small/latin/cpu/ort");
+        assert_eq!(key(&no_arena), "v6/small/latin/cpu/ort/mp1-arena0");
+        assert_eq!(key(&no_pattern), "v6/small/latin/cpu/ort/mp0-arena1");
+        assert_ne!(key(&no_arena), key(&no_pattern));
+
+        let capped = OrtSessionOptions {
+            max_threads: Some(2),
+            ..defaults
+        };
+        assert_eq!(
+            key(&capped),
+            key(&defaults),
+            "thread cap does not affect PaddleOCR sessions"
+        );
+        assert_eq!(
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &no_arena),
+            "v6/small/latin/cpu/tract"
         );
     }
 

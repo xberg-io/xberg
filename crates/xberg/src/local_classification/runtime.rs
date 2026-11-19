@@ -13,7 +13,7 @@ const MAX_CONCURRENT_REQUESTS: usize = 1;
 struct ClassifierState {
     config: LocalClassificationConfig,
     pool: crate::model_cache::ModelCache<PreparedModel>,
-    prepared_options: Mutex<Option<crate::onnx::OrtSessionOptions>>,
+    prepared_options: Mutex<Option<crate::ort_options::OrtSessionOptions>>,
     semaphore: Arc<tokio::sync::Semaphore>,
 }
 
@@ -60,7 +60,7 @@ impl LocalTextClassifier {
             };
             control.check()?;
             validate_cpu_runtime()?;
-            let session_options = crate::onnx::ort_session_options();
+            let session_options = crate::ort_options::ort_session_options();
             let identity = model_identity(&state.config);
             let model = state.pool.take_or_create_matching(
                 |model| model.identity == identity && model.session_options == session_options,
@@ -128,7 +128,7 @@ fn classify_admitted(
 ) -> crate::Result<LocalClassificationResult> {
     control.check()?;
     validate_cpu_runtime()?;
-    let session_options = crate::onnx::ort_session_options();
+    let session_options = crate::ort_options::ort_session_options();
     let prepared = *state
         .prepared_options
         .lock()
