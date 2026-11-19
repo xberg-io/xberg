@@ -154,6 +154,24 @@ fn grayscale_bytes_refuses_images_that_are_not_8_bpp() {
     assert_eq!(gray.grayscale_bytes().expect("8 bpp read").len(), 64);
 }
 
+ffi_extern! {
+    fn pixcmapCreate(depth: i32) -> *mut c_void;
+    fn pixSetColormap(pix: *mut c_void, colormap: *mut c_void) -> i32;
+}
+
+#[test]
+fn grayscale_bytes_refuses_a_colormapped_8_bpp_image() {
+    let pix = Pix::from_grayscale_bytes(&[7; 16], 4, 4).expect("8 bpp image");
+    assert!(pix.grayscale_bytes().is_ok());
+    // SAFETY: the new colormap is transferred to the live Pix, which owns and frees it. ~keep
+    let status = unsafe { pixSetColormap(pix.as_ptr(), pixcmapCreate(8)) };
+    assert_eq!(status, 0);
+    assert!(matches!(
+        pix.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
 #[test]
 fn deskew_reports_rotation_for_slanted_rows() {
     const WIDTH: usize = 384;
