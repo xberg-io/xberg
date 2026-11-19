@@ -21,42 +21,6 @@ impl PageRenderer {
             let transform = combine_transforms(base_transform, &gs_clone.ctm);
             let clip = st.clip_stack.last().and_then(|c| c.as_ref());
             tracing::trace!("Do: rendering XObject '{}'", name);
-            // §11.4.7 + §11.7.4 + §11.4 cycle: the entire
-            // XObject paint (Form or Image) sits inside the
-            // snapshot bracket so a /SMask attached via
-            // ExtGState modulates the cumulative
-            // contribution. Image XObjects always behave as
-            // fill-side paints; Form XObjects honour their
-            // own internal ExtGState changes (the snapshot
-            // captures the page-level state, the Form runs
-            // recursively, and the apply blends the Form's
-            // contribution against the captured backdrop).
-            //
-            // Per-subtype dispatch for the post-Do colour-
-            // lane modulators: Image / ImageMask XObjects do
-            // NOT execute their own paint operators — their
-            // pixel data is painted using the outer
-            // graphics state, so the post-Do CMYK compose,
-            // overprint and spot-lane mirrors are how those
-            // lanes learn about the contribution. Form
-            // XObjects DO execute their own paint operators
-            // (Fill / Stroke / FillStroke / Do / ShowText /
-            // shading), each of which runs its own per-
-            // paint sidecar mirror with the FORM's gs at
-            // the time of the paint. Re-applying the outer
-            // gs's CMYK / overprint / spot mirror after a
-            // Form Do would composite the form's region
-            // again with whatever colour the OUTER gs had,
-            // double-counting (and, when the outer colour
-            // differs from the form's, overwriting the
-            // form's mirror writes — the QA-6 / QA-6-DIAG-2
-            // failure mode where outer /K's iteration 2
-            // /Inner Do lost the inner Form's spot
-            // contribution). SMask attenuation always
-            // applies — an outer /SMask gs in effect at the
-            // Do attaches to the Do's entire region
-            // regardless of how the inner produced its
-            // pixels. ~keep
             let (is_form, group_boundary) = self.xobject_kind(name, resources, doc).unwrap_or_default();
             let _image_workspace = if is_form {
                 None
@@ -68,26 +32,7 @@ impl PageRenderer {
             } else {
                 None
             };
-            let smask_snap = if group_boundary {
-                None
-            } else {
-                self.paint_mask_snapshots(pixmap, &gs_clone)?
-            };
-            let overprint_snap = if is_form {
-                None
-            } else {
-                self.overprint_snapshot(pixmap, &gs_clone, true)
-            };
-            let cmyk_compose_snap = if is_form {
-                None
-            } else {
-                self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true)
-            };
-            let spot_snap = if is_form {
-                None
-            } else {
-                self.spot_paint_snapshot(pixmap, &gs_clone, true)
-            };
+            let snapshots = self.xobject_paint_snapshots(pixmap, &gs_clone, doc, is_form, group_boundary)?;
             // §8.9.5 + §8.9.6.2 + §11.7.3: rasterise the
             // Image / ImageMask footprint + stencil-bit
             // coverage so the spot mirror has a geometry-
@@ -96,7 +41,7 @@ impl PageRenderer {
             // inside the recursive content stream — the
             // post-Do mirror for Forms is already
             // suppressed by round 3's P0 fix). ~keep
-            let image_coverage = (!is_form && (spot_snap.is_some() || self.knockout_shape.is_some()))
+            let image_coverage = (!is_form && (snapshots.spot.is_some() || self.knockout_shape.is_some()))
                 .then(|| self.rasterise_image_xobject_coverage(name, transform, &gs_clone, resources, doc, clip, false))
                 .flatten();
             let image_geometry = (self.knockout_shape.is_some() && !is_form)
@@ -115,13 +60,7 @@ impl PageRenderer {
             )?;
             self.apply_paint_modulators(
                 pixmap,
-                PaintModulatorSnapshots {
-                    process_path: None,
-                    cmyk_compose: cmyk_compose_snap,
-                    overprint: overprint_snap,
-                    spot: spot_snap,
-                    smask: smask_snap,
-                },
+                snapshots,
                 image_coverage.as_deref(),
                 PaintModulatorContext {
                     gs: &gs_clone,
@@ -200,25 +139,7 @@ impl PageRenderer {
         } = env;
         if st.excluded_layer_depth == 0 {
             let mut gs_clone = st.gs_stack.current().clone();
-            // §8.7.4 + §11.7.3: when the shading's
-            // /ColorSpace is /Separation or non-process
-            // /DeviceN, surface the ink-name list (paired
-            // with the /Function /C0 endpoint tints) onto
-            // `gs_clone.fill_spot_inks` so the spot mirror
-            // sees a non-empty source ink set and fires.
-            // Without this the shading paint silently
-            // bypasses the spot mirror because the gating
-            // (`spot_paint_active`) checks
-            // `gs.fill_spot_inks`, which is otherwise
-            // populated only by `cs`/`scn` colour-set
-            // operators — none of which fire before `sh`. ~keep
-            if !self.spot_paint_active(&gs_clone, true) && self.cmyk_sidecar.is_some() {
-                if let Some(inks) = self.resolve_shading_spot_inks(name, resources, doc) {
-                    if !inks.is_empty() {
-                        gs_clone.fill_spot_inks = inks;
-                    }
-                }
-            }
+            self.seed_shading_spot_inks(&mut gs_clone, name, resources, doc);
             let transform = combine_transforms(base_transform, &gs_clone.ctm);
             let clip = st.clip_stack.last().and_then(|c| c.as_ref());
             // §11.4.7 + §11.7.4 + §11.4 cycle: shading is
@@ -265,5 +186,106 @@ impl PageRenderer {
             )?;
         }
         Ok(())
+    }
+
+    fn xobject_paint_snapshots(
+        &mut self,
+        pixmap: &mut Pixmap,
+        gs_clone: &GraphicsState,
+        doc: &PdfDocument,
+        is_form: bool,
+        group_boundary: bool,
+    ) -> Result<PaintModulatorSnapshots> {
+        // §11.4.7 + §11.7.4 + §11.4 cycle: the entire
+        // XObject paint (Form or Image) sits inside the
+        // snapshot bracket so a /SMask attached via
+        // ExtGState modulates the cumulative
+        // contribution. Image XObjects always behave as
+        // fill-side paints; Form XObjects honour their
+        // own internal ExtGState changes (the snapshot
+        // captures the page-level state, the Form runs
+        // recursively, and the apply blends the Form's
+        // contribution against the captured backdrop).
+        //
+        // Per-subtype dispatch for the post-Do colour-
+        // lane modulators: Image / ImageMask XObjects do
+        // NOT execute their own paint operators — their
+        // pixel data is painted using the outer
+        // graphics state, so the post-Do CMYK compose,
+        // overprint and spot-lane mirrors are how those
+        // lanes learn about the contribution. Form
+        // XObjects DO execute their own paint operators
+        // (Fill / Stroke / FillStroke / Do / ShowText /
+        // shading), each of which runs its own per-
+        // paint sidecar mirror with the FORM's gs at
+        // the time of the paint. Re-applying the outer
+        // gs's CMYK / overprint / spot mirror after a
+        // Form Do would composite the form's region
+        // again with whatever colour the OUTER gs had,
+        // double-counting (and, when the outer colour
+        // differs from the form's, overwriting the
+        // form's mirror writes — the QA-6 / QA-6-DIAG-2
+        // failure mode where outer /K's iteration 2
+        // /Inner Do lost the inner Form's spot
+        // contribution). SMask attenuation always
+        // applies — an outer /SMask gs in effect at the
+        // Do attaches to the Do's entire region
+        // regardless of how the inner produced its
+        // pixels. ~keep
+        let smask_snap = if group_boundary {
+            None
+        } else {
+            self.paint_mask_snapshots(pixmap, gs_clone)?
+        };
+        let overprint_snap = if is_form {
+            None
+        } else {
+            self.overprint_snapshot(pixmap, gs_clone, true)
+        };
+        let cmyk_compose_snap = if is_form {
+            None
+        } else {
+            self.cmyk_compose_snapshot(pixmap, gs_clone, doc, true)
+        };
+        let spot_snap = if is_form {
+            None
+        } else {
+            self.spot_paint_snapshot(pixmap, gs_clone, true)
+        };
+        Ok(PaintModulatorSnapshots {
+            process_path: None,
+            cmyk_compose: cmyk_compose_snap,
+            overprint: overprint_snap,
+            spot: spot_snap,
+            smask: smask_snap,
+        })
+    }
+
+    fn seed_shading_spot_inks(
+        &mut self,
+        gs_clone: &mut GraphicsState,
+        name: &str,
+        resources: &Object,
+        doc: &PdfDocument,
+    ) {
+        // §8.7.4 + §11.7.3: when the shading's
+        // /ColorSpace is /Separation or non-process
+        // /DeviceN, surface the ink-name list (paired
+        // with the /Function /C0 endpoint tints) onto
+        // `gs_clone.fill_spot_inks` so the spot mirror
+        // sees a non-empty source ink set and fires.
+        // Without this the shading paint silently
+        // bypasses the spot mirror because the gating
+        // (`spot_paint_active`) checks
+        // `gs.fill_spot_inks`, which is otherwise
+        // populated only by `cs`/`scn` colour-set
+        // operators — none of which fire before `sh`. ~keep
+        if !self.spot_paint_active(&*gs_clone, true) && self.cmyk_sidecar.is_some() {
+            if let Some(inks) = self.resolve_shading_spot_inks(name, resources, doc) {
+                if !inks.is_empty() {
+                    gs_clone.fill_spot_inks = inks;
+                }
+            }
+        }
     }
 }
