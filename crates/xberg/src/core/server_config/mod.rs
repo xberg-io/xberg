@@ -9,7 +9,7 @@
 //! - **Multi-format support**: Load configuration from TOML, YAML, or JSON files
 //! - **Environment overrides**: All settings can be overridden via environment variables
 //! - **Sensible defaults**: All fields have reasonable defaults matching current behavior
-//! - **Flexible CORS**: Support for all origins (default) or specific origin lists
+//! - **Deny-by-default CORS**: no cross-origin access unless origins are listed (`*` allows all)
 //!
 //! # Example
 //!
@@ -70,7 +70,7 @@ const DEFAULT_JOB_TIMEOUT_SECS: u64 = 600;
 ///
 /// - `host`: "127.0.0.1" (localhost only)
 /// - `port`: 8000
-/// - `cors_origins`: empty vector (allows all origins)
+/// - `cors_origins`: empty vector (denies cross-origin requests)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
 /// - `job_timeout_secs`: 600 (10 minutes)
@@ -85,11 +85,10 @@ pub struct ServerConfig {
     #[serde(default = "default_port")]
     pub port: u16,
 
-    /// CORS allowed origins. Empty vector means allow all origins.
+    /// CORS allowed origins. Empty vector means no cross-origin access.
     ///
-    /// If this is an empty vector, the server will accept requests from any origin.
-    /// If populated with specific origins (e.g., `"https://example.com"`), only
-    /// those origins will be allowed.
+    /// Populate with specific origins (e.g., `"https://example.com"`) to allow only
+    /// those origins. The entry `"*"` allows every origin.
     #[serde(default)]
     pub cors_origins: Vec<String>,
 
@@ -182,8 +181,8 @@ impl ServerConfig {
 
     /// Check if CORS allows all origins.
     ///
-    /// Returns `true` if the `cors_origins` vector is empty, meaning all origins
-    /// are allowed. Returns `false` if specific origins are configured.
+    /// Returns `true` only when `cors_origins` contains the wildcard `"*"`. An empty
+    /// list denies cross-origin requests.
     ///
     /// # Example
     ///
@@ -191,19 +190,19 @@ impl ServerConfig {
     /// use xberg::core::ServerConfig;
     ///
     /// let mut config = ServerConfig::default();
-    /// assert!(config.cors_allows_all());
-    ///
-    /// config.cors_origins.push("https://example.com".to_string());
     /// assert!(!config.cors_allows_all());
+    ///
+    /// config.cors_origins.push("*".to_string());
+    /// assert!(config.cors_allows_all());
     /// ```
     pub fn cors_allows_all(&self) -> bool {
-        self.cors_origins.is_empty()
+        self.cors_origins.iter().any(|origin| origin.trim() == "*")
     }
 
     /// Check if a given origin is allowed by CORS configuration.
     ///
     /// Returns `true` if:
-    /// - CORS allows all origins (empty origins list), or
+    /// - CORS allows all origins (the list contains `"*"`), or
     /// - The given origin is in the allowed origins list
     ///
     /// # Arguments
@@ -216,14 +215,14 @@ impl ServerConfig {
     /// use xberg::core::ServerConfig;
     ///
     /// let mut config = ServerConfig::default();
-    /// assert!(config.is_origin_allowed("https://example.com"));
+    /// assert!(!config.is_origin_allowed("https://example.com"));
     ///
     /// config.cors_origins.push("https://allowed.com".to_string());
     /// assert!(config.is_origin_allowed("https://allowed.com"));
     /// assert!(!config.is_origin_allowed("https://denied.com"));
     /// ```
     pub fn is_origin_allowed(&self, origin: &str) -> bool {
-        self.cors_origins.is_empty() || self.cors_origins.contains(&origin.to_string())
+        self.cors_allows_all() || self.cors_origins.iter().any(|allowed| allowed == origin)
     }
 
     /// Get maximum request body size in megabytes (rounded up).

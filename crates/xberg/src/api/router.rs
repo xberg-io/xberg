@@ -23,6 +23,7 @@ use crate::{ExtractionConfig, core::ServerConfig, service::ExtractionServiceBuil
 #[cfg(feature = "prometheus")]
 use super::handlers::metrics_handler;
 use super::{
+    auth::{API_TOKEN_ENV, ApiAuth, require_bearer_token},
     handlers::{
         cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, cancel_job_handler,
         detect_handler, extract_async_handler, extract_handler, formats_handler, health_handler, info_handler,
@@ -165,16 +166,14 @@ fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig, max_c
     }
 }
 
-/// Build the CORS layer for `server_config`, warning when the resulting policy is permissive.
-///
-/// An explicitly configured origin list that parses to nothing falls back to the permissive
-/// policy rather than locking the server out of every browser client. ~keep
+/// Build the CORS layer for `server_config`. Cross-origin access is denied unless
+/// `cors_origins` lists origins explicitly; the entry `*` opts in to every origin. ~keep
 fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
     if server_config.cors_allows_all() {
         tracing::warn!(
-            "CORS configured to allow all origins (default). This permits CSRF attacks. \
-             For production, set XBERG_CORS_ORIGINS environment variable to comma-separated \
-             list of allowed origins (e.g., 'https://app.example.com,https://api.example.com')"
+            "CORS configured to allow all origins ('*'). This permits CSRF attacks. \
+             For production, set XBERG_CORS_ORIGINS to a comma-separated list of allowed origins \
+             (e.g., 'https://app.example.com,https://api.example.com')"
         );
         return CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
     }
@@ -185,19 +184,16 @@ fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
         .filter_map(|s| s.trim().parse::<axum::http::HeaderValue>().ok())
         .collect();
 
-    if !origins.is_empty() {
-        tracing::info!("CORS configured with {} explicit allowed origin(s)", origins.len());
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(origins))
-            .allow_methods(Any)
-            .allow_headers(Any)
-    } else {
-        tracing::warn!(
-            "CORS origins configured but empty/invalid - falling back to permissive CORS. \
-             This allows CSRF attacks. Set explicit origins for production."
-        );
-        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+    if origins.is_empty() {
+        tracing::info!("CORS denied for all cross-origin requests (set XBERG_CORS_ORIGINS to allow origins)");
+        return CorsLayer::new();
     }
+
+    tracing::info!("CORS configured with {} explicit allowed origin(s)", origins.len());
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
 
 /// Cap how many extraction requests process concurrently so a burst of large
@@ -257,7 +253,13 @@ pub(crate) fn create_router_with_limits_and_server_config(
     limits: ApiSizeLimits,
     server_config: ServerConfig,
 ) -> Router {
-    build_router(config, limits, server_config, resolve_max_concurrent_requests())
+    build_router(
+        config,
+        limits,
+        server_config,
+        resolve_max_concurrent_requests(),
+        ApiAuth::from_env(),
+    )
 }
 
 fn build_router(
@@ -265,6 +267,7 @@ fn build_router(
     limits: ApiSizeLimits,
     server_config: ServerConfig,
     max_concurrent_requests: usize,
+    auth: ApiAuth,
 ) -> Router {
     let state = build_api_state(config, &server_config, max_concurrent_requests);
 
@@ -276,34 +279,43 @@ fn build_router(
             .route("/extract-async", post(extract_async_handler))
             .route("/detect", post(detect_handler))
             .route("/process", put(openweb_external_handler))
-            .route("/v1/convert/file", post(openweb_docling_handler)),
+            .route("/v1/convert/file", post(openweb_docling_handler))
+            .route("/cache/clear", delete(cache_clear_handler))
+            .route("/cache/warm", post(cache_warm_handler)),
         max_concurrent_requests,
     );
 
-    let mut router = Router::new()
+    let mut protected = Router::new()
         .merge(limited_routes)
         .route("/jobs/{job_id}", get(job_status_handler).delete(cancel_job_handler))
         .route("/formats", get(formats_handler))
-        .route("/health", get(health_handler))
         .route("/info", get(info_handler))
         .route("/version", get(version_handler))
         .route("/cache/stats", get(cache_stats_handler))
-        .route("/cache/clear", delete(cache_clear_handler))
-        .route("/cache/manifest", get(cache_manifest_handler))
-        .route("/cache/warm", post(cache_warm_handler))
-        .fallback(not_found_handler);
+        .route("/cache/manifest", get(cache_manifest_handler));
 
     #[cfg(feature = "api")]
     {
-        router = router.route("/openapi.json", get(openapi_schema_handler));
+        protected = protected.route("/openapi.json", get(openapi_schema_handler));
     }
 
     #[cfg(feature = "prometheus")]
     {
-        router = router.route("/metrics", get(metrics_handler));
+        protected = protected.route("/metrics", get(metrics_handler));
     }
 
-    let router = router
+    // The auth layer is added after the concurrency limit so it runs first: a rejected
+    // request never occupies an extraction slot. `/health` stays outside it for probes.
+    if let Some(token) = auth.expected_token() {
+        protected = protected.layer(axum::middleware::from_fn_with_state(token, require_bearer_token));
+    } else {
+        tracing::warn!("API authentication disabled ({API_TOKEN_ENV} not set)");
+    }
+
+    let router = Router::new()
+        .route("/health", get(health_handler))
+        .merge(protected)
+        .fallback(not_found_handler)
         .layer(DefaultBodyLimit::max(limits.max_request_body_bytes))
         .layer(RequestBodyLimitLayer::new(limits.max_request_body_bytes))
         .layer(cors_layer)
@@ -353,6 +365,7 @@ mod tests {
             ApiSizeLimits::default(),
             ServerConfig::default(),
             1,
+            ApiAuth::default(),
         );
 
         let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
@@ -393,6 +406,194 @@ mod tests {
         .await;
         assert!(queued.is_err(), "extraction routes must still queue behind the limit");
         holder.abort();
+    }
+
+    mod access_control {
+        use super::*;
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode, header},
+        };
+        use std::{convert::Infallible, time::Duration};
+        use tower::ServiceExt;
+
+        const TOKEN: &str = "s3cret-token";
+
+        fn router(cors_origins: &[&str], token: Option<&str>) -> Router {
+            build_router(
+                ExtractionConfig::default(),
+                ApiSizeLimits::default(),
+                ServerConfig {
+                    cors_origins: cors_origins.iter().map(ToString::to_string).collect(),
+                    ..ServerConfig::default()
+                },
+                1,
+                ApiAuth::new(token, false),
+            )
+        }
+
+        async fn status(router: &Router, method: &str, uri: &str, authorization: Option<&str>) -> StatusCode {
+            let mut request = Request::builder().method(method).uri(uri);
+            if let Some(value) = authorization {
+                request = request.header(header::AUTHORIZATION, value);
+            }
+            router
+                .clone()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+                .status()
+        }
+
+        #[tokio::test]
+        async fn rejects_missing_and_wrong_tokens_with_a_challenge() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in [
+                None,
+                Some("Bearer wrong"),
+                Some("Bearer s3cret-toke"),
+                Some("Bearer s3cret-token-extra"),
+                Some("Basic s3cret-token"),
+                Some(TOKEN),
+            ] {
+                assert_eq!(
+                    status(&router, "GET", "/info", authorization).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{authorization:?}"
+                );
+            }
+
+            let response = router
+                .clone()
+                .oneshot(Request::builder().uri("/info").body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.headers()[header::WWW_AUTHENTICATE], "Bearer");
+        }
+
+        #[tokio::test]
+        async fn accepts_the_right_token_case_insensitive_scheme() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in ["Bearer s3cret-token", "bearer s3cret-token"] {
+                assert_eq!(
+                    status(&router, "GET", "/info", Some(authorization)).await,
+                    StatusCode::OK
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn health_stays_open_when_a_token_is_set() {
+            let router = router(&[], Some(TOKEN));
+            assert_eq!(status(&router, "GET", "/health", None).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn without_a_token_every_route_is_open() {
+            let router = router(&[], None);
+            assert_eq!(status(&router, "GET", "/info", None).await, StatusCode::OK);
+            assert_eq!(status(&router, "GET", "/health", None).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn cache_routes_require_the_token() {
+            let router = router(&[], Some(TOKEN));
+            for (method, uri) in [
+                ("DELETE", "/cache/clear"),
+                ("POST", "/cache/warm"),
+                ("GET", "/cache/stats"),
+                ("GET", "/cache/manifest"),
+            ] {
+                assert_eq!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+                assert_eq!(
+                    status(&router, method, uri, Some("Bearer wrong")).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+            }
+            assert_eq!(
+                status(&router, "GET", "/cache/stats", Some("Bearer s3cret-token")).await,
+                StatusCode::OK
+            );
+        }
+
+        #[tokio::test]
+        async fn cache_mutations_queue_behind_the_concurrency_limit() {
+            let router = router(&[], None);
+            let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
+            let holder = tokio::spawn(
+                router.clone().oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header("content-type", "multipart/form-data; boundary=x")
+                        .body(stalled_body)
+                        .unwrap(),
+                ),
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            for (method, uri) in [("DELETE", "/cache/clear"), ("POST", "/cache/warm")] {
+                let queued = tokio::time::timeout(
+                    Duration::from_millis(300),
+                    router
+                        .clone()
+                        .oneshot(Request::builder().method(method).uri(uri).body(Body::empty()).unwrap()),
+                )
+                .await;
+                assert!(queued.is_err(), "{method} {uri} must wait for a free slot");
+            }
+            holder.abort();
+        }
+
+        async fn preflight(router: &Router, origin: &str) -> axum::response::Response {
+            router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("OPTIONS")
+                        .uri("/extract")
+                        .header(header::ORIGIN, origin)
+                        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+        }
+
+        #[tokio::test]
+        async fn cors_is_denied_by_default() {
+            let router = router(&[], Some(TOKEN));
+            let response = preflight(&router, "https://evil.example").await;
+            assert!(!response.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
+        }
+
+        #[tokio::test]
+        async fn cors_allows_only_listed_origins() {
+            let router = router(&["https://app.example.com"], Some(TOKEN));
+
+            let allowed = preflight(&router, "https://app.example.com").await;
+            assert_eq!(
+                allowed.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+                "https://app.example.com"
+            );
+
+            let denied = preflight(&router, "https://evil.example").await;
+            assert!(!denied.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
+        }
+
+        #[tokio::test]
+        async fn cors_wildcard_is_an_explicit_opt_in() {
+            let router = router(&["*"], Some(TOKEN));
+            let response = preflight(&router, "https://anything.example").await;
+            assert_eq!(response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
+        }
     }
 
     #[test]

@@ -6,7 +6,10 @@ use crate::{
     ExtractionConfig, Result, core::ServerConfig, extractors, plugins::startup_validation::validate_plugins_at_startup,
 };
 
-use super::{config::load_server_config, router::create_router_with_limits_and_server_config, types::ApiSizeLimits};
+use super::{
+    auth::ApiAuth, config::load_server_config, router::create_router_with_limits_and_server_config,
+    types::ApiSizeLimits,
+};
 
 /// Wait for a shutdown signal: SIGTERM on Unix platforms or Ctrl-C on all platforms.
 ///
@@ -92,9 +95,13 @@ async fn shutdown_signal() {
 /// export XBERG_HOST=0.0.0.0
 /// export XBERG_PORT=8000
 ///
-/// # CORS configuration (IMPORTANT for production security)
-/// # Default: allows all origins (permits CSRF attacks)
-/// # Production: set to comma-separated list of allowed origins
+/// # Authentication: bearer token required on every route except GET /health.
+/// # Binding a non-loopback host without a token is refused unless
+/// # XBERG_ALLOW_UNAUTHENTICATED=true is set.
+/// export XBERG_API_TOKEN="<secret>"
+///
+/// # CORS: cross-origin requests are denied by default.
+/// # Set a comma-separated list of allowed origins ("*" allows every origin)
 /// export XBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
 ///
 /// # Upload size limits (default: 100 MB)
@@ -198,6 +205,7 @@ pub async fn serve_with_config_and_limits(
         .as_ref()
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
+    ApiAuth::from_env().check_bind(ip)?;
 
     let server_config = ServerConfig {
         host: host.as_ref().to_string(),
@@ -262,6 +270,7 @@ pub async fn serve_with_server_config(extraction_config: ExtractionConfig, serve
         .host
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
+    ApiAuth::from_env().check_bind(ip)?;
 
     let limits = ApiSizeLimits::new(
         server_config.max_request_body_bytes,

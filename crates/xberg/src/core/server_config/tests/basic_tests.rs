@@ -32,15 +32,27 @@ fn test_listen_addr_custom() {
 #[test]
 fn test_cors_allows_all() {
     let mut config = ServerConfig::default();
-    assert!(config.cors_allows_all());
+    assert!(!config.cors_allows_all());
 
     config.cors_origins.push("https://example.com".to_string());
     assert!(!config.cors_allows_all());
+
+    config.cors_origins.push("*".to_string());
+    assert!(config.cors_allows_all());
+}
+
+#[test]
+fn test_is_origin_allowed_denies_by_default() {
+    let config = ServerConfig::default();
+    assert!(!config.is_origin_allowed("https://example.com"));
 }
 
 #[test]
 fn test_is_origin_allowed_all() {
-    let config = ServerConfig::default();
+    let config = ServerConfig {
+        cors_origins: vec!["*".to_string()],
+        ..ServerConfig::default()
+    };
     assert!(config.is_origin_allowed("https://example.com"));
     assert!(config.is_origin_allowed("https://other.com"));
 }

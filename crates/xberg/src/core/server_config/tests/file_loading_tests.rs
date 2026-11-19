@@ -177,7 +177,7 @@ port = 8000
 
     let config = ServerConfig::from_toml_file(&config_path).unwrap();
     assert!(config.cors_origins.is_empty());
-    assert!(config.cors_allows_all());
+    assert!(!config.cors_allows_all());
 }
 
 #[test]
