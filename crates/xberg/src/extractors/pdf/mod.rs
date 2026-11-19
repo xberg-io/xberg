@@ -3223,28 +3223,19 @@ impl PdfExtractor {
             feature = "layout-detection",
             any(feature = "ocr", feature = "ocr-pipeline")
         ))]
-        {
-            // These values exist only with layout detection; keep the reuse gate in the same cfg block. ~keep
-            let markdown_page_rotations = markdown_layout_images
-                .as_ref()
-                .map(|images| crate::pdf::render::get_page_rotations_from_bytes(content, images.len()))
-                .unwrap_or_default();
-            if !markdown_layout_reusable_for_ocr(markdown_layout_gate_decisions.as_deref(), &markdown_page_rotations) {
-                let native_inputs = (markdown_layout_images.take(), markdown_layout_detections.take());
-                markdown_layout_acceleration_override = None;
+        native_routing::withhold_unreusable_layout(
+            config,
+            content,
+            markdown_layout_gate_decisions.as_deref(),
+            native_routing::MarkdownLayoutInputs {
+                images: &mut markdown_layout_images,
+                detections: &mut markdown_layout_detections,
+                acceleration_override: &mut markdown_layout_acceleration_override,
+                rendered_pages: &mut markdown_rendered_pages,
                 #[cfg(any(feature = "formula-recognition", feature = "liter-llm"))]
-                {
-                    // Keep the rasters only when this run configures a native reader of them.
-                    if native_layout_readers_configured(config)
-                        && markdown_layout_usable_for_native(&markdown_page_rotations)
-                    {
-                        native_only_layout_inputs = Some(native_inputs);
-                    }
-                }
-                #[cfg(not(any(feature = "formula-recognition", feature = "liter-llm")))]
-                drop(native_inputs);
-            }
-        }
+                native_only: &mut native_only_layout_inputs,
+            },
+        );
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let (mut text, extraction_method) = native_routing::route_native_text(

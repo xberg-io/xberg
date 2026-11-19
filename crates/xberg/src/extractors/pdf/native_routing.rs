@@ -3,6 +3,13 @@
 use super::OcrLayoutGateDecisions;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::ink_probe;
+#[cfg(feature = "layout-detection")]
+use super::markdown_layout_reusable_for_ocr;
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm")
+))]
+use super::markdown_layout_usable_for_native;
 #[cfg(all(
     feature = "layout-detection",
     any(feature = "formula-recognition", feature = "liter-llm")
@@ -1188,4 +1195,32 @@ async fn read_picture_pages(
         }
     }
     Ok((text, method))
+}
+
+// These values exist only with layout detection; keep the reuse gate in the same cfg block. ~keep
+#[cfg(feature = "layout-detection")]
+pub(super) fn withhold_unreusable_layout(
+    config: &ExtractionConfig,
+    content: &[u8],
+    markdown_layout_gate_decisions: Option<&[crate::pdf::layout_gate::PageGateDecision]>,
+    layout: MarkdownLayoutInputs<'_>,
+) {
+    let markdown_page_rotations = layout
+        .images
+        .as_ref()
+        .map(|images| crate::pdf::render::get_page_rotations_from_bytes(content, images.len()))
+        .unwrap_or_default();
+    if !markdown_layout_reusable_for_ocr(markdown_layout_gate_decisions, &markdown_page_rotations) {
+        let native_inputs = (layout.images.take(), layout.detections.take());
+        *layout.acceleration_override = None;
+        #[cfg(any(feature = "formula-recognition", feature = "liter-llm"))]
+        {
+            // Keep the rasters only when this run configures a native reader of them.
+            if native_layout_readers_configured(config) && markdown_layout_usable_for_native(&markdown_page_rotations) {
+                *layout.native_only = Some(native_inputs);
+            }
+        }
+        #[cfg(not(any(feature = "formula-recognition", feature = "liter-llm")))]
+        drop(native_inputs);
+    }
 }
