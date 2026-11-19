@@ -1,11 +1,11 @@
-use crate::TesseractError;
 use crate::api::TesseractAPI;
-use crate::native_iterator::NativeIterator;
 use crate::enums::{
     TessOrientation, TessPageIteratorLevel, TessParagraphJustification, TessPolyBlockType, TessTextlineOrder,
     TessWritingDirection,
 };
 use crate::error::Result;
+use crate::native_iterator::NativeIterator;
+use crate::TesseractError;
 use std::os::raw::{c_float, c_int, c_void};
 
 /// Block-level layout information from Tesseract.
@@ -61,6 +61,16 @@ pub struct ParagraphExtractionOutcome {
 ///
 /// fn escape() -> PageIterator<'static> {
 ///     let api = TesseractAPI::new().unwrap();
+///     api.get_page_iterator().unwrap()
+/// }
+/// ```
+///
+/// The same function compiles once the iterator stays within the engine's scope:
+///
+/// ```no_run
+/// use xberg_tesseract::{PageIterator, TesseractAPI};
+///
+/// fn within(api: &TesseractAPI) -> PageIterator<'_> {
 ///     api.get_page_iterator().unwrap()
 /// }
 /// ```
@@ -439,6 +449,7 @@ ffi_extern! {
         bottom: *mut c_int,
     ) -> c_int;
     pub fn TessPageIteratorBlockType(handle: *mut c_void) -> c_int;
+    pub fn TessPageIteratorEmpty(handle: *const c_void, level: c_int) -> c_int;
     pub fn TessPageIteratorBaseline(
         handle: *mut c_void,
         level: c_int,

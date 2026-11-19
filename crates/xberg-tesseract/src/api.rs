@@ -1,9 +1,9 @@
 use crate::enums::{TessPageIteratorLevel, TessPageSegMode};
 use crate::error::{Result, TesseractError};
 use crate::monitor::TessMonitor;
-use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorDelete};
 use crate::mutable_iterator::MutableIterator;
-use crate::result_iterator::{TessResultIteratorDelete, copy_and_delete_tess_text};
+use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorDelete, TessPageIteratorEmpty};
+use crate::result_iterator::{copy_and_delete_tess_text, TessResultIteratorDelete};
 use crate::result_renderer::TessResultRenderer;
 use crate::{PageIterator, ResultIterator};
 use std::collections::HashMap;
@@ -285,6 +285,9 @@ impl TesseractAPI {
     /// No thread may use this engine, or start to use it, until the caller calls
     /// [`Self::mark_in_use`] and it returns `Ok`. The exit cleanup frees an idle engine
     /// at any time, so a thread that still uses the engine then uses freed memory.
+    ///
+    /// No iterator created from this engine may be used or alive while it is idle, because the
+    /// exit cleanup ends the engine and frees the results those iterators read.
     ///
     /// This method is for engine pools, not for general use.
     #[doc(hidden)]
@@ -628,7 +631,19 @@ impl TesseractAPI {
         if result != 0 {
             Err(TesseractError::OcrError)
         } else {
-            self.recognized.store(true, Ordering::SeqCst);
+            // Tesseract returns success for an empty page before it marks the recognition done, so a
+            // later text getter recognizes again and replaces the result. Only a non-empty result is final. ~keep
+            // SAFETY: the engine handle lock is held, and the probe iterator is deleted before returning.
+            let has_results = unsafe {
+                let probe = TessBaseAPIGetIterator(*handle);
+                let found =
+                    !probe.is_null() && TessPageIteratorEmpty(probe, TessPageIteratorLevel::RIL_BLOCK as c_int) == 0;
+                if !probe.is_null() {
+                    TessPageIteratorDelete(probe);
+                }
+                found
+            };
+            self.recognized.store(has_results, Ordering::SeqCst);
             ensure_tesseract_cleanup_registered();
             Ok(())
         }
@@ -912,6 +927,9 @@ impl TesseractAPI {
     /// Returns `true` if adaptation is successful, otherwise returns `false`.
     pub fn adapt_to_word_str(&self, mode: i32, wordstr: &str) -> Result<bool> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+        // AdaptToWordStr may recognize on demand and then replaces the page results. ~keep
+        self.invalidate_results();
         let wordstr = CString::new(wordstr).map_err(|_| TesseractError::NullByteInString)?;
         let result = unsafe { TessBaseAPIAdaptToWordStr(*handle, mode, wordstr.as_ptr()) };
         Ok(result != 0)
@@ -1171,9 +1189,6 @@ impl TesseractAPI {
         let succeeded = unsafe {
             TessBaseAPIProcessPages(*handle, filename.as_ptr(), retry_ptr, timeout_millisec, renderer_handle)
         } != 0;
-        if succeeded {
-            self.recognized.store(true, Ordering::SeqCst);
-        }
         drop(handle);
         drop(renderer);
         if !succeeded {
@@ -1354,6 +1369,9 @@ impl TesseractAPI {
     /// when Tesseract reports success; layout analysis failure is an error.
     pub fn get_text_direction(&self) -> Result<(i32, f32)> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
+        // GetTextDirection runs AnalyseLayout, which deletes the page results of a finished recognition. ~keep
+        self.invalidate_results();
         let mut out_offset = 0;
         let mut out_slope = 0.0;
         let succeeded = unsafe { TessBaseAPIGetTextDirection(*handle, &mut out_offset, &mut out_slope) } != 0;
@@ -2022,7 +2040,10 @@ impl TesseractAPI {
         })
     }
 
-    /// Gets both page and result iterators for full text analysis
+    /// Gets a page iterator from a fresh layout analysis and a result iterator from the engine's results.
+    ///
+    /// The layout analysis replaces the recognition result, so the iterators describe the layout
+    /// pass, not the finished recognition; recognized text is only reliable through the engine's getters.
     pub fn get_iterators(&self) -> Result<(PageIterator<'_>, ResultIterator<'_>)> {
         self.recognize()?;
 

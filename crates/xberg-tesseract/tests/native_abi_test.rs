@@ -252,3 +252,39 @@ fn choice_iterator_fails_once_the_result_is_replaced() {
 
     assert!(matches!(choices.get_utf8_text(), Err(TesseractError::StaleIterator)));
 }
+
+#[test]
+fn iterator_fails_once_text_direction_reruns_layout_analysis() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.get_text_direction();
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_fails_once_the_engine_adapts_to_a_word() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.adapt_to_word_str(0, "Hello");
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_over_a_blank_page_fails_once_a_getter_recognizes_again() {
+    let api = new_engine();
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.recognize().expect("recognize blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.get_utf8_text();
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
