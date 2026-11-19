@@ -49,9 +49,14 @@ impl OrtSessionOptions {
     };
 }
 
+// ~keep Literal fields rather than `Self::DEFAULT`: alef reads binding defaults from this impl.
 impl Default for OrtSessionOptions {
     fn default() -> Self {
-        Self::DEFAULT
+        Self {
+            memory_pattern: true,
+            cpu_arena: true,
+            max_threads: None,
+        }
     }
 }
 
@@ -60,9 +65,8 @@ static SESSION_OPTIONS: std::sync::RwLock<OrtSessionOptions> = std::sync::RwLock
 /// Set the [`OrtSessionOptions`] used for ONNX sessions built from now on.
 ///
 /// When the options actually change, the embedding, reranking, sparse-embedding and
-/// late-interaction engine caches are cleared so resident engines are rebuilt with the
-/// new options on next use. PaddleOCR engines already resident stay in their pool under
-/// the previous options and are no longer selected.
+/// late-interaction engine caches and the PaddleOCR engine pools are cleared, so resident
+/// engines are rebuilt with the new options on next use.
 pub fn set_ort_session_options(options: OrtSessionOptions) {
     let changed = {
         let mut guard = SESSION_OPTIONS.write().unwrap_or_else(|e| e.into_inner());
@@ -105,5 +109,10 @@ mod tests {
         };
         set_ort_session_options(bounded);
         assert_eq!(ort_session_options(), bounded);
+    }
+
+    #[test]
+    fn default_matches_the_const_default() {
+        assert_eq!(OrtSessionOptions::default(), OrtSessionOptions::DEFAULT);
     }
 }
