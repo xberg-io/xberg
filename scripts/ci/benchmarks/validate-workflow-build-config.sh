@@ -187,7 +187,7 @@ validate_harness_job="$(extract_job validate-harness <<<"$workflow_content")"
 aggregate_job="$(extract_job aggregate-and-publish <<<"$workflow_content")"
 setup_rust_step="$(extract_named_step "Setup Rust" <<<"$setup_job")"
 setup_rust_inputs="$(extract_with_inputs <<<"$setup_rust_step")"
-swap_step="$(extract_named_step "Provision swap for all-feature release link" <<<"$setup_job")"
+swap_step="$(extract_named_step "Provision swap for fat-LTO release links" <<<"$setup_job")"
 cohort_validation_step="$(extract_named_step "Validate benchmark cohorts" <<<"$validate_harness_job")"
 harness_contract_step="$(extract_named_step "Validate benchmark harness contracts" <<<"$validate_harness_job")"
 
@@ -199,7 +199,7 @@ require_exact_cli_build "$setup_job" \
   "setup must build exactly one all-feature CLI for benchmark size measurement"
 require_step "$swap_step" '^[[:space:]]+run: mise run benchmark:setup:swap$' \
   "setup must provision swap through the benchmark task before the all-feature release link"
-swap_line="$(grep -nF -- '- name: Provision swap for all-feature release link' <<<"$setup_job" | cut -d: -f1)"
+swap_line="$(grep -nF -- '- name: Provision swap for fat-LTO release links' <<<"$setup_job" | cut -d: -f1)"
 cli_build_line="$(grep -nF -- '- name: Build xberg-cli (release, all features + Sceptre tract diagnostic)' <<<"$setup_job" | cut -d: -f1)"
 if [[ -z "$swap_line" || -z "$cli_build_line" || "$swap_line" -ge "$cli_build_line" ]]; then
   echo "benchmark workflow validation failed: swap must be provisioned before the all-feature release link"
