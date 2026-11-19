@@ -2,41 +2,41 @@ use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::os::raw::c_char;
 use std::ptr;
+use std::rc::Rc;
 
 use four_cc::FourCC;
 use libheif_sys as lh;
 
+use crate::context::ContextOwner;
 use crate::utils::cstr_to_str;
 use crate::{
     ColorProfileNCLX, ColorProfileRaw, ColorProfileType, ColorSpace, HeifError, HeifErrorCode, HeifErrorSubCode,
     ImageMetadata, Result,
 };
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "v1_18")] {
-        use crate::regions::RegionItem;
-        use crate::HeifContext;
-    }
-}
+#[cfg(feature = "v1_18")]
+use crate::regions::RegionItem;
 
 /// Encoded image.
-pub struct ImageHandle {
+///
+/// Holds a share of the owning context's native state and input backing, so it is valid
+/// regardless of when the `HeifContext` is dropped. `'a` is the lifetime of the borrowed
+/// input, which the handle cannot outlive.
+pub struct ImageHandle<'a> {
     pub(crate) inner: *mut lh::heif_image_handle,
+    pub(crate) context: Rc<ContextOwner<'a>>,
 }
 
 pub type ItemId = lh::heif_item_id;
 
 #[allow(unsafe_code)]
-impl ImageHandle {
-    pub(crate) fn new(handle: *mut lh::heif_image_handle) -> Self {
-        ImageHandle { inner: handle }
-    }
-
-    #[cfg(feature = "v1_18")]
-    #[allow(unsafe_code)]
-    fn context(&self) -> HeifContext<'_> {
-        // FIXME(#3229): The new native wrapper shares a context and carries no Rust source.
-        unsafe { HeifContext::from_ptr(lh::heif_image_handle_get_context(self.inner)) }
+impl<'a> ImageHandle<'a> {
+    /// Takes ownership of `handle`, a native handle created from `context`'s native context.
+    pub(crate) fn new(handle: *mut lh::heif_image_handle, context: &Rc<ContextOwner<'a>>) -> Self {
+        ImageHandle {
+            inner: handle,
+            context: Rc::clone(context),
+        }
     }
 
     #[allow(unsafe_code)]
@@ -124,9 +124,7 @@ impl ImageHandle {
         };
         HeifError::from_heif_error(err)?;
         let out_depth_handler = unsafe { out_depth_handler.assume_init() };
-        Ok(ImageHandle {
-            inner: out_depth_handler,
-        })
+        Ok(ImageHandle::new(out_depth_handler, &self.context))
     }
 
     #[allow(unsafe_code)]
@@ -154,9 +152,7 @@ impl ImageHandle {
         };
         HeifError::from_heif_error(err)?;
         let out_thumbnail_handler = unsafe { out_thumbnail_handler.assume_init() };
-        Ok(ImageHandle {
-            inner: out_thumbnail_handler,
-        })
+        Ok(ImageHandle::new(out_thumbnail_handler, &self.context))
     }
 
     fn convert_type_filter<T>(type_filter: T) -> Option<CString>
@@ -365,7 +361,7 @@ impl ImageHandle {
             }
             for item_id in item_ids {
                 let mut item_ptr = ptr::null_mut();
-                let err = unsafe { lh::heif_context_get_region_item(self.context().inner, item_id, &mut item_ptr) };
+                let err = unsafe { lh::heif_context_get_region_item(self.context.ptr(), item_id, &mut item_ptr) };
                 if HeifError::from_heif_error(err).is_ok()
                     && let Some(region_item_ptr) = ptr::NonNull::new(item_ptr)
                 {
@@ -377,7 +373,7 @@ impl ImageHandle {
     }
 
     #[allow(unsafe_code)]
-    pub fn auxiliary_images<T: Into<Option<AuxiliaryImagesFilter>>>(&self, filter: T) -> Vec<ImageHandle> {
+    pub fn auxiliary_images<T: Into<Option<AuxiliaryImagesFilter>>>(&self, filter: T) -> Vec<ImageHandle<'a>> {
         let filter = filter.into().unwrap_or_default();
         let num_items = unsafe { lh::heif_image_handle_get_number_of_auxiliary_images(self.inner, filter.0) };
         let size = num_items.max(0) as usize;
@@ -398,7 +394,7 @@ impl ImageHandle {
                 let err =
                     unsafe { lh::heif_image_handle_get_auxiliary_image_handle(self.inner, item_id, &mut handle_ptr) };
                 if HeifError::from_heif_error(err).is_ok() && !handle_ptr.is_null() {
-                    image_handles.push(ImageHandle::new(handle_ptr));
+                    image_handles.push(ImageHandle::new(handle_ptr, &self.context));
                 }
             }
         }
@@ -457,8 +453,11 @@ impl AuxiliaryImagesFilter {
 }
 
 #[allow(unsafe_code)]
-impl Drop for ImageHandle {
+impl Drop for ImageHandle<'_> {
     fn drop(&mut self) {
+        // SAFETY: `inner` is the handle this value owns and releases exactly once; the context
+        // share in `context` is dropped after this runs, so the native context and input
+        // backing are still live while libheif releases the handle.
         unsafe { lh::heif_image_handle_release(self.inner) };
     }
 }

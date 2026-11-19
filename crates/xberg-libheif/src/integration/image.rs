@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::io::{Seek, SeekFrom};
+use std::io::{Cursor, Read};
 
 use image::error::{DecodingError, ImageFormatHint};
 use image::hooks::GenericReader;
@@ -101,18 +101,20 @@ impl From<HeifError> for ImageError {
     }
 }
 
-struct HeifDecoder<'a> {
-    _context: HeifContext<'a>,
-    image_handle: ImageHandle,
+struct HeifDecoder {
+    _context: HeifContext<'static>,
+    image_handle: ImageHandle<'static>,
     color_type: ColorType,
 }
 
-impl<'a> HeifDecoder<'a> {
-    fn new(mut reader: GenericReader<'a>) -> ImageResult<HeifDecoder<'a>> {
-        reader.seek(SeekFrom::End(0))?;
-        let total_size = reader.stream_position()?;
-        reader.seek(SeekFrom::Start(0))?;
-        let stream_reader = StreamReader::new(reader, total_size);
+impl HeifDecoder {
+    /// The input is buffered because libheif requires a `Send` reader and the `image` crate's
+    /// generic reader is not one.
+    fn new(mut reader: GenericReader<'_>) -> ImageResult<HeifDecoder> {
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data)?;
+        let total_size = data.len() as u64;
+        let stream_reader = StreamReader::new(Cursor::new(data), total_size);
         let context = HeifContext::read_from_reader(Box::new(stream_reader))?;
         let image_handle = context.primary_image_handle()?;
         let color_type = get_color_type(&image_handle)?;
@@ -125,7 +127,7 @@ impl<'a> HeifDecoder<'a> {
     }
 }
 
-fn get_color_type(image_handle: &ImageHandle) -> ImageResult<ColorType> {
+fn get_color_type(image_handle: &ImageHandle<'_>) -> ImageResult<ColorType> {
     let has_alpha = image_handle.has_alpha_channel();
     let color_space = image_handle.preferred_decoding_colorspace()?;
     let (is_monochrome, is_hdr) = match color_space {
@@ -187,7 +189,7 @@ fn get_color_space(color_type: ColorType) -> ColorSpace {
     }
 }
 
-impl<'a> image::ImageDecoder for HeifDecoder<'a> {
+impl image::ImageDecoder for HeifDecoder {
     fn dimensions(&self) -> (u32, u32) {
         (self.image_handle.width(), self.image_handle.height())
     }
