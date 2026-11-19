@@ -4252,85 +4252,16 @@ impl PdfExtractor {
         ) = (extracted_images, None);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_text_pages: Vec<u32> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        {
-            let keep_native_content = config.pages.as_ref().is_some_and(|pages| pages.keep_native_content);
-
-            if let Some(pts) = ocr_page_texts.as_ref() {
-                if let Some(ref mut pages) = page_contents {
-                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(
-                        pages,
-                        pts,
-                        ocr_document_page_texts.as_deref(),
-                        keep_native_content,
-                    ));
-                } else {
-                    // Only the pages whose read the output kept: an empty per-page text was
-                    // discarded, not accepted (#2939).
-                    ocr_text_pages.extend(
-                        pts.iter()
-                            .enumerate()
-                            .filter(|(_, text)| !text.trim().is_empty())
-                            .map(|(index, _)| (index + 1) as u32),
-                    );
-                    // The pages carry the restored native text of a discarded read, like the
-                    // document does (GH#3013).
-                    let page_texts = ocr_document_page_texts.as_deref().unwrap_or(pts);
-                    page_contents = Some(
-                        page_texts
-                            .iter()
-                            .enumerate()
-                            .map(|(i, text)| {
-                                let content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
-                                let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&content));
-                                crate::types::PageContent {
-                                    page_number: (i + 1) as u32,
-                                    content,
-                                    tables: Vec::new(),
-                                    image_indices: vec![],
-                                    image_preprocessing: None,
-                                    hierarchy: None,
-                                    is_blank,
-                                    layout_regions: None,
-                                    speaker_notes: None,
-                                    section_name: None,
-                                    sheet_name: None,
-                                    ocr_confidence: None,
-                                    native_content: None,
-                                }
-                            })
-                            .collect(),
-                    );
-                }
-            }
-
-            if let Some(results_map) = ocr_results_map.as_ref()
-                && let Some(ref mut pages) = page_contents
-            {
-                // The map holds only the pages `accepted_ocr_page_replacements` kept -- a
-                // blank or discarded read is filtered and warned about there (unit-tested in
-                // `ocr::tests`) -- so a page whose read the noise gate dropped is never
-                // marked here (#2939).
-                for page in pages.iter_mut() {
-                    if let Some(ocr_text) = results_map.get(&page.page_number) {
-                        replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);
-                        ocr_text_pages.push(page.page_number);
-                    }
-                }
-            }
-
-            if let Some(ref content_pages) = page_contents
-                && let Some(ref mut page_structure) = pdf_metadata.page_structure
-                && let Some(ref mut info_pages) = page_structure.pages
-            {
-                for info in info_pages.iter_mut() {
-                    if let Some(content_page) = content_pages.iter().find(|p| p.page_number == info.number) {
-                        info.is_blank = content_page.is_blank;
-                    }
-                }
-            }
-        }
+        let ocr_text_pages = native_finalize::apply_ocr_to_page_contents(
+            config,
+            native_finalize::OcrPageSources {
+                page_texts: ocr_page_texts.as_deref(),
+                document_page_texts: ocr_document_page_texts.as_deref(),
+                results_map: ocr_results_map.as_ref(),
+            },
+            &mut page_contents,
+            &mut pdf_metadata,
+        );
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let image_preprocessing = attach_pdf_preprocessing_metadata(&mut page_contents, &ocr_preprocessing_by_page);
