@@ -1,6 +1,7 @@
 //! Stages that finish the `InternalDocument` built by `PdfExtractor::extract_core_native_with_layout_pages`.
 
 use super::OcrLayoutGateDecisions;
+use super::apply_extracted_pdf_metadata;
 use super::extraction;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 use super::insert_image_ocr_text_anchor;
@@ -8,10 +9,9 @@ use super::insert_image_ocr_text_anchor;
 use super::layout_gate_metadata;
 use super::unmapped_glyphs;
 use crate::core::config::ExtractionConfig;
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use crate::types::ExtractionMethod;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement, PdfPageCoordinateFrame};
-use crate::types::{ExtractedImage, PageContent};
+use crate::types::{ExtractedImage, Metadata, PageContent};
 
 pub(super) fn push_link_annotation_uris(doc: &mut InternalDocument) {
     use crate::types::annotations::PdfAnnotationType;
@@ -310,5 +310,68 @@ pub(super) fn merge_document_warnings(
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     for warning in sources.markdown_layout_glyph_drop_warnings {
         crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
+    }
+}
+
+pub(super) struct DocumentMetadataInputs {
+    pub(super) pdf_metadata: crate::pdf::metadata::PdfExtractionMetadata,
+    pub(super) output_format: Option<String>,
+    pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    pub(super) used_ocr: bool,
+    pub(super) extraction_method: ExtractionMethod,
+    pub(super) pdf_page_labels: Option<Vec<String>>,
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    pub(super) ocr_backend_additional_metadata: ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>,
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    pub(super) ocr_coordinate_frames: Vec<crate::types::internal::OcrPageCoordinateFrame>,
+}
+
+pub(super) fn apply_document_metadata(
+    doc: &mut InternalDocument,
+    config: &ExtractionConfig,
+    inputs: DocumentMetadataInputs,
+) {
+    let extract_pdf_metadata = config
+        .pdf_options
+        .as_ref()
+        .is_none_or(|options| options.extract_metadata);
+    doc.metadata = Metadata {
+        output_format: inputs.output_format,
+        image_preprocessing: inputs.image_preprocessing,
+        ocr_used: inputs.used_ocr,
+        ..Default::default()
+    };
+    apply_extracted_pdf_metadata(&mut doc.metadata, inputs.pdf_metadata, extract_pdf_metadata);
+    doc.metadata.additional.insert(
+        std::borrow::Cow::Borrowed("extraction_method"),
+        serde_json::Value::String(inputs.extraction_method.as_str().to_string()),
+    );
+    // #1575: restore the OCR-pipeline keys taken above, now that the fresh `Metadata`
+    // literal they would otherwise have been lost to already exists.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    doc.metadata.additional.extend(inputs.ocr_backend_additional_metadata);
+
+    // GH#1645: one authoritative processed-raster coordinate frame per OCR page with
+    // public elements, so a multi-page consumer can normalize `OcrElement` geometry
+    // without relying on the single document-wide `ocr_processed_image_width/height`
+    // pair, which cannot describe differently sized, preprocessed, or rotated pages.
+    // Rides in `additional` rather than a new public binding type, same as the
+    // `page_labels` key below (issue #66).
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    if !inputs.ocr_coordinate_frames.is_empty() {
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAMES_METADATA_KEY),
+            serde_json::json!(inputs.ocr_coordinate_frames),
+        );
+    }
+
+    // Issue #66: `/PageLabels` — one display label per page, index-aligned
+    // with `pdf_metadata.page_structure`/`PageBoundary::page_number`.
+    // `PdfMetadata` is an alef-listed type (no new public fields), so this
+    // rides in `additional` instead. ~keep
+    if extract_pdf_metadata && let Some(labels) = inputs.pdf_page_labels {
+        doc.metadata
+            .additional
+            .insert(std::borrow::Cow::Borrowed("page_labels"), serde_json::json!(labels));
     }
 }

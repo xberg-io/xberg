@@ -4501,49 +4501,22 @@ impl PdfExtractor {
             ocr_layout_gate_audit,
         );
 
-        let extract_pdf_metadata = config
-            .pdf_options
-            .as_ref()
-            .is_none_or(|options| options.extract_metadata);
-        doc.metadata = Metadata {
-            output_format: pre_formatted_output,
-            image_preprocessing,
-            ocr_used: used_ocr,
-            ..Default::default()
-        };
-        apply_extracted_pdf_metadata(&mut doc.metadata, pdf_metadata, extract_pdf_metadata);
-        doc.metadata.additional.insert(
-            std::borrow::Cow::Borrowed("extraction_method"),
-            serde_json::Value::String(extraction_method.as_str().to_string()),
+        native_finalize::apply_document_metadata(
+            &mut doc,
+            config,
+            native_finalize::DocumentMetadataInputs {
+                pdf_metadata,
+                output_format: pre_formatted_output,
+                image_preprocessing,
+                used_ocr,
+                extraction_method,
+                pdf_page_labels,
+                #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+                ocr_backend_additional_metadata,
+                #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+                ocr_coordinate_frames,
+            },
         );
-        // #1575: restore the OCR-pipeline keys taken above, now that the fresh `Metadata`
-        // literal they would otherwise have been lost to already exists.
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        doc.metadata.additional.extend(ocr_backend_additional_metadata);
-
-        // GH#1645: one authoritative processed-raster coordinate frame per OCR page with
-        // public elements, so a multi-page consumer can normalize `OcrElement` geometry
-        // without relying on the single document-wide `ocr_processed_image_width/height`
-        // pair, which cannot describe differently sized, preprocessed, or rotated pages.
-        // Rides in `additional` rather than a new public binding type, same as the
-        // `page_labels` key below (issue #66).
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if !ocr_coordinate_frames.is_empty() {
-            doc.metadata.additional.insert(
-                std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAMES_METADATA_KEY),
-                serde_json::json!(ocr_coordinate_frames),
-            );
-        }
-
-        // Issue #66: `/PageLabels` — one display label per page, index-aligned
-        // with `pdf_metadata.page_structure`/`PageBoundary::page_number`.
-        // `PdfMetadata` is an alef-listed type (no new public fields), so this
-        // rides in `additional` instead. ~keep
-        if extract_pdf_metadata && let Some(labels) = pdf_page_labels {
-            doc.metadata
-                .additional
-                .insert(std::borrow::Cow::Borrowed("page_labels"), serde_json::json!(labels));
-        }
 
         // Issue #64: surface filled field values in rendered content for
         // output shapes (Markdown/HTML/Djot) that the plain-text widget
