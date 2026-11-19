@@ -4574,12 +4574,7 @@ impl PdfExtractor {
         )
         .await;
 
-        {
-            let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
-            for elem in &doc.elements {
-                budget.account_text(elem.text.len())?;
-            }
-        }
+        native_finalize::account_document_text(&doc, config)?;
 
         #[cfg(all(
             feature = "pdf",

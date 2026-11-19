@@ -543,3 +543,11 @@ pub(super) async fn inject_vlm_region_results(
         }
     }
 }
+
+pub(super) fn account_document_text(doc: &InternalDocument, config: &ExtractionConfig) -> crate::Result<()> {
+    let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
+    for elem in &doc.elements {
+        budget.account_text(elem.text.len())?;
+    }
+    Ok(())
+}
