@@ -97,6 +97,12 @@ pub struct CancellationToken {
 #[derive(Debug)]
 struct StopState {
     requested: AtomicBool,
+    // Counted by the PDF page loops and read by the native timeout wrapper; an OCR-only wasm build has
+    // neither. ~keep
+    #[cfg_attr(
+        not(any(test, feature = "pdf", all(feature = "tokio-runtime", not(target_arch = "wasm32")))),
+        allow(dead_code)
+    )]
     active_page_loops: AtomicUsize,
     first_unread_page: AtomicU32,
     deadline: OnceLock<Instant>,
