@@ -78,6 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+
+### Changed
+
+- **api:** Breaking. The server now refuses to start on a non-loopback host (the Docker images bind `0.0.0.0`) unless `XBERG_API_TOKEN` is set or `XBERG_ALLOW_UNAUTHENTICATED=true` opts out. CORS is denied unless `XBERG_CORS_ORIGINS` lists origins (`*` allows all), and `DELETE /cache/clear` and `POST /cache/warm` now count against the concurrency limit. Migration: set `XBERG_API_TOKEN` and send `Authorization: Bearer <token>`, or set `XBERG_ALLOW_UNAUTHENTICATED=true` behind a trusted proxy; add browser origins to `XBERG_CORS_ORIGINS`. (#3165)
+
 ## [1.4.2] - 2026-11-19
 
 ### Added
