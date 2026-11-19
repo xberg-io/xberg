@@ -4535,26 +4535,13 @@ impl PdfExtractor {
             crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
         }
 
-        // Record the layout gate's audit trail from whichever pass ran
-        // it. Compiled whenever `pdf` is on so `ocr_layout_gate_audit` keeps
-        // a reader in profiles without layout-detection (it is always
-        // `(None, None)` there and the fields stay `None`). ~keep
-        {
+        native_finalize::record_layout_gate_audit(
+            &mut pdf_metadata,
             #[cfg(feature = "layout-detection")]
-            #[allow(unused_mut)]
-            let (mut gated_pages, mut gate_reasons) = layout_gate_metadata(markdown_layout_gate_decisions.as_deref());
-            #[cfg(not(feature = "layout-detection"))]
-            #[allow(unused_mut)]
-            let (mut gated_pages, mut gate_reasons): OcrLayoutGateDecisions = (None, None);
+            markdown_layout_gate_decisions.as_deref(),
             #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-            if gated_pages.is_none() {
-                let (ocr_gated_pages, ocr_gate_reasons) = ocr_layout_gate_audit;
-                gated_pages = ocr_gated_pages;
-                gate_reasons = ocr_gate_reasons;
-            }
-            pdf_metadata.pdf_specific.layout_gated_pages = gated_pages;
-            pdf_metadata.pdf_specific.layout_gate_reasons = gate_reasons;
-        }
+            ocr_layout_gate_audit,
+        );
 
         let extract_pdf_metadata = config
             .pdf_options

@@ -1,8 +1,11 @@
 //! Stages that finish the `InternalDocument` built by `PdfExtractor::extract_core_native_with_layout_pages`.
 
+use super::OcrLayoutGateDecisions;
 use super::extraction;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 use super::insert_image_ocr_text_anchor;
+#[cfg(feature = "layout-detection")]
+use super::layout_gate_metadata;
 use crate::core::config::ExtractionConfig;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use crate::types::ExtractionMethod;
@@ -202,4 +205,31 @@ pub(super) fn inject_ocr_image_placeholders(doc: &mut InternalDocument, config: 
             }
         }
     }
+}
+
+// Record the layout gate's audit trail from whichever pass ran
+// it. Compiled whenever `pdf` is on so `ocr_layout_gate_audit` keeps
+// a reader in profiles without layout-detection (it is always
+// `(None, None)` there and the fields stay `None`). ~keep
+pub(super) fn record_layout_gate_audit(
+    pdf_metadata: &mut crate::pdf::metadata::PdfExtractionMetadata,
+    #[cfg(feature = "layout-detection")] markdown_layout_gate_decisions: Option<
+        &[crate::pdf::layout_gate::PageGateDecision],
+    >,
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))] ocr_layout_gate_audit: OcrLayoutGateDecisions,
+) {
+    #[cfg(feature = "layout-detection")]
+    #[allow(unused_mut)]
+    let (mut gated_pages, mut gate_reasons) = layout_gate_metadata(markdown_layout_gate_decisions);
+    #[cfg(not(feature = "layout-detection"))]
+    #[allow(unused_mut)]
+    let (mut gated_pages, mut gate_reasons): OcrLayoutGateDecisions = (None, None);
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    if gated_pages.is_none() {
+        let (ocr_gated_pages, ocr_gate_reasons) = ocr_layout_gate_audit;
+        gated_pages = ocr_gated_pages;
+        gate_reasons = ocr_gate_reasons;
+    }
+    pdf_metadata.pdf_specific.layout_gated_pages = gated_pages;
+    pdf_metadata.pdf_specific.layout_gate_reasons = gate_reasons;
 }
