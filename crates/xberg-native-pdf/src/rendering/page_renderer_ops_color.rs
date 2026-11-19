@@ -117,7 +117,7 @@ impl PageRenderer {
         st: &mut OpLoopState<'_>,
         env: OpEnv<'_>,
         components: &[f32],
-        name: &Option<Box<String>>,
+        name: Option<&str>,
     ) {
         let OpEnv { doc, .. } = env;
         let gs = st.gs_stack.current_mut();
@@ -130,7 +130,7 @@ impl PageRenderer {
         // active fill space is /Pattern; clear it otherwise so a
         // later device-colour scn cannot paint a stale pattern. ~keep
         gs.fill_pattern_name = if space_name == "Pattern" {
-            name.as_ref().map(|n| n.as_str().to_string())
+            name.map(str::to_string)
         } else {
             None
         };

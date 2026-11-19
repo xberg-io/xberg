@@ -1211,7 +1211,7 @@ impl PageRenderer {
                 Operator::SetFillColor { components } => self.op_set_fill_color(&mut st, env, components),
                 Operator::SetStrokeColor { components } => self.op_set_stroke_color(&mut st, env, components),
                 Operator::SetFillColorN { components, name } => {
-                    self.op_set_fill_color_n(&mut st, env, components, name)
+                    self.op_set_fill_color_n(&mut st, env, components, name.as_deref().map(String::as_str))
                 }
                 Operator::SetStrokeColorN { components, .. } => self.op_set_stroke_color_n(&mut st, env, components),
 

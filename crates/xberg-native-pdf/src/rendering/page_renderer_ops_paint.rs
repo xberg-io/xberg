@@ -222,7 +222,7 @@ impl PageRenderer {
                     clip,
                     gs: &gs_clone,
                     render_gs,
-                    fill_rule: fill_rule,
+                    fill_rule,
                     env,
                 };
 
