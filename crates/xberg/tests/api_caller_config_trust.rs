@@ -8,7 +8,7 @@ use axum::{
 };
 use serde_json::{Value, json};
 use tower::ServiceExt;
-use xberg::{ExtractionConfig, api::create_router};
+use xberg::ExtractionConfig;
 
 const CSS_FILE_REJECTION: &str = "Validation error: Caller extraction config may not set html_output.css_file";
 
@@ -133,4 +133,13 @@ async fn extract_with_empty_config_keeps_operator_settings() {
         content.contains("# Title"),
         "an empty caller config must keep the operator's Markdown output, got {content:?}"
     );
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router(config: ExtractionConfig) -> axum::Router {
+    xberg::api::create_router_with_auth(
+        config,
+        xberg::api::ApiSizeLimits::default(),
+        xberg::api::ApiAuth::new(None, false),
+    )
 }
