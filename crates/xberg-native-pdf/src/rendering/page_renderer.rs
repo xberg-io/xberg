@@ -51,6 +51,9 @@ mod image_budget;
 mod knockout;
 #[path = "knockout_resources.rs"]
 mod knockout_resources;
+#[path = "page_renderer_ops_state.rs"]
+mod page_renderer_ops_state;
+use page_renderer_ops_state::OpLoopState;
 #[path = "page_renderer_setup.rs"]
 mod page_renderer_setup;
 use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
@@ -1066,54 +1069,7 @@ impl PageRenderer {
         static EMPTY: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
         let empty_ref: &HashSet<String> = EMPTY.get_or_init(HashSet::new);
         let excluded_layers: &HashSet<String> = snapshot.as_deref().unwrap_or(empty_ref);
-        let mut gs_stack = GraphicsStateStack::new();
-
-        {
-            let gs = gs_stack.current_mut();
-            gs.fill_color_space = "DeviceGray".to_string();
-            gs.stroke_color_space = "DeviceGray".to_string();
-            gs.fill_color_rgb = (0.0, 0.0, 0.0);
-            gs.stroke_color_rgb = (0.0, 0.0, 0.0);
-        }
-
-        // Type 3 `d1` glyph description: seed the fill colour with the locked
-        // current colour so the stencil paints in it. Set the same fields the
-        // `rg` operator would (RGB, colour space, and components) so the
-        // colour-resolution pipeline reproduces it exactly. Colour operators
-        // inside the glyph are ignored below (ISO 32000-1:2008 §9.6.5.2). ~keep
-        if let Some((r, g, b)) = self.type3_fill_lock {
-            let gs = gs_stack.current_mut();
-            gs.fill_color_rgb = (r, g, b);
-            gs.fill_color_space = "DeviceRGB".to_string();
-            gs.fill_color_components.clear();
-            gs.fill_color_components.extend_from_slice(&[r, g, b]);
-        }
-
-        let mut in_text_object = false;
-        let mut current_path = PathBuilder::new();
-        let mut pending_clip: Option<(tiny_skia::Path, tiny_skia::FillRule)> = None;
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
-        // ~keep
-
-        // WS1.5b — text-clip accumulator (ISO 32000-1 §9.3.6 / Table 106,
-        // `Tr` modes 4–7). Text render modes ≥4 add the union of their glyph
-        // outlines to a "text clip path" that is intersected into the current
-        // clip at `ET`. We accumulate that union as opaque glyph coverage in a
-        // page-sized scratch pixmap's alpha channel (unioned across shows via
-        // SourceOver), then convert it to a `Mask` at `ET`. This stays
-        // allocation-free for the normal-text hot path: the scratch is created
-        // lazily only when a mode-≥4 show actually fires, and modes 0–3 never
-        // touch it. Complexity is inherently capped — coverage folds into a
-        // fixed-size buffer, so no unbounded path growth is possible. ~keep
-        let mut text_clip_accum: Option<Pixmap> = None;
-
-        // OCG layer exclusion tracking.
-        // `excluded_layer_depth` counts how many nested BDC/OC scopes we are
-        // inside that match an excluded layer. >0 means content is suppressed.
-        // `marked_content_depth` tracks total BDC/BMC nesting so EMC correctly
-        // decrements only when it pops an excluded-layer entry. ~keep
-        let mut excluded_layer_depth: u32 = 0;
-        let mut marked_content_is_excluded: Vec<bool> = Vec::new();
+        let gs_stack = self.seed_operator_graphics_state();
 
         // Per-`execute_operators` resolved ExtGState resource dictionary. PDF
         // content streams often invoke `gs<N>` thousands of times per page
@@ -1132,15 +1088,18 @@ impl PageRenderer {
         };
         let ext_g_states: Option<&std::collections::HashMap<String, Object>> =
             ext_g_state_resolved.as_ref().and_then(|o| o.as_dict());
-        // Cache parsed state per `dict_name` so the inner-dict resolve happens
-        // at most once per unique name in scope. ~keep
-        let mut ext_g_state_cache: std::collections::HashMap<String, ParsedExtGState> =
-            std::collections::HashMap::new();
+        let mut st = OpLoopState::new(gs_stack, excluded_layers, ext_g_states);
         for op in operators {
             if self.image_selection.is_some_and(|(_, include)| include) {
                 if knockout::is_path_paint(op) {
-                    apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                    current_path = PathBuilder::new();
+                    apply_pending_clip(
+                        &mut st.pending_clip,
+                        &mut st.clip_stack,
+                        pixmap,
+                        base_transform,
+                        &st.gs_stack,
+                    );
+                    st.current_path = PathBuilder::new();
                     continue;
                 }
                 if matches!(op, Operator::PaintShading { .. }) {
@@ -1158,7 +1117,7 @@ impl PageRenderer {
             if let Some(group) = knockout.as_deref_mut() {
                 group.before_operator(self, pixmap, op);
             }
-            let _raster_workspace = self.reserve_operator_workspace(pixmap, gs_stack.current(), op)?;
+            let _raster_workspace = self.reserve_operator_workspace(pixmap, st.gs_stack.current(), op)?;
             #[cfg(test)]
             if is_paint_operator(op) {
                 self.paint_operator_calls += 1;
@@ -1171,27 +1130,27 @@ impl PageRenderer {
             }
             match op {
                 Operator::SaveState => {
-                    gs_stack.save();
+                    st.gs_stack.save();
                     // Clone current clip for the new graphics state level
                     // This allows the current level to modify its clip without affecting parents
                     // ~keep
-                    let current_clip = clip_stack.last().cloned().flatten();
-                    clip_stack.push(current_clip);
+                    let current_clip = st.clip_stack.last().cloned().flatten();
+                    st.clip_stack.push(current_clip);
                     tracing::trace!(
                         "q (SaveState), depth={}, clip_stack depth={}",
-                        gs_stack.depth(),
-                        clip_stack.len()
+                        st.gs_stack.depth(),
+                        st.clip_stack.len()
                     );
                 }
                 Operator::RestoreState => {
-                    gs_stack.restore();
-                    if clip_stack.len() > 1 {
-                        clip_stack.pop();
+                    st.gs_stack.restore();
+                    if st.clip_stack.len() > 1 {
+                        st.clip_stack.pop();
                     }
                     tracing::trace!(
                         "Q (RestoreState), depth={}, clip_stack depth={}",
-                        gs_stack.depth(),
-                        clip_stack.len()
+                        st.gs_stack.depth(),
+                        st.clip_stack.len()
                     );
                 }
                 Operator::Cm { a, b, c, d, e, f } => {
@@ -1203,7 +1162,7 @@ impl PageRenderer {
                         e: *e,
                         f: *f,
                     };
-                    let current = gs_stack.current_mut();
+                    let current = st.gs_stack.current_mut();
                     // PDF spec ISO 32000-1:2008 §8.3.4: cm concatenates as M_cm × CTM ~keep
                     current.ctm = matrix.multiply(&current.ctm);
                     tracing::trace!(
@@ -1219,26 +1178,26 @@ impl PageRenderer {
                 }
 
                 Operator::SetFillRgb { r, g, b } => {
-                    color_operators::set_fill_rgb(gs_stack.current_mut(), *r, *g, *b);
+                    color_operators::set_fill_rgb(st.gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetStrokeRgb { r, g, b } => {
-                    color_operators::set_stroke_rgb(gs_stack.current_mut(), *r, *g, *b);
+                    color_operators::set_stroke_rgb(st.gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetFillGray { gray } => {
-                    color_operators::set_fill_gray(gs_stack.current_mut(), *gray);
+                    color_operators::set_fill_gray(st.gs_stack.current_mut(), *gray);
                 }
                 Operator::SetStrokeGray { gray } => {
-                    color_operators::set_stroke_gray(gs_stack.current_mut(), *gray);
+                    color_operators::set_stroke_gray(st.gs_stack.current_mut(), *gray);
                 }
                 Operator::SetFillCmyk { c, m, y, k } => {
-                    color_operators::set_fill_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
+                    color_operators::set_fill_cmyk(st.gs_stack.current_mut(), *c, *m, *y, *k);
                 }
                 Operator::SetStrokeCmyk { c, m, y, k } => {
-                    color_operators::set_stroke_cmyk(gs_stack.current_mut(), *c, *m, *y, *k);
+                    color_operators::set_stroke_cmyk(st.gs_stack.current_mut(), *c, *m, *y, *k);
                 }
 
                 Operator::SetFillColorSpace { name } => color_operators::set_fill_color_space(
-                    gs_stack.current_mut(),
+                    st.gs_stack.current_mut(),
                     name,
                     color_operators::ColorSpaceContext {
                         spaces: &self.color_spaces,
@@ -1247,7 +1206,7 @@ impl PageRenderer {
                     },
                 ),
                 Operator::SetStrokeColorSpace { name } => color_operators::set_stroke_color_space(
-                    gs_stack.current_mut(),
+                    st.gs_stack.current_mut(),
                     name,
                     color_operators::ColorSpaceContext {
                         spaces: &self.color_spaces,
@@ -1256,7 +1215,7 @@ impl PageRenderer {
                     },
                 ),
                 Operator::SetFillColor { components } => {
-                    let gs = gs_stack.current_mut();
+                    let gs = st.gs_stack.current_mut();
                     let space_name = gs.fill_color_space.clone();
                     let resolved_space = self.color_spaces.get(&space_name);
                     gs.fill_color_components.clear();
@@ -1321,7 +1280,7 @@ impl PageRenderer {
                     );
                 }
                 Operator::SetStrokeColor { components } => {
-                    let gs = gs_stack.current_mut();
+                    let gs = st.gs_stack.current_mut();
                     let space_name = gs.stroke_color_space.clone();
                     let resolved_space = self.color_spaces.get(&space_name);
                     gs.stroke_color_components.clear();
@@ -1362,7 +1321,7 @@ impl PageRenderer {
                     );
                 }
                 Operator::SetFillColorN { components, name } => {
-                    let gs = gs_stack.current_mut();
+                    let gs = st.gs_stack.current_mut();
                     let space_name = gs.fill_color_space.clone();
                     let resolved_space = self.color_spaces.get(&space_name);
                     gs.fill_color_components.clear();
@@ -1421,7 +1380,7 @@ impl PageRenderer {
                     );
                 }
                 Operator::SetStrokeColorN { components, .. } => {
-                    let gs = gs_stack.current_mut();
+                    let gs = st.gs_stack.current_mut();
                     let space_name = gs.stroke_color_space.clone();
                     let resolved_space = self.color_spaces.get(&space_name);
                     gs.stroke_color_components.clear();
@@ -1473,19 +1432,19 @@ impl PageRenderer {
                 }
 
                 Operator::SetLineWidth { width } => {
-                    gs_stack.current_mut().line_width = *width;
+                    st.gs_stack.current_mut().line_width = *width;
                 }
                 Operator::SetLineCap { cap_style } => {
-                    gs_stack.current_mut().line_cap = *cap_style;
+                    st.gs_stack.current_mut().line_cap = *cap_style;
                 }
                 Operator::SetLineJoin { join_style } => {
-                    gs_stack.current_mut().line_join = *join_style;
+                    st.gs_stack.current_mut().line_join = *join_style;
                 }
                 Operator::SetMiterLimit { limit } => {
-                    gs_stack.current_mut().miter_limit = *limit;
+                    st.gs_stack.current_mut().miter_limit = *limit;
                 }
                 Operator::SetDash { array, phase } => {
-                    gs_stack.current_mut().dash_pattern = (array.clone(), *phase);
+                    st.gs_stack.current_mut().dash_pattern = (array.clone(), *phase);
                 }
                 Operator::SetRenderingIntent { intent } => {
                     // ISO 32000-1:2008 §10.7.3 `/RI` operator. Updates
@@ -1500,7 +1459,7 @@ impl PageRenderer {
                     // field would stay at its default forever; the
                     // CMYK transform cache would collapse every
                     // intent's paint into a single shared entry. ~keep
-                    gs_stack.current_mut().rendering_intent = intent.clone();
+                    st.gs_stack.current_mut().rendering_intent = intent.clone();
                 }
 
                 Operator::MoveTo { .. }
@@ -1510,20 +1469,26 @@ impl PageRenderer {
                 | Operator::CurveToY { .. }
                 | Operator::Rectangle { .. }
                 | Operator::ClosePath => {
-                    let handled = path_operators::construct(&mut current_path, op);
+                    let handled = path_operators::construct(&mut st.current_path, op);
                     debug_assert!(handled, "only path construction operators are dispatched here");
                 }
 
                 Operator::Stroke | Operator::CloseStroke => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
+                    if st.excluded_layer_depth == 0 {
+                        apply_pending_clip(
+                            &mut st.pending_clip,
+                            &mut st.clip_stack,
+                            pixmap,
+                            base_transform,
+                            &st.gs_stack,
+                        );
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                         // ISO 32000-1 §8.5.3.2 Table 60: `s` is exactly `h S`. ~keep
                         if matches!(op, Operator::CloseStroke) {
-                            current_path.close();
+                            st.current_path.close();
                         }
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
+                        if let Some(path) = st.current_path.finish() {
+                            let gs_clone = st.gs_stack.current().clone();
                             // Stroke side mirrors the path-fill routing —
                             // route through the pipeline so Type 4 Separation
                             // strokes resolve correctly. Line width / cap /
@@ -1564,16 +1529,22 @@ impl PageRenderer {
                             )?;
                         }
                     } else {
-                        let _ = current_path.finish();
+                        let _ = st.current_path.finish();
                     }
-                    current_path = PathBuilder::new();
+                    st.current_path = PathBuilder::new();
                 }
                 Operator::Fill => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
+                    if st.excluded_layer_depth == 0 {
+                        apply_pending_clip(
+                            &mut st.pending_clip,
+                            &mut st.clip_stack,
+                            pixmap,
+                            base_transform,
+                            &st.gs_stack,
+                        );
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+                        if let Some(path) = st.current_path.finish() {
+                            let gs_clone = st.gs_stack.current().clone();
                             // Resolve the active fill colour through the
                             // pipeline (PostScript Type 4 tint transforms,
                             // ICCBased N=4, etc.) and splice the resulting
@@ -1648,14 +1619,20 @@ impl PageRenderer {
                             }
                         }
                     } else {
-                        let _ = current_path.finish();
+                        let _ = st.current_path.finish();
                     }
-                    current_path = PathBuilder::new();
+                    st.current_path = PathBuilder::new();
                 }
                 Operator::FillStroke | Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
+                    if st.excluded_layer_depth == 0 {
+                        apply_pending_clip(
+                            &mut st.pending_clip,
+                            &mut st.clip_stack,
+                            pixmap,
+                            base_transform,
+                            &st.gs_stack,
+                        );
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                         // ISO 32000-1 §8.5.3.1 Table 60: `b` and `b*` close
                         // the path before fill+stroke. Neither parser
                         // decomposes them, so the dispatcher must perform the
@@ -1664,10 +1641,10 @@ impl PageRenderer {
                         // `s` via `Operator::CloseStroke`: only the byte-level
                         // parser decomposes it, the object parser does not. ~keep
                         if matches!(op, Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd) {
-                            current_path.close();
+                            st.current_path.close();
                         }
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
+                        if let Some(path) = st.current_path.finish() {
+                            let gs_clone = st.gs_stack.current().clone();
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
                             self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
                             let fill_rule = if matches!(op, Operator::CloseFillStrokeEvenOdd) {
@@ -1790,16 +1767,22 @@ impl PageRenderer {
                             )?;
                         }
                     } else {
-                        let _ = current_path.finish();
+                        let _ = st.current_path.finish();
                     }
-                    current_path = PathBuilder::new();
+                    st.current_path = PathBuilder::new();
                 }
                 Operator::FillEvenOdd | Operator::FillStrokeEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
+                    if st.excluded_layer_depth == 0 {
+                        apply_pending_clip(
+                            &mut st.pending_clip,
+                            &mut st.clip_stack,
+                            pixmap,
+                            base_transform,
+                            &st.gs_stack,
+                        );
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+                        if let Some(path) = st.current_path.finish() {
+                            let gs_clone = st.gs_stack.current().clone();
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
                             self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
                             // One unified resolve covers both fill and the
@@ -1903,9 +1886,9 @@ impl PageRenderer {
                             }
                         }
                     } else {
-                        let _ = current_path.finish();
+                        let _ = st.current_path.finish();
                     }
-                    current_path = PathBuilder::new();
+                    st.current_path = PathBuilder::new();
                 }
 
                 // Clipping — suppressed inside an excluded OCG scope. Per PDF
@@ -1914,41 +1897,41 @@ impl PageRenderer {
                 // is not bracketed by `q/Q` would silently restrict subsequent
                 // visible content. ~keep
                 Operator::ClipNonZero => {
-                    if excluded_layer_depth == 0 {
-                        if let Some(path) = current_path.clone().finish() {
-                            pending_clip = Some((path, tiny_skia::FillRule::Winding));
+                    if st.excluded_layer_depth == 0 {
+                        if let Some(path) = st.current_path.clone().finish() {
+                            st.pending_clip = Some((path, tiny_skia::FillRule::Winding));
                         }
                     }
                 }
                 Operator::ClipEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        if let Some(path) = current_path.clone().finish() {
-                            pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
+                    if st.excluded_layer_depth == 0 {
+                        if let Some(path) = st.current_path.clone().finish() {
+                            st.pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
                         }
                     }
                 }
 
                 Operator::BeginText => {
-                    in_text_object = true;
+                    st.in_text_object = true;
                     // Start each text object with a clean text-clip path
                     // (§9.4.1: the text clip path is reset at BT and applied
                     // at ET). Any leftover from a malformed/unterminated prior
                     // block is discarded here. ~keep
-                    text_clip_accum = None;
-                    let gs = gs_stack.current_mut();
+                    st.text_clip_accum = None;
+                    let gs = st.gs_stack.current_mut();
                     gs.text_matrix = Matrix::identity();
                     gs.text_line_matrix = Matrix::identity();
                     tracing::trace!("BT (BeginText)");
                 }
                 Operator::EndText => {
-                    in_text_object = false;
+                    st.in_text_object = false;
                     // WS1.5b — apply the accumulated text clip path (Tr 4–7).
                     // If no clip-mode text was shown the accumulator is None and
                     // ET behaves exactly as before. An all-transparent
                     // accumulator (e.g. every glyph was whitespace or lacked an
                     // outline) is treated as degenerate and leaves the clip
                     // unchanged rather than collapsing it to empty. ~keep
-                    if let Some(scratch) = text_clip_accum.take() {
+                    if let Some(scratch) = st.text_clip_accum.take() {
                         let has_coverage = scratch.data().as_chunks::<4>().0.iter().any(|px| px[3] != 0);
                         if has_coverage {
                             let text_mask = tiny_skia::Mask::from_pixmap(scratch.as_ref(), tiny_skia::MaskType::Alpha);
@@ -1956,7 +1939,7 @@ impl PageRenderer {
                             // the current scope's clip so subsequent content is
                             // confined to the text shape *within* the existing
                             // clip — never widened past it. ~keep
-                            if let Some(slot) = clip_stack.last_mut() {
+                            if let Some(slot) = st.clip_stack.last_mut() {
                                 let existing = slot.take();
                                 *slot = Some(intersect_with_inherited(text_mask, existing.as_ref()));
                             }
@@ -1965,36 +1948,36 @@ impl PageRenderer {
                 }
 
                 Operator::Tc { char_space } => {
-                    gs_stack.current_mut().char_space = *char_space;
+                    st.gs_stack.current_mut().char_space = *char_space;
                 }
                 Operator::Tw { word_space } => {
-                    gs_stack.current_mut().word_space = *word_space;
+                    st.gs_stack.current_mut().word_space = *word_space;
                 }
                 Operator::Tz { scale } => {
-                    gs_stack.current_mut().horizontal_scaling = *scale;
+                    st.gs_stack.current_mut().horizontal_scaling = *scale;
                 }
                 Operator::TL { leading } => {
-                    gs_stack.current_mut().leading = *leading;
+                    st.gs_stack.current_mut().leading = *leading;
                 }
                 Operator::Ts { rise } => {
-                    gs_stack.current_mut().text_rise = *rise;
+                    st.gs_stack.current_mut().text_rise = *rise;
                 }
                 Operator::Tr { render } => {
-                    gs_stack.current_mut().render_mode = *render;
+                    st.gs_stack.current_mut().render_mode = *render;
                 }
 
                 // Text showing — glyphs suppressed inside an excluded OCG layer,
                 // but the text matrix still advances so that subsequent visible
                 // text inside the same BT/ET paints at the correct X position. ~keep
                 Operator::Tj { text } => {
-                    if in_text_object {
+                    if st.in_text_object {
                         // Type 3 fonts have no outline program; each glyph is a
                         // CharProcs content stream painted under FontMatrix ×
                         // text-space × CTM (ISO 32000-1 §9.6.5). It is handled
                         // here because it re-enters the content-stream renderer. ~keep
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
+                        if self.current_font_is_type3(st.gs_stack.current()) {
+                            let advance = if st.excluded_layer_depth == 0 {
+                                let gs_snap = st.gs_stack.current().clone();
                                 self.render_type3_text(
                                     pixmap,
                                     text,
@@ -2005,21 +1988,22 @@ impl PageRenderer {
                                     resources,
                                 )?
                             } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
+                                self.text_rasterizer
+                                    .measure_text(text, st.gs_stack.current(), &self.fonts)
                             };
-                            gs_stack.current_mut().advance_text_matrix(advance);
+                            st.gs_stack.current_mut().advance_text_matrix(advance);
                             continue;
                         }
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let gs = st.gs_stack.current();
+                        let advance = if st.excluded_layer_depth == 0 {
+                            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                             let transform = combine_transforms(base_transform, &gs.ctm);
                             // WS1.5b — modes 4–7 add this show's glyph
                             // outlines to the text clip path (applied at ET).
                             // Gated here so modes 0–3 pay nothing. ~keep
                             if gs.render_mode >= 4 {
                                 self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
+                                    &mut st.text_clip_accum,
                                     pixmap.width(),
                                     pixmap.height(),
                                     text,
@@ -2058,21 +2042,21 @@ impl PageRenderer {
                         // active writing axis. advance_text_matrix routes it
                         // to x (WMode 0) or y (WMode 1), keeping the axis
                         // swap in exactly one place. ~keep
-                        gs_stack.current_mut().advance_text_matrix(advance);
+                        st.gs_stack.current_mut().advance_text_matrix(advance);
                     }
                 }
                 Operator::Quote { text } => {
-                    if in_text_object {
+                    if st.in_text_object {
                         // Quote (') is T* followed by Tj — always advance line ~keep
-                        let gs_mut = gs_stack.current_mut();
+                        let gs_mut = st.gs_stack.current_mut();
                         let leading = gs_mut.leading;
                         let translation = Matrix::translation(0.0, -leading);
                         gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
                         gs_mut.text_matrix = gs_mut.text_line_matrix;
 
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
+                        if self.current_font_is_type3(st.gs_stack.current()) {
+                            let advance = if st.excluded_layer_depth == 0 {
+                                let gs_snap = st.gs_stack.current().clone();
                                 self.render_type3_text(
                                     pixmap,
                                     text,
@@ -2083,15 +2067,16 @@ impl PageRenderer {
                                     resources,
                                 )?
                             } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
+                                self.text_rasterizer
+                                    .measure_text(text, st.gs_stack.current(), &self.fonts)
                             };
-                            gs_stack.current_mut().advance_text_matrix(advance);
+                            st.gs_stack.current_mut().advance_text_matrix(advance);
                             continue;
                         }
 
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let gs = st.gs_stack.current();
+                        let advance = if st.excluded_layer_depth == 0 {
+                            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                             let transform = combine_transforms(base_transform, &gs.ctm);
                             tracing::trace!(
                                 "' (Quote): rendering text at Tm=[{}, {}, {}, {}, {}, {}]",
@@ -2104,7 +2089,7 @@ impl PageRenderer {
                             );
                             if gs.render_mode >= 4 {
                                 self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
+                                    &mut st.text_clip_accum,
                                     pixmap.width(),
                                     pixmap.height(),
                                     text,
@@ -2135,14 +2120,14 @@ impl PageRenderer {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)
                         };
 
-                        gs_stack.current_mut().advance_text_matrix(advance);
+                        st.gs_stack.current_mut().advance_text_matrix(advance);
                     }
                 }
                 Operator::TJ { array } => {
-                    if in_text_object {
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
+                    if st.in_text_object {
+                        if self.current_font_is_type3(st.gs_stack.current()) {
+                            let advance = if st.excluded_layer_depth == 0 {
+                                let gs_snap = st.gs_stack.current().clone();
                                 self.render_type3_tj_array(
                                     pixmap,
                                     array,
@@ -2154,14 +2139,14 @@ impl PageRenderer {
                                 )?
                             } else {
                                 self.text_rasterizer
-                                    .measure_tj_array(array, gs_stack.current(), &self.fonts)
+                                    .measure_tj_array(array, st.gs_stack.current(), &self.fonts)
                             };
-                            gs_stack.current_mut().advance_text_matrix(advance);
+                            st.gs_stack.current_mut().advance_text_matrix(advance);
                             continue;
                         }
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let gs = st.gs_stack.current();
+                        let advance = if st.excluded_layer_depth == 0 {
+                            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                             let transform = combine_transforms(base_transform, &gs.ctm);
                             tracing::trace!(
                                 "TJ: rendering array at Tm=[{}, {}, {}, {}, {}, {}]",
@@ -2174,7 +2159,7 @@ impl PageRenderer {
                             );
                             if gs.render_mode >= 4 {
                                 self.accumulate_text_clip_tj_array(
-                                    &mut text_clip_accum,
+                                    &mut st.text_clip_accum,
                                     pixmap.width(),
                                     pixmap.height(),
                                     array,
@@ -2208,7 +2193,7 @@ impl PageRenderer {
                             self.text_rasterizer.measure_tj_array(array, gs, &self.fonts)
                         };
 
-                        gs_stack.current_mut().advance_text_matrix(advance);
+                        st.gs_stack.current_mut().advance_text_matrix(advance);
                     }
                 }
                 Operator::DoubleQuote {
@@ -2216,9 +2201,9 @@ impl PageRenderer {
                     char_space,
                     text,
                 } => {
-                    if in_text_object {
+                    if st.in_text_object {
                         // Double Quote (") always updates state ~keep
-                        let gs_mut = gs_stack.current_mut();
+                        let gs_mut = st.gs_stack.current_mut();
                         gs_mut.word_space = *word_space;
                         gs_mut.char_space = *char_space;
 
@@ -2227,9 +2212,9 @@ impl PageRenderer {
                         gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
                         gs_mut.text_matrix = gs_mut.text_line_matrix;
 
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
+                        if self.current_font_is_type3(st.gs_stack.current()) {
+                            let advance = if st.excluded_layer_depth == 0 {
+                                let gs_snap = st.gs_stack.current().clone();
                                 self.render_type3_text(
                                     pixmap,
                                     text,
@@ -2240,15 +2225,16 @@ impl PageRenderer {
                                     resources,
                                 )?
                             } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
+                                self.text_rasterizer
+                                    .measure_text(text, st.gs_stack.current(), &self.fonts)
                             };
-                            gs_stack.current_mut().advance_text_matrix(advance);
+                            st.gs_stack.current_mut().advance_text_matrix(advance);
                             continue;
                         }
 
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let gs = st.gs_stack.current();
+                        let advance = if st.excluded_layer_depth == 0 {
+                            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                             let transform = combine_transforms(base_transform, &gs.ctm);
                             tracing::trace!(
                                 "\" (DoubleQuote): rendering text at Tm=[{}, {}, {}, {}, {}, {}]",
@@ -2261,7 +2247,7 @@ impl PageRenderer {
                             );
                             if gs.render_mode >= 4 {
                                 self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
+                                    &mut st.text_clip_accum,
                                     pixmap.width(),
                                     pixmap.height(),
                                     text,
@@ -2293,15 +2279,15 @@ impl PageRenderer {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)
                         };
 
-                        gs_stack.current_mut().advance_text_matrix(advance);
+                        st.gs_stack.current_mut().advance_text_matrix(advance);
                     }
                 }
 
                 Operator::Do { name } => {
-                    if excluded_layer_depth == 0 {
-                        let gs_clone = gs_stack.current().clone();
+                    if st.excluded_layer_depth == 0 {
+                        let gs_clone = st.gs_stack.current().clone();
                         let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                         tracing::trace!("Do: rendering XObject '{}'", name);
                         // §11.4.7 + §11.7.4 + §11.4 cycle: the entire
                         // XObject paint (Form or Image) sits inside the
@@ -2436,10 +2422,10 @@ impl PageRenderer {
                 // synthetic `Object::Stream`, and paint it through the same
                 // `render_image`/`render_image_mask` used for `Do` images. ~keep
                 Operator::InlineImage { dict, data } => {
-                    if excluded_layer_depth == 0 {
-                        let gs_clone = gs_stack.current().clone();
+                    if st.excluded_layer_depth == 0 {
+                        let gs_clone = st.gs_stack.current().clone();
                         let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                         let expanded = crate::extractors::images::expand_inline_image_dict((**dict).clone());
                         let is_image_mask = expanded
                             .get("ImageMask")
@@ -2482,8 +2468,8 @@ impl PageRenderer {
                 }
 
                 Operator::Td { tx, ty } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
+                    if st.in_text_object {
+                        let gs = st.gs_stack.current_mut();
                         let translation = Matrix::translation(*tx, *ty);
                         gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
                         gs.text_matrix = gs.text_line_matrix;
@@ -2491,8 +2477,8 @@ impl PageRenderer {
                     }
                 }
                 Operator::TD { tx, ty } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
+                    if st.in_text_object {
+                        let gs = st.gs_stack.current_mut();
                         gs.leading = -(*ty);
                         let translation = Matrix::translation(*tx, *ty);
                         gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
@@ -2501,8 +2487,8 @@ impl PageRenderer {
                     }
                 }
                 Operator::Tm { a, b, c, d, e, f } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
+                    if st.in_text_object {
+                        let gs = st.gs_stack.current_mut();
                         gs.text_matrix = Matrix {
                             a: *a,
                             b: *b,
@@ -2525,8 +2511,8 @@ impl PageRenderer {
                     }
                 }
                 Operator::TStar => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
+                    if st.in_text_object {
+                        let gs = st.gs_stack.current_mut();
                         let leading = gs.leading;
                         let translation = Matrix::translation(0.0, -leading);
                         gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
@@ -2540,7 +2526,7 @@ impl PageRenderer {
                     // primitive read instead of dereferencing the FontInfo
                     // through the cache for every glyph. ~keep
                     let wmode = self.fonts.get(font).map(|f| f.wmode).unwrap_or(0);
-                    let gs = gs_stack.current_mut();
+                    let gs = st.gs_stack.current_mut();
                     gs.font_name = Some(font.clone());
                     gs.font_size = *size;
                     gs.text_wmode = wmode;
@@ -2550,15 +2536,15 @@ impl PageRenderer {
                     // Fast path: resource dict is already resolved (see top of
                     // this function), so the per-`gs` cost is one HashMap
                     // lookup + one resolve of the small inner state dict. ~keep
-                    let entry = ext_g_state_cache.entry(dict_name.clone()).or_insert_with(|| {
-                        if let Some(states) = ext_g_states {
+                    let entry = st.ext_g_state_cache.entry(dict_name.clone()).or_insert_with(|| {
+                        if let Some(states) = st.ext_g_states {
                             if let Some(state_obj) = states.get(dict_name) {
                                 return parse_ext_g_state_inner(state_obj, doc).unwrap_or_default();
                             }
                         }
                         ParsedExtGState::default()
                     });
-                    entry.apply(gs_stack.current_mut());
+                    entry.apply(st.gs_stack.current_mut());
                 }
 
                 // EndPath (n operator): discard current path without painting,
@@ -2567,17 +2553,23 @@ impl PageRenderer {
                 // Suppress the clip application inside an excluded OCG scope so
                 // the clip doesn't leak past EMC into visible content. ~keep
                 Operator::EndPath => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
+                    if st.excluded_layer_depth == 0 {
+                        apply_pending_clip(
+                            &mut st.pending_clip,
+                            &mut st.clip_stack,
+                            pixmap,
+                            base_transform,
+                            &st.gs_stack,
+                        );
                     } else {
-                        let _ = pending_clip.take();
+                        let _ = st.pending_clip.take();
                     }
-                    current_path = PathBuilder::new();
+                    st.current_path = PathBuilder::new();
                 }
 
                 Operator::PaintShading { name } => {
-                    if excluded_layer_depth == 0 {
-                        let mut gs_clone = gs_stack.current().clone();
+                    if st.excluded_layer_depth == 0 {
+                        let mut gs_clone = st.gs_stack.current().clone();
                         // §8.7.4 + §11.7.3: when the shading's
                         // /ColorSpace is /Separation or non-process
                         // /DeviceN, surface the ink-name list (paired
@@ -2598,7 +2590,7 @@ impl PageRenderer {
                             }
                         }
                         let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
+                        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
                         // §11.4.7 + §11.7.4 + §11.4 cycle: shading is
                         // a fill-side paint, so the snapshot/apply
                         // cadence mirrors the path-Fill arm. The
@@ -2645,7 +2637,7 @@ impl PageRenderer {
                 }
 
                 Operator::BeginMarkedContent { .. } => {
-                    marked_content_is_excluded.push(false);
+                    st.marked_content_is_excluded.push(false);
                 }
                 Operator::BeginMarkedContentDict { tag, properties } => {
                     let mut is_excluded = false;
@@ -2659,18 +2651,18 @@ impl PageRenderer {
                             properties,
                             Some(resources),
                             Some(doc),
-                            excluded_layers,
+                            st.excluded_layers,
                         );
                     }
                     if is_excluded {
-                        excluded_layer_depth += 1;
+                        st.excluded_layer_depth += 1;
                     }
-                    marked_content_is_excluded.push(is_excluded);
+                    st.marked_content_is_excluded.push(is_excluded);
                 }
                 Operator::EndMarkedContent => {
-                    if let Some(was_excluded) = marked_content_is_excluded.pop() {
-                        if was_excluded && excluded_layer_depth > 0 {
-                            excluded_layer_depth -= 1;
+                    if let Some(was_excluded) = st.marked_content_is_excluded.pop() {
+                        if was_excluded && st.excluded_layer_depth > 0 {
+                            st.excluded_layer_depth -= 1;
                         }
                     }
                 }
