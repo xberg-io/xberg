@@ -4476,64 +4476,22 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         tracing::debug!(?document_origin, document_is_structured, "selected PDF document origin");
 
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        crate::core::diagnostics::dedup_extend_warnings(
-            &mut doc.processing_warnings,
-            std::mem::take(&mut ocr_fallback_warnings),
+        native_finalize::merge_document_warnings(
+            &mut doc,
+            config,
+            native_finalize::DocumentWarningSources {
+                lost_glyphs,
+                pdf_extraction_warnings: &mut pdf_extraction_warnings,
+                #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+                ocr_fallback_warnings: &mut ocr_fallback_warnings,
+                #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+                ocr_page_failures: &mut ocr_page_failures,
+                #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                markdown_layout_warning,
+                #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                markdown_layout_glyph_drop_warnings,
+            },
         );
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        doc.ocr_page_failures.append(&mut ocr_page_failures);
-        if let Some(warning) = unmapped_glyphs::lost_glyph_warning(lost_glyphs, config) {
-            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
-        }
-
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        crate::core::diagnostics::dedup_extend_warnings(
-            &mut doc.processing_warnings,
-            std::mem::take(&mut pdf_extraction_warnings),
-        );
-        #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
-        doc.processing_warnings.append(&mut pdf_extraction_warnings);
-
-        // #340: drain any xberg_native_pdf glyph-drop warnings captured while this
-        // document's pages were rendered by *this* task (OCR rasterization
-        // and any other call routed through `render_page_capturing_glyph_drops`
-        // in `crate::pdf::render` that runs inline on it;
-        // `with_task_render_warnings` keeps them with the task). The drain is unconditionally cheap and correct even when
-        // nothing was ever captured: `install_pdf_render_diagnostics` is
-        // opt-in and only an embedding application calls it (a library must
-        // not seize the process-global `log` backend on its own — see
-        // `pdf::render` for why), so this buffer stays empty for every caller
-        // that has not opted in and this loop is a no-op `Vec::is_empty`
-        // check. Deduped because a multi-page document can hit the identical
-        // xberg_native_pdf cause on many pages.
-        //
-        // Layout-detection rasterization runs inside `tokio::task::spawn_blocking`
-        // on a different OS thread, so this drain never sees those warnings —
-        // `layout_runner::run_layout_for_pdf_pages_async` drains them itself
-        // from inside that closure and threads them back through its return
-        // value instead (#353); they are merged below via
-        // `markdown_layout_glyph_drop_warnings` (markdown path) and were
-        // already folded into `ocr_fallback_warnings` above (OCR path). ~keep
-        for pdf_render_warning in crate::pdf::render::take_xberg_native_pdf_render_warnings() {
-            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, pdf_render_warning);
-        }
-
-        // Surface a hard layout-inference failure (e.g. CoreML kernel error) so
-        // degraded no-layout output is never silent to the caller (#1344). Runs
-        // whenever layout-detection is on, independent of OCR.
-        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        if let Some(warning) = markdown_layout_warning {
-            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
-        }
-
-        // #353: merge `xberg_native_pdf` glyph-drop warnings captured while the
-        // markdown layout pass rendered its pages off-thread inside
-        // `spawn_blocking` (see the drain comment above).
-        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        for warning in markdown_layout_glyph_drop_warnings {
-            crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
-        }
 
         native_finalize::record_layout_gate_audit(
             &mut pdf_metadata,
