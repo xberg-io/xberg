@@ -3283,18 +3283,7 @@ impl PdfExtractor {
             );
         }
 
-        // The routing gates above have read the lost-glyph markers. Pages that stay native must not
-        // show them, so remove them from every native structure before any later step reads it.
-        // The text itself, which carries byte offsets, follows once its page boundaries are known. ~keep
-        for page in page_contents.iter_mut().flatten() {
-            unmapped_glyphs::strip_page(page);
-        }
-        for table in &mut tables {
-            unmapped_glyphs::strip_table(table);
-        }
-        if let Some(native_doc) = pre_rendered_doc.as_mut() {
-            unmapped_glyphs::strip_document(native_doc);
-        }
+        native_finalize::strip_native_lost_glyphs(&mut page_contents, &mut tables, &mut pre_rendered_doc);
 
         #[cfg(all(
             feature = "pdf",
