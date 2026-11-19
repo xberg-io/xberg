@@ -10,6 +10,9 @@ use super::layout_gate_metadata;
 #[cfg(all(feature = "liter-llm", feature = "layout-detection"))]
 use super::region_vlm;
 use super::unmapped_glyphs;
+use super::{assign_hierarchy_to_pages, reconcile_native_page_tables};
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use super::{attach_ocr_text_page_marks, clear_blank_flag_of_unread_pages};
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 use super::{recognize_pdf_formula_page_inputs, select_formula_page_inputs};
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -569,4 +572,35 @@ pub(super) fn strip_native_lost_glyphs(
     if let Some(native_doc) = pre_rendered_doc.as_mut() {
         unmapped_glyphs::strip_document(native_doc);
     }
+}
+
+pub(super) fn attach_prebuilt_pages(
+    doc: &mut InternalDocument,
+    mut final_pages: Option<Vec<PageContent>>,
+    pdf_page_coordinate_frames: Vec<PdfPageCoordinateFrame>,
+    extraction_method: ExtractionMethod,
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))] ocr_text_pages: Vec<u32>,
+) {
+    if let Some(ref mut pages) = final_pages {
+        assign_hierarchy_to_pages(pages, doc);
+    }
+
+    if let Some(ref pages) = final_pages {
+        attach_page_coordinate_frames(doc, pages, pdf_page_coordinate_frames);
+    }
+
+    // Native snapshots were captured before canonical filtering, ordering and IDs.
+    // Reconcile only tables here; OCR and custom extractor page ownership is separate.
+    if extraction_method == ExtractionMethod::Native
+        && let Some(ref mut pages) = final_pages
+    {
+        reconcile_native_page_tables(pages, &doc.tables);
+    }
+    // Last: the stages above recompute the flag from each page's text, and the OCR document
+    // carries the unread pages in its own failure list.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    clear_blank_flag_of_unread_pages(&mut final_pages, &mut doc.metadata.pages, &doc.ocr_page_failures);
+    doc.prebuilt_pages = final_pages;
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    attach_ocr_text_page_marks(doc, ocr_text_pages);
 }

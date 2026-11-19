@@ -3565,28 +3565,14 @@ impl PdfExtractor {
             native_finalize::attach_embedded_files(&mut doc, content, config).await;
         }
 
-        if let Some(ref mut pages) = final_pages {
-            assign_hierarchy_to_pages(pages, &doc);
-        }
-
-        if let Some(ref pages) = final_pages {
-            native_finalize::attach_page_coordinate_frames(&mut doc, pages, pdf_page_coordinate_frames);
-        }
-
-        // Native snapshots were captured before canonical filtering, ordering and IDs.
-        // Reconcile only tables here; OCR and custom extractor page ownership is separate.
-        if extraction_method == ExtractionMethod::Native
-            && let Some(ref mut pages) = final_pages
-        {
-            reconcile_native_page_tables(pages, &doc.tables);
-        }
-        // Last: the stages above recompute the flag from each page's text, and the OCR document
-        // carries the unread pages in its own failure list.
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        clear_blank_flag_of_unread_pages(&mut final_pages, &mut doc.metadata.pages, &doc.ocr_page_failures);
-        doc.prebuilt_pages = final_pages;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        attach_ocr_text_page_marks(&mut doc, ocr_text_pages);
+        native_finalize::attach_prebuilt_pages(
+            &mut doc,
+            final_pages,
+            pdf_page_coordinate_frames,
+            extraction_method,
+            #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+            ocr_text_pages,
+        );
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !routing.elements.is_empty() {
