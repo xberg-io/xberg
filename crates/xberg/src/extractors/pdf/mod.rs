@@ -3363,8 +3363,7 @@ impl PdfExtractor {
             merge_mixed_ocr_tables(&mut tables, accepted_pages);
         }
 
-        let mut final_pages =
-            assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
+        let final_pages = assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
 
         let pre_formatted_output: Option<String> = None;
 

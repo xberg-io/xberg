@@ -407,6 +407,10 @@ fn scanned_pages_failed(
 
 // These values exist only with layout detection; keep the reuse gate in the same cfg block. ~keep
 #[cfg(feature = "layout-detection")]
+#[cfg_attr(
+    not(any(feature = "formula-recognition", feature = "liter-llm")),
+    allow(unused_variables)
+)]
 pub(super) fn withhold_unreusable_layout(
     config: &ExtractionConfig,
     content: &[u8],
