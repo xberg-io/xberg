@@ -481,10 +481,10 @@ const STOP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis
 enum PageTaskOutput {
     Read(
         usize,
-        (
+        Box<(
             crate::Result<OcrPipelineOutput>,
             Option<crate::cancellation::CancellationToken>,
-        ),
+        )>,
     ),
     #[cfg(all(paddle_ocr, feature = "ocr"))]
     Trial(usize, crate::Result<Option<sparse_glyph_read::AcceptedTrial>>),
@@ -2117,7 +2117,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr, feature = "ocr"))]
                         sparse_glyph_read::parallel_tests::test_page_started(&config_clone, idx);
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return PageTaskOutput::Read(idx, (Err(crate::XbergError::Cancelled), None));
+                            return PageTaskOutput::Read(idx, Box::new((Err(crate::XbergError::Cancelled), None)));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2156,10 +2156,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .await;
                         PageTaskOutput::Read(
                             idx,
-                            capture_ocr_completion(
+                            Box::new(capture_ocr_completion(
                                 result.map_err(crate::XbergError::from),
                                 config_clone.cancel_token.as_ref(),
-                            ),
+                            )),
                         )
                     });
                     #[cfg(test)]
@@ -2214,7 +2214,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }
                     };
                     let (page_idx, result, expired, sparse_dimensions) = match output {
-                        PageTaskOutput::Read(page_idx, (result, expired)) => (page_idx, result, expired, None),
+                        PageTaskOutput::Read(page_idx, read) => {
+                            let (result, expired) = *read;
+                            (page_idx, result, expired, None)
+                        }
                         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
                         PageTaskOutput::Trial(idx, Ok(Some(read))) => {
                             crate::engine::seams::emit_ocr_page(idx + 1, page_count, "tesseract");

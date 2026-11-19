@@ -68,7 +68,7 @@ fn folio_with_an_ineligible_second_page() -> Vec<u8> {
 // other pages behind the trials would end the wait by timeout. ~keep
 #[test]
 fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read_normally() {
-    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || async {
+    super::super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || async {
         let pdf = folio_with_an_ineligible_second_page();
         let models = tempfile::tempdir().unwrap();
         std::fs::write(

@@ -34,6 +34,16 @@ impl Drop for PanicGuard {
     }
 }
 
+/// Runs `work` while `guard` lives; the guard records its page unless `work` completes. The guard is
+/// moved in whole: a bare `guard.armed = false` in a `move` block captures only that field and
+/// leaves the guard to drop armed at the end of the spawning scope.
+async fn guarded<T>(guard: PanicGuard, work: impl std::future::Future<Output = T>) -> T {
+    let mut guard = guard;
+    let output = work.await;
+    guard.armed = false;
+    output
+}
+
 /// Spawn one trial per page into the batch's page task set.
 pub(in super::super) struct TrialContext<'a> {
     pub(in super::super) pdf: &'a Arc<PdfDocument>,
@@ -57,18 +67,42 @@ pub(in super::super) fn spawn_trials<'a>(
             page: page(index),
             words: words.clone(),
         };
-        let mut guard = PanicGuard {
+        let guard = PanicGuard {
             index,
             panicked: panicked.clone(),
             armed: true,
         };
-        let task = async move {
-            let outcome = trial.run().await;
-            guard.armed = false;
-            PageTaskOutput::Trial(index, outcome)
-        };
+        let task = guarded(guard, async move { PageTaskOutput::Trial(index, trial.run().await) });
         #[cfg(test)]
         let task = crate::plugins::registry::inherit_test_ocr_backend(task);
         tasks.spawn(crate::core::extractor::cacheability::inherit(task));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn run(panicked: &PanickedTrials, index: usize, fail: bool) {
+        let guard = PanicGuard {
+            index,
+            panicked: panicked.clone(),
+            armed: true,
+        };
+        let mut tasks = tokio::task::JoinSet::new();
+        tasks.spawn(guarded(guard, async move {
+            assert!(!fail, "intentional trial panic");
+        }));
+        assert_eq!(tasks.join_next().await.unwrap().is_err(), fail);
+    }
+
+    #[tokio::test]
+    async fn only_a_panicking_task_records_its_page() {
+        let panicked = PanickedTrials::default();
+        run(&panicked, 3, false).await;
+        assert_eq!(panicked.take(), None, "a completed trial must not be recorded");
+        run(&panicked, 5, true).await;
+        assert_eq!(panicked.take(), Some(5));
+        assert_eq!(panicked.take(), None);
     }
 }
