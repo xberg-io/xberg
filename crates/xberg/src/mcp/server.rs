@@ -1397,7 +1397,6 @@ pub async fn start_mcp_server_http(
     extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
-    use std::net::SocketAddr;
 
     let allow_local_paths = mcp_http_allows_local_paths();
     let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
@@ -1411,11 +1410,12 @@ pub async fn start_mcp_server_http(
         build_streamable_http_config(extra_allowed_hosts),
     );
 
-    let router = Router::new().nest_service("/mcp", http_service);
-
-    let addr: SocketAddr = format!("{}:{}", host.as_ref(), port)
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let (addr, router) = prepare_mcp_http(
+        host.as_ref(),
+        port,
+        &crate::api::auth::ApiAuth::from_env(),
+        Router::new().nest_service("/mcp", http_service),
+    )?;
 
     #[cfg(feature = "api")]
     tracing::info!("Starting MCP HTTP server on http://{}", addr);
@@ -1465,7 +1465,6 @@ pub async fn start_mcp_server_http_with_config(
     extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
-    use std::net::SocketAddr;
 
     let allow_local_paths = mcp_http_allows_local_paths();
     let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
@@ -1475,11 +1474,12 @@ pub async fn start_mcp_server_http_with_config(
         build_streamable_http_config(extra_allowed_hosts),
     );
 
-    let router = Router::new().nest_service("/mcp", http_service);
-
-    let addr: SocketAddr = format!("{}:{}", host.as_ref(), port)
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let (addr, router) = prepare_mcp_http(
+        host.as_ref(),
+        port,
+        &crate::api::auth::ApiAuth::from_env(),
+        Router::new().nest_service("/mcp", http_service),
+    )?;
 
     #[cfg(feature = "api")]
     tracing::info!("Starting MCP HTTP server on http://{}", addr);
@@ -1492,9 +1492,81 @@ pub async fn start_mcp_server_http_with_config(
     Ok(())
 }
 
+/// Parse the bind address, refuse an unauthenticated off-loopback bind, and put the bearer
+/// check (`XBERG_API_TOKEN`) in front of the MCP routes.
+#[cfg(feature = "mcp-http")]
+fn prepare_mcp_http(
+    host: &str,
+    port: u16,
+    auth: &crate::api::auth::ApiAuth,
+    router: axum::Router,
+) -> Result<(std::net::SocketAddr, axum::Router), Box<dyn std::error::Error + Send + Sync>> {
+    let addr: std::net::SocketAddr = format!("{host}:{port}")
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+    auth.check_bind(addr.ip())?;
+    Ok((addr, auth.protect(router)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "mcp-http")]
+    mod http_auth {
+        use super::super::prepare_mcp_http;
+        use crate::api::auth::ApiAuth;
+        use axum::{
+            Router,
+            body::Body,
+            http::{Request, StatusCode, header},
+            routing::get,
+        };
+        use tower::ServiceExt;
+
+        fn inner() -> Router {
+            Router::new().route("/mcp", get(|| async { "ok" }))
+        }
+
+        async fn status(router: Router, authorization: Option<&str>) -> StatusCode {
+            let mut request = Request::builder().uri("/mcp");
+            if let Some(value) = authorization {
+                request = request.header(header::AUTHORIZATION, value);
+            }
+            router
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+                .status()
+        }
+
+        #[tokio::test]
+        async fn mcp_http_requires_the_token_when_set() {
+            let (_, router) = prepare_mcp_http("127.0.0.1", 0, &ApiAuth::new(Some("tok"), false), inner()).unwrap();
+            assert_eq!(status(router.clone(), None).await, StatusCode::UNAUTHORIZED);
+            assert_eq!(
+                status(router.clone(), Some("Bearer nope")).await,
+                StatusCode::UNAUTHORIZED
+            );
+            assert_eq!(status(router, Some("Bearer tok")).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn mcp_http_on_loopback_without_token_is_open() {
+            let (_, router) = prepare_mcp_http("127.0.0.1", 0, &ApiAuth::new(None, false), inner()).unwrap();
+            assert_eq!(status(router, None).await, StatusCode::OK);
+        }
+
+        #[test]
+        fn mcp_http_refuses_off_loopback_without_token() {
+            let err = prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(None, false), inner())
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("XBERG_API_TOKEN"), "{err}");
+            assert!(prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(Some("t"), false), inner()).is_ok());
+            assert!(prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(None, true), inner()).is_ok());
+        }
+    }
 
     #[tokio::test]
     async fn test_tool_router_has_routes() {

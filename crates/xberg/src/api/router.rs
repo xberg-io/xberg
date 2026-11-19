@@ -23,7 +23,7 @@ use crate::{ExtractionConfig, core::ServerConfig, service::ExtractionServiceBuil
 #[cfg(feature = "prometheus")]
 use super::handlers::metrics_handler;
 use super::{
-    auth::{API_TOKEN_ENV, ApiAuth, require_bearer_token},
+    auth::ApiAuth,
     handlers::{
         cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, cancel_job_handler,
         detect_handler, extract_async_handler, extract_handler, formats_handler, health_handler, info_handler,
@@ -124,6 +124,21 @@ pub fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits
     create_router_with_limits_and_server_config(config, limits, ServerConfig::default())
 }
 
+/// Create the API router with explicit size limits and authentication settings.
+///
+/// Unlike [`create_router_with_limits`], this never reads `XBERG_API_TOKEN` from the process
+/// environment, so embedders and tests get the same behaviour regardless of it.
+#[cfg_attr(alef, alef(skip))]
+pub fn create_router_with_auth(config: ExtractionConfig, limits: ApiSizeLimits, auth: ApiAuth) -> Router {
+    build_router(
+        config,
+        limits,
+        ServerConfig::default(),
+        resolve_max_concurrent_requests(),
+        auth,
+    )
+}
+
 /// Build the [`ApiState`] shared by every route, including a fresh extraction service and
 /// (behind `feature = "api"`) a fresh job store.
 ///
@@ -171,9 +186,9 @@ fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig, max_c
 fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
     if server_config.cors_allows_all() {
         tracing::warn!(
-            "CORS configured to allow all origins ('*'). This permits CSRF attacks. \
-             For production, set XBERG_CORS_ORIGINS to a comma-separated list of allowed origins \
-             (e.g., 'https://app.example.com,https://api.example.com')"
+            "CORS configured to allow all origins ('*'). Any website can call this API from a \
+             browser; without XBERG_API_TOKEN that is a CSRF risk. Prefer listing origins in \
+             XBERG_CORS_ORIGINS (e.g., 'https://app.example.com,https://api.example.com')"
         );
         return CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
     }
@@ -306,11 +321,7 @@ fn build_router(
 
     // The auth layer is added after the concurrency limit so it runs first: a rejected
     // request never occupies an extraction slot. `/health` stays outside it for probes.
-    if let Some(token) = auth.expected_token() {
-        protected = protected.layer(axum::middleware::from_fn_with_state(token, require_bearer_token));
-    } else {
-        tracing::warn!("API authentication disabled ({API_TOKEN_ENV} not set)");
-    }
+    protected = auth.protect(protected);
 
     let router = Router::new()
         .route("/health", get(health_handler))
@@ -548,6 +559,138 @@ mod tests {
                 assert!(queued.is_err(), "{method} {uri} must wait for a free slot");
             }
             holder.abort();
+        }
+
+        #[tokio::test]
+        async fn extract_openapi_and_metrics_require_the_token() {
+            let router = router(&[], Some(TOKEN));
+            let mut routes = vec![("POST", "/extract"), ("GET", "/openapi.json")];
+            if cfg!(feature = "prometheus") {
+                routes.push(("GET", "/metrics"));
+            }
+            for (method, uri) in routes {
+                assert_eq!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn alternate_methods_and_paths_never_bypass_auth() {
+            let router = router(&[], Some(TOKEN));
+            for (method, uri) in [
+                ("HEAD", "/info"),
+                ("OPTIONS", "/info"),
+                ("GET", "/info/"),
+                ("GET", "//info"),
+                ("GET", "/%69nfo"),
+            ] {
+                assert_ne!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::OK,
+                    "{method} {uri}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn malformed_authorization_headers_are_rejected() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in ["Bearer  s3cret-token", "Bearer ", "Bearer"] {
+                assert_eq!(
+                    status(&router, "GET", "/info", Some(authorization)).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{authorization:?}"
+                );
+            }
+
+            for headers in [
+                ["Bearer s3cret-token", "Bearer wrong"],
+                ["Bearer wrong", "Bearer s3cret-token"],
+            ] {
+                let response = router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri("/info")
+                            .header(header::AUTHORIZATION, headers[0])
+                            .header(header::AUTHORIZATION, headers[1])
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{headers:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn unauthenticated_requests_do_not_wait_for_a_slot() {
+            let router = router(&[], Some(TOKEN));
+            let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
+            let holder = tokio::spawn(
+                router.clone().oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+                        .header("content-type", "multipart/form-data; boundary=x")
+                        .body(stalled_body)
+                        .unwrap(),
+                ),
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let rejected = tokio::time::timeout(Duration::from_secs(2), status(&router, "POST", "/extract", None))
+                .await
+                .expect("an unauthenticated request must not queue behind the held slot");
+            assert_eq!(rejected, StatusCode::UNAUTHORIZED);
+            holder.abort();
+        }
+
+        #[tokio::test]
+        async fn preflight_to_a_protected_route_is_answered_before_auth() {
+            let router = router(&["https://app.example.com"], Some(TOKEN));
+
+            let response = preflight(&router, "https://app.example.com").await;
+            assert!(response.status().is_success(), "{}", response.status());
+            assert_eq!(
+                response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+                "https://app.example.com"
+            );
+
+            let real = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header(header::ORIGIN, "https://app.example.com")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(real.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn simple_cross_origin_request_gets_no_cors_headers_by_default() {
+            let router = router(&[], None);
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/info")
+                        .header(header::ORIGIN, "https://evil.example")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(!response.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
         }
 
         async fn preflight(router: &Router, origin: &str) -> axum::response::Response {

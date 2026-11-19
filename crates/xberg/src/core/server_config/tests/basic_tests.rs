@@ -98,3 +98,20 @@ fn test_serde_default_serialization() {
     assert!(json.contains("host"));
     assert!(json.contains("port"));
 }
+
+#[test]
+fn test_cors_wildcard_mixed_with_listed_origin_and_padded() {
+    let mixed = ServerConfig {
+        cors_origins: vec!["https://app.example.com".to_string(), "*".to_string()],
+        ..ServerConfig::default()
+    };
+    assert!(mixed.cors_allows_all());
+    assert!(mixed.is_origin_allowed("https://other.example.com"));
+
+    let padded = ServerConfig {
+        cors_origins: vec![" * ".to_string()],
+        ..ServerConfig::default()
+    };
+    assert!(padded.cors_allows_all());
+    assert!(padded.is_origin_allowed("https://other.example.com"));
+}

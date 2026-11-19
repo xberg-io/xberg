@@ -85,7 +85,7 @@
 //!
 //! ```
 
-mod auth;
+pub(crate) mod auth;
 mod config;
 mod error;
 mod handlers;
@@ -99,9 +99,10 @@ mod router;
 mod startup;
 mod types;
 
+pub use auth::ApiAuth;
 pub use error::ApiError;
 #[allow(unused_imports)]
-pub use router::{create_router, create_router_with_limits};
+pub use router::{create_router, create_router_with_auth, create_router_with_limits};
 #[allow(unused_imports)]
 pub use startup::{serve, serve_default, serve_with_config, serve_with_config_and_limits, serve_with_server_config};
 pub use types::{

@@ -174,6 +174,9 @@ pub async fn serve_with_config(host: impl AsRef<str>, port: u16, config: Extract
 
 /// Start the API server with explicit config and size limits.
 ///
+/// The host, port and limits come from the arguments; `XBERG_CORS_ORIGINS` and
+/// `XBERG_JOB_TIMEOUT_SECS` are still read from the environment.
+///
 /// # Arguments
 ///
 /// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0")
@@ -207,12 +210,15 @@ pub async fn serve_with_config_and_limits(
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
     ApiAuth::from_env().check_bind(ip)?;
 
+    let mut env_config = ServerConfig::default();
+    env_config.apply_env_overrides()?;
     let server_config = ServerConfig {
         host: host.as_ref().to_string(),
         port,
         max_request_body_bytes: limits.max_request_body_bytes,
         max_multipart_field_bytes: limits.max_multipart_field_bytes,
-        ..Default::default()
+        cors_origins: env_config.cors_origins,
+        job_timeout_secs: env_config.job_timeout_secs,
     };
 
     let addr = SocketAddr::new(ip, port);

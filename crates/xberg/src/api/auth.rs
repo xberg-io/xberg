@@ -25,9 +25,14 @@ pub(crate) const API_TOKEN_ENV: &str = "XBERG_API_TOKEN";
 /// Environment variable that lets the server start on a non-loopback address without a token.
 pub(crate) const ALLOW_UNAUTHENTICATED_ENV: &str = "XBERG_ALLOW_UNAUTHENTICATED";
 
-/// Authentication settings resolved from the environment.
+/// Authentication settings for the REST API and the MCP HTTP transport.
+///
+/// The bearer token must be ASCII: it is compared byte-for-byte against the `Authorization`
+/// header, which clients can only send as visible ASCII. `XBERG_ALLOW_UNAUTHENTICATED` assumes
+/// the network in front of the server is trusted.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Clone, Default)]
-pub(crate) struct ApiAuth {
+pub struct ApiAuth {
     token: Option<Arc<str>>,
     allow_unauthenticated: bool,
 }
@@ -42,7 +47,8 @@ impl std::fmt::Debug for ApiAuth {
 }
 
 impl ApiAuth {
-    pub(crate) fn new(token: Option<&str>, allow_unauthenticated: bool) -> Self {
+    /// Build settings from an explicit token (blank counts as unset) and opt-out flag.
+    pub fn new(token: Option<&str>, allow_unauthenticated: bool) -> Self {
         Self {
             token: token.map(str::trim).filter(|t| !t.is_empty()).map(Arc::from),
             allow_unauthenticated,
@@ -51,17 +57,30 @@ impl ApiAuth {
 
     pub(crate) fn from_env() -> Self {
         let allow = std::env::var(ALLOW_UNAUTHENTICATED_ENV)
-            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+            .map(|v| parse_truthy(&v))
             .unwrap_or(false);
         Self::new(std::env::var(API_TOKEN_ENV).ok().as_deref(), allow)
     }
 
-    pub(crate) fn token_configured(&self) -> bool {
-        self.token.is_some()
+    /// Wrap `router` in the bearer-token check when a token is configured.
+    pub(crate) fn protect<S>(&self, router: Router<S>) -> Router<S>
+    where
+        S: Clone + Send + Sync + 'static,
+    {
+        match &self.token {
+            Some(token) => router.layer(axum::middleware::from_fn_with_state(
+                Arc::clone(token),
+                require_bearer_token,
+            )),
+            None => {
+                tracing::warn!("API authentication disabled ({API_TOKEN_ENV} not set)");
+                router
+            }
+        }
     }
 
-    pub(crate) fn expected_token(&self) -> Option<Arc<str>> {
-        self.token.clone()
+    pub(crate) fn token_configured(&self) -> bool {
+        self.token.is_some()
     }
 
     /// Refuse an unauthenticated server that is reachable from other hosts.
@@ -84,6 +103,10 @@ impl ApiAuth {
     }
 }
 
+fn parse_truthy(value: &str) -> bool {
+    matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")
+}
+
 /// Compare two byte strings without short-circuiting on the first difference or on length.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     let mut diff = a.len() ^ b.len();
@@ -95,10 +118,16 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     std::hint::black_box(diff) == 0
 }
 
+/// Extract the token from a single `Authorization: Bearer <token>` header. Repeated headers
+/// and extra whitespace are rejected rather than guessed at.
 fn bearer_token(request: &Request) -> Option<&str> {
-    let value = request.headers().get(header::AUTHORIZATION)?.to_str().ok()?;
-    let (scheme, token) = value.split_once(' ')?;
-    scheme.eq_ignore_ascii_case("bearer").then_some(token.trim())
+    let mut values = request.headers().get_all(header::AUTHORIZATION).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    let (scheme, token) = value.to_str().ok()?.split_once(' ')?;
+    scheme.eq_ignore_ascii_case("bearer").then_some(token)
 }
 
 fn unauthorized() -> Response {
@@ -136,6 +165,23 @@ mod tests {
         assert!(!constant_time_eq(b"secret", b"secre"));
         assert!(!constant_time_eq(b"", b"secret"));
         assert!(constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn allow_unauthenticated_parsing() {
+        for (value, expected) in [
+            ("1", true),
+            ("true", true),
+            ("TRUE", true),
+            (" yes ", true),
+            ("on", true),
+            ("0", false),
+            ("false", false),
+            ("junk", false),
+            ("", false),
+        ] {
+            assert_eq!(parse_truthy(value), expected, "{value:?}");
+        }
     }
 
     #[test]
