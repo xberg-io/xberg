@@ -3,6 +3,7 @@ use thiserror::Error;
 
 /// Errors that can occur when using the Tesseract API.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum TesseractError {
     #[error("Failed to initialize Tesseract")]
     InitError,

@@ -78,6 +78,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (tesseract):** `xberg-tesseract` iterators are tied to the engine and its current recognition result. `PageIterator`, `ResultIterator`, `ChoiceIterator` and `MutableIterator` gain an `<'api>` lifetime and cannot outlive the `TesseractAPI` that produced them. Their `new` constructors and public `handle` fields are removed, and `TesseractAPI::handle` is `pub(crate)`. `ResultIterator::choices()` replaces raw `ChoiceIterator` construction, and `get_mutable_iterator` returns `MutableIterator`. An iterator call made after Init, `set_image`, `recognize`, `clear`, layout analysis or another call that replaces the result fails with the new `TesseractError::StaleIterator`. `TesseractError` is now `#[non_exhaustive]`. (#3228)
+- **Breaking (tesseract):** `Pix::grayscale_bytes` returns `InvalidParameterError` for an image that is not 8 bpp or has a colormap, instead of narrowing raw pixel values. (#3228)
+
+### Fixed
+
+- **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
+
 ## [1.4.2] - 2026-11-19
 
 ### Added
