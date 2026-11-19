@@ -23,6 +23,45 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "paddle-ocr-ort")]
 thread_local! {
     static PADDLE_TL_ACCEL: RefCell<Option<crate::core::config::acceleration::AccelerationConfig>> = const { RefCell::new(None) };
+    static PADDLE_TL_OPTIONS: std::cell::Cell<crate::ort_options::OrtSessionOptions> =
+        const { std::cell::Cell::new(crate::ort_options::OrtSessionOptions::DEFAULT) };
+}
+
+/// Carries the option snapshot taken for the engine pool key to every session the
+/// hook builds, so det, cls and rec cannot observe a later change.
+#[cfg(feature = "paddle-ocr-ort")]
+struct PaddleOptionsGuard {
+    previous: crate::ort_options::OrtSessionOptions,
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+impl PaddleOptionsGuard {
+    fn set(options: crate::ort_options::OrtSessionOptions) -> Self {
+        Self {
+            previous: PADDLE_TL_OPTIONS.with(|cell| cell.replace(options)),
+        }
+    }
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+impl Drop for PaddleOptionsGuard {
+    fn drop(&mut self) {
+        PADDLE_TL_OPTIONS.with(|cell| cell.set(self.previous));
+    }
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+type PaddleBuilderHook =
+    fn(ort::session::builder::SessionBuilder) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>;
+
+/// `None` (ORT's default session recipe) unless an acceleration or a non-default option
+/// set needs the hook.
+#[cfg(feature = "paddle-ocr-ort")]
+fn paddle_builder_hook(
+    accel_configured: bool,
+    options: &crate::ort_options::OrtSessionOptions,
+) -> Option<PaddleBuilderHook> {
+    (accel_configured || !(options.memory_pattern && options.cpu_arena)).then_some(paddle_accel_builder_fn)
 }
 
 #[cfg(feature = "paddle-ocr-ort")]
@@ -35,7 +74,7 @@ fn paddle_accel_builder_fn(
     } else {
         builder
     };
-    apply_paddle_session_options(builder, &crate::ort_options::ort_session_options())
+    apply_paddle_session_options(builder, &PADDLE_TL_OPTIONS.with(|cell| cell.get()))
 }
 
 /// Apply the process-wide memory options to a PaddleOCR session builder; a default
@@ -157,6 +196,27 @@ impl<T> BoundedInitPool<T> {
     }
 }
 
+#[cfg(feature = "paddle-ocr-ort")]
+static LIVE_MODEL_CONTEXTS: Mutex<Vec<std::sync::Weak<PaddleModelContext>>> = Mutex::new(Vec::new());
+
+/// Drop every pooled PaddleOCR engine so the next request rebuilds with the current
+/// session options. Returns the number of engines removed; a caller still holding an
+/// engine keeps it alive until it drops it.
+#[cfg(feature = "paddle-ocr-ort")]
+pub(crate) fn clear_paddle_engine_caches() -> usize {
+    let mut live = LIVE_MODEL_CONTEXTS.lock().unwrap_or_else(|e| e.into_inner());
+    live.retain(|weak| weak.strong_count() > 0);
+    live.iter()
+        .filter_map(std::sync::Weak::upgrade)
+        .map(|context| {
+            let mut pool = context.engine_pool.lock().unwrap_or_else(|e| e.into_inner());
+            let removed = pool.len();
+            pool.clear();
+            removed
+        })
+        .sum()
+}
+
 struct PaddleModelContext {
     cache_dir: PathBuf,
     model_manager: ModelManager,
@@ -216,6 +276,11 @@ impl PaddleModelContextCache {
 
         let cache_dir = cache_dir.to_path_buf();
         let context = Arc::new(PaddleModelContext::new(cache_dir.clone()));
+        #[cfg(feature = "paddle-ocr-ort")]
+        LIVE_MODEL_CONTEXTS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(Arc::downgrade(&context));
         self.entries.insert(cache_dir.clone(), Arc::clone(&context));
         self.recency.push_back(cache_dir);
         Some(context)
@@ -781,14 +846,8 @@ impl PaddleOcrBackend {
         let version = &config.model_version;
         let backend = Self::effective_backend(config)?;
         let resolved = model_manager.resolve_rec_model_versioned(version, family, tier)?;
-        let pool_key = engine_pool_key(
-            version,
-            tier,
-            &resolved.model_key,
-            accel,
-            backend,
-            &crate::ort_options::ort_session_options(),
-        );
+        let options = crate::ort_options::ort_session_options();
+        let pool_key = engine_pool_key(version, tier, &resolved.model_key, accel, backend, &options);
 
         let init_cell = init_cell_for_key(engine_pool, &pool_key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire engine pool lock: {error}"),
@@ -796,6 +855,8 @@ impl PaddleOcrBackend {
         })?;
         let engine = init_cell.get_or_try_init(|| -> Result<Arc<PaddleOcrEngine>> {
             let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config)?;
+            #[cfg(feature = "paddle-ocr-ort")]
+            let _options_guard = PaddleOptionsGuard::set(options);
             Self::initialize_engine(family, tier, &resolved, &shared, accel.cloned(), backend)
         })?;
 
@@ -939,17 +1000,10 @@ impl PaddleOcrBackend {
         crate::ort_discovery::ensure_ort_available();
         crate::ort_discovery::ort_environment()?;
 
-        let builder_fn: Option<
-            fn(
-                ort::session::builder::SessionBuilder,
-            ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>,
-        > = if PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some())
-            || crate::ort_options::ort_session_options() != crate::ort_options::OrtSessionOptions::default()
-        {
-            Some(paddle_accel_builder_fn)
-        } else {
-            None
-        };
+        let builder_fn = paddle_builder_hook(
+            PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()),
+            &PADDLE_TL_OPTIONS.with(|cell| cell.get()),
+        );
 
         ocr_engine.init_models_with_dict_custom(
             det_model_path,
@@ -2369,6 +2423,78 @@ mod tests {
             engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
             engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &defaults)
         );
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn builder_hook_is_absent_for_default_options_without_acceleration() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let defaults = OrtSessionOptions::default();
+        assert!(paddle_builder_hook(false, &defaults).is_none());
+        assert!(paddle_builder_hook(true, &defaults).is_some());
+        let no_arena = OrtSessionOptions {
+            cpu_arena: false,
+            ..defaults
+        };
+        assert!(paddle_builder_hook(false, &no_arena).is_some());
+        let capped = OrtSessionOptions {
+            max_threads: Some(2),
+            ..defaults
+        };
+        assert!(
+            paddle_builder_hook(false, &capped).is_none(),
+            "the thread cap alone needs no hook"
+        );
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn options_guard_restores_previous_snapshot() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let off = OrtSessionOptions {
+            memory_pattern: false,
+            cpu_arena: false,
+            max_threads: None,
+        };
+        {
+            let _guard = PaddleOptionsGuard::set(off);
+            assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.get()), off);
+        }
+        assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.get()), OrtSessionOptions::default());
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn session_options_apply_to_a_builder_for_every_combo() {
+        use crate::ort_options::OrtSessionOptions;
+
+        crate::ort_discovery::ensure_ort_available();
+        for (memory_pattern, cpu_arena) in [(true, true), (false, true), (true, false), (false, false)] {
+            let options = OrtSessionOptions {
+                memory_pattern,
+                cpu_arena,
+                max_threads: None,
+            };
+            let builder = ort::session::Session::builder(crate::ort_discovery::ort_environment().expect("ort env"))
+                .expect("session builder");
+            apply_paddle_session_options(builder, &options).unwrap_or_else(|e| panic!("{options:?}: {e}"));
+        }
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    #[serial_test::serial]
+    fn clearing_paddle_engine_caches_empties_every_live_pool() {
+        let context = Arc::new(PaddleModelContext::new(PathBuf::from("/nonexistent-paddle-clear-test")));
+        LIVE_MODEL_CONTEXTS.lock().unwrap().push(Arc::downgrade(&context));
+        init_cell_for_key(&context.engine_pool, "v6/small/latin/cpu/ort").unwrap();
+        init_cell_for_key(&context.engine_pool, "v6/small/latin/cpu/ort/mp1-arena0").unwrap();
+        assert_eq!(context.engine_pool.lock().unwrap().len(), 2);
+
+        assert!(clear_paddle_engine_caches() >= 2);
+        assert!(context.engine_pool.lock().unwrap().is_empty());
     }
 
     #[test]

@@ -1,7 +1,11 @@
 //! Process-wide ONNX Runtime session options shared by every ORT-backed feature.
 
+use serde::{Deserialize, Serialize};
+
 /// Process-wide memory and threading options applied to the ONNX Runtime sessions of
 /// embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
+///
+/// The pure-Rust tract PaddleOCR backend ignores these options.
 ///
 /// PaddleOCR applies `memory_pattern` and `cpu_arena` only; its intra-op thread count
 /// is not changed by `max_threads`.
@@ -19,7 +23,8 @@
 /// engine caches when the options change, so resident engines are rebuilt on next use;
 /// a caller still holding an engine keeps its old session until it drops it. PaddleOCR
 /// engines are pooled per option set, so a changed option set builds new engines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct OrtSessionOptions {
     /// Enable ORT's memory-pattern optimization. Disable for variable input sizes.
     /// Default `true`.
@@ -36,21 +41,21 @@ pub struct OrtSessionOptions {
     pub max_threads: Option<usize>,
 }
 
+impl OrtSessionOptions {
+    pub(crate) const DEFAULT: Self = Self {
+        memory_pattern: true,
+        cpu_arena: true,
+        max_threads: None,
+    };
+}
+
 impl Default for OrtSessionOptions {
     fn default() -> Self {
-        Self {
-            memory_pattern: true,
-            cpu_arena: true,
-            max_threads: None,
-        }
+        Self::DEFAULT
     }
 }
 
-static SESSION_OPTIONS: std::sync::RwLock<OrtSessionOptions> = std::sync::RwLock::new(OrtSessionOptions {
-    memory_pattern: true,
-    cpu_arena: true,
-    max_threads: None,
-});
+static SESSION_OPTIONS: std::sync::RwLock<OrtSessionOptions> = std::sync::RwLock::new(OrtSessionOptions::DEFAULT);
 
 /// Set the [`OrtSessionOptions`] used for ONNX sessions built from now on.
 ///
@@ -68,6 +73,8 @@ pub fn set_ort_session_options(options: OrtSessionOptions) {
     if changed {
         #[cfg(feature = "onnx-runtime")]
         crate::clear_onnx_engine_caches();
+        #[cfg(feature = "paddle-ocr-ort")]
+        crate::paddle_ocr::clear_paddle_engine_caches();
     }
 }
 
