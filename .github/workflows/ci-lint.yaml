@@ -308,6 +308,8 @@ jobs:
       ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     name: Alef-generated bindings freshness
     runs-on: ubuntu-latest
+    env:
+      POLY_TRUST: "1"
     steps:
       - uses: actions/checkout@v7
       # `alef verify` hashes the same alef.toml [[crates.source_crates]] entries
@@ -406,9 +408,9 @@ jobs:
           echo "$clang_venv/bin" >>"$GITHUB_PATH"
           "$clang_venv/bin/clang-format" --version
       - name: Install poly
-        uses: Goldziher/poly@v0
+        uses: polylint/polylint@v0
         with:
-          version: "0.34.2"
+          version: "0.36.0"
       # `alef verify` (aliased as `mise run alef:verify`) is a purpose-built freshness
       # check: it recomputes each generated file's expected hash from the current
       # Rust source, applies the configured formatter to the in-memory render, and
@@ -455,6 +457,7 @@ jobs:
     name: Generated e2e suites freshness
     runs-on: ubuntu-latest
     env:
+      POLY_TRUST: "1"
       MISE_ENV: ci
       MISE_PYTHON_VERSION: "3.11.18"
       # uv must use the interpreter mise installed, not download its own. ~keep
@@ -550,9 +553,9 @@ jobs:
       # formatted files. The bindings job deliberately omits them because `alef verify`
       # recomputes hashes without writing or formatting generated files. ~keep
       - name: Install poly
-        uses: Goldziher/poly@v0
+        uses: polylint/polylint@v0
         with:
-          version: "0.34.2"
+          version: "0.36.0"
       # `mise run e2e:verify` (`alef e2e generate` then `git diff --exit-code e2e/`)
       # was previously invoked by nothing -- it was only named in a comment on
       # the alef-bindings-freshness job above as though it ran. Wiring it here
