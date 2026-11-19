@@ -344,6 +344,66 @@ async fn run_whole_document_fallback(
     native_text: String,
     gate: &AutoGate,
 ) -> Result<(String, ExtractionMethod)> {
+    #[cfg(all(
+        feature = "layout-detection",
+        any(feature = "formula-recognition", feature = "liter-llm")
+    ))]
+    let mut held_markdown_inputs = hold_markdown_inputs(route, gate);
+    let whole_read = read_whole_document(route, gate, &native_text).await;
+    let retried = retry_dropped_script_pages(route, routing, &native_text, gate, &whole_read).await?;
+    #[cfg(all(
+        feature = "layout-detection",
+        any(feature = "formula-recognition", feature = "liter-llm")
+    ))]
+    if retried.is_some() {
+        *route.layout.native_only = route.layout.native_only.take().or(held_markdown_inputs.take());
+    } else {
+        drop(route.layout.native_only.take());
+        drop(held_markdown_inputs.take());
+    }
+    if let Some(retried) = retried {
+        Ok(retried)
+    } else {
+        settle_whole_read(route, routing, native_text, gate, whole_read)
+    }
+}
+
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm")
+))]
+type HeldMarkdownInputs = Option<(
+    Option<Vec<image::RgbImage>>,
+    Option<Vec<crate::layout::DetectionResult>>,
+)>;
+
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm")
+))]
+fn hold_markdown_inputs(route: &mut OcrRouteInputs<'_>, gate: &AutoGate) -> HeldMarkdownInputs {
+    let config = route.config;
+    // With marked pages the retry below may keep some pages native, and the formula and
+    // region-VLM stages read their rasters, so the inputs are held until the retry is
+    // decided. The whole read consumes the reusable Markdown inputs, so a clone is held
+    // when a native reader is configured; the clone holds every page raster a second time
+    // until the retry is decided. ~keep
+    if gate.native_script_pages.is_empty() {
+        drop(route.layout.native_only.take());
+        None
+    } else if route.layout.native_only.is_none() && native_layout_readers_configured(config) {
+        Some((route.layout.images.clone(), route.layout.detections.clone()))
+    } else {
+        None
+    }
+}
+
+#[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))]
+async fn read_whole_document(
+    route: &mut OcrRouteInputs<'_>,
+    gate: &AutoGate,
+    native_text: &str,
+) -> ocr::OcrRunResult<WholePageOcrOutput> {
     let (content, config, path, layout_pages, pdf_metadata, boundaries) = (
         route.content,
         route.config,
@@ -352,23 +412,6 @@ async fn run_whole_document_fallback(
         route.pdf_metadata,
         route.boundaries,
     );
-    // With marked pages the retry below may keep some pages native, and the formula and
-    // region-VLM stages read their rasters, so the inputs are held until the retry is
-    // decided. The whole read consumes the reusable Markdown inputs, so a clone is held
-    // when a native reader is configured; the clone holds every page raster a second time
-    // until the retry is decided. ~keep
-    #[cfg(all(
-        feature = "layout-detection",
-        any(feature = "formula-recognition", feature = "liter-llm")
-    ))]
-    let mut held_markdown_inputs = if gate.native_script_pages.is_empty() {
-        drop(route.layout.native_only.take());
-        None
-    } else if route.layout.native_only.is_none() && native_layout_readers_configured(config) {
-        Some((route.layout.images.clone(), route.layout.detections.clone()))
-    } else {
-        None
-    };
     // `images.run_ocr_on_images` controls whether extracted images are
     // separately OCR'd (`core/pipeline/mod.rs`); it does not gate this
     // document-level page OCR fallback. Reading it here made any
@@ -409,22 +452,7 @@ async fn run_whole_document_fallback(
     .await;
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     drop(release_reads);
-    let retried = retry_dropped_script_pages(route, routing, &native_text, gate, &whole_read).await?;
-    #[cfg(all(
-        feature = "layout-detection",
-        any(feature = "formula-recognition", feature = "liter-llm")
-    ))]
-    if retried.is_some() {
-        *route.layout.native_only = route.layout.native_only.take().or(held_markdown_inputs.take());
-    } else {
-        drop(route.layout.native_only.take());
-        drop(held_markdown_inputs.take());
-    }
-    if let Some(retried) = retried {
-        Ok(retried)
-    } else {
-        settle_whole_read(route, routing, native_text, gate, whole_read)
-    }
+    whole_read
 }
 
 async fn retry_dropped_script_pages(
@@ -448,17 +476,7 @@ async fn retry_dropped_script_pages(
     // document, and the per-page route reports its own warnings and page failures, so
     // those of the discarded whole read are dropped with it. When the retry fails the
     // whole read stays the fallback. ~keep
-    let dropped_pages = match (whole_read, boundaries) {
-        (Ok(read), Some(bounds)) if !bounds.is_empty() => {
-            let read_pages = &read.5;
-            if every_page_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages) {
-                Vec::new()
-            } else {
-                pages_that_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages)
-            }
-        }
-        _ => Vec::new(),
-    };
+    let dropped_pages = dropped_script_pages(gate, native_text, whole_read, boundaries);
     let partial_script_drop = !dropped_pages.is_empty();
     let targeted_retry = match boundaries {
         Some(bounds) if partial_script_drop => Some(
@@ -535,6 +553,25 @@ async fn retry_dropped_script_pages(
         None => None,
     };
     Ok(retried)
+}
+
+fn dropped_script_pages(
+    gate: &AutoGate,
+    native_text: &str,
+    whole_read: &ocr::OcrRunResult<WholePageOcrOutput>,
+    boundaries: Option<&[crate::types::PageBoundary]>,
+) -> Vec<u32> {
+    match (whole_read, boundaries) {
+        (Ok(read), Some(bounds)) if !bounds.is_empty() => {
+            let read_pages = &read.5;
+            if every_page_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages) {
+                Vec::new()
+            } else {
+                pages_that_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages)
+            }
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn settle_whole_read(
