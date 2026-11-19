@@ -462,14 +462,7 @@ async fn retry_dropped_script_pages(
     gate: &AutoGate,
     whole_read: &ocr::OcrRunResult<WholePageOcrOutput>,
 ) -> Result<Option<(String, ExtractionMethod)>> {
-    let (content, config, layout_pages, pdf_metadata, boundaries) = (
-        route.content,
-        route.config,
-        route.layout_pages,
-        route.pdf_metadata,
-        route.boundaries,
-    );
-    let outlined_ocr_pages = &*route.outlined_ocr_pages;
+    let (config, boundaries) = (route.config, route.boundaries);
     // Some marked pages lost their script to the whole read while others did not
     // (a scan beside a native page): the pages go through the per-page route, which
     // keeps the native text of the marked ones. That is a second OCR run over the
@@ -477,29 +470,7 @@ async fn retry_dropped_script_pages(
     // those of the discarded whole read are dropped with it. When the retry fails the
     // whole read stays the fallback. ~keep
     let dropped_pages = dropped_script_pages(gate, native_text, whole_read, boundaries);
-    let partial_script_drop = !dropped_pages.is_empty();
-    let targeted_retry = match boundaries {
-        Some(bounds) if partial_script_drop => Some(
-            ocr::extract_mixed_ocr_native_with_layout_pages(
-                &native_text,
-                bounds,
-                (
-                    &gate.failing_pages,
-                    pdf_metadata
-                        .pdf_specific
-                        .fabricated_text_pages
-                        .as_deref()
-                        .unwrap_or(&[]),
-                ),
-                content,
-                config,
-                layout_pages,
-                (&outlined_ocr_pages, &gate.native_script_pages),
-            )
-            .await,
-        ),
-        _ => None,
-    };
+    let targeted_retry = targeted_script_retry(route, native_text, gate, &dropped_pages).await;
     let retried = match targeted_retry {
         Some(Ok(mixed_run)) => {
             // A page the retry could not read that the whole read did read would come out
@@ -571,6 +542,45 @@ fn dropped_script_pages(
             }
         }
         _ => Vec::new(),
+    }
+}
+
+async fn targeted_script_retry(
+    route: &OcrRouteInputs<'_>,
+    native_text: &str,
+    gate: &AutoGate,
+    dropped_pages: &[u32],
+) -> Option<crate::Result<ocr::MixedOcrRun>> {
+    let (content, config, layout_pages, pdf_metadata, boundaries) = (
+        route.content,
+        route.config,
+        route.layout_pages,
+        route.pdf_metadata,
+        route.boundaries,
+    );
+    let outlined_ocr_pages = &*route.outlined_ocr_pages;
+    let partial_script_drop = !dropped_pages.is_empty();
+    match boundaries {
+        Some(bounds) if partial_script_drop => Some(
+            ocr::extract_mixed_ocr_native_with_layout_pages(
+                &native_text,
+                bounds,
+                (
+                    &gate.failing_pages,
+                    pdf_metadata
+                        .pdf_specific
+                        .fabricated_text_pages
+                        .as_deref()
+                        .unwrap_or(&[]),
+                ),
+                content,
+                config,
+                layout_pages,
+                (&outlined_ocr_pages, &gate.native_script_pages),
+            )
+            .await,
+        ),
+        _ => None,
     }
 }
 

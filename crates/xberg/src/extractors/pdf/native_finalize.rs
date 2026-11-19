@@ -396,31 +396,7 @@ pub(super) fn apply_ocr_to_page_contents(
             // The pages carry the restored native text of a discarded read, like the
             // document does (GH#3013).
             let page_texts = sources.document_page_texts.unwrap_or(pts);
-            *page_contents = Some(
-                page_texts
-                    .iter()
-                    .enumerate()
-                    .map(|(i, text)| {
-                        let content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
-                        let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&content));
-                        crate::types::PageContent {
-                            page_number: (i + 1) as u32,
-                            content,
-                            tables: Vec::new(),
-                            image_indices: vec![],
-                            image_preprocessing: None,
-                            hierarchy: None,
-                            is_blank,
-                            layout_regions: None,
-                            speaker_notes: None,
-                            section_name: None,
-                            sheet_name: None,
-                            ocr_confidence: None,
-                            native_content: None,
-                        }
-                    })
-                    .collect(),
-            );
+            *page_contents = Some(page_contents_from_texts(page_texts));
         }
     }
 
@@ -439,16 +415,7 @@ pub(super) fn apply_ocr_to_page_contents(
         }
     }
 
-    if let Some(content_pages) = page_contents.as_ref()
-        && let Some(ref mut page_structure) = pdf_metadata.page_structure
-        && let Some(ref mut info_pages) = page_structure.pages
-    {
-        for info in info_pages.iter_mut() {
-            if let Some(content_page) = content_pages.iter().find(|p| p.page_number == info.number) {
-                info.is_blank = content_page.is_blank;
-            }
-        }
-    }
+    sync_page_structure_blank_flags(page_contents.as_deref(), pdf_metadata);
     ocr_text_pages
 }
 
@@ -622,5 +589,49 @@ fn push_layout_warnings(
     // `spawn_blocking` (see the drain comment above).
     for warning in markdown_layout_glyph_drop_warnings {
         crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn page_contents_from_texts(page_texts: &[String]) -> Vec<PageContent> {
+    page_texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
+            let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&content));
+            crate::types::PageContent {
+                page_number: (i + 1) as u32,
+                content,
+                tables: Vec::new(),
+                image_indices: vec![],
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: None,
+            }
+        })
+        .collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn sync_page_structure_blank_flags(
+    page_contents: Option<&[PageContent]>,
+    pdf_metadata: &mut crate::pdf::metadata::PdfExtractionMetadata,
+) {
+    if let Some(content_pages) = page_contents
+        && let Some(ref mut page_structure) = pdf_metadata.page_structure
+        && let Some(ref mut info_pages) = page_structure.pages
+    {
+        for info in info_pages.iter_mut() {
+            if let Some(content_page) = content_pages.iter().find(|p| p.page_number == info.number) {
+                info.is_blank = content_page.is_blank;
+            }
+        }
     }
 }
