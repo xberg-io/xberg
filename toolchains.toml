@@ -1,4 +1,4 @@
-baseline = "v1.18.0"
+baseline = "v1.20.0"
 task_sets = [
   "alef-bindings",
   "alef-version",

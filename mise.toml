@@ -20,23 +20,23 @@ includes = [
 
 [tools]
 python = "3.15.2"
-uv = "0.13.7"
-node = "26.13.0"
-pnpm = "12.18.0"
-go = "1.27.3"
+uv = "0.13.9"
+node = "26.13.1"
+pnpm = "12.21.0"
+go = "1.27.4"
 java = "temurin-25.0.5+8.0.LTS"
-maven = "3.10.0"
+maven = "3.10.1"
 ruby = "4.0.9"
-dotnet = "10.0.403"
-zig = "0.17.0"
-"github:Goldziher/poly" = "0.34.2"
-"github:Goldziher/adrlint" = "0.5.0"
+dotnet = "11.0.100"
+zig = "0.17.1"
+"github:Goldziher/poly" = "0.36.0"
+"github:Goldziher/adrlint" = "0.5.2"
 "github:xberg-io/alef" = "0.130.4"
-cargo-deny = "0.20.2"
+cargo-deny = "0.21.0"
 "github:taiki-e/cargo-llvm-cov" = "0.9.1"
 bats = "1.14.0"
 lychee = "0.24.2"
-helm = "4.3.1"
+helm = "4.3.2"
 "github:rustwasm/wasm-pack" = "0.15.1"
 
 [env]
@@ -179,17 +179,17 @@ run = "python3 scripts/tests/test_governance_runtime.py"
 
 [tasks."governance:generate"]
 description = "Generate local AI governance files with the latest ai-rulez"
-tools = { node = "26.13.0" }
+tools = { node = "26.13.1" }
 run = "npx -y ai-rulez@latest generate"
 
 [tasks."governance:validate"]
 description = "Validate the root AI governance configuration"
-tools = { node = "26.13.0" }
+tools = { node = "26.13.1" }
 run = "npx -y ai-rulez@latest validate"
 
 [tasks."plugin:generate"]
 description = "Regenerate the plugin bundles + marketplace from plugin/.ai-rulez"
-tools = { node = "26.13.0" }
+tools = { node = "26.13.1" }
 run = [
   "npx -y ai-rulez@latest generate --plugin",
   "python3 scripts/sync_public_skills.py",
@@ -199,7 +199,7 @@ run = [
 
 [tasks."plugin:verify"]
 description = "Verify generated plugin bundles match source (byte + BLAKE3 provenance)"
-tools = { node = "26.13.0" }
+tools = { node = "26.13.1" }
 run = [
   "npx -y ai-rulez@latest -C plugin/.ai-rulez lock --check",
   "npx -y ai-rulez@latest -C .ai-rulez lock --check",
