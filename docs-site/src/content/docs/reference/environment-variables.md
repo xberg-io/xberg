@@ -78,7 +78,7 @@ XBERG_PORT must be a valid u16 number, got 'invalid': invalid digit found in str
 **Type**: `String`
 **Default**: Unset (no authentication)
 
-Bearer token for the REST API. When set, every route except `GET /health` requires `Authorization: Bearer <token>`; the comparison is constant-time. A blank value counts as unset. When unset, the server refuses to bind a non-loopback host unless `XBERG_ALLOW_UNAUTHENTICATED` is set.
+Bearer token for the REST API. When set, every route except `GET /health` requires `Authorization: Bearer <token>`; the comparison is constant-time. A blank value counts as unset. The token must be ASCII. The MCP HTTP transport (`xberg mcp --transport http`) uses the same token and the same startup check. When unset, the server refuses to bind a non-loopback host unless `XBERG_ALLOW_UNAUTHENTICATED` is set.
 
 ```bash title="API token"
 export XBERG_API_TOKEN="$(openssl rand -hex 32)"
@@ -89,7 +89,7 @@ export XBERG_API_TOKEN="$(openssl rand -hex 32)"
 **Type**: `bool` (`1`, `true`, `yes`, `on`)
 **Default**: `false`
 
-Allows the server to start on a non-loopback host (such as `0.0.0.0`) without `XBERG_API_TOKEN`. Use it only when access is already restricted, for example by a reverse proxy or a private network.
+Allows the server to start on a non-loopback host (such as `0.0.0.0`) without `XBERG_API_TOKEN`. It assumes the network in front of the server is trusted: use it only when access is already restricted, for example by a reverse proxy or a private network.
 
 ### XBERG_CORS_ORIGINS
 
