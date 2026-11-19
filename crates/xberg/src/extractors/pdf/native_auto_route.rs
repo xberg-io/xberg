@@ -7,6 +7,11 @@ use super::ink_probe;
     any(feature = "formula-recognition", feature = "liter-llm")
 ))]
 use super::native_layout_readers_configured;
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm")
+))]
+use super::native_routing::NativeOnlyLayoutInputs;
 use super::native_routing::{OcrRouteInputs, OcrRoutingState};
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::picture_layer;
@@ -133,7 +138,7 @@ async fn evaluate_auto_gate(
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
     let thresholds = ocr_config.effective_thresholds();
     let mut decision = ocr::evaluate_per_page_ocr(
-        &native_text,
+        native_text,
         boundaries,
         pdf_metadata.pdf_specific.page_count,
         &thresholds,
@@ -201,7 +206,7 @@ async fn probe_native_script(
     let mut picture_candidates = Vec::new();
     let probe_reads = {
         let layer = unreadable_script::NativeLayer {
-            text: &native_text,
+            text: native_text,
             boundaries,
             page_count: pdf_metadata.pdf_specific.page_count,
         };
@@ -216,7 +221,7 @@ async fn probe_native_script(
         reads
     };
     let native_script_pages =
-        unreadable_script::native_script_pages(decision, &native_text, boundaries, content, config);
+        unreadable_script::native_script_pages(decision, native_text, boundaries, content, config);
     Ok(ScriptProbe {
         native_script_pages,
         probe_reads,
@@ -268,7 +273,7 @@ fn union_flagged_pages(route: &mut OcrRouteInputs<'_>, decision: &mut ocr::OcrFa
     } else {
         outlined_ocr_pages.retain(|page| !decision.failing_pages.contains(page));
         // Keep the selected-page acceptance check even when every page qualifies. ~keep
-        ocr::apply_flagged_pages(decision, &outlined_ocr_pages, has_boundaries, None);
+        ocr::apply_flagged_pages(decision, outlined_ocr_pages, has_boundaries, None);
     }
 }
 
@@ -325,7 +330,7 @@ fn gate_outcome(
             outcome,
             &decision.failing_pages,
             boundaries,
-            &native_text,
+            native_text,
             pdf_metadata.pdf_specific.page_count,
             pdf_metadata
                 .pdf_specific
@@ -372,10 +377,7 @@ async fn run_whole_document_fallback(
     feature = "layout-detection",
     any(feature = "formula-recognition", feature = "liter-llm")
 ))]
-type HeldMarkdownInputs = Option<(
-    Option<Vec<image::RgbImage>>,
-    Option<Vec<crate::layout::DetectionResult>>,
-)>;
+type HeldMarkdownInputs = Option<NativeOnlyLayoutInputs>;
 
 #[cfg(all(
     feature = "layout-detection",
@@ -434,7 +436,7 @@ async fn read_whole_document(
             rendered_layout_pages: std::mem::take(route.layout.rendered_pages),
             hints: {
                 #[allow(unused_mut)]
-                let mut hints = whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries, config);
+                let mut hints = whole_document_ocr_hints(pdf_metadata, native_text, boundaries, config);
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if let Some(reads) = &gate.probe_reads {
                     hints.get_or_insert_with(Default::default).probe_reads = Some(std::sync::Arc::clone(reads));
@@ -535,10 +537,10 @@ fn dropped_script_pages(
     match (whole_read, boundaries) {
         (Ok(read), Some(bounds)) if !bounds.is_empty() => {
             let read_pages = &read.5;
-            if every_page_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages) {
+            if every_page_dropped_script(&gate.native_script_pages, native_text, Some(bounds), read_pages) {
                 Vec::new()
             } else {
-                pages_that_dropped_script(&gate.native_script_pages, &native_text, Some(bounds), read_pages)
+                pages_that_dropped_script(&gate.native_script_pages, native_text, Some(bounds), read_pages)
             }
         }
         _ => Vec::new(),
@@ -563,7 +565,7 @@ async fn targeted_script_retry(
     match boundaries {
         Some(bounds) if partial_script_drop => Some(
             ocr::extract_mixed_ocr_native_with_layout_pages(
-                &native_text,
+                native_text,
                 bounds,
                 (
                     &gate.failing_pages,
@@ -576,7 +578,7 @@ async fn targeted_script_retry(
                 content,
                 config,
                 layout_pages,
-                (&outlined_ocr_pages, &gate.native_script_pages),
+                (outlined_ocr_pages, &gate.native_script_pages),
             )
             .await,
         ),
@@ -777,7 +779,7 @@ async fn run_selected_pages(
         content,
         config,
         layout_pages,
-        (&outlined_ocr_pages, &gate.native_script_pages, gate.probe_reads.clone()),
+        (outlined_ocr_pages, &gate.native_script_pages, gate.probe_reads.clone()),
     )
     .await;
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
@@ -795,7 +797,7 @@ async fn run_selected_pages(
         content,
         config,
         layout_pages,
-        (&outlined_ocr_pages, &gate.native_script_pages),
+        (outlined_ocr_pages, &gate.native_script_pages),
     )
     .await;
     Ok(match selected_run {

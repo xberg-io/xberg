@@ -53,6 +53,15 @@ pub(super) struct OcrRoutingState {
     pub(super) mixed_formula_layout_inputs: Option<(Vec<image::DynamicImage>, Vec<crate::layout::DetectionResult>)>,
 }
 
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm")
+))]
+pub(super) type NativeOnlyLayoutInputs = (
+    Option<Vec<image::RgbImage>>,
+    Option<Vec<crate::layout::DetectionResult>>,
+);
+
 #[cfg(feature = "layout-detection")]
 pub(super) struct MarkdownLayoutInputs<'a> {
     pub(super) images: &'a mut Option<Vec<image::RgbImage>>,
@@ -60,10 +69,7 @@ pub(super) struct MarkdownLayoutInputs<'a> {
     pub(super) acceleration_override: &'a mut Option<crate::core::config::acceleration::AccelerationConfig>,
     pub(super) rendered_pages: &'a mut Vec<bool>,
     #[cfg(any(feature = "formula-recognition", feature = "liter-llm"))]
-    pub(super) native_only: &'a mut Option<(
-        Option<Vec<image::RgbImage>>,
-        Option<Vec<crate::layout::DetectionResult>>,
-    )>,
+    pub(super) native_only: &'a mut Option<NativeOnlyLayoutInputs>,
 }
 
 /// The native extraction's view the OCR routes decide from.
