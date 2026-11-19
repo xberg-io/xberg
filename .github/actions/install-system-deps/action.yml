@@ -86,6 +86,21 @@ runs:
         LIBHEIF_VERSION: ${{ inputs.libheif-version }}
       run: scripts/ci/install-system-deps/install-linux.sh
 
+    - name: Identify MSVC toolset for Windows native caches
+      if: runner.os == 'Windows'
+      id: msvc-toolset
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $install = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($LASTEXITCODE -ne 0 -or -not $install) { throw 'vswhere found no Visual Studio with the MSVC x64 tools' }
+        $versionFile = Join-Path $install 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+        $version = (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim()
+        if ($version -notmatch '^(\d+\.\d+)\.') { throw "Unrecognized MSVC toolset version '$version'" }
+        if (-not $env:ImageOS) { throw 'ImageOS is not set; cannot identify the runner image' }
+        "id=$($env:ImageOS)-msvc$($Matches[1])" | Add-Content -Path $env:GITHUB_OUTPUT
+
     - name: Cache Tesseract (Windows)
       if: runner.os == 'Windows'
       id: cache-tesseract-windows
@@ -94,9 +109,9 @@ runs:
         path: |
           C:\Program Files\Tesseract-OCR
           C:\ProgramData\chocolatey\lib\tesseract
-        key: tesseract-windows-${{ runner.arch }}-v5.5.4-source-7e548e6-data-v2
+        key: tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-v2
         restore-keys: |
-          tesseract-windows-${{ runner.arch }}-v5.5.4-source-7e548e6-data-
+          tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-
 
     - name: Cache LLVM (Windows)
       if: runner.os == 'Windows'
@@ -124,9 +139,9 @@ runs:
       uses: actions/cache@v6
       with:
         path: C:\xberg-vcpkg-5363acb7
-        key: libheif-windows-${{ runner.arch }}-v1.23.7-vcpkg-5363acb7-v5
+        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5
         restore-keys: |
-          libheif-windows-${{ runner.arch }}-v1.23.7-vcpkg-5363acb7-v5-
+          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5-
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
