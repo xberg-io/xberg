@@ -3092,7 +3092,8 @@ jobs:
         nif: ["2.16"]
         include:
           - os: ubuntu-latest
-            timeout: 90
+            # The v1.4.2 dry run was still compiling at the 90-minute cap. ~keep
+            timeout: 240
             arch: x86_64
             target: x86_64-unknown-linux-musl
           - os: ubuntu-24.04-arm
