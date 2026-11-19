@@ -7,6 +7,8 @@ use super::extraction;
 use super::insert_image_ocr_text_anchor;
 #[cfg(feature = "layout-detection")]
 use super::layout_gate_metadata;
+#[cfg(all(feature = "liter-llm", feature = "layout-detection"))]
+use super::region_vlm;
 use super::unmapped_glyphs;
 #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
 use super::{recognize_pdf_formula_page_inputs, select_formula_page_inputs};
@@ -512,5 +514,32 @@ pub(super) async fn recognize_native_formulas(
         );
         recognize_pdf_formula_page_inputs(Some(&mut *doc), &mut side_channel, &inputs, layout, content).await;
         doc.formulas = side_channel;
+    }
+}
+
+#[cfg(all(feature = "liter-llm", feature = "layout-detection"))]
+pub(super) async fn inject_vlm_region_results(
+    doc: &mut InternalDocument,
+    config: &ExtractionConfig,
+    markdown_layout_images: Option<&[image::RgbImage]>,
+    markdown_layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
+    markdown_layout_detections: Option<&[crate::layout::DetectionResult]>,
+) {
+    if let Some(vlm_cfg) = region_vlm::region_vlm_config(config)
+        && let (Some(layout_images), Some(hints), Some(detections)) = (
+            markdown_layout_images,
+            markdown_layout_hints,
+            markdown_layout_detections,
+        )
+    {
+        let region_results = region_vlm::extract_vlm_regions(layout_images, hints, detections, vlm_cfg).await;
+        if !region_results.is_empty() {
+            tracing::debug!(
+                target: "xberg::extractors::pdf",
+                count = region_results.len(),
+                "injecting VLM region results into document"
+            );
+            region_vlm::inject_region_results(doc, region_results);
+        }
     }
 }

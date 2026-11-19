@@ -4565,24 +4565,14 @@ impl PdfExtractor {
         );
 
         #[cfg(all(feature = "liter-llm", feature = "layout-detection"))]
-        {
-            if let Some(vlm_cfg) = region_vlm::region_vlm_config(config)
-                && let (Some(layout_images), Some(hints), Some(detections)) = (
-                    markdown_layout_images.as_deref(),
-                    markdown_layout_hints.as_deref(),
-                    markdown_layout_detections.as_deref(),
-                )
-            {
-                let region_results = region_vlm::extract_vlm_regions(layout_images, hints, detections, vlm_cfg).await;
-                if !region_results.is_empty() {
-                    tracing::debug!(
-                        count = region_results.len(),
-                        "injecting VLM region results into document"
-                    );
-                    region_vlm::inject_region_results(&mut doc, region_results);
-                }
-            }
-        }
+        native_finalize::inject_vlm_region_results(
+            &mut doc,
+            config,
+            markdown_layout_images.as_deref(),
+            markdown_layout_hints.as_deref(),
+            markdown_layout_detections.as_deref(),
+        )
+        .await;
 
         {
             let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
