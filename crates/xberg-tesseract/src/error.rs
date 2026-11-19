@@ -44,6 +44,8 @@ pub enum TesseractError {
     InvalidEnumValue(i32),
     #[error("String contains null byte")]
     NullByteInString,
+    #[error("Iterator is stale: the engine recognized or reset after it was created")]
+    StaleIterator,
 }
 
 /// Result type for Tesseract operations.
