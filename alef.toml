@@ -1386,6 +1386,7 @@ sources = [
   "crates/xberg/src/core/config/html_output.rs",
   "crates/xberg/src/core/config/layout.rs",
   "crates/xberg/src/core/config/acceleration.rs",
+  "crates/xberg/src/ort_options.rs",
   "crates/xberg/src/core/config/llm.rs",
   "crates/xberg/src/core/config/content_filter.rs",
   "crates/xberg/src/core/config/tree_sitter.rs",
