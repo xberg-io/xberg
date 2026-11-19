@@ -4501,17 +4501,7 @@ impl PdfExtractor {
 
         #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
         if native_output.may_have_embedded_files {
-            let (embedded_children, embedded_warnings) =
-                crate::pdf::embedded_files::extract_and_process_embedded_files(content, config).await;
-            if !embedded_children.is_empty() {
-                match doc.children {
-                    Some(ref mut existing) => existing.extend(embedded_children),
-                    None => doc.children = Some(embedded_children),
-                }
-            }
-            for warning in embedded_warnings {
-                doc.processing_warnings.push(warning);
-            }
+            native_finalize::attach_embedded_files(&mut doc, content, config).await;
         }
 
         if let Some(ref mut pages) = final_pages {

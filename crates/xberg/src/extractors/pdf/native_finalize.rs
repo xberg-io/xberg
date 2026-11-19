@@ -471,3 +471,18 @@ pub(super) fn apply_ocr_to_page_contents(
     }
     ocr_text_pages
 }
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
+pub(super) async fn attach_embedded_files(doc: &mut InternalDocument, content: &[u8], config: &ExtractionConfig) {
+    let (embedded_children, embedded_warnings) =
+        crate::pdf::embedded_files::extract_and_process_embedded_files(content, config).await;
+    if !embedded_children.is_empty() {
+        match doc.children {
+            Some(ref mut existing) => existing.extend(embedded_children),
+            None => doc.children = Some(embedded_children),
+        }
+    }
+    for warning in embedded_warnings {
+        doc.processing_warnings.push(warning);
+    }
+}
