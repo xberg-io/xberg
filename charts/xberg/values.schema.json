@@ -109,7 +109,15 @@
           "enum": ["trace", "debug", "info", "warn", "error"]
         },
         "tessdataPrefix": { "type": "string" },
-        "ocrLanguage": { "type": "string" }
+        "ocrLanguage": { "type": "string" },
+        "apiTokenSecret": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "key": { "type": "string" }
+          }
+        },
+        "allowUnauthenticated": { "type": "boolean" }
       }
     },
     "cache": {

@@ -131,6 +131,15 @@ xberg:
   tessdataPrefix: "/usr/share/tesseract-ocr/5/tessdata"
   # -- Default OCR language
   ocrLanguage: "eng"
+  # -- Secret holding the API bearer token (XBERG_API_TOKEN). The pod binds 0.0.0.0, so the
+  # server refuses to start unless a token is provided or allowUnauthenticated is true.
+  apiTokenSecret:
+    # -- Name of an existing Secret; leave empty to run without a token
+    name: ""
+    # -- Key in the Secret that holds the token
+    key: "token"
+  # -- Start without authentication (XBERG_ALLOW_UNAUTHENTICATED=true), e.g. behind a trusted proxy
+  allowUnauthenticated: false
 
 cache:
   # -- Enable a persistent cache (PVC) for embedding models and downloaded assets.
