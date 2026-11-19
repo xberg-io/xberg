@@ -18,6 +18,8 @@ mod layout_runner;
 mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
+#[cfg(feature = "pdf")]
+mod native_finalize;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod picture_layer;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -4735,41 +4737,7 @@ impl PdfExtractor {
         }
         doc.annotations = pdf_annotations;
 
-        {
-            use crate::types::annotations::PdfAnnotationType;
-            use crate::types::uri::{ExtractedUri, UriKind};
-
-            let uris: Vec<ExtractedUri> = doc
-                .annotations
-                .as_ref()
-                .map(|annotations| {
-                    annotations
-                        .iter()
-                        .filter(|a| a.annotation_type == PdfAnnotationType::Link)
-                        .filter_map(|a| {
-                            a.content.as_ref().map(|url| {
-                                let kind = if url.starts_with('#') {
-                                    UriKind::Anchor
-                                } else if url.starts_with("mailto:") {
-                                    UriKind::Email
-                                } else {
-                                    UriKind::Hyperlink
-                                };
-                                ExtractedUri {
-                                    url: url.clone(),
-                                    label: Some(url.clone()),
-                                    page: Some(a.page_number),
-                                    kind,
-                                }
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            for uri in uris {
-                doc.push_uri(uri);
-            }
-        }
+        native_finalize::push_link_annotation_uris(&mut doc);
 
         #[cfg(feature = "pdf")]
         {
@@ -4798,33 +4766,8 @@ impl PdfExtractor {
             assign_hierarchy_to_pages(pages, &doc);
         }
 
-        // GH#1653 + GH#1654: one raw-MediaBox coordinate frame per page that ended up with
-        // hierarchy blocks, now that `assign_hierarchy_to_pages` above has populated
-        // `PageContent::hierarchy`. One shared record covers both issues: a consumer needs
-        // the MediaBox origin (which can be non-zero and negative) and the page rotation
-        // together to place a page's raw-space geometry. Rides in `additional` rather than a
-        // new public binding type, same as the `page_labels` key below (issue #66) and
-        // `ocr_page_coordinate_frames` above (GH#1645). ~keep
         if let Some(ref pages) = final_pages {
-            let pages_with_hierarchy: std::collections::HashSet<u32> = pages
-                .iter()
-                .filter(|page| {
-                    page.hierarchy
-                        .as_ref()
-                        .is_some_and(|hierarchy| !hierarchy.blocks.is_empty())
-                })
-                .map(|page| page.page_number)
-                .collect();
-            let pdf_page_coordinate_frames: Vec<_> = pdf_page_coordinate_frames
-                .into_iter()
-                .filter(|frame| pages_with_hierarchy.contains(&frame.page_number))
-                .collect();
-            if !pdf_page_coordinate_frames.is_empty() {
-                doc.metadata.additional.insert(
-                    std::borrow::Cow::Borrowed("pdf_page_coordinate_frames"),
-                    serde_json::json!(pdf_page_coordinate_frames),
-                );
-            }
+            native_finalize::attach_page_coordinate_frames(&mut doc, pages, pdf_page_coordinate_frames);
         }
 
         // Native snapshots were captured before canonical filtering, ordering and IDs.
