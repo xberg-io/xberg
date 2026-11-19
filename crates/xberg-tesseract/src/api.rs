@@ -2,7 +2,7 @@ use crate::enums::{TessPageIteratorLevel, TessPageSegMode};
 use crate::error::{Result, TesseractError};
 use crate::monitor::TessMonitor;
 use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorDelete};
-use crate::result_iterator::TessResultIteratorDelete;
+use crate::result_iterator::{TessResultIteratorDelete, copy_and_delete_tess_text};
 use crate::result_renderer::TessResultRenderer;
 use crate::{PageIterator, ResultIterator};
 use std::collections::HashMap;
@@ -15,6 +15,18 @@ use std::sync::{Arc, Mutex};
 use std::sync::{OnceLock, PoisonError};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
+
+/// Copies a non-null text allocation returned by a `TessBaseAPI` text getter and releases it with
+/// `TessDeleteText` on both the success and the UTF-8 error path. ~keep
+///
+/// # Safety
+///
+/// `pointer` must be non-null and reference a NUL-terminated allocation owned by the caller that
+/// only `TessDeleteText` may release and that nothing else frees.
+unsafe fn copy_owned_native_text(pointer: *mut c_char) -> Result<String> {
+    // SAFETY: forwarded from this function's contract; the deleter runs once with the same pointer. ~keep
+    unsafe { copy_and_delete_tess_text(pointer, |owned| TessDeleteText(owned)) }
+}
 
 /// Unique temporary directory removed on drop; holds the text renderer's output for
 /// [`TesseractAPI::process_pages`].
@@ -606,10 +618,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets the ALTO text for the specified page.
@@ -627,10 +638,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets the TSV text for the specified page.
@@ -649,10 +659,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Sets the input name.
@@ -765,10 +774,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets the LSTM box text for the specified page.
@@ -786,10 +794,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets the word str box text for the specified page.
@@ -807,10 +814,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets the UNLV text.
@@ -824,10 +830,9 @@ impl TesseractAPI {
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
         }
-        let c_str = unsafe { CStr::from_ptr(text_ptr) };
-        let result = c_str.to_str()?.to_owned();
-        unsafe { TessDeleteText(text_ptr) };
-        Ok(result)
+        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        unsafe { copy_owned_native_text(text_ptr) }
     }
 
     /// Gets all word confidences.
@@ -1586,12 +1591,9 @@ impl TesseractAPI {
             return Err(TesseractError::OcrError);
         }
 
-        let result = unsafe {
-            let c_str = CStr::from_ptr(text_ptr);
-            let result = c_str.to_str()?.to_owned();
-            TessDeleteText(text_ptr);
-            result
-        };
+        // SAFETY: `text_ptr` is non-null and was returned by TessBaseAPIGetUTF8Text, which hands over a
+        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+        let result = unsafe { copy_owned_native_text(text_ptr) }?;
 
         ensure_tesseract_cleanup_registered();
         Ok(result)
