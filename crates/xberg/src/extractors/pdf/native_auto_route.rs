@@ -734,106 +734,117 @@ async fn run_selected_pages_fallback(
     pages: Vec<u32>,
     gate: &AutoGate,
 ) -> Result<(String, ExtractionMethod)> {
-    let (content, config, layout_pages, pdf_metadata, boundaries) = (
-        route.content,
-        route.config,
-        route.layout_pages,
-        route.pdf_metadata,
-        route.boundaries,
-    );
-    let outlined_ocr_pages = &*route.outlined_ocr_pages;
-    Ok(match boundaries {
+    match route.boundaries {
         Some(bounds) if !bounds.is_empty() => {
-            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            let selected_run = ocr::extract_mixed_ocr_native_with_probe_reads(
-                &native_text,
-                bounds,
-                (
-                    &pages,
-                    pdf_metadata
-                        .pdf_specific
-                        .fabricated_text_pages
-                        .as_deref()
-                        .unwrap_or(&[]),
-                ),
-                content,
-                config,
-                layout_pages,
-                (&outlined_ocr_pages, &gate.native_script_pages, gate.probe_reads.clone()),
-            )
-            .await;
-            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-            let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
-                &native_text,
-                bounds,
-                (
-                    &pages,
-                    pdf_metadata
-                        .pdf_specific
-                        .fabricated_text_pages
-                        .as_deref()
-                        .unwrap_or(&[]),
-                ),
-                content,
-                config,
-                layout_pages,
-                (&outlined_ocr_pages, &gate.native_script_pages),
-            )
-            .await;
-            match selected_run {
-                Ok(mixed_run) => apply_targeted_mixed_run!(routing, mixed_run),
-                Err(e @ crate::XbergError::Cancelled) => return Err(e),
-                Err(e) => {
-                    tracing::warn!(
-                        target: "xberg::extractors::pdf",
-                        error = %e.pdf_ocr_trace_category(),
-                        failing_pages = ?pages,
-                        "Targeted OCR fallback failed; using native text extraction result"
-                    );
-                    if failed_ocr_fallback_is_total_loss(&native_text) {
-                        return Err(e);
-                    }
-                    routing
-                        .page_failures
-                        .extend(ocr::route_level_ocr_page_failures(&pages, &e, &native_text, bounds));
-                    routing.fallback_warnings.push(crate::types::ProcessingWarning {
-                        source: std::borrow::Cow::Borrowed("ocr"),
-                        message: std::borrow::Cow::Owned(format!(
-                            "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
-                                         retain native text that was below the OCR-trigger quality threshold \
-                                         and may be empty or incomplete."
-                        )),
-                    });
-                    (native_text, ExtractionMethod::Native)
-                }
-            }
+            run_selected_pages(route, routing, native_text, (bounds, &pages), gate).await
         }
-        _ => {
+        _ => selected_pages_without_boundaries(routing, native_text, &pages),
+    }
+}
+
+async fn run_selected_pages(
+    route: &OcrRouteInputs<'_>,
+    routing: &mut OcrRoutingState,
+    native_text: String,
+    (bounds, pages): (&[crate::types::PageBoundary], &[u32]),
+    gate: &AutoGate,
+) -> Result<(String, ExtractionMethod)> {
+    let (content, config, layout_pages, pdf_metadata) =
+        (route.content, route.config, route.layout_pages, route.pdf_metadata);
+    let outlined_ocr_pages = &*route.outlined_ocr_pages;
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let selected_run = ocr::extract_mixed_ocr_native_with_probe_reads(
+        &native_text,
+        bounds,
+        (
+            pages,
+            pdf_metadata
+                .pdf_specific
+                .fabricated_text_pages
+                .as_deref()
+                .unwrap_or(&[]),
+        ),
+        content,
+        config,
+        layout_pages,
+        (&outlined_ocr_pages, &gate.native_script_pages, gate.probe_reads.clone()),
+    )
+    .await;
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
+        &native_text,
+        bounds,
+        (
+            pages,
+            pdf_metadata
+                .pdf_specific
+                .fabricated_text_pages
+                .as_deref()
+                .unwrap_or(&[]),
+        ),
+        content,
+        config,
+        layout_pages,
+        (&outlined_ocr_pages, &gate.native_script_pages),
+    )
+    .await;
+    Ok(match selected_run {
+        Ok(mixed_run) => apply_targeted_mixed_run!(routing, mixed_run),
+        Err(e @ crate::XbergError::Cancelled) => return Err(e),
+        Err(e) => {
             tracing::warn!(
                 target: "xberg::extractors::pdf",
+                error = %e.pdf_ocr_trace_category(),
                 failing_pages = ?pages,
-                "Targeted OCR requested but no page boundaries available; using native text"
+                "Targeted OCR fallback failed; using native text extraction result"
             );
             if failed_ocr_fallback_is_total_loss(&native_text) {
-                return Err(crate::XbergError::Plugin {
-                    message: format!(
-                        "Targeted OCR was required for pages {pages:?} but no page boundaries \
-                                     were available, and no native text could be recovered"
-                    ),
-                    plugin_name: "ocr".to_string(),
-                });
+                return Err(e);
             }
+            routing
+                .page_failures
+                .extend(ocr::route_level_ocr_page_failures(pages, &e, &native_text, bounds));
             routing.fallback_warnings.push(crate::types::ProcessingWarning {
                 source: std::borrow::Cow::Borrowed("ocr"),
                 message: std::borrow::Cow::Owned(format!(
-                    "Targeted OCR was required for pages {pages:?} but no page boundaries were \
-                                 available; those pages retain native text that was below the OCR-trigger \
-                                 quality threshold and may be empty or incomplete."
+                    "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
+                                         retain native text that was below the OCR-trigger quality threshold \
+                                         and may be empty or incomplete."
                 )),
             });
             (native_text, ExtractionMethod::Native)
         }
     })
+}
+
+fn selected_pages_without_boundaries(
+    routing: &mut OcrRoutingState,
+    native_text: String,
+    pages: &[u32],
+) -> Result<(String, ExtractionMethod)> {
+    tracing::warn!(
+        target: "xberg::extractors::pdf",
+        failing_pages = ?pages,
+        "Targeted OCR requested but no page boundaries available; using native text"
+    );
+    if failed_ocr_fallback_is_total_loss(&native_text) {
+        return Err(crate::XbergError::Plugin {
+            message: format!(
+                "Targeted OCR was required for pages {pages:?} but no page boundaries \
+                                     were available, and no native text could be recovered"
+            ),
+            plugin_name: "ocr".to_string(),
+        });
+    }
+    routing.fallback_warnings.push(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(format!(
+            "Targeted OCR was required for pages {pages:?} but no page boundaries were \
+                                 available; those pages retain native text that was below the OCR-trigger \
+                                 quality threshold and may be empty or incomplete."
+        )),
+    });
+    Ok((native_text, ExtractionMethod::Native))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
