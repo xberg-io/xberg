@@ -1,4 +1,4 @@
-//! Text operator arms (`ET`, `Tj`, `'`, `TJ`, `"`) of the operator loop.
+//! Text operator arms (`BT`, `ET`, `Td`, `TD`, `T*`, `Tf`, `Tj`, `'`, `TJ`, `"`) of the operator loop.
 
 use super::*;
 use crate::content::operators::TextElement;
@@ -361,5 +361,62 @@ impl PageRenderer {
             st.gs_stack.current_mut().advance_text_matrix(advance);
         }
         Ok(())
+    }
+
+    pub(super) fn op_begin_text(&mut self, st: &mut OpLoopState<'_>) {
+        st.in_text_object = true;
+        // Start each text object with a clean text-clip path
+        // (§9.4.1: the text clip path is reset at BT and applied
+        // at ET). Any leftover from a malformed/unterminated prior
+        // block is discarded here. ~keep
+        st.text_clip_accum = None;
+        let gs = st.gs_stack.current_mut();
+        gs.text_matrix = Matrix::identity();
+        gs.text_line_matrix = Matrix::identity();
+        tracing::trace!("BT (BeginText)");
+    }
+
+    pub(super) fn op_td(&mut self, st: &mut OpLoopState<'_>, tx: &f32, ty: &f32) {
+        if st.in_text_object {
+            let gs = st.gs_stack.current_mut();
+            let translation = Matrix::translation(*tx, *ty);
+            gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
+            gs.text_matrix = gs.text_line_matrix;
+            tracing::trace!("Td: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
+        }
+    }
+
+    pub(super) fn op_td_set_leading(&mut self, st: &mut OpLoopState<'_>, tx: &f32, ty: &f32) {
+        if st.in_text_object {
+            let gs = st.gs_stack.current_mut();
+            gs.leading = -(*ty);
+            let translation = Matrix::translation(*tx, *ty);
+            gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
+            gs.text_matrix = gs.text_line_matrix;
+            tracing::trace!("TD: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
+        }
+    }
+
+    pub(super) fn op_t_star(&mut self, st: &mut OpLoopState<'_>) {
+        if st.in_text_object {
+            let gs = st.gs_stack.current_mut();
+            let leading = gs.leading;
+            let translation = Matrix::translation(0.0, -leading);
+            gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
+            gs.text_matrix = gs.text_line_matrix;
+            tracing::trace!("T*: text_matrix now: {:?}", gs.text_matrix);
+        }
+    }
+
+    pub(super) fn op_tf(&mut self, st: &mut OpLoopState<'_>, font: &String, size: &f32) {
+        // Cache the font's writing mode on the graphics state so
+        // the rasterizer hot path can branch on a single
+        // primitive read instead of dereferencing the FontInfo
+        // through the cache for every glyph. ~keep
+        let wmode = self.fonts.get(font).map(|f| f.wmode).unwrap_or(0);
+        let gs = st.gs_stack.current_mut();
+        gs.font_name = Some(font.clone());
+        gs.font_size = *size;
+        gs.text_wmode = wmode;
     }
 }

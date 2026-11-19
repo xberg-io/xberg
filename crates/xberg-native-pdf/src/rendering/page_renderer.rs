@@ -1145,30 +1145,8 @@ impl PageRenderer {
                 continue;
             }
             match op {
-                Operator::SaveState => {
-                    st.gs_stack.save();
-                    // Clone current clip for the new graphics state level
-                    // This allows the current level to modify its clip without affecting parents
-                    // ~keep
-                    let current_clip = st.clip_stack.last().cloned().flatten();
-                    st.clip_stack.push(current_clip);
-                    tracing::trace!(
-                        "q (SaveState), depth={}, clip_stack depth={}",
-                        st.gs_stack.depth(),
-                        st.clip_stack.len()
-                    );
-                }
-                Operator::RestoreState => {
-                    st.gs_stack.restore();
-                    if st.clip_stack.len() > 1 {
-                        st.clip_stack.pop();
-                    }
-                    tracing::trace!(
-                        "Q (RestoreState), depth={}, clip_stack depth={}",
-                        st.gs_stack.depth(),
-                        st.clip_stack.len()
-                    );
-                }
+                Operator::SaveState => self.op_save_state(&mut st),
+                Operator::RestoreState => self.op_restore_state(&mut st),
                 Operator::Cm { a, b, c, d, e, f } => {
                     let matrix = Matrix {
                         a: *a,
@@ -1293,33 +1271,10 @@ impl PageRenderer {
                 // gating it, a `W n` issued inside an excluded BDC scope that
                 // is not bracketed by `q/Q` would silently restrict subsequent
                 // visible content. ~keep
-                Operator::ClipNonZero => {
-                    if st.excluded_layer_depth == 0 {
-                        if let Some(path) = st.current_path.clone().finish() {
-                            st.pending_clip = Some((path, tiny_skia::FillRule::Winding));
-                        }
-                    }
-                }
-                Operator::ClipEvenOdd => {
-                    if st.excluded_layer_depth == 0 {
-                        if let Some(path) = st.current_path.clone().finish() {
-                            st.pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
-                        }
-                    }
-                }
+                Operator::ClipNonZero => self.op_clip_non_zero(&mut st),
+                Operator::ClipEvenOdd => self.op_clip_even_odd(&mut st),
 
-                Operator::BeginText => {
-                    st.in_text_object = true;
-                    // Start each text object with a clean text-clip path
-                    // (§9.4.1: the text clip path is reset at BT and applied
-                    // at ET). Any leftover from a malformed/unterminated prior
-                    // block is discarded here. ~keep
-                    st.text_clip_accum = None;
-                    let gs = st.gs_stack.current_mut();
-                    gs.text_matrix = Matrix::identity();
-                    gs.text_line_matrix = Matrix::identity();
-                    tracing::trace!("BT (BeginText)");
-                }
+                Operator::BeginText => self.op_begin_text(&mut st),
                 Operator::EndText => self.op_end_text(&mut st),
 
                 Operator::Tc { char_space } => {
@@ -1366,25 +1321,8 @@ impl PageRenderer {
                 // `render_image`/`render_image_mask` used for `Do` images. ~keep
                 Operator::InlineImage { dict, data } => self.op_inline_image(pixmap, &mut st, env, dict, data)?,
 
-                Operator::Td { tx, ty } => {
-                    if st.in_text_object {
-                        let gs = st.gs_stack.current_mut();
-                        let translation = Matrix::translation(*tx, *ty);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("Td: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
-                    }
-                }
-                Operator::TD { tx, ty } => {
-                    if st.in_text_object {
-                        let gs = st.gs_stack.current_mut();
-                        gs.leading = -(*ty);
-                        let translation = Matrix::translation(*tx, *ty);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("TD: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
-                    }
-                }
+                Operator::Td { tx, ty } => self.op_td(&mut st, tx, ty),
+                Operator::TD { tx, ty } => self.op_td_set_leading(&mut st, tx, ty),
                 Operator::Tm { a, b, c, d, e, f } => {
                     if st.in_text_object {
                         let gs = st.gs_stack.current_mut();
@@ -1409,27 +1347,8 @@ impl PageRenderer {
                         );
                     }
                 }
-                Operator::TStar => {
-                    if st.in_text_object {
-                        let gs = st.gs_stack.current_mut();
-                        let leading = gs.leading;
-                        let translation = Matrix::translation(0.0, -leading);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("T*: text_matrix now: {:?}", gs.text_matrix);
-                    }
-                }
-                Operator::Tf { font, size } => {
-                    // Cache the font's writing mode on the graphics state so
-                    // the rasterizer hot path can branch on a single
-                    // primitive read instead of dereferencing the FontInfo
-                    // through the cache for every glyph. ~keep
-                    let wmode = self.fonts.get(font).map(|f| f.wmode).unwrap_or(0);
-                    let gs = st.gs_stack.current_mut();
-                    gs.font_name = Some(font.clone());
-                    gs.font_size = *size;
-                    gs.text_wmode = wmode;
-                }
+                Operator::TStar => self.op_t_star(&mut st),
+                Operator::Tf { font, size } => self.op_tf(&mut st, font, size),
 
                 Operator::SetExtGState { dict_name } => self.op_set_ext_g_state(&mut st, env, dict_name),
 
@@ -1438,20 +1357,7 @@ impl PageRenderer {
                 // way to set a clipping path without filling or stroking.
                 // Suppress the clip application inside an excluded OCG scope so
                 // the clip doesn't leak past EMC into visible content. ~keep
-                Operator::EndPath => {
-                    if st.excluded_layer_depth == 0 {
-                        apply_pending_clip(
-                            &mut st.pending_clip,
-                            &mut st.clip_stack,
-                            pixmap,
-                            base_transform,
-                            &st.gs_stack,
-                        );
-                    } else {
-                        let _ = st.pending_clip.take();
-                    }
-                    st.current_path = PathBuilder::new();
-                }
+                Operator::EndPath => self.op_end_path(pixmap, &mut st, env),
 
                 Operator::PaintShading { name } => self.op_paint_shading(pixmap, &mut st, env, name)?,
 
@@ -1461,13 +1367,7 @@ impl PageRenderer {
                 Operator::BeginMarkedContentDict { tag, properties } => {
                     self.op_begin_marked_content_dict(&mut st, env, tag, properties)
                 }
-                Operator::EndMarkedContent => {
-                    if let Some(was_excluded) = st.marked_content_is_excluded.pop() {
-                        if was_excluded && st.excluded_layer_depth > 0 {
-                            st.excluded_layer_depth -= 1;
-                        }
-                    }
-                }
+                Operator::EndMarkedContent => self.op_end_marked_content(&mut st),
 
                 _ => {}
             }

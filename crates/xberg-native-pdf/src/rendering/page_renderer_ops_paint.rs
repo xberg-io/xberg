@@ -1,4 +1,5 @@
-//! Path-painting operator arms (`S`, `s`, `f`, `f*`, `B`, `b`, `B*`, `b*`) of the operator loop.
+//! Path-painting, clipping and path-ending operator arms (`S`, `s`, `f`, `f*`, `B`, `b`, `B*`, `b*`,
+//! `W`, `W*`, `n`) of the operator loop.
 
 use super::*;
 
@@ -464,5 +465,37 @@ impl PageRenderer {
             let _ = std::mem::replace(&mut st.current_path, PathBuilder::new()).finish();
         }
         Ok(())
+    }
+
+    pub(super) fn op_clip_non_zero(&mut self, st: &mut OpLoopState<'_>) {
+        if st.excluded_layer_depth == 0 {
+            if let Some(path) = st.current_path.clone().finish() {
+                st.pending_clip = Some((path, tiny_skia::FillRule::Winding));
+            }
+        }
+    }
+
+    pub(super) fn op_clip_even_odd(&mut self, st: &mut OpLoopState<'_>) {
+        if st.excluded_layer_depth == 0 {
+            if let Some(path) = st.current_path.clone().finish() {
+                st.pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
+            }
+        }
+    }
+
+    pub(super) fn op_end_path(&mut self, pixmap: &mut Pixmap, st: &mut OpLoopState<'_>, env: OpEnv<'_>) {
+        let OpEnv { base_transform, .. } = env;
+        if st.excluded_layer_depth == 0 {
+            apply_pending_clip(
+                &mut st.pending_clip,
+                &mut st.clip_stack,
+                pixmap,
+                base_transform,
+                &st.gs_stack,
+            );
+        } else {
+            let _ = st.pending_clip.take();
+        }
+        st.current_path = PathBuilder::new();
     }
 }
