@@ -449,7 +449,6 @@ ffi_extern! {
         bottom: *mut c_int,
     ) -> c_int;
     pub fn TessPageIteratorBlockType(handle: *mut c_void) -> c_int;
-    pub fn TessPageIteratorEmpty(handle: *const c_void, level: c_int) -> c_int;
     pub fn TessPageIteratorBaseline(
         handle: *mut c_void,
         level: c_int,

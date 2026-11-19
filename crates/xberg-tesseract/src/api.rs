@@ -2,7 +2,7 @@ use crate::enums::{TessPageIteratorLevel, TessPageSegMode};
 use crate::error::{Result, TesseractError};
 use crate::monitor::TessMonitor;
 use crate::mutable_iterator::MutableIterator;
-use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorDelete, TessPageIteratorEmpty};
+use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorBoundingBox, TessPageIteratorDelete};
 use crate::result_iterator::{copy_and_delete_tess_text, TessResultIteratorDelete};
 use crate::result_renderer::TessResultRenderer;
 use crate::{PageIterator, ResultIterator};
@@ -634,10 +634,20 @@ impl TesseractAPI {
             // Tesseract returns success for an empty page before it marks the recognition done, so a
             // later text getter recognizes again and replaces the result. Only a non-empty result is final. ~keep
             // SAFETY: the engine handle lock is held, and the probe iterator is deleted before returning.
+            // The C API has no TessPageIteratorEmpty; PageIterator::BoundingBox returns false exactly when
+            // Empty(level) holds (pageiterator.cpp), so a failing RIL_BLOCK box means no blocks. ~keep
             let has_results = unsafe {
                 let probe = TessBaseAPIGetIterator(*handle);
-                let found =
-                    !probe.is_null() && TessPageIteratorEmpty(probe, TessPageIteratorLevel::RIL_BLOCK as c_int) == 0;
+                let (mut left, mut top, mut right, mut bottom) = (0, 0, 0, 0);
+                let found = !probe.is_null()
+                    && TessPageIteratorBoundingBox(
+                        probe,
+                        TessPageIteratorLevel::RIL_BLOCK as c_int,
+                        &mut left,
+                        &mut top,
+                        &mut right,
+                        &mut bottom,
+                    ) != 0;
                 if !probe.is_null() {
                     TessPageIteratorDelete(probe);
                 }
