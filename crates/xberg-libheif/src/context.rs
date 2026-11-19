@@ -45,8 +45,10 @@ impl ContextOwner<'_> {
 impl Drop for ContextOwner<'_> {
     fn drop(&mut self) {
         // SAFETY: `ptr` is the context allocated by `HeifContext::new` and owned only by this
-        // value; nothing else frees it. It is released before the fields drop, so the source
-        // (reader or borrowed input) outlives every native read the context can still make.
+        // value; nothing else frees it. The native context is released before the fields drop,
+        // so the source (reader or borrowed input) outlives it. Every wrapper that can keep
+        // native context state alive (`HeifContext`, `ImageHandle`, `Track`, `RegionItem`)
+        // holds an `Rc` of this owner, so the release happens only after the last of them.
         unsafe { lh::heif_context_free(self.ptr) };
     }
 }
@@ -99,8 +101,21 @@ pub struct HeifContext<'a> {
 
 #[allow(unsafe_code)]
 impl HeifContext<'static> {
+    /// Create a new context from a file.
+    pub fn read_from_file(name: &str) -> Result<HeifContext<'static>> {
+        let mut context = HeifContext::new()?;
+        context.read_file(name)?;
+        Ok(context)
+    }
+}
+
+#[allow(unsafe_code)]
+impl<'a> HeifContext<'a> {
     /// Create a new empty context.
-    pub fn new() -> Result<HeifContext<'static>> {
+    ///
+    /// The lifetime is chosen by the caller: the context is invariant over it, and a
+    /// reader or input slice later installed must outlive it.
+    pub fn new() -> Result<HeifContext<'a>> {
         // SAFETY: Allocation takes no caller-owned pointers. A non-null result is owned by the
         // `ContextOwner` created below, which frees it exactly once.
         let ctx = unsafe { lh::heif_context_alloc() };
@@ -121,17 +136,7 @@ impl HeifContext<'static> {
         }
     }
 
-    /// Create a new context from a file.
-    pub fn read_from_file(name: &str) -> Result<HeifContext<'static>> {
-        let mut context = HeifContext::new()?;
-        context.read_file(name)?;
-        Ok(context)
-    }
-}
-
-#[allow(unsafe_code)]
-impl<'a> HeifContext<'a> {
-    /// The source slot, available only while no handle or track shares this context.
+    /// The source slot, available only while no handle, track or region item shares this context.
     ///
     /// Replacing the input under a live handle would leave the handle's native state reading
     /// from a different source than the one it was parsed from.
@@ -165,8 +170,8 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn read_file(&mut self, name: &str) -> Result<()> {
         let inner = self.inner;
+        let c_name = str_to_cstring(name, "name")?;
         *self.source_mut()? = Source::File;
-        let c_name = ffi::CString::new(name).unwrap();
         // SAFETY: The context is exclusively borrowed and the NUL-terminated filename lives
         // through this call. Null requests default read options.
         let err = unsafe { lh::heif_context_read_from_file(inner, c_name.as_ptr(), ptr::null()) };
