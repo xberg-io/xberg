@@ -4,17 +4,20 @@ version = 1
 [[hook_sources]]
 id = "adrlint"
 source = "https://github.com/Goldziher/adrlint.git"
-revision = "4c82ef4fa623d7721852a85f0a14c931cd04960b"
-path = "cache://hook-sources/87f17bc04cb735c06ccfa44452e81ef2/4c82ef4fa623d7721852a85f0a14c931cd04960b"
+ref = "v0"
+revision = "0c8663b43e009f7989b67ce88739ea04211d9e27"
+path = "cache://hook-sources/87f17bc04cb735c06ccfa44452e81ef2/0c8663b43e009f7989b67ce88739ea04211d9e27"
 
 [[hook_sources]]
 id = "ai-rulez"
 source = "https://github.com/Goldziher/ai-rulez.git"
-revision = "6966b9819c2829e3bccb62d06b5fef448a2826c8"
-path = "cache://hook-sources/a028197e1e7ffd465c27caaca41da62d/6966b9819c2829e3bccb62d06b5fef448a2826c8"
+ref = "v5"
+revision = "fa7efad1c1b7184c1e824f299a0e90258cd89b87"
+path = "cache://hook-sources/a028197e1e7ffd465c27caaca41da62d/fa7efad1c1b7184c1e824f299a0e90258cd89b87"
 
 [[hook_sources]]
 id = "gh-actions-updater"
 source = "https://github.com/Goldziher/gh-actions-updater.git"
+ref = "v0"
 revision = "93f32049db3418fe9508790b1a65d1de3436ae92"
 path = "cache://hook-sources/b631113be44d7a0373123edd3551bb86/93f32049db3418fe9508790b1a65d1de3436ae92"
