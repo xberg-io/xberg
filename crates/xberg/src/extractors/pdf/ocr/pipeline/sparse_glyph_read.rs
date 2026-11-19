@@ -753,6 +753,9 @@ static EVENTS: std::sync::Mutex<Vec<(&'static str, usize)>> = std::sync::Mutex::
 static PAGE_STARTED: tokio::sync::Notify = tokio::sync::Notify::const_new();
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const PARALLEL_CASE_WORKERS: usize = 2;
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const PARALLEL_CASE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
@@ -1110,6 +1113,10 @@ fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read
                 extract_pages: true,
                 ..Default::default()
             }),
+            concurrency: Some(crate::core::config::concurrency::ConcurrencyConfig {
+                max_threads: Some(PARALLEL_CASE_WORKERS),
+                ..Default::default()
+            }),
             ocr: Some(OcrConfig {
                 tessdata_path: Some(models.path().to_path_buf()),
                 quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
@@ -1120,6 +1127,9 @@ fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read
             }),
             ..Default::default()
         };
+        EVENTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+        // A permit left by an earlier run would release the trial without a second page starting.
+        while futures::FutureExt::now_or_never(PAGE_STARTED.notified()).is_some() {}
         let result = crate::core::extractor::extract_bytes(&pdf, "application/pdf", &config)
             .await
             .unwrap();
@@ -1130,7 +1140,8 @@ fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read
         );
         assert!(
             events.contains(&("trial_released", 0)) && !events.contains(&("trial_timeout", 0)),
-            "page two must start while the trial of page one is still running: {events:?}"
+            "page two must start while the trial of page one is still running; if page two landed in a \
+             later batch, the memory-adapted batch size dropped below {PARALLEL_CASE_WORKERS}: {events:?}"
         );
         assert!(
             events.iter().filter(|event| **event == ("page_start", 0)).count() == 1,

@@ -1826,7 +1826,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
         let batch_pages = &page_indices[batch_start..batch_end];
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let trial_pages: Vec<usize> = effective_pipeline
             .as_ref()
             .map(|_| {
@@ -1837,7 +1837,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .collect()
             })
             .unwrap_or_default();
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let without_trials = (!trial_pages.is_empty()).then(|| {
             batch_pages
                 .iter()
@@ -1845,7 +1845,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 .filter(|idx| !trial_pages.contains(idx))
                 .collect::<Vec<_>>()
         });
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let batch_pages = without_trials.as_deref().unwrap_or(batch_pages);
         #[cfg(feature = "layout-detection")]
         let (page_images, render_failures, batch_raster_dpis) = if let Some(images) = layout_images_for_mixed {
@@ -2235,14 +2235,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 );
                                 continue;
                             }
-                            let (retry_images, retry_failures, retry_dpis) = render_selected_pages_with_image_config(
-                                &render_doc,
-                                &page_rotations,
-                                &[idx],
-                                security_limits,
-                                &images_for_page,
-                                preprocessing_render_dpi,
-                            );
+                            // Trial pages have no XObject, Pattern or Shading resources (`marked_words`
+                            // rejects them), so the source-image budget refusal that gets XObject
+                            // recovery above cannot occur here.
+                            let retry_doc = Arc::clone(&render_doc);
+                            let retry_rotations = page_rotations.clone();
+                            let retry_limits = security_limits.clone();
+                            let retry_images_config = images_for_page(idx).cloned();
+                            let (retry_images, retry_failures, retry_dpis) =
+                                super::super::spawn_pdf_blocking(move || {
+                                    Ok(render_selected_pages_with_image_config(
+                                        &retry_doc,
+                                        &retry_rotations,
+                                        &[idx],
+                                        &retry_limits,
+                                        |_| retry_images_config.as_ref(),
+                                        preprocessing_render_dpi,
+                                    ))
+                                })
+                                .await?;
                             raster_dpis.extend(retry_dpis);
                             for (failed_idx, error) in retry_failures {
                                 pending_pages.remove(&failed_idx);
