@@ -8,6 +8,8 @@ use super::insert_image_ocr_text_anchor;
 #[cfg(feature = "layout-detection")]
 use super::layout_gate_metadata;
 use super::unmapped_glyphs;
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+use super::{recognize_pdf_formula_page_inputs, select_formula_page_inputs};
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::{replace_page_content_with_ocr_text, replace_pages_with_ocr_page_texts};
 use crate::core::config::ExtractionConfig;
@@ -484,5 +486,31 @@ pub(super) async fn attach_embedded_files(doc: &mut InternalDocument, content: &
     }
     for warning in embedded_warnings {
         doc.processing_warnings.push(warning);
+    }
+}
+
+// Native pages with layout hints carry formula elements holding the
+// region's glyph text; a configured model replaces it with LaTeX.
+// Accepted mixed OCR pages use their own layout inputs; untouched pages
+// retain their Markdown inputs. Each page has one formula owner. ~keep
+#[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
+pub(super) async fn recognize_native_formulas(
+    doc: &mut InternalDocument,
+    config: &ExtractionConfig,
+    content: &[u8],
+    markdown_layout_inputs: Option<(&[image::RgbImage], &[crate::layout::DetectionResult])>,
+    mixed_formula_layout_inputs: &mut Option<(Vec<image::DynamicImage>, Vec<crate::layout::DetectionResult>)>,
+) {
+    if let Some(layout) = config.layout.as_ref() {
+        let mut side_channel = std::mem::take(&mut doc.formulas);
+        let mixed_inputs = mixed_formula_layout_inputs.take();
+        let inputs = select_formula_page_inputs(
+            markdown_layout_inputs,
+            mixed_inputs
+                .as_ref()
+                .map(|(images, detections)| (images.as_slice(), detections.as_slice())),
+        );
+        recognize_pdf_formula_page_inputs(Some(&mut *doc), &mut side_channel, &inputs, layout, content).await;
+        doc.formulas = side_channel;
     }
 }

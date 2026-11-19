@@ -4537,25 +4537,17 @@ impl PdfExtractor {
             doc.formulas = ocr_formulas;
         }
 
-        // Native pages with layout hints carry formula elements holding the
-        // region's glyph text; a configured model replaces it with LaTeX.
-        // Accepted mixed OCR pages use their own layout inputs; untouched pages
-        // retain their Markdown inputs. Each page has one formula owner. ~keep
         #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
-        if let Some(layout) = config.layout.as_ref() {
-            let mut side_channel = std::mem::take(&mut doc.formulas);
-            let mixed_inputs = mixed_formula_layout_inputs.take();
-            let inputs = select_formula_page_inputs(
-                markdown_layout_images
-                    .as_deref()
-                    .zip(markdown_layout_detections.as_deref()),
-                mixed_inputs
-                    .as_ref()
-                    .map(|(images, detections)| (images.as_slice(), detections.as_slice())),
-            );
-            recognize_pdf_formula_page_inputs(Some(&mut doc), &mut side_channel, &inputs, layout, content).await;
-            doc.formulas = side_channel;
-        }
+        native_finalize::recognize_native_formulas(
+            &mut doc,
+            config,
+            content,
+            markdown_layout_images
+                .as_deref()
+                .zip(markdown_layout_detections.as_deref()),
+            &mut mixed_formula_layout_inputs,
+        )
+        .await;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !ocr_llm_usage.is_empty() {
