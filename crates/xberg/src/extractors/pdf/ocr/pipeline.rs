@@ -470,6 +470,26 @@ const IN_FLIGHT_PAGE_GRACE: std::time::Duration =
 ))]
 const STOP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
+/// What a task of the batch's page task set returns: the read of a page, or a sparse-glyph trial
+/// whose page is read at normal density when the trial is declined.
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+enum PageTaskOutput {
+    Read(
+        usize,
+        (
+            crate::Result<OcrPipelineOutput>,
+            Option<crate::cancellation::CancellationToken>,
+        ),
+    ),
+    #[cfg(all(paddle_ocr, feature = "ocr"))]
+    Trial(usize, crate::Result<Option<sparse_glyph_read::AcceptedTrial>>),
+}
+
 /// What awaiting the next page task of a batch produced.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -1807,54 +1827,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
         let batch_pages = &page_indices[batch_start..batch_end];
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        let sparse_reads = sparse_glyph_read::run_batch(
-            &render_doc,
-            &pipeline_stage_config,
-            effective_pipeline.as_ref(),
-            batch_pages,
-            &implicit_sparse_glyph_pages,
-            |idx| sparse_glyph_read::TrialPage {
-                rotation: page_rotations.get(idx).copied().unwrap_or(0),
-                hints: hints_for_pipeline_page(idx, None),
-                orientation_retry: orientation_retry.clone(),
-            },
-        )
-        .await?;
+        let trial_pages: Vec<usize> = effective_pipeline
+            .as_ref()
+            .map(|_| {
+                batch_pages
+                    .iter()
+                    .copied()
+                    .filter(|idx| implicit_sparse_glyph_pages.contains_key(idx))
+                    .collect()
+            })
+            .unwrap_or_default();
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        let tried_sparse = batch_pages
-            .iter()
-            .any(|idx| implicit_sparse_glyph_pages.contains_key(idx));
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        let remaining = (!sparse_reads.is_empty()).then(|| {
+        let without_trials = (!trial_pages.is_empty()).then(|| {
             batch_pages
                 .iter()
                 .copied()
-                .filter(|idx| !sparse_reads.contains_key(idx))
+                .filter(|idx| !trial_pages.contains(idx))
                 .collect::<Vec<_>>()
         });
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        let batch_pages = remaining.as_deref().unwrap_or(batch_pages);
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        let batch_pages = if let Some(token) = config
-            .cancel_token
-            .as_ref()
-            .filter(|t| tried_sparse && t.time_limit_reached())
-        {
-            mark_pages_unread(
-                Some(token),
-                batch_pages.iter().copied(),
-                &mut page_failures,
-                &mut failed_page_errors,
-                |idx| mixed_native_page_has_content(native_text, boundaries, idx),
-            );
-            &[]
-        } else {
-            batch_pages
-        };
-        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-        for (&idx, read) in &sparse_reads {
-            raster_dpis.insert(idx, read.dpi);
-        }
+        let batch_pages = without_trials.as_deref().unwrap_or(batch_pages);
         #[cfg(feature = "layout-detection")]
         let (page_images, render_failures, batch_raster_dpis) = if let Some(images) = layout_images_for_mixed {
             let mut page_images = Vec::with_capacity(batch_end - batch_start);
@@ -2045,14 +2037,36 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 let mut join_set = tokio::task::JoinSet::new();
                 let mut pending_pages: ahash::AHashSet<usize> = ahash::AHashSet::new();
-                let dimensions: ahash::AHashMap<_, _> = page_images
+                #[cfg_attr(not(paddle_ocr), allow(unused_mut))]
+                let mut dimensions: ahash::AHashMap<_, _> = page_images
                     .iter()
                     .map(|(index, image)| (*index, (image.width(), image.height())))
                     .collect();
-                for (page_idx, image_arc) in page_images {
-                    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                        break;
-                    }
+                #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                let panicked_trials = sparse_glyph_read::PanickedTrials::default();
+                #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                {
+                    sparse_glyph_read::spawn_trials(
+                        &mut join_set,
+                        &panicked_trials,
+                        &render_doc,
+                        &pipeline_stage_config,
+                        pipeline,
+                        trial_pages
+                            .iter()
+                            .filter_map(|&idx| implicit_sparse_glyph_pages.get(&idx).map(|words| (idx, words))),
+                        |idx| sparse_glyph_read::TrialPage {
+                            rotation: page_rotations.get(idx).copied().unwrap_or(0),
+                            hints: hints_for_pipeline_page(idx, None),
+                            orientation_retry: orientation_retry.clone(),
+                        },
+                    );
+                    pending_pages.extend(trial_pages.iter().copied());
+                }
+                let spawn_page = |join_set: &mut tokio::task::JoinSet<PageTaskOutput>,
+                                  page_idx: usize,
+                                  image_arc: Arc<image::DynamicImage>,
+                                  raster: Option<crate::pdf::render::OcrRasterDpi>| {
                     let render_doc_clone = Arc::clone(&render_doc);
                     let pipeline_clone = pipeline.clone();
                     let config_clone = pipeline_stage_config.clone();
@@ -2069,7 +2083,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // resolve the wrong page's rotation (or none at all) for anything but the
                     // document's first OCR'd page (#651).
                     let page_rotation_degrees = page_rotations.get(page_idx).copied().unwrap_or(0);
-                    let mut page_ocr_hints = hints_for_pipeline_page(idx, raster_dpis.get(&idx).copied());
+                    let mut page_ocr_hints = hints_for_pipeline_page(idx, raster);
                     page_ocr_hints.source_dpi = rendered_page_source_dpi(&render_doc, idx, image_arc.width());
                     // See `extract_with_ocr_for_page`'s doc comment on
                     // `points_per_pixel_override`: this call hands the stage a single
@@ -2098,8 +2112,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && page_ocr_hints.known_full_page_scan
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
                     let task = crate::engine::seams::inherit_progress(async move {
+                        #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr, feature = "ocr"))]
+                        sparse_glyph_read::test_page_started(&config_clone, idx);
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, (Err(crate::XbergError::Cancelled), None));
+                            return PageTaskOutput::Read(idx, (Err(crate::XbergError::Cancelled), None));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2136,7 +2152,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             allow_stored_retry,
                         )
                         .await;
-                        (
+                        PageTaskOutput::Read(
                             idx,
                             capture_ocr_completion(
                                 result.map_err(crate::XbergError::from),
@@ -2146,44 +2162,111 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     });
                     #[cfg(test)]
                     let task = crate::plugins::registry::inherit_test_ocr_backend(task);
-                    pending_pages.insert(idx);
                     join_set.spawn(crate::core::extractor::cacheability::inherit(task));
+                };
+                for (page_idx, image_arc) in page_images {
+                    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                        break;
+                    }
+                    pending_pages.insert(page_idx);
+                    spawn_page(&mut join_set, page_idx, image_arc, raster_dpis.get(&page_idx).copied());
                 }
                 let mut abandon_at = None;
-                #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-                let mut sparse_reads = sparse_reads.into_iter();
                 loop {
-                    #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
-                    let sparse = sparse_reads
-                        .next()
-                        .map(|(idx, read)| (idx, *read.output, read.dimensions));
-                    #[cfg(not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32"))))]
-                    let sparse: Option<(usize, OcrPipelineOutput, (u32, u32))> = None;
-                    let (page_idx, result, expired, sparse_dimensions) = if let Some((idx, output, dims)) = sparse {
-                        crate::engine::seams::emit_ocr_page(idx + 1, page_count, "tesseract");
-                        (idx, Ok(output), None, Some(dims))
-                    } else {
-                        let join_result =
-                            match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
-                                NextPageTask::Finished(join_result) => join_result,
-                                NextPageTask::Drained => break,
-                                NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
-                                NextPageTask::Abandoned => {
-                                    mark_pages_unread(
-                                        config.cancel_token.as_ref(),
-                                        pending_pages.drain(),
-                                        &mut page_failures,
-                                        &mut failed_page_errors,
-                                        |page_idx| mixed_native_page_has_content(native_text, boundaries, page_idx),
-                                    );
-                                    break;
+                    let join_result =
+                        match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
+                            NextPageTask::Finished(join_result) => join_result,
+                            NextPageTask::Drained => break,
+                            NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
+                            NextPageTask::Abandoned => {
+                                mark_pages_unread(
+                                    config.cancel_token.as_ref(),
+                                    pending_pages.drain(),
+                                    &mut page_failures,
+                                    &mut failed_page_errors,
+                                    |page_idx| mixed_native_page_has_content(native_text, boundaries, page_idx),
+                                );
+                                break;
+                            }
+                        };
+                    let output = match join_result {
+                        Ok(output) => output,
+                        Err(error) => {
+                            #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                            let panicked_trial = panicked_trials.take().map(|idx| {
+                                tracing::debug!(page = idx + 1, "Sparse glyph OCR task did not finish");
+                                PageTaskOutput::Trial(idx, Ok(None))
+                            });
+                            #[cfg(not(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32"))))]
+                            let panicked_trial: Option<PageTaskOutput> = None;
+                            match panicked_trial {
+                                Some(output) => output,
+                                None => {
+                                    return Err(crate::XbergError::Plugin {
+                                        message: format!("OCR pipeline task panicked: {}", error),
+                                        plugin_name: "ocr".to_string(),
+                                    }
+                                    .into());
                                 }
-                            };
-                        let (page_idx, (result, expired)) = join_result.map_err(|e| crate::XbergError::Plugin {
-                            message: format!("OCR pipeline task panicked: {}", e),
-                            plugin_name: "ocr".to_string(),
-                        })?;
-                        (page_idx, result, expired, None)
+                            }
+                        }
+                    };
+                    let (page_idx, result, expired, sparse_dimensions) = match output {
+                        PageTaskOutput::Read(page_idx, (result, expired)) => (page_idx, result, expired, None),
+                        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                        PageTaskOutput::Trial(idx, Ok(Some(read))) => {
+                            crate::engine::seams::emit_ocr_page(idx + 1, page_count, "tesseract");
+                            raster_dpis.insert(idx, read.dpi);
+                            (idx, Ok(*read.output), None, Some(read.dimensions))
+                        }
+                        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                        PageTaskOutput::Trial(_, Err(error)) => return Err(error.into()),
+                        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                        PageTaskOutput::Trial(idx, Ok(None)) => {
+                            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
+                            {
+                                pending_pages.remove(&idx);
+                                mark_pages_unread(
+                                    Some(token),
+                                    std::iter::once(idx),
+                                    &mut page_failures,
+                                    &mut failed_page_errors,
+                                    |idx| mixed_native_page_has_content(native_text, boundaries, idx),
+                                );
+                                continue;
+                            }
+                            let (retry_images, retry_failures, retry_dpis) = render_selected_pages_with_image_config(
+                                &render_doc,
+                                &page_rotations,
+                                &[idx],
+                                security_limits,
+                                &images_for_page,
+                                preprocessing_render_dpi,
+                            );
+                            raster_dpis.extend(retry_dpis);
+                            for (failed_idx, error) in retry_failures {
+                                pending_pages.remove(&failed_idx);
+                                let recovered = mixed_native_page_has_content(native_text, boundaries, failed_idx);
+                                push_mixed_ocr_page_failure_warning(
+                                    &mut accumulated_warnings,
+                                    &mut page_failures,
+                                    failed_idx,
+                                    &error,
+                                    recovered,
+                                );
+                                failed_page_errors.insert(failed_idx, error);
+                            }
+                            for (retry_idx, image_arc) in share_rendered_page_images(retry_images) {
+                                dimensions.insert(retry_idx, (image_arc.width(), image_arc.height()));
+                                spawn_page(
+                                    &mut join_set,
+                                    retry_idx,
+                                    image_arc,
+                                    raster_dpis.get(&retry_idx).copied(),
+                                );
+                            }
+                            continue;
+                        }
                     };
                     pending_pages.remove(&page_idx);
                     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())

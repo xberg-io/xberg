@@ -145,24 +145,51 @@ pub(super) struct AcceptedTrial {
     pub dpi: Dpi,
 }
 
+/// Indices of trial tasks that panicked. A task that panics yields a `JoinError` without its page,
+/// and a panicked trial is retried at normal density like a declined one.
 #[cfg(paddle_ocr)]
-pub(super) async fn run_batch(
+#[derive(Clone, Default)]
+pub(super) struct PanickedTrials(Arc<std::sync::Mutex<Vec<usize>>>);
+
+#[cfg(paddle_ocr)]
+impl PanickedTrials {
+    pub(super) fn take(&self) -> Option<usize> {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).pop()
+    }
+}
+
+#[cfg(paddle_ocr)]
+struct PanicGuard {
+    index: usize,
+    panicked: PanickedTrials,
+    armed: bool,
+}
+
+#[cfg(paddle_ocr)]
+impl Drop for PanicGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.panicked
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(self.index);
+        }
+    }
+}
+
+/// Spawn one trial per page into the batch's page task set.
+#[cfg(paddle_ocr)]
+pub(super) fn spawn_trials<'a>(
+    tasks: &mut tokio::task::JoinSet<super::PageTaskOutput>,
+    panicked: &PanickedTrials,
     pdf: &Arc<PdfDocument>,
     config: &ExtractionConfig,
-    pipeline: Option<&crate::core::config::OcrPipelineConfig>,
-    indices: &[usize],
-    eligible: &ahash::AHashMap<usize, MarkedWords>,
+    pipeline: &crate::core::config::OcrPipelineConfig,
+    pages: impl IntoIterator<Item = (usize, &'a MarkedWords)>,
     page: impl Fn(usize) -> TrialPage,
-) -> crate::Result<std::collections::BTreeMap<usize, AcceptedTrial>> {
-    let mut accepted = std::collections::BTreeMap::new();
-    let Some(pipeline) = pipeline.filter(|_| !eligible.is_empty()) else {
-        return Ok(accepted);
-    };
-    let mut tasks = tokio::task::JoinSet::new();
-    for &index in indices {
-        let Some(words) = eligible.get(&index) else {
-            continue;
-        };
+) {
+    for (index, words) in pages {
         let trial = PipelineTrial {
             pdf: Arc::clone(pdf),
             index,
@@ -171,25 +198,19 @@ pub(super) async fn run_batch(
             page: page(index),
             words: words.clone(),
         };
-        let task = async move { (index, trial.run().await) };
+        let mut guard = PanicGuard {
+            index,
+            panicked: panicked.clone(),
+            armed: true,
+        };
+        let task = async move {
+            let outcome = trial.run().await;
+            guard.armed = false;
+            super::PageTaskOutput::Trial(index, outcome)
+        };
         #[cfg(test)]
         let task = crate::plugins::registry::inherit_test_ocr_backend(task);
         tasks.spawn(crate::core::extractor::cacheability::inherit(task));
-    }
-    let mut abandon_at = None;
-    loop {
-        match super::next_page_task(&mut tasks, config.cancel_token.as_ref(), &mut abandon_at).await {
-            super::NextPageTask::Finished(Ok((index, result))) => {
-                if let Some(result) = result? {
-                    accepted.insert(index, result);
-                }
-            }
-            super::NextPageTask::Finished(Err(error)) => {
-                tracing::debug!(panicked = error.is_panic(), "Sparse glyph OCR task did not finish");
-            }
-            super::NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled),
-            super::NextPageTask::Drained | super::NextPageTask::Abandoned => return Ok(accepted),
-        }
     }
 }
 
@@ -278,6 +299,8 @@ impl PipelineTrial {
     }
 
     async fn run(self) -> crate::Result<Option<AcceptedTrial>> {
+        #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+        hold_until_another_page_starts(&self.config, self.index).await;
         if let Ok((image, dpi, warnings)) = self.render().await
             // Failed and warning-bearing trials are retried by the ordinary renderer, so the
             // result only reports warnings from the selected normal render in batch order.
@@ -561,6 +584,8 @@ const IMPLICIT_ROTATED_CASE: usize = 0x3238_5103;
 const IMPLICIT_PANIC_CASE: usize = 0x3238_5104;
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const IMPLICIT_OVERRIDE_CASE: usize = 0x3238_5105;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const IMPLICIT_PARALLEL_CASE: usize = 0x3238_5106;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
@@ -589,7 +614,11 @@ fn implicit_pipeline_case(case: usize) -> bool {
     cfg!(paddle_ocr)
         && matches!(
             case,
-            IMPLICIT_MISSING_WORD_CASE | IMPLICIT_ROTATED_CASE | IMPLICIT_PANIC_CASE | IMPLICIT_OVERRIDE_CASE
+            IMPLICIT_MISSING_WORD_CASE
+                | IMPLICIT_ROTATED_CASE
+                | IMPLICIT_PANIC_CASE
+                | IMPLICIT_OVERRIDE_CASE
+                | IMPLICIT_PARALLEL_CASE
         )
 }
 
@@ -670,7 +699,10 @@ pub(super) fn test_attempt(
                 words.accounted_for(read),
                 "unmodified read must account for the marked words"
             );
-            if matches!(case, MISSING_WORD_CASE | IMPLICIT_MISSING_WORD_CASE) {
+            if matches!(
+                case,
+                MISSING_WORD_CASE | IMPLICIT_MISSING_WORD_CASE | IMPLICIT_PARALLEL_CASE
+            ) {
                 remove_marked_word(read, words);
                 assert!(!words.accounted_for(read));
             }
@@ -712,6 +744,50 @@ fn remove_marked_word(read: &mut ExtractedDocument, words: &MarkedWords) {
         })
         .expect("iterator word at the first marked position");
     elements.remove(index);
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+static EVENTS: std::sync::Mutex<Vec<(&'static str, usize)>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+static PAGE_STARTED: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const PARALLEL_CASE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn parallel_case(config: &ExtractionConfig) -> bool {
+    config
+        .security_limits
+        .as_ref()
+        .is_some_and(|limits| limits.max_archive_size == IMPLICIT_PARALLEL_CASE)
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn record_event(event: &'static str, index: usize) {
+    EVENTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push((event, index));
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+pub(super) fn test_page_started(config: &ExtractionConfig, index: usize) {
+    if parallel_case(config) {
+        record_event("page_start", index);
+        PAGE_STARTED.notify_one();
+    }
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+async fn hold_until_another_page_starts(config: &ExtractionConfig, index: usize) {
+    if parallel_case(config) {
+        record_event("trial_start", index);
+        let released = tokio::time::timeout(PARALLEL_CASE_WAIT, PAGE_STARTED.notified())
+            .await
+            .is_ok();
+        record_event(if released { "trial_released" } else { "trial_timeout" }, index);
+    }
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
@@ -983,6 +1059,96 @@ fn implicit_trial_skips_pages_that_khmer_number_recovery_may_claim() {
         .collect();
     kept.sort_unstable();
     assert_eq!(kept, [1, 2]);
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+fn folio_with_an_ineligible_second_page() -> Vec<u8> {
+    let mut document = lopdf::Document::load_mem(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf/separation-overprint-2817/folio-black.pdf"
+    )))
+    .unwrap();
+    let first = document.get_pages()[&1];
+    let mut second = document.get_object(first).unwrap().as_dict().unwrap().clone();
+    // An annotation makes a page ineligible for the trial while it keeps the same lost glyphs.
+    second.set("Annots", lopdf::Object::Array(Vec::new()));
+    let parent = second.get(b"Parent").unwrap().as_reference().unwrap();
+    let second = document.add_object(second);
+    let pages = document.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
+    pages
+        .get_mut(b"Kids")
+        .unwrap()
+        .as_array_mut()
+        .unwrap()
+        .push(lopdf::Object::Reference(second));
+    pages.set("Count", 2);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+// The trial of page one waits until page two starts its normal read, so a batch that held its
+// other pages behind the trials would end the wait by timeout. ~keep
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[test]
+fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read_normally() {
+    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || async {
+        let pdf = folio_with_an_ineligible_second_page();
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(
+            models.path().join("eng.traineddata"),
+            xberg_tesseract::bundled_eng_traineddata().unwrap(),
+        )
+        .unwrap();
+        let config = ExtractionConfig {
+            use_cache: false,
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_archive_size: IMPLICIT_PARALLEL_CASE,
+                ..Default::default()
+            }),
+            pages: Some(crate::core::config::PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                tessdata_path: Some(models.path().to_path_buf()),
+                quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
+                    min_ocr_mean_confidence: 50.0,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = crate::core::extractor::extract_bytes(&pdf, "application/pdf", &config)
+            .await
+            .unwrap();
+        let events = std::mem::take(&mut *EVENTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+        assert!(
+            events.contains(&("trial_start", 0)) && !events.contains(&("trial_start", 1)),
+            "only page one is eligible for a trial: {events:?}"
+        );
+        assert!(
+            events.contains(&("trial_released", 0)) && !events.contains(&("trial_timeout", 0)),
+            "page two must start while the trial of page one is still running: {events:?}"
+        );
+        assert!(
+            events.iter().filter(|event| **event == ("page_start", 0)).count() == 1,
+            "the declined trial must requeue page one for exactly one normal read: {events:?}"
+        );
+        let normal = normal_density_control(&pdf, &config).await;
+        let read = |document: &ExtractedDocument| {
+            document
+                .pages
+                .as_deref()
+                .unwrap()
+                .iter()
+                .map(|page| page.content.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(read(&result).len(), 2);
+        assert_eq!(read(&result), read(&normal));
+    });
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
