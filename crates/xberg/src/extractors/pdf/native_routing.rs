@@ -260,122 +260,13 @@ async fn route_scanned_pages(
     native_text: String,
     scanned_pages: Vec<u32>,
 ) -> Result<(String, ExtractionMethod)> {
-    let (content, config, layout_pages, pdf_metadata, boundaries) = (
-        route.content,
-        route.config,
-        route.layout_pages,
-        route.pdf_metadata,
-        route.boundaries,
-    );
     Ok(
         // A scanner's invisible sidecar passes the gate below, so detected
         // pages are selected before it runs. ~keep
-        if let Some(bounds) = boundaries
+        if let Some(bounds) = route.boundaries
             && !bounds.is_empty()
         {
-            // This OCR run is AUTOMATIC -- scanned-page detection asked for it, the
-            // caller did not -- so a failure here must degrade to the native text rather
-            // than abort, exactly as the quality-gate fallback below already does. With
-            // `ocr-pipeline` enabled and no backend registered (a legitimate feature
-            // selection: `ocr` implies `ocr-pipeline`, not the reverse) the `?` that used
-            // to be here failed an ordinary PDF extraction that never requested OCR. The
-            // EXPLICIT sites (`force_ocr_pages` above, `ocr_inline_images`) keep their
-            // hard error, because there the caller asked for something the build cannot
-            // do. See GH#1610. ~keep
-            match ocr::extract_mixed_ocr_native_with_layout_pages(
-                &native_text,
-                bounds,
-                (
-                    &scanned_pages,
-                    pdf_metadata
-                        .pdf_specific
-                        .fabricated_text_pages
-                        .as_deref()
-                        .unwrap_or(&[]),
-                ),
-                content,
-                config,
-                layout_pages,
-                (&[], &[]),
-            )
-            .await
-            {
-                Ok(mixed_run) => {
-                    #[cfg(feature = "formula-recognition")]
-                    {
-                        routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
-                    }
-                    let (
-                        mixed,
-                        results_map,
-                        mixed_structured_pages,
-                        mixed_llm_usage,
-                        mixed_rstrs,
-                        mixed_formulas,
-                        mixed_preprocessing,
-                        mixed_ocr_confidence,
-                        mixed_warnings,
-                        mixed_page_failures,
-                    ) = mixed_run.output;
-                    // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
-                    // every candidate page was rejected (blank render, failed decode, empty
-                    // backend output) nothing was replaced and the result IS the native text --
-                    // reporting `Mixed` there tells a caller the document was OCR'd when it was
-                    // not, which is how a silent whole-document OCR failure reads as success. ~keep
-                    let mixed_method = extraction_method_after_mixed_ocr(&results_map);
-                    let ocr_contributed = mixed_method == ExtractionMethod::Mixed;
-                    if !ocr_contributed {
-                        tracing::warn!(
-                            target: "xberg::extractors::pdf",
-                            candidate_pages = scanned_pages.len(),
-                            "OCR was attempted on every detected scanned page but no page produced usable \
-                            text; reporting the native extraction method rather than `mixed`"
-                        );
-                    }
-                    routing.llm_usage = mixed_llm_usage;
-                    routing.results_map = Some(results_map);
-                    routing.structured_pages = Some(mixed_structured_pages);
-                    routing.page_rasters = mixed_rstrs;
-                    if !mixed_formulas.is_empty() {
-                        routing.formulas = mixed_formulas;
-                    }
-                    routing.preprocessing_by_page.extend(mixed_preprocessing);
-                    routing.confidence_by_page.extend(mixed_ocr_confidence);
-                    routing.page_failures.extend(mixed_page_failures);
-                    routing.fallback_warnings.extend(mixed_warnings);
-                    if ocr_contributed {
-                        (mixed, mixed_method)
-                    } else {
-                        (mixed, ExtractionMethod::Native)
-                    }
-                }
-                Err(e @ crate::XbergError::Cancelled) => return Err(e),
-                Err(e) => {
-                    tracing::warn!(
-                        target: "xberg::extractors::pdf",
-                        error = %e.pdf_ocr_trace_category(),
-                        candidate_pages = ?scanned_pages,
-                        "Automatic OCR of detected scanned pages failed; using native text extraction result"
-                    );
-                    if failed_ocr_fallback_is_total_loss(&native_text) {
-                        return Err(e);
-                    }
-                    routing.page_failures.extend(ocr::route_level_ocr_page_failures(
-                        &scanned_pages,
-                        &e,
-                        &native_text,
-                        bounds,
-                    ));
-                    routing.fallback_warnings.push(crate::types::ProcessingWarning {
-                        source: std::borrow::Cow::Borrowed("ocr"),
-                        message: std::borrow::Cow::Owned(format!(
-                            "Automatic OCR of detected scanned pages {scanned_pages:?} failed ({e}); those \
-                                 pages retain their native text, which may be empty or incomplete."
-                        )),
-                    });
-                    (native_text, ExtractionMethod::Native)
-                }
-            }
+            read_scanned_pages(route, routing, native_text, bounds, &scanned_pages).await?
         } else {
             tracing::warn!(
                 target: "xberg::extractors::pdf",
@@ -384,6 +275,134 @@ async fn route_scanned_pages(
             (native_text, ExtractionMethod::Native)
         },
     )
+}
+
+async fn read_scanned_pages(
+    route: &OcrRouteInputs<'_>,
+    routing: &mut OcrRoutingState,
+    native_text: String,
+    bounds: &[crate::types::PageBoundary],
+    scanned_pages: &[u32],
+) -> Result<(String, ExtractionMethod)> {
+    let (content, config, layout_pages, pdf_metadata) =
+        (route.content, route.config, route.layout_pages, route.pdf_metadata);
+    // This OCR run is AUTOMATIC -- scanned-page detection asked for it, the
+    // caller did not -- so a failure here must degrade to the native text rather
+    // than abort, exactly as the quality-gate fallback below already does. With
+    // `ocr-pipeline` enabled and no backend registered (a legitimate feature
+    // selection: `ocr` implies `ocr-pipeline`, not the reverse) the `?` that used
+    // to be here failed an ordinary PDF extraction that never requested OCR. The
+    // EXPLICIT sites (`force_ocr_pages` above, `ocr_inline_images`) keep their
+    // hard error, because there the caller asked for something the build cannot
+    // do. See GH#1610. ~keep
+    let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
+        &native_text,
+        bounds,
+        (
+            scanned_pages,
+            pdf_metadata
+                .pdf_specific
+                .fabricated_text_pages
+                .as_deref()
+                .unwrap_or(&[]),
+        ),
+        content,
+        config,
+        layout_pages,
+        (&[], &[]),
+    )
+    .await;
+    Ok(match selected_run {
+        Ok(mixed_run) => adopt_scanned_run(routing, mixed_run, scanned_pages),
+        Err(e @ crate::XbergError::Cancelled) => return Err(e),
+        Err(e) => scanned_pages_failed(routing, native_text, bounds, scanned_pages, e)?,
+    })
+}
+
+fn adopt_scanned_run(
+    routing: &mut OcrRoutingState,
+    mixed_run: ocr::MixedOcrRun,
+    scanned_pages: &[u32],
+) -> (String, ExtractionMethod) {
+    #[cfg(feature = "formula-recognition")]
+    {
+        routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+    }
+    let (
+        mixed,
+        results_map,
+        mixed_structured_pages,
+        mixed_llm_usage,
+        mixed_rstrs,
+        mixed_formulas,
+        mixed_preprocessing,
+        mixed_ocr_confidence,
+        mixed_warnings,
+        mixed_page_failures,
+    ) = mixed_run.output;
+    // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
+    // every candidate page was rejected (blank render, failed decode, empty
+    // backend output) nothing was replaced and the result IS the native text --
+    // reporting `Mixed` there tells a caller the document was OCR'd when it was
+    // not, which is how a silent whole-document OCR failure reads as success. ~keep
+    let mixed_method = extraction_method_after_mixed_ocr(&results_map);
+    let ocr_contributed = mixed_method == ExtractionMethod::Mixed;
+    if !ocr_contributed {
+        tracing::warn!(
+            target: "xberg::extractors::pdf",
+            candidate_pages = scanned_pages.len(),
+            "OCR was attempted on every detected scanned page but no page produced usable \
+            text; reporting the native extraction method rather than `mixed`"
+        );
+    }
+    routing.llm_usage = mixed_llm_usage;
+    routing.results_map = Some(results_map);
+    routing.structured_pages = Some(mixed_structured_pages);
+    routing.page_rasters = mixed_rstrs;
+    if !mixed_formulas.is_empty() {
+        routing.formulas = mixed_formulas;
+    }
+    routing.preprocessing_by_page.extend(mixed_preprocessing);
+    routing.confidence_by_page.extend(mixed_ocr_confidence);
+    routing.page_failures.extend(mixed_page_failures);
+    routing.fallback_warnings.extend(mixed_warnings);
+    if ocr_contributed {
+        (mixed, mixed_method)
+    } else {
+        (mixed, ExtractionMethod::Native)
+    }
+}
+
+fn scanned_pages_failed(
+    routing: &mut OcrRoutingState,
+    native_text: String,
+    bounds: &[crate::types::PageBoundary],
+    scanned_pages: &[u32],
+    e: crate::XbergError,
+) -> Result<(String, ExtractionMethod)> {
+    tracing::warn!(
+        target: "xberg::extractors::pdf",
+        error = %e.pdf_ocr_trace_category(),
+        candidate_pages = ?scanned_pages,
+        "Automatic OCR of detected scanned pages failed; using native text extraction result"
+    );
+    if failed_ocr_fallback_is_total_loss(&native_text) {
+        return Err(e);
+    }
+    routing.page_failures.extend(ocr::route_level_ocr_page_failures(
+        scanned_pages,
+        &e,
+        &native_text,
+        bounds,
+    ));
+    routing.fallback_warnings.push(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(format!(
+            "Automatic OCR of detected scanned pages {scanned_pages:?} failed ({e}); those \
+                                 pages retain their native text, which may be empty or incomplete."
+        )),
+    });
+    Ok((native_text, ExtractionMethod::Native))
 }
 
 // These values exist only with layout detection; keep the reuse gate in the same cfg block. ~keep
