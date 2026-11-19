@@ -208,10 +208,12 @@ pub async fn serve_with_config_and_limits(
         .as_ref()
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
-    ApiAuth::from_env().check_bind(ip)?;
+    let auth = ApiAuth::from_env();
+    auth.validate()?;
+    auth.check_bind(ip)?;
 
     let mut env_config = ServerConfig::default();
-    env_config.apply_env_overrides()?;
+    env_config.apply_cors_and_job_timeout_env_overrides()?;
     let server_config = ServerConfig {
         host: host.as_ref().to_string(),
         port,
@@ -276,7 +278,9 @@ pub async fn serve_with_server_config(extraction_config: ExtractionConfig, serve
         .host
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
-    ApiAuth::from_env().check_bind(ip)?;
+    let auth = ApiAuth::from_env();
+    auth.validate()?;
+    auth.check_bind(ip)?;
 
     let limits = ApiSizeLimits::new(
         server_config.max_request_body_bytes,

@@ -1504,6 +1504,7 @@ fn prepare_mcp_http(
     let addr: std::net::SocketAddr = format!("{host}:{port}")
         .parse()
         .map_err(|e| format!("Invalid address: {}", e))?;
+    auth.validate()?;
     auth.check_bind(addr.ip())?;
     Ok((addr, auth.protect(router)))
 }

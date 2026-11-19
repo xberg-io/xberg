@@ -27,9 +27,10 @@ pub(crate) const ALLOW_UNAUTHENTICATED_ENV: &str = "XBERG_ALLOW_UNAUTHENTICATED"
 
 /// Authentication settings for the REST API and the MCP HTTP transport.
 ///
-/// The bearer token must be ASCII: it is compared byte-for-byte against the `Authorization`
-/// header, which clients can only send as visible ASCII. `XBERG_ALLOW_UNAUTHENTICATED` assumes
-/// the network in front of the server is trusted.
+/// The bearer token must be printable ASCII: it is compared byte-for-byte against the
+/// `Authorization` header, which clients can only send as printable ASCII, so any other value
+/// is rejected at startup. `XBERG_ALLOW_UNAUTHENTICATED` assumes the network in front of the
+/// server is trusted.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Clone, Default)]
 pub struct ApiAuth {
@@ -77,6 +78,25 @@ impl ApiAuth {
                 router
             }
         }
+    }
+
+    /// Refuse a token that no request can ever match.
+    ///
+    /// The expected token is compared against the `Authorization` header value, which must be
+    /// printable ASCII. Any other byte, such as the `é` in `secrét`, makes `HeaderValue::to_str`
+    /// fail for every request, so the server would start and then reject all of them. The error
+    /// never echoes the token.
+    pub(crate) fn validate(&self) -> Result<()> {
+        let Some(token) = &self.token else {
+            return Ok(());
+        };
+        if token.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+            return Ok(());
+        }
+        Err(XbergError::validation(format!(
+            "{API_TOKEN_ENV} must contain only printable ASCII characters (0x20-0x7E) so it can be \
+             sent in an Authorization: Bearer header"
+        )))
     }
 
     /// Refuse an unauthenticated server that is reachable from other hosts.
@@ -184,6 +204,22 @@ mod tests {
     fn blank_token_counts_as_unset() {
         assert!(ApiAuth::new(Some("   "), false).token.is_none());
         assert!(ApiAuth::new(Some("abc"), false).token.is_some());
+    }
+
+    #[test]
+    fn validate_rejects_a_token_that_cannot_be_sent() {
+        for token in ["secrét", "tab\tseparated", "del\u{7f}"] {
+            let err = ApiAuth::new(Some(token), false).validate().unwrap_err().to_string();
+            assert!(err.contains(API_TOKEN_ENV), "{err}");
+            assert!(!err.contains(token), "the error must not echo the token: {err}");
+        }
+    }
+
+    #[test]
+    fn validate_accepts_ascii_tokens_and_an_unset_token() {
+        assert!(ApiAuth::new(Some("s3cret-token._~+/="), false).validate().is_ok());
+        assert!(ApiAuth::new(Some("two words"), false).validate().is_ok());
+        assert!(ApiAuth::new(None, false).validate().is_ok());
     }
 
     #[test]

@@ -57,6 +57,12 @@ Xberg runs as an HTTP REST API server (`xberg serve`) or as an MCP server (`xber
 </TabItem>
 <TabItem label="Docker">
 
+The images bind `0.0.0.0`, so export a token first: the server refuses to start without one.
+
+```bash title="Terminal"
+export XBERG_API_TOKEN="$(openssl rand -hex 32)"
+```
+
 <Snip_api_server_docker />
 
 </TabItem>

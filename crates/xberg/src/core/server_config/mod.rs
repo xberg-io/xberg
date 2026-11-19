@@ -312,6 +312,26 @@ impl ServerConfig {
         Ok(())
     }
 
+    /// Apply only the environment overrides that an entrypoint with an explicit bind address
+    /// and size limits still honours: `XBERG_CORS_ORIGINS` and `XBERG_JOB_TIMEOUT_SECS`.
+    ///
+    /// [`Self::apply_env_overrides`] also parses `XBERG_HOST`, `XBERG_PORT` and the two upload
+    /// limit variables. An entrypoint that takes those as arguments must not fail on a malformed
+    /// value it then discards, so it calls this instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns `XbergError::Validation` if `XBERG_JOB_TIMEOUT_SECS` cannot be parsed as u64, or
+    /// if the resulting configuration fails [`Self::validate`].
+    pub(crate) fn apply_cors_and_job_timeout_env_overrides(&mut self) -> Result<()> {
+        env::apply_cors_origins_env(&mut self.cors_origins);
+        env::apply_job_timeout_secs_env(&mut self.job_timeout_secs)?;
+
+        self.validate()?;
+
+        Ok(())
+    }
+
     /// Load server configuration from a file.
     ///
     /// Automatically detects the file format based on extension:
