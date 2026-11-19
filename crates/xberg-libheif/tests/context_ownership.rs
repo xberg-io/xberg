@@ -5,22 +5,35 @@
 
 #![allow(clippy::print_stderr)] // ~keep: skip notices go to stderr by design
 
-use std::io::{self, Cursor};
+use std::io::{self, Cursor, Read, Seek, SeekFrom};
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use xberg_libheif::{
     AuxiliaryImagesFilter, ColorSpace, HeifContext, HeifErrorCode, LibHeif, Reader, ReaderGrowStatus, RgbChroma,
-    StreamReader,
 };
 
+/// Corpus root: `TEST_DOCUMENTS_DIR` when set (a worktree's `test_documents/` is an empty
+/// submodule directory), otherwise the repository's `test_documents/`.
+fn corpus_root() -> PathBuf {
+    std::env::var_os("TEST_DOCUMENTS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_documents"))
+}
+
+/// Read a corpus fixture. A missing fixture skips the test, or fails it when
+/// `XBERG_REQUIRE_TEST_FIXTURES=1` (the strict policy of the shared Rust test helper).
 fn load_fixture(relative: &str) -> Option<Vec<u8>> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../test_documents")
-        .join(relative);
+    let path = corpus_root().join(relative);
     match std::fs::read(&path) {
         Ok(bytes) => Some(bytes),
         Err(e) => {
+            assert!(
+                std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_none_or(|value| value != "1"),
+                "required fixture {} is unavailable: {e}",
+                path.display()
+            );
             eprintln!(
                 "SKIP: fixture {} not available ({e}); run `python3 test_documents/scripts/fetch_corpus.py` to fetch it",
                 path.display()
@@ -66,19 +79,6 @@ fn a_derived_handle_outlives_its_parent_handle_and_context() {
 }
 
 #[test]
-fn a_reader_backed_context_decodes_after_the_context_is_dropped() {
-    let Some(bytes) = load_fixture("images/test.heic") else {
-        return;
-    };
-    let size = bytes.len() as u64;
-    let context = HeifContext::read_from_reader(Box::new(StreamReader::new(Cursor::new(bytes), size)))
-        .expect("read fixture through a reader");
-    let handle = context.primary_image_handle().expect("primary image");
-    drop(context);
-    assert!(decode_len(&handle) > 0);
-}
-
-#[test]
 fn a_context_with_live_handles_refuses_a_new_source() {
     let Some(bytes) = load_fixture("images/test.heic") else {
         return;
@@ -107,37 +107,76 @@ fn a_handle_from_another_context_is_rejected() {
     assert!(matches!(error.code, HeifErrorCode::UsageError));
 }
 
-struct CountedFailingReader(Arc<AtomicUsize>);
+struct TrackedReader {
+    data: Cursor<Vec<u8>>,
+    reads: Arc<AtomicUsize>,
+    dropped: Arc<AtomicBool>,
+}
 
-impl Drop for CountedFailingReader {
+impl Drop for TrackedReader {
     fn drop(&mut self) {
-        self.0.fetch_add(1, Ordering::SeqCst);
+        self.dropped.store(true, Ordering::SeqCst);
     }
 }
 
-impl Reader for CountedFailingReader {
+impl Reader for TrackedReader {
     fn position(&mut self) -> u64 {
-        0
+        self.data.position()
     }
 
     #[allow(deprecated)]
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::ErrorKind::UnexpectedEof.into())
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.data.read(buf)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        self.reads.fetch_add(1, Ordering::SeqCst);
+        self.data.read_exact(buf)
     }
 
     fn seek(&mut self, position: u64) -> io::Result<u64> {
-        Ok(position)
+        self.data.seek(SeekFrom::Start(position))
     }
 
-    fn wait_for_file_size(&mut self, _target_size: u64) -> ReaderGrowStatus {
-        ReaderGrowStatus::SizeBeyondEof
+    fn wait_for_file_size(&mut self, target_size: u64) -> ReaderGrowStatus {
+        if target_size > self.data.get_ref().len() as u64 {
+            ReaderGrowStatus::SizeBeyondEof
+        } else {
+            ReaderGrowStatus::SizeReached
+        }
     }
 }
 
+/// The context is dropped while a handle lives: the reader must stay alive and keep serving
+/// the handle's decode, and be released only with the last handle.
 #[test]
-fn a_failing_reader_is_freed_once_when_the_read_fails() {
-    let drops = Arc::new(AtomicUsize::new(0));
-    let result = HeifContext::read_from_reader(Box::new(CountedFailingReader(Arc::clone(&drops))));
-    assert!(result.is_err());
-    assert_eq!(drops.load(Ordering::SeqCst), 1);
+fn the_reader_lives_until_the_last_handle_is_dropped() {
+    let Some(bytes) = load_fixture("images/test.heic") else {
+        return;
+    };
+    let reads = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let reader = TrackedReader {
+        data: Cursor::new(bytes),
+        reads: Arc::clone(&reads),
+        dropped: Arc::clone(&dropped),
+    };
+    let context = HeifContext::read_from_reader(Box::new(reader)).expect("read fixture through the reader");
+    let handle = context.primary_image_handle().expect("primary image");
+    drop(context);
+    assert!(
+        !dropped.load(Ordering::SeqCst),
+        "the reader was released while a handle still uses it"
+    );
+    let reads_before_decode = reads.load(Ordering::SeqCst);
+    assert!(decode_len(&handle) > 0);
+    assert!(
+        reads.load(Ordering::SeqCst) > reads_before_decode,
+        "decoding through the handle did not read through the context's reader"
+    );
+    drop(handle);
+    assert!(
+        dropped.load(Ordering::SeqCst),
+        "the reader leaked after the last handle was dropped"
+    );
 }
