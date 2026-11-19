@@ -3,6 +3,15 @@
 
 use super::*;
 
+/// Loop-invariant inputs every operator helper needs.
+#[derive(Clone, Copy)]
+pub(super) struct OpEnv<'a> {
+    pub(super) base_transform: Transform,
+    pub(super) doc: &'a PdfDocument,
+    pub(super) page_num: usize,
+    pub(super) resources: &'a Object,
+}
+
 /// Locals of the operator loop that persist from one operator to the next.
 pub(super) struct OpLoopState<'a> {
     pub(super) gs_stack: GraphicsStateStack,
