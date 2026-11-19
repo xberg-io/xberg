@@ -55,6 +55,8 @@ mod knockout_resources;
 mod page_renderer_ops_color;
 #[path = "page_renderer_ops_paint.rs"]
 mod page_renderer_ops_paint;
+#[path = "page_renderer_ops_scope.rs"]
+mod page_renderer_ops_scope;
 #[path = "page_renderer_ops_state.rs"]
 mod page_renderer_ops_state;
 #[path = "page_renderer_ops_text.rs"]
@@ -1429,20 +1431,7 @@ impl PageRenderer {
                     gs.text_wmode = wmode;
                 }
 
-                Operator::SetExtGState { dict_name } => {
-                    // Fast path: resource dict is already resolved (see top of
-                    // this function), so the per-`gs` cost is one HashMap
-                    // lookup + one resolve of the small inner state dict. ~keep
-                    let entry = st.ext_g_state_cache.entry(dict_name.clone()).or_insert_with(|| {
-                        if let Some(states) = st.ext_g_states {
-                            if let Some(state_obj) = states.get(dict_name) {
-                                return parse_ext_g_state_inner(state_obj, doc).unwrap_or_default();
-                            }
-                        }
-                        ParsedExtGState::default()
-                    });
-                    entry.apply(st.gs_stack.current_mut());
-                }
+                Operator::SetExtGState { dict_name } => self.op_set_ext_g_state(&mut st, env, dict_name),
 
                 // EndPath (n operator): discard current path without painting,
                 // but apply any pending clip. Per PDF spec, W n is the standard
@@ -1470,24 +1459,7 @@ impl PageRenderer {
                     st.marked_content_is_excluded.push(false);
                 }
                 Operator::BeginMarkedContentDict { tag, properties } => {
-                    let mut is_excluded = false;
-                    // Tag "OC" scopes can hide content even with empty excluded_layers
-                    // when the OCMD uses /VE /Not or /P /AllOff/AnyOff (the
-                    // expression evaluates with all OCGs on by default). We can
-                    // only short-circuit cheaply for simple OCG refs, which the
-                    // optional_content module handles internally. ~keep
-                    if tag == "OC" {
-                        is_excluded = crate::optional_content::resolve_and_check_ocg_excluded(
-                            properties,
-                            Some(resources),
-                            Some(doc),
-                            st.excluded_layers,
-                        );
-                    }
-                    if is_excluded {
-                        st.excluded_layer_depth += 1;
-                    }
-                    st.marked_content_is_excluded.push(is_excluded);
+                    self.op_begin_marked_content_dict(&mut st, env, tag, properties)
                 }
                 Operator::EndMarkedContent => {
                     if let Some(was_excluded) = st.marked_content_is_excluded.pop() {
