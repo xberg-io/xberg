@@ -278,6 +278,12 @@ public func ocrBackendSupportsLanguage<GenericIntoRustString: IntoRustString>(_ 
 public func ocrBackendSupportsLanguageFor<GenericIntoRustString: IntoRustString>(_ backend: GenericIntoRustString, _ language: GenericIntoRustString, _ config: OcrConfig) throws -> Bool {
     try { let val = __swift_bridge__$ocr_backend_supports_language_for({ let rustString = backend.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = language.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {config.isOwned = false; return config.ptr;}()); switch val.tag { case __swift_bridge__$ResultBoolAndAlefBridgeError$ResultOk: return val.payload.ok case __swift_bridge__$ResultBoolAndAlefBridgeError$ResultErr: throw AlefBridgeError(ptr: val.payload.err) default: fatalError() } }()
 }
+public func ortSessionOptions() -> OrtSessionOptions {
+    OrtSessionOptions(ptr: __swift_bridge__$ort_session_options())
+}
+public func setOrtSessionOptions(_ options: OrtSessionOptions) -> () {
+    __swift_bridge__$set_ort_session_options({options.isOwned = false; return options.ptr;}())
+}
 public func __alef_owned_vec_max_sim_rank(_ query: MultiVectorEmbedding, _ docs: RustVec<MultiVectorEmbedding>) -> RustVec<LateInteractionMatch> {
     RustVec(ptr: __swift_bridge__$max_sim_rank({query.isOwned = false; return query.ptr;}(), { let val = docs; val.isOwned = false; return val.ptr }()))
 }
@@ -1184,6 +1190,9 @@ public func ocrTableFromJson<GenericIntoRustString: IntoRustString>(_ json: Gene
 }
 public func ocrTableBoundingBoxFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrTableBoundingBox {
     try { let val = __swift_bridge__$ocr_table_bounding_box_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrTableBoundingBox(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
+public func ortSessionOptionsFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OrtSessionOptions {
+    try { let val = __swift_bridge__$ort_session_options_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OrtSessionOptions(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
 public func paddleOcrConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PaddleOcrConfig {
     try { let val = __swift_bridge__$paddle_ocr_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PaddleOcrConfig(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
@@ -2741,6 +2750,9 @@ public func __alef_phantom_vec_ngram_range() -> RustVec<NgramRange> {
 }
 public func __alef_phantom_vec_orientation_result() -> RustVec<OrientationResult> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_orientation_result())
+}
+public func __alef_phantom_vec_ort_session_options() -> RustVec<OrtSessionOptions> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ort_session_options())
 }
 public func __alef_phantom_vec_paddle_ocr_vl_backend_options() -> RustVec<PaddleOcrVlBackendOptions> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_paddle_ocr_vl_backend_options())
@@ -19825,6 +19837,99 @@ extension OrientationResult: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_OrientationResult$len(vecPtr)
+    }
+}
+
+
+public class OrtSessionOptions: OrtSessionOptionsRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$OrtSessionOptions$_free(ptr)
+        }
+    }
+}
+extension OrtSessionOptions {
+    public convenience init(_ memory_pattern: Bool, _ cpu_arena: Bool, _ max_threads: Optional<UInt>) {
+        self.init(ptr: __swift_bridge__$OrtSessionOptions$new(memory_pattern, cpu_arena, max_threads.intoFfiRepr()))
+    }
+}
+public class OrtSessionOptionsRefMut: OrtSessionOptionsRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class OrtSessionOptionsRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension OrtSessionOptionsRef {
+    public func memoryPattern() -> Bool {
+        __swift_bridge__$OrtSessionOptions$memory_pattern(ptr)
+    }
+
+    public func cpuArena() -> Bool {
+        __swift_bridge__$OrtSessionOptions$cpu_arena(ptr)
+    }
+
+    public func maxThreads() -> Optional<UInt> {
+        __swift_bridge__$OrtSessionOptions$max_threads(ptr).intoSwiftRepr()
+    }
+}
+extension OrtSessionOptions: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_OrtSessionOptions$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_OrtSessionOptions$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: OrtSessionOptions) {
+        __swift_bridge__$Vec_OrtSessionOptions$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_OrtSessionOptions$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (OrtSessionOptions(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OrtSessionOptionsRef> {
+        let pointer = __swift_bridge__$Vec_OrtSessionOptions$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OrtSessionOptionsRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OrtSessionOptionsRefMut> {
+        let pointer = __swift_bridge__$Vec_OrtSessionOptions$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OrtSessionOptionsRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<OrtSessionOptionsRef> {
+        UnsafePointer<OrtSessionOptionsRef>(OpaquePointer(__swift_bridge__$Vec_OrtSessionOptions$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_OrtSessionOptions$len(vecPtr)
     }
 }
 
