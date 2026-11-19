@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek};
 
 use image::error::{DecodingError, ImageFormatHint};
 use image::hooks::GenericReader;
@@ -101,6 +101,9 @@ impl From<HeifError> for ImageError {
     }
 }
 
+/// Upper bound on the input the decoder buffers in memory.
+const MAX_BUFFERED_INPUT: u64 = 512 * 1024 * 1024;
+
 struct HeifDecoder {
     _context: HeifContext<'static>,
     image_handle: ImageHandle<'static>,
@@ -111,8 +114,12 @@ impl HeifDecoder {
     /// The input is buffered because libheif requires a `Send` reader and the `image` crate's
     /// generic reader is not one.
     fn new(mut reader: GenericReader<'_>) -> ImageResult<HeifDecoder> {
+        reader.rewind()?;
         let mut data = Vec::new();
-        reader.read_to_end(&mut data)?;
+        reader.by_ref().take(MAX_BUFFERED_INPUT + 1).read_to_end(&mut data)?;
+        if data.len() as u64 > MAX_BUFFERED_INPUT {
+            return Err(image_error("Input exceeds the buffered HEIF size limit."));
+        }
         let total_size = data.len() as u64;
         let stream_reader = StreamReader::new(Cursor::new(data), total_size);
         let context = HeifContext::read_from_reader(Box::new(stream_reader))?;
