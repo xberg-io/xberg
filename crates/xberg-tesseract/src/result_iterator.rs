@@ -88,6 +88,18 @@ pub struct WordExtractionOutcome {
 /// drop(api);
 /// let _ = words.extract_all_words();
 /// ```
+///
+/// The same code compiles once the iterator is dropped before the engine:
+///
+/// ```no_run
+/// use xberg_tesseract::TesseractAPI;
+///
+/// let api = TesseractAPI::new().unwrap();
+/// let words = api.get_iterator().unwrap();
+/// let _ = words.extract_all_words();
+/// drop(words);
+/// drop(api);
+/// ```
 pub struct ResultIterator<'api> {
     inner: NativeIterator<'api>,
 }
@@ -477,6 +489,9 @@ impl<'api> ResultIterator<'api> {
     /// Reads the text and box of each symbol in every word that `wanted` accepts, in a single
     /// mutex lock. The iterator is reset to the beginning first. A word whose text, box or
     /// symbols cannot be read is left out, so an absent word means "unknown", not "no symbols". ~keep
+    ///
+    /// `wanted` runs while the iterator and engine locks are held: it must not call into this
+    /// iterator or its engine, or the call deadlocks.
     pub fn extract_word_symbols(&self, wanted: impl Fn(&str) -> bool) -> Result<Vec<WordSymbols>> {
         let handle = self.inner.lock()?;
         let raw = *handle;
