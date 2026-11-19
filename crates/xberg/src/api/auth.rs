@@ -9,7 +9,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::{
-    Json,
+    Json, Router,
     extract::{Request, State},
     http::{HeaderValue, StatusCode, header},
     middleware::Next,
@@ -77,10 +77,6 @@ impl ApiAuth {
                 router
             }
         }
-    }
-
-    pub(crate) fn token_configured(&self) -> bool {
-        self.token.is_some()
     }
 
     /// Refuse an unauthenticated server that is reachable from other hosts.
@@ -186,8 +182,8 @@ mod tests {
 
     #[test]
     fn blank_token_counts_as_unset() {
-        assert!(!ApiAuth::new(Some("   "), false).token_configured());
-        assert!(ApiAuth::new(Some("abc"), false).token_configured());
+        assert!(ApiAuth::new(Some("   "), false).token.is_none());
+        assert!(ApiAuth::new(Some("abc"), false).token.is_some());
     }
 
     #[test]

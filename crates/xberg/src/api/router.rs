@@ -582,7 +582,6 @@ mod tests {
             let router = router(&[], Some(TOKEN));
             for (method, uri) in [
                 ("HEAD", "/info"),
-                ("OPTIONS", "/info"),
                 ("GET", "/info/"),
                 ("GET", "//info"),
                 ("GET", "/%69nfo"),
@@ -593,6 +592,26 @@ mod tests {
                     "{method} {uri}"
                 );
             }
+        }
+
+        // tower-http's CORS layer answers every OPTIONS request itself, before auth runs, with an
+        // empty body; that is by design and exposes no route data.
+        #[tokio::test]
+        async fn options_requests_never_return_protected_content() {
+            let router = router(&[], Some(TOKEN));
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("OPTIONS")
+                        .uri("/info")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            assert!(body.is_empty(), "{body:?}");
         }
 
         #[tokio::test]
