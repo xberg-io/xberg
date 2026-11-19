@@ -1,6 +1,9 @@
 use libheif_sys as lh;
 use std::ptr;
 
+use std::rc::Rc;
+
+use crate::context::ContextOwner;
 use crate::utils::get_non_null_ptr;
 use crate::{HeifError, Image, ItemId, Result};
 
@@ -442,14 +445,21 @@ impl Drop for Region {
 /// Region item.
 ///
 /// See ISO/IEC 23008-12:2022 Section 6.10 "Region items and region annotations"
-pub struct RegionItem {
+///
+/// Shares ownership of the context's native state and input backing like [`crate::ImageHandle`].
+/// The [`Region`] values it returns only describe parsed region geometry, never read the
+/// input, and carry no context share.
+pub struct RegionItem<'a> {
     pub(crate) inner: *mut lh::heif_region_item,
+    _context: Rc<ContextOwner<'a>>,
 }
 
 #[allow(unsafe_code)]
-impl Drop for RegionItem {
+impl Drop for RegionItem<'_> {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: `inner` is the region item this value owns and releases exactly once, before
+        // the context share in `_context` is dropped, so the native context is still live.
         unsafe {
             lh::heif_region_item_release(self.inner);
         }
@@ -457,9 +467,12 @@ impl Drop for RegionItem {
 }
 
 #[allow(unsafe_code)]
-impl RegionItem {
-    pub(crate) fn new(inner: ptr::NonNull<lh::heif_region_item>) -> Self {
-        Self { inner: inner.as_ptr() }
+impl<'a> RegionItem<'a> {
+    pub(crate) fn new(inner: ptr::NonNull<lh::heif_region_item>, context: &Rc<ContextOwner<'a>>) -> Self {
+        Self {
+            inner: inner.as_ptr(),
+            _context: Rc::clone(context),
+        }
     }
 
     #[allow(unsafe_code)]

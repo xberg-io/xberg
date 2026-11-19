@@ -328,7 +328,7 @@ impl<'a> ImageHandle<'a> {
 
     #[cfg(feature = "v1_18")]
     #[allow(unsafe_code)]
-    pub fn add_region_item(&mut self, reference_width: u32, reference_height: u32) -> Result<RegionItem> {
+    pub fn add_region_item(&mut self, reference_width: u32, reference_height: u32) -> Result<RegionItem<'a>> {
         let mut lh_region_item_ptr: *mut lh::heif_region_item = ptr::null_mut();
         let err = unsafe {
             lh::heif_image_handle_add_region_item(
@@ -344,16 +344,16 @@ impl<'a> ImageHandle<'a> {
             sub_code: HeifErrorSubCode::Unspecified,
             message: "".to_string(),
         })?;
-        Ok(RegionItem::new(item_ptr))
+        Ok(RegionItem::new(item_ptr, &self.context))
     }
 
     #[cfg(feature = "v1_18")]
     #[allow(unsafe_code)]
-    pub fn region_items(&self) -> Vec<RegionItem> {
+    pub fn region_items(&self) -> Vec<RegionItem<'a>> {
         let num_items = unsafe { lh::heif_image_handle_get_number_of_region_items(self.inner) };
         let size = num_items.max(0) as usize;
         let mut item_ids: Vec<ItemId> = Vec::with_capacity(size);
-        let mut items: Vec<RegionItem> = Vec::with_capacity(size);
+        let mut items: Vec<RegionItem<'a>> = Vec::with_capacity(size);
         if size > 0 {
             unsafe {
                 lh::heif_image_handle_get_list_of_region_item_ids(self.inner, item_ids.as_mut_ptr(), num_items);
@@ -365,7 +365,7 @@ impl<'a> ImageHandle<'a> {
                 if HeifError::from_heif_error(err).is_ok()
                     && let Some(region_item_ptr) = ptr::NonNull::new(item_ptr)
                 {
-                    items.push(RegionItem::new(region_item_ptr));
+                    items.push(RegionItem::new(region_item_ptr, &self.context));
                 }
             }
         }
