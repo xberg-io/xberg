@@ -4618,119 +4618,22 @@ impl PdfExtractor {
         inject_unrepresented_table_elements(&mut doc, allow_table_injection);
 
         if let Some(imgs) = images {
-            // The OCR path has its own guarded injection block below (see the `#[cfg(feature = "ocr")]`
-            let image_anchor = extraction::image_anchor(config);
-            let document_has_image_elements = doc.elements.iter().any(|element| {
+            native_finalize::inject_native_image_elements(
+                &mut doc,
+                imgs,
+                config,
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-                if element.image_ocr_text_anchor_index().is_some() {
-                    return true;
-                }
-                matches!(element.kind, ElementKind::Image { .. })
-            });
-            if !document_has_image_elements && image_anchor != extraction::ImageAnchor::None {
-                for (idx, img) in imgs.iter().enumerate() {
-                    // Page OCR already read the picture as part of the page, so the picture's
-                    // own OCR text is not rendered there: no anchor, and a placeholder without
-                    // the text. The OCR merge of a structured document does the same for the
-                    // pages it replaces. ~keep
-                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-                    let page_text_is_from_ocr = extraction_method == ExtractionMethod::Ocr
-                        || img.page_number.is_some_and(|page| {
-                            ocr_results_map
-                                .as_ref()
-                                .is_some_and(|results| results.contains_key(&page))
-                        });
-                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-                    if image_anchor == extraction::ImageAnchor::OcrTextOnly {
-                        if !page_text_is_from_ocr {
-                            insert_image_ocr_text_anchor(
-                                &mut doc,
-                                InternalElement::image_ocr_text_anchor(idx as u32, img.page_number),
-                            );
-                        }
-                        continue;
-                    }
-                    let mut elem = InternalElement::text(
-                        ElementKind::Image {
-                            image_index: idx as u32,
-                        },
-                        "",
-                        0,
-                    );
-                    elem.page = img.page_number;
-                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-                    if page_text_is_from_ocr {
-                        elem.suppress_image_ocr_rendering();
-                    }
-                    doc.push_element(elem);
-                }
-            }
-            doc.images = imgs;
+                extraction_method,
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                ocr_results_map.as_ref(),
+            );
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let ocr_rasters_bypass = ocr_page_rasters.is_none();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if let Some(rasters) = ocr_page_rasters {
-            let base_idx = doc.images.len() as u32;
-            for (offset, mut raster) in rasters.into_iter().enumerate() {
-                raster.image_index = base_idx + offset as u32;
-                doc.images.push(raster);
-            }
-        }
+        native_finalize::append_ocr_page_rasters(&mut doc, ocr_page_rasters, config, used_ocr, extraction_method);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if used_ocr
-            && ocr_rasters_bypass
-            && extraction_method == ExtractionMethod::Ocr
-            && config.images.as_ref().is_some_and(|c| c.include_page_rasters)
-        {
-            doc.processing_warnings.push(crate::types::ProcessingWarning {
-                source: std::borrow::Cow::Borrowed("page_rasters"),
-                message: std::borrow::Cow::Borrowed(
-                    "include_page_rasters is set but no page rasters were produced; \
-                     the active OCR backend used document-level processing without per-page rendering",
-                ),
-            });
-        }
-
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if used_ocr && !doc.images.is_empty() {
-            let images_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
-                || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
-            if images_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(false) {
-                let referenced_images: std::collections::HashSet<u32> = doc
-                    .elements
-                    .iter()
-                    .filter_map(|element| match element.kind {
-                        ElementKind::Image { image_index } => Some(image_index),
-                        _ => None,
-                    })
-                    .collect();
-                let elems: Vec<InternalElement> = doc
-                    .images
-                    .iter()
-                    .filter(|image| !referenced_images.contains(&image.image_index))
-                    .map(|img| {
-                        let elem = InternalElement::text(
-                            ElementKind::Image {
-                                image_index: img.image_index,
-                            },
-                            "",
-                            0,
-                        );
-                        if let Some(page) = img.page_number {
-                            elem.with_page(page)
-                        } else {
-                            elem
-                        }
-                    })
-                    .collect();
-                for elem in elems {
-                    doc.push_element(elem);
-                }
-            }
-        }
+        native_finalize::inject_ocr_image_placeholders(&mut doc, config, used_ocr);
 
         if let Some(warning) = image_fallback_warning {
             doc.processing_warnings.push(warning);
