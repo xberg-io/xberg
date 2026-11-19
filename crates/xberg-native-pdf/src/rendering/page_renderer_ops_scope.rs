@@ -3,12 +3,12 @@
 use super::*;
 
 impl PageRenderer {
-    pub(super) fn op_set_ext_g_state(&mut self, st: &mut OpLoopState<'_>, env: OpEnv<'_>, dict_name: &String) {
+    pub(super) fn op_set_ext_g_state(&mut self, st: &mut OpLoopState<'_>, env: OpEnv<'_>, dict_name: &str) {
         let OpEnv { doc, .. } = env;
         // Fast path: resource dict is already resolved (see the top of
         // `execute_operators_with_backdrop`), so the per-`gs` cost is one HashMap
         // lookup + one resolve of the small inner state dict. ~keep
-        let entry = st.ext_g_state_cache.entry(dict_name.clone()).or_insert_with(|| {
+        let entry = st.ext_g_state_cache.entry(dict_name.to_string()).or_insert_with(|| {
             if let Some(states) = st.ext_g_states {
                 if let Some(state_obj) = states.get(dict_name) {
                     return parse_ext_g_state_inner(state_obj, doc).unwrap_or_default();

@@ -34,8 +34,9 @@ pub(super) struct OpLoopState<'a> {
     /// OCG layer exclusion tracking.
     /// `excluded_layer_depth` counts how many nested BDC/OC scopes we are
     /// inside that match an excluded layer. >0 means content is suppressed.
-    /// `marked_content_is_excluded` tracks total BDC/BMC nesting so EMC correctly
-    /// decrements only when it pops an excluded-layer entry. ~keep
+    /// `marked_content_is_excluded` is the per-scope stack of exclusion flags:
+    /// every BDC/BMC pushes one entry and EMC pops exactly one, so a pop only
+    /// decrements `excluded_layer_depth` when the entry it removes was excluded. ~keep
     pub(super) excluded_layer_depth: u32,
     pub(super) marked_content_is_excluded: Vec<bool>,
     pub(super) ext_g_states: Option<&'a HashMap<String, Object>>,

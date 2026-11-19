@@ -1306,7 +1306,7 @@ impl PageRenderer {
                     word_space,
                     char_space,
                     text,
-                } => self.op_double_quote(pixmap, &mut st, env, word_space, char_space, text)?,
+                } => self.op_double_quote(pixmap, &mut st, env, *word_space, *char_space, text)?,
 
                 Operator::Do { name } => self.op_do(pixmap, &mut st, env, name)?,
 
@@ -1321,8 +1321,8 @@ impl PageRenderer {
                 // `render_image`/`render_image_mask` used for `Do` images. ~keep
                 Operator::InlineImage { dict, data } => self.op_inline_image(pixmap, &mut st, env, dict, data)?,
 
-                Operator::Td { tx, ty } => self.op_td(&mut st, tx, ty),
-                Operator::TD { tx, ty } => self.op_td_set_leading(&mut st, tx, ty),
+                Operator::Td { tx, ty } => self.op_td(&mut st, *tx, *ty),
+                Operator::TD { tx, ty } => self.op_td_set_leading(&mut st, *tx, *ty),
                 Operator::Tm { a, b, c, d, e, f } => {
                     if st.in_text_object {
                         let gs = st.gs_stack.current_mut();
@@ -1348,7 +1348,7 @@ impl PageRenderer {
                     }
                 }
                 Operator::TStar => self.op_t_star(&mut st),
-                Operator::Tf { font, size } => self.op_tf(&mut st, font, size),
+                Operator::Tf { font, size } => self.op_tf(&mut st, font, *size),
 
                 Operator::SetExtGState { dict_name } => self.op_set_ext_g_state(&mut st, env, dict_name),
 

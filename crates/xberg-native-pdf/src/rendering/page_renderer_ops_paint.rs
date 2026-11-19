@@ -97,10 +97,7 @@ impl PageRenderer {
         op: &Operator,
     ) -> Result<()> {
         let OpEnv {
-            base_transform,
-            doc,
-            page_num,
-            resources,
+            base_transform, doc, ..
         } = env;
         if st.excluded_layer_depth == 0 {
             apply_pending_clip(
@@ -136,21 +133,7 @@ impl PageRenderer {
                 // the region the solid-colour paint below is
                 // skipped; unsupported/shading patterns return
                 // false and fall through to the solid fallback. ~keep
-                if gs_clone.fill_color_space == "Pattern"
-                    && gs_clone.fill_pattern_name.is_some()
-                    && self.fill_with_tiling_pattern(
-                        pixmap,
-                        &path,
-                        base_transform,
-                        transform,
-                        tiny_skia::FillRule::Winding,
-                        clip,
-                        &gs_clone,
-                        doc,
-                        page_num,
-                        resources,
-                    )?
-                {
+                if self.fill_by_tiling_pattern(pixmap, paint)? {
                     // Painted by the tiling pattern. ~keep
                 } else {
                     self.paint_plain_fill(pixmap, paint)?;
@@ -367,8 +350,8 @@ impl PageRenderer {
             clip,
             gs: gs_clone,
             render_gs,
+            fill_rule,
             env,
-            ..
         } = paint;
         let OpEnv {
             base_transform,
@@ -385,9 +368,9 @@ impl PageRenderer {
         let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
         let cmyk_sidecar_snap = self.cmyk_sidecar_snapshot(pixmap, &gs_clone, true);
         let rgb_sidecar_snap = self.cmyk_sidecar_snapshot_for_rgb_paint(pixmap, &gs_clone, true);
-        let cmyk_coverage = self.rasterise_fill_coverage(&path, transform, tiny_skia::FillRule::Winding, clip);
+        let cmyk_coverage = self.rasterise_fill_coverage(&path, transform, fill_rule, clip);
         self.path_rasterizer
-            .fill_path_clipped(pixmap, &path, transform, render_gs, tiny_skia::FillRule::Winding, clip);
+            .fill_path_clipped(pixmap, &path, transform, render_gs, fill_rule, clip);
         self.apply_sidecar_paint_modulators(
             pixmap,
             SidecarPaintModulatorSnapshots {

@@ -82,7 +82,7 @@ impl PageRenderer {
         st: &mut OpLoopState<'_>,
         env: OpEnv<'_>,
         dict: &std::collections::HashMap<String, Object>,
-        data: &Vec<u8>,
+        data: &[u8],
     ) -> Result<()> {
         let OpEnv {
             base_transform, doc, ..
@@ -98,7 +98,7 @@ impl PageRenderer {
                 .unwrap_or(false);
             let synthetic = Object::Stream {
                 dict: expanded,
-                data: bytes::Bytes::from(data.clone()),
+                data: bytes::Bytes::copy_from_slice(data),
             };
             if self.knockout_shape.is_some() {
                 self.collect_inline_image_shape(&synthetic, transform, &gs_clone, doc, clip, is_image_mask)?;
