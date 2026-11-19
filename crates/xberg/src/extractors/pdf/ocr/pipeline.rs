@@ -2049,9 +2049,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     sparse_glyph_read::spawn_trials(
                         &mut join_set,
                         &panicked_trials,
-                        &render_doc,
-                        &pipeline_stage_config,
-                        pipeline,
+                        &sparse_glyph_read::TrialContext {
+                            pdf: &render_doc,
+                            config: &pipeline_stage_config,
+                            pipeline,
+                        },
                         trial_pages
                             .iter()
                             .filter_map(|&idx| implicit_sparse_glyph_pages.get(&idx).map(|words| (idx, words))),
@@ -2113,7 +2115,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
                     let task = crate::engine::seams::inherit_progress(async move {
                         #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr, feature = "ocr"))]
-                        sparse_glyph_read::test_page_started(&config_clone, idx);
+                        sparse_glyph_read::parallel_tests::test_page_started(&config_clone, idx);
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                             return PageTaskOutput::Read(idx, (Err(crate::XbergError::Cancelled), None));
                         }
