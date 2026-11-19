@@ -20,6 +20,8 @@ mod loses_whole_read_tests;
 mod mixed_tables;
 #[cfg(feature = "pdf")]
 mod native_finalize;
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod native_routing;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod picture_layer;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -3195,44 +3197,7 @@ impl PdfExtractor {
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_tables: Vec<crate::types::Table> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_coordinate_frames: Vec<crate::types::internal::OcrPageCoordinateFrame> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_internal_doc: Option<InternalDocument> = None;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_page_texts: Option<Vec<String>> = None;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_document_page_texts: Option<Vec<String>> = None;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_results_map: Option<ahash::AHashMap<u32, String>> = None;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut structured_ocr_pages: Option<ahash::AHashMap<u32, InternalDocument>> = None;
-        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        let mut picture_pages = ahash::AHashMap::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_page_rasters: Option<Vec<crate::types::ExtractedImage>> = None;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_formulas: Vec<crate::types::Formula> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
-            ahash::AHashMap::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_confidence_by_page: ahash::AHashMap<u32, crate::types::page::PageOcrConfidence> =
-            ahash::AHashMap::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_fallback_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        #[allow(unused_assignments)]
-        let mut ocr_layout_gate_audit: OcrLayoutGateDecisions = (None, None);
-        #[cfg(feature = "formula-recognition")]
-        let mut mixed_formula_layout_inputs = None;
+        let mut routing = native_routing::OcrRoutingState::default();
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !native_text_stopped_by_time_limit(config) {
@@ -3241,7 +3206,7 @@ impl PdfExtractor {
                 &mut pdf_metadata,
                 &native_text,
                 boundaries.as_deref(),
-                &mut ocr_fallback_warnings,
+                &mut routing.fallback_warnings,
             );
         }
 
@@ -3289,7 +3254,7 @@ impl PdfExtractor {
                 let mixed_run = $mixed_run;
                 #[cfg(feature = "formula-recognition")]
                 {
-                    mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                    routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
                 }
                 let (
                     mixed,
@@ -3304,17 +3269,17 @@ impl PdfExtractor {
                     mixed_page_failures,
                 ) = mixed_run.output;
                 let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-                ocr_llm_usage = mixed_llm_usage;
-                ocr_results_map = Some(results_map);
-                structured_ocr_pages = Some(mixed_structured_pages);
-                ocr_page_rasters = mixed_rstrs;
+                routing.llm_usage = mixed_llm_usage;
+                routing.results_map = Some(results_map);
+                routing.structured_pages = Some(mixed_structured_pages);
+                routing.page_rasters = mixed_rstrs;
                 if !mixed_formulas.is_empty() {
-                    ocr_formulas = mixed_formulas;
+                    routing.formulas = mixed_formulas;
                 }
-                ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                ocr_page_failures.extend(mixed_page_failures);
-                ocr_fallback_warnings.extend(mixed_warnings);
+                routing.preprocessing_by_page.extend(mixed_preprocessing);
+                routing.confidence_by_page.extend(mixed_ocr_confidence);
+                routing.page_failures.extend(mixed_page_failures);
+                routing.fallback_warnings.extend(mixed_warnings);
                 (mixed, extraction_method)
             }};
         }
@@ -3359,10 +3324,10 @@ impl PdfExtractor {
             )
             .await?;
             if let Some(warning) = layout_warning {
-                crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
             }
             for warning in layout_glyph_drop_warnings {
-                crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
             }
             if ocr_pts.iter().any(|page| page.trim().is_empty()) {
                 let native_pages =
@@ -3370,28 +3335,28 @@ impl PdfExtractor {
                 if let Some((pages, lost_glyphs)) =
                     restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages, config)
                 {
-                    ocr_document_page_texts = Some(pages);
+                    routing.document_page_texts = Some(pages);
                     let total_lost = lost_glyphs.iter().map(|&(_, lost)| lost).sum();
                     if let Some(warning) = unmapped_glyphs::lost_glyph_warning(total_lost, config) {
-                        crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                        crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
                     }
                     for (page, lost) in lost_glyphs {
                         if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(page, lost) {
-                            crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                            crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
                         }
                     }
                 }
             }
-            ocr_layout_gate_audit = gate_audit;
-            ocr_tables = ocr_tbls;
-            ocr_elements = ocr_elems;
-            ocr_internal_doc = ocr_doc;
-            ocr_llm_usage = llm_usage;
-            ocr_page_texts = Some(ocr_pts);
-            ocr_page_rasters = ocr_rstrs;
-            ocr_formulas = formulas;
-            ocr_preprocessing_by_page = preprocessing;
-            ocr_confidence_by_page = page_ocr_confidence;
+            routing.layout_gate_audit = gate_audit;
+            routing.tables = ocr_tbls;
+            routing.elements = ocr_elems;
+            routing.internal_doc = ocr_doc;
+            routing.llm_usage = llm_usage;
+            routing.page_texts = Some(ocr_pts);
+            routing.page_rasters = ocr_rstrs;
+            routing.formulas = formulas;
+            routing.preprocessing_by_page = preprocessing;
+            routing.confidence_by_page = page_ocr_confidence;
             (ocr_text, ExtractionMethod::Ocr)
         } else if let Some(ref ocr_pages) = config.force_ocr_pages {
             if !ocr_pages.is_empty() {
@@ -3409,7 +3374,7 @@ impl PdfExtractor {
                         .await?;
                         #[cfg(feature = "formula-recognition")]
                         {
-                            mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                            routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
                         }
                         let (
                             mixed,
@@ -3424,17 +3389,17 @@ impl PdfExtractor {
                             mixed_page_failures,
                         ) = mixed_run.output;
                         let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-                        ocr_llm_usage = mixed_llm_usage;
-                        ocr_results_map = Some(results_map);
-                        structured_ocr_pages = Some(mixed_structured_pages);
-                        ocr_page_rasters = mixed_rstrs;
+                        routing.llm_usage = mixed_llm_usage;
+                        routing.results_map = Some(results_map);
+                        routing.structured_pages = Some(mixed_structured_pages);
+                        routing.page_rasters = mixed_rstrs;
                         if !mixed_formulas.is_empty() {
-                            ocr_formulas = mixed_formulas;
+                            routing.formulas = mixed_formulas;
                         }
-                        ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                        ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                        ocr_page_failures.extend(mixed_page_failures);
-                        ocr_fallback_warnings.extend(mixed_warnings);
+                        routing.preprocessing_by_page.extend(mixed_preprocessing);
+                        routing.confidence_by_page.extend(mixed_ocr_confidence);
+                        routing.page_failures.extend(mixed_page_failures);
+                        routing.fallback_warnings.extend(mixed_warnings);
                         (mixed, extraction_method)
                     } else {
                         tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
@@ -3486,7 +3451,7 @@ impl PdfExtractor {
                     Ok(mixed_run) => {
                         #[cfg(feature = "formula-recognition")]
                         {
-                            mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                            routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
                         }
                         let (
                             mixed,
@@ -3514,17 +3479,17 @@ impl PdfExtractor {
                                  text; reporting the native extraction method rather than `mixed`"
                             );
                         }
-                        ocr_llm_usage = mixed_llm_usage;
-                        ocr_results_map = Some(results_map);
-                        structured_ocr_pages = Some(mixed_structured_pages);
-                        ocr_page_rasters = mixed_rstrs;
+                        routing.llm_usage = mixed_llm_usage;
+                        routing.results_map = Some(results_map);
+                        routing.structured_pages = Some(mixed_structured_pages);
+                        routing.page_rasters = mixed_rstrs;
                         if !mixed_formulas.is_empty() {
-                            ocr_formulas = mixed_formulas;
+                            routing.formulas = mixed_formulas;
                         }
-                        ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                        ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                        ocr_page_failures.extend(mixed_page_failures);
-                        ocr_fallback_warnings.extend(mixed_warnings);
+                        routing.preprocessing_by_page.extend(mixed_preprocessing);
+                        routing.confidence_by_page.extend(mixed_ocr_confidence);
+                        routing.page_failures.extend(mixed_page_failures);
+                        routing.fallback_warnings.extend(mixed_warnings);
                         if ocr_contributed {
                             (mixed, mixed_method)
                         } else {
@@ -3541,13 +3506,13 @@ impl PdfExtractor {
                         if failed_ocr_fallback_is_total_loss(&native_text) {
                             return Err(e);
                         }
-                        ocr_page_failures.extend(ocr::route_level_ocr_page_failures(
+                        routing.page_failures.extend(ocr::route_level_ocr_page_failures(
                             &scanned_pages,
                             &e,
                             &native_text,
                             bounds,
                         ));
-                        ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                        routing.fallback_warnings.push(crate::types::ProcessingWarning {
                             source: std::borrow::Cow::Borrowed("ocr"),
                             message: std::borrow::Cow::Owned(format!(
                                 "Automatic OCR of detected scanned pages {scanned_pages:?} failed ({e}); those \
@@ -3594,9 +3559,9 @@ impl PdfExtractor {
                 let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
                 let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
                 picture_candidates.clone_from(&decision.failing_pages);
-                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
+                crate::core::diagnostics::dedup_extend_warnings(&mut routing.fallback_warnings, ink.warnings);
                 crate::core::diagnostics::dedup_extend_warnings(
-                    &mut ocr_fallback_warnings,
+                    &mut routing.fallback_warnings,
                     unreadable_script::retain_unreadable_script_pages(
                         &mut decision,
                         layer,
@@ -3843,7 +3808,7 @@ impl PdfExtractor {
                                     "Targeted OCR could not read a page the whole-document read had read; \
                                      using the whole-document read"
                                 );
-                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                routing.fallback_warnings.push(crate::types::ProcessingWarning {
                                     source: std::borrow::Cow::Borrowed("ocr"),
                                     message: std::borrow::Cow::Owned(format!(
                                         "Pages {dropped_pages:?} are in a script that the OCR read did not \
@@ -3866,7 +3831,7 @@ impl PdfExtractor {
                                  using the whole-document read"
                             );
                             ensure_pdf_not_cancelled(config)?;
-                            ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                            routing.fallback_warnings.push(crate::types::ProcessingWarning {
                                 source: std::borrow::Cow::Borrowed("ocr"),
                                 message: std::borrow::Cow::Owned(format!(
                                     "Pages {dropped_pages:?} are in a script that the OCR read did not produce, \
@@ -3915,10 +3880,16 @@ impl PdfExtractor {
                             ) =>
                             {
                                 if let Some(warning) = layout_warning {
-                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                                    crate::core::diagnostics::push_warning_deduped(
+                                        &mut routing.fallback_warnings,
+                                        warning,
+                                    );
                                 }
                                 for warning in layout_glyph_drop_warnings {
-                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                                    crate::core::diagnostics::push_warning_deduped(
+                                        &mut routing.fallback_warnings,
+                                        warning,
+                                    );
                                 }
                                 let preserve_native_after_discard = discarded_visible_native_page
                                     && pdf_metadata
@@ -3937,7 +3908,7 @@ impl PdfExtractor {
                                         native_text.matches(unmapped_glyphs::is_lost_glyph).count(),
                                     ) {
                                         crate::core::diagnostics::push_warning_deduped(
-                                            &mut ocr_fallback_warnings,
+                                            &mut routing.fallback_warnings,
                                             warning,
                                         );
                                     }
@@ -3945,22 +3916,22 @@ impl PdfExtractor {
                                         .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                         .unwrap_or_default();
                                     crate::core::diagnostics::dedup_extend_warnings(
-                                        &mut ocr_fallback_warnings,
+                                        &mut routing.fallback_warnings,
                                         warnings,
                                     );
-                                    ocr_page_failures.extend(failures);
+                                    routing.page_failures.extend(failures);
                                     (native_text, ExtractionMethod::Native)
                                 } else {
-                                    ocr_layout_gate_audit = gate_audit;
-                                    ocr_tables = ocr_tbls;
-                                    ocr_elements = ocr_elems;
-                                    ocr_internal_doc = ocr_doc;
-                                    ocr_llm_usage = llm_usage;
-                                    ocr_page_texts = Some(ocr_pts);
-                                    ocr_page_rasters = ocr_rstrs;
-                                    ocr_formulas = formulas;
-                                    ocr_preprocessing_by_page = preprocessing;
-                                    ocr_confidence_by_page = page_ocr_confidence;
+                                    routing.layout_gate_audit = gate_audit;
+                                    routing.tables = ocr_tbls;
+                                    routing.elements = ocr_elems;
+                                    routing.internal_doc = ocr_doc;
+                                    routing.llm_usage = llm_usage;
+                                    routing.page_texts = Some(ocr_pts);
+                                    routing.page_rasters = ocr_rstrs;
+                                    routing.formulas = formulas;
+                                    routing.preprocessing_by_page = preprocessing;
+                                    routing.confidence_by_page = page_ocr_confidence;
                                     (ocr_text, ExtractionMethod::Ocr)
                                 }
                             }
@@ -3972,20 +3943,20 @@ impl PdfExtractor {
                                 // recovered by it, and layout inputs and llm_usage go with it, as in the
                                 // sibling arms.
                                 crate::core::diagnostics::dedup_extend_warnings(
-                                    &mut ocr_fallback_warnings,
+                                    &mut routing.fallback_warnings,
                                     warnings
                                         .into_iter()
                                         .filter(|warning| !warning.message.contains("was recovered from"))
                                         .collect(),
                                 );
-                                ocr_page_failures.extend(failures.into_iter().map(|failure| {
+                                routing.page_failures.extend(failures.into_iter().map(|failure| {
                                     crate::types::OcrPageFailure {
                                         recovered: false,
                                         ..failure
                                     }
                                 }));
                                 crate::core::diagnostics::dedup_extend_warnings(
-                                    &mut ocr_fallback_warnings,
+                                    &mut routing.fallback_warnings,
                                     dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
                                 );
                                 (native_text, ExtractionMethod::Native)
@@ -4002,7 +3973,7 @@ impl PdfExtractor {
                                     return Err(failed_run.error);
                                 }
                                 if ensure_pdf_not_cancelled(config).is_ok() {
-                                    ocr_page_failures.extend(ocr::failed_run_page_failures(
+                                    routing.page_failures.extend(ocr::failed_run_page_failures(
                                         &failed_run,
                                         pdf_metadata.pdf_specific.page_count.unwrap_or(0),
                                         &native_text,
@@ -4013,10 +3984,13 @@ impl PdfExtractor {
                                     1,
                                     failed_run.unrecovered_glyphs_on_page_one,
                                 ) {
-                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                                    crate::core::diagnostics::push_warning_deduped(
+                                        &mut routing.fallback_warnings,
+                                        warning,
+                                    );
                                 }
                                 let e = &failed_run.error;
-                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                routing.fallback_warnings.push(crate::types::ProcessingWarning {
                                     source: std::borrow::Cow::Borrowed("ocr"),
                                     message: std::borrow::Cow::Owned(format!(
                                         "OCR fallback failed ({e}); returning native text that was below the \
@@ -4079,13 +4053,13 @@ impl PdfExtractor {
                                 if failed_ocr_fallback_is_total_loss(&native_text) {
                                     return Err(e);
                                 }
-                                ocr_page_failures.extend(ocr::route_level_ocr_page_failures(
+                                routing.page_failures.extend(ocr::route_level_ocr_page_failures(
                                     &pages,
                                     &e,
                                     &native_text,
                                     bounds,
                                 ));
-                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                routing.fallback_warnings.push(crate::types::ProcessingWarning {
                                     source: std::borrow::Cow::Borrowed("ocr"),
                                     message: std::borrow::Cow::Owned(format!(
                                         "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
@@ -4111,7 +4085,7 @@ impl PdfExtractor {
                                 plugin_name: "ocr".to_string(),
                             });
                         }
-                        ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                        routing.fallback_warnings.push(crate::types::ProcessingWarning {
                             source: std::borrow::Cow::Borrowed("ocr"),
                             message: std::borrow::Cow::Owned(format!(
                                 "Targeted OCR was required for pages {pages:?} but no page boundaries were \
@@ -4138,19 +4112,19 @@ impl PdfExtractor {
                         let (text, replacements, _, _, _, _, preprocessing, confidence, warnings, page_failures) =
                             mixed_run.output;
                         let method = extraction_method_after_mixed_ocr(&replacements);
-                        ocr_preprocessing_by_page.extend(
+                        routing.preprocessing_by_page.extend(
                             preprocessing
                                 .into_iter()
                                 .filter(|(page, _)| replacements.contains_key(page)),
                         );
-                        ocr_confidence_by_page.extend(
+                        routing.confidence_by_page.extend(
                             confidence
                                 .into_iter()
                                 .filter(|(page, _)| replacements.contains_key(page)),
                         );
-                        ocr_fallback_warnings.extend(warnings);
-                        ocr_page_failures.extend(page_failures);
-                        ocr_results_map = Some(replacements);
+                        routing.fallback_warnings.extend(warnings);
+                        routing.page_failures.extend(page_failures);
+                        routing.results_map = Some(replacements);
                         (text, method)
                     } else {
                         (native_text, ExtractionMethod::Native)
@@ -4164,27 +4138,31 @@ impl PdfExtractor {
                     && !picture_candidates.is_empty()
                     && let Some(bounds) = boundaries.as_deref()
                 {
-                    let current_bounds = ocr_results_map.as_ref().map_or_else(
+                    let current_bounds = routing.results_map.as_ref().map_or_else(
                         || bounds.to_vec(),
                         |accepted| ocr::boundaries_after_replacements(bounds, accepted),
                     );
-                    picture_pages = picture_layer::read_retained_picture_pages(
+                    routing.picture_pages = picture_layer::read_retained_picture_pages(
                         content,
                         &text,
                         &current_bounds,
                         &picture_candidates,
-                        ocr_results_map.as_ref(),
+                        routing.results_map.as_ref(),
                         config,
                     )
                     .await?;
-                    if !picture_pages.is_empty() {
-                        let additions = picture_pages
+                    if !routing.picture_pages.is_empty() {
+                        let additions = routing
+                            .picture_pages
                             .iter()
                             .map(|(&page, read)| (page, read.transcript()))
                             .collect();
                         text = ocr::apply_ocr_page_replacements(&text, &current_bounds, &additions);
-                        ocr_results_map.get_or_insert_with(Default::default).extend(additions);
-                        if picture_pages.values().any(|page| page.raster.is_some()) {
+                        routing
+                            .results_map
+                            .get_or_insert_with(Default::default)
+                            .extend(additions);
+                        if routing.picture_pages.values().any(|page| page.raster.is_some()) {
                             method = ExtractionMethod::Mixed;
                         }
                     }
@@ -4202,8 +4180,8 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if let (Some(bounds), Some(replacements), Some(documents)) = (
             boundaries.as_deref(),
-            ocr_results_map.as_mut(),
-            structured_ocr_pages.as_ref(),
+            routing.results_map.as_mut(),
+            routing.structured_pages.as_ref(),
         ) {
             ocr::render_mixed_plain_pages(
                 extraction_method,
@@ -4244,7 +4222,7 @@ impl PdfExtractor {
         // them. The structured OCR document already contains the same table
         // values, so later document assembly must not inject them a second
         // time. ~keep
-        replace_tables_with_ocr_output(&mut tables, ocr_tables);
+        replace_tables_with_ocr_output(&mut tables, routing.tables);
 
         let (images, image_fallback_warning): (
             Option<Vec<crate::types::ExtractedImage>>,
@@ -4255,18 +4233,18 @@ impl PdfExtractor {
         let ocr_text_pages = native_finalize::apply_ocr_to_page_contents(
             config,
             native_finalize::OcrPageSources {
-                page_texts: ocr_page_texts.as_deref(),
-                document_page_texts: ocr_document_page_texts.as_deref(),
-                results_map: ocr_results_map.as_ref(),
+                page_texts: routing.page_texts.as_deref(),
+                document_page_texts: routing.document_page_texts.as_deref(),
+                results_map: routing.results_map.as_ref(),
             },
             &mut page_contents,
             &mut pdf_metadata,
         );
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let image_preprocessing = attach_pdf_preprocessing_metadata(&mut page_contents, &ocr_preprocessing_by_page);
+        let image_preprocessing = attach_pdf_preprocessing_metadata(&mut page_contents, &routing.preprocessing_by_page);
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        attach_pdf_ocr_confidence(&mut page_contents, &ocr_confidence_by_page);
+        attach_pdf_ocr_confidence(&mut page_contents, &routing.confidence_by_page);
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         let image_preprocessing = None;
 
@@ -4276,11 +4254,11 @@ impl PdfExtractor {
             extraction::apply_annotation_text_fallback(
                 annotation_text_fallback,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
+                routing.document_page_texts.as_deref().or(routing.page_texts.as_deref()),
                 #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
                 None,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_results_map.as_ref(),
+                routing.results_map.as_ref(),
                 #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
                 None,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -4299,7 +4277,7 @@ impl PdfExtractor {
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if extraction_method == ExtractionMethod::Mixed
-            && let Some(ref accepted_pages) = structured_ocr_pages
+            && let Some(ref accepted_pages) = routing.structured_pages
         {
             merge_mixed_ocr_tables(&mut tables, accepted_pages);
         }
@@ -4322,8 +4300,8 @@ impl PdfExtractor {
                 extraction_method,
                 &text,
                 boundaries.as_deref(),
-                ocr_results_map.as_ref(),
-                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
+                routing.results_map.as_ref(),
+                routing.document_page_texts.as_deref().or(routing.page_texts.as_deref()),
                 config,
             )
         };
@@ -4336,7 +4314,8 @@ impl PdfExtractor {
             #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
             let page_boundaries = boundaries.as_mut();
             #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-            let ocr_pages: Vec<u32> = ocr_results_map
+            let ocr_pages: Vec<u32> = routing
+                .results_map
                 .iter()
                 .flat_map(|replaced| replaced.keys().copied())
                 .collect();
@@ -4355,15 +4334,18 @@ impl PdfExtractor {
             page_structure.boundaries = boundaries.clone();
         }
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let selector_replacements = ocr_results_map.as_ref();
+        let selector_replacements = routing.results_map.as_ref();
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let filtered_replacements;
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        let selector_replacements = if picture_pages.is_empty() {
+        let selector_replacements = if routing.picture_pages.is_empty() {
             selector_replacements
         } else {
-            filtered_replacements =
-                picture_layer::unapplied_replacements(pre_rendered_doc.as_mut(), &picture_pages, selector_replacements);
+            filtered_replacements = picture_layer::unapplied_replacements(
+                pre_rendered_doc.as_mut(),
+                &routing.picture_pages,
+                selector_replacements,
+            );
             if extraction_method == ExtractionMethod::Native
                 && let (Some(document), Some(unapplied)) = (pre_rendered_doc.as_mut(), filtered_replacements.as_ref())
             {
@@ -4377,18 +4359,18 @@ impl PdfExtractor {
             &text,
             mime_type,
             pre_rendered_doc,
-            ocr_internal_doc.take(),
+            routing.internal_doc.take(),
             selector_replacements,
-            structured_ocr_pages.as_ref(),
+            routing.structured_pages.as_ref(),
             selector_boundaries.as_deref(),
             &config.output_format,
         );
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if extraction_method == ExtractionMethod::Mixed
-            && let Some(ref accepted_pages) = structured_ocr_pages
+            && let Some(ref accepted_pages) = routing.structured_pages
         {
-            ocr_elements = accepted_mixed_ocr_elements(accepted_pages);
-            ocr_coordinate_frames = accepted_mixed_ocr_coordinate_frames(accepted_pages);
+            routing.elements = accepted_mixed_ocr_elements(accepted_pages);
+            routing.coordinate_frames = accepted_mixed_ocr_coordinate_frames(accepted_pages);
         }
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         let (mut doc, document_is_structured) =
@@ -4396,7 +4378,7 @@ impl PdfExtractor {
         // #1575: `doc.metadata` is fully replaced by a fresh `Metadata { .. }` literal below
         // (native/mixed extraction never populates `doc.metadata` this early, so this is a
         // no-op for them), which would otherwise discard the OCR pipeline's `psm`/`language`/
-        // `tesseract_dict_invalid_word_ratio` keys set on `ocr_internal_doc.metadata.additional`
+        // `tesseract_dict_invalid_word_ratio` keys set on `routing.internal_doc.metadata.additional`
         // (`extract_with_ocr_for_page`) before they ever reached a caller. Taken here and
         // merged back in after that literal is built. ~keep
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -4414,9 +4396,9 @@ impl PdfExtractor {
                 lost_glyphs,
                 pdf_extraction_warnings: &mut pdf_extraction_warnings,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_fallback_warnings: &mut ocr_fallback_warnings,
+                ocr_fallback_warnings: &mut routing.fallback_warnings,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_page_failures: &mut ocr_page_failures,
+                ocr_page_failures: &mut routing.page_failures,
                 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
                 markdown_layout_warning,
                 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -4429,7 +4411,7 @@ impl PdfExtractor {
             #[cfg(feature = "layout-detection")]
             markdown_layout_gate_decisions.as_deref(),
             #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-            ocr_layout_gate_audit,
+            routing.layout_gate_audit,
         );
 
         native_finalize::apply_document_metadata(
@@ -4445,7 +4427,7 @@ impl PdfExtractor {
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
                 ocr_backend_additional_metadata,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_coordinate_frames,
+                ocr_coordinate_frames: routing.coordinate_frames,
             },
         );
 
@@ -4474,12 +4456,12 @@ impl PdfExtractor {
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
                 extraction_method,
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-                ocr_results_map.as_ref(),
+                routing.results_map.as_ref(),
             );
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        native_finalize::append_ocr_page_rasters(&mut doc, ocr_page_rasters, config, used_ocr, extraction_method);
+        native_finalize::append_ocr_page_rasters(&mut doc, routing.page_rasters, config, used_ocr, extraction_method);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         native_finalize::inject_ocr_image_placeholders(&mut doc, config, used_ocr);
@@ -4528,13 +4510,13 @@ impl PdfExtractor {
         attach_ocr_text_page_marks(&mut doc, ocr_text_pages);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if !ocr_elements.is_empty() {
-            doc.prebuilt_ocr_elements = Some(ocr_elements);
+        if !routing.elements.is_empty() {
+            doc.prebuilt_ocr_elements = Some(routing.elements);
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if !ocr_formulas.is_empty() {
-            doc.formulas = ocr_formulas;
+        if !routing.formulas.is_empty() {
+            doc.formulas = routing.formulas;
         }
 
         #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
@@ -4545,13 +4527,13 @@ impl PdfExtractor {
             markdown_layout_images
                 .as_deref()
                 .zip(markdown_layout_detections.as_deref()),
-            &mut mixed_formula_layout_inputs,
+            &mut routing.mixed_formula_layout_inputs,
         )
         .await;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if !ocr_llm_usage.is_empty() {
-            doc.llm_usage = Some(ocr_llm_usage);
+        if !routing.llm_usage.is_empty() {
+            doc.llm_usage = Some(routing.llm_usage);
         }
 
         doc.diagrams = diagrams;
