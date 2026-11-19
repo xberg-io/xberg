@@ -47,8 +47,9 @@ impl Drop for ContextOwner<'_> {
         // SAFETY: `ptr` is the context allocated by `HeifContext::new` and owned only by this
         // value; nothing else frees it. The native context is released before the fields drop,
         // so the source (reader or borrowed input) outlives it. Every wrapper that can keep
-        // native context state alive (`HeifContext`, `ImageHandle`, `Track`, `RegionItem`)
-        // holds an `Rc` of this owner, so the release happens only after the last of them.
+        // native context state alive (`HeifContext`, `ImageHandle`, `Track`, `RegionItem`,
+        // `Region`) holds an `Rc` of this owner, so the release happens only after the last of
+        // them.
         unsafe { lh::heif_context_free(self.ptr) };
     }
 }
@@ -136,17 +137,21 @@ impl<'a> HeifContext<'a> {
         }
     }
 
-    /// The source slot, available only while no handle, track or region item shares this context.
+    /// The source slot, available only while no handle, track, region item or region shares this
+    /// context.
     ///
     /// Replacing the input under a live handle would leave the handle's native state reading
-    /// from a different source than the one it was parsed from.
+    /// from a different source than the one it was parsed from, and a live region resolves its
+    /// transformed getters against the image properties of the context it came from.
     fn source_mut(&mut self) -> Result<&mut Source<'a>> {
         Rc::get_mut(&mut self.owner)
             .map(|owner| &mut owner.source)
             .ok_or_else(|| HeifError {
                 code: HeifErrorCode::UsageError,
                 sub_code: HeifErrorSubCode::Unspecified,
-                message: String::from("the context cannot be read again while image handles or tracks are alive"),
+                message: String::from(
+                    "the context cannot be read again while image handles, tracks or regions are alive",
+                ),
             })
     }
 

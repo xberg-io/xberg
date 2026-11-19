@@ -93,6 +93,39 @@ fn a_context_with_live_handles_refuses_a_new_source() {
     context.read_bytes(&bytes).expect("re-read once the handle is gone");
 }
 
+/// libheif resolves a region's transformed getters against its context's image properties, so a
+/// region must keep the context from loading another image for as long as it is alive, even
+/// after the region item and image handle it came from are gone.
+#[cfg(feature = "v1_18")]
+#[test]
+fn a_live_region_blocks_reading_another_image_into_its_context() {
+    use xberg_libheif::regions::Region;
+
+    let Some(bytes) = load_fixture("images/test.heic") else {
+        return;
+    };
+    let mut context = HeifContext::read_from_bytes(&bytes).expect("read fixture");
+    let mut handle = context.primary_image_handle().expect("primary image");
+    let mut region_item = handle
+        .add_region_item(handle.width(), handle.height())
+        .expect("add a region item");
+    let region = region_item.add_point(1, 2).expect("add a point region");
+    drop(region_item);
+    drop(handle);
+    let Region::Point(point) = &region else {
+        panic!("a point region was added");
+    };
+    assert_eq!(point.point(), (1, 2));
+    let error = context
+        .read_bytes(&bytes)
+        .expect_err("a live region must block re-reading");
+    assert!(matches!(error.code, HeifErrorCode::UsageError));
+    drop(region);
+    context
+        .read_bytes(&bytes)
+        .expect("re-read once the last region is gone");
+}
+
 #[test]
 fn a_handle_from_another_context_is_rejected() {
     let Some(bytes) = load_fixture("images/test.heic") else {
