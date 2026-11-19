@@ -142,6 +142,19 @@ fn no_op_transforms_return_independent_pixels_and_resolution() {
 }
 
 #[test]
+fn grayscale_bytes_refuses_images_that_are_not_8_bpp() {
+    let rgb = make_rgb_pix(8, 8, 200);
+    assert_eq!(rgb.depth(), 32);
+    assert!(matches!(
+        rgb.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+
+    let gray = rgb.to_grayscale().expect("to_grayscale");
+    assert_eq!(gray.grayscale_bytes().expect("8 bpp read").len(), 64);
+}
+
+#[test]
 fn deskew_reports_rotation_for_slanted_rows() {
     const WIDTH: usize = 384;
     const HEIGHT: usize = 256;
