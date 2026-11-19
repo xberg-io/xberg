@@ -113,19 +113,13 @@ pub(super) async fn route_auto_fallback(
     Ok(routed)
 }
 
+#[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))]
 async fn evaluate_auto_gate(
     route: &mut OcrRouteInputs<'_>,
     routing: &mut OcrRoutingState,
     native_text: &str,
 ) -> Result<(ocr::OcrGateOutcome, AutoGate)> {
-    let (content, config, layout_pages, pdf_metadata, boundaries) = (
-        route.content,
-        route.config,
-        route.layout_pages,
-        route.pdf_metadata,
-        route.boundaries,
-    );
-    let outlined_ocr_pages = &mut *route.outlined_ocr_pages;
+    let (config, pdf_metadata, boundaries) = (route.config, route.pdf_metadata, route.boundaries);
     // Under `Auto`, a PDF with NO native text at all (a scan / missing text layer)
     // must reach OCR even when no explicit `ocr` config was given — the default
     // `ocr: None` ("OCR disabled") otherwise silently discarded the detected scan
@@ -144,31 +138,95 @@ async fn evaluate_auto_gate(
         pdf_metadata.pdf_specific.page_count,
         &thresholds,
     );
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut script = probe_native_script(route, routing, native_text, &mut decision).await?;
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-    let native_script_pages: Vec<u32> = Vec::new();
+    let script = ScriptProbe {
+        native_script_pages: Vec::new(),
+    };
+    union_flagged_pages(route, &mut decision);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    script
+        .picture_candidates
+        .retain(|page| !decision.failing_pages.contains(page));
+
+    log_gate_decision(&decision);
+    let (total_chars, alnum_ws_chars, alnum_ws_ratio) = native_text_shape(native_text);
+    let outcome = gate_outcome(
+        route,
+        native_text,
+        &decision,
+        &thresholds,
+        (total_chars, alnum_ws_ratio),
+    );
+    Ok((
+        outcome,
+        AutoGate {
+            failing_pages: decision.failing_pages,
+            fallback: decision.fallback,
+            native_script_pages: script.native_script_pages,
+            total_chars,
+            alnum_ws_chars,
+            alnum_ws_ratio,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: script.probe_reads,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            picture_candidates: script.picture_candidates,
+        },
+    ))
+}
+
+struct ScriptProbe {
+    native_script_pages: Vec<u32>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    probe_reads: Option<std::sync::Arc<ocr::read_reuse::ProbeReads>>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    picture_candidates: Vec<u32>,
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+async fn probe_native_script(
+    route: &OcrRouteInputs<'_>,
+    routing: &mut OcrRoutingState,
+    native_text: &str,
+    decision: &mut ocr::OcrFallbackDecision,
+) -> Result<ScriptProbe> {
+    let (content, config, layout_pages, pdf_metadata, boundaries) = (
+        route.content,
+        route.config,
+        route.layout_pages,
+        route.pdf_metadata,
+        route.boundaries,
+    );
     let mut picture_candidates = Vec::new();
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let probe_reads = {
         let layer = unreadable_script::NativeLayer {
             text: &native_text,
             boundaries,
             page_count: pdf_metadata.pdf_specific.page_count,
         };
-        let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
+        let ink = ink_probe::contradicted_pages(decision, layer, content, config, layout_pages).await?;
         let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
         picture_candidates.clone_from(&decision.failing_pages);
         crate::core::diagnostics::dedup_extend_warnings(&mut routing.fallback_warnings, ink.warnings);
         crate::core::diagnostics::dedup_extend_warnings(
             &mut routing.fallback_warnings,
-            unreadable_script::retain_unreadable_script_pages(&mut decision, layer, content, config, &ink.contradicted),
+            unreadable_script::retain_unreadable_script_pages(decision, layer, content, config, &ink.contradicted),
         );
         reads
     };
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let native_script_pages =
-        unreadable_script::native_script_pages(&decision, &native_text, boundaries, content, config);
+        unreadable_script::native_script_pages(decision, &native_text, boundaries, content, config);
+    Ok(ScriptProbe {
+        native_script_pages,
+        probe_reads,
+        picture_candidates,
+    })
+}
 
+fn union_flagged_pages(route: &mut OcrRouteInputs<'_>, decision: &mut ocr::OcrFallbackDecision) {
+    let (pdf_metadata, boundaries) = (route.pdf_metadata, route.boundaries);
+    let outlined_ocr_pages = &mut *route.outlined_ocr_pages;
     // `NativeTextStats`' character-class checks cannot see a font whose mapping
     // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
     // letters and punctuation (issue #1667): the text is structurally clean. The
@@ -178,7 +236,7 @@ async fn evaluate_auto_gate(
     // discarding it. ~keep
     let has_boundaries = boundaries.is_some_and(|b| !b.is_empty());
     ocr::apply_flagged_pages(
-        &mut decision,
+        decision,
         pdf_metadata
             .pdf_specific
             .fabricated_text_pages
@@ -195,7 +253,7 @@ async fn evaluate_auto_gate(
     // `scanned_pages` above; `Auto` reads it here the same way it reads the
     // provenance signal, so both share one union step. ~keep
     ocr::apply_flagged_pages(
-        &mut decision,
+        decision,
         pdf_metadata
             .pdf_specific
             .implausible_text_pages
@@ -210,12 +268,11 @@ async fn evaluate_auto_gate(
     } else {
         outlined_ocr_pages.retain(|page| !decision.failing_pages.contains(page));
         // Keep the selected-page acceptance check even when every page qualifies. ~keep
-        ocr::apply_flagged_pages(&mut decision, &outlined_ocr_pages, has_boundaries, None);
+        ocr::apply_flagged_pages(decision, &outlined_ocr_pages, has_boundaries, None);
     }
+}
 
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    picture_candidates.retain(|page| !decision.failing_pages.contains(page));
-
+fn log_gate_decision(decision: &ocr::OcrFallbackDecision) {
     tracing::debug!(
         target: "xberg::pdf::ocr",
         fallback = decision.fallback,
@@ -231,7 +288,9 @@ async fn evaluate_auto_gate(
         consecutive_repeat_ratio = decision.stats.consecutive_repeat_ratio,
         "per-page OCR gate decision",
     );
+}
 
+fn native_text_shape(native_text: &str) -> (usize, usize, f64) {
     let total_chars = native_text.chars().count();
     let alnum_ws_chars = native_text
         .chars()
@@ -243,14 +302,25 @@ async fn evaluate_auto_gate(
         1.0
     };
 
+    (total_chars, alnum_ws_chars, alnum_ws_ratio)
+}
+
+fn gate_outcome(
+    route: &OcrRouteInputs<'_>,
+    native_text: &str,
+    decision: &ocr::OcrFallbackDecision,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    (total_chars, alnum_ws_ratio): (usize, f64),
+) -> ocr::OcrGateOutcome {
+    let (config, pdf_metadata, boundaries) = (route.config, route.pdf_metadata, route.boundaries);
     let outcome = ocr::evaluate_ocr_skip_gate(
         route.has_pre_rendered_doc,
         total_chars,
         alnum_ws_ratio,
-        &decision,
-        &thresholds,
+        decision,
+        thresholds,
     );
-    let outcome = if automatic_page_acceptance_supported(config) {
+    if automatic_page_acceptance_supported(config) {
         with_native_page_acceptance(
             outcome,
             &decision.failing_pages,
@@ -265,22 +335,7 @@ async fn evaluate_auto_gate(
         )
     } else {
         outcome
-    };
-    Ok((
-        outcome,
-        AutoGate {
-            failing_pages: decision.failing_pages,
-            fallback: decision.fallback,
-            native_script_pages,
-            total_chars,
-            alnum_ws_chars,
-            alnum_ws_ratio,
-            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            probe_reads,
-            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            picture_candidates,
-        },
-    ))
+    }
 }
 
 async fn run_whole_document_fallback(
