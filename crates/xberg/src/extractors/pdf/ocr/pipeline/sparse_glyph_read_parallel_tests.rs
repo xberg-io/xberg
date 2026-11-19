@@ -8,6 +8,29 @@ const PARALLEL_CASE_WORKERS: usize = 2;
 
 const PARALLEL_CASE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// Free memory reported to the batch-width adapter while the parallel case runs: room for both
+/// pages above the adapter's 512 MiB reserve.
+const PINNED_AVAILABLE_MEMORY: usize = 2 * 1024 * 1024 * 1024;
+
+/// Pins the free-memory reading the batch width is computed from, and restores the real reading on
+/// drop. `max_threads` only sets the configured width; the adapter narrows it to one page when the
+/// host reports no headroom, which would put the two pages in separate batches and end the trial's
+/// wait by timeout. Process-wide, hence `#[serial]`.
+struct PinnedAvailableMemory;
+
+impl PinnedAvailableMemory {
+    fn with_room_for_both_pages() -> Self {
+        super::super::TEST_AVAILABLE_MEMORY.store(PINNED_AVAILABLE_MEMORY, std::sync::atomic::Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for PinnedAvailableMemory {
+    fn drop(&mut self) {
+        super::super::TEST_AVAILABLE_MEMORY.store(0, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 fn parallel_case(config: &ExtractionConfig) -> bool {
     config
         .security_limits
@@ -67,8 +90,10 @@ fn folio_with_an_ineligible_second_page() -> Vec<u8> {
 // The trial of page one waits until page two starts its normal read, so a batch that held its
 // other pages behind the trials would end the wait by timeout. ~keep
 #[test]
+#[serial_test::serial]
 fn a_slow_trial_does_not_hold_the_pages_without_one_and_a_declined_trial_is_read_normally() {
     super::super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || async {
+        let _pin = PinnedAvailableMemory::with_room_for_both_pages();
         let pdf = folio_with_an_ineligible_second_page();
         let models = tempfile::tempdir().unwrap();
         std::fs::write(

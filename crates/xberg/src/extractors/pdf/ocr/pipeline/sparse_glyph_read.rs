@@ -129,7 +129,9 @@ struct PipelineTrial {
 #[path = "sparse_glyph_read_trial_tasks.rs"]
 mod trial_tasks;
 #[cfg(paddle_ocr)]
-pub(super) use trial_tasks::{PanickedTrials, TrialContext, spawn_trials};
+pub(super) use trial_tasks::{
+    PanickedTrials, RetryRenderOutcome, RetryRenderRequest, TrialContext, spawn_retry_render, spawn_trials,
+};
 
 #[cfg(paddle_ocr)]
 pub(super) struct TrialPage {

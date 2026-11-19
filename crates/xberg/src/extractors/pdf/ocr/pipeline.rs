@@ -470,8 +470,9 @@ const IN_FLIGHT_PAGE_GRACE: std::time::Duration =
 ))]
 const STOP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
-/// What a task of the batch's page task set returns: the read of a page, or a sparse-glyph trial
-/// whose page is read at normal density when the trial is declined.
+/// What a task of the batch's page task set returns: the read of a page, a sparse-glyph trial
+/// whose page is read at normal density when the trial is declined, or the render that requeues
+/// such a page.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     feature = "pdf",
@@ -488,6 +489,8 @@ enum PageTaskOutput {
     ),
     #[cfg(all(paddle_ocr, feature = "ocr"))]
     Trial(usize, crate::Result<Option<sparse_glyph_read::AcceptedTrial>>),
+    #[cfg(all(paddle_ocr, feature = "ocr"))]
+    RetryRender(usize, Box<sparse_glyph_read::RetryRenderOutcome>),
 }
 
 /// What awaiting the next page task of a batch produced.
@@ -2243,22 +2246,42 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             // Trial pages have no XObject, Pattern or Shading resources (`marked_words`
                             // rejects them), so the source-image budget refusal that gets XObject
                             // recovery above cannot occur here.
-                            let retry_doc = Arc::clone(&render_doc);
-                            let retry_rotations = page_rotations.clone();
-                            let retry_limits = security_limits.clone();
-                            let retry_images_config = images_for_page(idx).cloned();
-                            let (retry_images, retry_failures, retry_dpis) =
-                                super::super::spawn_pdf_blocking(move || {
-                                    Ok(render_selected_pages_with_image_config(
-                                        &retry_doc,
-                                        &retry_rotations,
-                                        &[idx],
-                                        &retry_limits,
-                                        |_| retry_images_config.as_ref(),
-                                        preprocessing_render_dpi,
-                                    ))
-                                })
-                                .await?;
+                            sparse_glyph_read::spawn_retry_render(
+                                &mut join_set,
+                                sparse_glyph_read::RetryRenderRequest {
+                                    pdf: Arc::clone(&render_doc),
+                                    index: idx,
+                                    rotations: page_rotations.clone(),
+                                    limits: security_limits.clone(),
+                                    images_config: images_for_page(idx).cloned(),
+                                    preprocessing_dpi: preprocessing_render_dpi,
+                                },
+                            );
+                            continue;
+                        }
+                        #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+                        PageTaskOutput::RetryRender(idx, rendered) => {
+                            // The render is a task of this set, not an inline await, so a stalled
+                            // render cannot keep the collector from draining finished reads or
+                            // honouring the stop request. Its warnings were drained on the
+                            // blocking worker that rendered them.
+                            let (retry_images, retry_failures, retry_dpis, retry_warnings) = match *rendered {
+                                Ok(rendered) => rendered,
+                                Err(error) => {
+                                    pending_pages.remove(&idx);
+                                    let recovered = mixed_native_page_has_content(native_text, boundaries, idx);
+                                    push_mixed_ocr_page_failure_warning(
+                                        &mut accumulated_warnings,
+                                        &mut page_failures,
+                                        idx,
+                                        &error,
+                                        recovered,
+                                    );
+                                    failed_page_errors.insert(idx, error);
+                                    continue;
+                                }
+                            };
+                            crate::core::diagnostics::dedup_extend_warnings(&mut accumulated_warnings, retry_warnings);
                             raster_dpis.extend(retry_dpis);
                             for (failed_idx, error) in retry_failures {
                                 pending_pages.remove(&failed_idx);
@@ -2272,7 +2295,27 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 );
                                 failed_page_errors.insert(failed_idx, error);
                             }
-                            for (retry_idx, image_arc) in share_rendered_page_images(retry_images) {
+                            if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                                return Err(crate::XbergError::Cancelled.into());
+                            }
+                            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
+                            {
+                                pending_pages.remove(&idx);
+                                mark_pages_unread(
+                                    Some(token),
+                                    std::iter::once(idx),
+                                    &mut page_failures,
+                                    &mut failed_page_errors,
+                                    |idx| mixed_native_page_has_content(native_text, boundaries, idx),
+                                );
+                                continue;
+                            }
+                            let retry_images = share_rendered_page_images(retry_images);
+                            if retry_images.is_empty() {
+                                pending_pages.remove(&idx);
+                                continue;
+                            }
+                            for (retry_idx, image_arc) in retry_images {
                                 dimensions.insert(retry_idx, (image_arc.width(), image_arc.height()));
                                 spawn_page(
                                     &mut join_set,

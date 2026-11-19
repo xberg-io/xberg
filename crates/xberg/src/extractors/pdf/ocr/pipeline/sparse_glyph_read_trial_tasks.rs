@@ -5,6 +5,16 @@ use xberg_native_pdf::PdfDocument;
 
 type PageTaskOutput = super::super::PageTaskOutput;
 
+/// A declined trial's normal-density retry render: the pages it rendered, the pages it could not,
+/// the raster DPIs it observed, and the render warnings drained on the blocking worker that did
+/// the rendering.
+pub(in super::super) type RetryRenderOutcome = crate::Result<(
+    Vec<(usize, image::DynamicImage)>,
+    Vec<(usize, crate::XbergError)>,
+    crate::pdf::render::OcrRasterDpis,
+    Vec<crate::types::ProcessingWarning>,
+)>;
+
 /// Indices of trial tasks that panicked. A task that panics yields a `JoinError` without its page,
 /// and a panicked trial is retried at normal density like a declined one.
 #[derive(Clone, Default)]
@@ -77,6 +87,57 @@ pub(in super::super) fn spawn_trials<'a>(
         let task = crate::plugins::registry::inherit_test_ocr_backend(task);
         tasks.spawn(crate::core::extractor::cacheability::inherit(task));
     }
+}
+
+/// The render a declined trial's page needs, captured so the task owns everything it reads.
+pub(in super::super) struct RetryRenderRequest {
+    pub(in super::super) pdf: Arc<PdfDocument>,
+    pub(in super::super) index: usize,
+    pub(in super::super) rotations: Vec<u32>,
+    pub(in super::super) limits: crate::extractors::security::SecurityLimits,
+    pub(in super::super) images_config: Option<crate::core::config::ImageExtractionConfig>,
+    pub(in super::super) preprocessing_dpi: Option<i32>,
+}
+
+/// Spawn a declined trial's page render at normal density into the batch's page task set.
+///
+/// The render runs on the blocking pool from inside the task, never inline in the collector: a
+/// render that stalls just before the extraction deadline must not stop the collector from
+/// draining the reads that already finished or from honouring the stop request. `capture_render_warnings`
+/// drains the warnings on the blocking worker that rendered, because the buffer is thread-local
+/// and the collector would never see them.
+pub(in super::super) fn spawn_retry_render(
+    tasks: &mut tokio::task::JoinSet<PageTaskOutput>,
+    request: RetryRenderRequest,
+) {
+    let RetryRenderRequest {
+        pdf,
+        index,
+        rotations,
+        limits,
+        images_config,
+        preprocessing_dpi,
+    } = request;
+    let task = async move {
+        let rendered = super::super::super::super::spawn_pdf_blocking(move || {
+            crate::pdf::render::capture_render_warnings(|| {
+                Ok(super::super::super::rendering::render_selected_pages_with_image_config(
+                    &pdf,
+                    &rotations,
+                    &[index],
+                    &limits,
+                    |_| images_config.as_ref(),
+                    preprocessing_dpi,
+                ))
+            })
+        })
+        .await;
+        PageTaskOutput::RetryRender(
+            index,
+            Box::new(rendered.map(|(render, warnings)| (render.0, render.1, render.2, warnings))),
+        )
+    };
+    tasks.spawn(crate::core::extractor::cacheability::inherit(task));
 }
 
 #[cfg(test)]
