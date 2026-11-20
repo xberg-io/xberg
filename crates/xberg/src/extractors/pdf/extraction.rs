@@ -653,11 +653,20 @@ pub(crate) fn extract_all_from_native_document(
     // Asking for the hierarchy is the opt-in for the per-page tracking it requires.
     let force_hierarchy_page_tracking =
         hierarchy_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
+    // Vector geometry is returned on `PageContent`, so the same rule applies: asking for it
+    // is the opt-in for the per-page tracking it needs.
+    let geometry_enabled = config
+        .pdf_options
+        .as_ref()
+        .is_some_and(|options| options.extract_vector_geometry);
+    let force_geometry_page_tracking =
+        geometry_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
     let mut tracked_config;
-    let text_config = if force_annotation_page_tracking || force_hierarchy_page_tracking {
+    let text_config = if force_annotation_page_tracking || force_hierarchy_page_tracking || force_geometry_page_tracking
+    {
         tracked_config = config.clone();
         let mut page_config = tracked_config.pages.take().unwrap_or_default();
-        if force_hierarchy_page_tracking {
+        if force_hierarchy_page_tracking || force_geometry_page_tracking {
             page_config.extract_pages = true;
         }
         tracked_config.pages = Some(page_config);
@@ -1194,6 +1203,16 @@ pub(crate) fn extract_all_from_native_document(
         tracing::debug!("page label extraction failed: {e}");
         None
     });
+
+    if cut_short && geometry_enabled {
+        skipped_stages.push("vector geometry");
+    }
+    if geometry_enabled
+        && !cut_short
+        && let Some(pages) = page_contents.as_mut()
+    {
+        crate::pdf::native::geometry::attach_page_geometry(&doc.doc, pages);
+    }
 
     if !skipped_stages.is_empty() {
         extraction_warnings.push(crate::types::ProcessingWarning {
@@ -1795,6 +1814,7 @@ mod tests {
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: None,
+                geometry: None,
                 image_preprocessing: None,
             },
             PageContent {
@@ -1810,6 +1830,7 @@ mod tests {
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: None,
+                geometry: None,
                 image_preprocessing: None,
             },
         ]);

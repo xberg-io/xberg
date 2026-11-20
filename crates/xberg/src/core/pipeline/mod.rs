@@ -1938,6 +1938,7 @@ mod issue_214_text_coverage_tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }
     }
 

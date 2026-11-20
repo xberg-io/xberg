@@ -9,9 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
+// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vector_line_cap_from_core`, `try_convert_vector_line_join_from_core`, `try_convert_vector_segment_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -815,6 +815,28 @@ Future<ImagePreprocessingMetadata> createImagePreprocessingMetadataFromJson({
 Future<Formula> createFormulaFromJson({required String json}) =>
     RustLib.instance.api.crateCreateFormulaFromJson(json: json);
 
+Future<PageGeometry> createPageGeometryFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageGeometryFromJson(json: json);
+
+Future<VectorPath> createVectorPathFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorPathFromJson(json: json);
+
+Future<VectorSubpath> createVectorSubpathFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorSubpathFromJson(json: json);
+
+Future<VectorPoint> createVectorPointFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorPointFromJson(json: json);
+
+Future<VectorColor> createVectorColorFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorColorFromJson(json: json);
+
+Future<VectorStroke> createVectorStrokeFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorStrokeFromJson(json: json);
+
+Future<VectorDashPattern> createVectorDashPatternFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateVectorDashPatternFromJson(json: json);
+
 Future<CodeMetadata> createCodeMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateCodeMetadataFromJson(json: json);
 
@@ -1399,6 +1421,15 @@ Future<ElementType> createElementTypeFromJson({required String json}) =>
 
 Future<FormFieldType> createFormFieldTypeFromJson({required String json}) =>
     RustLib.instance.api.crateCreateFormFieldTypeFromJson(json: json);
+
+Future<VectorSegment> createVectorSegmentFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorSegmentFromJson(json: json);
+
+Future<VectorLineCap> createVectorLineCapFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorLineCapFromJson(json: json);
+
+Future<VectorLineJoin> createVectorLineJoinFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateVectorLineJoinFromJson(json: json);
 
 Future<FormatMetadata> createFormatMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateFormatMetadataFromJson(json: json);
@@ -15404,6 +15435,15 @@ class PageContent {
   /// text layer is not blank and differs from the OCR text. `None` on every other page. PDF only.
   final String? nativeContent;
 
+  /// Vector geometry (lines, curves and filled shapes) of this page.
+  ///
+  /// Set only for PDF pages when `pdf_options.extract_vector_geometry` is on; `None` on
+  /// every other page, for every other format, and on a page that drew no path. Coordinates
+  /// are in page points with y increasing upwards — the same frame as text bounds in
+  /// [`ElementMetadata::coordinates`](super::ElementMetadata) — and content-stream and Form
+  /// XObject transforms are already applied. See [`PageGeometry`].
+  final PageGeometry? geometry;
+
   const PageContent({
     required this.pageNumber,
     required this.content,
@@ -15418,6 +15458,7 @@ class PageContent {
     this.sheetName,
     this.ocrConfidence,
     this.nativeContent,
+    this.geometry,
   });
 
   @override
@@ -15434,7 +15475,8 @@ class PageContent {
       sectionName.hashCode ^
       sheetName.hashCode ^
       ocrConfidence.hashCode ^
-      nativeContent.hashCode;
+      nativeContent.hashCode ^
+      geometry.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -15453,7 +15495,8 @@ class PageContent {
           sectionName == other.sectionName &&
           sheetName == other.sheetName &&
           ocrConfidence == other.ocrConfidence &&
-          nativeContent == other.nativeContent;
+          nativeContent == other.nativeContent &&
+          geometry == other.geometry;
 }
 
 /// Metadata for individual page/slide/sheet.
@@ -15479,6 +15522,31 @@ class PageDimensions {
           runtimeType == other.runtimeType &&
           width == other.width &&
           height == other.height;
+}
+
+/// Vector geometry of one page.
+///
+/// Only populated for PDF pages, and only when
+/// [`PdfConfig::extract_vector_geometry`](crate::core::config::PdfConfig) is on.
+/// A dense drawing sheet can hold more than ten thousand paths, so this output is off by
+/// default.
+class PageGeometry {
+  /// Painted paths, in content-stream drawing order.
+  ///
+  /// Clipping paths alone are not painted and are therefore not listed.
+  final List<VectorPath> paths;
+
+  const PageGeometry({required this.paths});
+
+  @override
+  int get hashCode => paths.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageGeometry &&
+          runtimeType == other.runtimeType &&
+          paths == other.paths;
 }
 
 /// Page hierarchy structure containing heading levels and block information.
@@ -16137,6 +16205,24 @@ class PdfConfig {
   /// see [`PdfBackend`] and `extractors::pdf::pdfium_engine` for details.
   final PdfBackend backend;
 
+  /// Return each page's vector geometry (lines, curves and filled shapes).
+  ///
+  /// When `true`, every `PageContent` of a PDF carries a `geometry` value: each
+  /// painted path's subpaths, fill colour, stroke colour/width/dash and Optional
+  /// Content layer, in page coordinates with the content-stream and Form XObject
+  /// transforms already applied. Text bounds use the same coordinate frame, so a
+  /// label's box and the shape it annotates are directly comparable.
+  ///
+  /// Off by default because a dense drawing sheet can hold more than ten thousand
+  /// paths and this output reports every one of them. Asking for it also turns on
+  /// per-page tracking (`pages.extract_pages`) because that is where the geometry is
+  /// returned.
+  ///
+  /// PDF only, and only on the native backend. Geometry is `None` on non-PDF
+  /// documents, on a page with no drawn path, and when the page's content stream cannot
+  /// be parsed.
+  final bool extractVectorGeometry;
+
   const PdfConfig({
     required this.extractImages,
     required this.extractTables,
@@ -16151,6 +16237,7 @@ class PdfConfig {
     required this.extractFormFields,
     required this.readingOrder,
     required this.backend,
+    required this.extractVectorGeometry,
   });
 
   @override
@@ -16167,7 +16254,8 @@ class PdfConfig {
       ocrInlineImages.hashCode ^
       extractFormFields.hashCode ^
       readingOrder.hashCode ^
-      backend.hashCode;
+      backend.hashCode ^
+      extractVectorGeometry.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -16186,7 +16274,8 @@ class PdfConfig {
           ocrInlineImages == other.ocrInlineImages &&
           extractFormFields == other.extractFormFields &&
           readingOrder == other.readingOrder &&
-          backend == other.backend;
+          backend == other.backend &&
+          extractVectorGeometry == other.extractVectorGeometry;
 }
 
 /// A form field extracted from a PDF's AcroForm or XFA structure.
@@ -18232,7 +18321,7 @@ class SecurityLimits {
 ///
 /// - `host`: "127.0.0.1" (localhost only)
 /// - `port`: 8000
-/// - `cors_origins`: empty vector (allows all origins)
+/// - `cors_origins`: empty vector (denies cross-origin requests)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
 /// - `job_timeout_secs`: 600 (10 minutes)
@@ -18243,11 +18332,10 @@ class ServerConfig {
   /// Server port number
   final PlatformInt64 port;
 
-  /// CORS allowed origins. Empty vector means allow all origins.
+  /// CORS allowed origins. Empty vector means no cross-origin access.
   ///
-  /// If this is an empty vector, the server will accept requests from any origin.
-  /// If populated with specific origins (e.g., `"https://example.com"`), only
-  /// those origins will be allowed.
+  /// Populate with specific origins (e.g., `"https://example.com"`) to allow only
+  /// those origins. The entry `"*"` allows every origin.
   final List<String> corsOrigins;
 
   /// Maximum size of request body in bytes (default: 100 MB)
@@ -20237,6 +20325,256 @@ class UserChunkConfig {
           pagesPerChunk == other.pagesPerChunk &&
           forceChunking == other.forceChunking &&
           disableChunking == other.disableChunking;
+}
+
+/// An RGB colour with channels in `0.0..=1.0` in the page's colour space.
+class VectorColor {
+  /// Red channel.
+  final double r;
+
+  /// Green channel.
+  final double g;
+
+  /// Blue channel.
+  final double b;
+
+  const VectorColor({required this.r, required this.g, required this.b});
+
+  @override
+  int get hashCode => r.hashCode ^ g.hashCode ^ b.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorColor &&
+          runtimeType == other.runtimeType &&
+          r == other.r &&
+          g == other.g &&
+          b == other.b;
+}
+
+/// Dash pattern of a [`VectorStroke`].
+class VectorDashPattern {
+  /// Alternating on/off lengths in points, starting with an on length.
+  final Float64List dashes;
+
+  /// Distance into the pattern at which the stroke starts.
+  final double phase;
+
+  const VectorDashPattern({required this.dashes, required this.phase});
+
+  @override
+  int get hashCode => dashes.hashCode ^ phase.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorDashPattern &&
+          runtimeType == other.runtimeType &&
+          dashes == other.dashes &&
+          phase == other.phase;
+}
+
+/// How the ends of an open stroked subpath are painted.
+enum VectorLineCap {
+  /// The stroke ends at the end point.
+  butt,
+
+  /// A semicircle extends past the end point.
+  round,
+
+  /// A half square extends past the end point.
+  square,
+}
+
+/// How corners of a stroked subpath are painted.
+enum VectorLineJoin {
+  /// The outer edges meet at a sharp corner.
+  miter,
+
+  /// The outer edges meet at a circular arc.
+  round,
+
+  /// The corner is cut off with a straight edge.
+  bevel,
+}
+
+/// One painted vector path, in page coordinates.
+///
+/// A single painting operator can carry several subpaths (for example a table rule and a
+/// rectangle drawn before one `f`), so a path is a list of [`VectorSubpath`]s sharing one
+/// paint style.
+class VectorPath {
+  /// Subpaths, in the order the path built them.
+  final List<VectorSubpath> subpaths;
+
+  /// Axis-aligned bounds of the path's geometry, without the stroke extension.
+  ///
+  /// This is the geometry as constructed: a cubic segment's control points are included,
+  /// so the box bounds the curve without being tight to it. A stroke straddles the path by
+  /// half its width on each side, which this box does not include.
+  final BoundingBox boundingBox;
+
+  /// Fill colour, or `None` when the path is not filled.
+  final VectorColor? fillColor;
+
+  /// Stroke style, or `None` when the path is not stroked.
+  final VectorStroke? stroke;
+
+  /// Name of the Optional Content Group (PDF "layer") the path was drawn under, when the
+  /// producer tagged it. CAD and BIM exports commonly name layers such as `A-WALL`, and a
+  /// consumer can use the name to select the drawing discipline it wants.
+  final String? layer;
+
+  const VectorPath({
+    required this.subpaths,
+    required this.boundingBox,
+    this.fillColor,
+    this.stroke,
+    this.layer,
+  });
+
+  @override
+  int get hashCode =>
+      subpaths.hashCode ^
+      boundingBox.hashCode ^
+      fillColor.hashCode ^
+      stroke.hashCode ^
+      layer.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorPath &&
+          runtimeType == other.runtimeType &&
+          subpaths == other.subpaths &&
+          boundingBox == other.boundingBox &&
+          fillColor == other.fillColor &&
+          stroke == other.stroke &&
+          layer == other.layer;
+}
+
+/// A point in page coordinates.
+class VectorPoint {
+  /// Horizontal coordinate in PDF points.
+  final double x;
+
+  /// Vertical coordinate in PDF points, increasing upwards.
+  final double y;
+
+  const VectorPoint({required this.x, required this.y});
+
+  @override
+  int get hashCode => x.hashCode ^ y.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorPoint &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y;
+}
+
+@freezed
+sealed class VectorSegment with _$VectorSegment {
+  const VectorSegment._();
+
+  /// A straight segment.
+  const factory VectorSegment.line({
+    /// End point of the segment.
+    required VectorPoint to,
+  }) = VectorSegment_Line;
+
+  /// A cubic Bézier segment.
+  const factory VectorSegment.cubic({
+    /// First control point.
+    required VectorPoint control1,
+
+    /// Second control point.
+    required VectorPoint control2,
+
+    /// End point of the segment.
+    required VectorPoint to,
+  }) = VectorSegment_Cubic;
+}
+
+/// Stroke style of a [`VectorPath`].
+class VectorStroke {
+  /// Stroke colour.
+  final VectorColor color;
+
+  /// Line width in points, in page coordinates (any content-stream scaling already applied).
+  final double width;
+
+  /// Dash pattern, or `None` for a solid line.
+  final VectorDashPattern? dashPattern;
+
+  /// How the ends of an open subpath are painted.
+  final VectorLineCap lineCap;
+
+  /// How corners between segments are painted.
+  final VectorLineJoin lineJoin;
+
+  const VectorStroke({
+    required this.color,
+    required this.width,
+    this.dashPattern,
+    required this.lineCap,
+    required this.lineJoin,
+  });
+
+  @override
+  int get hashCode =>
+      color.hashCode ^
+      width.hashCode ^
+      dashPattern.hashCode ^
+      lineCap.hashCode ^
+      lineJoin.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorStroke &&
+          runtimeType == other.runtimeType &&
+          color == other.color &&
+          width == other.width &&
+          dashPattern == other.dashPattern &&
+          lineCap == other.lineCap &&
+          lineJoin == other.lineJoin;
+}
+
+/// One continuous run of a [`VectorPath`].
+class VectorSubpath {
+  /// Point the subpath starts at.
+  final VectorPoint start;
+
+  /// Segments leaving [`start`](Self::start), in order.
+  final List<VectorSegment> segments;
+
+  /// Whether the subpath is closed.
+  ///
+  /// A closed subpath paints one extra straight segment from the end of its last segment
+  /// back to [`start`](Self::start), as the PDF `h` operator does.
+  final bool closed;
+
+  const VectorSubpath({
+    required this.start,
+    required this.segments,
+    required this.closed,
+  });
+
+  @override
+  int get hashCode => start.hashCode ^ segments.hashCode ^ closed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VectorSubpath &&
+          runtimeType == other.runtimeType &&
+          start == other.start &&
+          segments == other.segments &&
+          closed == other.closed;
 }
 
 @freezed

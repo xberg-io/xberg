@@ -11,6 +11,7 @@ pub mod extraction;
 pub mod form_field;
 pub mod formats;
 pub mod formula;
+pub mod geometry;
 pub mod internal;
 pub mod internal_builder;
 pub mod metadata;
@@ -38,6 +39,7 @@ pub use extraction::*;
 pub use form_field::{FormFieldType, PdfFormField};
 pub use formats::*;
 pub use formula::Formula;
+pub use geometry::*;
 pub use metadata::*;
 pub use ocr_elements::*;
 pub use page::*;
@@ -203,6 +205,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -231,6 +234,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -267,6 +271,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         let page2 = PageContent {
@@ -283,6 +288,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         assert!(Arc::ptr_eq(&page1.tables[0], &page2.tables[0]));
@@ -312,6 +318,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();

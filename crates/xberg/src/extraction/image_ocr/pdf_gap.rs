@@ -188,7 +188,11 @@ pub(crate) async fn process(
     check_cancelled(config.cancel_token.as_ref())?;
     let ocr = config.ocr.as_ref().expect("eligible explicit OCR configuration");
     let mut images = [image];
-    let Some((index, bytes, mut primary_config)) = super::build_pending_ocr_tasks(&images, ocr, config).pop_front()
+    let Some(super::PendingOcrTask {
+        indices: index,
+        data: bytes,
+        config: mut primary_config,
+    }) = super::build_pending_ocr_tasks(&images, ocr, config).pop_front()
     else {
         let [image] = images;
         return Ok((image, None));
@@ -214,7 +218,7 @@ pub(crate) async fn process(
         crate::core::extractor::cacheability::invalidate_current();
         None
     };
-    super::apply_ocr_result(&mut images, index, primary, ocr, warnings);
+    super::apply_ocr_result(&mut images, &index, primary, ocr, warnings);
     let [image] = images;
     Ok((image, addition))
 }

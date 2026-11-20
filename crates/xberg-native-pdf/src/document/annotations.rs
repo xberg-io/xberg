@@ -934,32 +934,10 @@ impl PdfDocument {
         }
     }
 
-    /// Decode a PDF text string that may be UTF-16BE/LE (with BOM) or PDFDocEncoding.
+    /// Decode a PDF text string: UTF-16BE/LE or UTF-8 with a BOM, PDFDocEncoding
+    /// otherwise. Delegates to [`crate::object::decode_pdf_text_string`].
     pub(super) fn decode_pdf_text_string(bytes: &[u8]) -> String {
-        if bytes.len() >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF {
-            let utf16_bytes = &bytes[2..];
-            let utf16_pairs: Vec<u16> = utf16_bytes
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
-                .collect();
-            String::from_utf16(&utf16_pairs).unwrap_or_else(|_| String::from_utf8_lossy(bytes).to_string())
-        } else if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-            let utf16_bytes = &bytes[2..];
-            let utf16_pairs: Vec<u16> = utf16_bytes
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-                .collect();
-            String::from_utf16(&utf16_pairs).unwrap_or_else(|_| String::from_utf8_lossy(bytes).to_string())
-        } else {
-            bytes
-                .iter()
-                .filter_map(|&b| crate::fonts::font_dict::pdfdoc_encoding_lookup(b))
-                .collect()
-        }
+        crate::object::decode_pdf_text_string(bytes)
     }
 
     /// Strip XHTML tags from rich content (/RC) to extract plain text.
