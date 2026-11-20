@@ -789,7 +789,17 @@ pub(crate) fn extract_all_from_native_document(
                     &mut page_paths,
                 );
                 let hierarchy_segments = hierarchy_segments.map(|mut extraction| {
-                    extraction.tables.retain(|table| ruled.allows_heuristic_table(table));
+                    let keep: Vec<bool> = extraction
+                        .tables
+                        .iter()
+                        .map(|table| ruled.allows_heuristic_table(table))
+                        .collect();
+                    if keep.iter().any(|keep| !keep) {
+                        let mut mask = keep.iter();
+                        extraction.tables.retain(|_| *mask.next().unwrap_or(&true));
+                        let mut mask = keep.iter();
+                        extraction.grids.retain(|_| *mask.next().unwrap_or(&true));
+                    }
                     extraction
                 });
                 let mut warnings = ruled.warnings;
@@ -811,9 +821,17 @@ pub(crate) fn extract_all_from_native_document(
                     .unzip();
                 let hierarchy_segments = match hierarchy_segments {
                     Ok(extraction) => {
-                        native_grids
-                            .resize_with(combined.len() + extraction.tables.len(), NativeTableMetadata::default);
+                        let mut heuristic_metadata: Vec<NativeTableMetadata> = extraction
+                            .grids
+                            .into_iter()
+                            .map(|grid| NativeTableMetadata {
+                                grid,
+                                ..NativeTableMetadata::default()
+                            })
+                            .collect();
+                        heuristic_metadata.resize_with(extraction.tables.len(), NativeTableMetadata::default);
                         combined.extend(extraction.tables);
+                        native_grids.extend(heuristic_metadata);
                         drop((
                             extraction.hierarchy_segments.pages,
                             extraction.hierarchy_segments.used_structure_tree,
@@ -840,6 +858,16 @@ pub(crate) fn extract_all_from_native_document(
                         None
                     }
                 };
+                let keep: Vec<bool> = combined
+                    .iter()
+                    .map(|table| !crate::pdf::table_normalize::is_page_letterhead_table(table))
+                    .collect();
+                if keep.iter().any(|keep| !keep) {
+                    let mut mask = keep.iter();
+                    combined.retain(|_| *mask.next().unwrap_or(&true));
+                    let mut mask = keep.iter();
+                    native_grids.retain(|_| *mask.next().unwrap_or(&true));
+                }
                 let repaired_tables = combined
                     .iter_mut()
                     .map(crate::pdf::table_normalize::repair_consistently_merged_numeric_column)

@@ -5,6 +5,43 @@ use crate::types::Table;
 const MIN_REPEATED_DATA_ROWS: usize = 8;
 const MIN_WIDE_TABLE_COLUMNS: usize = 16;
 
+/// Reject a page letterhead emitted as a table.
+///
+/// A two-column letterhead (company name, plan line, place) is an unruled,
+/// three-row 2x2-ish block: at most one row fills both columns, one row has
+/// only the left cell and another only the right cell. A real two-column
+/// table repeats both columns across its rows and carries values or at least
+/// more than one full row. ~keep
+pub(crate) fn is_page_letterhead_table(table: &Table) -> bool {
+    const MAX_LETTERHEAD_ROWS: usize = 3;
+    const MAX_LETTERHEAD_CELLS: usize = 5;
+    if table.cells.len() > MAX_LETTERHEAD_ROWS || table.cells.iter().any(|row| row.len() != 2) {
+        return false;
+    }
+    let mut filled = 0usize;
+    let mut full_rows = 0usize;
+    let mut left_only = false;
+    let mut right_only = false;
+    let mut has_numeric = false;
+    let mut has_multiword_cell = false;
+    for row in &table.cells {
+        let left = row[0].trim();
+        let right = row[1].trim();
+        filled += usize::from(!left.is_empty()) + usize::from(!right.is_empty());
+        match (left.is_empty(), right.is_empty()) {
+            (false, false) => full_rows += 1,
+            (false, true) => left_only = true,
+            (true, false) => right_only = true,
+            (true, true) => {}
+        }
+        for cell in [left, right] {
+            has_numeric |= cell.chars().any(|character| character.is_ascii_digit());
+            has_multiword_cell |= cell.split_whitespace().count() > 1;
+        }
+    }
+    filled <= MAX_LETTERHEAD_CELLS && full_rows <= 1 && left_only && right_only && !has_numeric && has_multiword_cell
+}
+
 /// Repairs one column boundary that a native detector consistently collapsed.
 ///
 /// Returns `true` when the table was changed.
@@ -118,6 +155,41 @@ mod tests {
                 .collect(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn rejects_two_column_page_letterhead() {
+        let table = table_with_rows(vec![
+            vec!["WASHINGTON", "NATIONAL INSURANCE COMPANY"],
+            vec!["Medicare Select -- Plan A,B, C, & D", ""],
+            vec!["", "Texas Experience"],
+        ]);
+
+        assert!(is_page_letterhead_table(&table));
+    }
+
+    #[test]
+    fn keeps_a_real_two_column_table() {
+        let table = table_with_rows(vec![
+            vec!["Plan", "Premium"],
+            vec!["Plan A", "120.00"],
+            vec!["Plan B", "145.00"],
+            vec!["Plan C", "170.00"],
+        ]);
+
+        assert!(!is_page_letterhead_table(&table));
+    }
+
+    #[test]
+    fn keeps_a_short_two_column_table_with_more_than_one_full_row() {
+        let table = table_with_rows(vec![
+            vec!["Name", "Amount"],
+            vec!["Alpha", ""],
+            vec!["", "Beta"],
+            vec!["Gamma", "Delta"],
+        ]);
+
+        assert!(!is_page_letterhead_table(&table));
     }
 
     fn repeated_rows(candidate: &str, count: usize) -> Vec<Vec<&str>> {
