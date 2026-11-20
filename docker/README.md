@@ -83,10 +83,14 @@ All images support three execution modes via ENTRYPOINT:
 ### 1. API Server (default)
 
 ```bash
-docker run -p 8000:8000 xberg:core
+docker run -p 8000:8000 -e XBERG_API_TOKEN="$XBERG_API_TOKEN" xberg:core
 # or override host/port:
-docker run -p 8000:8000 xberg:core serve --host 0.0.0.0 --port 8000
+docker run -p 8000:8000 -e XBERG_API_TOKEN="$XBERG_API_TOKEN" xberg:core serve --host 0.0.0.0 --port 8000
 ```
+
+The images bind `0.0.0.0`, so the server exits at startup unless `XBERG_API_TOKEN` is set (clients send
+`Authorization: Bearer <token>`; `GET /health` stays open). Set `XBERG_ALLOW_UNAUTHENTICATED=true`
+instead only on a trusted network, for example behind a reverse proxy. The token must be ASCII.
 
 ### 2. CLI Mode
 

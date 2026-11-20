@@ -6,7 +6,10 @@ use crate::{
     ExtractionConfig, Result, core::ServerConfig, extractors, plugins::startup_validation::validate_plugins_at_startup,
 };
 
-use super::{config::load_server_config, router::create_router_with_limits_and_server_config, types::ApiSizeLimits};
+use super::{
+    auth::ApiAuth, config::load_server_config, router::create_router_with_limits_and_server_config,
+    types::ApiSizeLimits,
+};
 
 /// Wait for a shutdown signal: SIGTERM on Unix platforms or Ctrl-C on all platforms.
 ///
@@ -92,9 +95,13 @@ async fn shutdown_signal() {
 /// export XBERG_HOST=0.0.0.0
 /// export XBERG_PORT=8000
 ///
-/// # CORS configuration (IMPORTANT for production security)
-/// # Default: allows all origins (permits CSRF attacks)
-/// # Production: set to comma-separated list of allowed origins
+/// # Authentication: bearer token required on every route except GET /health.
+/// # Binding a non-loopback host without a token is refused unless
+/// # XBERG_ALLOW_UNAUTHENTICATED=true is set.
+/// export XBERG_API_TOKEN="<secret>"
+///
+/// # CORS: cross-origin requests are denied by default.
+/// # Set a comma-separated list of allowed origins ("*" allows every origin)
 /// export XBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
 ///
 /// # Upload size limits (default: 100 MB)
@@ -167,6 +174,9 @@ pub async fn serve_with_config(host: impl AsRef<str>, port: u16, config: Extract
 
 /// Start the API server with explicit config and size limits.
 ///
+/// The host, port and limits come from the arguments; `XBERG_CORS_ORIGINS` and
+/// `XBERG_JOB_TIMEOUT_SECS` are still read from the environment.
+///
 /// # Arguments
 ///
 /// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0")
@@ -198,13 +208,19 @@ pub async fn serve_with_config_and_limits(
         .as_ref()
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
+    let auth = ApiAuth::from_env();
+    auth.validate()?;
+    auth.check_bind(ip)?;
 
+    let mut env_config = ServerConfig::default();
+    env_config.apply_cors_and_job_timeout_env_overrides()?;
     let server_config = ServerConfig {
         host: host.as_ref().to_string(),
         port,
         max_request_body_bytes: limits.max_request_body_bytes,
         max_multipart_field_bytes: limits.max_multipart_field_bytes,
-        ..Default::default()
+        cors_origins: env_config.cors_origins,
+        job_timeout_secs: env_config.job_timeout_secs,
     };
 
     let addr = SocketAddr::new(ip, port);
@@ -262,6 +278,9 @@ pub async fn serve_with_server_config(extraction_config: ExtractionConfig, serve
         .host
         .parse()
         .map_err(|e| crate::error::XbergError::validation(format!("Invalid host address: {}", e)))?;
+    let auth = ApiAuth::from_env();
+    auth.validate()?;
+    auth.check_bind(ip)?;
 
     let limits = ApiSizeLimits::new(
         server_config.max_request_body_bytes,

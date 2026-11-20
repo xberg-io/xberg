@@ -10,7 +10,7 @@ use tower::ServiceExt;
 
 use xberg::{
     ExtractionConfig,
-    api::{DoclingCompatResponse, OpenWebDocumentResponse, create_router},
+    api::{DoclingCompatResponse, OpenWebDocumentResponse},
 };
 
 /// Test successful extraction via the external engine endpoint.
@@ -462,4 +462,13 @@ async fn test_openweb_process_response_structure() {
         json["metadata"]["source"].is_string(),
         "Expected 'metadata.source' string"
     );
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router(config: ExtractionConfig) -> axum::Router {
+    xberg::api::create_router_with_auth(
+        config,
+        xberg::api::ApiSizeLimits::default(),
+        xberg::api::ApiAuth::new(None, false),
+    )
 }

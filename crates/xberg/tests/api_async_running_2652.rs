@@ -12,7 +12,6 @@ use tower::ServiceExt;
 
 use xberg::{
     ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionResult,
-    api::create_router,
     plugins::{DocumentExtractor, Plugin, register_document_extractor, unregister_document_extractor},
 };
 
@@ -136,4 +135,13 @@ async fn should_report_running_while_extractor_is_held_then_complete_after_relea
     })
     .await
     .expect("job must start and complete within deadline");
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router(config: ExtractionConfig) -> axum::Router {
+    xberg::api::create_router_with_auth(
+        config,
+        xberg::api::ApiSizeLimits::default(),
+        xberg::api::ApiAuth::new(None, false),
+    )
 }
