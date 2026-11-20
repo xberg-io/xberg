@@ -3339,7 +3339,6 @@ impl OcrRequest<'_> {
             cells: Some(table),
             claims_page: false,
         };
-        outcome.claims_page = grid.claims_page;
         let Some(cleaned) = grid.cells else {
             return outcome;
         };
@@ -3356,6 +3355,7 @@ impl OcrRequest<'_> {
         }
 
         let markdown_table = table_to_markdown(&cleaned);
+        outcome.claims_page = grid.claims_page;
         outcome.table = Some(OcrTable {
             cells: cleaned,
             markdown: markdown_table,
@@ -5768,9 +5768,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn blank_quantity_retry_is_bounded_to_the_missing_quantity_cell() {
-        let words = vec![
+    fn invoice_words() -> Vec<crate::table_core::HocrWord> {
+        vec![
             invoice_word("DESCRIPTION", 279, 100, 250),
             invoice_word("QTY", 1_699, 100, 90),
             invoice_word("UNIT PRICE", 2_096, 100, 258),
@@ -5786,7 +5785,12 @@ mod tests {
             invoice_word("Cleaning Tablets", 279, 400, 360),
             invoice_word("$18.50", 2_206, 400, 150),
             invoice_word("$92.50", 2_772, 400, 150),
-        ];
+        ]
+    }
+
+    #[test]
+    fn blank_quantity_retry_is_bounded_to_the_missing_quantity_cell() {
+        let words = invoice_words();
         let table = vec![
             vec!["DESCRIPTION", "QTY", "UNIT PRICE", "LINE TOTAL"],
             vec!["Espresso Beans", "10", "$45.00", "$450.00"],
@@ -5812,6 +5816,20 @@ mod tests {
 
         assert_eq!(region.row, 3);
         assert_eq!(region.column, 1);
+        assert_eq!((region.left, region.top), (1_659, 380));
+        assert_eq!((region.width, region.height), (170, 80));
+    }
+
+    #[test]
+    fn reconstructed_invoice_table_keeps_the_blank_quantity_crop() {
+        let words = invoice_words();
+        let config = TesseractConfig::default();
+        let (table, column_positions) = reconstruct_cleaned_table(&words, &config);
+
+        let region = quantity_retry_candidate(&words, &table, &column_positions, &config, (3_200, 4_089))
+            .expect("the reconstructed invoice keeps one bounded retry region");
+
+        assert_eq!((region.row, region.column), (3, 1));
         assert_eq!((region.left, region.top), (1_659, 380));
         assert_eq!((region.width, region.height), (170, 80));
     }
