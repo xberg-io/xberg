@@ -4,59 +4,54 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A non-fatal warning from a processing pipeline stage.
  *
- * Captures errors from optional features that don't prevent extraction
- * but may indicate degraded or incomplete results. Inspect these independently
- * from {@code ExtractedDocument.quality_score}, which assesses retained text only.
+ * <p>Captures errors from optional features that don't prevent extraction but may indicate degraded
+ * or incomplete results. Inspect these independently from {@code ExtractedDocument.quality_score},
+ * which assesses retained text only.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ProcessingWarning.Builder.class)
 public record ProcessingWarning(
-    @JsonProperty("source") String source,
-    @JsonProperty("message") String message
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("source") String source, @JsonProperty("message") String message) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ProcessingWarning deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String source;
+    private String message;
+
+    /** Sets the source field. */
+    @JsonProperty("source")
+    public Builder withSource(final String value) {
+      this.source = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ProcessingWarning deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String source;
-        private String message;
-
-        /** Sets the source field. */
-        @JsonProperty("source")
-        public Builder withSource(final String value) {
-            this.source = value;
-            return this;
-        }
-
-        /** Sets the message field. */
-        @JsonProperty("message")
-        public Builder withMessage(final String value) {
-            this.message = value;
-            return this;
-        }
-
-        /** Constructs a ProcessingWarning instance from the builder's current state. */
-        public ProcessingWarning build() {
-            return new ProcessingWarning(
-                source,
-                message
-            );
-        }
+    /** Sets the message field. */
+    @JsonProperty("message")
+    public Builder withMessage(final String value) {
+      this.message = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a ProcessingWarning instance from the builder's current state. */
+    public ProcessingWarning build() {
+      return new ProcessingWarning(source, message);
+    }
+  }
+  // CPD-ON
 }

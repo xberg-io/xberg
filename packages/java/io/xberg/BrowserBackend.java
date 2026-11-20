@@ -7,48 +7,41 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Browser backend used for JavaScript rendering.
- */
+/** Browser backend used for JavaScript rendering. */
 @SuppressWarnings("PMD")
 public enum BrowserBackend {
-    /**
-     * Existing Chromium/CDP backend powered by chromiumoxide.
-     */
-    CHROMIUMOXIDE("chromiumoxide"),
-    /**
-     * Crawlberg-owned native browser backend derived from Obscura.
-     */
-    NATIVE("native");
+  /** Existing Chromium/CDP backend powered by chromiumoxide. */
+  CHROMIUMOXIDE("chromiumoxide"),
+  /** Crawlberg-owned native browser backend derived from Obscura. */
+  NATIVE("native");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  BrowserBackend(final String value) {
+    this.value = value;
+  }
 
-    BrowserBackend(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static BrowserBackend fromValue(final String value) {
+    for (BrowserBackend e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown BrowserBackend value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static BrowserBackend fromValue(final String value) {
-        for (BrowserBackend e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown BrowserBackend value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

@@ -4,15 +4,13 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Metadata about a document for analysis.
- */
+/** Metadata about a document for analysis. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DocumentMetadata.Builder.class)
 public record DocumentMetadata(
@@ -21,90 +19,90 @@ public record DocumentMetadata(
     @Nullable @JsonProperty("page_count") Integer pageCount,
     @JsonProperty("force_ocr") boolean forceOcr,
     @Nullable @JsonProperty("user_chunk_config") UserChunkConfig userChunkConfig,
-    @JsonProperty("chunking_enabled") boolean chunkingEnabled
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("chunking_enabled") boolean chunkingEnabled) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DocumentMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("mime_type")
+    private String mimeType;
+
+    @JsonProperty("size_bytes")
+    private long sizeBytes;
+
+    @JsonProperty("page_count")
+    @Nullable
+    private Integer pageCount;
+
+    @JsonProperty("force_ocr")
+    private boolean forceOcr;
+
+    @JsonProperty("user_chunk_config")
+    @Nullable
+    private UserChunkConfig userChunkConfig;
+
+    @JsonProperty("chunking_enabled")
+    private boolean chunkingEnabled;
+
+    /** Sets the mimeType field. */
+    @JsonProperty("mime_type")
+    public Builder withMimeType(final String value) {
+      this.mimeType = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DocumentMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("mime_type")
-        private String mimeType;
-        @JsonProperty("size_bytes")
-        private long sizeBytes;
-        @JsonProperty("page_count")
-        @Nullable private Integer pageCount;
-        @JsonProperty("force_ocr")
-        private boolean forceOcr;
-        @JsonProperty("user_chunk_config")
-        @Nullable private UserChunkConfig userChunkConfig;
-        @JsonProperty("chunking_enabled")
-        private boolean chunkingEnabled;
-
-        /** Sets the mimeType field. */
-        @JsonProperty("mime_type")
-        public Builder withMimeType(final String value) {
-            this.mimeType = value;
-            return this;
-        }
-
-        /** Sets the sizeBytes field. */
-        @JsonProperty("size_bytes")
-        public Builder withSizeBytes(final long value) {
-            this.sizeBytes = value;
-            return this;
-        }
-
-        /** Sets the pageCount field. */
-        @JsonProperty("page_count")
-        public Builder withPageCount(final @Nullable Integer value) {
-            this.pageCount = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withPageCount(final int value) {
-            return withPageCount(Integer.valueOf(value));
-        }
-
-        /** Sets the forceOcr field. */
-        @JsonProperty("force_ocr")
-        public Builder withForceOcr(final boolean value) {
-            this.forceOcr = value;
-            return this;
-        }
-
-        /** Sets the userChunkConfig field. */
-        @JsonProperty("user_chunk_config")
-        public Builder withUserChunkConfig(final @Nullable UserChunkConfig value) {
-            this.userChunkConfig = value;
-            return this;
-        }
-
-        /** Sets the chunkingEnabled field. */
-        @JsonProperty("chunking_enabled")
-        public Builder withChunkingEnabled(final boolean value) {
-            this.chunkingEnabled = value;
-            return this;
-        }
-
-        /** Constructs a DocumentMetadata instance from the builder's current state. */
-        public DocumentMetadata build() {
-            return new DocumentMetadata(
-                mimeType,
-                sizeBytes,
-                pageCount,
-                forceOcr,
-                userChunkConfig,
-                chunkingEnabled
-            );
-        }
+    /** Sets the sizeBytes field. */
+    @JsonProperty("size_bytes")
+    public Builder withSizeBytes(final long value) {
+      this.sizeBytes = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the pageCount field. */
+    @JsonProperty("page_count")
+    public Builder withPageCount(final @Nullable Integer value) {
+      this.pageCount = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withPageCount(final int value) {
+      return withPageCount(Integer.valueOf(value));
+    }
+
+    /** Sets the forceOcr field. */
+    @JsonProperty("force_ocr")
+    public Builder withForceOcr(final boolean value) {
+      this.forceOcr = value;
+      return this;
+    }
+
+    /** Sets the userChunkConfig field. */
+    @JsonProperty("user_chunk_config")
+    public Builder withUserChunkConfig(final @Nullable UserChunkConfig value) {
+      this.userChunkConfig = value;
+      return this;
+    }
+
+    /** Sets the chunkingEnabled field. */
+    @JsonProperty("chunking_enabled")
+    public Builder withChunkingEnabled(final boolean value) {
+      this.chunkingEnabled = value;
+      return this;
+    }
+
+    /** Constructs a DocumentMetadata instance from the builder's current state. */
+    public DocumentMetadata build() {
+      return new DocumentMetadata(
+          mimeType, sizeBytes, pageCount, forceOcr, userChunkConfig, chunkingEnabled);
+    }
+  }
+  // CPD-ON
 }

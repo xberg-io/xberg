@@ -7,56 +7,45 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Classification of a detected layout region that warrants VLM extraction.
- */
+/** Classification of a detected layout region that warrants VLM extraction. */
 @SuppressWarnings("PMD")
 public enum RegionKind {
-    /**
-     * A figure, diagram, chart, or image region.
-     */
-    FIGURE("Figure"),
-    /**
-     * A densely formatted or complex table.
-     */
-    DENSE_TABLE("DenseTable"),
-    /**
-     * A region with complex or mixed layout.
-     */
-    COMPLEX_LAYOUT("ComplexLayout"),
-    /**
-     * A standalone image to caption.
-     */
-    CAPTION("Caption");
+  /** A figure, diagram, chart, or image region. */
+  FIGURE("Figure"),
+  /** A densely formatted or complex table. */
+  DENSE_TABLE("DenseTable"),
+  /** A region with complex or mixed layout. */
+  COMPLEX_LAYOUT("ComplexLayout"),
+  /** A standalone image to caption. */
+  CAPTION("Caption");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  RegionKind(final String value) {
+    this.value = value;
+  }
 
-    RegionKind(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static RegionKind fromValue(final String value) {
+    for (RegionKind e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown RegionKind value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static RegionKind fromValue(final String value) {
-        for (RegionKind e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown RegionKind value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

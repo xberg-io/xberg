@@ -4,50 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Configuration for email extraction.
- */
+/** Configuration for email extraction. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EmailConfig.Builder.class)
-public record EmailConfig(@Nullable @JsonProperty("msg_fallback_codepage") Integer msgFallbackCodepage) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+public record EmailConfig(
+    @Nullable @JsonProperty("msg_fallback_codepage") Integer msgFallbackCodepage) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for EmailConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("msg_fallback_codepage")
+    @Nullable
+    private Integer msgFallbackCodepage;
+
+    /** Sets the msgFallbackCodepage field. */
+    @JsonProperty("msg_fallback_codepage")
+    public Builder withMsgFallbackCodepage(final @Nullable Integer value) {
+      this.msgFallbackCodepage = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for EmailConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("msg_fallback_codepage")
-        @Nullable private Integer msgFallbackCodepage;
-
-        /** Sets the msgFallbackCodepage field. */
-        @JsonProperty("msg_fallback_codepage")
-        public Builder withMsgFallbackCodepage(final @Nullable Integer value) {
-            this.msgFallbackCodepage = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMsgFallbackCodepage(final int value) {
-            return withMsgFallbackCodepage(Integer.valueOf(value));
-        }
-
-        /** Constructs a EmailConfig instance from the builder's current state. */
-        public EmailConfig build() {
-            return new EmailConfig(
-                msgFallbackCodepage
-            );
-        }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMsgFallbackCodepage(final int value) {
+      return withMsgFallbackCodepage(Integer.valueOf(value));
     }
-    // CPD-ON
+
+    /** Constructs a EmailConfig instance from the builder's current state. */
+    public EmailConfig build() {
+      return new EmailConfig(msgFallbackCodepage);
+    }
+  }
+  // CPD-ON
 }

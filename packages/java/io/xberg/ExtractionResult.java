@@ -4,16 +4,14 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Unified extraction result envelope.
- */
+/** Unified extraction result envelope. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExtractionResult.Builder.class)
 public record ExtractionResult(
@@ -22,87 +20,93 @@ public record ExtractionResult(
     @JsonProperty("summary") ExtractionSummary summary,
     @JsonProperty("crawl_final_urls") List<String> crawlFinalUrls,
     @Nullable @JsonProperty("crawl_redirect_count") Long crawlRedirectCount,
-    @JsonProperty("crawl_unique_normalized_urls") List<String> crawlUniqueNormalizedUrls
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("crawl_unique_normalized_urls") List<String> crawlUniqueNormalizedUrls) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public ExtractionResult {
+    if (errors == null) {
+      errors = List.of();
     }
-    public ExtractionResult{
-        if (errors == null) { errors = List.of(); }
-        if (crawlFinalUrls == null) { crawlFinalUrls = List.of(); }
-        if (crawlUniqueNormalizedUrls == null) { crawlUniqueNormalizedUrls = List.of(); }
+    if (crawlFinalUrls == null) {
+      crawlFinalUrls = List.of();
+    }
+    if (crawlUniqueNormalizedUrls == null) {
+      crawlUniqueNormalizedUrls = List.of();
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ExtractionResult deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<ExtractedDocument> results = List.of();
+    @Nullable private List<ExtractionErrorItem> errors = List.of();
+    private ExtractionSummary summary;
+
+    @JsonProperty("crawl_final_urls")
+    @Nullable
+    private List<String> crawlFinalUrls = List.of();
+
+    @JsonProperty("crawl_redirect_count")
+    @Nullable
+    private Long crawlRedirectCount;
+
+    @JsonProperty("crawl_unique_normalized_urls")
+    @Nullable
+    private List<String> crawlUniqueNormalizedUrls = List.of();
+
+    /** Sets the results field. */
+    @JsonProperty("results")
+    public Builder withResults(final List<ExtractedDocument> value) {
+      this.results = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ExtractionResult deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<ExtractedDocument> results = List.of();
-        @Nullable private List<ExtractionErrorItem> errors = List.of();
-        private ExtractionSummary summary;
-        @JsonProperty("crawl_final_urls")
-        @Nullable private List<String> crawlFinalUrls = List.of();
-        @JsonProperty("crawl_redirect_count")
-        @Nullable private Long crawlRedirectCount;
-        @JsonProperty("crawl_unique_normalized_urls")
-        @Nullable private List<String> crawlUniqueNormalizedUrls = List.of();
-
-        /** Sets the results field. */
-        @JsonProperty("results")
-        public Builder withResults(final List<ExtractedDocument> value) {
-            this.results = value;
-            return this;
-        }
-
-        /** Sets the errors field. */
-        @JsonProperty("errors")
-        public Builder withErrors(final @Nullable List<ExtractionErrorItem> value) {
-            this.errors = value;
-            return this;
-        }
-
-        /** Sets the summary field. */
-        @JsonProperty("summary")
-        public Builder withSummary(final ExtractionSummary value) {
-            this.summary = value;
-            return this;
-        }
-
-        /** Sets the crawlFinalUrls field. */
-        @JsonProperty("crawl_final_urls")
-        public Builder withCrawlFinalUrls(final @Nullable List<String> value) {
-            this.crawlFinalUrls = value;
-            return this;
-        }
-
-        /** Sets the crawlRedirectCount field. */
-        @JsonProperty("crawl_redirect_count")
-        public Builder withCrawlRedirectCount(final @Nullable Long value) {
-            this.crawlRedirectCount = value;
-            return this;
-        }
-
-        /** Sets the crawlUniqueNormalizedUrls field. */
-        @JsonProperty("crawl_unique_normalized_urls")
-        public Builder withCrawlUniqueNormalizedUrls(final @Nullable List<String> value) {
-            this.crawlUniqueNormalizedUrls = value;
-            return this;
-        }
-
-        /** Constructs a ExtractionResult instance from the builder's current state. */
-        public ExtractionResult build() {
-            return new ExtractionResult(
-                results,
-                errors,
-                summary,
-                crawlFinalUrls,
-                crawlRedirectCount,
-                crawlUniqueNormalizedUrls
-            );
-        }
+    /** Sets the errors field. */
+    @JsonProperty("errors")
+    public Builder withErrors(final @Nullable List<ExtractionErrorItem> value) {
+      this.errors = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the summary field. */
+    @JsonProperty("summary")
+    public Builder withSummary(final ExtractionSummary value) {
+      this.summary = value;
+      return this;
+    }
+
+    /** Sets the crawlFinalUrls field. */
+    @JsonProperty("crawl_final_urls")
+    public Builder withCrawlFinalUrls(final @Nullable List<String> value) {
+      this.crawlFinalUrls = value;
+      return this;
+    }
+
+    /** Sets the crawlRedirectCount field. */
+    @JsonProperty("crawl_redirect_count")
+    public Builder withCrawlRedirectCount(final @Nullable Long value) {
+      this.crawlRedirectCount = value;
+      return this;
+    }
+
+    /** Sets the crawlUniqueNormalizedUrls field. */
+    @JsonProperty("crawl_unique_normalized_urls")
+    public Builder withCrawlUniqueNormalizedUrls(final @Nullable List<String> value) {
+      this.crawlUniqueNormalizedUrls = value;
+      return this;
+    }
+
+    /** Constructs a ExtractionResult instance from the builder's current state. */
+    public ExtractionResult build() {
+      return new ExtractionResult(
+          results, errors, summary, crawlFinalUrls, crawlRedirectCount, crawlUniqueNormalizedUrls);
+    }
+  }
+  // CPD-ON
 }

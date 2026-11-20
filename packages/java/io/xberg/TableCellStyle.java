@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * The paragraph style a single table cell's text carries, located by grid position.
  *
- * Flat rather than a nested {@code Vec&lt;Vec&lt;Option&lt;..&gt;&gt;&gt;}: the nested shape marshals badly across the
- * FFI bindings, and the data is sparse anyway. See Table.cell_styles.
+ * <p>Flat rather than a nested {@code Vec&lt;Vec&lt;Option&lt;..&gt;&gt;&gt;}: the nested shape
+ * marshals badly across the FFI bindings, and the data is sparse anyway. See Table.cell_styles.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TableCellStyle.Builder.class)
@@ -22,68 +22,66 @@ public record TableCellStyle(
     @JsonProperty("row") int row,
     @JsonProperty("col") int col,
     @Nullable @JsonProperty("heading_level") Byte headingLevel,
-    @Nullable @JsonProperty("style_name") String styleName
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("style_name") String styleName) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TableCellStyle deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int row;
+    private int col;
+
+    @JsonProperty("heading_level")
+    @Nullable
+    private Byte headingLevel;
+
+    @JsonProperty("style_name")
+    @Nullable
+    private String styleName;
+
+    /** Sets the row field. */
+    @JsonProperty("row")
+    public Builder withRow(final int value) {
+      this.row = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TableCellStyle deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int row;
-        private int col;
-        @JsonProperty("heading_level")
-        @Nullable private Byte headingLevel;
-        @JsonProperty("style_name")
-        @Nullable private String styleName;
-
-        /** Sets the row field. */
-        @JsonProperty("row")
-        public Builder withRow(final int value) {
-            this.row = value;
-            return this;
-        }
-
-        /** Sets the col field. */
-        @JsonProperty("col")
-        public Builder withCol(final int value) {
-            this.col = value;
-            return this;
-        }
-
-        /** Sets the headingLevel field. */
-        @JsonProperty("heading_level")
-        public Builder withHeadingLevel(final @Nullable Byte value) {
-            this.headingLevel = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withHeadingLevel(final byte value) {
-            return withHeadingLevel(Byte.valueOf(value));
-        }
-
-        /** Sets the styleName field. */
-        @JsonProperty("style_name")
-        public Builder withStyleName(final @Nullable String value) {
-            this.styleName = value;
-            return this;
-        }
-
-        /** Constructs a TableCellStyle instance from the builder's current state. */
-        public TableCellStyle build() {
-            return new TableCellStyle(
-                row,
-                col,
-                headingLevel,
-                styleName
-            );
-        }
+    /** Sets the col field. */
+    @JsonProperty("col")
+    public Builder withCol(final int value) {
+      this.col = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the headingLevel field. */
+    @JsonProperty("heading_level")
+    public Builder withHeadingLevel(final @Nullable Byte value) {
+      this.headingLevel = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withHeadingLevel(final byte value) {
+      return withHeadingLevel(Byte.valueOf(value));
+    }
+
+    /** Sets the styleName field. */
+    @JsonProperty("style_name")
+    public Builder withStyleName(final @Nullable String value) {
+      this.styleName = value;
+      return this;
+    }
+
+    /** Constructs a TableCellStyle instance from the builder's current state. */
+    public TableCellStyle build() {
+      return new TableCellStyle(row, col, headingLevel, styleName);
+    }
+  }
+  // CPD-ON
 }

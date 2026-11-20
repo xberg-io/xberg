@@ -4,68 +4,63 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
 /**
  * Structured table grid with cell-level metadata.
  *
- * Stores row/column dimensions and a flat list of cells with position info.
+ * <p>Stores row/column dimensions and a flat list of cells with position info.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TableGrid.Builder.class)
 public record TableGrid(
     @JsonProperty("rows") int rows,
     @JsonProperty("cols") int cols,
-    @JsonProperty("cells") List<GridCell> cells
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("cells") List<GridCell> cells) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TableGrid deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int rows;
+    private int cols;
+    private List<GridCell> cells = List.of();
+
+    /** Sets the rows field. */
+    @JsonProperty("rows")
+    public Builder withRows(final int value) {
+      this.rows = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TableGrid deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int rows;
-        private int cols;
-        private List<GridCell> cells = List.of();
-
-        /** Sets the rows field. */
-        @JsonProperty("rows")
-        public Builder withRows(final int value) {
-            this.rows = value;
-            return this;
-        }
-
-        /** Sets the cols field. */
-        @JsonProperty("cols")
-        public Builder withCols(final int value) {
-            this.cols = value;
-            return this;
-        }
-
-        /** Sets the cells field. */
-        @JsonProperty("cells")
-        public Builder withCells(final List<GridCell> value) {
-            this.cells = value;
-            return this;
-        }
-
-        /** Constructs a TableGrid instance from the builder's current state. */
-        public TableGrid build() {
-            return new TableGrid(
-                rows,
-                cols,
-                cells
-            );
-        }
+    /** Sets the cols field. */
+    @JsonProperty("cols")
+    public Builder withCols(final int value) {
+      this.cols = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the cells field. */
+    @JsonProperty("cells")
+    public Builder withCells(final List<GridCell> value) {
+      this.cells = value;
+      return this;
+    }
+
+    /** Constructs a TableGrid instance from the builder's current state. */
+    public TableGrid build() {
+      return new TableGrid(rows, cols, cells);
+    }
+  }
+  // CPD-ON
 }

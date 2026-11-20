@@ -2,9 +2,7 @@
 // alef:hash:d2ebf26176c8bd67d77984b37529cee10cba9c52d54f6e3fbab86f87946148df
 package io.xberg;
 
-/**
- * The file is not valid JSON.
- */
+/** The file is not valid JSON. */
 public class ParseException extends LoadErrorException {
   private static final long serialVersionUID = 1L;
 

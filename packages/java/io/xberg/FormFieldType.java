@@ -10,68 +10,53 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Kind of a PDF form field.
  *
- * Mirrors {@code xberg_native_pdf}'s widget field taxonomy without leaking the upstream
- * type across the binding surface.
+ * <p>Mirrors {@code xberg_native_pdf}'s widget field taxonomy without leaking the upstream type
+ * across the binding surface.
  */
 @SuppressWarnings("PMD")
 public enum FormFieldType {
-    /**
-     * Single- or multi-line text input.
-     */
-    TEXT("text"),
-    /**
-     * Checkbox (on/off toggle).
-     */
-    CHECKBOX("checkbox"),
-    /**
-     * Radio-button group member.
-     */
-    RADIO("radio"),
-    /**
-     * Choice field (dropdown or list box).
-     */
-    CHOICE("choice"),
-    /**
-     * Digital-signature field.
-     */
-    SIGNATURE("signature"),
-    /**
-     * Push button.
-     */
-    BUTTON("button"),
-    /**
-     * Field type that could not be classified.
-     */
-    UNKNOWN("unknown");
+  /** Single- or multi-line text input. */
+  TEXT("text"),
+  /** Checkbox (on/off toggle). */
+  CHECKBOX("checkbox"),
+  /** Radio-button group member. */
+  RADIO("radio"),
+  /** Choice field (dropdown or list box). */
+  CHOICE("choice"),
+  /** Digital-signature field. */
+  SIGNATURE("signature"),
+  /** Push button. */
+  BUTTON("button"),
+  /** Field type that could not be classified. */
+  UNKNOWN("unknown");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  FormFieldType(final String value) {
+    this.value = value;
+  }
 
-    FormFieldType(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static FormFieldType fromValue(final String value) {
+    for (FormFieldType e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown FormFieldType value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static FormFieldType fromValue(final String value) {
-        for (FormFieldType e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown FormFieldType value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

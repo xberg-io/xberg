@@ -10,40 +10,38 @@ import java.util.List;
 /**
  * Path A Bridge implementation for IRerankerBackend.
  *
- * Wraps a user-supplied implementation and delegates all method calls.
- * This adapter conforms to the hand-authored sealed interface.
+ * <p>Wraps a user-supplied implementation and delegates all method calls. This adapter conforms to
+ * the hand-authored sealed interface.
  */
 public final class RerankerBackendAdapter implements IRerankerBackend {
-    private final IRerankerBackend impl;
+  private final IRerankerBackend impl;
 
-    public RerankerBackendAdapter(IRerankerBackend impl) {
-        this.impl = impl;
-    }
+  public RerankerBackendAdapter(IRerankerBackend impl) {
+    this.impl = impl;
+  }
 
-    @Override
-    public String name() {
-        return impl.name();
-    }
+  @Override
+  public String name() {
+    return impl.name();
+  }
 
-    @Override
-    public String version() {
-        return impl.version();
-    }
+  @Override
+  public String version() {
+    return impl.version();
+  }
 
-    @Override
-    public void initialize() throws Exception {
-        impl.initialize();
-    }
+  @Override
+  public void initialize() throws Exception {
+    impl.initialize();
+  }
 
-    @Override
-    public void shutdown() throws Exception {
-        impl.shutdown();
-    }
+  @Override
+  public void shutdown() throws Exception {
+    impl.shutdown();
+  }
 
-    @Override
-    public List<Float> rerank(String query, List<String> documents) throws Exception {
-        return impl.rerank(query, documents);
-    }
-
-
+  @Override
+  public List<Float> rerank(String query, List<String> documents) throws Exception {
+    return impl.rerank(query, documents);
+  }
 }

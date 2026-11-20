@@ -10,36 +10,27 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Late-interaction model types supported by Xberg.
- */
+/** Late-interaction model types supported by Xberg. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = LateInteractionModelType.Preset.class, name = "preset"),
-    @JsonSubTypes.Type(value = LateInteractionModelType.Custom.class, name = "custom"),
-    @JsonSubTypes.Type(value = LateInteractionModelType.Plugin.class, name = "plugin")
+  @JsonSubTypes.Type(value = LateInteractionModelType.Preset.class, name = "preset"),
+  @JsonSubTypes.Type(value = LateInteractionModelType.Custom.class, name = "custom"),
+  @JsonSubTypes.Type(value = LateInteractionModelType.Plugin.class, name = "plugin")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface LateInteractionModelType {
 
-    /**
-     * Use a preset ColBERT model (recommended).
-     */
-    record Preset(@JsonProperty("name") String name) implements LateInteractionModelType { }
+  /** Use a preset ColBERT model (recommended). */
+  record Preset(@JsonProperty("name") String name) implements LateInteractionModelType {}
 
-    /**
-     * Use a custom ColBERT ONNX model from HuggingFace.
-     */
-    record Custom(
-        @JsonProperty("model_id") String modelId,
-        @JsonProperty("model_file") Optional<String> modelFile,
-        @JsonProperty("additional_files") List<String> additionalFiles,
-        @JsonProperty("max_length") Optional<Long> maxLength
-    ) implements LateInteractionModelType {
-    }
+  /** Use a custom ColBERT ONNX model from HuggingFace. */
+  record Custom(
+      @JsonProperty("model_id") String modelId,
+      @JsonProperty("model_file") Optional<String> modelFile,
+      @JsonProperty("additional_files") List<String> additionalFiles,
+      @JsonProperty("max_length") Optional<Long> maxLength)
+      implements LateInteractionModelType {}
 
-    /**
-     * In-process late-interaction backend registered via the plugin system.
-     */
-    record Plugin(@JsonProperty("name") String name) implements LateInteractionModelType { }
+  /** In-process late-interaction backend registered via the plugin system. */
+  record Plugin(@JsonProperty("name") String name) implements LateInteractionModelType {}
 }

@@ -2,9 +2,7 @@
 // alef:hash:d0ec15943e6954f1e2f629a603a2c7e89efe422d7195236e0db3af096ea34a4f
 package io.xberg;
 
-/**
- * An OCR engine returned an error or produced unusable output.
- */
+/** An OCR engine returned an error or produced unusable output. */
 public class OcrException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

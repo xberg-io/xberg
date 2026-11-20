@@ -10,57 +10,51 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Controls how markdown tables are handled when they exceed the chunk size limit.
  *
- * Only applies when {@code chunker_type} is {@code Markdown}.
+ * <p>Only applies when {@code chunker_type} is {@code Markdown}.
  *
- * # Variants
+ * <p># Variants
  *
- * * {@code Split} - Default behavior: tables are split at row boundaries like any
- *   other block element. Continuation chunks contain only data rows without
- *   the header, which can break downstream consumers that need column context.
- * * {@code RepeatHeader} - Prepend the table header (header row + separator row) to
- *   every continuation chunk that contains data rows from the same table.
- *   Adds a small amount of duplicate text but ensures each chunk is
- *   self-contained for extraction, search, and LLM consumption.
+ * <p>* {@code Split} - Default behavior: tables are split at row boundaries like any other block
+ * element. Continuation chunks contain only data rows without the header, which can break
+ * downstream consumers that need column context. * {@code RepeatHeader} - Prepend the table header
+ * (header row + separator row) to every continuation chunk that contains data rows from the same
+ * table. Adds a small amount of duplicate text but ensures each chunk is self-contained for
+ * extraction, search, and LLM consumption.
  */
 @SuppressWarnings("PMD")
 public enum TableChunkingMode {
-    /**
-     * Split tables at row boundaries (default). Continuation chunks have no header.
-     */
-    SPLIT("split"),
-    /**
-     * Prepend the table header to every chunk that continues a split table.
-     */
-    REPEAT_HEADER("repeat_header");
+  /** Split tables at row boundaries (default). Continuation chunks have no header. */
+  SPLIT("split"),
+  /** Prepend the table header to every chunk that continues a split table. */
+  REPEAT_HEADER("repeat_header");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  TableChunkingMode(final String value) {
+    this.value = value;
+  }
 
-    TableChunkingMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static TableChunkingMode fromValue(final String value) {
+    for (TableChunkingMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown TableChunkingMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static TableChunkingMode fromValue(final String value) {
-        for (TableChunkingMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown TableChunkingMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

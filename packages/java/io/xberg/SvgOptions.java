@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,57 +13,59 @@ import org.jspecify.annotations.Nullable;
 /**
  * SVG-specific configuration for the image-encode pipeline.
  *
- * Applies when the source image is SVG or when the output format is set to
- * ImageOutputFormat.Svg.  Available when the {@code svg} feature is active.
+ * <p>Applies when the source image is SVG or when the output format is set to
+ * ImageOutputFormat.Svg. Available when the {@code svg} feature is active.
  *
- * Used via ImageExtractionConfig.svg.
+ * <p>Used via ImageExtractionConfig.svg.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = SvgOptions.Builder.class)
 public record SvgOptions(
     @Nullable @JsonProperty("sanitize") Boolean sanitize,
-    @Nullable @JsonProperty("render_dpi") Float renderDpi
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("render_dpi") Float renderDpi) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public SvgOptions {
+    if (sanitize == null) {
+      sanitize = true;
     }
-    public SvgOptions{
-        if (sanitize == null) { sanitize = true; }
-        if (renderDpi == null) { renderDpi = 96.0f; }
+    if (renderDpi == null) {
+      renderDpi = 96.0f;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for SvgOptions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private Boolean sanitize = true;
+
+    @JsonProperty("render_dpi")
+    private Float renderDpi;
+
+    /** Sets the sanitize field. */
+    @JsonProperty("sanitize")
+    public Builder withSanitize(final @Nullable Boolean value) {
+      this.sanitize = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for SvgOptions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private Boolean sanitize = true;
-        @JsonProperty("render_dpi")
-        private Float renderDpi;
-
-        /** Sets the sanitize field. */
-        @JsonProperty("sanitize")
-        public Builder withSanitize(final @Nullable Boolean value) {
-            this.sanitize = value;
-            return this;
-        }
-
-        /** Sets the renderDpi field. */
-        @JsonProperty("render_dpi")
-        public Builder withRenderDpi(final @Nullable Float value) {
-            this.renderDpi = value;
-            return this;
-        }
-
-        /** Constructs a SvgOptions instance from the builder's current state. */
-        public SvgOptions build() {
-            return new SvgOptions(
-                sanitize,
-                renderDpi
-            );
-        }
+    /** Sets the renderDpi field. */
+    @JsonProperty("render_dpi")
+    public Builder withRenderDpi(final @Nullable Float value) {
+      this.renderDpi = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a SvgOptions instance from the builder's current state. */
+    public SvgOptions build() {
+      return new SvgOptions(sanitize, renderDpi);
+    }
+  }
+  // CPD-ON
 }

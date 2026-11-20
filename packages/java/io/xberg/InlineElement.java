@@ -4,17 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.Map;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Inline element within a block.
  *
- * Represents text with formatting, links, images, etc.
+ * <p>Represents text with formatting, links, images, etc.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = InlineElement.Builder.class)
@@ -22,62 +22,57 @@ public record InlineElement(
     @JsonProperty("element_type") InlineType elementType,
     @JsonProperty("content") String content,
     @Nullable @JsonProperty("attributes") Attributes attributes,
-    @Nullable @JsonProperty("metadata") Map<String, String> metadata
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("metadata") Map<String, String> metadata) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for InlineElement deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("element_type")
+    private InlineType elementType;
+
+    private String content;
+    @Nullable private Attributes attributes;
+    @Nullable private Map<String, String> metadata;
+
+    /** Sets the elementType field. */
+    @JsonProperty("element_type")
+    public Builder withElementType(final InlineType value) {
+      this.elementType = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for InlineElement deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("element_type")
-        private InlineType elementType;
-        private String content;
-        @Nullable private Attributes attributes;
-        @Nullable private Map<String, String> metadata;
-
-        /** Sets the elementType field. */
-        @JsonProperty("element_type")
-        public Builder withElementType(final InlineType value) {
-            this.elementType = value;
-            return this;
-        }
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final String value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the attributes field. */
-        @JsonProperty("attributes")
-        public Builder withAttributes(final @Nullable Attributes value) {
-            this.attributes = value;
-            return this;
-        }
-
-        /** Sets the metadata field. */
-        @JsonProperty("metadata")
-        public Builder withMetadata(final @Nullable Map<String, String> value) {
-            this.metadata = value;
-            return this;
-        }
-
-        /** Constructs a InlineElement instance from the builder's current state. */
-        public InlineElement build() {
-            return new InlineElement(
-                elementType,
-                content,
-                attributes,
-                metadata
-            );
-        }
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final String value) {
+      this.content = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the attributes field. */
+    @JsonProperty("attributes")
+    public Builder withAttributes(final @Nullable Attributes value) {
+      this.attributes = value;
+      return this;
+    }
+
+    /** Sets the metadata field. */
+    @JsonProperty("metadata")
+    public Builder withMetadata(final @Nullable Map<String, String> value) {
+      this.metadata = value;
+      return this;
+    }
+
+    /** Constructs a InlineElement instance from the builder's current state. */
+    public InlineElement build() {
+      return new InlineElement(elementType, content, attributes, metadata);
+    }
+  }
+  // CPD-ON
 }

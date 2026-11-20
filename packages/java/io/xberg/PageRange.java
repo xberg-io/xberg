@@ -4,52 +4,47 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Page range for a chunk (0-indexed, inclusive).
- */
+/** Page range for a chunk (0-indexed, inclusive). */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageRange.Builder.class)
 public record PageRange(@JsonProperty("start") int start, @JsonProperty("end") int end) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PageRange deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int start;
+    private int end;
+
+    /** Sets the start field. */
+    @JsonProperty("start")
+    public Builder withStart(final int value) {
+      this.start = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PageRange deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int start;
-        private int end;
-
-        /** Sets the start field. */
-        @JsonProperty("start")
-        public Builder withStart(final int value) {
-            this.start = value;
-            return this;
-        }
-
-        /** Sets the end field. */
-        @JsonProperty("end")
-        public Builder withEnd(final int value) {
-            this.end = value;
-            return this;
-        }
-
-        /** Constructs a PageRange instance from the builder's current state. */
-        public PageRange build() {
-            return new PageRange(
-                start,
-                end
-            );
-        }
+    /** Sets the end field. */
+    @JsonProperty("end")
+    public Builder withEnd(final int value) {
+      this.end = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a PageRange instance from the builder's current state. */
+    public PageRange build() {
+      return new PageRange(start, end);
+    }
+  }
+  // CPD-ON
 }

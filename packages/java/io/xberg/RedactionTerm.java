@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,62 +13,59 @@ import org.jspecify.annotations.Nullable;
 /**
  * One user-supplied literal term to redact.
  *
- * Matched as a regex-escaped substring (so callers do not need to escape
- * metacharacters themselves). Case-insensitive by default — set
- * Self.case_sensitive to {@code true} for exact byte-match semantics.
+ * <p>Matched as a regex-escaped substring (so callers do not need to escape metacharacters
+ * themselves). Case-insensitive by default — set Self.case_sensitive to {@code true} for exact
+ * byte-match semantics.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = RedactionTerm.Builder.class)
 public record RedactionTerm(
     @JsonProperty("label") String label,
     @JsonProperty("value") String value,
-    @Nullable @JsonProperty("case_sensitive") Boolean caseSensitive
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("case_sensitive") Boolean caseSensitive) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for RedactionTerm deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String label;
+    private String value;
+
+    @JsonProperty("case_sensitive")
+    @Nullable
+    private Boolean caseSensitive;
+
+    /** Sets the label field. */
+    @JsonProperty("label")
+    public Builder withLabel(final String value) {
+      this.label = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for RedactionTerm deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String label;
-        private String value;
-        @JsonProperty("case_sensitive")
-        @Nullable private Boolean caseSensitive;
-
-        /** Sets the label field. */
-        @JsonProperty("label")
-        public Builder withLabel(final String value) {
-            this.label = value;
-            return this;
-        }
-
-        /** Sets the value field. */
-        @JsonProperty("value")
-        public Builder withValue(final String value) {
-            this.value = value;
-            return this;
-        }
-
-        /** Sets the caseSensitive field. */
-        @JsonProperty("case_sensitive")
-        public Builder withCaseSensitive(final @Nullable Boolean value) {
-            this.caseSensitive = value;
-            return this;
-        }
-
-        /** Constructs a RedactionTerm instance from the builder's current state. */
-        public RedactionTerm build() {
-            return new RedactionTerm(
-                label,
-                value,
-                caseSensitive
-            );
-        }
+    /** Sets the value field. */
+    @JsonProperty("value")
+    public Builder withValue(final String value) {
+      this.value = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the caseSensitive field. */
+    @JsonProperty("case_sensitive")
+    public Builder withCaseSensitive(final @Nullable Boolean value) {
+      this.caseSensitive = value;
+      return this;
+    }
+
+    /** Constructs a RedactionTerm instance from the builder's current state. */
+    public RedactionTerm build() {
+      return new RedactionTerm(label, value, caseSensitive);
+    }
+  }
+  // CPD-ON
 }

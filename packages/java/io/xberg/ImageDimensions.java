@@ -4,55 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Image dimensions in pixels.
- */
+/** Image dimensions in pixels. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageDimensions.Builder.class)
 public record ImageDimensions(
-    @JsonProperty("width") int width,
-    @JsonProperty("height") int height
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("width") int width, @JsonProperty("height") int height) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ImageDimensions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int width;
+    private int height;
+
+    /** Sets the width field. */
+    @JsonProperty("width")
+    public Builder withWidth(final int value) {
+      this.width = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ImageDimensions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int width;
-        private int height;
-
-        /** Sets the width field. */
-        @JsonProperty("width")
-        public Builder withWidth(final int value) {
-            this.width = value;
-            return this;
-        }
-
-        /** Sets the height field. */
-        @JsonProperty("height")
-        public Builder withHeight(final int value) {
-            this.height = value;
-            return this;
-        }
-
-        /** Constructs a ImageDimensions instance from the builder's current state. */
-        public ImageDimensions build() {
-            return new ImageDimensions(
-                width,
-                height
-            );
-        }
+    /** Sets the height field. */
+    @JsonProperty("height")
+    public Builder withHeight(final int value) {
+      this.height = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a ImageDimensions instance from the builder's current state. */
+    public ImageDimensions build() {
+      return new ImageDimensions(width, height);
+    }
+  }
+  // CPD-ON
 }

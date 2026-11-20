@@ -4,58 +4,53 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * Image preprocessing metadata.
  *
- * Tracks the transformations applied to an image during OCR preprocessing,
- * including DPI normalization, resizing, and resampling.
+ * <p>Tracks the transformations applied to an image during OCR preprocessing, including DPI
+ * normalization, resizing, and resampling.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PixelDimensions.Builder.class)
 public record PixelDimensions(
-    @JsonProperty("width") long width,
-    @JsonProperty("height") long height
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("width") long width, @JsonProperty("height") long height) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PixelDimensions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private long width;
+    private long height;
+
+    /** Sets the width field. */
+    @JsonProperty("width")
+    public Builder withWidth(final long value) {
+      this.width = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PixelDimensions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private long width;
-        private long height;
-
-        /** Sets the width field. */
-        @JsonProperty("width")
-        public Builder withWidth(final long value) {
-            this.width = value;
-            return this;
-        }
-
-        /** Sets the height field. */
-        @JsonProperty("height")
-        public Builder withHeight(final long value) {
-            this.height = value;
-            return this;
-        }
-
-        /** Constructs a PixelDimensions instance from the builder's current state. */
-        public PixelDimensions build() {
-            return new PixelDimensions(
-                width,
-                height
-            );
-        }
+    /** Sets the height field. */
+    @JsonProperty("height")
+    public Builder withHeight(final long value) {
+      this.height = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a PixelDimensions instance from the builder's current state. */
+    public PixelDimensions build() {
+      return new PixelDimensions(width, height);
+    }
+  }
+  // CPD-ON
 }

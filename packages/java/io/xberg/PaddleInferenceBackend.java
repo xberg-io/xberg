@@ -10,50 +10,45 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which concrete ONNX inference engine PaddleOCR model loading uses.
  *
- * Mirrors {@code sceptre.Backend} for the PaddleOCR backend: {@code Ort} is the native,
- * full-featured path (acceleration/execution-provider hook, ONNX-embedded
- * dictionary metadata); {@code Tract} is the pure-Rust, CPU-only path used on targets
- * where {@code ort} cannot link (Android x86_64 emulator, WASM once wired).
+ * <p>Mirrors {@code sceptre.Backend} for the PaddleOCR backend: {@code Ort} is the native,
+ * full-featured path (acceleration/execution-provider hook, ONNX-embedded dictionary metadata);
+ * {@code Tract} is the pure-Rust, CPU-only path used on targets where {@code ort} cannot link
+ * (Android x86_64 emulator, WASM once wired).
  */
 @SuppressWarnings("PMD")
 public enum PaddleInferenceBackend {
-    /**
-     * Native ONNX Runtime (requires the {@code paddle-ocr-ort} feature).
-     */
-    ORT("ort"),
-    /**
-     * Pure-Rust ONNX via {@code tract} (requires the {@code paddle-ocr-tract} feature).
-     */
-    TRACT("tract");
+  /** Native ONNX Runtime (requires the {@code paddle-ocr-ort} feature). */
+  ORT("ort"),
+  /** Pure-Rust ONNX via {@code tract} (requires the {@code paddle-ocr-tract} feature). */
+  TRACT("tract");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  PaddleInferenceBackend(final String value) {
+    this.value = value;
+  }
 
-    PaddleInferenceBackend(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static PaddleInferenceBackend fromValue(final String value) {
+    for (PaddleInferenceBackend e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown PaddleInferenceBackend value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static PaddleInferenceBackend fromValue(final String value) {
-        for (PaddleInferenceBackend e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown PaddleInferenceBackend value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

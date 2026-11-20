@@ -2,9 +2,7 @@
 // alef:hash:1c2393a3536412c655c630a084d9377d8af37dc997638ed07c88ea6ff1db2814
 package io.xberg;
 
-/**
- * A cache read or write operation failed.
- */
+/** A cache read or write operation failed. */
 public class CacheException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

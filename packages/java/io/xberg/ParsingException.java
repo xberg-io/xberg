@@ -2,9 +2,7 @@
 // alef:hash:39f168d1b3f9c8b8898bf94806cc9ae5adb522a4964ee3d471abd145305705be
 package io.xberg;
 
-/**
- * Document parsing failed (e.g. corrupt file, unsupported format feature).
- */
+/** Document parsing failed (e.g. corrupt file, unsupported format feature). */
 public class ParsingException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

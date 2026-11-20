@@ -2,9 +2,7 @@
 // alef:hash:88b0cd03092758ffb8edd2d088c19848873e6f8a97e3b546f1fd23e9a9fe33b5
 package io.xberg;
 
-/**
- * Audio/video transcription failed.
- */
+/** Audio/video transcription failed. */
 public class TranscriptionException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

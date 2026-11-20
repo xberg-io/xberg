@@ -10,58 +10,55 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * How to resolve overlapping native vs layout (TATR/SLANeXT) tables.
  *
- * When both native detection and the layout table model produce a table for
- * the same page region, one must be dropped. This controls which one wins. Wire
- * format is snake_case in all serializers (JSON, TOML, YAML).
+ * <p>When both native detection and the layout table model produce a table for the same page
+ * region, one must be dropped. This controls which one wins. Wire format is snake_case in all
+ * serializers (JSON, TOML, YAML).
  */
 @SuppressWarnings("PMD")
 public enum TableOverlapPreference {
-    /**
-     * Keep whichever table carries more content (cell count + markdown length).
-     * This is the historical default. TATR/SLANeXT tables usually recognize more
-     * cells and therefore win, which maximizes table-structure F1 but can lower
-     * text F1 when the recognized cell reflow diverges from the source reading order.
-     */
-    CONTENT("content"),
-    /**
-     * Prefer the native table when it overlaps a layout table. Native tables
-     * preserve the source reading order, which scores higher on text F1 for
-     * documents where the layout model's cell reflow diverges from the ground truth.
-     */
-    NATIVE("native"),
-    /**
-     * Prefer the layout (TATR/SLANeXT) table when it overlaps a native table.
-     */
-    LAYOUT("layout");
+  /**
+   * Keep whichever table carries more content (cell count + markdown length). This is the
+   * historical default. TATR/SLANeXT tables usually recognize more cells and therefore win, which
+   * maximizes table-structure F1 but can lower text F1 when the recognized cell reflow diverges
+   * from the source reading order.
+   */
+  CONTENT("content"),
+  /**
+   * Prefer the native table when it overlaps a layout table. Native tables preserve the source
+   * reading order, which scores higher on text F1 for documents where the layout model's cell
+   * reflow diverges from the ground truth.
+   */
+  NATIVE("native"),
+  /** Prefer the layout (TATR/SLANeXT) table when it overlaps a native table. */
+  LAYOUT("layout");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  TableOverlapPreference(final String value) {
+    this.value = value;
+  }
 
-    TableOverlapPreference(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static TableOverlapPreference fromValue(final String value) {
+    for (TableOverlapPreference e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown TableOverlapPreference value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static TableOverlapPreference fromValue(final String value) {
-        for (TableOverlapPreference e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown TableOverlapPreference value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

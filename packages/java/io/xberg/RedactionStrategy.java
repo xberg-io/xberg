@@ -7,58 +7,51 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Strategy applied when a PII match is rewritten.
- */
+/** Strategy applied when a PII match is rewritten. */
 @SuppressWarnings("PMD")
 public enum RedactionStrategy {
-    /**
-     * Replace the matched span with a fixed mask token (default {@code "[REDACTED]"}).
-     */
-    MASK("mask"),
-    /**
-     * Replace with a SHA-256 hash of the original value (truncated to 16 hex chars).
-     * Lets downstream consumers do equality joins without recovering the source.
-     */
-    HASH("hash"),
-    /**
-     * Replace with a per-category running token ({@code "[PERSON_1]"}, {@code "[PERSON_2]"}, …)
-     * so the same person referenced twice gets the same token within the document.
-     */
-    TOKEN_REPLACE("token_replace"),
-    /**
-     * Delete the matched span entirely.
-     */
-    DROP("drop");
+  /** Replace the matched span with a fixed mask token (default {@code "[REDACTED]"}). */
+  MASK("mask"),
+  /**
+   * Replace with a SHA-256 hash of the original value (truncated to 16 hex chars). Lets downstream
+   * consumers do equality joins without recovering the source.
+   */
+  HASH("hash"),
+  /**
+   * Replace with a per-category running token ({@code "[PERSON_1]"}, {@code "[PERSON_2]"}, …) so
+   * the same person referenced twice gets the same token within the document.
+   */
+  TOKEN_REPLACE("token_replace"),
+  /** Delete the matched span entirely. */
+  DROP("drop");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  RedactionStrategy(final String value) {
+    this.value = value;
+  }
 
-    RedactionStrategy(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static RedactionStrategy fromValue(final String value) {
+    for (RedactionStrategy e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown RedactionStrategy value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static RedactionStrategy fromValue(final String value) {
-        for (RedactionStrategy e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown RedactionStrategy value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

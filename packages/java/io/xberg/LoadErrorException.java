@@ -2,11 +2,10 @@
 // alef:hash:ff75267b69fc5ad26baa6774811ea4b0b2e0f0958277d98e7b48be6a96a9a6af
 package io.xberg;
 
-/**
- * Errors produced while loading or validating a preset file.
- */
+/** Errors produced while loading or validating a preset file. */
 public class LoadErrorException extends XbergRsException implements ILoadError {
   private static final long serialVersionUID = 1L;
+
   /** Creates a new LoadErrorException with the given message. */
   public LoadErrorException(final String message) {
     super(message);

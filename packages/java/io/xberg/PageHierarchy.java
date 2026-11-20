@@ -4,64 +4,64 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Page hierarchy structure containing heading levels and block information.
  *
- * Used when PDF text hierarchy extraction is enabled. Contains hierarchical
- * blocks with heading levels (H1-H6) for semantic document structure.
+ * <p>Used when PDF text hierarchy extraction is enabled. Contains hierarchical blocks with heading
+ * levels (H1-H6) for semantic document structure.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageHierarchy.Builder.class)
 public record PageHierarchy(
     @JsonProperty("block_count") int blockCount,
-    @JsonProperty("blocks") List<HierarchicalBlock> blocks
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("blocks") List<HierarchicalBlock> blocks) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public PageHierarchy {
+    if (blocks == null) {
+      blocks = List.of();
     }
-    public PageHierarchy{
-        if (blocks == null) { blocks = List.of(); }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PageHierarchy deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("block_count")
+    private int blockCount;
+
+    @Nullable private List<HierarchicalBlock> blocks = List.of();
+
+    /** Sets the blockCount field. */
+    @JsonProperty("block_count")
+    public Builder withBlockCount(final int value) {
+      this.blockCount = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PageHierarchy deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("block_count")
-        private int blockCount;
-        @Nullable private List<HierarchicalBlock> blocks = List.of();
-
-        /** Sets the blockCount field. */
-        @JsonProperty("block_count")
-        public Builder withBlockCount(final int value) {
-            this.blockCount = value;
-            return this;
-        }
-
-        /** Sets the blocks field. */
-        @JsonProperty("blocks")
-        public Builder withBlocks(final @Nullable List<HierarchicalBlock> value) {
-            this.blocks = value;
-            return this;
-        }
-
-        /** Constructs a PageHierarchy instance from the builder's current state. */
-        public PageHierarchy build() {
-            return new PageHierarchy(
-                blockCount,
-                blocks
-            );
-        }
+    /** Sets the blocks field. */
+    @JsonProperty("blocks")
+    public Builder withBlocks(final @Nullable List<HierarchicalBlock> value) {
+      this.blocks = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a PageHierarchy instance from the builder's current state. */
+    public PageHierarchy build() {
+      return new PageHierarchy(blockCount, blocks);
+    }
+  }
+  // CPD-ON
 }

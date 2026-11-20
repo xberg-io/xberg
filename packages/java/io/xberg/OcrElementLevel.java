@@ -10,56 +10,47 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Hierarchical level of an OCR element.
  *
- * Maps to Tesseract's page segmentation hierarchy and provides
- * equivalent semantics for PaddleOCR.
+ * <p>Maps to Tesseract's page segmentation hierarchy and provides equivalent semantics for
+ * PaddleOCR.
  */
 @SuppressWarnings("PMD")
 public enum OcrElementLevel {
-    /**
-     * Individual word
-     */
-    WORD("word"),
-    /**
-     * Line of text (default for PaddleOCR)
-     */
-    LINE("line"),
-    /**
-     * Paragraph or text block
-     */
-    BLOCK("block"),
-    /**
-     * Page-level element
-     */
-    PAGE("page");
+  /** Individual word */
+  WORD("word"),
+  /** Line of text (default for PaddleOCR) */
+  LINE("line"),
+  /** Paragraph or text block */
+  BLOCK("block"),
+  /** Page-level element */
+  PAGE("page");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  OcrElementLevel(final String value) {
+    this.value = value;
+  }
 
-    OcrElementLevel(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static OcrElementLevel fromValue(final String value) {
+    for (OcrElementLevel e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown OcrElementLevel value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static OcrElementLevel fromValue(final String value) {
-        for (OcrElementLevel e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown OcrElementLevel value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

@@ -2,9 +2,7 @@
 // alef:hash:34e8dfed3fae91167cda431102f60636db3d6a3016c5fb3dc03170ff3077a5db
 package io.xberg;
 
-/**
- * The preset's declared `id` does not match its file-system location.
- */
+/** The preset's declared `id` does not match its file-system location. */
 public class IdMismatchException extends LoadErrorException {
   private static final long serialVersionUID = 1L;
 

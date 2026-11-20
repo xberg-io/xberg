@@ -8,69 +8,63 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * What the output shows for an image, an embedded media element, or a link, whose address is
- * an inline {@code data:} URL.
+ * What the output shows for an image, an embedded media element, or a link, whose address is an
+ * inline {@code data:} URL.
  *
- * Applies to {@code &lt;img&gt;} (including its lazy-load attributes, its {@code srcset} candidates and the
- * {@code &lt;source&gt;} elements of a {@code &lt;picture&gt;} around it), {@code &lt;graphic&gt;}, inline {@code &lt;svg&gt;}, {@code
- * &lt;video&gt;},
- * {@code &lt;audio&gt;} (including their nested {@code &lt;source&gt;} elements), {@code &lt;iframe&gt;}, and a link ({@code &lt;a
- * href&gt;})
- * whose own address is a {@code data:} URL.
+ * <p>Applies to {@code &lt;img&gt;} (including its lazy-load attributes, its {@code srcset}
+ * candidates and the {@code &lt;source&gt;} elements of a {@code &lt;picture&gt;} around it),
+ * {@code &lt;graphic&gt;}, inline {@code &lt;svg&gt;}, {@code &lt;video&gt;}, {@code &lt;audio&gt;}
+ * (including their nested {@code &lt;source&gt;} elements), {@code &lt;iframe&gt;}, and a link
+ * ({@code &lt;a href&gt;}) whose own address is a {@code data:} URL.
  *
- * With {@code AltTextOnly} or {@code DropElement}, an element that also has an address that is not {@code data:}
- * uses that address instead. The document structure follows the markdown: a dropped image has
- * no node, and an image written as its alt text has no address. A link whose only content the
- * choice removed is dropped with it.
+ * <p>With {@code AltTextOnly} or {@code DropElement}, an element that also has an address that is
+ * not {@code data:} uses that address instead. The document structure follows the markdown: a
+ * dropped image has no node, and an image written as its alt text has no address. A link whose only
+ * content the choice removed is dropped with it.
  *
- * A link has no attribute separate from its own text to use as a caption, so {@code AltTextOnly} and
- * {@code DropElement} do the same thing to a link's {@code data:} address: write the link's text with no
- * destination. Unlike an image, a link's text is never dropped along with the address.
+ * <p>A link has no attribute separate from its own text to use as a caption, so {@code AltTextOnly}
+ * and {@code DropElement} do the same thing to a link's {@code data:} address: write the link's
+ * text with no destination. Unlike an image, a link's text is never dropped along with the address.
  */
 @SuppressWarnings("PMD")
 public enum InlineDataMedia {
-    /**
-     * Write the {@code data:} URL as the destination, payload included. Default.
-     */
-    KEEP("Keep"),
-    /**
-     * Write the alt text (the text of an {@code &lt;svg&gt;}, the fallback content for {@code &lt;video&gt;} and
-     * {@code &lt;audio&gt;}) without a destination.
-     */
-    ALT_TEXT_ONLY("AltTextOnly"),
-    /**
-     * Write nothing for the element.
-     */
-    DROP_ELEMENT("DropElement");
+  /** Write the {@code data:} URL as the destination, payload included. Default. */
+  KEEP("Keep"),
+  /**
+   * Write the alt text (the text of an {@code &lt;svg&gt;}, the fallback content for {@code
+   * &lt;video&gt;} and {@code &lt;audio&gt;}) without a destination.
+   */
+  ALT_TEXT_ONLY("AltTextOnly"),
+  /** Write nothing for the element. */
+  DROP_ELEMENT("DropElement");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  InlineDataMedia(final String value) {
+    this.value = value;
+  }
 
-    InlineDataMedia(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static InlineDataMedia fromValue(final String value) {
+    for (InlineDataMedia e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown InlineDataMedia value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static InlineDataMedia fromValue(final String value) {
-        for (InlineDataMedia e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown InlineDataMedia value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

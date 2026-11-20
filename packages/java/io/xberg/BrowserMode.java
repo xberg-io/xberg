@@ -7,68 +7,55 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * When to use the headless browser fallback.
- */
+/** When to use the headless browser fallback. */
 @SuppressWarnings("PMD")
 public enum BrowserMode {
-    /**
-     * Automatically detect when JS rendering is needed and fall back to browser.
-     */
-    AUTO("auto"),
-    /**
-     * Always use the browser for every request.
-     */
-    ALWAYS("always"),
-    /**
-     * Never use the browser fallback.
-     */
-    NEVER("never"),
-    /**
-     * Always use the browser with all stealth surfaces enabled.
-     *
-     * Behaves like Always(BrowserMode.Always) for escalation purposes
-     * (every request is routed through the browser tier), but additionally
-     * enables:
-     *
-     * - browser JavaScript stealth patches
-     * - native-backend TLS fingerprint spoofing
-     * - stealth-aware default user-agent when no explicit UA is set
-     * - 1920×1080 viewport override
-     *
-     * Use this instead of setting the now-removed {@code BrowserConfig.stealth}
-     * boolean field.
-     */
-    STEALTH("stealth");
+  /** Automatically detect when JS rendering is needed and fall back to browser. */
+  AUTO("auto"),
+  /** Always use the browser for every request. */
+  ALWAYS("always"),
+  /** Never use the browser fallback. */
+  NEVER("never"),
+  /**
+   * Always use the browser with all stealth surfaces enabled.
+   *
+   * <p>Behaves like Always(BrowserMode.Always) for escalation purposes (every request is routed
+   * through the browser tier), but additionally enables:
+   *
+   * <p>- browser JavaScript stealth patches - native-backend TLS fingerprint spoofing -
+   * stealth-aware default user-agent when no explicit UA is set - 1920×1080 viewport override
+   *
+   * <p>Use this instead of setting the now-removed {@code BrowserConfig.stealth} boolean field.
+   */
+  STEALTH("stealth");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  BrowserMode(final String value) {
+    this.value = value;
+  }
 
-    BrowserMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static BrowserMode fromValue(final String value) {
+    for (BrowserMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown BrowserMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static BrowserMode fromValue(final String value) {
-        for (BrowserMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown BrowserMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

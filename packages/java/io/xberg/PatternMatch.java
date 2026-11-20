@@ -4,75 +4,68 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * One detected PII span in the input text.
- */
+/** One detected PII span in the input text. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PatternMatch.Builder.class)
 public record PatternMatch(
     @JsonProperty("start") long start,
     @JsonProperty("end") long end,
-    @JsonDeserialize(using = PiiCategoryDeserializer.class) @JsonProperty("category") PiiCategory category,
-    @JsonProperty("text") String text
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonDeserialize(using = PiiCategoryDeserializer.class) @JsonProperty("category")
+        PiiCategory category,
+    @JsonProperty("text") String text) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PatternMatch deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private long start;
+    private long end;
+    private PiiCategory category;
+    private String text;
+
+    /** Sets the start field. */
+    @JsonProperty("start")
+    public Builder withStart(final long value) {
+      this.start = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PatternMatch deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private long start;
-        private long end;
-        private PiiCategory category;
-        private String text;
-
-        /** Sets the start field. */
-        @JsonProperty("start")
-        public Builder withStart(final long value) {
-            this.start = value;
-            return this;
-        }
-
-        /** Sets the end field. */
-        @JsonProperty("end")
-        public Builder withEnd(final long value) {
-            this.end = value;
-            return this;
-        }
-
-        /** Sets the category field. */
-        @JsonProperty("category")
-        public Builder withCategory(final PiiCategory value) {
-            this.category = value;
-            return this;
-        }
-
-        /** Sets the text field. */
-        @JsonProperty("text")
-        public Builder withText(final String value) {
-            this.text = value;
-            return this;
-        }
-
-        /** Constructs a PatternMatch instance from the builder's current state. */
-        public PatternMatch build() {
-            return new PatternMatch(
-                start,
-                end,
-                category,
-                text
-            );
-        }
+    /** Sets the end field. */
+    @JsonProperty("end")
+    public Builder withEnd(final long value) {
+      this.end = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the category field. */
+    @JsonProperty("category")
+    public Builder withCategory(final PiiCategory value) {
+      this.category = value;
+      return this;
+    }
+
+    /** Sets the text field. */
+    @JsonProperty("text")
+    public Builder withText(final String value) {
+      this.text = value;
+      return this;
+    }
+
+    /** Constructs a PatternMatch instance from the builder's current state. */
+    public PatternMatch build() {
+      return new PatternMatch(start, end, category, text);
+    }
+  }
+  // CPD-ON
 }

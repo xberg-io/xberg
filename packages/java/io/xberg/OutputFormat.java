@@ -4,75 +4,56 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Output format for extraction results.
  *
- * Controls the format of the {@code content} field in {@code ExtractedDocument}.
- * When set to {@code Markdown}, {@code Djot}, or {@code Html}, the output uses that format.
- * {@code Plain} returns the raw extracted text.
+ * <p>Controls the format of the {@code content} field in {@code ExtractedDocument}. When set to
+ * {@code Markdown}, {@code Djot}, or {@code Html}, the output uses that format. {@code Plain}
+ * returns the raw extracted text.
  */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = OutputFormatDeserializer.class)
 @JsonSerialize(using = OutputFormatSerializer.class)
 public sealed interface OutputFormat {
 
-    /**
-     * Plain text content only (default)
-     */
-    record Plain() implements OutputFormat {
-    }
+  /** Plain text content only (default) */
+  record Plain() implements OutputFormat {}
 
-    /**
-     * Markdown format
-     */
-    record Markdown() implements OutputFormat {
-    }
+  /** Markdown format */
+  record Markdown() implements OutputFormat {}
 
-    /**
-     * Djot markup format
-     */
-    record Djot() implements OutputFormat {
-    }
+  /** Djot markup format */
+  record Djot() implements OutputFormat {}
 
-    /**
-     * HTML format
-     */
-    record Html() implements OutputFormat {
-    }
+  /** HTML format */
+  record Html() implements OutputFormat {}
 
-    /**
-     * JSON tree format with heading-driven sections.
-     */
-    record Json() implements OutputFormat {
-    }
+  /** JSON tree format with heading-driven sections. */
+  record Json() implements OutputFormat {}
 
-    /**
-     * Docling DocTags format (tables rendered as OTSL).
-     */
-    record DocTags() implements OutputFormat {
-    }
+  /** Docling DocTags format (tables rendered as OTSL). */
+  record DocTags() implements OutputFormat {}
 
-    /**
-     * Custom renderer registered via the RendererRegistry.
-     * The string is the renderer name (e.g., "docx", "latex").
-     */
-    record Custom(String value) implements OutputFormat { }
+  /**
+   * Custom renderer registered via the RendererRegistry. The string is the renderer name (e.g.,
+   * "docx", "latex").
+   */
+  record Custom(String value) implements OutputFormat {}
 
-    /** Returns the Custom data if this is a Custom variant, otherwise null. */
-    default @Nullable String custom() {
-        return this instanceof Custom variant ? variant.value() : null;
-    }
-
+  /** Returns the Custom data if this is a Custom variant, otherwise null. */
+  default @Nullable String custom() {
+    return this instanceof Custom variant ? variant.value() : null;
+  }
 }
 
 /** Custom deserializer for sealed interface with unwrapped variants. */
@@ -101,25 +82,26 @@ class OutputFormatDeserializer extends StdDeserializer<OutputFormat> {
     }
     throw new com.fasterxml.jackson.databind.JsonMappingException(
         parser, "Untagged variant must be a string");
-
   }
 }
 
 /** Custom serializer for serde's externally tagged enum shape. */
 class OutputFormatSerializer extends StdSerializer<OutputFormat> {
   private static final long serialVersionUID = 1L;
+
   /** ObjectMapper for serializing inner variant values. */
   private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = createMapper();
 
   private static com.fasterxml.jackson.databind.ObjectMapper createMapper() {
-    var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
-        .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
-        .setPropertyNamingStrategy(
-            com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+    var mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+            .setPropertyNamingStrategy(
+                com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+            .setSerializationInclusion(
+                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
     return JsonMapperFactory.withNativePathSerialization(mapper);
   }
-
 
   /** Creates a new OutputFormatSerializer. */
   OutputFormatSerializer() {
@@ -136,14 +118,29 @@ class OutputFormatSerializer extends StdSerializer<OutputFormat> {
     }
 
     String tag;
-    Object inner;if (value instanceof OutputFormat.Plain variantPlain) {
-      tag = "plain";      inner = null;    }else if (value instanceof OutputFormat.Markdown variantMarkdown) {
-      tag = "markdown";      inner = null;    }else if (value instanceof OutputFormat.Djot variantDjot) {
-      tag = "djot";      inner = null;    }else if (value instanceof OutputFormat.Html variantHtml) {
-      tag = "html";      inner = null;    }else if (value instanceof OutputFormat.Json variantJson) {
-      tag = "json";      inner = null;    }else if (value instanceof OutputFormat.DocTags variantDocTags) {
-      tag = "doctags";      inner = null;    }else if (value instanceof OutputFormat.Custom variantCustom) {
-      tag = "custom";      inner = variantCustom.value();    }    else {
+    Object inner;
+    if (value instanceof OutputFormat.Plain variantPlain) {
+      tag = "plain";
+      inner = null;
+    } else if (value instanceof OutputFormat.Markdown variantMarkdown) {
+      tag = "markdown";
+      inner = null;
+    } else if (value instanceof OutputFormat.Djot variantDjot) {
+      tag = "djot";
+      inner = null;
+    } else if (value instanceof OutputFormat.Html variantHtml) {
+      tag = "html";
+      inner = null;
+    } else if (value instanceof OutputFormat.Json variantJson) {
+      tag = "json";
+      inner = null;
+    } else if (value instanceof OutputFormat.DocTags variantDocTags) {
+      tag = "doctags";
+      inner = null;
+    } else if (value instanceof OutputFormat.Custom variantCustom) {
+      tag = "custom";
+      inner = variantCustom.value();
+    } else {
       throw new com.fasterxml.jackson.databind.JsonMappingException(
           gen, "Unknown OutputFormat variant: " + value.getClass().getName());
     }

@@ -2,9 +2,7 @@
 // alef:hash:93d8f0848cb90892571c597d93592ee2cc986bc2ec8817527feca8bcabe4b132
 package io.xberg;
 
-/**
- * A required optional system dependency (e.g. `tesseract`) was not found.
- */
+/** A required optional system dependency (e.g. `tesseract`) was not found. */
 public class MissingDependencyException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

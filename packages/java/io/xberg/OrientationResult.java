@@ -4,55 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Document orientation detection result.
- */
+/** Document orientation detection result. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OrientationResult.Builder.class)
 public record OrientationResult(
-    @JsonProperty("degrees") int degrees,
-    @JsonProperty("confidence") float confidence
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("degrees") int degrees, @JsonProperty("confidence") float confidence) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for OrientationResult deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int degrees;
+    private float confidence;
+
+    /** Sets the degrees field. */
+    @JsonProperty("degrees")
+    public Builder withDegrees(final int value) {
+      this.degrees = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for OrientationResult deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int degrees;
-        private float confidence;
-
-        /** Sets the degrees field. */
-        @JsonProperty("degrees")
-        public Builder withDegrees(final int value) {
-            this.degrees = value;
-            return this;
-        }
-
-        /** Sets the confidence field. */
-        @JsonProperty("confidence")
-        public Builder withConfidence(final float value) {
-            this.confidence = value;
-            return this;
-        }
-
-        /** Constructs a OrientationResult instance from the builder's current state. */
-        public OrientationResult build() {
-            return new OrientationResult(
-                degrees,
-                confidence
-            );
-        }
+    /** Sets the confidence field. */
+    @JsonProperty("confidence")
+    public Builder withConfidence(final float value) {
+      this.confidence = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a OrientationResult instance from the builder's current state. */
+    public OrientationResult build() {
+      return new OrientationResult(degrees, confidence);
+    }
+  }
+  // CPD-ON
 }

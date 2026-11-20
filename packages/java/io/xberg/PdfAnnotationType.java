@@ -7,112 +7,73 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Type of PDF annotation.
- */
+/** Type of PDF annotation. */
 @SuppressWarnings("PMD")
 public enum PdfAnnotationType {
-    /**
-     * Sticky note / text annotation
-     */
-    TEXT("text"),
-    /**
-     * Highlighted text region
-     */
-    HIGHLIGHT("highlight"),
-    /**
-     * Hyperlink annotation
-     */
-    LINK("link"),
-    /**
-     * Rubber stamp annotation
-     */
-    STAMP("stamp"),
-    /**
-     * Underline text markup
-     */
-    UNDERLINE("underline"),
-    /**
-     * Strikeout text markup
-     */
-    STRIKE_OUT("strike_out"),
-    /**
-     * Squiggly (wavy) underline text markup
-     */
-    SQUIGGLY("squiggly"),
-    /**
-     * Freehand drawing (ink) annotation
-     */
-    INK("ink"),
-    /**
-     * Rectangle/box shape annotation
-     */
-    SQUARE("square"),
-    /**
-     * Ellipse/oval shape annotation
-     */
-    CIRCLE("circle"),
-    /**
-     * Closed polygon shape annotation
-     */
-    POLYGON("polygon"),
-    /**
-     * Open polyline shape annotation
-     */
-    POLY_LINE("poly_line"),
-    /**
-     * Line annotation
-     */
-    LINE("line"),
-    /**
-     * Caret (text-insertion marker) annotation
-     */
-    CARET("caret"),
-    /**
-     * Embedded file attachment annotation
-     */
-    FILE_ATTACHMENT("file_attachment"),
-    /**
-     * Embedded sound annotation
-     */
-    SOUND("sound"),
-    /**
-     * Embedded movie annotation
-     */
-    MOVIE("movie"),
-    /**
-     * Any other annotation type
-     */
-    OTHER("other");
+  /** Sticky note / text annotation */
+  TEXT("text"),
+  /** Highlighted text region */
+  HIGHLIGHT("highlight"),
+  /** Hyperlink annotation */
+  LINK("link"),
+  /** Rubber stamp annotation */
+  STAMP("stamp"),
+  /** Underline text markup */
+  UNDERLINE("underline"),
+  /** Strikeout text markup */
+  STRIKE_OUT("strike_out"),
+  /** Squiggly (wavy) underline text markup */
+  SQUIGGLY("squiggly"),
+  /** Freehand drawing (ink) annotation */
+  INK("ink"),
+  /** Rectangle/box shape annotation */
+  SQUARE("square"),
+  /** Ellipse/oval shape annotation */
+  CIRCLE("circle"),
+  /** Closed polygon shape annotation */
+  POLYGON("polygon"),
+  /** Open polyline shape annotation */
+  POLY_LINE("poly_line"),
+  /** Line annotation */
+  LINE("line"),
+  /** Caret (text-insertion marker) annotation */
+  CARET("caret"),
+  /** Embedded file attachment annotation */
+  FILE_ATTACHMENT("file_attachment"),
+  /** Embedded sound annotation */
+  SOUND("sound"),
+  /** Embedded movie annotation */
+  MOVIE("movie"),
+  /** Any other annotation type */
+  OTHER("other");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  PdfAnnotationType(final String value) {
+    this.value = value;
+  }
 
-    PdfAnnotationType(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static PdfAnnotationType fromValue(final String value) {
+    for (PdfAnnotationType e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown PdfAnnotationType value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static PdfAnnotationType fromValue(final String value) {
-        for (PdfAnnotationType e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown PdfAnnotationType value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

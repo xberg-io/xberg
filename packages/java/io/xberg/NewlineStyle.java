@@ -10,47 +10,42 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Line break syntax in Markdown output.
  *
- * Controls how soft line breaks (from {@code &lt;br&gt;} or line breaks in source) are rendered.
+ * <p>Controls how soft line breaks (from {@code &lt;br&gt;} or line breaks in source) are rendered.
  */
 @SuppressWarnings("PMD")
 public enum NewlineStyle {
-    /**
-     * Two trailing spaces at end of line. Default. Standard Markdown syntax.
-     */
-    SPACES("Spaces"),
-    /**
-     * Backslash at end of line. Alternative Markdown syntax.
-     */
-    BACKSLASH("Backslash");
+  /** Two trailing spaces at end of line. Default. Standard Markdown syntax. */
+  SPACES("Spaces"),
+  /** Backslash at end of line. Alternative Markdown syntax. */
+  BACKSLASH("Backslash");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  NewlineStyle(final String value) {
+    this.value = value;
+  }
 
-    NewlineStyle(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static NewlineStyle fromValue(final String value) {
+    for (NewlineStyle e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown NewlineStyle value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static NewlineStyle fromValue(final String value) {
-        for (NewlineStyle e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown NewlineStyle value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

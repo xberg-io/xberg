@@ -4,66 +4,60 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Information about a single chunk.
- */
+/** Information about a single chunk. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ChunkInfo.Builder.class)
 public record ChunkInfo(
     @JsonProperty("index") int index,
     @JsonProperty("pages") PageRange pages,
-    @JsonProperty("estimated_time_ms") long estimatedTimeMs
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("estimated_time_ms") long estimatedTimeMs) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ChunkInfo deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int index;
+    private PageRange pages;
+
+    @JsonProperty("estimated_time_ms")
+    private long estimatedTimeMs;
+
+    /** Sets the index field. */
+    @JsonProperty("index")
+    public Builder withIndex(final int value) {
+      this.index = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ChunkInfo deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int index;
-        private PageRange pages;
-        @JsonProperty("estimated_time_ms")
-        private long estimatedTimeMs;
-
-        /** Sets the index field. */
-        @JsonProperty("index")
-        public Builder withIndex(final int value) {
-            this.index = value;
-            return this;
-        }
-
-        /** Sets the pages field. */
-        @JsonProperty("pages")
-        public Builder withPages(final PageRange value) {
-            this.pages = value;
-            return this;
-        }
-
-        /** Sets the estimatedTimeMs field. */
-        @JsonProperty("estimated_time_ms")
-        public Builder withEstimatedTimeMs(final long value) {
-            this.estimatedTimeMs = value;
-            return this;
-        }
-
-        /** Constructs a ChunkInfo instance from the builder's current state. */
-        public ChunkInfo build() {
-            return new ChunkInfo(
-                index,
-                pages,
-                estimatedTimeMs
-            );
-        }
+    /** Sets the pages field. */
+    @JsonProperty("pages")
+    public Builder withPages(final PageRange value) {
+      this.pages = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the estimatedTimeMs field. */
+    @JsonProperty("estimated_time_ms")
+    public Builder withEstimatedTimeMs(final long value) {
+      this.estimatedTimeMs = value;
+      return this;
+    }
+
+    /** Constructs a ChunkInfo instance from the builder's current state. */
+    public ChunkInfo build() {
+      return new ChunkInfo(index, pages, estimatedTimeMs);
+    }
+  }
+  // CPD-ON
 }

@@ -7,52 +7,43 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * How a generated image caption interacts with existing alternate text.
- */
+/** How a generated image caption interacts with existing alternate text. */
 @SuppressWarnings("PMD")
 public enum CaptionAltTextMode {
-    /**
-     * Keep existing alternate text, using the caption only when it is absent.
-     */
-    PRESERVE("preserve"),
-    /**
-     * Join existing alternate text and the generated caption with {@code : }.
-     */
-    COMBINE("combine"),
-    /**
-     * Use the generated caption even when alternate text is present.
-     */
-    REPLACE("replace");
+  /** Keep existing alternate text, using the caption only when it is absent. */
+  PRESERVE("preserve"),
+  /** Join existing alternate text and the generated caption with {@code : }. */
+  COMBINE("combine"),
+  /** Use the generated caption even when alternate text is present. */
+  REPLACE("replace");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  CaptionAltTextMode(final String value) {
+    this.value = value;
+  }
 
-    CaptionAltTextMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static CaptionAltTextMode fromValue(final String value) {
+    for (CaptionAltTextMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown CaptionAltTextMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static CaptionAltTextMode fromValue(final String value) {
-        for (CaptionAltTextMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown CaptionAltTextMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

@@ -4,16 +4,14 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * A single backend stage in the OCR pipeline.
- */
+/** A single backend stage in the OCR pipeline. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrPipelineStage.Builder.class)
 public record OcrPipelineStage(
@@ -24,105 +22,116 @@ public record OcrPipelineStage(
     @Nullable @JsonProperty("paddle_ocr_config") Object paddleOcrConfig,
     @Nullable @JsonProperty("paddle_ocr_settings") PaddleOcrConfig paddleOcrSettings,
     @Nullable @JsonProperty("vlm_config") LlmConfig vlmConfig,
-    @Nullable @JsonProperty("backend_options") Object backendOptions
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("backend_options") Object backendOptions) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public OcrPipelineStage {
+    if (priority == null) {
+      priority = 100;
     }
-    public OcrPipelineStage{
-        if (priority == null) { priority = 100; }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for OcrPipelineStage deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String backend;
+    @Nullable private Integer priority;
+    @Nullable private List<String> language;
+
+    @JsonProperty("tesseract_config")
+    @Nullable
+    private TesseractConfig tesseractConfig;
+
+    @JsonProperty("paddle_ocr_config")
+    @Nullable
+    private Object paddleOcrConfig;
+
+    @JsonProperty("paddle_ocr_settings")
+    @Nullable
+    private PaddleOcrConfig paddleOcrSettings;
+
+    @JsonProperty("vlm_config")
+    @Nullable
+    private LlmConfig vlmConfig;
+
+    @JsonProperty("backend_options")
+    @Nullable
+    private Object backendOptions;
+
+    /** Sets the backend field. */
+    @JsonProperty("backend")
+    public Builder withBackend(final String value) {
+      this.backend = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for OcrPipelineStage deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String backend;
-        @Nullable private Integer priority;
-        @Nullable private List<String> language;
-        @JsonProperty("tesseract_config")
-        @Nullable private TesseractConfig tesseractConfig;
-        @JsonProperty("paddle_ocr_config")
-        @Nullable private Object paddleOcrConfig;
-        @JsonProperty("paddle_ocr_settings")
-        @Nullable private PaddleOcrConfig paddleOcrSettings;
-        @JsonProperty("vlm_config")
-        @Nullable private LlmConfig vlmConfig;
-        @JsonProperty("backend_options")
-        @Nullable private Object backendOptions;
-
-        /** Sets the backend field. */
-        @JsonProperty("backend")
-        public Builder withBackend(final String value) {
-            this.backend = value;
-            return this;
-        }
-
-        /** Sets the priority field. */
-        @JsonProperty("priority")
-        public Builder withPriority(final @Nullable Integer value) {
-            this.priority = value;
-            return this;
-        }
-
-        /** Sets the language field. */
-        @JsonProperty("language")
-        public Builder withLanguage(final @Nullable List<String> value) {
-            this.language = value;
-            return this;
-        }
-
-        /** Sets the tesseractConfig field. */
-        @JsonProperty("tesseract_config")
-        public Builder withTesseractConfig(final @Nullable TesseractConfig value) {
-            this.tesseractConfig = value;
-            return this;
-        }
-
-        /** Sets the paddleOcrConfig field. */
-        @JsonProperty("paddle_ocr_config")
-        public Builder withPaddleOcrConfig(final @Nullable Object value) {
-            this.paddleOcrConfig = value;
-            return this;
-        }
-
-        /** Sets the paddleOcrSettings field. */
-        @JsonProperty("paddle_ocr_settings")
-        public Builder withPaddleOcrSettings(final @Nullable PaddleOcrConfig value) {
-            this.paddleOcrSettings = value;
-            return this;
-        }
-
-        /** Sets the vlmConfig field. */
-        @JsonProperty("vlm_config")
-        public Builder withVlmConfig(final @Nullable LlmConfig value) {
-            this.vlmConfig = value;
-            return this;
-        }
-
-        /** Sets the backendOptions field. */
-        @JsonProperty("backend_options")
-        public Builder withBackendOptions(final @Nullable Object value) {
-            this.backendOptions = value;
-            return this;
-        }
-
-        /** Constructs a OcrPipelineStage instance from the builder's current state. */
-        public OcrPipelineStage build() {
-            return new OcrPipelineStage(
-                backend,
-                priority,
-                language,
-                tesseractConfig,
-                paddleOcrConfig,
-                paddleOcrSettings,
-                vlmConfig,
-                backendOptions
-            );
-        }
+    /** Sets the priority field. */
+    @JsonProperty("priority")
+    public Builder withPriority(final @Nullable Integer value) {
+      this.priority = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the language field. */
+    @JsonProperty("language")
+    public Builder withLanguage(final @Nullable List<String> value) {
+      this.language = value;
+      return this;
+    }
+
+    /** Sets the tesseractConfig field. */
+    @JsonProperty("tesseract_config")
+    public Builder withTesseractConfig(final @Nullable TesseractConfig value) {
+      this.tesseractConfig = value;
+      return this;
+    }
+
+    /** Sets the paddleOcrConfig field. */
+    @JsonProperty("paddle_ocr_config")
+    public Builder withPaddleOcrConfig(final @Nullable Object value) {
+      this.paddleOcrConfig = value;
+      return this;
+    }
+
+    /** Sets the paddleOcrSettings field. */
+    @JsonProperty("paddle_ocr_settings")
+    public Builder withPaddleOcrSettings(final @Nullable PaddleOcrConfig value) {
+      this.paddleOcrSettings = value;
+      return this;
+    }
+
+    /** Sets the vlmConfig field. */
+    @JsonProperty("vlm_config")
+    public Builder withVlmConfig(final @Nullable LlmConfig value) {
+      this.vlmConfig = value;
+      return this;
+    }
+
+    /** Sets the backendOptions field. */
+    @JsonProperty("backend_options")
+    public Builder withBackendOptions(final @Nullable Object value) {
+      this.backendOptions = value;
+      return this;
+    }
+
+    /** Constructs a OcrPipelineStage instance from the builder's current state. */
+    public OcrPipelineStage build() {
+      return new OcrPipelineStage(
+          backend,
+          priority,
+          language,
+          tesseractConfig,
+          paddleOcrConfig,
+          paddleOcrSettings,
+          vlmConfig,
+          backendOptions);
+    }
+  }
+  // CPD-ON
 }

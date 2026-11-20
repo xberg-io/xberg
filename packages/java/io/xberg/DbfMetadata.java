@@ -4,72 +4,70 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * dBASE (DBF) file metadata.
- */
+/** dBASE (DBF) file metadata. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DbfMetadata.Builder.class)
 public record DbfMetadata(
     @JsonProperty("record_count") long recordCount,
     @JsonProperty("field_count") long fieldCount,
-    @JsonProperty("fields") List<DbfFieldInfo> fields
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("fields") List<DbfFieldInfo> fields) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public DbfMetadata {
+    if (fields == null) {
+      fields = List.of();
     }
-    public DbfMetadata{
-        if (fields == null) { fields = List.of(); }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DbfMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("record_count")
+    private long recordCount;
+
+    @JsonProperty("field_count")
+    private long fieldCount;
+
+    @Nullable private List<DbfFieldInfo> fields = List.of();
+
+    /** Sets the recordCount field. */
+    @JsonProperty("record_count")
+    public Builder withRecordCount(final long value) {
+      this.recordCount = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DbfMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("record_count")
-        private long recordCount;
-        @JsonProperty("field_count")
-        private long fieldCount;
-        @Nullable private List<DbfFieldInfo> fields = List.of();
-
-        /** Sets the recordCount field. */
-        @JsonProperty("record_count")
-        public Builder withRecordCount(final long value) {
-            this.recordCount = value;
-            return this;
-        }
-
-        /** Sets the fieldCount field. */
-        @JsonProperty("field_count")
-        public Builder withFieldCount(final long value) {
-            this.fieldCount = value;
-            return this;
-        }
-
-        /** Sets the fields field. */
-        @JsonProperty("fields")
-        public Builder withFields(final @Nullable List<DbfFieldInfo> value) {
-            this.fields = value;
-            return this;
-        }
-
-        /** Constructs a DbfMetadata instance from the builder's current state. */
-        public DbfMetadata build() {
-            return new DbfMetadata(
-                recordCount,
-                fieldCount,
-                fields
-            );
-        }
+    /** Sets the fieldCount field. */
+    @JsonProperty("field_count")
+    public Builder withFieldCount(final long value) {
+      this.fieldCount = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the fields field. */
+    @JsonProperty("fields")
+    public Builder withFields(final @Nullable List<DbfFieldInfo> value) {
+      this.fields = value;
+      return this;
+    }
+
+    /** Constructs a DbfMetadata instance from the builder's current state. */
+    public DbfMetadata build() {
+      return new DbfMetadata(recordCount, fieldCount, fields);
+    }
+  }
+  // CPD-ON
 }

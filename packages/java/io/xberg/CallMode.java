@@ -10,54 +10,46 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * How a structured-extraction preset is dispatched to the model.
  *
- * This is the preset-facing call mode (the {@code preferred_call_mode} field of a
- * {@code Preset}). The structured pipeline has a richer
- * runtime-only decision enum with skip and fallback states; this 3-variant
- * type is the stable, serializable surface presets and bindings depend on.
+ * <p>This is the preset-facing call mode (the {@code preferred_call_mode} field of a {@code
+ * Preset}). The structured pipeline has a richer runtime-only decision enum with skip and fallback
+ * states; this 3-variant type is the stable, serializable surface presets and bindings depend on.
  */
 @SuppressWarnings("PMD")
 public enum CallMode {
-    /**
-     * Use the extracted text only.
-     */
-    TEXT_ONLY("text_only"),
-    /**
-     * Use rasterized page images only.
-     */
-    VISION_ONLY("vision_only"),
-    /**
-     * Provide both extracted text and page images to the model.
-     */
-    TEXT_PLUS_VISION("text_plus_vision");
+  /** Use the extracted text only. */
+  TEXT_ONLY("text_only"),
+  /** Use rasterized page images only. */
+  VISION_ONLY("vision_only"),
+  /** Provide both extracted text and page images to the model. */
+  TEXT_PLUS_VISION("text_plus_vision");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  CallMode(final String value) {
+    this.value = value;
+  }
 
-    CallMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static CallMode fromValue(final String value) {
+    for (CallMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown CallMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static CallMode fromValue(final String value) {
-        for (CallMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown CallMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

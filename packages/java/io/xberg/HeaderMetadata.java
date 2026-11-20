@@ -4,15 +4,13 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Header/heading element metadata.
- */
+/** Header/heading element metadata. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HeaderMetadata.Builder.class)
 public record HeaderMetadata(
@@ -20,71 +18,65 @@ public record HeaderMetadata(
     @JsonProperty("text") String text,
     @Nullable @JsonProperty("id") String id,
     @JsonProperty("depth") int depth,
-    @JsonProperty("html_offset") int htmlOffset
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("html_offset") int htmlOffset) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for HeaderMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private byte level;
+    private String text;
+    @Nullable private String id;
+    private int depth;
+
+    @JsonProperty("html_offset")
+    private int htmlOffset;
+
+    /** Sets the level field. */
+    @JsonProperty("level")
+    public Builder withLevel(final byte value) {
+      this.level = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for HeaderMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private byte level;
-        private String text;
-        @Nullable private String id;
-        private int depth;
-        @JsonProperty("html_offset")
-        private int htmlOffset;
-
-        /** Sets the level field. */
-        @JsonProperty("level")
-        public Builder withLevel(final byte value) {
-            this.level = value;
-            return this;
-        }
-
-        /** Sets the text field. */
-        @JsonProperty("text")
-        public Builder withText(final String value) {
-            this.text = value;
-            return this;
-        }
-
-        /** Sets the id field. */
-        @JsonProperty("id")
-        public Builder withId(final @Nullable String value) {
-            this.id = value;
-            return this;
-        }
-
-        /** Sets the depth field. */
-        @JsonProperty("depth")
-        public Builder withDepth(final int value) {
-            this.depth = value;
-            return this;
-        }
-
-        /** Sets the htmlOffset field. */
-        @JsonProperty("html_offset")
-        public Builder withHtmlOffset(final int value) {
-            this.htmlOffset = value;
-            return this;
-        }
-
-        /** Constructs a HeaderMetadata instance from the builder's current state. */
-        public HeaderMetadata build() {
-            return new HeaderMetadata(
-                level,
-                text,
-                id,
-                depth,
-                htmlOffset
-            );
-        }
+    /** Sets the text field. */
+    @JsonProperty("text")
+    public Builder withText(final String value) {
+      this.text = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the id field. */
+    @JsonProperty("id")
+    public Builder withId(final @Nullable String value) {
+      this.id = value;
+      return this;
+    }
+
+    /** Sets the depth field. */
+    @JsonProperty("depth")
+    public Builder withDepth(final int value) {
+      this.depth = value;
+      return this;
+    }
+
+    /** Sets the htmlOffset field. */
+    @JsonProperty("html_offset")
+    public Builder withHtmlOffset(final int value) {
+      this.htmlOffset = value;
+      return this;
+    }
+
+    /** Constructs a HeaderMetadata instance from the builder's current state. */
+    public HeaderMetadata build() {
+      return new HeaderMetadata(level, text, id, depth, htmlOffset);
+    }
+  }
+  // CPD-ON
 }

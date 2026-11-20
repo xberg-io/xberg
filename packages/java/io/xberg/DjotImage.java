@@ -4,76 +4,68 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Image element in Djot.
- */
+/** Image element in Djot. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DjotImage.Builder.class)
 public record DjotImage(
     @JsonProperty("src") String src,
     @JsonProperty("alt") String alt,
     @Nullable @JsonProperty("title") String title,
-    @Nullable @JsonProperty("attributes") Attributes attributes
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("attributes") Attributes attributes) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DjotImage deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String src;
+    private String alt;
+    @Nullable private String title;
+    @Nullable private Attributes attributes;
+
+    /** Sets the src field. */
+    @JsonProperty("src")
+    public Builder withSrc(final String value) {
+      this.src = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DjotImage deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String src;
-        private String alt;
-        @Nullable private String title;
-        @Nullable private Attributes attributes;
-
-        /** Sets the src field. */
-        @JsonProperty("src")
-        public Builder withSrc(final String value) {
-            this.src = value;
-            return this;
-        }
-
-        /** Sets the alt field. */
-        @JsonProperty("alt")
-        public Builder withAlt(final String value) {
-            this.alt = value;
-            return this;
-        }
-
-        /** Sets the title field. */
-        @JsonProperty("title")
-        public Builder withTitle(final @Nullable String value) {
-            this.title = value;
-            return this;
-        }
-
-        /** Sets the attributes field. */
-        @JsonProperty("attributes")
-        public Builder withAttributes(final @Nullable Attributes value) {
-            this.attributes = value;
-            return this;
-        }
-
-        /** Constructs a DjotImage instance from the builder's current state. */
-        public DjotImage build() {
-            return new DjotImage(
-                src,
-                alt,
-                title,
-                attributes
-            );
-        }
+    /** Sets the alt field. */
+    @JsonProperty("alt")
+    public Builder withAlt(final String value) {
+      this.alt = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the title field. */
+    @JsonProperty("title")
+    public Builder withTitle(final @Nullable String value) {
+      this.title = value;
+      return this;
+    }
+
+    /** Sets the attributes field. */
+    @JsonProperty("attributes")
+    public Builder withAttributes(final @Nullable Attributes value) {
+      this.attributes = value;
+      return this;
+    }
+
+    /** Constructs a DjotImage instance from the builder's current state. */
+    public DjotImage build() {
+      return new DjotImage(src, alt, title, attributes);
+    }
+  }
+  // CPD-ON
 }

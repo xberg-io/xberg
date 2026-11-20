@@ -4,71 +4,68 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
 /**
  * XML extraction result.
  *
- * Contains extracted text content from XML files along with
- * structural statistics about the XML document.
+ * <p>Contains extracted text content from XML files along with structural statistics about the XML
+ * document.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = XmlExtractionResult.Builder.class)
 public record XmlExtractionResult(
     @JsonProperty("content") String content,
     @JsonProperty("element_count") long elementCount,
-    @JsonProperty("unique_elements") List<String> uniqueElements
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("unique_elements") List<String> uniqueElements) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for XmlExtractionResult deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String content;
+
+    @JsonProperty("element_count")
+    private long elementCount;
+
+    @JsonProperty("unique_elements")
+    private List<String> uniqueElements = List.of();
+
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final String value) {
+      this.content = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for XmlExtractionResult deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String content;
-        @JsonProperty("element_count")
-        private long elementCount;
-        @JsonProperty("unique_elements")
-        private List<String> uniqueElements = List.of();
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final String value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the elementCount field. */
-        @JsonProperty("element_count")
-        public Builder withElementCount(final long value) {
-            this.elementCount = value;
-            return this;
-        }
-
-        /** Sets the uniqueElements field. */
-        @JsonProperty("unique_elements")
-        public Builder withUniqueElements(final List<String> value) {
-            this.uniqueElements = value;
-            return this;
-        }
-
-        /** Constructs a XmlExtractionResult instance from the builder's current state. */
-        public XmlExtractionResult build() {
-            return new XmlExtractionResult(
-                content,
-                elementCount,
-                uniqueElements
-            );
-        }
+    /** Sets the elementCount field. */
+    @JsonProperty("element_count")
+    public Builder withElementCount(final long value) {
+      this.elementCount = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the uniqueElements field. */
+    @JsonProperty("unique_elements")
+    public Builder withUniqueElements(final List<String> value) {
+      this.uniqueElements = value;
+      return this;
+    }
+
+    /** Constructs a XmlExtractionResult instance from the builder's current state. */
+    public XmlExtractionResult build() {
+      return new XmlExtractionResult(content, elementCount, uniqueElements);
+    }
+  }
+  // CPD-ON
 }

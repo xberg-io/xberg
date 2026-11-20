@@ -4,15 +4,15 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
 /**
- * Lightweight projection of Preset used by the registry list endpoint
- * (omits the full schema and prompt to keep the payload small).
+ * Lightweight projection of Preset used by the registry list endpoint (omits the full schema and
+ * prompt to keep the payload small).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PresetSummary.Builder.class)
@@ -25,109 +25,112 @@ public record PresetSummary(
     @JsonProperty("tags") List<String> tags,
     @JsonProperty("preferred_call_mode") CallMode preferredCallMode,
     @JsonProperty("emit_citations") boolean emitCitations,
-    @JsonProperty("fingerprint") String fingerprint
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("fingerprint") String fingerprint) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PresetSummary deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String id;
+    private String version;
+
+    @JsonProperty("schema_name")
+    private String schemaName;
+
+    private String description;
+    private PresetCategory category;
+    private List<String> tags = List.of();
+
+    @JsonProperty("preferred_call_mode")
+    private CallMode preferredCallMode;
+
+    @JsonProperty("emit_citations")
+    private boolean emitCitations;
+
+    private String fingerprint;
+
+    /** Sets the id field. */
+    @JsonProperty("id")
+    public Builder withId(final String value) {
+      this.id = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PresetSummary deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String id;
-        private String version;
-        @JsonProperty("schema_name")
-        private String schemaName;
-        private String description;
-        private PresetCategory category;
-        private List<String> tags = List.of();
-        @JsonProperty("preferred_call_mode")
-        private CallMode preferredCallMode;
-        @JsonProperty("emit_citations")
-        private boolean emitCitations;
-        private String fingerprint;
-
-        /** Sets the id field. */
-        @JsonProperty("id")
-        public Builder withId(final String value) {
-            this.id = value;
-            return this;
-        }
-
-        /** Sets the version field. */
-        @JsonProperty("version")
-        public Builder withVersion(final String value) {
-            this.version = value;
-            return this;
-        }
-
-        /** Sets the schemaName field. */
-        @JsonProperty("schema_name")
-        public Builder withSchemaName(final String value) {
-            this.schemaName = value;
-            return this;
-        }
-
-        /** Sets the description field. */
-        @JsonProperty("description")
-        public Builder withDescription(final String value) {
-            this.description = value;
-            return this;
-        }
-
-        /** Sets the category field. */
-        @JsonProperty("category")
-        public Builder withCategory(final PresetCategory value) {
-            this.category = value;
-            return this;
-        }
-
-        /** Sets the tags field. */
-        @JsonProperty("tags")
-        public Builder withTags(final List<String> value) {
-            this.tags = value;
-            return this;
-        }
-
-        /** Sets the preferredCallMode field. */
-        @JsonProperty("preferred_call_mode")
-        public Builder withPreferredCallMode(final CallMode value) {
-            this.preferredCallMode = value;
-            return this;
-        }
-
-        /** Sets the emitCitations field. */
-        @JsonProperty("emit_citations")
-        public Builder withEmitCitations(final boolean value) {
-            this.emitCitations = value;
-            return this;
-        }
-
-        /** Sets the fingerprint field. */
-        @JsonProperty("fingerprint")
-        public Builder withFingerprint(final String value) {
-            this.fingerprint = value;
-            return this;
-        }
-
-        /** Constructs a PresetSummary instance from the builder's current state. */
-        public PresetSummary build() {
-            return new PresetSummary(
-                id,
-                version,
-                schemaName,
-                description,
-                category,
-                tags,
-                preferredCallMode,
-                emitCitations,
-                fingerprint
-            );
-        }
+    /** Sets the version field. */
+    @JsonProperty("version")
+    public Builder withVersion(final String value) {
+      this.version = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the schemaName field. */
+    @JsonProperty("schema_name")
+    public Builder withSchemaName(final String value) {
+      this.schemaName = value;
+      return this;
+    }
+
+    /** Sets the description field. */
+    @JsonProperty("description")
+    public Builder withDescription(final String value) {
+      this.description = value;
+      return this;
+    }
+
+    /** Sets the category field. */
+    @JsonProperty("category")
+    public Builder withCategory(final PresetCategory value) {
+      this.category = value;
+      return this;
+    }
+
+    /** Sets the tags field. */
+    @JsonProperty("tags")
+    public Builder withTags(final List<String> value) {
+      this.tags = value;
+      return this;
+    }
+
+    /** Sets the preferredCallMode field. */
+    @JsonProperty("preferred_call_mode")
+    public Builder withPreferredCallMode(final CallMode value) {
+      this.preferredCallMode = value;
+      return this;
+    }
+
+    /** Sets the emitCitations field. */
+    @JsonProperty("emit_citations")
+    public Builder withEmitCitations(final boolean value) {
+      this.emitCitations = value;
+      return this;
+    }
+
+    /** Sets the fingerprint field. */
+    @JsonProperty("fingerprint")
+    public Builder withFingerprint(final String value) {
+      this.fingerprint = value;
+      return this;
+    }
+
+    /** Constructs a PresetSummary instance from the builder's current state. */
+    public PresetSummary build() {
+      return new PresetSummary(
+          id,
+          version,
+          schemaName,
+          description,
+          category,
+          tags,
+          preferredCallMode,
+          emitCitations,
+          fingerprint);
+    }
+  }
+  // CPD-ON
 }

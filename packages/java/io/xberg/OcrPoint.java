@@ -4,52 +4,47 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * A point in OCR raster pixel coordinates.
- */
+/** A point in OCR raster pixel coordinates. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrPoint.Builder.class)
 public record OcrPoint(@JsonProperty("x") int x, @JsonProperty("y") int y) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for OcrPoint deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int x;
+    private int y;
+
+    /** Sets the x field. */
+    @JsonProperty("x")
+    public Builder withX(final int value) {
+      this.x = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for OcrPoint deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int x;
-        private int y;
-
-        /** Sets the x field. */
-        @JsonProperty("x")
-        public Builder withX(final int value) {
-            this.x = value;
-            return this;
-        }
-
-        /** Sets the y field. */
-        @JsonProperty("y")
-        public Builder withY(final int value) {
-            this.y = value;
-            return this;
-        }
-
-        /** Constructs a OcrPoint instance from the builder's current state. */
-        public OcrPoint build() {
-            return new OcrPoint(
-                x,
-                y
-            );
-        }
+    /** Sets the y field. */
+    @JsonProperty("y")
+    public Builder withY(final int value) {
+      this.y = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a OcrPoint instance from the builder's current state. */
+    public OcrPoint build() {
+      return new OcrPoint(x, y);
+    }
+  }
+  // CPD-ON
 }

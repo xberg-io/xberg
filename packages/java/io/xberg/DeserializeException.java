@@ -2,9 +2,7 @@
 // alef:hash:47e88cc60c44cd0183b55e9a6838146ae97da71c7b79859fd676fda1fc1281e2
 package io.xberg;
 
-/**
- * The file validates but cannot be deserialized into [`Preset`].
- */
+/** The file validates but cannot be deserialized into [`Preset`]. */
 public class DeserializeException extends LoadErrorException {
   private static final long serialVersionUID = 1L;
 

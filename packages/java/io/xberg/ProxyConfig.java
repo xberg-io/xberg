@@ -4,66 +4,59 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Proxy configuration for HTTP requests.
- */
+/** Proxy configuration for HTTP requests. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ProxyConfig.Builder.class)
 public record ProxyConfig(
     @JsonProperty("url") String url,
     @Nullable @JsonProperty("username") String username,
-    @Nullable @JsonProperty("password") String password
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("password") String password) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ProxyConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String url;
+    @Nullable private String username;
+    @Nullable private String password;
+
+    /** Sets the url field. */
+    @JsonProperty("url")
+    public Builder withUrl(final String value) {
+      this.url = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ProxyConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String url;
-        @Nullable private String username;
-        @Nullable private String password;
-
-        /** Sets the url field. */
-        @JsonProperty("url")
-        public Builder withUrl(final String value) {
-            this.url = value;
-            return this;
-        }
-
-        /** Sets the username field. */
-        @JsonProperty("username")
-        public Builder withUsername(final @Nullable String value) {
-            this.username = value;
-            return this;
-        }
-
-        /** Sets the password field. */
-        @JsonProperty("password")
-        public Builder withPassword(final @Nullable String value) {
-            this.password = value;
-            return this;
-        }
-
-        /** Constructs a ProxyConfig instance from the builder's current state. */
-        public ProxyConfig build() {
-            return new ProxyConfig(
-                url,
-                username,
-                password
-            );
-        }
+    /** Sets the username field. */
+    @JsonProperty("username")
+    public Builder withUsername(final @Nullable String value) {
+      this.username = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the password field. */
+    @JsonProperty("password")
+    public Builder withPassword(final @Nullable String value) {
+      this.password = value;
+      return this;
+    }
+
+    /** Constructs a ProxyConfig instance from the builder's current state. */
+    public ProxyConfig build() {
+      return new ProxyConfig(url, username, password);
+    }
+  }
+  // CPD-ON
 }

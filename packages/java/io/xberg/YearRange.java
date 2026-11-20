@@ -4,80 +4,76 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Year range for bibliographic metadata.
- */
+/** Year range for bibliographic metadata. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = YearRange.Builder.class)
 public record YearRange(
     @Nullable @JsonProperty("min") Integer min,
     @Nullable @JsonProperty("max") Integer max,
-    @JsonProperty("years") List<Integer> years
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("years") List<Integer> years) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public YearRange {
+    if (years == null) {
+      years = List.of();
     }
-    public YearRange{
-        if (years == null) { years = List.of(); }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for YearRange deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private Integer min;
+    @Nullable private Integer max;
+    @Nullable private List<Integer> years = List.of();
+
+    /** Sets the min field. */
+    @JsonProperty("min")
+    public Builder withMin(final @Nullable Integer value) {
+      this.min = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for YearRange deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private Integer min;
-        @Nullable private Integer max;
-        @Nullable private List<Integer> years = List.of();
-
-        /** Sets the min field. */
-        @JsonProperty("min")
-        public Builder withMin(final @Nullable Integer value) {
-            this.min = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMin(final int value) {
-            return withMin(Integer.valueOf(value));
-        }
-
-        /** Sets the max field. */
-        @JsonProperty("max")
-        public Builder withMax(final @Nullable Integer value) {
-            this.max = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMax(final int value) {
-            return withMax(Integer.valueOf(value));
-        }
-
-        /** Sets the years field. */
-        @JsonProperty("years")
-        public Builder withYears(final @Nullable List<Integer> value) {
-            this.years = value;
-            return this;
-        }
-
-        /** Constructs a YearRange instance from the builder's current state. */
-        public YearRange build() {
-            return new YearRange(
-                min,
-                max,
-                years
-            );
-        }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMin(final int value) {
+      return withMin(Integer.valueOf(value));
     }
-    // CPD-ON
+
+    /** Sets the max field. */
+    @JsonProperty("max")
+    public Builder withMax(final @Nullable Integer value) {
+      this.max = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMax(final int value) {
+      return withMax(Integer.valueOf(value));
+    }
+
+    /** Sets the years field. */
+    @JsonProperty("years")
+    public Builder withYears(final @Nullable List<Integer> value) {
+      this.years = value;
+      return this;
+    }
+
+    /** Constructs a YearRange instance from the builder's current state. */
+    public YearRange build() {
+      return new YearRange(min, max, years);
+    }
+  }
+  // CPD-ON
 }

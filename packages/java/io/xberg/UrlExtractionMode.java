@@ -7,52 +7,43 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * URL extraction mode.
- */
+/** URL extraction mode. */
 @SuppressWarnings("PMD")
 public enum UrlExtractionMode {
-    /**
-     * Classify HTTP(S) resources after fetch.
-     */
-    AUTO("auto"),
-    /**
-     * Treat the URI as a single remote document/page.
-     */
-    DOCUMENT("document"),
-    /**
-     * Crawl from the seed URI and extract discovered pages/documents.
-     */
-    CRAWL("crawl");
+  /** Classify HTTP(S) resources after fetch. */
+  AUTO("auto"),
+  /** Treat the URI as a single remote document/page. */
+  DOCUMENT("document"),
+  /** Crawl from the seed URI and extract discovered pages/documents. */
+  CRAWL("crawl");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  UrlExtractionMode(final String value) {
+    this.value = value;
+  }
 
-    UrlExtractionMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static UrlExtractionMode fromValue(final String value) {
+    for (UrlExtractionMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown UrlExtractionMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static UrlExtractionMode fromValue(final String value) {
-        for (UrlExtractionMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown UrlExtractionMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

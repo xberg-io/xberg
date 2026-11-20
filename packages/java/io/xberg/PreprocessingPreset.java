@@ -10,51 +10,45 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * HTML preprocessing aggressiveness level.
  *
- * Controls the extent of cleanup performed before conversion. Higher levels remove more elements.
+ * <p>Controls the extent of cleanup performed before conversion. Higher levels remove more
+ * elements.
  */
 @SuppressWarnings("PMD")
 public enum PreprocessingPreset {
-    /**
-     * Minimal cleanup. Remove only essential noise (scripts, styles).
-     */
-    MINIMAL("Minimal"),
-    /**
-     * Standard cleanup. Default. Removes navigation, forms, and other auxiliary content.
-     */
-    STANDARD("Standard"),
-    /**
-     * Aggressive cleanup. Remove extensive non-content elements and structure.
-     */
-    AGGRESSIVE("Aggressive");
+  /** Minimal cleanup. Remove only essential noise (scripts, styles). */
+  MINIMAL("Minimal"),
+  /** Standard cleanup. Default. Removes navigation, forms, and other auxiliary content. */
+  STANDARD("Standard"),
+  /** Aggressive cleanup. Remove extensive non-content elements and structure. */
+  AGGRESSIVE("Aggressive");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  PreprocessingPreset(final String value) {
+    this.value = value;
+  }
 
-    PreprocessingPreset(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static PreprocessingPreset fromValue(final String value) {
+    for (PreprocessingPreset e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown PreprocessingPreset value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static PreprocessingPreset fromValue(final String value) {
-        for (PreprocessingPreset e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown PreprocessingPreset value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

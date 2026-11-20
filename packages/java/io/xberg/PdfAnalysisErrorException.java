@@ -2,9 +2,7 @@
 // alef:hash:72c7f7da650a741e70ccd9dbe7b5d5728999845935fc98d269bf1ea19cbcd412
 package io.xberg;
 
-/**
- * PDF analysis step failed (only when `heuristics-pdf` feature is active).
- */
+/** PDF analysis step failed (only when `heuristics-pdf` feature is active). */
 public class PdfAnalysisErrorException extends HeuristicsErrorException {
   private static final long serialVersionUID = 1L;
 

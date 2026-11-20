@@ -2,9 +2,7 @@
 // alef:hash:3fcfd3b6b1967cf2669524e8c2b1f2f0cf62fa98168d4ebbe744c74047d9182c
 package io.xberg;
 
-/**
- * Invalid configuration value.
- */
+/** Invalid configuration value. */
 public class ConfigErrorException extends HeuristicsErrorException {
   private static final long serialVersionUID = 1L;
 

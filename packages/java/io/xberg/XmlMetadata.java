@@ -4,60 +4,57 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
 /**
  * XML metadata extracted during XML parsing.
  *
- * Provides statistics about XML document structure.
+ * <p>Provides statistics about XML document structure.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = XmlMetadata.Builder.class)
 public record XmlMetadata(
     @JsonProperty("element_count") int elementCount,
-    @JsonProperty("unique_elements") List<String> uniqueElements
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("unique_elements") List<String> uniqueElements) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for XmlMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("element_count")
+    private int elementCount;
+
+    @JsonProperty("unique_elements")
+    private List<String> uniqueElements = List.of();
+
+    /** Sets the elementCount field. */
+    @JsonProperty("element_count")
+    public Builder withElementCount(final int value) {
+      this.elementCount = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for XmlMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("element_count")
-        private int elementCount;
-        @JsonProperty("unique_elements")
-        private List<String> uniqueElements = List.of();
-
-        /** Sets the elementCount field. */
-        @JsonProperty("element_count")
-        public Builder withElementCount(final int value) {
-            this.elementCount = value;
-            return this;
-        }
-
-        /** Sets the uniqueElements field. */
-        @JsonProperty("unique_elements")
-        public Builder withUniqueElements(final List<String> value) {
-            this.uniqueElements = value;
-            return this;
-        }
-
-        /** Constructs a XmlMetadata instance from the builder's current state. */
-        public XmlMetadata build() {
-            return new XmlMetadata(
-                elementCount,
-                uniqueElements
-            );
-        }
+    /** Sets the uniqueElements field. */
+    @JsonProperty("unique_elements")
+    public Builder withUniqueElements(final List<String> value) {
+      this.uniqueElements = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a XmlMetadata instance from the builder's current state. */
+    public XmlMetadata build() {
+      return new XmlMetadata(elementCount, uniqueElements);
+    }
+  }
+  // CPD-ON
 }

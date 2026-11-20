@@ -4,65 +4,58 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * A single doctor verdict: what was checked, the outcome, and why.
- */
+/** A single doctor verdict: what was checked, the outcome, and why. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DoctorCheck.Builder.class)
 public record DoctorCheck(
     @JsonProperty("name") String name,
     @JsonProperty("status") ProbeStatus status,
-    @JsonProperty("message") String message
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("message") String message) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DoctorCheck deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String name;
+    private ProbeStatus status;
+    private String message;
+
+    /** Sets the name field. */
+    @JsonProperty("name")
+    public Builder withName(final String value) {
+      this.name = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DoctorCheck deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String name;
-        private ProbeStatus status;
-        private String message;
-
-        /** Sets the name field. */
-        @JsonProperty("name")
-        public Builder withName(final String value) {
-            this.name = value;
-            return this;
-        }
-
-        /** Sets the status field. */
-        @JsonProperty("status")
-        public Builder withStatus(final ProbeStatus value) {
-            this.status = value;
-            return this;
-        }
-
-        /** Sets the message field. */
-        @JsonProperty("message")
-        public Builder withMessage(final String value) {
-            this.message = value;
-            return this;
-        }
-
-        /** Constructs a DoctorCheck instance from the builder's current state. */
-        public DoctorCheck build() {
-            return new DoctorCheck(
-                name,
-                status,
-                message
-            );
-        }
+    /** Sets the status field. */
+    @JsonProperty("status")
+    public Builder withStatus(final ProbeStatus value) {
+      this.status = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the message field. */
+    @JsonProperty("message")
+    public Builder withMessage(final String value) {
+      this.message = value;
+      return this;
+    }
+
+    /** Constructs a DoctorCheck instance from the builder's current state. */
+    public DoctorCheck build() {
+      return new DoctorCheck(name, status, message);
+    }
+  }
+  // CPD-ON
 }

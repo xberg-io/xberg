@@ -7,57 +7,50 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Selects which evidence is authoritative when Xberg infers a MIME type.
- */
+/** Selects which evidence is authoritative when Xberg infers a MIME type. */
 @SuppressWarnings("PMD")
 public enum MimeDetectionPolicy {
-    /**
-     * Prefer a supported content signature, falling back to the filename extension.
-     */
-    PREFER_CONTENT("prefer_content"),
-    /**
-     * Trust a supported filename extension without reading content for detection.
-     *
-     * # Security
-     *
-     * Filenames are attacker-controlled input in uploads and downloads. Use this only for trusted sources;
-     * otherwise a misleading extension can route arbitrary content to the wrong extractor.
-     */
-    TRUST_EXTENSION("trust_extension"),
-    /**
-     * Ignore the filename extension and require content-based detection.
-     */
-    CONTENT_ONLY("content_only");
+  /** Prefer a supported content signature, falling back to the filename extension. */
+  PREFER_CONTENT("prefer_content"),
+  /**
+   * Trust a supported filename extension without reading content for detection.
+   *
+   * <p># Security
+   *
+   * <p>Filenames are attacker-controlled input in uploads and downloads. Use this only for trusted
+   * sources; otherwise a misleading extension can route arbitrary content to the wrong extractor.
+   */
+  TRUST_EXTENSION("trust_extension"),
+  /** Ignore the filename extension and require content-based detection. */
+  CONTENT_ONLY("content_only");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  MimeDetectionPolicy(final String value) {
+    this.value = value;
+  }
 
-    MimeDetectionPolicy(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static MimeDetectionPolicy fromValue(final String value) {
+    for (MimeDetectionPolicy e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown MimeDetectionPolicy value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static MimeDetectionPolicy fromValue(final String value) {
-        for (MimeDetectionPolicy e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown MimeDetectionPolicy value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

@@ -4,97 +4,64 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Standard entity categories produced by built-in NER backends.
  *
- * The {@code Custom(String)} variant lets caller-supplied categories (e.g. LLM
- * schemas) flow through without losing fidelity to the consumer.
+ * <p>The {@code Custom(String)} variant lets caller-supplied categories (e.g. LLM schemas) flow
+ * through without losing fidelity to the consumer.
  */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = EntityCategoryDeserializer.class)
 @JsonSerialize(using = EntityCategorySerializer.class)
 public sealed interface EntityCategory {
 
-    /**
-     * A person's name.
-     */
-    record Person() implements EntityCategory {
-    }
+  /** A person's name. */
+  record Person() implements EntityCategory {}
 
-    /**
-     * A company, institution, or organisation name.
-     */
-    record Organization() implements EntityCategory {
-    }
+  /** A company, institution, or organisation name. */
+  record Organization() implements EntityCategory {}
 
-    /**
-     * A geographic location (city, country, address).
-     */
-    record Location() implements EntityCategory {
-    }
+  /** A geographic location (city, country, address). */
+  record Location() implements EntityCategory {}
 
-    /**
-     * A calendar date.
-     */
-    record Date() implements EntityCategory {
-    }
+  /** A calendar date. */
+  record Date() implements EntityCategory {}
 
-    /**
-     * A time of day or duration.
-     */
-    record Time() implements EntityCategory {
-    }
+  /** A time of day or duration. */
+  record Time() implements EntityCategory {}
 
-    /**
-     * A monetary amount with optional currency.
-     */
-    record Money() implements EntityCategory {
-    }
+  /** A monetary amount with optional currency. */
+  record Money() implements EntityCategory {}
 
-    /**
-     * A percentage value.
-     */
-    record Percent() implements EntityCategory {
-    }
+  /** A percentage value. */
+  record Percent() implements EntityCategory {}
 
-    /**
-     * An email address.
-     */
-    record Email() implements EntityCategory {
-    }
+  /** An email address. */
+  record Email() implements EntityCategory {}
 
-    /**
-     * A phone number.
-     */
-    record Phone() implements EntityCategory {
-    }
+  /** A phone number. */
+  record Phone() implements EntityCategory {}
 
-    /**
-     * A URL or URI.
-     */
-    record Url() implements EntityCategory {
-    }
+  /** A URL or URI. */
+  record Url() implements EntityCategory {}
 
-    /**
-     * A caller-supplied custom category label.
-     */
-    record Custom(String value) implements EntityCategory { }
+  /** A caller-supplied custom category label. */
+  record Custom(String value) implements EntityCategory {}
 
-    /** Returns the Custom data if this is a Custom variant, otherwise null. */
-    default @Nullable String custom() {
-        return this instanceof Custom variant ? variant.value() : null;
-    }
-
+  /** Returns the Custom data if this is a Custom variant, otherwise null. */
+  default @Nullable String custom() {
+    return this instanceof Custom variant ? variant.value() : null;
+  }
 }
 
 /** Custom deserializer for sealed interface with unwrapped variants. */
@@ -122,8 +89,9 @@ class EntityCategoryDeserializer extends StdDeserializer<EntityCategory> {
         case "email" -> new EntityCategory.Email();
         case "phone" -> new EntityCategory.Phone();
         case "url" -> new EntityCategory.Url();
-        default -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-            parser, "Unknown EntityCategory unit variant: " + wire.asText());
+        default ->
+            throw new com.fasterxml.jackson.databind.JsonMappingException(
+                parser, "Unknown EntityCategory unit variant: " + wire.asText());
       };
     }
     if (!wire.isObject() || wire.size() != 1) {
@@ -134,28 +102,37 @@ class EntityCategoryDeserializer extends StdDeserializer<EntityCategory> {
     final com.fasterxml.jackson.databind.JsonNode contentNode = wire.get(tagValue);
 
     return switch (tagValue) {
-      case "person" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "organization" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "location" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "date" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "time" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "money" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "percent" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "email" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "phone" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "url" -> throw new com.fasterxml.jackson.databind.JsonMappingException(
-          parser, "Externally tagged unit variants must be strings");
-      case "custom" -> new EntityCategory.Custom(
-          ctx.readTreeAsValue(contentNode, String.class));
+      case "person" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "organization" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "location" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "date" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "time" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "money" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "percent" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "email" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "phone" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "url" ->
+          throw new com.fasterxml.jackson.databind.JsonMappingException(
+              parser, "Externally tagged unit variants must be strings");
+      case "custom" -> new EntityCategory.Custom(ctx.readTreeAsValue(contentNode, String.class));
       default -> {
         throw new com.fasterxml.jackson.databind.JsonMappingException(
             parser, "Unknown EntityCategory discriminator: " + tagValue);
@@ -167,18 +144,20 @@ class EntityCategoryDeserializer extends StdDeserializer<EntityCategory> {
 /** Custom serializer for serde's externally tagged enum shape. */
 class EntityCategorySerializer extends StdSerializer<EntityCategory> {
   private static final long serialVersionUID = 1L;
+
   /** ObjectMapper for serializing inner variant values. */
   private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = createMapper();
 
   private static com.fasterxml.jackson.databind.ObjectMapper createMapper() {
-    var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
-        .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
-        .setPropertyNamingStrategy(
-            com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+    var mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+            .setPropertyNamingStrategy(
+                com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+            .setSerializationInclusion(
+                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
     return JsonMapperFactory.withNativePathSerialization(mapper);
   }
-
 
   /** Creates a new EntityCategorySerializer. */
   EntityCategorySerializer() {
@@ -190,18 +169,41 @@ class EntityCategorySerializer extends StdSerializer<EntityCategory> {
   public void serialize(EntityCategory value, JsonGenerator gen, SerializerProvider provider)
       throws java.io.IOException {
     String tag;
-    Object inner;if (value instanceof EntityCategory.Person variantPerson) {
-      tag = "person";      inner = null;    }else if (value instanceof EntityCategory.Organization variantOrganization) {
-      tag = "organization";      inner = null;    }else if (value instanceof EntityCategory.Location variantLocation) {
-      tag = "location";      inner = null;    }else if (value instanceof EntityCategory.Date variantDate) {
-      tag = "date";      inner = null;    }else if (value instanceof EntityCategory.Time variantTime) {
-      tag = "time";      inner = null;    }else if (value instanceof EntityCategory.Money variantMoney) {
-      tag = "money";      inner = null;    }else if (value instanceof EntityCategory.Percent variantPercent) {
-      tag = "percent";      inner = null;    }else if (value instanceof EntityCategory.Email variantEmail) {
-      tag = "email";      inner = null;    }else if (value instanceof EntityCategory.Phone variantPhone) {
-      tag = "phone";      inner = null;    }else if (value instanceof EntityCategory.Url variantUrl) {
-      tag = "url";      inner = null;    }else if (value instanceof EntityCategory.Custom variantCustom) {
-      tag = "custom";      inner = variantCustom.value();    }    else {
+    Object inner;
+    if (value instanceof EntityCategory.Person variantPerson) {
+      tag = "person";
+      inner = null;
+    } else if (value instanceof EntityCategory.Organization variantOrganization) {
+      tag = "organization";
+      inner = null;
+    } else if (value instanceof EntityCategory.Location variantLocation) {
+      tag = "location";
+      inner = null;
+    } else if (value instanceof EntityCategory.Date variantDate) {
+      tag = "date";
+      inner = null;
+    } else if (value instanceof EntityCategory.Time variantTime) {
+      tag = "time";
+      inner = null;
+    } else if (value instanceof EntityCategory.Money variantMoney) {
+      tag = "money";
+      inner = null;
+    } else if (value instanceof EntityCategory.Percent variantPercent) {
+      tag = "percent";
+      inner = null;
+    } else if (value instanceof EntityCategory.Email variantEmail) {
+      tag = "email";
+      inner = null;
+    } else if (value instanceof EntityCategory.Phone variantPhone) {
+      tag = "phone";
+      inner = null;
+    } else if (value instanceof EntityCategory.Url variantUrl) {
+      tag = "url";
+      inner = null;
+    } else if (value instanceof EntityCategory.Custom variantCustom) {
+      tag = "custom";
+      inner = variantCustom.value();
+    } else {
       throw new com.fasterxml.jackson.databind.JsonMappingException(
           gen, "Unknown EntityCategory variant: " + value.getClass().getName());
     }

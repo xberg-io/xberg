@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for the reranking pipeline.
  *
- * Controls which model to use, how many results to return, and download/cache
- * behavior for local ONNX models.
+ * <p>Controls which model to use, how many results to return, and download/cache behavior for local
+ * ONNX models.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = RerankerConfig.Builder.class)
@@ -25,106 +25,117 @@ public record RerankerConfig(
     @Nullable @JsonProperty("show_download_progress") Boolean showDownloadProgress,
     @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
     @Nullable @JsonProperty("acceleration") AccelerationConfig acceleration,
-    @Nullable @JsonProperty("max_rerank_duration_secs") Long maxRerankDurationSecs
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("max_rerank_duration_secs") Long maxRerankDurationSecs) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public RerankerConfig {
+    if (batchSize == null) {
+      batchSize = 32L;
     }
-    public RerankerConfig{
-        if (batchSize == null) { batchSize = 32L; }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for RerankerConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private RerankerModelType model;
+
+    @JsonProperty("top_k")
+    @Nullable
+    private Long topK;
+
+    @JsonProperty("batch_size")
+    @Nullable
+    private Long batchSize;
+
+    @JsonProperty("show_download_progress")
+    @Nullable
+    private Boolean showDownloadProgress;
+
+    @JsonProperty("cache_dir")
+    private java.nio.file.@Nullable Path cacheDir;
+
+    @Nullable private AccelerationConfig acceleration;
+
+    @JsonProperty("max_rerank_duration_secs")
+    @Nullable
+    private Long maxRerankDurationSecs;
+
+    /** Sets the model field. */
+    @JsonProperty("model")
+    public Builder withModel(final @Nullable RerankerModelType value) {
+      this.model = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for RerankerConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private RerankerModelType model;
-        @JsonProperty("top_k")
-        @Nullable private Long topK;
-        @JsonProperty("batch_size")
-        @Nullable private Long batchSize;
-        @JsonProperty("show_download_progress")
-        @Nullable private Boolean showDownloadProgress;
-        @JsonProperty("cache_dir")
-        private java.nio.file.@Nullable Path cacheDir;
-        @Nullable private AccelerationConfig acceleration;
-        @JsonProperty("max_rerank_duration_secs")
-        @Nullable private Long maxRerankDurationSecs;
-
-        /** Sets the model field. */
-        @JsonProperty("model")
-        public Builder withModel(final @Nullable RerankerModelType value) {
-            this.model = value;
-            return this;
-        }
-
-        /** Sets the topK field. */
-        @JsonProperty("top_k")
-        public Builder withTopK(final @Nullable Long value) {
-            this.topK = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withTopK(final long value) {
-            return withTopK(Long.valueOf(value));
-        }
-
-        /** Sets the batchSize field. */
-        @JsonProperty("batch_size")
-        public Builder withBatchSize(final @Nullable Long value) {
-            this.batchSize = value;
-            return this;
-        }
-
-        /** Sets the showDownloadProgress field. */
-        @JsonProperty("show_download_progress")
-        public Builder withShowDownloadProgress(final @Nullable Boolean value) {
-            this.showDownloadProgress = value;
-            return this;
-        }
-
-        /** Sets the cacheDir field. */
-        @JsonProperty("cache_dir")
-        public Builder withCacheDir(final java.nio.file.@Nullable Path value) {
-            this.cacheDir = value;
-            return this;
-        }
-
-        /** Sets the acceleration field. */
-        @JsonProperty("acceleration")
-        public Builder withAcceleration(final @Nullable AccelerationConfig value) {
-            this.acceleration = value;
-            return this;
-        }
-
-        /** Sets the maxRerankDurationSecs field. */
-        @JsonProperty("max_rerank_duration_secs")
-        public Builder withMaxRerankDurationSecs(final @Nullable Long value) {
-            this.maxRerankDurationSecs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxRerankDurationSecs(final long value) {
-            return withMaxRerankDurationSecs(Long.valueOf(value));
-        }
-
-        /** Constructs a RerankerConfig instance from the builder's current state. */
-        public RerankerConfig build() {
-            return new RerankerConfig(
-                model,
-                topK,
-                batchSize,
-                showDownloadProgress,
-                cacheDir,
-                acceleration,
-                maxRerankDurationSecs
-            );
-        }
+    /** Sets the topK field. */
+    @JsonProperty("top_k")
+    public Builder withTopK(final @Nullable Long value) {
+      this.topK = value;
+      return this;
     }
-    // CPD-ON
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withTopK(final long value) {
+      return withTopK(Long.valueOf(value));
+    }
+
+    /** Sets the batchSize field. */
+    @JsonProperty("batch_size")
+    public Builder withBatchSize(final @Nullable Long value) {
+      this.batchSize = value;
+      return this;
+    }
+
+    /** Sets the showDownloadProgress field. */
+    @JsonProperty("show_download_progress")
+    public Builder withShowDownloadProgress(final @Nullable Boolean value) {
+      this.showDownloadProgress = value;
+      return this;
+    }
+
+    /** Sets the cacheDir field. */
+    @JsonProperty("cache_dir")
+    public Builder withCacheDir(final java.nio.file.@Nullable Path value) {
+      this.cacheDir = value;
+      return this;
+    }
+
+    /** Sets the acceleration field. */
+    @JsonProperty("acceleration")
+    public Builder withAcceleration(final @Nullable AccelerationConfig value) {
+      this.acceleration = value;
+      return this;
+    }
+
+    /** Sets the maxRerankDurationSecs field. */
+    @JsonProperty("max_rerank_duration_secs")
+    public Builder withMaxRerankDurationSecs(final @Nullable Long value) {
+      this.maxRerankDurationSecs = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxRerankDurationSecs(final long value) {
+      return withMaxRerankDurationSecs(Long.valueOf(value));
+    }
+
+    /** Constructs a RerankerConfig instance from the builder's current state. */
+    public RerankerConfig build() {
+      return new RerankerConfig(
+          model,
+          topK,
+          batchSize,
+          showDownloadProgress,
+          cacheDir,
+          acceleration,
+          maxRerankDurationSecs);
+    }
+  }
+  // CPD-ON
 }

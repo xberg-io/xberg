@@ -4,78 +4,79 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Options controlling how two {@code ExtractedDocument} values are compared.
- */
+/** Options controlling how two {@code ExtractedDocument} values are compared. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DiffOptions.Builder.class)
 public record DiffOptions(
     @Nullable @JsonProperty("include_metadata") Boolean includeMetadata,
     @Nullable @JsonProperty("include_embedded") Boolean includeEmbedded,
-    @Nullable @JsonProperty("max_content_chars") Long maxContentChars
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("max_content_chars") Long maxContentChars) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public DiffOptions {
+    if (includeMetadata == null) {
+      includeMetadata = true;
     }
-    public DiffOptions{
-        if (includeMetadata == null) { includeMetadata = true; }
-        if (includeEmbedded == null) { includeEmbedded = true; }
+    if (includeEmbedded == null) {
+      includeEmbedded = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DiffOptions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("include_metadata")
+    private Boolean includeMetadata = true;
+
+    @JsonProperty("include_embedded")
+    private Boolean includeEmbedded = true;
+
+    @JsonProperty("max_content_chars")
+    @Nullable
+    private Long maxContentChars;
+
+    /** Sets the includeMetadata field. */
+    @JsonProperty("include_metadata")
+    public Builder withIncludeMetadata(final @Nullable Boolean value) {
+      this.includeMetadata = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DiffOptions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("include_metadata")
-        private Boolean includeMetadata = true;
-        @JsonProperty("include_embedded")
-        private Boolean includeEmbedded = true;
-        @JsonProperty("max_content_chars")
-        @Nullable private Long maxContentChars;
-
-        /** Sets the includeMetadata field. */
-        @JsonProperty("include_metadata")
-        public Builder withIncludeMetadata(final @Nullable Boolean value) {
-            this.includeMetadata = value;
-            return this;
-        }
-
-        /** Sets the includeEmbedded field. */
-        @JsonProperty("include_embedded")
-        public Builder withIncludeEmbedded(final @Nullable Boolean value) {
-            this.includeEmbedded = value;
-            return this;
-        }
-
-        /** Sets the maxContentChars field. */
-        @JsonProperty("max_content_chars")
-        public Builder withMaxContentChars(final @Nullable Long value) {
-            this.maxContentChars = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxContentChars(final long value) {
-            return withMaxContentChars(Long.valueOf(value));
-        }
-
-        /** Constructs a DiffOptions instance from the builder's current state. */
-        public DiffOptions build() {
-            return new DiffOptions(
-                includeMetadata,
-                includeEmbedded,
-                maxContentChars
-            );
-        }
+    /** Sets the includeEmbedded field. */
+    @JsonProperty("include_embedded")
+    public Builder withIncludeEmbedded(final @Nullable Boolean value) {
+      this.includeEmbedded = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the maxContentChars field. */
+    @JsonProperty("max_content_chars")
+    public Builder withMaxContentChars(final @Nullable Long value) {
+      this.maxContentChars = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxContentChars(final long value) {
+      return withMaxContentChars(Long.valueOf(value));
+    }
+
+    /** Constructs a DiffOptions instance from the builder's current state. */
+    public DiffOptions build() {
+      return new DiffOptions(includeMetadata, includeEmbedded, maxContentChars);
+    }
+  }
+  // CPD-ON
 }

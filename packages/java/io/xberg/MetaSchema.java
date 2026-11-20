@@ -4,260 +4,262 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.lang.foreign.MemorySegment;
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
-/**
- * Compiled meta-schema validator over {@code preset.schema.json}.
- */
+/** Compiled meta-schema validator over {@code preset.schema.json}. */
 @SuppressWarnings("PMD")
 public class MetaSchema implements AutoCloseable {
-    private MemorySegment handle;
-    private int activeBorrows;
-    private boolean handleUnavailable;
-    private boolean transferPending;
+  private MemorySegment handle;
+  private int activeBorrows;
+  private boolean handleUnavailable;
+  private boolean transferPending;
 
-    @FunctionalInterface
-    private interface NativeReleaser {
-        void release(MemorySegment handle) throws Throwable;
+  @FunctionalInterface
+  private interface NativeReleaser {
+    void release(MemorySegment handle) throws Throwable;
+  }
+
+  private static final class CleanupFailures {
+    private final List<Throwable> failures = new java.util.ArrayList<>();
+
+    private void release(MemorySegment handle, NativeReleaser releaser) {
+      if (handle == null || handle.equals(MemorySegment.NULL)) return;
+      try {
+        releaser.release(handle);
+      } catch (Throwable failure) {
+        failures.add(failure);
+      }
     }
 
-    private static final class CleanupFailures {
-        private final List<Throwable> failures = new java.util.ArrayList<>();
-
-        private void release(MemorySegment handle, NativeReleaser releaser) {
-            if (handle == null || handle.equals(MemorySegment.NULL)) return;
-            try {
-                releaser.release(handle);
-            } catch (Throwable failure) {
-                failures.add(failure);
-            }
-        }
-
-        private void close(AutoCloseable resource) {
-            if (resource == null) return;
-            try {
-                resource.close();
-            } catch (Throwable failure) {
-                failures.add(failure);
-            }
-        }
-
-        private void throwIfAny(Throwable primaryFailure) {
-            if (failures.isEmpty()) return;
-            RuntimeException aggregate = new RuntimeException("Native resource cleanup failed");
-            failures.forEach(aggregate::addSuppressed);
-            if (primaryFailure != null) {
-                primaryFailure.addSuppressed(aggregate);
-                return;
-            }
-            throw aggregate;
-        }
+    private void close(AutoCloseable resource) {
+      if (resource == null) return;
+      try {
+        resource.close();
+      } catch (Throwable failure) {
+        failures.add(failure);
+      }
     }
 
-    final class HandleLease implements AutoCloseable {
-        private final MemorySegment borrowedHandle;
-        private boolean released;
+    private void throwIfAny(Throwable primaryFailure) {
+      if (failures.isEmpty()) return;
+      RuntimeException aggregate = new RuntimeException("Native resource cleanup failed");
+      failures.forEach(aggregate::addSuppressed);
+      if (primaryFailure != null) {
+        primaryFailure.addSuppressed(aggregate);
+        return;
+      }
+      throw aggregate;
+    }
+  }
 
-        private HandleLease(MemorySegment borrowedHandle) {
-            this.borrowedHandle = borrowedHandle;
-        }
+  final class HandleLease implements AutoCloseable {
+    private final MemorySegment borrowedHandle;
+    private boolean released;
 
-        MemorySegment handle() {
-            return borrowedHandle;
-        }
-
-        @Override
-        public void close() {
-            synchronized (MetaSchema.this) {
-                if (released) {
-                    return;
-                }
-                released = true;
-                activeBorrows--;
-                if (activeBorrows == 0) {
-                    MetaSchema.this.notifyAll();
-                }
-            }
-        }
+    private HandleLease(MemorySegment borrowedHandle) {
+      this.borrowedHandle = borrowedHandle;
     }
 
-    final class HandleTransfer implements AutoCloseable {
-        private MemorySegment transferredHandle;
-
-        private HandleTransfer(MemorySegment transferredHandle) {
-            this.transferredHandle = transferredHandle;
-        }
-
-        synchronized MemorySegment handle() {
-            if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
-                throw new IllegalStateException("Handle transfer is no longer active");
-            }
-            return transferredHandle;
-        }
-
-        synchronized MemorySegment commit() {
-            if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
-                throw new IllegalStateException("Handle transfer is no longer active");
-            }
-            MemorySegment committedHandle = transferredHandle;
-            transferredHandle = MemorySegment.NULL;
-            commitTransfer();
-            return committedHandle;
-        }
-
-        @Override
-        public synchronized void close() {
-            if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
-                return;
-            }
-            rollbackTransfer(transferredHandle);
-            transferredHandle = MemorySegment.NULL;
-        }
+    MemorySegment handle() {
+      return borrowedHandle;
     }
 
-    MetaSchema(MemorySegment handle) {
-        this.handle = handle;
+    @Override
+    public void close() {
+      synchronized (MetaSchema.this) {
+        if (released) {
+          return;
+        }
+        released = true;
+        activeBorrows--;
+        if (activeBorrows == 0) {
+          MetaSchema.this.notifyAll();
+        }
+      }
+    }
+  }
+
+  final class HandleTransfer implements AutoCloseable {
+    private MemorySegment transferredHandle;
+
+    private HandleTransfer(MemorySegment transferredHandle) {
+      this.transferredHandle = transferredHandle;
     }
 
     synchronized MemorySegment handle() {
-        checkHandleAvailable();
-        return this.handle;
+      if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
+        throw new IllegalStateException("Handle transfer is no longer active");
+      }
+      return transferredHandle;
     }
 
-    synchronized HandleLease borrowHandle() {
-        checkHandleAvailable();
-        activeBorrows++;
-        return new HandleLease(handle);
+    synchronized MemorySegment commit() {
+      if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
+        throw new IllegalStateException("Handle transfer is no longer active");
+      }
+      MemorySegment committedHandle = transferredHandle;
+      transferredHandle = MemorySegment.NULL;
+      commitTransfer();
+      return committedHandle;
     }
 
-    synchronized HandleTransfer takeHandle() {
-        checkHandleAvailable();
-        HandleTransfer transfer = new HandleTransfer(handle);
-        handleUnavailable = true;
-        awaitBorrowedCalls();
-        this.handle = MemorySegment.NULL;
-        transferPending = true;
-        return transfer;
-    }
-
-    private synchronized void rollbackTransfer(MemorySegment transferredHandle) {
-        if (!handle.equals(MemorySegment.NULL)) {
-            throw new IllegalStateException("Cannot restore an active handle");
-        }
-        transferPending = false;
-        handle = transferredHandle;
-        handleUnavailable = false;
-        notifyAll();
-    }
-
-    private synchronized void commitTransfer() {
-        transferPending = false;
-        notifyAll();
-    }
-
-    private void checkHandleAvailable() {
-        if (handleUnavailable || handle == null || handle.equals(MemorySegment.NULL)) {
-            throw new IllegalStateException("MetaSchema is closed");
-        }
-    }
-
-    private void awaitBorrowedCalls() {
-        boolean interrupted = false;
-        while (activeBorrows != 0) {
-            try {
-                wait();
-            } catch (InterruptedException ignored) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    /**
-     * Validate {@code raw} against the meta-schema and deserialize into a Preset,
-     * stamping the fingerprint over the canonical file bytes.
-     */
-    public Preset parsePreset(final String path, final byte[] raw) throws XbergRsException {
-        java.util.Objects.requireNonNull(path, "path must not be null");
-        java.util.Objects.requireNonNull(raw, "raw must not be null");
-        throw new XbergRsException("parsePreset: unsupported parameter raw", (Throwable) null);
-    }
-
-    /**
-     * Compile the given JSON text as a Draft 2020-12 meta-schema.
-     */
-    public static MetaSchema compile(final String metaSchemaJson) throws XbergRsException {
-        java.util.Objects.requireNonNull(metaSchemaJson, "metaSchemaJson must not be null");
-        try (Arena arena = Arena.ofShared()) {
-            Throwable operationFailure = null;
-            try {
-            var cMetaSchemaJson = arena.allocateFrom(metaSchemaJson);
-            var handle = (MemorySegment) NativeLib.XBERG_META_SCHEMA_COMPILE.invoke(cMetaSchemaJson);
-            if (handle == null || handle.equals(MemorySegment.NULL)) {
-                throw new XbergRsException("compile returned null", (Throwable) null);
-            }
-            return new MetaSchema(handle);
-            } catch (Throwable failure) {
-                operationFailure = failure;
-                throw failure;
-            } finally {
-            }
-        }
-        catch (Throwable e) {
-            if (e instanceof XbergRsException) throw (XbergRsException) e;
-            throw new RuntimeException("compile failed: " + e.getMessage(), e);
-        }
-    }
     @Override
-    @SuppressWarnings("PMD.AvoidCatchingGenericException")
     public synchronized void close() {
-        if (transferPending) {
-            awaitTransfer();
-        }
-        if (handleUnavailable || handle == null || handle.equals(MemorySegment.NULL)) {
-            handleUnavailable = true;
-            return;
-        }
-        handleUnavailable = true;
-        awaitBorrowedCalls();
-        MemorySegment handleToFree = handle;
-        handle = MemorySegment.NULL;
-        try {
-            NativeLib.XBERG_META_SCHEMA_FREE.invoke(handleToFree);
-        } catch (Throwable e) {
-            throw new RuntimeException("Failed to free MetaSchema: " + e.getMessage(), e);
-        }
+      if (transferredHandle == null || transferredHandle.equals(MemorySegment.NULL)) {
+        return;
+      }
+      rollbackTransfer(transferredHandle);
+      transferredHandle = MemorySegment.NULL;
     }
+  }
 
-    private void awaitTransfer() {
-        boolean interrupted = false;
-        while (transferPending) {
-            try {
-                wait();
-            } catch (InterruptedException ignored) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
+  MetaSchema(MemorySegment handle) {
+    this.handle = handle;
+  }
+
+  synchronized MemorySegment handle() {
+    checkHandleAvailable();
+    return this.handle;
+  }
+
+  synchronized HandleLease borrowHandle() {
+    checkHandleAvailable();
+    activeBorrows++;
+    return new HandleLease(handle);
+  }
+
+  synchronized HandleTransfer takeHandle() {
+    checkHandleAvailable();
+    HandleTransfer transfer = new HandleTransfer(handle);
+    handleUnavailable = true;
+    awaitBorrowedCalls();
+    this.handle = MemorySegment.NULL;
+    transferPending = true;
+    return transfer;
+  }
+
+  private synchronized void rollbackTransfer(MemorySegment transferredHandle) {
+    if (!handle.equals(MemorySegment.NULL)) {
+      throw new IllegalStateException("Cannot restore an active handle");
     }
+    transferPending = false;
+    handle = transferredHandle;
+    handleUnavailable = false;
+    notifyAll();
+  }
 
-    // CPD-OFF — generated FFI boilerplate, identical across all opaque types by design.
-    private static void checkLastFfiError() throws XbergRsException {
-        try {
-            int code = (int)(long) NativeLib.XBERG_LAST_ERROR_CODE.invoke();
-            if (code == 0) { return; }
-            MemorySegment ctxPtr = (MemorySegment) NativeLib.XBERG_LAST_ERROR_CONTEXT.invoke();
-            String msg = ctxPtr.equals(MemorySegment.NULL) ? "unknown" : ctxPtr.reinterpret(Long.MAX_VALUE).getString(0);
-            throw NativeLib.lastErrorException(code, msg);
-        } catch (XbergRsException e) {
-            throw e;
-        } catch (Throwable e) {
-            throw new XbergRsException("failed to read last error", e);
+  private synchronized void commitTransfer() {
+    transferPending = false;
+    notifyAll();
+  }
+
+  private void checkHandleAvailable() {
+    if (handleUnavailable || handle == null || handle.equals(MemorySegment.NULL)) {
+      throw new IllegalStateException("MetaSchema is closed");
+    }
+  }
+
+  private void awaitBorrowedCalls() {
+    boolean interrupted = false;
+    while (activeBorrows != 0) {
+      try {
+        wait();
+      } catch (InterruptedException ignored) {
+        interrupted = true;
+      }
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
+   * Validate {@code raw} against the meta-schema and deserialize into a Preset, stamping the
+   * fingerprint over the canonical file bytes.
+   */
+  public Preset parsePreset(final String path, final byte[] raw) throws XbergRsException {
+    java.util.Objects.requireNonNull(path, "path must not be null");
+    java.util.Objects.requireNonNull(raw, "raw must not be null");
+    throw new XbergRsException("parsePreset: unsupported parameter raw", (Throwable) null);
+  }
+
+  /** Compile the given JSON text as a Draft 2020-12 meta-schema. */
+  public static MetaSchema compile(final String metaSchemaJson) throws XbergRsException {
+    java.util.Objects.requireNonNull(metaSchemaJson, "metaSchemaJson must not be null");
+    try (Arena arena = Arena.ofShared()) {
+      Throwable operationFailure = null;
+      try {
+        var cMetaSchemaJson = arena.allocateFrom(metaSchemaJson);
+        var handle = (MemorySegment) NativeLib.XBERG_META_SCHEMA_COMPILE.invoke(cMetaSchemaJson);
+        if (handle == null || handle.equals(MemorySegment.NULL)) {
+          throw new XbergRsException("compile returned null", (Throwable) null);
         }
-    }    // CPD-ON
+        return new MetaSchema(handle);
+      } catch (Throwable failure) {
+        operationFailure = failure;
+        throw failure;
+      } finally {
+      }
+    } catch (Throwable e) {
+      if (e instanceof XbergRsException) throw (XbergRsException) e;
+      throw new RuntimeException("compile failed: " + e.getMessage(), e);
+    }
+  }
+
+  @Override
+  @SuppressWarnings("PMD.AvoidCatchingGenericException")
+  public synchronized void close() {
+    if (transferPending) {
+      awaitTransfer();
+    }
+    if (handleUnavailable || handle == null || handle.equals(MemorySegment.NULL)) {
+      handleUnavailable = true;
+      return;
+    }
+    handleUnavailable = true;
+    awaitBorrowedCalls();
+    MemorySegment handleToFree = handle;
+    handle = MemorySegment.NULL;
+    try {
+      NativeLib.XBERG_META_SCHEMA_FREE.invoke(handleToFree);
+    } catch (Throwable e) {
+      throw new RuntimeException("Failed to free MetaSchema: " + e.getMessage(), e);
+    }
+  }
+
+  private void awaitTransfer() {
+    boolean interrupted = false;
+    while (transferPending) {
+      try {
+        wait();
+      } catch (InterruptedException ignored) {
+        interrupted = true;
+      }
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  // CPD-OFF — generated FFI boilerplate, identical across all opaque types by design.
+  private static void checkLastFfiError() throws XbergRsException {
+    try {
+      int code = (int) (long) NativeLib.XBERG_LAST_ERROR_CODE.invoke();
+      if (code == 0) {
+        return;
+      }
+      MemorySegment ctxPtr = (MemorySegment) NativeLib.XBERG_LAST_ERROR_CONTEXT.invoke();
+      String msg =
+          ctxPtr.equals(MemorySegment.NULL)
+              ? "unknown"
+              : ctxPtr.reinterpret(Long.MAX_VALUE).getString(0);
+      throw NativeLib.lastErrorException(code, msg);
+    } catch (XbergRsException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new XbergRsException("failed to read last error", e);
+    }
+  } // CPD-ON
 }

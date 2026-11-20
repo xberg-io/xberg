@@ -4,16 +4,14 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Browser fallback configuration.
- */
+/** Browser fallback configuration. */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = BrowserConfig.Builder.class)
@@ -37,272 +35,350 @@ public record BrowserConfig(
     @JsonProperty("chrome_args") List<String> chromeArgs,
     @Nullable @JsonProperty("scroll_containers") Boolean scrollContainers,
     @Nullable @JsonProperty("dom_quiet_window") Long domQuietWindow,
-    @Nullable @JsonProperty("dom_quiet_cap") Long domQuietCap
-) {
-    public BrowserConfig(
-        BrowserMode mode,
-        BrowserBackend backend,
-        String endpoint,
-        Long timeout,
-        Long overallTimeout,
-        Long shutdownTimeout,
-        BrowserWait waitValue,
-        String waitSelector,
-        Long extraWait,
-        ProxyConfig proxy,
-        List<String> blockUrlPatterns,
-        String evalScript,
-        String robotsUserAgent,
-        Boolean captureNetworkEvents,
-        Boolean sessionAffinity,
-        java.nio.file.Path chromePath,
-        List<String> chromeArgs
-    ) {
-        this(mode, backend, endpoint, timeout, overallTimeout, shutdownTimeout, waitValue, waitSelector, extraWait, proxy, blockUrlPatterns, evalScript, robotsUserAgent, captureNetworkEvents, sessionAffinity, chromePath, chromeArgs, false, 150L, 4000L);
+    @Nullable @JsonProperty("dom_quiet_cap") Long domQuietCap) {
+  public BrowserConfig(
+      BrowserMode mode,
+      BrowserBackend backend,
+      String endpoint,
+      Long timeout,
+      Long overallTimeout,
+      Long shutdownTimeout,
+      BrowserWait waitValue,
+      String waitSelector,
+      Long extraWait,
+      ProxyConfig proxy,
+      List<String> blockUrlPatterns,
+      String evalScript,
+      String robotsUserAgent,
+      Boolean captureNetworkEvents,
+      Boolean sessionAffinity,
+      java.nio.file.Path chromePath,
+      List<String> chromeArgs) {
+    this(
+        mode,
+        backend,
+        endpoint,
+        timeout,
+        overallTimeout,
+        shutdownTimeout,
+        waitValue,
+        waitSelector,
+        extraWait,
+        proxy,
+        blockUrlPatterns,
+        evalScript,
+        robotsUserAgent,
+        captureNetworkEvents,
+        sessionAffinity,
+        chromePath,
+        chromeArgs,
+        false,
+        150L,
+        4000L);
+  }
+
+  public BrowserConfig(
+      BrowserMode mode,
+      BrowserBackend backend,
+      String endpoint,
+      Long timeout,
+      Long overallTimeout,
+      Long shutdownTimeout,
+      BrowserWait waitValue,
+      String waitSelector,
+      Long extraWait,
+      ProxyConfig proxy,
+      List<String> blockUrlPatterns,
+      String evalScript,
+      String robotsUserAgent,
+      Boolean captureNetworkEvents,
+      Boolean sessionAffinity,
+      java.nio.file.Path chromePath,
+      List<String> chromeArgs,
+      Boolean scrollContainers,
+      Long domQuietWindow) {
+    this(
+        mode,
+        backend,
+        endpoint,
+        timeout,
+        overallTimeout,
+        shutdownTimeout,
+        waitValue,
+        waitSelector,
+        extraWait,
+        proxy,
+        blockUrlPatterns,
+        evalScript,
+        robotsUserAgent,
+        captureNetworkEvents,
+        sessionAffinity,
+        chromePath,
+        chromeArgs,
+        scrollContainers,
+        domQuietWindow,
+        4000L);
+  }
+
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public BrowserConfig {
+    if (timeout == null) {
+      timeout = 30000L;
     }
-    public BrowserConfig(
-        BrowserMode mode,
-        BrowserBackend backend,
-        String endpoint,
-        Long timeout,
-        Long overallTimeout,
-        Long shutdownTimeout,
-        BrowserWait waitValue,
-        String waitSelector,
-        Long extraWait,
-        ProxyConfig proxy,
-        List<String> blockUrlPatterns,
-        String evalScript,
-        String robotsUserAgent,
-        Boolean captureNetworkEvents,
-        Boolean sessionAffinity,
-        java.nio.file.Path chromePath,
-        List<String> chromeArgs,
-        Boolean scrollContainers,
-        Long domQuietWindow
-    ) {
-        this(mode, backend, endpoint, timeout, overallTimeout, shutdownTimeout, waitValue, waitSelector, extraWait, proxy, blockUrlPatterns, evalScript, robotsUserAgent, captureNetworkEvents, sessionAffinity, chromePath, chromeArgs, scrollContainers, domQuietWindow, 4000L);
+    if (overallTimeout == null) {
+      overallTimeout = 60000L;
     }
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    if (shutdownTimeout == null) {
+      shutdownTimeout = 5000L;
     }
-    public BrowserConfig{
-        if (timeout == null) { timeout = 30000L; }
-        if (overallTimeout == null) { overallTimeout = 60000L; }
-        if (shutdownTimeout == null) { shutdownTimeout = 5000L; }
-        if (sessionAffinity == null) { sessionAffinity = true; }
-        if (domQuietWindow == null) { domQuietWindow = 150L; }
-        if (domQuietCap == null) { domQuietCap = 4000L; }
+    if (sessionAffinity == null) {
+      sessionAffinity = true;
+    }
+    if (domQuietWindow == null) {
+      domQuietWindow = 150L;
+    }
+    if (domQuietCap == null) {
+      domQuietCap = 4000L;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for BrowserConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private BrowserMode mode;
+    private BrowserBackend backend;
+    @Nullable private String endpoint;
+    @Nullable private Long timeout;
+
+    @JsonProperty("overall_timeout")
+    @Nullable
+    private Long overallTimeout;
+
+    @JsonProperty("shutdown_timeout")
+    @Nullable
+    private Long shutdownTimeout;
+
+    @JsonProperty("wait")
+    private BrowserWait waitValue;
+
+    @JsonProperty("wait_selector")
+    @Nullable
+    private String waitSelector;
+
+    @JsonProperty("extra_wait")
+    @Nullable
+    private Long extraWait;
+
+    @Nullable private ProxyConfig proxy;
+
+    @JsonProperty("block_url_patterns")
+    @Nullable
+    private List<String> blockUrlPatterns;
+
+    @JsonProperty("eval_script")
+    @Nullable
+    private String evalScript;
+
+    @JsonProperty("robots_user_agent")
+    @Nullable
+    private String robotsUserAgent;
+
+    @JsonProperty("capture_network_events")
+    @Nullable
+    private Boolean captureNetworkEvents;
+
+    @JsonProperty("session_affinity")
+    private Boolean sessionAffinity = true;
+
+    @JsonProperty("chrome_path")
+    private java.nio.file.@Nullable Path chromePath;
+
+    @JsonProperty("chrome_args")
+    private List<String> chromeArgs = List.of();
+
+    @JsonProperty("scroll_containers")
+    @Nullable
+    private Boolean scrollContainers;
+
+    @JsonProperty("dom_quiet_window")
+    @Nullable
+    private Long domQuietWindow;
+
+    @JsonProperty("dom_quiet_cap")
+    @Nullable
+    private Long domQuietCap;
+
+    /** Sets the mode field. */
+    @JsonProperty("mode")
+    public Builder withMode(final BrowserMode value) {
+      this.mode = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for BrowserConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private BrowserMode mode;
-        private BrowserBackend backend;
-        @Nullable private String endpoint;
-        @Nullable private Long timeout;
-        @JsonProperty("overall_timeout")
-        @Nullable private Long overallTimeout;
-        @JsonProperty("shutdown_timeout")
-        @Nullable private Long shutdownTimeout;
-        @JsonProperty("wait")
-        private BrowserWait waitValue;
-        @JsonProperty("wait_selector")
-        @Nullable private String waitSelector;
-        @JsonProperty("extra_wait")
-        @Nullable private Long extraWait;
-        @Nullable private ProxyConfig proxy;
-        @JsonProperty("block_url_patterns")
-        @Nullable private List<String> blockUrlPatterns;
-        @JsonProperty("eval_script")
-        @Nullable private String evalScript;
-        @JsonProperty("robots_user_agent")
-        @Nullable private String robotsUserAgent;
-        @JsonProperty("capture_network_events")
-        @Nullable private Boolean captureNetworkEvents;
-        @JsonProperty("session_affinity")
-        private Boolean sessionAffinity = true;
-        @JsonProperty("chrome_path")
-        private java.nio.file.@Nullable Path chromePath;
-        @JsonProperty("chrome_args")
-        private List<String> chromeArgs = List.of();
-        @JsonProperty("scroll_containers")
-        @Nullable private Boolean scrollContainers;
-        @JsonProperty("dom_quiet_window")
-        @Nullable private Long domQuietWindow;
-        @JsonProperty("dom_quiet_cap")
-        @Nullable private Long domQuietCap;
-
-        /** Sets the mode field. */
-        @JsonProperty("mode")
-        public Builder withMode(final BrowserMode value) {
-            this.mode = value;
-            return this;
-        }
-
-        /** Sets the backend field. */
-        @JsonProperty("backend")
-        public Builder withBackend(final BrowserBackend value) {
-            this.backend = value;
-            return this;
-        }
-
-        /** Sets the endpoint field. */
-        @JsonProperty("endpoint")
-        public Builder withEndpoint(final @Nullable String value) {
-            this.endpoint = value;
-            return this;
-        }
-
-        /** Sets the timeout field. */
-        @JsonProperty("timeout")
-        public Builder withTimeout(final @Nullable Long value) {
-            this.timeout = value;
-            return this;
-        }
-
-        /** Sets the overallTimeout field. */
-        @JsonProperty("overall_timeout")
-        public Builder withOverallTimeout(final @Nullable Long value) {
-            this.overallTimeout = value;
-            return this;
-        }
-
-        /** Sets the shutdownTimeout field. */
-        @JsonProperty("shutdown_timeout")
-        public Builder withShutdownTimeout(final @Nullable Long value) {
-            this.shutdownTimeout = value;
-            return this;
-        }
-
-        /** Sets the waitValue field. */
-        @JsonProperty("wait")
-        public Builder withWait(final BrowserWait value) {
-            this.waitValue = value;
-            return this;
-        }
-
-        /** Sets the waitSelector field. */
-        @JsonProperty("wait_selector")
-        public Builder withWaitSelector(final @Nullable String value) {
-            this.waitSelector = value;
-            return this;
-        }
-
-        /** Sets the extraWait field. */
-        @JsonProperty("extra_wait")
-        public Builder withExtraWait(final @Nullable Long value) {
-            this.extraWait = value;
-            return this;
-        }
-
-        /** Sets the proxy field. */
-        @JsonProperty("proxy")
-        public Builder withProxy(final @Nullable ProxyConfig value) {
-            this.proxy = value;
-            return this;
-        }
-
-        /** Sets the blockUrlPatterns field. */
-        @JsonProperty("block_url_patterns")
-        public Builder withBlockUrlPatterns(final @Nullable List<String> value) {
-            this.blockUrlPatterns = value;
-            return this;
-        }
-
-        /** Sets the evalScript field. */
-        @JsonProperty("eval_script")
-        public Builder withEvalScript(final @Nullable String value) {
-            this.evalScript = value;
-            return this;
-        }
-
-        /** Sets the robotsUserAgent field. */
-        @JsonProperty("robots_user_agent")
-        public Builder withRobotsUserAgent(final @Nullable String value) {
-            this.robotsUserAgent = value;
-            return this;
-        }
-
-        /** Sets the captureNetworkEvents field. */
-        @JsonProperty("capture_network_events")
-        public Builder withCaptureNetworkEvents(final @Nullable Boolean value) {
-            this.captureNetworkEvents = value;
-            return this;
-        }
-
-        /** Sets the sessionAffinity field. */
-        @JsonProperty("session_affinity")
-        public Builder withSessionAffinity(final @Nullable Boolean value) {
-            this.sessionAffinity = value;
-            return this;
-        }
-
-        /** Sets the chromePath field. */
-        @JsonProperty("chrome_path")
-        public Builder withChromePath(final java.nio.file.@Nullable Path value) {
-            this.chromePath = value;
-            return this;
-        }
-
-        /** Sets the chromeArgs field. */
-        @JsonProperty("chrome_args")
-        public Builder withChromeArgs(final List<String> value) {
-            this.chromeArgs = value;
-            return this;
-        }
-
-        /** Sets the scrollContainers field. */
-        @JsonProperty("scroll_containers")
-        public Builder withScrollContainers(final @Nullable Boolean value) {
-            this.scrollContainers = value;
-            return this;
-        }
-
-        /** Sets the domQuietWindow field. */
-        @JsonProperty("dom_quiet_window")
-        public Builder withDomQuietWindow(final @Nullable Long value) {
-            this.domQuietWindow = value;
-            return this;
-        }
-
-        /** Sets the domQuietCap field. */
-        @JsonProperty("dom_quiet_cap")
-        public Builder withDomQuietCap(final @Nullable Long value) {
-            this.domQuietCap = value;
-            return this;
-        }
-
-        /** Constructs a BrowserConfig instance from the builder's current state. */
-        public BrowserConfig build() {
-            return new BrowserConfig(
-                mode,
-                backend,
-                endpoint,
-                timeout,
-                overallTimeout,
-                shutdownTimeout,
-                waitValue,
-                waitSelector,
-                extraWait,
-                proxy,
-                blockUrlPatterns,
-                evalScript,
-                robotsUserAgent,
-                captureNetworkEvents,
-                sessionAffinity,
-                chromePath,
-                chromeArgs,
-                scrollContainers,
-                domQuietWindow,
-                domQuietCap
-            );
-        }
+    /** Sets the backend field. */
+    @JsonProperty("backend")
+    public Builder withBackend(final BrowserBackend value) {
+      this.backend = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the endpoint field. */
+    @JsonProperty("endpoint")
+    public Builder withEndpoint(final @Nullable String value) {
+      this.endpoint = value;
+      return this;
+    }
+
+    /** Sets the timeout field. */
+    @JsonProperty("timeout")
+    public Builder withTimeout(final @Nullable Long value) {
+      this.timeout = value;
+      return this;
+    }
+
+    /** Sets the overallTimeout field. */
+    @JsonProperty("overall_timeout")
+    public Builder withOverallTimeout(final @Nullable Long value) {
+      this.overallTimeout = value;
+      return this;
+    }
+
+    /** Sets the shutdownTimeout field. */
+    @JsonProperty("shutdown_timeout")
+    public Builder withShutdownTimeout(final @Nullable Long value) {
+      this.shutdownTimeout = value;
+      return this;
+    }
+
+    /** Sets the waitValue field. */
+    @JsonProperty("wait")
+    public Builder withWait(final BrowserWait value) {
+      this.waitValue = value;
+      return this;
+    }
+
+    /** Sets the waitSelector field. */
+    @JsonProperty("wait_selector")
+    public Builder withWaitSelector(final @Nullable String value) {
+      this.waitSelector = value;
+      return this;
+    }
+
+    /** Sets the extraWait field. */
+    @JsonProperty("extra_wait")
+    public Builder withExtraWait(final @Nullable Long value) {
+      this.extraWait = value;
+      return this;
+    }
+
+    /** Sets the proxy field. */
+    @JsonProperty("proxy")
+    public Builder withProxy(final @Nullable ProxyConfig value) {
+      this.proxy = value;
+      return this;
+    }
+
+    /** Sets the blockUrlPatterns field. */
+    @JsonProperty("block_url_patterns")
+    public Builder withBlockUrlPatterns(final @Nullable List<String> value) {
+      this.blockUrlPatterns = value;
+      return this;
+    }
+
+    /** Sets the evalScript field. */
+    @JsonProperty("eval_script")
+    public Builder withEvalScript(final @Nullable String value) {
+      this.evalScript = value;
+      return this;
+    }
+
+    /** Sets the robotsUserAgent field. */
+    @JsonProperty("robots_user_agent")
+    public Builder withRobotsUserAgent(final @Nullable String value) {
+      this.robotsUserAgent = value;
+      return this;
+    }
+
+    /** Sets the captureNetworkEvents field. */
+    @JsonProperty("capture_network_events")
+    public Builder withCaptureNetworkEvents(final @Nullable Boolean value) {
+      this.captureNetworkEvents = value;
+      return this;
+    }
+
+    /** Sets the sessionAffinity field. */
+    @JsonProperty("session_affinity")
+    public Builder withSessionAffinity(final @Nullable Boolean value) {
+      this.sessionAffinity = value;
+      return this;
+    }
+
+    /** Sets the chromePath field. */
+    @JsonProperty("chrome_path")
+    public Builder withChromePath(final java.nio.file.@Nullable Path value) {
+      this.chromePath = value;
+      return this;
+    }
+
+    /** Sets the chromeArgs field. */
+    @JsonProperty("chrome_args")
+    public Builder withChromeArgs(final List<String> value) {
+      this.chromeArgs = value;
+      return this;
+    }
+
+    /** Sets the scrollContainers field. */
+    @JsonProperty("scroll_containers")
+    public Builder withScrollContainers(final @Nullable Boolean value) {
+      this.scrollContainers = value;
+      return this;
+    }
+
+    /** Sets the domQuietWindow field. */
+    @JsonProperty("dom_quiet_window")
+    public Builder withDomQuietWindow(final @Nullable Long value) {
+      this.domQuietWindow = value;
+      return this;
+    }
+
+    /** Sets the domQuietCap field. */
+    @JsonProperty("dom_quiet_cap")
+    public Builder withDomQuietCap(final @Nullable Long value) {
+      this.domQuietCap = value;
+      return this;
+    }
+
+    /** Constructs a BrowserConfig instance from the builder's current state. */
+    public BrowserConfig build() {
+      return new BrowserConfig(
+          mode,
+          backend,
+          endpoint,
+          timeout,
+          overallTimeout,
+          shutdownTimeout,
+          waitValue,
+          waitSelector,
+          extraWait,
+          proxy,
+          blockUrlPatterns,
+          evalScript,
+          robotsUserAgent,
+          captureNetworkEvents,
+          sessionAffinity,
+          chromePath,
+          chromeArgs,
+          scrollContainers,
+          domQuietWindow,
+          domQuietCap);
+    }
+  }
+  // CPD-ON
 }

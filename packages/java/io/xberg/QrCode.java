@@ -4,71 +4,64 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * One QR code decoded from an extracted image.
- */
+/** One QR code decoded from an extracted image. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = QrCode.Builder.class)
 public record QrCode(
     @JsonProperty("payload") String payload,
     @Nullable @JsonProperty("confidence") Float confidence,
-    @Nullable @JsonProperty("bbox") QrBoundingBox bbox
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("bbox") QrBoundingBox bbox) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for QrCode deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String payload;
+    @Nullable private Float confidence;
+    @Nullable private QrBoundingBox bbox;
+
+    /** Sets the payload field. */
+    @JsonProperty("payload")
+    public Builder withPayload(final String value) {
+      this.payload = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for QrCode deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String payload;
-        @Nullable private Float confidence;
-        @Nullable private QrBoundingBox bbox;
-
-        /** Sets the payload field. */
-        @JsonProperty("payload")
-        public Builder withPayload(final String value) {
-            this.payload = value;
-            return this;
-        }
-
-        /** Sets the confidence field. */
-        @JsonProperty("confidence")
-        public Builder withConfidence(final @Nullable Float value) {
-            this.confidence = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withConfidence(final float value) {
-            return withConfidence(Float.valueOf(value));
-        }
-
-        /** Sets the bbox field. */
-        @JsonProperty("bbox")
-        public Builder withBbox(final @Nullable QrBoundingBox value) {
-            this.bbox = value;
-            return this;
-        }
-
-        /** Constructs a QrCode instance from the builder's current state. */
-        public QrCode build() {
-            return new QrCode(
-                payload,
-                confidence,
-                bbox
-            );
-        }
+    /** Sets the confidence field. */
+    @JsonProperty("confidence")
+    public Builder withConfidence(final @Nullable Float value) {
+      this.confidence = value;
+      return this;
     }
-    // CPD-ON
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withConfidence(final float value) {
+      return withConfidence(Float.valueOf(value));
+    }
+
+    /** Sets the bbox field. */
+    @JsonProperty("bbox")
+    public Builder withBbox(final @Nullable QrBoundingBox value) {
+      this.bbox = value;
+      return this;
+    }
+
+    /** Constructs a QrCode instance from the builder's current state. */
+    public QrCode build() {
+      return new QrCode(payload, confidence, bbox);
+    }
+  }
+  // CPD-ON
 }

@@ -3,8 +3,8 @@
 package io.xberg;
 
 /**
- * Implemented by every exception of the {@code XbergError} family, including a variant exception
- * it shares with another family and so does not extend. Java catches only exception types, so
- * test for it: {@code catch (Exception e) { if (e instanceof IXbergError) ... }}.
+ * Implemented by every exception of the {@code XbergError} family, including a variant exception it
+ * shares with another family and so does not extend. Java catches only exception types, so test for
+ * it: {@code catch (Exception e) { if (e instanceof IXbergError) ... }}.
  */
 public interface IXbergError {}

@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Application properties from docProps/app.xml for DOCX
  *
- * Contains Word-specific document statistics and metadata.
+ * <p>Contains Word-specific document statistics and metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DocxAppProperties.Builder.class)
@@ -33,237 +33,254 @@ public record DocxAppProperties(
     @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
     @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
     @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
-    @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DocxAppProperties deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private String application;
+
+    @JsonProperty("app_version")
+    @Nullable
+    private String appVersion;
+
+    @Nullable private String template;
+
+    @JsonProperty("total_time")
+    @Nullable
+    private Integer totalTime;
+
+    @Nullable private Integer pages;
+    @Nullable private Integer words;
+    @Nullable private Integer characters;
+
+    @JsonProperty("characters_with_spaces")
+    @Nullable
+    private Integer charactersWithSpaces;
+
+    @Nullable private Integer lines;
+    @Nullable private Integer paragraphs;
+    @Nullable private String company;
+
+    @JsonProperty("doc_security")
+    @Nullable
+    private Integer docSecurity;
+
+    @JsonProperty("scale_crop")
+    @Nullable
+    private Boolean scaleCrop;
+
+    @JsonProperty("links_up_to_date")
+    @Nullable
+    private Boolean linksUpToDate;
+
+    @JsonProperty("shared_doc")
+    @Nullable
+    private Boolean sharedDoc;
+
+    @JsonProperty("hyperlinks_changed")
+    @Nullable
+    private Boolean hyperlinksChanged;
+
+    /** Sets the application field. */
+    @JsonProperty("application")
+    public Builder withApplication(final @Nullable String value) {
+      this.application = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DocxAppProperties deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private String application;
-        @JsonProperty("app_version")
-        @Nullable private String appVersion;
-        @Nullable private String template;
-        @JsonProperty("total_time")
-        @Nullable private Integer totalTime;
-        @Nullable private Integer pages;
-        @Nullable private Integer words;
-        @Nullable private Integer characters;
-        @JsonProperty("characters_with_spaces")
-        @Nullable private Integer charactersWithSpaces;
-        @Nullable private Integer lines;
-        @Nullable private Integer paragraphs;
-        @Nullable private String company;
-        @JsonProperty("doc_security")
-        @Nullable private Integer docSecurity;
-        @JsonProperty("scale_crop")
-        @Nullable private Boolean scaleCrop;
-        @JsonProperty("links_up_to_date")
-        @Nullable private Boolean linksUpToDate;
-        @JsonProperty("shared_doc")
-        @Nullable private Boolean sharedDoc;
-        @JsonProperty("hyperlinks_changed")
-        @Nullable private Boolean hyperlinksChanged;
-
-        /** Sets the application field. */
-        @JsonProperty("application")
-        public Builder withApplication(final @Nullable String value) {
-            this.application = value;
-            return this;
-        }
-
-        /** Sets the appVersion field. */
-        @JsonProperty("app_version")
-        public Builder withAppVersion(final @Nullable String value) {
-            this.appVersion = value;
-            return this;
-        }
-
-        /** Sets the template field. */
-        @JsonProperty("template")
-        public Builder withTemplate(final @Nullable String value) {
-            this.template = value;
-            return this;
-        }
-
-        /** Sets the totalTime field. */
-        @JsonProperty("total_time")
-        public Builder withTotalTime(final @Nullable Integer value) {
-            this.totalTime = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withTotalTime(final int value) {
-            return withTotalTime(Integer.valueOf(value));
-        }
-
-        /** Sets the pages field. */
-        @JsonProperty("pages")
-        public Builder withPages(final @Nullable Integer value) {
-            this.pages = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withPages(final int value) {
-            return withPages(Integer.valueOf(value));
-        }
-
-        /** Sets the words field. */
-        @JsonProperty("words")
-        public Builder withWords(final @Nullable Integer value) {
-            this.words = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withWords(final int value) {
-            return withWords(Integer.valueOf(value));
-        }
-
-        /** Sets the characters field. */
-        @JsonProperty("characters")
-        public Builder withCharacters(final @Nullable Integer value) {
-            this.characters = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withCharacters(final int value) {
-            return withCharacters(Integer.valueOf(value));
-        }
-
-        /** Sets the charactersWithSpaces field. */
-        @JsonProperty("characters_with_spaces")
-        public Builder withCharactersWithSpaces(final @Nullable Integer value) {
-            this.charactersWithSpaces = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withCharactersWithSpaces(final int value) {
-            return withCharactersWithSpaces(Integer.valueOf(value));
-        }
-
-        /** Sets the lines field. */
-        @JsonProperty("lines")
-        public Builder withLines(final @Nullable Integer value) {
-            this.lines = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withLines(final int value) {
-            return withLines(Integer.valueOf(value));
-        }
-
-        /** Sets the paragraphs field. */
-        @JsonProperty("paragraphs")
-        public Builder withParagraphs(final @Nullable Integer value) {
-            this.paragraphs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withParagraphs(final int value) {
-            return withParagraphs(Integer.valueOf(value));
-        }
-
-        /** Sets the company field. */
-        @JsonProperty("company")
-        public Builder withCompany(final @Nullable String value) {
-            this.company = value;
-            return this;
-        }
-
-        /** Sets the docSecurity field. */
-        @JsonProperty("doc_security")
-        public Builder withDocSecurity(final @Nullable Integer value) {
-            this.docSecurity = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withDocSecurity(final int value) {
-            return withDocSecurity(Integer.valueOf(value));
-        }
-
-        /** Sets the scaleCrop field. */
-        @JsonProperty("scale_crop")
-        public Builder withScaleCrop(final @Nullable Boolean value) {
-            this.scaleCrop = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withScaleCrop(final boolean value) {
-            return withScaleCrop(Boolean.valueOf(value));
-        }
-
-        /** Sets the linksUpToDate field. */
-        @JsonProperty("links_up_to_date")
-        public Builder withLinksUpToDate(final @Nullable Boolean value) {
-            this.linksUpToDate = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withLinksUpToDate(final boolean value) {
-            return withLinksUpToDate(Boolean.valueOf(value));
-        }
-
-        /** Sets the sharedDoc field. */
-        @JsonProperty("shared_doc")
-        public Builder withSharedDoc(final @Nullable Boolean value) {
-            this.sharedDoc = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withSharedDoc(final boolean value) {
-            return withSharedDoc(Boolean.valueOf(value));
-        }
-
-        /** Sets the hyperlinksChanged field. */
-        @JsonProperty("hyperlinks_changed")
-        public Builder withHyperlinksChanged(final @Nullable Boolean value) {
-            this.hyperlinksChanged = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withHyperlinksChanged(final boolean value) {
-            return withHyperlinksChanged(Boolean.valueOf(value));
-        }
-
-        /** Constructs a DocxAppProperties instance from the builder's current state. */
-        public DocxAppProperties build() {
-            return new DocxAppProperties(
-                application,
-                appVersion,
-                template,
-                totalTime,
-                pages,
-                words,
-                characters,
-                charactersWithSpaces,
-                lines,
-                paragraphs,
-                company,
-                docSecurity,
-                scaleCrop,
-                linksUpToDate,
-                sharedDoc,
-                hyperlinksChanged
-            );
-        }
+    /** Sets the appVersion field. */
+    @JsonProperty("app_version")
+    public Builder withAppVersion(final @Nullable String value) {
+      this.appVersion = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the template field. */
+    @JsonProperty("template")
+    public Builder withTemplate(final @Nullable String value) {
+      this.template = value;
+      return this;
+    }
+
+    /** Sets the totalTime field. */
+    @JsonProperty("total_time")
+    public Builder withTotalTime(final @Nullable Integer value) {
+      this.totalTime = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withTotalTime(final int value) {
+      return withTotalTime(Integer.valueOf(value));
+    }
+
+    /** Sets the pages field. */
+    @JsonProperty("pages")
+    public Builder withPages(final @Nullable Integer value) {
+      this.pages = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withPages(final int value) {
+      return withPages(Integer.valueOf(value));
+    }
+
+    /** Sets the words field. */
+    @JsonProperty("words")
+    public Builder withWords(final @Nullable Integer value) {
+      this.words = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withWords(final int value) {
+      return withWords(Integer.valueOf(value));
+    }
+
+    /** Sets the characters field. */
+    @JsonProperty("characters")
+    public Builder withCharacters(final @Nullable Integer value) {
+      this.characters = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withCharacters(final int value) {
+      return withCharacters(Integer.valueOf(value));
+    }
+
+    /** Sets the charactersWithSpaces field. */
+    @JsonProperty("characters_with_spaces")
+    public Builder withCharactersWithSpaces(final @Nullable Integer value) {
+      this.charactersWithSpaces = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withCharactersWithSpaces(final int value) {
+      return withCharactersWithSpaces(Integer.valueOf(value));
+    }
+
+    /** Sets the lines field. */
+    @JsonProperty("lines")
+    public Builder withLines(final @Nullable Integer value) {
+      this.lines = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withLines(final int value) {
+      return withLines(Integer.valueOf(value));
+    }
+
+    /** Sets the paragraphs field. */
+    @JsonProperty("paragraphs")
+    public Builder withParagraphs(final @Nullable Integer value) {
+      this.paragraphs = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withParagraphs(final int value) {
+      return withParagraphs(Integer.valueOf(value));
+    }
+
+    /** Sets the company field. */
+    @JsonProperty("company")
+    public Builder withCompany(final @Nullable String value) {
+      this.company = value;
+      return this;
+    }
+
+    /** Sets the docSecurity field. */
+    @JsonProperty("doc_security")
+    public Builder withDocSecurity(final @Nullable Integer value) {
+      this.docSecurity = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withDocSecurity(final int value) {
+      return withDocSecurity(Integer.valueOf(value));
+    }
+
+    /** Sets the scaleCrop field. */
+    @JsonProperty("scale_crop")
+    public Builder withScaleCrop(final @Nullable Boolean value) {
+      this.scaleCrop = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withScaleCrop(final boolean value) {
+      return withScaleCrop(Boolean.valueOf(value));
+    }
+
+    /** Sets the linksUpToDate field. */
+    @JsonProperty("links_up_to_date")
+    public Builder withLinksUpToDate(final @Nullable Boolean value) {
+      this.linksUpToDate = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withLinksUpToDate(final boolean value) {
+      return withLinksUpToDate(Boolean.valueOf(value));
+    }
+
+    /** Sets the sharedDoc field. */
+    @JsonProperty("shared_doc")
+    public Builder withSharedDoc(final @Nullable Boolean value) {
+      this.sharedDoc = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withSharedDoc(final boolean value) {
+      return withSharedDoc(Boolean.valueOf(value));
+    }
+
+    /** Sets the hyperlinksChanged field. */
+    @JsonProperty("hyperlinks_changed")
+    public Builder withHyperlinksChanged(final @Nullable Boolean value) {
+      this.hyperlinksChanged = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withHyperlinksChanged(final boolean value) {
+      return withHyperlinksChanged(Boolean.valueOf(value));
+    }
+
+    /** Constructs a DocxAppProperties instance from the builder's current state. */
+    public DocxAppProperties build() {
+      return new DocxAppProperties(
+          application,
+          appVersion,
+          template,
+          totalTime,
+          pages,
+          words,
+          characters,
+          charactersWithSpaces,
+          lines,
+          paragraphs,
+          company,
+          docSecurity,
+          scaleCrop,
+          linksUpToDate,
+          sharedDoc,
+          hyperlinksChanged);
+    }
+  }
+  // CPD-ON
 }

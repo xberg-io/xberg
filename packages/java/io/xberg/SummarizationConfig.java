@@ -4,72 +4,68 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Configuration for the summarisation post-processor.
- */
+/** Configuration for the summarisation post-processor. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = SummarizationConfig.Builder.class)
 public record SummarizationConfig(
     @Nullable @JsonProperty("strategy") SummaryStrategy strategy,
     @Nullable @JsonProperty("max_tokens") Integer maxTokens,
-    @Nullable @JsonProperty("llm") LlmConfig llm
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("llm") LlmConfig llm) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for SummarizationConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private SummaryStrategy strategy = SummaryStrategy.EXTRACTIVE;
+
+    @JsonProperty("max_tokens")
+    @Nullable
+    private Integer maxTokens;
+
+    @Nullable private LlmConfig llm;
+
+    /** Sets the strategy field. */
+    @JsonProperty("strategy")
+    public Builder withStrategy(final @Nullable SummaryStrategy value) {
+      this.strategy = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for SummarizationConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private SummaryStrategy strategy = SummaryStrategy.EXTRACTIVE;
-        @JsonProperty("max_tokens")
-        @Nullable private Integer maxTokens;
-        @Nullable private LlmConfig llm;
-
-        /** Sets the strategy field. */
-        @JsonProperty("strategy")
-        public Builder withStrategy(final @Nullable SummaryStrategy value) {
-            this.strategy = value;
-            return this;
-        }
-
-        /** Sets the maxTokens field. */
-        @JsonProperty("max_tokens")
-        public Builder withMaxTokens(final @Nullable Integer value) {
-            this.maxTokens = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxTokens(final int value) {
-            return withMaxTokens(Integer.valueOf(value));
-        }
-
-        /** Sets the llm field. */
-        @JsonProperty("llm")
-        public Builder withLlm(final @Nullable LlmConfig value) {
-            this.llm = value;
-            return this;
-        }
-
-        /** Constructs a SummarizationConfig instance from the builder's current state. */
-        public SummarizationConfig build() {
-            return new SummarizationConfig(
-                strategy,
-                maxTokens,
-                llm
-            );
-        }
+    /** Sets the maxTokens field. */
+    @JsonProperty("max_tokens")
+    public Builder withMaxTokens(final @Nullable Integer value) {
+      this.maxTokens = value;
+      return this;
     }
-    // CPD-ON
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxTokens(final int value) {
+      return withMaxTokens(Integer.valueOf(value));
+    }
+
+    /** Sets the llm field. */
+    @JsonProperty("llm")
+    public Builder withLlm(final @Nullable LlmConfig value) {
+      this.llm = value;
+      return this;
+    }
+
+    /** Constructs a SummarizationConfig instance from the builder's current state. */
+    public SummarizationConfig build() {
+      return new SummarizationConfig(strategy, maxTokens, llm);
+    }
+  }
+  // CPD-ON
 }

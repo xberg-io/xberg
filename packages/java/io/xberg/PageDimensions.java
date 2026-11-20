@@ -4,58 +4,53 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * Metadata for individual page/slide/sheet.
  *
- * Captures per-page information including dimensions, content counts,
- * and visibility state (for presentations).
+ * <p>Captures per-page information including dimensions, content counts, and visibility state (for
+ * presentations).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageDimensions.Builder.class)
 public record PageDimensions(
-    @JsonProperty("width") double width,
-    @JsonProperty("height") double height
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("width") double width, @JsonProperty("height") double height) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PageDimensions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private double width;
+    private double height;
+
+    /** Sets the width field. */
+    @JsonProperty("width")
+    public Builder withWidth(final double value) {
+      this.width = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PageDimensions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private double width;
-        private double height;
-
-        /** Sets the width field. */
-        @JsonProperty("width")
-        public Builder withWidth(final double value) {
-            this.width = value;
-            return this;
-        }
-
-        /** Sets the height field. */
-        @JsonProperty("height")
-        public Builder withHeight(final double value) {
-            this.height = value;
-            return this;
-        }
-
-        /** Constructs a PageDimensions instance from the builder's current state. */
-        public PageDimensions build() {
-            return new PageDimensions(
-                width,
-                height
-            );
-        }
+    /** Sets the height field. */
+    @JsonProperty("height")
+    public Builder withHeight(final double value) {
+      this.height = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a PageDimensions instance from the builder's current state. */
+    public PageDimensions build() {
+      return new PageDimensions(width, height);
+    }
+  }
+  // CPD-ON
 }

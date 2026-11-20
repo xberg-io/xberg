@@ -2,9 +2,7 @@
 // alef:hash:86dc82b8fd2c1ccec79d522b8486563f544717ffdba717fe6516bdfa68024998
 package io.xberg;
 
-/**
- * JSON or MessagePack serialization/deserialization failed.
- */
+/** JSON or MessagePack serialization/deserialization failed. */
 public class SerializationException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

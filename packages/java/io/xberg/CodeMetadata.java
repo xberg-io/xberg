@@ -4,61 +4,57 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Code-format metadata: the structural chunks produced by tree-sitter parsing.
  *
- * Wrapped by FormatMetadata.Code. Kept as a named struct (rather than an inline
- * enum-variant body) so serde can tag it under internal tagging and utoipa can emit a
- * referenceable {@code CodeMetadata} component in the OpenAPI schema.
+ * <p>Wrapped by FormatMetadata.Code. Kept as a named struct (rather than an inline enum-variant
+ * body) so serde can tag it under internal tagging and utoipa can emit a referenceable {@code
+ * CodeMetadata} component in the OpenAPI schema.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CodeMetadata.Builder.class)
 public record CodeMetadata(
     @JsonProperty("chunks") List<CodeChunkInfo> chunks,
-    @Nullable @JsonProperty("data") CodeDataNode data
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("data") CodeDataNode data) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for CodeMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<CodeChunkInfo> chunks = List.of();
+    @Nullable private CodeDataNode data;
+
+    /** Sets the chunks field. */
+    @JsonProperty("chunks")
+    public Builder withChunks(final List<CodeChunkInfo> value) {
+      this.chunks = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for CodeMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<CodeChunkInfo> chunks = List.of();
-        @Nullable private CodeDataNode data;
-
-        /** Sets the chunks field. */
-        @JsonProperty("chunks")
-        public Builder withChunks(final List<CodeChunkInfo> value) {
-            this.chunks = value;
-            return this;
-        }
-
-        /** Sets the data field. */
-        @JsonProperty("data")
-        public Builder withData(final @Nullable CodeDataNode value) {
-            this.data = value;
-            return this;
-        }
-
-        /** Constructs a CodeMetadata instance from the builder's current state. */
-        public CodeMetadata build() {
-            return new CodeMetadata(
-                chunks,
-                data
-            );
-        }
+    /** Sets the data field. */
+    @JsonProperty("data")
+    public Builder withData(final @Nullable CodeDataNode value) {
+      this.data = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a CodeMetadata instance from the builder's current state. */
+    public CodeMetadata build() {
+      return new CodeMetadata(chunks, data);
+    }
+  }
+  // CPD-ON
 }

@@ -7,68 +7,51 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * High-level category used to group presets in the registry UI.
- */
+/** High-level category used to group presets in the registry UI. */
 @SuppressWarnings("PMD")
 public enum PresetCategory {
-    /**
-     * Invoices, receipts, statements, purchase orders, W-9.
-     */
-    FINANCE("finance"),
-    /**
-     * Passports, drivers licenses, insurance cards.
-     */
-    IDENTITY("identity"),
-    /**
-     * Contracts, NDAs, agreements.
-     */
-    LEGAL("legal"),
-    /**
-     * Bills of lading, customs declarations, packing lists.
-     */
-    LOGISTICS("logistics"),
-    /**
-     * Clinical records, lab reports.
-     */
-    MEDICAL("medical"),
-    /**
-     * Pay stubs, resumes, employment offers.
-     */
-    HR("hr"),
-    /**
-     * Catch-all for documents that don't fit the other categories.
-     */
-    OTHER("other");
+  /** Invoices, receipts, statements, purchase orders, W-9. */
+  FINANCE("finance"),
+  /** Passports, drivers licenses, insurance cards. */
+  IDENTITY("identity"),
+  /** Contracts, NDAs, agreements. */
+  LEGAL("legal"),
+  /** Bills of lading, customs declarations, packing lists. */
+  LOGISTICS("logistics"),
+  /** Clinical records, lab reports. */
+  MEDICAL("medical"),
+  /** Pay stubs, resumes, employment offers. */
+  HR("hr"),
+  /** Catch-all for documents that don't fit the other categories. */
+  OTHER("other");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  PresetCategory(final String value) {
+    this.value = value;
+  }
 
-    PresetCategory(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static PresetCategory fromValue(final String value) {
+    for (PresetCategory e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown PresetCategory value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static PresetCategory fromValue(final String value) {
-        for (PresetCategory e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown PresetCategory value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

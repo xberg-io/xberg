@@ -7,68 +7,51 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Semantic kind of a relationship between document elements.
- */
+/** Semantic kind of a relationship between document elements. */
 @SuppressWarnings("PMD")
 public enum RelationshipKind {
-    /**
-     * Footnote marker -&gt; footnote definition.
-     */
-    FOOTNOTE_REFERENCE("footnote_reference"),
-    /**
-     * Citation marker -&gt; bibliography entry.
-     */
-    CITATION_REFERENCE("citation_reference"),
-    /**
-     * Internal anchor link ({@code #id}) -&gt; target heading/element.
-     */
-    INTERNAL_LINK("internal_link"),
-    /**
-     * Caption paragraph -&gt; figure/table it describes.
-     */
-    CAPTION("caption"),
-    /**
-     * Label -&gt; labeled element (HTML {@code &lt;label for&gt;}, LaTeX {@code \label{}}).
-     */
-    LABEL("label"),
-    /**
-     * TOC entry -&gt; target section.
-     */
-    TOC_ENTRY("toc_entry"),
-    /**
-     * Cross-reference (LaTeX {@code \ref{}}, DOCX cross-reference field).
-     */
-    CROSS_REFERENCE("cross_reference");
+  /** Footnote marker -&gt; footnote definition. */
+  FOOTNOTE_REFERENCE("footnote_reference"),
+  /** Citation marker -&gt; bibliography entry. */
+  CITATION_REFERENCE("citation_reference"),
+  /** Internal anchor link ({@code #id}) -&gt; target heading/element. */
+  INTERNAL_LINK("internal_link"),
+  /** Caption paragraph -&gt; figure/table it describes. */
+  CAPTION("caption"),
+  /** Label -&gt; labeled element (HTML {@code &lt;label for&gt;}, LaTeX {@code \label{}}). */
+  LABEL("label"),
+  /** TOC entry -&gt; target section. */
+  TOC_ENTRY("toc_entry"),
+  /** Cross-reference (LaTeX {@code \ref{}}, DOCX cross-reference field). */
+  CROSS_REFERENCE("cross_reference");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  RelationshipKind(final String value) {
+    this.value = value;
+  }
 
-    RelationshipKind(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static RelationshipKind fromValue(final String value) {
+    for (RelationshipKind e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown RelationshipKind value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static RelationshipKind fromValue(final String value) {
-        for (RelationshipKind e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown RelationshipKind value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

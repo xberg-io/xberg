@@ -2,9 +2,7 @@
 // alef:hash:03f8d07c9d7aa5f23c51958234022155600f928ba756d0140f56591ffe48264d
 package io.xberg;
 
-/**
- * A custom schema override was supplied but is not a JSON object.
- */
+/** A custom schema override was supplied but is not a JSON object. */
 public class SchemaNotObjectException extends ResolveErrorException {
   private static final long serialVersionUID = 1L;
 

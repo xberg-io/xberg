@@ -4,19 +4,19 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import java.util.Map;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
  * OCR extraction result.
  *
- * Result of performing OCR on an image or scanned document,
- * including recognized text and detected tables.
+ * <p>Result of performing OCR on an image or scanned document, including recognized text and
+ * detected tables.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrExtractionResult.Builder.class)
@@ -25,72 +25,69 @@ public record OcrExtractionResult(
     @JsonProperty("mime_type") String mimeType,
     @JsonProperty("metadata") Map<String, Object> metadata,
     @JsonProperty("tables") List<OcrTable> tables,
-    @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for OcrExtractionResult deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String content;
+
+    @JsonProperty("mime_type")
+    private String mimeType;
+
+    private Map<String, Object> metadata = Map.of();
+    private List<OcrTable> tables = List.of();
+
+    @JsonProperty("ocr_elements")
+    @Nullable
+    private List<OcrElement> ocrElements;
+
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final String value) {
+      this.content = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for OcrExtractionResult deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String content;
-        @JsonProperty("mime_type")
-        private String mimeType;
-        private Map<String, Object> metadata = Map.of();
-        private List<OcrTable> tables = List.of();
-        @JsonProperty("ocr_elements")
-        @Nullable private List<OcrElement> ocrElements;
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final String value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the mimeType field. */
-        @JsonProperty("mime_type")
-        public Builder withMimeType(final String value) {
-            this.mimeType = value;
-            return this;
-        }
-
-        /** Sets the metadata field. */
-        @JsonProperty("metadata")
-        public Builder withMetadata(final Map<String, Object> value) {
-            this.metadata = value;
-            return this;
-        }
-
-        /** Sets the tables field. */
-        @JsonProperty("tables")
-        public Builder withTables(final List<OcrTable> value) {
-            this.tables = value;
-            return this;
-        }
-
-        /** Sets the ocrElements field. */
-        @JsonProperty("ocr_elements")
-        public Builder withOcrElements(final @Nullable List<OcrElement> value) {
-            this.ocrElements = value;
-            return this;
-        }
-
-        /** Constructs a OcrExtractionResult instance from the builder's current state. */
-        public OcrExtractionResult build() {
-            return new OcrExtractionResult(
-                content,
-                mimeType,
-                metadata,
-                tables,
-                ocrElements
-            );
-        }
+    /** Sets the mimeType field. */
+    @JsonProperty("mime_type")
+    public Builder withMimeType(final String value) {
+      this.mimeType = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the metadata field. */
+    @JsonProperty("metadata")
+    public Builder withMetadata(final Map<String, Object> value) {
+      this.metadata = value;
+      return this;
+    }
+
+    /** Sets the tables field. */
+    @JsonProperty("tables")
+    public Builder withTables(final List<OcrTable> value) {
+      this.tables = value;
+      return this;
+    }
+
+    /** Sets the ocrElements field. */
+    @JsonProperty("ocr_elements")
+    public Builder withOcrElements(final @Nullable List<OcrElement> value) {
+      this.ocrElements = value;
+      return this;
+    }
+
+    /** Constructs a OcrExtractionResult instance from the builder's current state. */
+    public OcrExtractionResult build() {
+      return new OcrExtractionResult(content, mimeType, metadata, tables, ocrElements);
+    }
+  }
+  // CPD-ON
 }

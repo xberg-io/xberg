@@ -2,9 +2,7 @@
 // alef:hash:5dd069f6b744f56a2fb66ea0ecb9fb140fd536b9c062740cacaaf7d682f92c64
 package io.xberg;
 
-/**
- * An image manipulation operation (resize, decode, DPI conversion) failed.
- */
+/** An image manipulation operation (resize, decode, DPI conversion) failed. */
 public class ImageProcessingException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

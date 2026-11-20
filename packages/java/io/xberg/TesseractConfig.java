@@ -4,33 +4,33 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Tesseract OCR configuration.
  *
- * Provides fine-grained control over Tesseract OCR engine parameters.
- * Most users can use the defaults, but these settings allow optimization
- * for specific document types (invoices, handwriting, etc.).
+ * <p>Provides fine-grained control over Tesseract OCR engine parameters. Most users can use the
+ * defaults, but these settings allow optimization for specific document types (invoices,
+ * handwriting, etc.).
  *
- * **This is the public-facing counterpart of {@code ocr.types.TesseractConfig}
- * (the internal, engine-facing representation with {@code u8}/{@code String} fields instead of
- * {@code i32}/{@code Vec&lt;String&gt;}).** They are two independent struct definitions bridged only by
- * an explicit {@code From&lt;&amp;TesseractConfig&gt; for crate.ocr.types.TesseractConfig} impl in
- * {@code ocr/types.rs} — that conversion carries field *values* across, but each struct keeps
- * its own {@code Default} impl, and the conversion does nothing to keep those two defaults in
- * sync. Several production call sites ({@code extractors.image.apply_default_tesseract_psm},
- * {@code configured_region_ocr}, {@code sparse_image_ocr_fallback_config}) construct *this* struct's
- * default and convert it, bypassing the internal struct's {@code Default} entirely — so if the
- * two defaults disagree, standalone image OCR silently uses this struct's value while
- * PDF-embedded OCR (which can reach the internal {@code Default} directly when no
- * {@code tesseract_config} is set) uses the other. When changing a default here, also update
- * {@code ocr.types.TesseractConfig.default}, and vice versa.
+ * <p>**This is the public-facing counterpart of {@code ocr.types.TesseractConfig} (the internal,
+ * engine-facing representation with {@code u8}/{@code String} fields instead of {@code i32}/{@code
+ * Vec&lt;String&gt;}).** They are two independent struct definitions bridged only by an explicit
+ * {@code From&lt;&amp;TesseractConfig&gt; for crate.ocr.types.TesseractConfig} impl in {@code
+ * ocr/types.rs} — that conversion carries field *values* across, but each struct keeps its own
+ * {@code Default} impl, and the conversion does nothing to keep those two defaults in sync. Several
+ * production call sites ({@code extractors.image.apply_default_tesseract_psm}, {@code
+ * configured_region_ocr}, {@code sparse_image_ocr_fallback_config}) construct *this* struct's
+ * default and convert it, bypassing the internal struct's {@code Default} entirely — so if the two
+ * defaults disagree, standalone image OCR silently uses this struct's value while PDF-embedded OCR
+ * (which can reach the internal {@code Default} directly when no {@code tesseract_config} is set)
+ * uses the other. When changing a default here, also update {@code
+ * ocr.types.TesseractConfig.default}, and vice versa.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TesseractConfig.Builder.class)
@@ -46,259 +46,303 @@ public record TesseractConfig(
     @Nullable @JsonProperty("table_column_threshold") Integer tableColumnThreshold,
     @Nullable @JsonProperty("table_row_threshold_ratio") Double tableRowThresholdRatio,
     @Nullable @JsonProperty("use_cache") Boolean useCache,
-    @Nullable @JsonProperty("classify_use_pre_adapted_templates") Boolean classifyUsePreAdaptedTemplates,
+    @Nullable @JsonProperty("classify_use_pre_adapted_templates")
+        Boolean classifyUsePreAdaptedTemplates,
     @Nullable @JsonProperty("language_model_ngram_on") Boolean languageModelNgramOn,
     @Nullable @JsonProperty("tessedit_dont_blkrej_good_wds") Boolean tesseditDontBlkrejGoodWds,
     @Nullable @JsonProperty("tessedit_dont_rowrej_good_wds") Boolean tesseditDontRowrejGoodWds,
     @Nullable @JsonProperty("tessedit_enable_dict_correction") Boolean tesseditEnableDictCorrection,
     @JsonProperty("tessedit_char_whitelist") String tesseditCharWhitelist,
     @JsonProperty("tessedit_char_blacklist") String tesseditCharBlacklist,
-    @Nullable @JsonProperty("tessedit_use_primary_params_model") Boolean tesseditUsePrimaryParamsModel,
+    @Nullable @JsonProperty("tessedit_use_primary_params_model")
+        Boolean tesseditUsePrimaryParamsModel,
     @Nullable @JsonProperty("textord_space_size_is_variable") Boolean textordSpaceSizeIsVariable,
-    @JsonProperty("thresholding_method") int thresholdingMethod
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("thresholding_method") int thresholdingMethod) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public TesseractConfig {
+    if (oem == null) {
+      oem = 3;
     }
-    public TesseractConfig{
-        if (oem == null) { oem = 3; }
-        if (enableTableDetection == null) { enableTableDetection = true; }
-        if (tableColumnThreshold == null) { tableColumnThreshold = 50; }
-        if (tableRowThresholdRatio == null) { tableRowThresholdRatio = 0.5; }
-        if (useCache == null) { useCache = true; }
-        if (classifyUsePreAdaptedTemplates == null) { classifyUsePreAdaptedTemplates = true; }
-        if (languageModelNgramOn == null) { languageModelNgramOn = true; }
-        if (tesseditDontBlkrejGoodWds == null) { tesseditDontBlkrejGoodWds = true; }
-        if (tesseditDontRowrejGoodWds == null) { tesseditDontRowrejGoodWds = true; }
-        if (tesseditEnableDictCorrection == null) { tesseditEnableDictCorrection = true; }
-        if (tesseditUsePrimaryParamsModel == null) { tesseditUsePrimaryParamsModel = true; }
-        if (textordSpaceSizeIsVariable == null) { textordSpaceSizeIsVariable = true; }
+    if (enableTableDetection == null) {
+      enableTableDetection = true;
+    }
+    if (tableColumnThreshold == null) {
+      tableColumnThreshold = 50;
+    }
+    if (tableRowThresholdRatio == null) {
+      tableRowThresholdRatio = 0.5;
+    }
+    if (useCache == null) {
+      useCache = true;
+    }
+    if (classifyUsePreAdaptedTemplates == null) {
+      classifyUsePreAdaptedTemplates = true;
+    }
+    if (languageModelNgramOn == null) {
+      languageModelNgramOn = true;
+    }
+    if (tesseditDontBlkrejGoodWds == null) {
+      tesseditDontBlkrejGoodWds = true;
+    }
+    if (tesseditDontRowrejGoodWds == null) {
+      tesseditDontRowrejGoodWds = true;
+    }
+    if (tesseditEnableDictCorrection == null) {
+      tesseditEnableDictCorrection = true;
+    }
+    if (tesseditUsePrimaryParamsModel == null) {
+      tesseditUsePrimaryParamsModel = true;
+    }
+    if (textordSpaceSizeIsVariable == null) {
+      textordSpaceSizeIsVariable = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TesseractConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<String> language = List.of();
+    @Nullable private Integer psm;
+
+    @JsonProperty("output_format")
+    private String outputFormat = "markdown";
+
+    private Integer oem;
+
+    @JsonProperty("min_confidence")
+    private double minConfidence;
+
+    @Nullable private ImagePreprocessingConfig preprocessing;
+
+    @JsonProperty("enable_table_detection")
+    private Boolean enableTableDetection = true;
+
+    @JsonProperty("table_min_confidence")
+    private double tableMinConfidence;
+
+    @JsonProperty("table_column_threshold")
+    private Integer tableColumnThreshold;
+
+    @JsonProperty("table_row_threshold_ratio")
+    private Double tableRowThresholdRatio;
+
+    @JsonProperty("use_cache")
+    private Boolean useCache = true;
+
+    @JsonProperty("classify_use_pre_adapted_templates")
+    private Boolean classifyUsePreAdaptedTemplates = true;
+
+    @JsonProperty("language_model_ngram_on")
+    private Boolean languageModelNgramOn = true;
+
+    @JsonProperty("tessedit_dont_blkrej_good_wds")
+    private Boolean tesseditDontBlkrejGoodWds = true;
+
+    @JsonProperty("tessedit_dont_rowrej_good_wds")
+    private Boolean tesseditDontRowrejGoodWds = true;
+
+    @JsonProperty("tessedit_enable_dict_correction")
+    private Boolean tesseditEnableDictCorrection = true;
+
+    @JsonProperty("tessedit_char_whitelist")
+    private String tesseditCharWhitelist;
+
+    @JsonProperty("tessedit_char_blacklist")
+    private String tesseditCharBlacklist;
+
+    @JsonProperty("tessedit_use_primary_params_model")
+    private Boolean tesseditUsePrimaryParamsModel = true;
+
+    @JsonProperty("textord_space_size_is_variable")
+    private Boolean textordSpaceSizeIsVariable = true;
+
+    @JsonProperty("thresholding_method")
+    private int thresholdingMethod;
+
+    /** Sets the language field. */
+    @JsonProperty("language")
+    public Builder withLanguage(final List<String> value) {
+      this.language = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TesseractConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<String> language = List.of();
-        @Nullable private Integer psm;
-        @JsonProperty("output_format")
-        private String outputFormat = "markdown";
-        private Integer oem;
-        @JsonProperty("min_confidence")
-        private double minConfidence;
-        @Nullable private ImagePreprocessingConfig preprocessing;
-        @JsonProperty("enable_table_detection")
-        private Boolean enableTableDetection = true;
-        @JsonProperty("table_min_confidence")
-        private double tableMinConfidence;
-        @JsonProperty("table_column_threshold")
-        private Integer tableColumnThreshold;
-        @JsonProperty("table_row_threshold_ratio")
-        private Double tableRowThresholdRatio;
-        @JsonProperty("use_cache")
-        private Boolean useCache = true;
-        @JsonProperty("classify_use_pre_adapted_templates")
-        private Boolean classifyUsePreAdaptedTemplates = true;
-        @JsonProperty("language_model_ngram_on")
-        private Boolean languageModelNgramOn = true;
-        @JsonProperty("tessedit_dont_blkrej_good_wds")
-        private Boolean tesseditDontBlkrejGoodWds = true;
-        @JsonProperty("tessedit_dont_rowrej_good_wds")
-        private Boolean tesseditDontRowrejGoodWds = true;
-        @JsonProperty("tessedit_enable_dict_correction")
-        private Boolean tesseditEnableDictCorrection = true;
-        @JsonProperty("tessedit_char_whitelist")
-        private String tesseditCharWhitelist;
-        @JsonProperty("tessedit_char_blacklist")
-        private String tesseditCharBlacklist;
-        @JsonProperty("tessedit_use_primary_params_model")
-        private Boolean tesseditUsePrimaryParamsModel = true;
-        @JsonProperty("textord_space_size_is_variable")
-        private Boolean textordSpaceSizeIsVariable = true;
-        @JsonProperty("thresholding_method")
-        private int thresholdingMethod;
-
-        /** Sets the language field. */
-        @JsonProperty("language")
-        public Builder withLanguage(final List<String> value) {
-            this.language = value;
-            return this;
-        }
-
-        /** Sets the psm field. */
-        @JsonProperty("psm")
-        public Builder withPsm(final @Nullable Integer value) {
-            this.psm = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withPsm(final int value) {
-            return withPsm(Integer.valueOf(value));
-        }
-
-        /** Sets the outputFormat field. */
-        @JsonProperty("output_format")
-        public Builder withOutputFormat(final String value) {
-            this.outputFormat = value;
-            return this;
-        }
-
-        /** Sets the oem field. */
-        @JsonProperty("oem")
-        public Builder withOem(final @Nullable Integer value) {
-            this.oem = value;
-            return this;
-        }
-
-        /** Sets the minConfidence field. */
-        @JsonProperty("min_confidence")
-        public Builder withMinConfidence(final double value) {
-            this.minConfidence = value;
-            return this;
-        }
-
-        /** Sets the preprocessing field. */
-        @JsonProperty("preprocessing")
-        public Builder withPreprocessing(final @Nullable ImagePreprocessingConfig value) {
-            this.preprocessing = value;
-            return this;
-        }
-
-        /** Sets the enableTableDetection field. */
-        @JsonProperty("enable_table_detection")
-        public Builder withEnableTableDetection(final @Nullable Boolean value) {
-            this.enableTableDetection = value;
-            return this;
-        }
-
-        /** Sets the tableMinConfidence field. */
-        @JsonProperty("table_min_confidence")
-        public Builder withTableMinConfidence(final double value) {
-            this.tableMinConfidence = value;
-            return this;
-        }
-
-        /** Sets the tableColumnThreshold field. */
-        @JsonProperty("table_column_threshold")
-        public Builder withTableColumnThreshold(final @Nullable Integer value) {
-            this.tableColumnThreshold = value;
-            return this;
-        }
-
-        /** Sets the tableRowThresholdRatio field. */
-        @JsonProperty("table_row_threshold_ratio")
-        public Builder withTableRowThresholdRatio(final @Nullable Double value) {
-            this.tableRowThresholdRatio = value;
-            return this;
-        }
-
-        /** Sets the useCache field. */
-        @JsonProperty("use_cache")
-        public Builder withUseCache(final @Nullable Boolean value) {
-            this.useCache = value;
-            return this;
-        }
-
-        /** Sets the classifyUsePreAdaptedTemplates field. */
-        @JsonProperty("classify_use_pre_adapted_templates")
-        public Builder withClassifyUsePreAdaptedTemplates(final @Nullable Boolean value) {
-            this.classifyUsePreAdaptedTemplates = value;
-            return this;
-        }
-
-        /** Sets the languageModelNgramOn field. */
-        @JsonProperty("language_model_ngram_on")
-        public Builder withLanguageModelNgramOn(final @Nullable Boolean value) {
-            this.languageModelNgramOn = value;
-            return this;
-        }
-
-        /** Sets the tesseditDontBlkrejGoodWds field. */
-        @JsonProperty("tessedit_dont_blkrej_good_wds")
-        public Builder withTesseditDontBlkrejGoodWds(final @Nullable Boolean value) {
-            this.tesseditDontBlkrejGoodWds = value;
-            return this;
-        }
-
-        /** Sets the tesseditDontRowrejGoodWds field. */
-        @JsonProperty("tessedit_dont_rowrej_good_wds")
-        public Builder withTesseditDontRowrejGoodWds(final @Nullable Boolean value) {
-            this.tesseditDontRowrejGoodWds = value;
-            return this;
-        }
-
-        /** Sets the tesseditEnableDictCorrection field. */
-        @JsonProperty("tessedit_enable_dict_correction")
-        public Builder withTesseditEnableDictCorrection(final @Nullable Boolean value) {
-            this.tesseditEnableDictCorrection = value;
-            return this;
-        }
-
-        /** Sets the tesseditCharWhitelist field. */
-        @JsonProperty("tessedit_char_whitelist")
-        public Builder withTesseditCharWhitelist(final String value) {
-            this.tesseditCharWhitelist = value;
-            return this;
-        }
-
-        /** Sets the tesseditCharBlacklist field. */
-        @JsonProperty("tessedit_char_blacklist")
-        public Builder withTesseditCharBlacklist(final String value) {
-            this.tesseditCharBlacklist = value;
-            return this;
-        }
-
-        /** Sets the tesseditUsePrimaryParamsModel field. */
-        @JsonProperty("tessedit_use_primary_params_model")
-        public Builder withTesseditUsePrimaryParamsModel(final @Nullable Boolean value) {
-            this.tesseditUsePrimaryParamsModel = value;
-            return this;
-        }
-
-        /** Sets the textordSpaceSizeIsVariable field. */
-        @JsonProperty("textord_space_size_is_variable")
-        public Builder withTextordSpaceSizeIsVariable(final @Nullable Boolean value) {
-            this.textordSpaceSizeIsVariable = value;
-            return this;
-        }
-
-        /** Sets the thresholdingMethod field. */
-        @JsonProperty("thresholding_method")
-        public Builder withThresholdingMethod(final int value) {
-            this.thresholdingMethod = value;
-            return this;
-        }
-
-        /** Constructs a TesseractConfig instance from the builder's current state. */
-        public TesseractConfig build() {
-            return new TesseractConfig(
-                language,
-                psm,
-                outputFormat,
-                oem,
-                minConfidence,
-                preprocessing,
-                enableTableDetection,
-                tableMinConfidence,
-                tableColumnThreshold,
-                tableRowThresholdRatio,
-                useCache,
-                classifyUsePreAdaptedTemplates,
-                languageModelNgramOn,
-                tesseditDontBlkrejGoodWds,
-                tesseditDontRowrejGoodWds,
-                tesseditEnableDictCorrection,
-                tesseditCharWhitelist,
-                tesseditCharBlacklist,
-                tesseditUsePrimaryParamsModel,
-                textordSpaceSizeIsVariable,
-                thresholdingMethod
-            );
-        }
+    /** Sets the psm field. */
+    @JsonProperty("psm")
+    public Builder withPsm(final @Nullable Integer value) {
+      this.psm = value;
+      return this;
     }
-    // CPD-ON
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withPsm(final int value) {
+      return withPsm(Integer.valueOf(value));
+    }
+
+    /** Sets the outputFormat field. */
+    @JsonProperty("output_format")
+    public Builder withOutputFormat(final String value) {
+      this.outputFormat = value;
+      return this;
+    }
+
+    /** Sets the oem field. */
+    @JsonProperty("oem")
+    public Builder withOem(final @Nullable Integer value) {
+      this.oem = value;
+      return this;
+    }
+
+    /** Sets the minConfidence field. */
+    @JsonProperty("min_confidence")
+    public Builder withMinConfidence(final double value) {
+      this.minConfidence = value;
+      return this;
+    }
+
+    /** Sets the preprocessing field. */
+    @JsonProperty("preprocessing")
+    public Builder withPreprocessing(final @Nullable ImagePreprocessingConfig value) {
+      this.preprocessing = value;
+      return this;
+    }
+
+    /** Sets the enableTableDetection field. */
+    @JsonProperty("enable_table_detection")
+    public Builder withEnableTableDetection(final @Nullable Boolean value) {
+      this.enableTableDetection = value;
+      return this;
+    }
+
+    /** Sets the tableMinConfidence field. */
+    @JsonProperty("table_min_confidence")
+    public Builder withTableMinConfidence(final double value) {
+      this.tableMinConfidence = value;
+      return this;
+    }
+
+    /** Sets the tableColumnThreshold field. */
+    @JsonProperty("table_column_threshold")
+    public Builder withTableColumnThreshold(final @Nullable Integer value) {
+      this.tableColumnThreshold = value;
+      return this;
+    }
+
+    /** Sets the tableRowThresholdRatio field. */
+    @JsonProperty("table_row_threshold_ratio")
+    public Builder withTableRowThresholdRatio(final @Nullable Double value) {
+      this.tableRowThresholdRatio = value;
+      return this;
+    }
+
+    /** Sets the useCache field. */
+    @JsonProperty("use_cache")
+    public Builder withUseCache(final @Nullable Boolean value) {
+      this.useCache = value;
+      return this;
+    }
+
+    /** Sets the classifyUsePreAdaptedTemplates field. */
+    @JsonProperty("classify_use_pre_adapted_templates")
+    public Builder withClassifyUsePreAdaptedTemplates(final @Nullable Boolean value) {
+      this.classifyUsePreAdaptedTemplates = value;
+      return this;
+    }
+
+    /** Sets the languageModelNgramOn field. */
+    @JsonProperty("language_model_ngram_on")
+    public Builder withLanguageModelNgramOn(final @Nullable Boolean value) {
+      this.languageModelNgramOn = value;
+      return this;
+    }
+
+    /** Sets the tesseditDontBlkrejGoodWds field. */
+    @JsonProperty("tessedit_dont_blkrej_good_wds")
+    public Builder withTesseditDontBlkrejGoodWds(final @Nullable Boolean value) {
+      this.tesseditDontBlkrejGoodWds = value;
+      return this;
+    }
+
+    /** Sets the tesseditDontRowrejGoodWds field. */
+    @JsonProperty("tessedit_dont_rowrej_good_wds")
+    public Builder withTesseditDontRowrejGoodWds(final @Nullable Boolean value) {
+      this.tesseditDontRowrejGoodWds = value;
+      return this;
+    }
+
+    /** Sets the tesseditEnableDictCorrection field. */
+    @JsonProperty("tessedit_enable_dict_correction")
+    public Builder withTesseditEnableDictCorrection(final @Nullable Boolean value) {
+      this.tesseditEnableDictCorrection = value;
+      return this;
+    }
+
+    /** Sets the tesseditCharWhitelist field. */
+    @JsonProperty("tessedit_char_whitelist")
+    public Builder withTesseditCharWhitelist(final String value) {
+      this.tesseditCharWhitelist = value;
+      return this;
+    }
+
+    /** Sets the tesseditCharBlacklist field. */
+    @JsonProperty("tessedit_char_blacklist")
+    public Builder withTesseditCharBlacklist(final String value) {
+      this.tesseditCharBlacklist = value;
+      return this;
+    }
+
+    /** Sets the tesseditUsePrimaryParamsModel field. */
+    @JsonProperty("tessedit_use_primary_params_model")
+    public Builder withTesseditUsePrimaryParamsModel(final @Nullable Boolean value) {
+      this.tesseditUsePrimaryParamsModel = value;
+      return this;
+    }
+
+    /** Sets the textordSpaceSizeIsVariable field. */
+    @JsonProperty("textord_space_size_is_variable")
+    public Builder withTextordSpaceSizeIsVariable(final @Nullable Boolean value) {
+      this.textordSpaceSizeIsVariable = value;
+      return this;
+    }
+
+    /** Sets the thresholdingMethod field. */
+    @JsonProperty("thresholding_method")
+    public Builder withThresholdingMethod(final int value) {
+      this.thresholdingMethod = value;
+      return this;
+    }
+
+    /** Constructs a TesseractConfig instance from the builder's current state. */
+    public TesseractConfig build() {
+      return new TesseractConfig(
+          language,
+          psm,
+          outputFormat,
+          oem,
+          minConfidence,
+          preprocessing,
+          enableTableDetection,
+          tableMinConfidence,
+          tableColumnThreshold,
+          tableRowThresholdRatio,
+          useCache,
+          classifyUsePreAdaptedTemplates,
+          languageModelNgramOn,
+          tesseditDontBlkrejGoodWds,
+          tesseditDontRowrejGoodWds,
+          tesseditEnableDictCorrection,
+          tesseditCharWhitelist,
+          tesseditCharBlacklist,
+          tesseditUsePrimaryParamsModel,
+          textordSpaceSizeIsVariable,
+          thresholdingMethod);
+    }
+  }
+  // CPD-ON
 }

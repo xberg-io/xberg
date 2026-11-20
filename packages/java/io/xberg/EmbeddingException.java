@@ -2,9 +2,7 @@
 // alef:hash:cac23056ff2a90e1658b02089affca371d481bd491446307d076a417d7673c9d
 package io.xberg;
 
-/**
- * The embedding model or embedding pipeline returned an error.
- */
+/** The embedding model or embedding pipeline returned an error. */
 public class EmbeddingException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

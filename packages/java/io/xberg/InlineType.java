@@ -7,104 +7,69 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Types of inline elements in Djot.
- */
+/** Types of inline elements in Djot. */
 @SuppressWarnings("PMD")
 public enum InlineType {
-    /**
-     * Plain text run.
-     */
-    TEXT("text"),
-    /**
-     * Bold / strong emphasis.
-     */
-    STRONG("strong"),
-    /**
-     * Italic / regular emphasis.
-     */
-    EMPHASIS("emphasis"),
-    /**
-     * Highlighted text (marker pen).
-     */
-    HIGHLIGHT("highlight"),
-    /**
-     * Subscript text.
-     */
-    SUBSCRIPT("subscript"),
-    /**
-     * Superscript text.
-     */
-    SUPERSCRIPT("superscript"),
-    /**
-     * Inserted text (tracked change).
-     */
-    INSERT("insert"),
-    /**
-     * Deleted text (tracked change).
-     */
-    DELETE("delete"),
-    /**
-     * Inline code span.
-     */
-    CODE("code"),
-    /**
-     * Hyperlink with URL.
-     */
-    LINK("link"),
-    /**
-     * Inline image reference.
-     */
-    IMAGE("image"),
-    /**
-     * Generic inline span with optional attributes.
-     */
-    SPAN("span"),
-    /**
-     * Inline mathematical expression.
-     */
-    MATH("math"),
-    /**
-     * Raw inline content in a specified format.
-     */
-    RAW_INLINE("raw_inline"),
-    /**
-     * Footnote reference marker.
-     */
-    FOOTNOTE_REF("footnote_ref"),
-    /**
-     * Named symbol or emoji shortcode.
-     */
-    SYMBOL("symbol");
+  /** Plain text run. */
+  TEXT("text"),
+  /** Bold / strong emphasis. */
+  STRONG("strong"),
+  /** Italic / regular emphasis. */
+  EMPHASIS("emphasis"),
+  /** Highlighted text (marker pen). */
+  HIGHLIGHT("highlight"),
+  /** Subscript text. */
+  SUBSCRIPT("subscript"),
+  /** Superscript text. */
+  SUPERSCRIPT("superscript"),
+  /** Inserted text (tracked change). */
+  INSERT("insert"),
+  /** Deleted text (tracked change). */
+  DELETE("delete"),
+  /** Inline code span. */
+  CODE("code"),
+  /** Hyperlink with URL. */
+  LINK("link"),
+  /** Inline image reference. */
+  IMAGE("image"),
+  /** Generic inline span with optional attributes. */
+  SPAN("span"),
+  /** Inline mathematical expression. */
+  MATH("math"),
+  /** Raw inline content in a specified format. */
+  RAW_INLINE("raw_inline"),
+  /** Footnote reference marker. */
+  FOOTNOTE_REF("footnote_ref"),
+  /** Named symbol or emoji shortcode. */
+  SYMBOL("symbol");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  InlineType(final String value) {
+    this.value = value;
+  }
 
-    InlineType(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static InlineType fromValue(final String value) {
+    for (InlineType e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown InlineType value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static InlineType fromValue(final String value) {
-        for (InlineType e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown InlineType value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

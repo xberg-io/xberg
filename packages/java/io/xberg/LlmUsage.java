@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,9 +13,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * Token usage and cost data for a single LLM call made during extraction.
  *
- * Populated when VLM OCR, structured extraction, or LLM-based embeddings
- * are used. Multiple entries may be present when multiple LLM calls occur
- * within one extraction (e.g. VLM OCR + structured extraction).
+ * <p>Populated when VLM OCR, structured extraction, or LLM-based embeddings are used. Multiple
+ * entries may be present when multiple LLM calls occur within one extraction (e.g. VLM OCR +
+ * structured extraction).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LlmUsage.Builder.class)
@@ -26,113 +26,115 @@ public record LlmUsage(
     @Nullable @JsonProperty("output_tokens") Long outputTokens,
     @Nullable @JsonProperty("total_tokens") Long totalTokens,
     @Nullable @JsonProperty("estimated_cost") Double estimatedCost,
-    @Nullable @JsonProperty("finish_reason") String finishReason
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("finish_reason") String finishReason) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for LlmUsage deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String model;
+    private String source;
+
+    @JsonProperty("input_tokens")
+    @Nullable
+    private Long inputTokens;
+
+    @JsonProperty("output_tokens")
+    @Nullable
+    private Long outputTokens;
+
+    @JsonProperty("total_tokens")
+    @Nullable
+    private Long totalTokens;
+
+    @JsonProperty("estimated_cost")
+    @Nullable
+    private Double estimatedCost;
+
+    @JsonProperty("finish_reason")
+    @Nullable
+    private String finishReason;
+
+    /** Sets the model field. */
+    @JsonProperty("model")
+    public Builder withModel(final String value) {
+      this.model = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for LlmUsage deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String model;
-        private String source;
-        @JsonProperty("input_tokens")
-        @Nullable private Long inputTokens;
-        @JsonProperty("output_tokens")
-        @Nullable private Long outputTokens;
-        @JsonProperty("total_tokens")
-        @Nullable private Long totalTokens;
-        @JsonProperty("estimated_cost")
-        @Nullable private Double estimatedCost;
-        @JsonProperty("finish_reason")
-        @Nullable private String finishReason;
-
-        /** Sets the model field. */
-        @JsonProperty("model")
-        public Builder withModel(final String value) {
-            this.model = value;
-            return this;
-        }
-
-        /** Sets the source field. */
-        @JsonProperty("source")
-        public Builder withSource(final String value) {
-            this.source = value;
-            return this;
-        }
-
-        /** Sets the inputTokens field. */
-        @JsonProperty("input_tokens")
-        public Builder withInputTokens(final @Nullable Long value) {
-            this.inputTokens = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withInputTokens(final long value) {
-            return withInputTokens(Long.valueOf(value));
-        }
-
-        /** Sets the outputTokens field. */
-        @JsonProperty("output_tokens")
-        public Builder withOutputTokens(final @Nullable Long value) {
-            this.outputTokens = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withOutputTokens(final long value) {
-            return withOutputTokens(Long.valueOf(value));
-        }
-
-        /** Sets the totalTokens field. */
-        @JsonProperty("total_tokens")
-        public Builder withTotalTokens(final @Nullable Long value) {
-            this.totalTokens = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withTotalTokens(final long value) {
-            return withTotalTokens(Long.valueOf(value));
-        }
-
-        /** Sets the estimatedCost field. */
-        @JsonProperty("estimated_cost")
-        public Builder withEstimatedCost(final @Nullable Double value) {
-            this.estimatedCost = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withEstimatedCost(final double value) {
-            return withEstimatedCost(Double.valueOf(value));
-        }
-
-        /** Sets the finishReason field. */
-        @JsonProperty("finish_reason")
-        public Builder withFinishReason(final @Nullable String value) {
-            this.finishReason = value;
-            return this;
-        }
-
-        /** Constructs a LlmUsage instance from the builder's current state. */
-        public LlmUsage build() {
-            return new LlmUsage(
-                model,
-                source,
-                inputTokens,
-                outputTokens,
-                totalTokens,
-                estimatedCost,
-                finishReason
-            );
-        }
+    /** Sets the source field. */
+    @JsonProperty("source")
+    public Builder withSource(final String value) {
+      this.source = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the inputTokens field. */
+    @JsonProperty("input_tokens")
+    public Builder withInputTokens(final @Nullable Long value) {
+      this.inputTokens = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withInputTokens(final long value) {
+      return withInputTokens(Long.valueOf(value));
+    }
+
+    /** Sets the outputTokens field. */
+    @JsonProperty("output_tokens")
+    public Builder withOutputTokens(final @Nullable Long value) {
+      this.outputTokens = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withOutputTokens(final long value) {
+      return withOutputTokens(Long.valueOf(value));
+    }
+
+    /** Sets the totalTokens field. */
+    @JsonProperty("total_tokens")
+    public Builder withTotalTokens(final @Nullable Long value) {
+      this.totalTokens = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withTotalTokens(final long value) {
+      return withTotalTokens(Long.valueOf(value));
+    }
+
+    /** Sets the estimatedCost field. */
+    @JsonProperty("estimated_cost")
+    public Builder withEstimatedCost(final @Nullable Double value) {
+      this.estimatedCost = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withEstimatedCost(final double value) {
+      return withEstimatedCost(Double.valueOf(value));
+    }
+
+    /** Sets the finishReason field. */
+    @JsonProperty("finish_reason")
+    public Builder withFinishReason(final @Nullable String value) {
+      this.finishReason = value;
+      return this;
+    }
+
+    /** Constructs a LlmUsage instance from the builder's current state. */
+    public LlmUsage build() {
+      return new LlmUsage(
+          model, source, inputTokens, outputTokens, totalTokens, estimatedCost, finishReason);
+    }
+  }
+  // CPD-ON
 }

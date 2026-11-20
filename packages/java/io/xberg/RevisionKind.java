@@ -7,56 +7,45 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Semantic classification of a tracked change.
- */
+/** Semantic classification of a tracked change. */
 @SuppressWarnings("PMD")
 public enum RevisionKind {
-    /**
-     * Text or content was inserted.
-     */
-    INSERTION("insertion"),
-    /**
-     * Text or content was deleted.
-     */
-    DELETION("deletion"),
-    /**
-     * Run-level formatting (font, size, colour, …) was changed.
-     */
-    FORMAT_CHANGE("format_change"),
-    /**
-     * A reviewer comment or annotation.
-     */
-    COMMENT("comment");
+  /** Text or content was inserted. */
+  INSERTION("insertion"),
+  /** Text or content was deleted. */
+  DELETION("deletion"),
+  /** Run-level formatting (font, size, colour, …) was changed. */
+  FORMAT_CHANGE("format_change"),
+  /** A reviewer comment or annotation. */
+  COMMENT("comment");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  RevisionKind(final String value) {
+    this.value = value;
+  }
 
-    RevisionKind(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static RevisionKind fromValue(final String value) {
+    for (RevisionKind e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown RevisionKind value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static RevisionKind fromValue(final String value) {
-        for (RevisionKind e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown RevisionKind value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

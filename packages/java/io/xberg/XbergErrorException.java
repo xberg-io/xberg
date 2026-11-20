@@ -5,42 +5,38 @@ package io.xberg;
 /**
  * Main error type for all Xberg operations.
  *
- * All errors in Xberg use this enum, which preserves error chains
- * and provides context for debugging.
+ * <p>All errors in Xberg use this enum, which preserves error chains and provides context for
+ * debugging.
  *
- * # Variants
+ * <p># Variants
  *
- * - `Io` - File system and I/O errors (always bubble up)
- * - `Parsing` - Document parsing errors (corrupt files, unsupported features)
- * - `Ocr` - OCR processing errors
- * - `Validation` - Input validation errors (invalid paths, config, parameters)
- * - `Cache` - Cache operation errors (non-fatal, can be ignored)
- * - `ImageProcessing` - Image manipulation errors
- * - `Serialization` - JSON/MessagePack serialization errors
- * - `MissingDependency` - Missing optional dependencies (tesseract, etc.)
- * - `Plugin` - Plugin-specific errors
- * - `LockPoisoned` - Mutex/RwLock poisoning (should not happen in normal operation)
- * - `UnsupportedFormat` - Unsupported MIME type or file format
- * - `Other` - Catch-all for uncommon errors
- * # FFI error codes — a stable public contract
+ * <p>- `Io` - File system and I/O errors (always bubble up) - `Parsing` - Document parsing errors
+ * (corrupt files, unsupported features) - `Ocr` - OCR processing errors - `Validation` - Input
+ * validation errors (invalid paths, config, parameters) - `Cache` - Cache operation errors
+ * (non-fatal, can be ignored) - `ImageProcessing` - Image manipulation errors - `Serialization` -
+ * JSON/MessagePack serialization errors - `MissingDependency` - Missing optional dependencies
+ * (tesseract, etc.) - `Plugin` - Plugin-specific errors - `LockPoisoned` - Mutex/RwLock poisoning
+ * (should not happen in normal operation) - `UnsupportedFormat` - Unsupported MIME type or file
+ * format - `Other` - Catch-all for uncommon errors # FFI error codes — a stable public contract
  *
- * Each variant carries `#[cfg_attr(alef, alef(error_code = N))]`. Without it alef has no stable
+ * <p>Each variant carries `#[cfg_attr(alef, alef(error_code = N))]`. Without it alef has no stable
  * numeric taxonomy to bind to, so `alef_ffi_error_code()` collapses every variant to a single
  * unknown code and EVERY language binding loses the ability to tell error kinds apart --
  * `errors.Is(err, ErrOcr)` in Go, the `checkLastError` switch in Java, and Zig's typed error sets
- * all degrade to one catch-all. Refusing to guess is correct on alef's part; supplying the codes
- * is our job.
+ * all degrade to one catch-all. Refusing to guess is correct on alef's part; supplying the codes is
+ * our job.
  *
- * The blocks are `XbergError` 1000-1017, `HeuristicsError` 1100-1101, `LoadError` 1200-1205,
- * `ResolveError` 1300, chosen to leave room to grow and to stay clear of alef's own reserved
- * 0-4 (`None`/`Conversion`/`Unknown`/`Panic`/`InvalidHandle`).
+ * <p>The blocks are `XbergError` 1000-1017, `HeuristicsError` 1100-1101, `LoadError` 1200-1205,
+ * `ResolveError` 1300, chosen to leave room to grow and to stay clear of alef's own reserved 0-4
+ * (`None`/`Conversion`/`Unknown`/`Panic`/`InvalidHandle`).
  *
- * These numbers cross the FFI boundary and are compiled into released bindings, so they are
+ * <p>These numbers cross the FFI boundary and are compiled into released bindings, so they are
  * append-only: **never renumber or reuse a code**, and give a new variant the next free number in
  * its block rather than inserting one in declaration order.
  */
 public class XbergErrorException extends XbergRsException implements IXbergError {
   private static final long serialVersionUID = 1L;
+
   /** Creates a new XbergErrorException with the given message. */
   public XbergErrorException(final String message) {
     super(message);

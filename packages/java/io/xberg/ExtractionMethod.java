@@ -7,52 +7,43 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * How the extracted text was produced.
- */
+/** How the extracted text was produced. */
 @SuppressWarnings("PMD")
 public enum ExtractionMethod {
-    /**
-     * Text extracted directly from the document's native format (no OCR).
-     */
-    NATIVE("native"),
-    /**
-     * All text was obtained via OCR (e.g. scanned image-only PDF).
-     */
-    OCR("ocr"),
-    /**
-     * Text came from a combination of native extraction and OCR.
-     */
-    MIXED("mixed");
+  /** Text extracted directly from the document's native format (no OCR). */
+  NATIVE("native"),
+  /** All text was obtained via OCR (e.g. scanned image-only PDF). */
+  OCR("ocr"),
+  /** Text came from a combination of native extraction and OCR. */
+  MIXED("mixed");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  ExtractionMethod(final String value) {
+    this.value = value;
+  }
 
-    ExtractionMethod(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static ExtractionMethod fromValue(final String value) {
+    for (ExtractionMethod e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown ExtractionMethod value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static ExtractionMethod fromValue(final String value) {
-        for (ExtractionMethod e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown ExtractionMethod value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

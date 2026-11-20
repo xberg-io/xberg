@@ -4,16 +4,14 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Configuration for the redaction post-processor.
- */
+/** Configuration for the redaction post-processor. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = RedactionConfig.Builder.class)
 public record RedactionConfig(
@@ -26,130 +24,147 @@ public record RedactionConfig(
     @JsonProperty("findings") List<ExternalRedactionFinding> findings,
     @Nullable @JsonProperty("min_score") Float minScore,
     @JsonProperty("findings_path") java.nio.file.@Nullable Path findingsPath,
-    @Nullable @JsonProperty("findings_offset_encoding") RedactionOffsetEncoding findingsOffsetEncoding
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("findings_offset_encoding")
+        RedactionOffsetEncoding findingsOffsetEncoding) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public RedactionConfig {
+    if (preserveOffsets == null) {
+      preserveOffsets = true;
     }
-    public RedactionConfig{
-        if (preserveOffsets == null) { preserveOffsets = true; }
-        if (findings == null) { findings = List.of(); }
+    if (findings == null) {
+      findings = List.of();
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for RedactionConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private List<PiiCategory> categories;
+    @Nullable private RedactionStrategy strategy = RedactionStrategy.MASK;
+    @Nullable private NerConfig ner;
+
+    @JsonProperty("preserve_offsets")
+    @Nullable
+    private Boolean preserveOffsets;
+
+    @JsonProperty("custom_terms")
+    @Nullable
+    private List<RedactionTerm> customTerms;
+
+    @JsonProperty("custom_patterns")
+    @Nullable
+    private List<RedactionPattern> customPatterns;
+
+    @Nullable private List<ExternalRedactionFinding> findings = List.of();
+
+    @JsonProperty("min_score")
+    @Nullable
+    private Float minScore;
+
+    @JsonProperty("findings_path")
+    private java.nio.file.@Nullable Path findingsPath;
+
+    @JsonProperty("findings_offset_encoding")
+    @Nullable
+    private RedactionOffsetEncoding findingsOffsetEncoding =
+        RedactionOffsetEncoding.UNICODE_CODE_POINTS;
+
+    /** Sets the categories field. */
+    @JsonProperty("categories")
+    public Builder withCategories(final @Nullable List<PiiCategory> value) {
+      this.categories = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for RedactionConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private List<PiiCategory> categories;
-        @Nullable private RedactionStrategy strategy = RedactionStrategy.MASK;
-        @Nullable private NerConfig ner;
-        @JsonProperty("preserve_offsets")
-        @Nullable private Boolean preserveOffsets;
-        @JsonProperty("custom_terms")
-        @Nullable private List<RedactionTerm> customTerms;
-        @JsonProperty("custom_patterns")
-        @Nullable private List<RedactionPattern> customPatterns;
-        @Nullable private List<ExternalRedactionFinding> findings = List.of();
-        @JsonProperty("min_score")
-        @Nullable private Float minScore;
-        @JsonProperty("findings_path")
-        private java.nio.file.@Nullable Path findingsPath;
-        @JsonProperty("findings_offset_encoding")
-        @Nullable private RedactionOffsetEncoding findingsOffsetEncoding = RedactionOffsetEncoding.UNICODE_CODE_POINTS;
-
-        /** Sets the categories field. */
-        @JsonProperty("categories")
-        public Builder withCategories(final @Nullable List<PiiCategory> value) {
-            this.categories = value;
-            return this;
-        }
-
-        /** Sets the strategy field. */
-        @JsonProperty("strategy")
-        public Builder withStrategy(final @Nullable RedactionStrategy value) {
-            this.strategy = value;
-            return this;
-        }
-
-        /** Sets the ner field. */
-        @JsonProperty("ner")
-        public Builder withNer(final @Nullable NerConfig value) {
-            this.ner = value;
-            return this;
-        }
-
-        /** Sets the preserveOffsets field. */
-        @JsonProperty("preserve_offsets")
-        public Builder withPreserveOffsets(final @Nullable Boolean value) {
-            this.preserveOffsets = value;
-            return this;
-        }
-
-        /** Sets the customTerms field. */
-        @JsonProperty("custom_terms")
-        public Builder withCustomTerms(final @Nullable List<RedactionTerm> value) {
-            this.customTerms = value;
-            return this;
-        }
-
-        /** Sets the customPatterns field. */
-        @JsonProperty("custom_patterns")
-        public Builder withCustomPatterns(final @Nullable List<RedactionPattern> value) {
-            this.customPatterns = value;
-            return this;
-        }
-
-        /** Sets the findings field. */
-        @JsonProperty("findings")
-        public Builder withFindings(final @Nullable List<ExternalRedactionFinding> value) {
-            this.findings = value;
-            return this;
-        }
-
-        /** Sets the minScore field. */
-        @JsonProperty("min_score")
-        public Builder withMinScore(final @Nullable Float value) {
-            this.minScore = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMinScore(final float value) {
-            return withMinScore(Float.valueOf(value));
-        }
-
-        /** Sets the findingsPath field. */
-        @JsonProperty("findings_path")
-        public Builder withFindingsPath(final java.nio.file.@Nullable Path value) {
-            this.findingsPath = value;
-            return this;
-        }
-
-        /** Sets the findingsOffsetEncoding field. */
-        @JsonProperty("findings_offset_encoding")
-        public Builder withFindingsOffsetEncoding(final @Nullable RedactionOffsetEncoding value) {
-            this.findingsOffsetEncoding = value;
-            return this;
-        }
-
-        /** Constructs a RedactionConfig instance from the builder's current state. */
-        public RedactionConfig build() {
-            return new RedactionConfig(
-                categories,
-                strategy,
-                ner,
-                preserveOffsets,
-                customTerms,
-                customPatterns,
-                findings,
-                minScore,
-                findingsPath,
-                findingsOffsetEncoding
-            );
-        }
+    /** Sets the strategy field. */
+    @JsonProperty("strategy")
+    public Builder withStrategy(final @Nullable RedactionStrategy value) {
+      this.strategy = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the ner field. */
+    @JsonProperty("ner")
+    public Builder withNer(final @Nullable NerConfig value) {
+      this.ner = value;
+      return this;
+    }
+
+    /** Sets the preserveOffsets field. */
+    @JsonProperty("preserve_offsets")
+    public Builder withPreserveOffsets(final @Nullable Boolean value) {
+      this.preserveOffsets = value;
+      return this;
+    }
+
+    /** Sets the customTerms field. */
+    @JsonProperty("custom_terms")
+    public Builder withCustomTerms(final @Nullable List<RedactionTerm> value) {
+      this.customTerms = value;
+      return this;
+    }
+
+    /** Sets the customPatterns field. */
+    @JsonProperty("custom_patterns")
+    public Builder withCustomPatterns(final @Nullable List<RedactionPattern> value) {
+      this.customPatterns = value;
+      return this;
+    }
+
+    /** Sets the findings field. */
+    @JsonProperty("findings")
+    public Builder withFindings(final @Nullable List<ExternalRedactionFinding> value) {
+      this.findings = value;
+      return this;
+    }
+
+    /** Sets the minScore field. */
+    @JsonProperty("min_score")
+    public Builder withMinScore(final @Nullable Float value) {
+      this.minScore = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMinScore(final float value) {
+      return withMinScore(Float.valueOf(value));
+    }
+
+    /** Sets the findingsPath field. */
+    @JsonProperty("findings_path")
+    public Builder withFindingsPath(final java.nio.file.@Nullable Path value) {
+      this.findingsPath = value;
+      return this;
+    }
+
+    /** Sets the findingsOffsetEncoding field. */
+    @JsonProperty("findings_offset_encoding")
+    public Builder withFindingsOffsetEncoding(final @Nullable RedactionOffsetEncoding value) {
+      this.findingsOffsetEncoding = value;
+      return this;
+    }
+
+    /** Constructs a RedactionConfig instance from the builder's current state. */
+    public RedactionConfig build() {
+      return new RedactionConfig(
+          categories,
+          strategy,
+          ner,
+          preserveOffsets,
+          customTerms,
+          customPatterns,
+          findings,
+          minScore,
+          findingsPath,
+          findingsOffsetEncoding);
+    }
+  }
+  // CPD-ON
 }

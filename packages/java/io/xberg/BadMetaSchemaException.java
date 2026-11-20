@@ -2,9 +2,7 @@
 // alef:hash:633167dfb88566802d935f0f76d3aaf2bdb800e69aacbddcc45ab61c4752320f
 package io.xberg;
 
-/**
- * The meta-schema itself failed to compile.
- */
+/** The meta-schema itself failed to compile. */
 public class BadMetaSchemaException extends LoadErrorException {
   private static final long serialVersionUID = 1L;
 

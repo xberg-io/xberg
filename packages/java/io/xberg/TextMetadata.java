@@ -4,18 +4,18 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Text/Markdown metadata.
  *
- * Extracted from plain text and Markdown files. Includes word counts and,
- * for Markdown, structural elements like headers and links.
+ * <p>Extracted from plain text and Markdown files. Includes word counts and, for Markdown,
+ * structural elements like headers and links.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TextMetadata.Builder.class)
@@ -25,83 +25,80 @@ public record TextMetadata(
     @JsonProperty("character_count") int characterCount,
     @Nullable @JsonProperty("headers") List<String> headers,
     @Nullable @JsonProperty("links") List<MarkdownLink> links,
-    @Nullable @JsonProperty("code_blocks") List<MarkdownCodeBlock> codeBlocks
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("code_blocks") List<MarkdownCodeBlock> codeBlocks) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TextMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("line_count")
+    private int lineCount;
+
+    @JsonProperty("word_count")
+    private int wordCount;
+
+    @JsonProperty("character_count")
+    private int characterCount;
+
+    @Nullable private List<String> headers;
+    @Nullable private List<MarkdownLink> links;
+
+    @JsonProperty("code_blocks")
+    @Nullable
+    private List<MarkdownCodeBlock> codeBlocks;
+
+    /** Sets the lineCount field. */
+    @JsonProperty("line_count")
+    public Builder withLineCount(final int value) {
+      this.lineCount = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TextMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("line_count")
-        private int lineCount;
-        @JsonProperty("word_count")
-        private int wordCount;
-        @JsonProperty("character_count")
-        private int characterCount;
-        @Nullable private List<String> headers;
-        @Nullable private List<MarkdownLink> links;
-        @JsonProperty("code_blocks")
-        @Nullable private List<MarkdownCodeBlock> codeBlocks;
-
-        /** Sets the lineCount field. */
-        @JsonProperty("line_count")
-        public Builder withLineCount(final int value) {
-            this.lineCount = value;
-            return this;
-        }
-
-        /** Sets the wordCount field. */
-        @JsonProperty("word_count")
-        public Builder withWordCount(final int value) {
-            this.wordCount = value;
-            return this;
-        }
-
-        /** Sets the characterCount field. */
-        @JsonProperty("character_count")
-        public Builder withCharacterCount(final int value) {
-            this.characterCount = value;
-            return this;
-        }
-
-        /** Sets the headers field. */
-        @JsonProperty("headers")
-        public Builder withHeaders(final @Nullable List<String> value) {
-            this.headers = value;
-            return this;
-        }
-
-        /** Sets the links field. */
-        @JsonProperty("links")
-        public Builder withLinks(final @Nullable List<MarkdownLink> value) {
-            this.links = value;
-            return this;
-        }
-
-        /** Sets the codeBlocks field. */
-        @JsonProperty("code_blocks")
-        public Builder withCodeBlocks(final @Nullable List<MarkdownCodeBlock> value) {
-            this.codeBlocks = value;
-            return this;
-        }
-
-        /** Constructs a TextMetadata instance from the builder's current state. */
-        public TextMetadata build() {
-            return new TextMetadata(
-                lineCount,
-                wordCount,
-                characterCount,
-                headers,
-                links,
-                codeBlocks
-            );
-        }
+    /** Sets the wordCount field. */
+    @JsonProperty("word_count")
+    public Builder withWordCount(final int value) {
+      this.wordCount = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the characterCount field. */
+    @JsonProperty("character_count")
+    public Builder withCharacterCount(final int value) {
+      this.characterCount = value;
+      return this;
+    }
+
+    /** Sets the headers field. */
+    @JsonProperty("headers")
+    public Builder withHeaders(final @Nullable List<String> value) {
+      this.headers = value;
+      return this;
+    }
+
+    /** Sets the links field. */
+    @JsonProperty("links")
+    public Builder withLinks(final @Nullable List<MarkdownLink> value) {
+      this.links = value;
+      return this;
+    }
+
+    /** Sets the codeBlocks field. */
+    @JsonProperty("code_blocks")
+    public Builder withCodeBlocks(final @Nullable List<MarkdownCodeBlock> value) {
+      this.codeBlocks = value;
+      return this;
+    }
+
+    /** Constructs a TextMetadata instance from the builder's current state. */
+    public TextMetadata build() {
+      return new TextMetadata(lineCount, wordCount, characterCount, headers, links, codeBlocks);
+    }
+  }
+  // CPD-ON
 }

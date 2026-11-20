@@ -4,17 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Email attachment representation.
  *
- * Contains metadata and optionally the content of an email attachment.
+ * <p>Contains metadata and optionally the content of an email attachment.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EmailAttachment.Builder.class)
@@ -24,86 +24,83 @@ public record EmailAttachment(
     @Nullable @JsonProperty("mime_type") String mimeType,
     @Nullable @JsonProperty("size") Long size,
     @JsonProperty("is_image") boolean isImage,
-    @JsonSerialize(using = ByteArraySerializer.class) @Nullable @JsonProperty("data") byte[] data
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonSerialize(using = ByteArraySerializer.class) @Nullable @JsonProperty("data") byte[] data) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for EmailAttachment deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private String name;
+    @Nullable private String filename;
+
+    @JsonProperty("mime_type")
+    @Nullable
+    private String mimeType;
+
+    @Nullable private Long size;
+
+    @JsonProperty("is_image")
+    private boolean isImage;
+
+    @Nullable private byte[] data;
+
+    /** Sets the name field. */
+    @JsonProperty("name")
+    public Builder withName(final @Nullable String value) {
+      this.name = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for EmailAttachment deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private String name;
-        @Nullable private String filename;
-        @JsonProperty("mime_type")
-        @Nullable private String mimeType;
-        @Nullable private Long size;
-        @JsonProperty("is_image")
-        private boolean isImage;
-        @Nullable private byte[] data;
-
-        /** Sets the name field. */
-        @JsonProperty("name")
-        public Builder withName(final @Nullable String value) {
-            this.name = value;
-            return this;
-        }
-
-        /** Sets the filename field. */
-        @JsonProperty("filename")
-        public Builder withFilename(final @Nullable String value) {
-            this.filename = value;
-            return this;
-        }
-
-        /** Sets the mimeType field. */
-        @JsonProperty("mime_type")
-        public Builder withMimeType(final @Nullable String value) {
-            this.mimeType = value;
-            return this;
-        }
-
-        /** Sets the size field. */
-        @JsonProperty("size")
-        public Builder withSize(final @Nullable Long value) {
-            this.size = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withSize(final long value) {
-            return withSize(Long.valueOf(value));
-        }
-
-        /** Sets the isImage field. */
-        @JsonProperty("is_image")
-        public Builder withIsImage(final boolean value) {
-            this.isImage = value;
-            return this;
-        }
-
-        /** Sets the data field. */
-        @JsonProperty("data")
-        public Builder withData(final @Nullable byte[] value) {
-            this.data = value;
-            return this;
-        }
-
-        /** Constructs a EmailAttachment instance from the builder's current state. */
-        public EmailAttachment build() {
-            return new EmailAttachment(
-                name,
-                filename,
-                mimeType,
-                size,
-                isImage,
-                data
-            );
-        }
+    /** Sets the filename field. */
+    @JsonProperty("filename")
+    public Builder withFilename(final @Nullable String value) {
+      this.filename = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the mimeType field. */
+    @JsonProperty("mime_type")
+    public Builder withMimeType(final @Nullable String value) {
+      this.mimeType = value;
+      return this;
+    }
+
+    /** Sets the size field. */
+    @JsonProperty("size")
+    public Builder withSize(final @Nullable Long value) {
+      this.size = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withSize(final long value) {
+      return withSize(Long.valueOf(value));
+    }
+
+    /** Sets the isImage field. */
+    @JsonProperty("is_image")
+    public Builder withIsImage(final boolean value) {
+      this.isImage = value;
+      return this;
+    }
+
+    /** Sets the data field. */
+    @JsonProperty("data")
+    public Builder withData(final @Nullable byte[] value) {
+      this.data = value;
+      return this;
+    }
+
+    /** Constructs a EmailAttachment instance from the builder's current state. */
+    public EmailAttachment build() {
+      return new EmailAttachment(name, filename, mimeType, size, isImage, data);
+    }
+  }
+  // CPD-ON
 }

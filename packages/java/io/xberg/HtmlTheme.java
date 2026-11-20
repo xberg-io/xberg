@@ -7,63 +7,53 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Built-in HTML theme selection.
- */
+/** Built-in HTML theme selection. */
 @SuppressWarnings("PMD")
 public enum HtmlTheme {
-    /**
-     * Sensible defaults: system font stack, neutral colours, readable line
-     * measure. CSS custom properties ({@code --kb-*}) are all defined so user CSS
-     * can override individual values.
-     */
-    DEFAULT("default"),
-    /**
-     * GitHub Markdown-inspired palette and spacing.
-     */
-    GIT_HUB("github"),
-    /**
-     * Dark background, light text.
-     */
-    DARK("dark"),
-    /**
-     * Minimal light theme with generous whitespace.
-     */
-    LIGHT("light"),
-    /**
-     * No built-in stylesheet emitted. CSS custom properties are still defined
-     * on {@code :root} so user stylesheets can reference {@code var(--kb-*)} tokens.
-     */
-    UNSTYLED("unstyled");
+  /**
+   * Sensible defaults: system font stack, neutral colours, readable line measure. CSS custom
+   * properties ({@code --kb-*}) are all defined so user CSS can override individual values.
+   */
+  DEFAULT("default"),
+  /** GitHub Markdown-inspired palette and spacing. */
+  GIT_HUB("github"),
+  /** Dark background, light text. */
+  DARK("dark"),
+  /** Minimal light theme with generous whitespace. */
+  LIGHT("light"),
+  /**
+   * No built-in stylesheet emitted. CSS custom properties are still defined on {@code :root} so
+   * user stylesheets can reference {@code var(--kb-*)} tokens.
+   */
+  UNSTYLED("unstyled");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  HtmlTheme(final String value) {
+    this.value = value;
+  }
 
-    HtmlTheme(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static HtmlTheme fromValue(final String value) {
+    for (HtmlTheme e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown HtmlTheme value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static HtmlTheme fromValue(final String value) {
-        for (HtmlTheme e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown HtmlTheme value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

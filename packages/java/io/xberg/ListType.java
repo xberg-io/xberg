@@ -7,56 +7,45 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Type of list detection.
- */
+/** Type of list detection. */
 @SuppressWarnings("PMD")
 public enum ListType {
-    /**
-     * Bullet points (-, *, •, etc.)
-     */
-    BULLET("Bullet"),
-    /**
-     * Numbered lists (1., 2., etc.)
-     */
-    NUMBERED("Numbered"),
-    /**
-     * Lettered lists (a., b., A., B., etc.)
-     */
-    LETTERED("Lettered"),
-    /**
-     * Indented items
-     */
-    INDENTED("Indented");
+  /** Bullet points (-, *, •, etc.) */
+  BULLET("Bullet"),
+  /** Numbered lists (1., 2., etc.) */
+  NUMBERED("Numbered"),
+  /** Lettered lists (a., b., A., B., etc.) */
+  LETTERED("Lettered"),
+  /** Indented items */
+  INDENTED("Indented");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  ListType(final String value) {
+    this.value = value;
+  }
 
-    ListType(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static ListType fromValue(final String value) {
+    for (ListType e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown ListType value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static ListType fromValue(final String value) {
-        for (ListType e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown ListType value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

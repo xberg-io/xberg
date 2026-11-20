@@ -7,6 +7,7 @@ package io.xberg;
 /** Exception thrown by XbergRs. */
 public class XbergRsException extends Exception {
   private static final long serialVersionUID = 1L;
+
   /** The error code. */
   private int code;
 

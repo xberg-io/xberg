@@ -4,44 +4,40 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
-/**
- * Aggregate doctor report over all configured backends and settings.
- */
+/** Aggregate doctor report over all configured backends and settings. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DoctorReport.Builder.class)
 public record DoctorReport(@JsonProperty("checks") List<DoctorCheck> checks) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DoctorReport deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<DoctorCheck> checks = List.of();
+
+    /** Sets the checks field. */
+    @JsonProperty("checks")
+    public Builder withChecks(final List<DoctorCheck> value) {
+      this.checks = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DoctorReport deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<DoctorCheck> checks = List.of();
-
-        /** Sets the checks field. */
-        @JsonProperty("checks")
-        public Builder withChecks(final List<DoctorCheck> value) {
-            this.checks = value;
-            return this;
-        }
-
-        /** Constructs a DoctorReport instance from the builder's current state. */
-        public DoctorReport build() {
-            return new DoctorReport(
-                checks
-            );
-        }
+    /** Constructs a DoctorReport instance from the builder's current state. */
+    public DoctorReport build() {
+      return new DoctorReport(checks);
     }
-    // CPD-ON
+  }
+  // CPD-ON
 }

@@ -7,52 +7,46 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Controls which conversion tier is used.
- */
+/** Controls which conversion tier is used. */
 @SuppressWarnings("PMD")
 public enum TierStrategy {
-    /**
-     * Automatically pick the best tier for the input (default).
-     *
-     * Runs the classifier against the prescan report and uses Tier-1 when
-     * eligible; falls back to Tier-2 on bail or when the classifier routes
-     * to Tier-2.
-     */
-    AUTO("auto"),
-    /**
-     * Always use the Tier-2 (DOM parse + walk) path, skipping Tier-1.
-     */
-    TIER2("tier2");
+  /**
+   * Automatically pick the best tier for the input (default).
+   *
+   * <p>Runs the classifier against the prescan report and uses Tier-1 when eligible; falls back to
+   * Tier-2 on bail or when the classifier routes to Tier-2.
+   */
+  AUTO("auto"),
+  /** Always use the Tier-2 (DOM parse + walk) path, skipping Tier-1. */
+  TIER2("tier2");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  TierStrategy(final String value) {
+    this.value = value;
+  }
 
-    TierStrategy(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static TierStrategy fromValue(final String value) {
+    for (TierStrategy e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown TierStrategy value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static TierStrategy fromValue(final String value) {
-        for (TierStrategy e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown TierStrategy value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

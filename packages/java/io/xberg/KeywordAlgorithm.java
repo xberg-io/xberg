@@ -7,48 +7,41 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Keyword algorithm selection.
- */
+/** Keyword algorithm selection. */
 @SuppressWarnings("PMD")
 public enum KeywordAlgorithm {
-    /**
-     * YAKE (Yet Another Keyword Extractor) - statistical approach
-     */
-    YAKE("yake"),
-    /**
-     * RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-     */
-    RAKE("rake");
+  /** YAKE (Yet Another Keyword Extractor) - statistical approach */
+  YAKE("yake"),
+  /** RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based */
+  RAKE("rake");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  KeywordAlgorithm(final String value) {
+    this.value = value;
+  }
 
-    KeywordAlgorithm(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static KeywordAlgorithm fromValue(final String value) {
+    for (KeywordAlgorithm e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown KeywordAlgorithm value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static KeywordAlgorithm fromValue(final String value) {
-        for (KeywordAlgorithm e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown KeywordAlgorithm value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

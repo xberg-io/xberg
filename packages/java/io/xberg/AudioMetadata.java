@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Audio/video file metadata.
  *
- * Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and
- * PCM decode properties. Available when the {@code transcription-types} feature is enabled.
+ * <p>Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and PCM decode
+ * properties. Available when the {@code transcription-types} feature is enabled.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = AudioMetadata.Builder.class)
@@ -24,101 +24,98 @@ public record AudioMetadata(
     @Nullable @JsonProperty("container") String container,
     @Nullable @JsonProperty("sample_rate_hz") Integer sampleRateHz,
     @Nullable @JsonProperty("channels") Short channels,
-    @Nullable @JsonProperty("bitrate") Integer bitrate
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("bitrate") Integer bitrate) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for AudioMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("duration_ms")
+    @Nullable
+    private Long durationMs;
+
+    @Nullable private String codec;
+    @Nullable private String container;
+
+    @JsonProperty("sample_rate_hz")
+    @Nullable
+    private Integer sampleRateHz;
+
+    @Nullable private Short channels;
+    @Nullable private Integer bitrate;
+
+    /** Sets the durationMs field. */
+    @JsonProperty("duration_ms")
+    public Builder withDurationMs(final @Nullable Long value) {
+      this.durationMs = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for AudioMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("duration_ms")
-        @Nullable private Long durationMs;
-        @Nullable private String codec;
-        @Nullable private String container;
-        @JsonProperty("sample_rate_hz")
-        @Nullable private Integer sampleRateHz;
-        @Nullable private Short channels;
-        @Nullable private Integer bitrate;
-
-        /** Sets the durationMs field. */
-        @JsonProperty("duration_ms")
-        public Builder withDurationMs(final @Nullable Long value) {
-            this.durationMs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withDurationMs(final long value) {
-            return withDurationMs(Long.valueOf(value));
-        }
-
-        /** Sets the codec field. */
-        @JsonProperty("codec")
-        public Builder withCodec(final @Nullable String value) {
-            this.codec = value;
-            return this;
-        }
-
-        /** Sets the container field. */
-        @JsonProperty("container")
-        public Builder withContainer(final @Nullable String value) {
-            this.container = value;
-            return this;
-        }
-
-        /** Sets the sampleRateHz field. */
-        @JsonProperty("sample_rate_hz")
-        public Builder withSampleRateHz(final @Nullable Integer value) {
-            this.sampleRateHz = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withSampleRateHz(final int value) {
-            return withSampleRateHz(Integer.valueOf(value));
-        }
-
-        /** Sets the channels field. */
-        @JsonProperty("channels")
-        public Builder withChannels(final @Nullable Short value) {
-            this.channels = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withChannels(final short value) {
-            return withChannels(Short.valueOf(value));
-        }
-
-        /** Sets the bitrate field. */
-        @JsonProperty("bitrate")
-        public Builder withBitrate(final @Nullable Integer value) {
-            this.bitrate = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withBitrate(final int value) {
-            return withBitrate(Integer.valueOf(value));
-        }
-
-        /** Constructs a AudioMetadata instance from the builder's current state. */
-        public AudioMetadata build() {
-            return new AudioMetadata(
-                durationMs,
-                codec,
-                container,
-                sampleRateHz,
-                channels,
-                bitrate
-            );
-        }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withDurationMs(final long value) {
+      return withDurationMs(Long.valueOf(value));
     }
-    // CPD-ON
+
+    /** Sets the codec field. */
+    @JsonProperty("codec")
+    public Builder withCodec(final @Nullable String value) {
+      this.codec = value;
+      return this;
+    }
+
+    /** Sets the container field. */
+    @JsonProperty("container")
+    public Builder withContainer(final @Nullable String value) {
+      this.container = value;
+      return this;
+    }
+
+    /** Sets the sampleRateHz field. */
+    @JsonProperty("sample_rate_hz")
+    public Builder withSampleRateHz(final @Nullable Integer value) {
+      this.sampleRateHz = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withSampleRateHz(final int value) {
+      return withSampleRateHz(Integer.valueOf(value));
+    }
+
+    /** Sets the channels field. */
+    @JsonProperty("channels")
+    public Builder withChannels(final @Nullable Short value) {
+      this.channels = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withChannels(final short value) {
+      return withChannels(Short.valueOf(value));
+    }
+
+    /** Sets the bitrate field. */
+    @JsonProperty("bitrate")
+    public Builder withBitrate(final @Nullable Integer value) {
+      this.bitrate = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withBitrate(final int value) {
+      return withBitrate(Integer.valueOf(value));
+    }
+
+    /** Constructs a AudioMetadata instance from the builder's current state. */
+    public AudioMetadata build() {
+      return new AudioMetadata(durationMs, codec, container, sampleRateHz, channels, bitrate);
+    }
+  }
+  // CPD-ON
 }

@@ -2,9 +2,7 @@
 // alef:hash:8227fa965fa6007a7de39a2f16eaec7397a42419cd67211f8a25ea26f45f0ad6
 package io.xberg;
 
-/**
- * The document's MIME type is not supported by any registered extractor.
- */
+/** The document's MIME type is not supported by any registered extractor. */
 public class UnsupportedFormatException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

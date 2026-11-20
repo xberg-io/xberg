@@ -2,9 +2,7 @@
 // alef:hash:3745c1039a103c757fd7e48fa1098aef9bef06dc1c8f3c939e2ddad84aade4b4
 package io.xberg;
 
-/**
- * The file parses as JSON but does not validate against the meta-schema.
- */
+/** The file parses as JSON but does not validate against the meta-schema. */
 public class SchemaValidationException extends LoadErrorException {
   private static final long serialVersionUID = 1L;
 

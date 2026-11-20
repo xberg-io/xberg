@@ -4,14 +4,12 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Per-page signals extracted from PDF content.
- */
+/** Per-page signals extracted from PDF content. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageSignals.Builder.class)
 public record PageSignals(
@@ -20,85 +18,88 @@ public record PageSignals(
     @JsonProperty("starts_with_letterhead_like") boolean startsWithLetterheadLike,
     @JsonProperty("has_page_number_one_marker") boolean hasPageNumberOneMarker,
     @JsonProperty("has_signature_block") boolean hasSignatureBlock,
-    @JsonProperty("layout_text_density") float layoutTextDensity
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("layout_text_density") float layoutTextDensity) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PageSignals deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("page_number")
+    private int pageNumber;
+
+    @JsonProperty("text_excerpt")
+    private String textExcerpt;
+
+    @JsonProperty("starts_with_letterhead_like")
+    private boolean startsWithLetterheadLike;
+
+    @JsonProperty("has_page_number_one_marker")
+    private boolean hasPageNumberOneMarker;
+
+    @JsonProperty("has_signature_block")
+    private boolean hasSignatureBlock;
+
+    @JsonProperty("layout_text_density")
+    private float layoutTextDensity;
+
+    /** Sets the pageNumber field. */
+    @JsonProperty("page_number")
+    public Builder withPageNumber(final int value) {
+      this.pageNumber = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PageSignals deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("page_number")
-        private int pageNumber;
-        @JsonProperty("text_excerpt")
-        private String textExcerpt;
-        @JsonProperty("starts_with_letterhead_like")
-        private boolean startsWithLetterheadLike;
-        @JsonProperty("has_page_number_one_marker")
-        private boolean hasPageNumberOneMarker;
-        @JsonProperty("has_signature_block")
-        private boolean hasSignatureBlock;
-        @JsonProperty("layout_text_density")
-        private float layoutTextDensity;
-
-        /** Sets the pageNumber field. */
-        @JsonProperty("page_number")
-        public Builder withPageNumber(final int value) {
-            this.pageNumber = value;
-            return this;
-        }
-
-        /** Sets the textExcerpt field. */
-        @JsonProperty("text_excerpt")
-        public Builder withTextExcerpt(final String value) {
-            this.textExcerpt = value;
-            return this;
-        }
-
-        /** Sets the startsWithLetterheadLike field. */
-        @JsonProperty("starts_with_letterhead_like")
-        public Builder withStartsWithLetterheadLike(final boolean value) {
-            this.startsWithLetterheadLike = value;
-            return this;
-        }
-
-        /** Sets the hasPageNumberOneMarker field. */
-        @JsonProperty("has_page_number_one_marker")
-        public Builder withHasPageNumberOneMarker(final boolean value) {
-            this.hasPageNumberOneMarker = value;
-            return this;
-        }
-
-        /** Sets the hasSignatureBlock field. */
-        @JsonProperty("has_signature_block")
-        public Builder withHasSignatureBlock(final boolean value) {
-            this.hasSignatureBlock = value;
-            return this;
-        }
-
-        /** Sets the layoutTextDensity field. */
-        @JsonProperty("layout_text_density")
-        public Builder withLayoutTextDensity(final float value) {
-            this.layoutTextDensity = value;
-            return this;
-        }
-
-        /** Constructs a PageSignals instance from the builder's current state. */
-        public PageSignals build() {
-            return new PageSignals(
-                pageNumber,
-                textExcerpt,
-                startsWithLetterheadLike,
-                hasPageNumberOneMarker,
-                hasSignatureBlock,
-                layoutTextDensity
-            );
-        }
+    /** Sets the textExcerpt field. */
+    @JsonProperty("text_excerpt")
+    public Builder withTextExcerpt(final String value) {
+      this.textExcerpt = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the startsWithLetterheadLike field. */
+    @JsonProperty("starts_with_letterhead_like")
+    public Builder withStartsWithLetterheadLike(final boolean value) {
+      this.startsWithLetterheadLike = value;
+      return this;
+    }
+
+    /** Sets the hasPageNumberOneMarker field. */
+    @JsonProperty("has_page_number_one_marker")
+    public Builder withHasPageNumberOneMarker(final boolean value) {
+      this.hasPageNumberOneMarker = value;
+      return this;
+    }
+
+    /** Sets the hasSignatureBlock field. */
+    @JsonProperty("has_signature_block")
+    public Builder withHasSignatureBlock(final boolean value) {
+      this.hasSignatureBlock = value;
+      return this;
+    }
+
+    /** Sets the layoutTextDensity field. */
+    @JsonProperty("layout_text_density")
+    public Builder withLayoutTextDensity(final float value) {
+      this.layoutTextDensity = value;
+      return this;
+    }
+
+    /** Constructs a PageSignals instance from the builder's current state. */
+    public PageSignals build() {
+      return new PageSignals(
+          pageNumber,
+          textExcerpt,
+          startsWithLetterheadLike,
+          hasPageNumberOneMarker,
+          hasSignatureBlock,
+          layoutTextDensity);
+    }
+  }
+  // CPD-ON
 }

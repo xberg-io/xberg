@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,10 +13,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * A single tracked change embedded in a document.
  *
- * Populated by per-format extractors that understand change-tracking metadata
- * (DOCX {@code w:ins}/{@code w:del}/{@code w:rPrChange}, ODT {@code text:change-*}, …). Every
- * extractor defaults to {@code ExtractedDocument.revisions = None} until a
- * format-specific implementation is added.
+ * <p>Populated by per-format extractors that understand change-tracking metadata (DOCX {@code
+ * w:ins}/{@code w:del}/{@code w:rPrChange}, ODT {@code text:change-*}, …). Every extractor defaults
+ * to {@code ExtractedDocument.revisions = None} until a format-specific implementation is added.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DocumentRevision.Builder.class)
@@ -26,80 +25,73 @@ public record DocumentRevision(
     @Nullable @JsonProperty("timestamp") String timestamp,
     @JsonProperty("kind") RevisionKind kind,
     @Nullable @JsonProperty("anchor") RevisionAnchor anchor,
-    @JsonProperty("delta") RevisionDelta delta
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("delta") RevisionDelta delta) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for DocumentRevision deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("revision_id")
+    private String revisionId;
+
+    @Nullable private String author;
+    @Nullable private String timestamp;
+    private RevisionKind kind;
+    @Nullable private RevisionAnchor anchor;
+    private RevisionDelta delta;
+
+    /** Sets the revisionId field. */
+    @JsonProperty("revision_id")
+    public Builder withRevisionId(final String value) {
+      this.revisionId = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for DocumentRevision deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("revision_id")
-        private String revisionId;
-        @Nullable private String author;
-        @Nullable private String timestamp;
-        private RevisionKind kind;
-        @Nullable private RevisionAnchor anchor;
-        private RevisionDelta delta;
-
-        /** Sets the revisionId field. */
-        @JsonProperty("revision_id")
-        public Builder withRevisionId(final String value) {
-            this.revisionId = value;
-            return this;
-        }
-
-        /** Sets the author field. */
-        @JsonProperty("author")
-        public Builder withAuthor(final @Nullable String value) {
-            this.author = value;
-            return this;
-        }
-
-        /** Sets the timestamp field. */
-        @JsonProperty("timestamp")
-        public Builder withTimestamp(final @Nullable String value) {
-            this.timestamp = value;
-            return this;
-        }
-
-        /** Sets the kind field. */
-        @JsonProperty("kind")
-        public Builder withKind(final RevisionKind value) {
-            this.kind = value;
-            return this;
-        }
-
-        /** Sets the anchor field. */
-        @JsonProperty("anchor")
-        public Builder withAnchor(final @Nullable RevisionAnchor value) {
-            this.anchor = value;
-            return this;
-        }
-
-        /** Sets the delta field. */
-        @JsonProperty("delta")
-        public Builder withDelta(final RevisionDelta value) {
-            this.delta = value;
-            return this;
-        }
-
-        /** Constructs a DocumentRevision instance from the builder's current state. */
-        public DocumentRevision build() {
-            return new DocumentRevision(
-                revisionId,
-                author,
-                timestamp,
-                kind,
-                anchor,
-                delta
-            );
-        }
+    /** Sets the author field. */
+    @JsonProperty("author")
+    public Builder withAuthor(final @Nullable String value) {
+      this.author = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the timestamp field. */
+    @JsonProperty("timestamp")
+    public Builder withTimestamp(final @Nullable String value) {
+      this.timestamp = value;
+      return this;
+    }
+
+    /** Sets the kind field. */
+    @JsonProperty("kind")
+    public Builder withKind(final RevisionKind value) {
+      this.kind = value;
+      return this;
+    }
+
+    /** Sets the anchor field. */
+    @JsonProperty("anchor")
+    public Builder withAnchor(final @Nullable RevisionAnchor value) {
+      this.anchor = value;
+      return this;
+    }
+
+    /** Sets the delta field. */
+    @JsonProperty("delta")
+    public Builder withDelta(final RevisionDelta value) {
+      this.delta = value;
+      return this;
+    }
+
+    /** Constructs a DocumentRevision instance from the builder's current state. */
+    public DocumentRevision build() {
+      return new DocumentRevision(revisionId, author, timestamp, kind, anchor, delta);
+    }
+  }
+  // CPD-ON
 }

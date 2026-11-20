@@ -4,55 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * A string key-value attribute.
- */
+/** A string key-value attribute. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = KeyValueAttribute.Builder.class)
 public record KeyValueAttribute(
-    @JsonProperty("key") String key,
-    @JsonProperty("value") String value
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("key") String key, @JsonProperty("value") String value) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for KeyValueAttribute deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String key;
+    private String value;
+
+    /** Sets the key field. */
+    @JsonProperty("key")
+    public Builder withKey(final String value) {
+      this.key = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for KeyValueAttribute deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String key;
-        private String value;
-
-        /** Sets the key field. */
-        @JsonProperty("key")
-        public Builder withKey(final String value) {
-            this.key = value;
-            return this;
-        }
-
-        /** Sets the value field. */
-        @JsonProperty("value")
-        public Builder withValue(final String value) {
-            this.value = value;
-            return this;
-        }
-
-        /** Constructs a KeyValueAttribute instance from the builder's current state. */
-        public KeyValueAttribute build() {
-            return new KeyValueAttribute(
-                key,
-                value
-            );
-        }
+    /** Sets the value field. */
+    @JsonProperty("value")
+    public Builder withValue(final String value) {
+      this.value = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a KeyValueAttribute instance from the builder's current state. */
+    public KeyValueAttribute build() {
+      return new KeyValueAttribute(key, value);
+    }
+  }
+  // CPD-ON
 }

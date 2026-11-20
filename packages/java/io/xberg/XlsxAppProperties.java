@@ -4,17 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Application properties from docProps/app.xml for XLSX
  *
- * Contains Excel-specific document metadata.
+ * <p>Contains Excel-specific document metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = XlsxAppProperties.Builder.class)
@@ -27,138 +27,150 @@ public record XlsxAppProperties(
     @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
     @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged,
     @Nullable @JsonProperty("company") String company,
-    @JsonProperty("worksheet_names") List<String> worksheetNames
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("worksheet_names") List<String> worksheetNames) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for XlsxAppProperties deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private String application;
+
+    @JsonProperty("app_version")
+    @Nullable
+    private String appVersion;
+
+    @JsonProperty("doc_security")
+    @Nullable
+    private Integer docSecurity;
+
+    @JsonProperty("scale_crop")
+    @Nullable
+    private Boolean scaleCrop;
+
+    @JsonProperty("links_up_to_date")
+    @Nullable
+    private Boolean linksUpToDate;
+
+    @JsonProperty("shared_doc")
+    @Nullable
+    private Boolean sharedDoc;
+
+    @JsonProperty("hyperlinks_changed")
+    @Nullable
+    private Boolean hyperlinksChanged;
+
+    @Nullable private String company;
+
+    @JsonProperty("worksheet_names")
+    private List<String> worksheetNames = List.of();
+
+    /** Sets the application field. */
+    @JsonProperty("application")
+    public Builder withApplication(final @Nullable String value) {
+      this.application = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for XlsxAppProperties deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private String application;
-        @JsonProperty("app_version")
-        @Nullable private String appVersion;
-        @JsonProperty("doc_security")
-        @Nullable private Integer docSecurity;
-        @JsonProperty("scale_crop")
-        @Nullable private Boolean scaleCrop;
-        @JsonProperty("links_up_to_date")
-        @Nullable private Boolean linksUpToDate;
-        @JsonProperty("shared_doc")
-        @Nullable private Boolean sharedDoc;
-        @JsonProperty("hyperlinks_changed")
-        @Nullable private Boolean hyperlinksChanged;
-        @Nullable private String company;
-        @JsonProperty("worksheet_names")
-        private List<String> worksheetNames = List.of();
-
-        /** Sets the application field. */
-        @JsonProperty("application")
-        public Builder withApplication(final @Nullable String value) {
-            this.application = value;
-            return this;
-        }
-
-        /** Sets the appVersion field. */
-        @JsonProperty("app_version")
-        public Builder withAppVersion(final @Nullable String value) {
-            this.appVersion = value;
-            return this;
-        }
-
-        /** Sets the docSecurity field. */
-        @JsonProperty("doc_security")
-        public Builder withDocSecurity(final @Nullable Integer value) {
-            this.docSecurity = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withDocSecurity(final int value) {
-            return withDocSecurity(Integer.valueOf(value));
-        }
-
-        /** Sets the scaleCrop field. */
-        @JsonProperty("scale_crop")
-        public Builder withScaleCrop(final @Nullable Boolean value) {
-            this.scaleCrop = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withScaleCrop(final boolean value) {
-            return withScaleCrop(Boolean.valueOf(value));
-        }
-
-        /** Sets the linksUpToDate field. */
-        @JsonProperty("links_up_to_date")
-        public Builder withLinksUpToDate(final @Nullable Boolean value) {
-            this.linksUpToDate = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withLinksUpToDate(final boolean value) {
-            return withLinksUpToDate(Boolean.valueOf(value));
-        }
-
-        /** Sets the sharedDoc field. */
-        @JsonProperty("shared_doc")
-        public Builder withSharedDoc(final @Nullable Boolean value) {
-            this.sharedDoc = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withSharedDoc(final boolean value) {
-            return withSharedDoc(Boolean.valueOf(value));
-        }
-
-        /** Sets the hyperlinksChanged field. */
-        @JsonProperty("hyperlinks_changed")
-        public Builder withHyperlinksChanged(final @Nullable Boolean value) {
-            this.hyperlinksChanged = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withHyperlinksChanged(final boolean value) {
-            return withHyperlinksChanged(Boolean.valueOf(value));
-        }
-
-        /** Sets the company field. */
-        @JsonProperty("company")
-        public Builder withCompany(final @Nullable String value) {
-            this.company = value;
-            return this;
-        }
-
-        /** Sets the worksheetNames field. */
-        @JsonProperty("worksheet_names")
-        public Builder withWorksheetNames(final List<String> value) {
-            this.worksheetNames = value;
-            return this;
-        }
-
-        /** Constructs a XlsxAppProperties instance from the builder's current state. */
-        public XlsxAppProperties build() {
-            return new XlsxAppProperties(
-                application,
-                appVersion,
-                docSecurity,
-                scaleCrop,
-                linksUpToDate,
-                sharedDoc,
-                hyperlinksChanged,
-                company,
-                worksheetNames
-            );
-        }
+    /** Sets the appVersion field. */
+    @JsonProperty("app_version")
+    public Builder withAppVersion(final @Nullable String value) {
+      this.appVersion = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the docSecurity field. */
+    @JsonProperty("doc_security")
+    public Builder withDocSecurity(final @Nullable Integer value) {
+      this.docSecurity = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withDocSecurity(final int value) {
+      return withDocSecurity(Integer.valueOf(value));
+    }
+
+    /** Sets the scaleCrop field. */
+    @JsonProperty("scale_crop")
+    public Builder withScaleCrop(final @Nullable Boolean value) {
+      this.scaleCrop = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withScaleCrop(final boolean value) {
+      return withScaleCrop(Boolean.valueOf(value));
+    }
+
+    /** Sets the linksUpToDate field. */
+    @JsonProperty("links_up_to_date")
+    public Builder withLinksUpToDate(final @Nullable Boolean value) {
+      this.linksUpToDate = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withLinksUpToDate(final boolean value) {
+      return withLinksUpToDate(Boolean.valueOf(value));
+    }
+
+    /** Sets the sharedDoc field. */
+    @JsonProperty("shared_doc")
+    public Builder withSharedDoc(final @Nullable Boolean value) {
+      this.sharedDoc = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withSharedDoc(final boolean value) {
+      return withSharedDoc(Boolean.valueOf(value));
+    }
+
+    /** Sets the hyperlinksChanged field. */
+    @JsonProperty("hyperlinks_changed")
+    public Builder withHyperlinksChanged(final @Nullable Boolean value) {
+      this.hyperlinksChanged = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withHyperlinksChanged(final boolean value) {
+      return withHyperlinksChanged(Boolean.valueOf(value));
+    }
+
+    /** Sets the company field. */
+    @JsonProperty("company")
+    public Builder withCompany(final @Nullable String value) {
+      this.company = value;
+      return this;
+    }
+
+    /** Sets the worksheetNames field. */
+    @JsonProperty("worksheet_names")
+    public Builder withWorksheetNames(final List<String> value) {
+      this.worksheetNames = value;
+      return this;
+    }
+
+    /** Constructs a XlsxAppProperties instance from the builder's current state. */
+    public XlsxAppProperties build() {
+      return new XlsxAppProperties(
+          application,
+          appVersion,
+          docSecurity,
+          scaleCrop,
+          linksUpToDate,
+          sharedDoc,
+          hyperlinksChanged,
+          company,
+          worksheetNames);
+    }
+  }
+  // CPD-ON
 }

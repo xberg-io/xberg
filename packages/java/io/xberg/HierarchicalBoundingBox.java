@@ -4,16 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A text block with hierarchy level assignment.
  *
- * Represents a block of text with semantic heading information extracted from
- * font size clustering and hierarchical analysis.
+ * <p>Represents a block of text with semantic heading information extracted from font size
+ * clustering and hierarchical analysis.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HierarchicalBoundingBox.Builder.class)
@@ -21,61 +21,55 @@ public record HierarchicalBoundingBox(
     @JsonProperty("left") float left,
     @JsonProperty("top") float top,
     @JsonProperty("right") float right,
-    @JsonProperty("bottom") float bottom
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("bottom") float bottom) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for HierarchicalBoundingBox deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private float left;
+    private float top;
+    private float right;
+    private float bottom;
+
+    /** Sets the left field. */
+    @JsonProperty("left")
+    public Builder withLeft(final float value) {
+      this.left = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for HierarchicalBoundingBox deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private float left;
-        private float top;
-        private float right;
-        private float bottom;
-
-        /** Sets the left field. */
-        @JsonProperty("left")
-        public Builder withLeft(final float value) {
-            this.left = value;
-            return this;
-        }
-
-        /** Sets the top field. */
-        @JsonProperty("top")
-        public Builder withTop(final float value) {
-            this.top = value;
-            return this;
-        }
-
-        /** Sets the right field. */
-        @JsonProperty("right")
-        public Builder withRight(final float value) {
-            this.right = value;
-            return this;
-        }
-
-        /** Sets the bottom field. */
-        @JsonProperty("bottom")
-        public Builder withBottom(final float value) {
-            this.bottom = value;
-            return this;
-        }
-
-        /** Constructs a HierarchicalBoundingBox instance from the builder's current state. */
-        public HierarchicalBoundingBox build() {
-            return new HierarchicalBoundingBox(
-                left,
-                top,
-                right,
-                bottom
-            );
-        }
+    /** Sets the top field. */
+    @JsonProperty("top")
+    public Builder withTop(final float value) {
+      this.top = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the right field. */
+    @JsonProperty("right")
+    public Builder withRight(final float value) {
+      this.right = value;
+      return this;
+    }
+
+    /** Sets the bottom field. */
+    @JsonProperty("bottom")
+    public Builder withBottom(final float value) {
+      this.bottom = value;
+      return this;
+    }
+
+    /** Constructs a HierarchicalBoundingBox instance from the builder's current state. */
+    public HierarchicalBoundingBox build() {
+      return new HierarchicalBoundingBox(left, top, right, bottom);
+    }
+  }
+  // CPD-ON
 }

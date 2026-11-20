@@ -5,34 +5,38 @@
 
 package io.xberg;
 
-
 /**
  * Bridge interface for the PostProcessor plugin system.
  *
- * Implementations are wrapped by PostProcessorBridge and exposed to the native
- * runtime through Panama FFM upcall stubs.
+ * <p>Implementations are wrapped by PostProcessorBridge and exposed to the native runtime through
+ * Panama FFM upcall stubs.
  */
 public interface IPostProcessor {
 
-    /** Plugin name (used for registry keying). */
-    String name();
+  /** Plugin name (used for registry keying). */
+  String name();
 
-    /** Plugin version. */
-    String version();
+  /** Plugin version. */
+  String version();
 
-    /** Initialize the plugin. */
-    default void initialize() throws Exception {}
+  /** Initialize the plugin. */
+  default void initialize() throws Exception {}
 
-    /** Shut down the plugin. */
-    default void shutdown() throws Exception {}
+  /** Shut down the plugin. */
+  default void shutdown() throws Exception {}
 
-/** process. */    void process(ExtractedDocument result, ExtractionConfig config) throws Exception;
+  /** process. */
+  void process(ExtractedDocument result, ExtractionConfig config) throws Exception;
 
-/** processing_stage. */    String processing_stage() throws Exception;
+  /** processing_stage. */
+  String processing_stage() throws Exception;
 
-/** should_process. */    boolean should_process(ExtractedDocument _result, ExtractionConfig _config) throws Exception;
+  /** should_process. */
+  boolean should_process(ExtractedDocument _result, ExtractionConfig _config) throws Exception;
 
-/** estimated_duration_ms. */    long estimated_duration_ms(ExtractedDocument _result) throws Exception;
+  /** estimated_duration_ms. */
+  long estimated_duration_ms(ExtractedDocument _result) throws Exception;
 
-/** priority. */    int priority() throws Exception;
+  /** priority. */
+  int priority() throws Exception;
 }

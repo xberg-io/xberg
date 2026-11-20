@@ -4,46 +4,44 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 
 /**
  * Heading context for a chunk within a Markdown document.
  *
- * Contains the heading hierarchy from document root to this chunk's section.
+ * <p>Contains the heading hierarchy from document root to this chunk's section.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HeadingContext.Builder.class)
 public record HeadingContext(@JsonProperty("headings") List<HeadingLevel> headings) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for HeadingContext deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<HeadingLevel> headings = List.of();
+
+    /** Sets the headings field. */
+    @JsonProperty("headings")
+    public Builder withHeadings(final List<HeadingLevel> value) {
+      this.headings = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for HeadingContext deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<HeadingLevel> headings = List.of();
-
-        /** Sets the headings field. */
-        @JsonProperty("headings")
-        public Builder withHeadings(final List<HeadingLevel> value) {
-            this.headings = value;
-            return this;
-        }
-
-        /** Constructs a HeadingContext instance from the builder's current state. */
-        public HeadingContext build() {
-            return new HeadingContext(
-                headings
-            );
-        }
+    /** Constructs a HeadingContext instance from the builder's current state. */
+    public HeadingContext build() {
+      return new HeadingContext(headings);
     }
-    // CPD-ON
+  }
+  // CPD-ON
 }

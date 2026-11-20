@@ -4,28 +4,28 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Content for a single page/slide.
  *
- * When page extraction is enabled, documents are split into per-page content
- * with associated tables and images mapped to each page.
+ * <p>When page extraction is enabled, documents are split into per-page content with associated
+ * tables and images mapped to each page.
  *
- * # Performance
+ * <p># Performance
  *
- * Uses Arc-wrapped tables and images for memory efficiency:
- * - {@code Vec&lt;Arc&lt;Table&gt;&gt;} enables zero-copy sharing of table data
- * - {@code Vec&lt;Arc&lt;ExtractedImage&gt;&gt;} enables zero-copy sharing of image data
- * - Maintains exact JSON compatibility via custom Serialize/Deserialize
+ * <p>Uses Arc-wrapped tables and images for memory efficiency: - {@code
+ * Vec&lt;Arc&lt;Table&gt;&gt;} enables zero-copy sharing of table data - {@code
+ * Vec&lt;Arc&lt;ExtractedImage&gt;&gt;} enables zero-copy sharing of image data - Maintains exact
+ * JSON compatibility via custom Serialize/Deserialize
  *
- * This reduces memory overhead for documents with shared tables/images
- * by avoiding redundant copies during serialization.
+ * <p>This reduces memory overhead for documents with shared tables/images by avoiding redundant
+ * copies during serialization.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageContent.Builder.class)
@@ -42,161 +42,184 @@ public record PageContent(
     @Nullable @JsonProperty("section_name") String sectionName,
     @Nullable @JsonProperty("sheet_name") String sheetName,
     @Nullable @JsonProperty("ocr_confidence") PageOcrConfidence ocrConfidence,
-    @Nullable @JsonProperty("native_content") String nativeContent
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("native_content") String nativeContent) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public PageContent {
+    if (tables == null) {
+      tables = List.of();
     }
-    public PageContent{
-        if (tables == null) { tables = List.of(); }
-        if (imageIndices == null) { imageIndices = List.of(); }
+    if (imageIndices == null) {
+      imageIndices = List.of();
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PageContent deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("page_number")
+    private int pageNumber;
+
+    private String content;
+    @Nullable private List<Table> tables = List.of();
+
+    @JsonProperty("image_indices")
+    @Nullable
+    private List<Integer> imageIndices = List.of();
+
+    @JsonProperty("image_preprocessing")
+    @Nullable
+    private ImagePreprocessingMetadata imagePreprocessing;
+
+    @Nullable private PageHierarchy hierarchy;
+
+    @JsonProperty("is_blank")
+    @Nullable
+    private Boolean isBlank;
+
+    @JsonProperty("layout_regions")
+    @Nullable
+    private List<LayoutRegion> layoutRegions;
+
+    @JsonProperty("speaker_notes")
+    @Nullable
+    private String speakerNotes;
+
+    @JsonProperty("section_name")
+    @Nullable
+    private String sectionName;
+
+    @JsonProperty("sheet_name")
+    @Nullable
+    private String sheetName;
+
+    @JsonProperty("ocr_confidence")
+    @Nullable
+    private PageOcrConfidence ocrConfidence;
+
+    @JsonProperty("native_content")
+    @Nullable
+    private String nativeContent;
+
+    /** Sets the pageNumber field. */
+    @JsonProperty("page_number")
+    public Builder withPageNumber(final int value) {
+      this.pageNumber = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PageContent deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("page_number")
-        private int pageNumber;
-        private String content;
-        @Nullable private List<Table> tables = List.of();
-        @JsonProperty("image_indices")
-        @Nullable private List<Integer> imageIndices = List.of();
-        @JsonProperty("image_preprocessing")
-        @Nullable private ImagePreprocessingMetadata imagePreprocessing;
-        @Nullable private PageHierarchy hierarchy;
-        @JsonProperty("is_blank")
-        @Nullable private Boolean isBlank;
-        @JsonProperty("layout_regions")
-        @Nullable private List<LayoutRegion> layoutRegions;
-        @JsonProperty("speaker_notes")
-        @Nullable private String speakerNotes;
-        @JsonProperty("section_name")
-        @Nullable private String sectionName;
-        @JsonProperty("sheet_name")
-        @Nullable private String sheetName;
-        @JsonProperty("ocr_confidence")
-        @Nullable private PageOcrConfidence ocrConfidence;
-        @JsonProperty("native_content")
-        @Nullable private String nativeContent;
-
-        /** Sets the pageNumber field. */
-        @JsonProperty("page_number")
-        public Builder withPageNumber(final int value) {
-            this.pageNumber = value;
-            return this;
-        }
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final String value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the tables field. */
-        @JsonProperty("tables")
-        public Builder withTables(final @Nullable List<Table> value) {
-            this.tables = value;
-            return this;
-        }
-
-        /** Sets the imageIndices field. */
-        @JsonProperty("image_indices")
-        public Builder withImageIndices(final @Nullable List<Integer> value) {
-            this.imageIndices = value;
-            return this;
-        }
-
-        /** Sets the imagePreprocessing field. */
-        @JsonProperty("image_preprocessing")
-        public Builder withImagePreprocessing(final @Nullable ImagePreprocessingMetadata value) {
-            this.imagePreprocessing = value;
-            return this;
-        }
-
-        /** Sets the hierarchy field. */
-        @JsonProperty("hierarchy")
-        public Builder withHierarchy(final @Nullable PageHierarchy value) {
-            this.hierarchy = value;
-            return this;
-        }
-
-        /** Sets the isBlank field. */
-        @JsonProperty("is_blank")
-        public Builder withIsBlank(final @Nullable Boolean value) {
-            this.isBlank = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withIsBlank(final boolean value) {
-            return withIsBlank(Boolean.valueOf(value));
-        }
-
-        /** Sets the layoutRegions field. */
-        @JsonProperty("layout_regions")
-        public Builder withLayoutRegions(final @Nullable List<LayoutRegion> value) {
-            this.layoutRegions = value;
-            return this;
-        }
-
-        /** Sets the speakerNotes field. */
-        @JsonProperty("speaker_notes")
-        public Builder withSpeakerNotes(final @Nullable String value) {
-            this.speakerNotes = value;
-            return this;
-        }
-
-        /** Sets the sectionName field. */
-        @JsonProperty("section_name")
-        public Builder withSectionName(final @Nullable String value) {
-            this.sectionName = value;
-            return this;
-        }
-
-        /** Sets the sheetName field. */
-        @JsonProperty("sheet_name")
-        public Builder withSheetName(final @Nullable String value) {
-            this.sheetName = value;
-            return this;
-        }
-
-        /** Sets the ocrConfidence field. */
-        @JsonProperty("ocr_confidence")
-        public Builder withOcrConfidence(final @Nullable PageOcrConfidence value) {
-            this.ocrConfidence = value;
-            return this;
-        }
-
-        /** Sets the nativeContent field. */
-        @JsonProperty("native_content")
-        public Builder withNativeContent(final @Nullable String value) {
-            this.nativeContent = value;
-            return this;
-        }
-
-        /** Constructs a PageContent instance from the builder's current state. */
-        public PageContent build() {
-            return new PageContent(
-                pageNumber,
-                content,
-                tables,
-                imageIndices,
-                imagePreprocessing,
-                hierarchy,
-                isBlank,
-                layoutRegions,
-                speakerNotes,
-                sectionName,
-                sheetName,
-                ocrConfidence,
-                nativeContent
-            );
-        }
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final String value) {
+      this.content = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the tables field. */
+    @JsonProperty("tables")
+    public Builder withTables(final @Nullable List<Table> value) {
+      this.tables = value;
+      return this;
+    }
+
+    /** Sets the imageIndices field. */
+    @JsonProperty("image_indices")
+    public Builder withImageIndices(final @Nullable List<Integer> value) {
+      this.imageIndices = value;
+      return this;
+    }
+
+    /** Sets the imagePreprocessing field. */
+    @JsonProperty("image_preprocessing")
+    public Builder withImagePreprocessing(final @Nullable ImagePreprocessingMetadata value) {
+      this.imagePreprocessing = value;
+      return this;
+    }
+
+    /** Sets the hierarchy field. */
+    @JsonProperty("hierarchy")
+    public Builder withHierarchy(final @Nullable PageHierarchy value) {
+      this.hierarchy = value;
+      return this;
+    }
+
+    /** Sets the isBlank field. */
+    @JsonProperty("is_blank")
+    public Builder withIsBlank(final @Nullable Boolean value) {
+      this.isBlank = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withIsBlank(final boolean value) {
+      return withIsBlank(Boolean.valueOf(value));
+    }
+
+    /** Sets the layoutRegions field. */
+    @JsonProperty("layout_regions")
+    public Builder withLayoutRegions(final @Nullable List<LayoutRegion> value) {
+      this.layoutRegions = value;
+      return this;
+    }
+
+    /** Sets the speakerNotes field. */
+    @JsonProperty("speaker_notes")
+    public Builder withSpeakerNotes(final @Nullable String value) {
+      this.speakerNotes = value;
+      return this;
+    }
+
+    /** Sets the sectionName field. */
+    @JsonProperty("section_name")
+    public Builder withSectionName(final @Nullable String value) {
+      this.sectionName = value;
+      return this;
+    }
+
+    /** Sets the sheetName field. */
+    @JsonProperty("sheet_name")
+    public Builder withSheetName(final @Nullable String value) {
+      this.sheetName = value;
+      return this;
+    }
+
+    /** Sets the ocrConfidence field. */
+    @JsonProperty("ocr_confidence")
+    public Builder withOcrConfidence(final @Nullable PageOcrConfidence value) {
+      this.ocrConfidence = value;
+      return this;
+    }
+
+    /** Sets the nativeContent field. */
+    @JsonProperty("native_content")
+    public Builder withNativeContent(final @Nullable String value) {
+      this.nativeContent = value;
+      return this;
+    }
+
+    /** Constructs a PageContent instance from the builder's current state. */
+    public PageContent build() {
+      return new PageContent(
+          pageNumber,
+          content,
+          tables,
+          imageIndices,
+          imagePreprocessing,
+          hierarchy,
+          isBlank,
+          layoutRegions,
+          speakerNotes,
+          sectionName,
+          sheetName,
+          ocrConfidence,
+          nativeContent);
+    }
+  }
+  // CPD-ON
 }

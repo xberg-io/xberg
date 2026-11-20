@@ -10,55 +10,46 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Highlight rendering style for {@code &lt;mark&gt;} elements.
  *
- * Controls how highlighted text is rendered in Markdown output.
+ * <p>Controls how highlighted text is rendered in Markdown output.
  */
 @SuppressWarnings("PMD")
 public enum HighlightStyle {
-    /**
-     * Double equals syntax (==text==). Default. Pandoc-compatible.
-     */
-    DOUBLE_EQUAL("DoubleEqual"),
-    /**
-     * Preserve as HTML (==text==). Original HTML tag.
-     */
-    HTML("Html"),
-    /**
-     * Render as bold (**text**). Uses strong emphasis.
-     */
-    BOLD("Bold"),
-    /**
-     * Strip formatting, render as plain text. No markup.
-     */
-    NONE("None");
+  /** Double equals syntax (==text==). Default. Pandoc-compatible. */
+  DOUBLE_EQUAL("DoubleEqual"),
+  /** Preserve as HTML (==text==). Original HTML tag. */
+  HTML("Html"),
+  /** Render as bold (**text**). Uses strong emphasis. */
+  BOLD("Bold"),
+  /** Strip formatting, render as plain text. No markup. */
+  NONE("None");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  HighlightStyle(final String value) {
+    this.value = value;
+  }
 
-    HighlightStyle(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static HighlightStyle fromValue(final String value) {
+    for (HighlightStyle e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown HighlightStyle value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static HighlightStyle fromValue(final String value) {
-        for (HighlightStyle e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown HighlightStyle value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

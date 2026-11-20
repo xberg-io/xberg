@@ -10,52 +10,44 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Schema-validation outcome surfaced as one of three buckets.
  *
- * Fold into the combined confidence score without leaking internal validation
- * error types.
+ * <p>Fold into the combined confidence score without leaking internal validation error types.
  */
 @SuppressWarnings("PMD")
 public enum SchemaCompliance {
-    /**
-     * Every batch validated against the schema.
-     */
-    ALL_VALID("all_valid"),
-    /**
-     * At least one batch validated; at least one did not.
-     */
-    PARTIAL_VALID("partial_valid"),
-    /**
-     * No batch validated.
-     */
-    ALL_INVALID("all_invalid");
+  /** Every batch validated against the schema. */
+  ALL_VALID("all_valid"),
+  /** At least one batch validated; at least one did not. */
+  PARTIAL_VALID("partial_valid"),
+  /** No batch validated. */
+  ALL_INVALID("all_invalid");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  SchemaCompliance(final String value) {
+    this.value = value;
+  }
 
-    SchemaCompliance(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static SchemaCompliance fromValue(final String value) {
+    for (SchemaCompliance e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown SchemaCompliance value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static SchemaCompliance fromValue(final String value) {
-        for (SchemaCompliance e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown SchemaCompliance value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

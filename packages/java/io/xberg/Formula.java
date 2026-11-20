@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,11 +13,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * A mathematical formula extracted from a document.
  *
- * Three kinds of sources populate this type. Layout-guided OCR detects
- * formula regions and recognizes them; those formulas carry a {@code bbox} and a
- * {@code page}. VLM OCR recognizes formulas in transcribed text without layout, so
- * its formulas carry no geometry. Markup extraction (DOCX, PPTX, ODT, EPUB,
- * HTML, JATS, LaTeX, Markdown, and related formats) converts embedded math
+ * <p>Three kinds of sources populate this type. Layout-guided OCR detects formula regions and
+ * recognizes them; those formulas carry a {@code bbox} and a {@code page}. VLM OCR recognizes
+ * formulas in transcribed text without layout, so its formulas carry no geometry. Markup extraction
+ * (DOCX, PPTX, ODT, EPUB, HTML, JATS, LaTeX, Markdown, and related formats) converts embedded math
  * to LaTeX, also without geometry.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
@@ -25,57 +24,52 @@ import org.jspecify.annotations.Nullable;
 public record Formula(
     @JsonProperty("latex") String latex,
     @Nullable @JsonProperty("bbox") BoundingBox bbox,
-    @Nullable @JsonProperty("page") Integer page
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("page") Integer page) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for Formula deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String latex;
+    @Nullable private BoundingBox bbox;
+    @Nullable private Integer page;
+
+    /** Sets the latex field. */
+    @JsonProperty("latex")
+    public Builder withLatex(final String value) {
+      this.latex = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for Formula deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String latex;
-        @Nullable private BoundingBox bbox;
-        @Nullable private Integer page;
-
-        /** Sets the latex field. */
-        @JsonProperty("latex")
-        public Builder withLatex(final String value) {
-            this.latex = value;
-            return this;
-        }
-
-        /** Sets the bbox field. */
-        @JsonProperty("bbox")
-        public Builder withBbox(final @Nullable BoundingBox value) {
-            this.bbox = value;
-            return this;
-        }
-
-        /** Sets the page field. */
-        @JsonProperty("page")
-        public Builder withPage(final @Nullable Integer value) {
-            this.page = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withPage(final int value) {
-            return withPage(Integer.valueOf(value));
-        }
-
-        /** Constructs a Formula instance from the builder's current state. */
-        public Formula build() {
-            return new Formula(
-                latex,
-                bbox,
-                page
-            );
-        }
+    /** Sets the bbox field. */
+    @JsonProperty("bbox")
+    public Builder withBbox(final @Nullable BoundingBox value) {
+      this.bbox = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the page field. */
+    @JsonProperty("page")
+    public Builder withPage(final @Nullable Integer value) {
+      this.page = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withPage(final int value) {
+      return withPage(Integer.valueOf(value));
+    }
+
+    /** Constructs a Formula instance from the builder's current state. */
+    public Formula build() {
+      return new Formula(latex, bbox, page);
+    }
+  }
+  // CPD-ON
 }

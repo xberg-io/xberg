@@ -7,52 +7,43 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Unit that an external finding's {@code start} / {@code end} offsets count in.
- */
+/** Unit that an external finding's {@code start} / {@code end} offsets count in. */
 @SuppressWarnings("PMD")
 public enum RedactionOffsetEncoding {
-    /**
-     * UTF-8 byte offsets.
-     */
-    UTF8_BYTES("utf8_bytes"),
-    /**
-     * Unicode scalar value (code point) offsets, as Presidio reports them.
-     */
-    UNICODE_CODE_POINTS("unicode_code_points"),
-    /**
-     * UTF-16 code unit offsets.
-     */
-    UTF16_CODE_UNITS("utf16_code_units");
+  /** UTF-8 byte offsets. */
+  UTF8_BYTES("utf8_bytes"),
+  /** Unicode scalar value (code point) offsets, as Presidio reports them. */
+  UNICODE_CODE_POINTS("unicode_code_points"),
+  /** UTF-16 code unit offsets. */
+  UTF16_CODE_UNITS("utf16_code_units");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  RedactionOffsetEncoding(final String value) {
+    this.value = value;
+  }
 
-    RedactionOffsetEncoding(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static RedactionOffsetEncoding fromValue(final String value) {
+    for (RedactionOffsetEncoding e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown RedactionOffsetEncoding value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static RedactionOffsetEncoding fromValue(final String value) {
-        for (RedactionOffsetEncoding e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown RedactionOffsetEncoding value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

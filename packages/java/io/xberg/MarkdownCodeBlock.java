@@ -4,55 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * A fenced code block extracted from Markdown.
- */
+/** A fenced code block extracted from Markdown. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = MarkdownCodeBlock.Builder.class)
 public record MarkdownCodeBlock(
-    @JsonProperty("language") String language,
-    @JsonProperty("code") String code
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("language") String language, @JsonProperty("code") String code) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for MarkdownCodeBlock deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String language;
+    private String code;
+
+    /** Sets the language field. */
+    @JsonProperty("language")
+    public Builder withLanguage(final String value) {
+      this.language = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for MarkdownCodeBlock deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String language;
-        private String code;
-
-        /** Sets the language field. */
-        @JsonProperty("language")
-        public Builder withLanguage(final String value) {
-            this.language = value;
-            return this;
-        }
-
-        /** Sets the code field. */
-        @JsonProperty("code")
-        public Builder withCode(final String value) {
-            this.code = value;
-            return this;
-        }
-
-        /** Constructs a MarkdownCodeBlock instance from the builder's current state. */
-        public MarkdownCodeBlock build() {
-            return new MarkdownCodeBlock(
-                language,
-                code
-            );
-        }
+    /** Sets the code field. */
+    @JsonProperty("code")
+    public Builder withCode(final String value) {
+      this.code = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a MarkdownCodeBlock instance from the builder's current state. */
+    public MarkdownCodeBlock build() {
+      return new MarkdownCodeBlock(language, code);
+    }
+  }
+  // CPD-ON
 }

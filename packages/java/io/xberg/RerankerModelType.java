@@ -10,58 +10,51 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Reranker model types supported by Xberg.
- */
+/** Reranker model types supported by Xberg. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = RerankerModelType.Preset.class, name = "preset"),
-    @JsonSubTypes.Type(value = RerankerModelType.Custom.class, name = "custom"),
-    @JsonSubTypes.Type(value = RerankerModelType.Llm.class, name = "llm"),
-    @JsonSubTypes.Type(value = RerankerModelType.Plugin.class, name = "plugin")
+  @JsonSubTypes.Type(value = RerankerModelType.Preset.class, name = "preset"),
+  @JsonSubTypes.Type(value = RerankerModelType.Custom.class, name = "custom"),
+  @JsonSubTypes.Type(value = RerankerModelType.Llm.class, name = "llm"),
+  @JsonSubTypes.Type(value = RerankerModelType.Plugin.class, name = "plugin")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface RerankerModelType {
 
-    /**
-     * Use a preset cross-encoder model (recommended).
-     */
-    record Preset(@JsonProperty("name") String name) implements RerankerModelType { }
+  /** Use a preset cross-encoder model (recommended). */
+  record Preset(@JsonProperty("name") String name) implements RerankerModelType {}
 
-    /**
-     * Use a custom ONNX cross-encoder from HuggingFace.
-     */
-    record Custom(
-        @JsonProperty("model_id") String modelId,
-        @JsonProperty("model_file") Optional<String> modelFile,
-        @JsonProperty("additional_files") List<String> additionalFiles,
-        @JsonProperty("max_length") Optional<Long> maxLength,
-        @JsonProperty("head") RerankerHead head
-    ) implements RerankerModelType {
-    }
+  /** Use a custom ONNX cross-encoder from HuggingFace. */
+  record Custom(
+      @JsonProperty("model_id") String modelId,
+      @JsonProperty("model_file") Optional<String> modelFile,
+      @JsonProperty("additional_files") List<String> additionalFiles,
+      @JsonProperty("max_length") Optional<Long> maxLength,
+      @JsonProperty("head") RerankerHead head)
+      implements RerankerModelType {}
 
-    /**
-     * Provider-hosted reranker via liter-llm (e.g. Cohere, Jina, Voyage).
-     *
-     * The model in the nested {@code LlmConfig} must be a rerank-capable model ID
-     * (e.g. {@code "cohere/rerank-english-v3.0"}).
-     */
-    record Llm(@JsonProperty("llm") LlmConfig llm) implements RerankerModelType { }
+  /**
+   * Provider-hosted reranker via liter-llm (e.g. Cohere, Jina, Voyage).
+   *
+   * <p>The model in the nested {@code LlmConfig} must be a rerank-capable model ID (e.g. {@code
+   * "cohere/rerank-english-v3.0"}).
+   */
+  record Llm(@JsonProperty("llm") LlmConfig llm) implements RerankerModelType {}
 
-    /**
-     * In-process reranker registered via the plugin system.
-     *
-     * The caller registers a {@code RerankerBackend} once (e.g. a
-     * wrapper around a {@code sentence-transformers} cross-encoder or a provider client),
-     * then references it by name in config. Xberg calls back into the registered
-     * backend — no HuggingFace download, no ONNX Runtime requirement.
-     *
-     * When this variant is selected, only {@code max_rerank_duration_secs} applies.
-     * Model-loading fields ({@code batch_size}, {@code cache_dir}, {@code show_download_progress},
-     * {@code acceleration}) are ignored — the host owns the model lifecycle, so there is
-     * no download to report progress for.
-     *
-     * See {@code register_reranker_backend}.
-     */
-    record Plugin(@JsonProperty("name") String name) implements RerankerModelType { }
+  /**
+   * In-process reranker registered via the plugin system.
+   *
+   * <p>The caller registers a {@code RerankerBackend} once (e.g. a wrapper around a {@code
+   * sentence-transformers} cross-encoder or a provider client), then references it by name in
+   * config. Xberg calls back into the registered backend — no HuggingFace download, no ONNX Runtime
+   * requirement.
+   *
+   * <p>When this variant is selected, only {@code max_rerank_duration_secs} applies. Model-loading
+   * fields ({@code batch_size}, {@code cache_dir}, {@code show_download_progress}, {@code
+   * acceleration}) are ignored — the host owns the model lifecycle, so there is no download to
+   * report progress for.
+   *
+   * <p>See {@code register_reranker_backend}.
+   */
+  record Plugin(@JsonProperty("name") String name) implements RerankerModelType {}
 }

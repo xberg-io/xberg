@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,21 +13,16 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for audio/video transcription (speech-to-text).
  *
- * When present and {@code enabled}, Xberg will route audio and video files
- * (mp3, mp4, m4a, wav, webm, etc.) through the transcription pipeline.
+ * <p>When present and {@code enabled}, Xberg will route audio and video files (mp3, mp4, m4a, wav,
+ * webm, etc.) through the transcription pipeline.
  *
- * The heavy dependencies (ORT, hf-hub, symphonia) are only pulled when the
- * {@code transcription} feature is enabled. The config struct itself is available
- * under {@code transcription-types} so that {@code ExtractionConfig} round-trips on all
- * targets.
+ * <p>The heavy dependencies (ORT, hf-hub, symphonia) are only pulled when the {@code transcription}
+ * feature is enabled. The config struct itself is available under {@code transcription-types} so
+ * that {@code ExtractionConfig} round-trips on all targets.
  *
- * All fields have sensible defaults. The recommended starting point is:
+ * <p>All fields have sensible defaults. The recommended starting point is:
  *
- * {@code }{@code toml}
- * [extraction.transcription]
- * enabled = true
- * model = "tiny"
- *
+ * <p>{@code }{@code toml} [extraction.transcription] enabled = true model = "tiny"
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TranscriptionConfig.Builder.class)
@@ -41,140 +36,154 @@ public record TranscriptionConfig(
     @Nullable @JsonProperty("timeout_ms") Long timeoutMs,
     @JsonProperty("model_cache_dir") java.nio.file.@Nullable Path modelCacheDir,
     @Nullable @JsonProperty("allow_network") Boolean allowNetwork,
-    @Nullable @JsonProperty("verify_hash") Boolean verifyHash
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("verify_hash") Boolean verifyHash) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public TranscriptionConfig {
+    if (enabled == null) {
+      enabled = true;
     }
-    public TranscriptionConfig{
-        if (enabled == null) { enabled = true; }
-        if (allowNetwork == null) { allowNetwork = true; }
+    if (allowNetwork == null) {
+      allowNetwork = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TranscriptionConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private Boolean enabled;
+    @Nullable private WhisperModel model = WhisperModel.TINY;
+    @Nullable private String language;
+    @Nullable private Boolean timestamps;
+
+    @JsonProperty("max_duration_ms")
+    @Nullable
+    private Long maxDurationMs;
+
+    @JsonProperty("max_bytes")
+    @Nullable
+    private Long maxBytes;
+
+    @JsonProperty("timeout_ms")
+    @Nullable
+    private Long timeoutMs;
+
+    @JsonProperty("model_cache_dir")
+    private java.nio.file.@Nullable Path modelCacheDir;
+
+    @JsonProperty("allow_network")
+    @Nullable
+    private Boolean allowNetwork;
+
+    @JsonProperty("verify_hash")
+    @Nullable
+    private Boolean verifyHash;
+
+    /** Sets the enabled field. */
+    @JsonProperty("enabled")
+    public Builder withEnabled(final @Nullable Boolean value) {
+      this.enabled = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TranscriptionConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private Boolean enabled;
-        @Nullable private WhisperModel model = WhisperModel.TINY;
-        @Nullable private String language;
-        @Nullable private Boolean timestamps;
-        @JsonProperty("max_duration_ms")
-        @Nullable private Long maxDurationMs;
-        @JsonProperty("max_bytes")
-        @Nullable private Long maxBytes;
-        @JsonProperty("timeout_ms")
-        @Nullable private Long timeoutMs;
-        @JsonProperty("model_cache_dir")
-        private java.nio.file.@Nullable Path modelCacheDir;
-        @JsonProperty("allow_network")
-        @Nullable private Boolean allowNetwork;
-        @JsonProperty("verify_hash")
-        @Nullable private Boolean verifyHash;
-
-        /** Sets the enabled field. */
-        @JsonProperty("enabled")
-        public Builder withEnabled(final @Nullable Boolean value) {
-            this.enabled = value;
-            return this;
-        }
-
-        /** Sets the model field. */
-        @JsonProperty("model")
-        public Builder withModel(final @Nullable WhisperModel value) {
-            this.model = value;
-            return this;
-        }
-
-        /** Sets the language field. */
-        @JsonProperty("language")
-        public Builder withLanguage(final @Nullable String value) {
-            this.language = value;
-            return this;
-        }
-
-        /** Sets the timestamps field. */
-        @JsonProperty("timestamps")
-        public Builder withTimestamps(final @Nullable Boolean value) {
-            this.timestamps = value;
-            return this;
-        }
-
-        /** Sets the maxDurationMs field. */
-        @JsonProperty("max_duration_ms")
-        public Builder withMaxDurationMs(final @Nullable Long value) {
-            this.maxDurationMs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxDurationMs(final long value) {
-            return withMaxDurationMs(Long.valueOf(value));
-        }
-
-        /** Sets the maxBytes field. */
-        @JsonProperty("max_bytes")
-        public Builder withMaxBytes(final @Nullable Long value) {
-            this.maxBytes = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxBytes(final long value) {
-            return withMaxBytes(Long.valueOf(value));
-        }
-
-        /** Sets the timeoutMs field. */
-        @JsonProperty("timeout_ms")
-        public Builder withTimeoutMs(final @Nullable Long value) {
-            this.timeoutMs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withTimeoutMs(final long value) {
-            return withTimeoutMs(Long.valueOf(value));
-        }
-
-        /** Sets the modelCacheDir field. */
-        @JsonProperty("model_cache_dir")
-        public Builder withModelCacheDir(final java.nio.file.@Nullable Path value) {
-            this.modelCacheDir = value;
-            return this;
-        }
-
-        /** Sets the allowNetwork field. */
-        @JsonProperty("allow_network")
-        public Builder withAllowNetwork(final @Nullable Boolean value) {
-            this.allowNetwork = value;
-            return this;
-        }
-
-        /** Sets the verifyHash field. */
-        @JsonProperty("verify_hash")
-        public Builder withVerifyHash(final @Nullable Boolean value) {
-            this.verifyHash = value;
-            return this;
-        }
-
-        /** Constructs a TranscriptionConfig instance from the builder's current state. */
-        public TranscriptionConfig build() {
-            return new TranscriptionConfig(
-                enabled,
-                model,
-                language,
-                timestamps,
-                maxDurationMs,
-                maxBytes,
-                timeoutMs,
-                modelCacheDir,
-                allowNetwork,
-                verifyHash
-            );
-        }
+    /** Sets the model field. */
+    @JsonProperty("model")
+    public Builder withModel(final @Nullable WhisperModel value) {
+      this.model = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the language field. */
+    @JsonProperty("language")
+    public Builder withLanguage(final @Nullable String value) {
+      this.language = value;
+      return this;
+    }
+
+    /** Sets the timestamps field. */
+    @JsonProperty("timestamps")
+    public Builder withTimestamps(final @Nullable Boolean value) {
+      this.timestamps = value;
+      return this;
+    }
+
+    /** Sets the maxDurationMs field. */
+    @JsonProperty("max_duration_ms")
+    public Builder withMaxDurationMs(final @Nullable Long value) {
+      this.maxDurationMs = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxDurationMs(final long value) {
+      return withMaxDurationMs(Long.valueOf(value));
+    }
+
+    /** Sets the maxBytes field. */
+    @JsonProperty("max_bytes")
+    public Builder withMaxBytes(final @Nullable Long value) {
+      this.maxBytes = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxBytes(final long value) {
+      return withMaxBytes(Long.valueOf(value));
+    }
+
+    /** Sets the timeoutMs field. */
+    @JsonProperty("timeout_ms")
+    public Builder withTimeoutMs(final @Nullable Long value) {
+      this.timeoutMs = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withTimeoutMs(final long value) {
+      return withTimeoutMs(Long.valueOf(value));
+    }
+
+    /** Sets the modelCacheDir field. */
+    @JsonProperty("model_cache_dir")
+    public Builder withModelCacheDir(final java.nio.file.@Nullable Path value) {
+      this.modelCacheDir = value;
+      return this;
+    }
+
+    /** Sets the allowNetwork field. */
+    @JsonProperty("allow_network")
+    public Builder withAllowNetwork(final @Nullable Boolean value) {
+      this.allowNetwork = value;
+      return this;
+    }
+
+    /** Sets the verifyHash field. */
+    @JsonProperty("verify_hash")
+    public Builder withVerifyHash(final @Nullable Boolean value) {
+      this.verifyHash = value;
+      return this;
+    }
+
+    /** Constructs a TranscriptionConfig instance from the builder's current state. */
+    public TranscriptionConfig build() {
+      return new TranscriptionConfig(
+          enabled,
+          model,
+          language,
+          timestamps,
+          maxDurationMs,
+          maxBytes,
+          timeoutMs,
+          modelCacheDir,
+          allowNetwork,
+          verifyHash);
+    }
+  }
+  // CPD-ON
 }

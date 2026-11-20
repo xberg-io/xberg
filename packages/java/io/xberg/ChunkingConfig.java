@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,16 +13,12 @@ import org.jspecify.annotations.Nullable;
 /**
  * Chunking configuration.
  *
- * Configures text chunking for document content, including chunk size,
- * overlap, trimming behavior, and optional embeddings.
+ * <p>Configures text chunking for document content, including chunk size, overlap, trimming
+ * behavior, and optional embeddings.
  *
- * Use {@code ..Default.default()} when constructing to allow for future field additions:
+ * <p>Use {@code ..Default.default()} when constructing to allow for future field additions:
  *
- * let config = ChunkingConfig {
- *     max_characters: 500,
- *     ..Default.default()
- * };
- *
+ * <p>let config = ChunkingConfig { max_characters: 500, ..Default.default() };
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ChunkingConfig.Builder.class)
@@ -37,141 +33,162 @@ public record ChunkingConfig(
     @Nullable @JsonProperty("preset") String preset,
     @Nullable @JsonProperty("sizing") ChunkSizing sizing,
     @Nullable @JsonProperty("topic_threshold") Float topicThreshold,
-    @Nullable @JsonProperty("table_chunking") TableChunkingMode tableChunking
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("table_chunking") TableChunkingMode tableChunking) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public ChunkingConfig {
+    if (maxCharacters == null) {
+      maxCharacters = 1000L;
     }
-    public ChunkingConfig{
-        if (maxCharacters == null) { maxCharacters = 1000L; }
-        if (overlap == null) { overlap = 200L; }
-        if (trim == null) { trim = true; }
+    if (overlap == null) {
+      overlap = 200L;
+    }
+    if (trim == null) {
+      trim = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ChunkingConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("max_chars")
+    @Nullable
+    private Long maxCharacters;
+
+    @JsonProperty("max_overlap")
+    @Nullable
+    private Long overlap;
+
+    @Nullable private Boolean trim;
+
+    @JsonProperty("chunker_type")
+    @Nullable
+    private ChunkerType chunkerType = ChunkerType.TEXT;
+
+    @Nullable private EmbeddingConfig embedding;
+
+    @JsonProperty("sparse_embedding")
+    @Nullable
+    private SparseEmbeddingConfig sparseEmbedding;
+
+    @JsonProperty("late_interaction")
+    @Nullable
+    private LateInteractionConfig lateInteraction;
+
+    @Nullable private String preset;
+    @Nullable private ChunkSizing sizing = new ChunkSizing.Characters();
+
+    @JsonProperty("topic_threshold")
+    @Nullable
+    private Float topicThreshold;
+
+    @JsonProperty("table_chunking")
+    @Nullable
+    private TableChunkingMode tableChunking = TableChunkingMode.SPLIT;
+
+    /** Sets the maxCharacters field. */
+    @JsonProperty("max_chars")
+    public Builder withMaxCharacters(final @Nullable Long value) {
+      this.maxCharacters = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ChunkingConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("max_chars")
-        @Nullable private Long maxCharacters;
-        @JsonProperty("max_overlap")
-        @Nullable private Long overlap;
-        @Nullable private Boolean trim;
-        @JsonProperty("chunker_type")
-        @Nullable private ChunkerType chunkerType = ChunkerType.TEXT;
-        @Nullable private EmbeddingConfig embedding;
-        @JsonProperty("sparse_embedding")
-        @Nullable private SparseEmbeddingConfig sparseEmbedding;
-        @JsonProperty("late_interaction")
-        @Nullable private LateInteractionConfig lateInteraction;
-        @Nullable private String preset;
-        @Nullable private ChunkSizing sizing = new ChunkSizing.Characters();
-        @JsonProperty("topic_threshold")
-        @Nullable private Float topicThreshold;
-        @JsonProperty("table_chunking")
-        @Nullable private TableChunkingMode tableChunking = TableChunkingMode.SPLIT;
-
-        /** Sets the maxCharacters field. */
-        @JsonProperty("max_chars")
-        public Builder withMaxCharacters(final @Nullable Long value) {
-            this.maxCharacters = value;
-            return this;
-        }
-
-        /** Sets the overlap field. */
-        @JsonProperty("max_overlap")
-        public Builder withOverlap(final @Nullable Long value) {
-            this.overlap = value;
-            return this;
-        }
-
-        /** Sets the trim field. */
-        @JsonProperty("trim")
-        public Builder withTrim(final @Nullable Boolean value) {
-            this.trim = value;
-            return this;
-        }
-
-        /** Sets the chunkerType field. */
-        @JsonProperty("chunker_type")
-        public Builder withChunkerType(final @Nullable ChunkerType value) {
-            this.chunkerType = value;
-            return this;
-        }
-
-        /** Sets the embedding field. */
-        @JsonProperty("embedding")
-        public Builder withEmbedding(final @Nullable EmbeddingConfig value) {
-            this.embedding = value;
-            return this;
-        }
-
-        /** Sets the sparseEmbedding field. */
-        @JsonProperty("sparse_embedding")
-        public Builder withSparseEmbedding(final @Nullable SparseEmbeddingConfig value) {
-            this.sparseEmbedding = value;
-            return this;
-        }
-
-        /** Sets the lateInteraction field. */
-        @JsonProperty("late_interaction")
-        public Builder withLateInteraction(final @Nullable LateInteractionConfig value) {
-            this.lateInteraction = value;
-            return this;
-        }
-
-        /** Sets the preset field. */
-        @JsonProperty("preset")
-        public Builder withPreset(final @Nullable String value) {
-            this.preset = value;
-            return this;
-        }
-
-        /** Sets the sizing field. */
-        @JsonProperty("sizing")
-        public Builder withSizing(final @Nullable ChunkSizing value) {
-            this.sizing = value;
-            return this;
-        }
-
-        /** Sets the topicThreshold field. */
-        @JsonProperty("topic_threshold")
-        public Builder withTopicThreshold(final @Nullable Float value) {
-            this.topicThreshold = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withTopicThreshold(final float value) {
-            return withTopicThreshold(Float.valueOf(value));
-        }
-
-        /** Sets the tableChunking field. */
-        @JsonProperty("table_chunking")
-        public Builder withTableChunking(final @Nullable TableChunkingMode value) {
-            this.tableChunking = value;
-            return this;
-        }
-
-        /** Constructs a ChunkingConfig instance from the builder's current state. */
-        public ChunkingConfig build() {
-            return new ChunkingConfig(
-                maxCharacters,
-                overlap,
-                trim,
-                chunkerType,
-                embedding,
-                sparseEmbedding,
-                lateInteraction,
-                preset,
-                sizing,
-                topicThreshold,
-                tableChunking
-            );
-        }
+    /** Sets the overlap field. */
+    @JsonProperty("max_overlap")
+    public Builder withOverlap(final @Nullable Long value) {
+      this.overlap = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the trim field. */
+    @JsonProperty("trim")
+    public Builder withTrim(final @Nullable Boolean value) {
+      this.trim = value;
+      return this;
+    }
+
+    /** Sets the chunkerType field. */
+    @JsonProperty("chunker_type")
+    public Builder withChunkerType(final @Nullable ChunkerType value) {
+      this.chunkerType = value;
+      return this;
+    }
+
+    /** Sets the embedding field. */
+    @JsonProperty("embedding")
+    public Builder withEmbedding(final @Nullable EmbeddingConfig value) {
+      this.embedding = value;
+      return this;
+    }
+
+    /** Sets the sparseEmbedding field. */
+    @JsonProperty("sparse_embedding")
+    public Builder withSparseEmbedding(final @Nullable SparseEmbeddingConfig value) {
+      this.sparseEmbedding = value;
+      return this;
+    }
+
+    /** Sets the lateInteraction field. */
+    @JsonProperty("late_interaction")
+    public Builder withLateInteraction(final @Nullable LateInteractionConfig value) {
+      this.lateInteraction = value;
+      return this;
+    }
+
+    /** Sets the preset field. */
+    @JsonProperty("preset")
+    public Builder withPreset(final @Nullable String value) {
+      this.preset = value;
+      return this;
+    }
+
+    /** Sets the sizing field. */
+    @JsonProperty("sizing")
+    public Builder withSizing(final @Nullable ChunkSizing value) {
+      this.sizing = value;
+      return this;
+    }
+
+    /** Sets the topicThreshold field. */
+    @JsonProperty("topic_threshold")
+    public Builder withTopicThreshold(final @Nullable Float value) {
+      this.topicThreshold = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withTopicThreshold(final float value) {
+      return withTopicThreshold(Float.valueOf(value));
+    }
+
+    /** Sets the tableChunking field. */
+    @JsonProperty("table_chunking")
+    public Builder withTableChunking(final @Nullable TableChunkingMode value) {
+      this.tableChunking = value;
+      return this;
+    }
+
+    /** Constructs a ChunkingConfig instance from the builder's current state. */
+    public ChunkingConfig build() {
+      return new ChunkingConfig(
+          maxCharacters,
+          overlap,
+          trim,
+          chunkerType,
+          embedding,
+          sparseEmbedding,
+          lateInteraction,
+          preset,
+          sizing,
+          topicThreshold,
+          tableChunking);
+    }
+  }
+  // CPD-ON
 }

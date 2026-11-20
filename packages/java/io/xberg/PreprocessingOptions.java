@@ -4,83 +4,84 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * HTML preprocessing options for document cleanup before conversion.
- */
+/** HTML preprocessing options for document cleanup before conversion. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PreprocessingOptions.Builder.class)
 public record PreprocessingOptions(
     @Nullable @JsonProperty("enabled") Boolean enabled,
     @JsonProperty("preset") PreprocessingPreset preset,
     @Nullable @JsonProperty("remove_navigation") Boolean removeNavigation,
-    @Nullable @JsonProperty("remove_forms") Boolean removeForms
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("remove_forms") Boolean removeForms) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public PreprocessingOptions {
+    if (enabled == null) {
+      enabled = true;
     }
-    public PreprocessingOptions{
-        if (enabled == null) { enabled = true; }
-        if (removeNavigation == null) { removeNavigation = true; }
-        if (removeForms == null) { removeForms = true; }
+    if (removeNavigation == null) {
+      removeNavigation = true;
+    }
+    if (removeForms == null) {
+      removeForms = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for PreprocessingOptions deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private Boolean enabled = true;
+    private PreprocessingPreset preset;
+
+    @JsonProperty("remove_navigation")
+    private Boolean removeNavigation = true;
+
+    @JsonProperty("remove_forms")
+    private Boolean removeForms = true;
+
+    /** Sets the enabled field. */
+    @JsonProperty("enabled")
+    public Builder withEnabled(final @Nullable Boolean value) {
+      this.enabled = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for PreprocessingOptions deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private Boolean enabled = true;
-        private PreprocessingPreset preset;
-        @JsonProperty("remove_navigation")
-        private Boolean removeNavigation = true;
-        @JsonProperty("remove_forms")
-        private Boolean removeForms = true;
-
-        /** Sets the enabled field. */
-        @JsonProperty("enabled")
-        public Builder withEnabled(final @Nullable Boolean value) {
-            this.enabled = value;
-            return this;
-        }
-
-        /** Sets the preset field. */
-        @JsonProperty("preset")
-        public Builder withPreset(final PreprocessingPreset value) {
-            this.preset = value;
-            return this;
-        }
-
-        /** Sets the removeNavigation field. */
-        @JsonProperty("remove_navigation")
-        public Builder withRemoveNavigation(final @Nullable Boolean value) {
-            this.removeNavigation = value;
-            return this;
-        }
-
-        /** Sets the removeForms field. */
-        @JsonProperty("remove_forms")
-        public Builder withRemoveForms(final @Nullable Boolean value) {
-            this.removeForms = value;
-            return this;
-        }
-
-        /** Constructs a PreprocessingOptions instance from the builder's current state. */
-        public PreprocessingOptions build() {
-            return new PreprocessingOptions(
-                enabled,
-                preset,
-                removeNavigation,
-                removeForms
-            );
-        }
+    /** Sets the preset field. */
+    @JsonProperty("preset")
+    public Builder withPreset(final PreprocessingPreset value) {
+      this.preset = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the removeNavigation field. */
+    @JsonProperty("remove_navigation")
+    public Builder withRemoveNavigation(final @Nullable Boolean value) {
+      this.removeNavigation = value;
+      return this;
+    }
+
+    /** Sets the removeForms field. */
+    @JsonProperty("remove_forms")
+    public Builder withRemoveForms(final @Nullable Boolean value) {
+      this.removeForms = value;
+      return this;
+    }
+
+    /** Constructs a PreprocessingOptions instance from the builder's current state. */
+    public PreprocessingOptions build() {
+      return new PreprocessingOptions(enabled, preset, removeNavigation, removeForms);
+    }
+  }
+  // CPD-ON
 }

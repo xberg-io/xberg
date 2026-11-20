@@ -4,55 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/**
- * Diff for a single embedded archive entry that appears in both results.
- */
+/** Diff for a single embedded archive entry that appears in both results. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EmbeddedDiff.Builder.class)
 public record EmbeddedDiff(
-    @JsonProperty("path") String path,
-    @JsonProperty("diff") ExtractionDiff diff
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("path") String path, @JsonProperty("diff") ExtractionDiff diff) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for EmbeddedDiff deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String path;
+    private ExtractionDiff diff;
+
+    /** Sets the path field. */
+    @JsonProperty("path")
+    public Builder withPath(final String value) {
+      this.path = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for EmbeddedDiff deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String path;
-        private ExtractionDiff diff;
-
-        /** Sets the path field. */
-        @JsonProperty("path")
-        public Builder withPath(final String value) {
-            this.path = value;
-            return this;
-        }
-
-        /** Sets the diff field. */
-        @JsonProperty("diff")
-        public Builder withDiff(final ExtractionDiff value) {
-            this.diff = value;
-            return this;
-        }
-
-        /** Constructs a EmbeddedDiff instance from the builder's current state. */
-        public EmbeddedDiff build() {
-            return new EmbeddedDiff(
-                path,
-                diff
-            );
-        }
+    /** Sets the diff field. */
+    @JsonProperty("diff")
+    public Builder withDiff(final ExtractionDiff value) {
+      this.diff = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a EmbeddedDiff instance from the builder's current state. */
+    public EmbeddedDiff build() {
+      return new EmbeddedDiff(path, diff);
+    }
+  }
+  // CPD-ON
 }

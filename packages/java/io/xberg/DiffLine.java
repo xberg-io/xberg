@@ -4,59 +4,52 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import org.jspecify.annotations.Nullable;
 
 /**
  * A single line in a unified-diff hunk.
  *
- * Defined here (rather than only in {@code crate.diff}) so {@code RevisionDelta} can
- * reference it unconditionally, without requiring the {@code diff} Cargo feature.
- * {@code crate.diff} re-exports this type verbatim.
+ * <p>Defined here (rather than only in {@code crate.diff}) so {@code RevisionDelta} can reference
+ * it unconditionally, without requiring the {@code diff} Cargo feature. {@code crate.diff}
+ * re-exports this type verbatim.
  */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = DiffLineDeserializer.class)
 @JsonSerialize(using = DiffLineSerializer.class)
 public sealed interface DiffLine {
 
-    /**
-     * Unchanged context line.
-     */
-    record Context(String value) implements DiffLine { }
+  /** Unchanged context line. */
+  record Context(String value) implements DiffLine {}
 
-    /**
-     * Line added in the "after" version.
-     */
-    record Added(String value) implements DiffLine { }
+  /** Line added in the "after" version. */
+  record Added(String value) implements DiffLine {}
 
-    /**
-     * Line removed from the "before" version.
-     */
-    record Removed(String value) implements DiffLine { }
+  /** Line removed from the "before" version. */
+  record Removed(String value) implements DiffLine {}
 
-    /** Returns the Context data if this is a Context variant, otherwise null. */
-    default @Nullable String context() {
-        return this instanceof Context variant ? variant.value() : null;
-    }
+  /** Returns the Context data if this is a Context variant, otherwise null. */
+  default @Nullable String context() {
+    return this instanceof Context variant ? variant.value() : null;
+  }
 
-    /** Returns the Added data if this is a Added variant, otherwise null. */
-    default @Nullable String added() {
-        return this instanceof Added variant ? variant.value() : null;
-    }
+  /** Returns the Added data if this is a Added variant, otherwise null. */
+  default @Nullable String added() {
+    return this instanceof Added variant ? variant.value() : null;
+  }
 
-    /** Returns the Removed data if this is a Removed variant, otherwise null. */
-    default @Nullable String removed() {
-        return this instanceof Removed variant ? variant.value() : null;
-    }
-
+  /** Returns the Removed data if this is a Removed variant, otherwise null. */
+  default @Nullable String removed() {
+    return this instanceof Removed variant ? variant.value() : null;
+  }
 }
 
 /** Custom deserializer for sealed interface with unwrapped variants. */
@@ -94,12 +87,15 @@ class DiffLineDeserializer extends StdDeserializer<DiffLine> {
     final com.fasterxml.jackson.databind.JsonNode contentNode = node.get("text");
 
     return switch (tagValue) {
-      case "context" -> new DiffLine.Context(
-          ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
-      case "added" -> new DiffLine.Added(
-          ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
-      case "removed" -> new DiffLine.Removed(
-          ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
+      case "context" ->
+          new DiffLine.Context(
+              ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
+      case "added" ->
+          new DiffLine.Added(
+              ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
+      case "removed" ->
+          new DiffLine.Removed(
+              ctx.readTreeAsValue(requireContent(parser, contentNode, tagValue), String.class));
       default -> {
         throw new com.fasterxml.jackson.databind.JsonMappingException(
             parser, "Unknown DiffLine discriminator: " + tagValue);
@@ -108,21 +104,26 @@ class DiffLineDeserializer extends StdDeserializer<DiffLine> {
   }
 }
 
-/** Custom serializer for sealed interface with unwrapped variants. Emits serde's adjacently tagged shape: the discriminator under "kind" and the whole payload under "text". */
+/**
+ * Custom serializer for sealed interface with unwrapped variants. Emits serde's adjacently tagged
+ * shape: the discriminator under "kind" and the whole payload under "text".
+ */
 class DiffLineSerializer extends StdSerializer<DiffLine> {
   private static final long serialVersionUID = 1L;
+
   /** ObjectMapper for serializing inner variant values. */
   private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = createMapper();
 
   private static com.fasterxml.jackson.databind.ObjectMapper createMapper() {
-    var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
-        .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
-        .setPropertyNamingStrategy(
-            com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+    var mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+            .setPropertyNamingStrategy(
+                com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+            .setSerializationInclusion(
+                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
     return JsonMapperFactory.withNativePathSerialization(mapper);
   }
-
 
   /** Creates a new DiffLineSerializer. */
   DiffLineSerializer() {
@@ -134,10 +135,17 @@ class DiffLineSerializer extends StdSerializer<DiffLine> {
   public void serialize(DiffLine value, JsonGenerator gen, SerializerProvider provider)
       throws java.io.IOException {
     String tag;
-    Object inner;if (value instanceof DiffLine.Context variantContext) {
-      tag = "context";      inner = variantContext.value();    }else if (value instanceof DiffLine.Added variantAdded) {
-      tag = "added";      inner = variantAdded.value();    }else if (value instanceof DiffLine.Removed variantRemoved) {
-      tag = "removed";      inner = variantRemoved.value();    }    else {
+    Object inner;
+    if (value instanceof DiffLine.Context variantContext) {
+      tag = "context";
+      inner = variantContext.value();
+    } else if (value instanceof DiffLine.Added variantAdded) {
+      tag = "added";
+      inner = variantAdded.value();
+    } else if (value instanceof DiffLine.Removed variantRemoved) {
+      tag = "removed";
+      inner = variantRemoved.value();
+    } else {
       throw new com.fasterxml.jackson.databind.JsonMappingException(
           gen, "Unknown DiffLine variant: " + value.getClass().getName());
     }

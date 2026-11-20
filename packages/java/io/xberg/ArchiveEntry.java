@@ -4,69 +4,66 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A single file extracted from an archive.
  *
- * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
- * enabled, each processable file produces its own full {@code ExtractedDocument}.
+ * <p>When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction enabled, each
+ * processable file produces its own full {@code ExtractedDocument}.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ArchiveEntry.Builder.class)
 public record ArchiveEntry(
     @JsonProperty("path") String path,
     @JsonProperty("mime_type") String mimeType,
-    @JsonProperty("result") ExtractedDocument result
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("result") ExtractedDocument result) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ArchiveEntry deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String path;
+
+    @JsonProperty("mime_type")
+    private String mimeType;
+
+    private ExtractedDocument result;
+
+    /** Sets the path field. */
+    @JsonProperty("path")
+    public Builder withPath(final String value) {
+      this.path = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ArchiveEntry deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String path;
-        @JsonProperty("mime_type")
-        private String mimeType;
-        private ExtractedDocument result;
-
-        /** Sets the path field. */
-        @JsonProperty("path")
-        public Builder withPath(final String value) {
-            this.path = value;
-            return this;
-        }
-
-        /** Sets the mimeType field. */
-        @JsonProperty("mime_type")
-        public Builder withMimeType(final String value) {
-            this.mimeType = value;
-            return this;
-        }
-
-        /** Sets the result field. */
-        @JsonProperty("result")
-        public Builder withResult(final ExtractedDocument value) {
-            this.result = value;
-            return this;
-        }
-
-        /** Constructs a ArchiveEntry instance from the builder's current state. */
-        public ArchiveEntry build() {
-            return new ArchiveEntry(
-                path,
-                mimeType,
-                result
-            );
-        }
+    /** Sets the mimeType field. */
+    @JsonProperty("mime_type")
+    public Builder withMimeType(final String value) {
+      this.mimeType = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the result field. */
+    @JsonProperty("result")
+    public Builder withResult(final ExtractedDocument value) {
+      this.result = value;
+      return this;
+    }
+
+    /** Constructs a ArchiveEntry instance from the builder's current state. */
+    public ArchiveEntry build() {
+      return new ArchiveEntry(path, mimeType, result);
+    }
+  }
+  // CPD-ON
 }

@@ -4,18 +4,18 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Plain text and Markdown extraction result.
  *
- * Contains the extracted text along with statistics and,
- * for Markdown files, structural elements like headers and links.
+ * <p>Contains the extracted text along with statistics and, for Markdown files, structural elements
+ * like headers and links.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TextExtractionResult.Builder.class)
@@ -26,92 +26,90 @@ public record TextExtractionResult(
     @JsonProperty("character_count") long characterCount,
     @Nullable @JsonProperty("headers") List<String> headers,
     @Nullable @JsonProperty("links") List<MarkdownLink> links,
-    @Nullable @JsonProperty("code_blocks") List<MarkdownCodeBlock> codeBlocks
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("code_blocks") List<MarkdownCodeBlock> codeBlocks) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TextExtractionResult deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String content;
+
+    @JsonProperty("line_count")
+    private long lineCount;
+
+    @JsonProperty("word_count")
+    private long wordCount;
+
+    @JsonProperty("character_count")
+    private long characterCount;
+
+    @Nullable private List<String> headers;
+    @Nullable private List<MarkdownLink> links;
+
+    @JsonProperty("code_blocks")
+    @Nullable
+    private List<MarkdownCodeBlock> codeBlocks;
+
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final String value) {
+      this.content = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TextExtractionResult deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String content;
-        @JsonProperty("line_count")
-        private long lineCount;
-        @JsonProperty("word_count")
-        private long wordCount;
-        @JsonProperty("character_count")
-        private long characterCount;
-        @Nullable private List<String> headers;
-        @Nullable private List<MarkdownLink> links;
-        @JsonProperty("code_blocks")
-        @Nullable private List<MarkdownCodeBlock> codeBlocks;
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final String value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the lineCount field. */
-        @JsonProperty("line_count")
-        public Builder withLineCount(final long value) {
-            this.lineCount = value;
-            return this;
-        }
-
-        /** Sets the wordCount field. */
-        @JsonProperty("word_count")
-        public Builder withWordCount(final long value) {
-            this.wordCount = value;
-            return this;
-        }
-
-        /** Sets the characterCount field. */
-        @JsonProperty("character_count")
-        public Builder withCharacterCount(final long value) {
-            this.characterCount = value;
-            return this;
-        }
-
-        /** Sets the headers field. */
-        @JsonProperty("headers")
-        public Builder withHeaders(final @Nullable List<String> value) {
-            this.headers = value;
-            return this;
-        }
-
-        /** Sets the links field. */
-        @JsonProperty("links")
-        public Builder withLinks(final @Nullable List<MarkdownLink> value) {
-            this.links = value;
-            return this;
-        }
-
-        /** Sets the codeBlocks field. */
-        @JsonProperty("code_blocks")
-        public Builder withCodeBlocks(final @Nullable List<MarkdownCodeBlock> value) {
-            this.codeBlocks = value;
-            return this;
-        }
-
-        /** Constructs a TextExtractionResult instance from the builder's current state. */
-        public TextExtractionResult build() {
-            return new TextExtractionResult(
-                content,
-                lineCount,
-                wordCount,
-                characterCount,
-                headers,
-                links,
-                codeBlocks
-            );
-        }
+    /** Sets the lineCount field. */
+    @JsonProperty("line_count")
+    public Builder withLineCount(final long value) {
+      this.lineCount = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the wordCount field. */
+    @JsonProperty("word_count")
+    public Builder withWordCount(final long value) {
+      this.wordCount = value;
+      return this;
+    }
+
+    /** Sets the characterCount field. */
+    @JsonProperty("character_count")
+    public Builder withCharacterCount(final long value) {
+      this.characterCount = value;
+      return this;
+    }
+
+    /** Sets the headers field. */
+    @JsonProperty("headers")
+    public Builder withHeaders(final @Nullable List<String> value) {
+      this.headers = value;
+      return this;
+    }
+
+    /** Sets the links field. */
+    @JsonProperty("links")
+    public Builder withLinks(final @Nullable List<MarkdownLink> value) {
+      this.links = value;
+      return this;
+    }
+
+    /** Sets the codeBlocks field. */
+    @JsonProperty("code_blocks")
+    public Builder withCodeBlocks(final @Nullable List<MarkdownCodeBlock> value) {
+      this.codeBlocks = value;
+      return this;
+    }
+
+    /** Constructs a TextExtractionResult instance from the builder's current state. */
+    public TextExtractionResult build() {
+      return new TextExtractionResult(
+          content, lineCount, wordCount, characterCount, headers, links, codeBlocks);
+    }
+  }
+  // CPD-ON
 }

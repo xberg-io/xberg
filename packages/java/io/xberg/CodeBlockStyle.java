@@ -10,51 +10,44 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Code block fence style in Markdown output.
  *
- * Determines how code blocks ({@code &lt;pre&gt;&lt;code&gt;}) are rendered in Markdown.
+ * <p>Determines how code blocks ({@code &lt;pre&gt;&lt;code&gt;}) are rendered in Markdown.
  */
 @SuppressWarnings("PMD")
 public enum CodeBlockStyle {
-    /**
-     * Indented code blocks (4 spaces). {@code CommonMark} standard.
-     */
-    INDENTED("Indented"),
-    /**
-     * Fenced code blocks with triple backticks. Default (GFM). Supports language hints.
-     */
-    BACKTICKS("Backticks"),
-    /**
-     * Fenced code blocks with tildes (~~~). Supports language hints.
-     */
-    TILDES("Tildes");
+  /** Indented code blocks (4 spaces). {@code CommonMark} standard. */
+  INDENTED("Indented"),
+  /** Fenced code blocks with triple backticks. Default (GFM). Supports language hints. */
+  BACKTICKS("Backticks"),
+  /** Fenced code blocks with tildes (~~~). Supports language hints. */
+  TILDES("Tildes");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  CodeBlockStyle(final String value) {
+    this.value = value;
+  }
 
-    CodeBlockStyle(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static CodeBlockStyle fromValue(final String value) {
+    for (CodeBlockStyle e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown CodeBlockStyle value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static CodeBlockStyle fromValue(final String value) {
-        for (CodeBlockStyle e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown CodeBlockStyle value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

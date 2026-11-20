@@ -10,47 +10,44 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Whitespace handling strategy during conversion.
  *
- * Determines how sequences of whitespace characters (spaces, tabs, newlines) are processed.
+ * <p>Determines how sequences of whitespace characters (spaces, tabs, newlines) are processed.
  */
 @SuppressWarnings("PMD")
 public enum WhitespaceMode {
-    /**
-     * Collapse multiple whitespace characters to single spaces. Default. Matches browser behavior.
-     */
-    NORMALIZED("Normalized"),
-    /**
-     * Preserve all whitespace exactly as it appears in the HTML.
-     */
-    STRICT("Strict");
+  /**
+   * Collapse multiple whitespace characters to single spaces. Default. Matches browser behavior.
+   */
+  NORMALIZED("Normalized"),
+  /** Preserve all whitespace exactly as it appears in the HTML. */
+  STRICT("Strict");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  WhitespaceMode(final String value) {
+    this.value = value;
+  }
 
-    WhitespaceMode(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static WhitespaceMode fromValue(final String value) {
+    for (WhitespaceMode e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown WhitespaceMode value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static WhitespaceMode fromValue(final String value) {
-        for (WhitespaceMode e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown WhitespaceMode value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

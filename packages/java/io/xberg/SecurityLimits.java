@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for security limits across extractors.
  *
- * All limits are intentionally conservative to prevent DoS attacks
- * while still supporting legitimate documents.
+ * <p>All limits are intentionally conservative to prevent DoS attacks while still supporting
+ * legitimate documents.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = SecurityLimits.Builder.class)
@@ -28,141 +28,168 @@ public record SecurityLimits(
     @Nullable @JsonProperty("max_iterations") Long maxIterations,
     @Nullable @JsonProperty("max_xml_depth") Long maxXmlDepth,
     @Nullable @JsonProperty("max_table_cells") Long maxTableCells,
-    @Nullable @JsonProperty("max_pages") Long maxPages
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("max_pages") Long maxPages) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public SecurityLimits {
+    if (maxArchiveSize == null) {
+      maxArchiveSize = 524288000L;
     }
-    public SecurityLimits{
-        if (maxArchiveSize == null) { maxArchiveSize = 524288000L; }
-        if (maxCompressionRatio == null) { maxCompressionRatio = 100L; }
-        if (maxFilesInArchive == null) { maxFilesInArchive = 10000L; }
-        if (maxNestingDepth == null) { maxNestingDepth = 1024L; }
-        if (maxEntityLength == null) { maxEntityLength = 1048576L; }
-        if (maxContentSize == null) { maxContentSize = 104857600L; }
-        if (maxIterations == null) { maxIterations = 10000000L; }
-        if (maxXmlDepth == null) { maxXmlDepth = 1024L; }
-        if (maxTableCells == null) { maxTableCells = 100000L; }
+    if (maxCompressionRatio == null) {
+      maxCompressionRatio = 100L;
+    }
+    if (maxFilesInArchive == null) {
+      maxFilesInArchive = 10000L;
+    }
+    if (maxNestingDepth == null) {
+      maxNestingDepth = 1024L;
+    }
+    if (maxEntityLength == null) {
+      maxEntityLength = 1048576L;
+    }
+    if (maxContentSize == null) {
+      maxContentSize = 104857600L;
+    }
+    if (maxIterations == null) {
+      maxIterations = 10000000L;
+    }
+    if (maxXmlDepth == null) {
+      maxXmlDepth = 1024L;
+    }
+    if (maxTableCells == null) {
+      maxTableCells = 100000L;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for SecurityLimits deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("max_archive_size")
+    private Long maxArchiveSize;
+
+    @JsonProperty("max_compression_ratio")
+    private Long maxCompressionRatio;
+
+    @JsonProperty("max_files_in_archive")
+    private Long maxFilesInArchive;
+
+    @JsonProperty("max_nesting_depth")
+    private Long maxNestingDepth;
+
+    @JsonProperty("max_entity_length")
+    private Long maxEntityLength;
+
+    @JsonProperty("max_content_size")
+    private Long maxContentSize;
+
+    @JsonProperty("max_iterations")
+    private Long maxIterations;
+
+    @JsonProperty("max_xml_depth")
+    private Long maxXmlDepth;
+
+    @JsonProperty("max_table_cells")
+    private Long maxTableCells;
+
+    @JsonProperty("max_pages")
+    @Nullable
+    private Long maxPages;
+
+    /** Sets the maxArchiveSize field. */
+    @JsonProperty("max_archive_size")
+    public Builder withMaxArchiveSize(final @Nullable Long value) {
+      this.maxArchiveSize = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for SecurityLimits deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("max_archive_size")
-        private Long maxArchiveSize;
-        @JsonProperty("max_compression_ratio")
-        private Long maxCompressionRatio;
-        @JsonProperty("max_files_in_archive")
-        private Long maxFilesInArchive;
-        @JsonProperty("max_nesting_depth")
-        private Long maxNestingDepth;
-        @JsonProperty("max_entity_length")
-        private Long maxEntityLength;
-        @JsonProperty("max_content_size")
-        private Long maxContentSize;
-        @JsonProperty("max_iterations")
-        private Long maxIterations;
-        @JsonProperty("max_xml_depth")
-        private Long maxXmlDepth;
-        @JsonProperty("max_table_cells")
-        private Long maxTableCells;
-        @JsonProperty("max_pages")
-        @Nullable private Long maxPages;
-
-        /** Sets the maxArchiveSize field. */
-        @JsonProperty("max_archive_size")
-        public Builder withMaxArchiveSize(final @Nullable Long value) {
-            this.maxArchiveSize = value;
-            return this;
-        }
-
-        /** Sets the maxCompressionRatio field. */
-        @JsonProperty("max_compression_ratio")
-        public Builder withMaxCompressionRatio(final @Nullable Long value) {
-            this.maxCompressionRatio = value;
-            return this;
-        }
-
-        /** Sets the maxFilesInArchive field. */
-        @JsonProperty("max_files_in_archive")
-        public Builder withMaxFilesInArchive(final @Nullable Long value) {
-            this.maxFilesInArchive = value;
-            return this;
-        }
-
-        /** Sets the maxNestingDepth field. */
-        @JsonProperty("max_nesting_depth")
-        public Builder withMaxNestingDepth(final @Nullable Long value) {
-            this.maxNestingDepth = value;
-            return this;
-        }
-
-        /** Sets the maxEntityLength field. */
-        @JsonProperty("max_entity_length")
-        public Builder withMaxEntityLength(final @Nullable Long value) {
-            this.maxEntityLength = value;
-            return this;
-        }
-
-        /** Sets the maxContentSize field. */
-        @JsonProperty("max_content_size")
-        public Builder withMaxContentSize(final @Nullable Long value) {
-            this.maxContentSize = value;
-            return this;
-        }
-
-        /** Sets the maxIterations field. */
-        @JsonProperty("max_iterations")
-        public Builder withMaxIterations(final @Nullable Long value) {
-            this.maxIterations = value;
-            return this;
-        }
-
-        /** Sets the maxXmlDepth field. */
-        @JsonProperty("max_xml_depth")
-        public Builder withMaxXmlDepth(final @Nullable Long value) {
-            this.maxXmlDepth = value;
-            return this;
-        }
-
-        /** Sets the maxTableCells field. */
-        @JsonProperty("max_table_cells")
-        public Builder withMaxTableCells(final @Nullable Long value) {
-            this.maxTableCells = value;
-            return this;
-        }
-
-        /** Sets the maxPages field. */
-        @JsonProperty("max_pages")
-        public Builder withMaxPages(final @Nullable Long value) {
-            this.maxPages = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxPages(final long value) {
-            return withMaxPages(Long.valueOf(value));
-        }
-
-        /** Constructs a SecurityLimits instance from the builder's current state. */
-        public SecurityLimits build() {
-            return new SecurityLimits(
-                maxArchiveSize,
-                maxCompressionRatio,
-                maxFilesInArchive,
-                maxNestingDepth,
-                maxEntityLength,
-                maxContentSize,
-                maxIterations,
-                maxXmlDepth,
-                maxTableCells,
-                maxPages
-            );
-        }
+    /** Sets the maxCompressionRatio field. */
+    @JsonProperty("max_compression_ratio")
+    public Builder withMaxCompressionRatio(final @Nullable Long value) {
+      this.maxCompressionRatio = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the maxFilesInArchive field. */
+    @JsonProperty("max_files_in_archive")
+    public Builder withMaxFilesInArchive(final @Nullable Long value) {
+      this.maxFilesInArchive = value;
+      return this;
+    }
+
+    /** Sets the maxNestingDepth field. */
+    @JsonProperty("max_nesting_depth")
+    public Builder withMaxNestingDepth(final @Nullable Long value) {
+      this.maxNestingDepth = value;
+      return this;
+    }
+
+    /** Sets the maxEntityLength field. */
+    @JsonProperty("max_entity_length")
+    public Builder withMaxEntityLength(final @Nullable Long value) {
+      this.maxEntityLength = value;
+      return this;
+    }
+
+    /** Sets the maxContentSize field. */
+    @JsonProperty("max_content_size")
+    public Builder withMaxContentSize(final @Nullable Long value) {
+      this.maxContentSize = value;
+      return this;
+    }
+
+    /** Sets the maxIterations field. */
+    @JsonProperty("max_iterations")
+    public Builder withMaxIterations(final @Nullable Long value) {
+      this.maxIterations = value;
+      return this;
+    }
+
+    /** Sets the maxXmlDepth field. */
+    @JsonProperty("max_xml_depth")
+    public Builder withMaxXmlDepth(final @Nullable Long value) {
+      this.maxXmlDepth = value;
+      return this;
+    }
+
+    /** Sets the maxTableCells field. */
+    @JsonProperty("max_table_cells")
+    public Builder withMaxTableCells(final @Nullable Long value) {
+      this.maxTableCells = value;
+      return this;
+    }
+
+    /** Sets the maxPages field. */
+    @JsonProperty("max_pages")
+    public Builder withMaxPages(final @Nullable Long value) {
+      this.maxPages = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxPages(final long value) {
+      return withMaxPages(Long.valueOf(value));
+    }
+
+    /** Constructs a SecurityLimits instance from the builder's current state. */
+    public SecurityLimits build() {
+      return new SecurityLimits(
+          maxArchiveSize,
+          maxCompressionRatio,
+          maxFilesInArchive,
+          maxNestingDepth,
+          maxEntityLength,
+          maxContentSize,
+          maxIterations,
+          maxXmlDepth,
+          maxTableCells,
+          maxPages);
+    }
+  }
+  // CPD-ON
 }

@@ -4,17 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Block-level element in a Djot document.
  *
- * Represents structural elements like headings, paragraphs, lists, code blocks, etc.
+ * <p>Represents structural elements like headings, paragraphs, lists, code blocks, etc.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = FormattedBlock.Builder.class)
@@ -25,98 +25,96 @@ public record FormattedBlock(
     @Nullable @JsonProperty("attributes") Attributes attributes,
     @Nullable @JsonProperty("language") String language,
     @Nullable @JsonProperty("code") String code,
-    @JsonProperty("children") List<FormattedBlock> children
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("children") List<FormattedBlock> children) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public FormattedBlock {
+    if (children == null) {
+      children = List.of();
     }
-    public FormattedBlock{
-        if (children == null) { children = List.of(); }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for FormattedBlock deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("block_type")
+    private BlockType blockType;
+
+    @Nullable private Long level;
+
+    @JsonProperty("inline_content")
+    private List<InlineElement> inlineContent = List.of();
+
+    @Nullable private Attributes attributes;
+    @Nullable private String language;
+    @Nullable private String code;
+    @Nullable private List<FormattedBlock> children = List.of();
+
+    /** Sets the blockType field. */
+    @JsonProperty("block_type")
+    public Builder withBlockType(final BlockType value) {
+      this.blockType = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for FormattedBlock deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("block_type")
-        private BlockType blockType;
-        @Nullable private Long level;
-        @JsonProperty("inline_content")
-        private List<InlineElement> inlineContent = List.of();
-        @Nullable private Attributes attributes;
-        @Nullable private String language;
-        @Nullable private String code;
-        @Nullable private List<FormattedBlock> children = List.of();
-
-        /** Sets the blockType field. */
-        @JsonProperty("block_type")
-        public Builder withBlockType(final BlockType value) {
-            this.blockType = value;
-            return this;
-        }
-
-        /** Sets the level field. */
-        @JsonProperty("level")
-        public Builder withLevel(final @Nullable Long value) {
-            this.level = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withLevel(final long value) {
-            return withLevel(Long.valueOf(value));
-        }
-
-        /** Sets the inlineContent field. */
-        @JsonProperty("inline_content")
-        public Builder withInlineContent(final List<InlineElement> value) {
-            this.inlineContent = value;
-            return this;
-        }
-
-        /** Sets the attributes field. */
-        @JsonProperty("attributes")
-        public Builder withAttributes(final @Nullable Attributes value) {
-            this.attributes = value;
-            return this;
-        }
-
-        /** Sets the language field. */
-        @JsonProperty("language")
-        public Builder withLanguage(final @Nullable String value) {
-            this.language = value;
-            return this;
-        }
-
-        /** Sets the code field. */
-        @JsonProperty("code")
-        public Builder withCode(final @Nullable String value) {
-            this.code = value;
-            return this;
-        }
-
-        /** Sets the children field. */
-        @JsonProperty("children")
-        public Builder withChildren(final @Nullable List<FormattedBlock> value) {
-            this.children = value;
-            return this;
-        }
-
-        /** Constructs a FormattedBlock instance from the builder's current state. */
-        public FormattedBlock build() {
-            return new FormattedBlock(
-                blockType,
-                level,
-                inlineContent,
-                attributes,
-                language,
-                code,
-                children
-            );
-        }
+    /** Sets the level field. */
+    @JsonProperty("level")
+    public Builder withLevel(final @Nullable Long value) {
+      this.level = value;
+      return this;
     }
-    // CPD-ON
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withLevel(final long value) {
+      return withLevel(Long.valueOf(value));
+    }
+
+    /** Sets the inlineContent field. */
+    @JsonProperty("inline_content")
+    public Builder withInlineContent(final List<InlineElement> value) {
+      this.inlineContent = value;
+      return this;
+    }
+
+    /** Sets the attributes field. */
+    @JsonProperty("attributes")
+    public Builder withAttributes(final @Nullable Attributes value) {
+      this.attributes = value;
+      return this;
+    }
+
+    /** Sets the language field. */
+    @JsonProperty("language")
+    public Builder withLanguage(final @Nullable String value) {
+      this.language = value;
+      return this;
+    }
+
+    /** Sets the code field. */
+    @JsonProperty("code")
+    public Builder withCode(final @Nullable String value) {
+      this.code = value;
+      return this;
+    }
+
+    /** Sets the children field. */
+    @JsonProperty("children")
+    public Builder withChildren(final @Nullable List<FormattedBlock> value) {
+      this.children = value;
+      return this;
+    }
+
+    /** Constructs a FormattedBlock instance from the builder's current state. */
+    public FormattedBlock build() {
+      return new FormattedBlock(
+          blockType, level, inlineContent, attributes, language, code, children);
+    }
+  }
+  // CPD-ON
 }

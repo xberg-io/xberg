@@ -10,61 +10,54 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * PDF extraction backend selection.
  *
- * Controls which engine parses and renders PDF documents. Wire format is
- * snake_case in all serializers (JSON, TOML, YAML). Defaults to
- * PdfBackend.Native -- selecting anything else never changes behavior
- * for a caller who does not opt in.
+ * <p>Controls which engine parses and renders PDF documents. Wire format is snake_case in all
+ * serializers (JSON, TOML, YAML). Defaults to PdfBackend.Native -- selecting anything else never
+ * changes behavior for a caller who does not opt in.
  */
 @SuppressWarnings("PMD")
 public enum PdfBackend {
-    /**
-     * xberg's own pure-Rust PDF engine (default), {@code crates/xberg-native-pdf}.
-     */
-    NATIVE("native"),
-    /**
-     * pdfium -- Google's PDFium engine, gated behind the {@code pdf-pdfium} Cargo
-     * feature (#700 added the selection level; #702 added the extraction
-     * engine, {@code extractors.pdf.pdfium_engine}, deliberately smaller in scope
-     * than {@code Native} -- see that module's doc comment for exactly what it
-     * extracts). A build without the {@code pdf-pdfium} feature rejects this at the
-     * CLI validation layer rather than silently falling back to {@code Native}.
-     * A build *with* the feature still enforces the selection at extraction
-     * time ({@code extractors.pdf.PdfExtractor.extract_core}), because that is
-     * the one dispatch point every caller -- CLI, library use, API/MCP
-     * servers, language bindings -- passes through; see that function's doc
-     * comment for why the enforcement lives there and not only in CLI
-     * validation.
-     */
-    PDFIUM("pdfium");
+  /** xberg's own pure-Rust PDF engine (default), {@code crates/xberg-native-pdf}. */
+  NATIVE("native"),
+  /**
+   * pdfium -- Google's PDFium engine, gated behind the {@code pdf-pdfium} Cargo feature (#700 added
+   * the selection level; #702 added the extraction engine, {@code extractors.pdf.pdfium_engine},
+   * deliberately smaller in scope than {@code Native} -- see that module's doc comment for exactly
+   * what it extracts). A build without the {@code pdf-pdfium} feature rejects this at the CLI
+   * validation layer rather than silently falling back to {@code Native}. A build *with* the
+   * feature still enforces the selection at extraction time ({@code
+   * extractors.pdf.PdfExtractor.extract_core}), because that is the one dispatch point every caller
+   * -- CLI, library use, API/MCP servers, language bindings -- passes through; see that function's
+   * doc comment for why the enforcement lives there and not only in CLI validation.
+   */
+  PDFIUM("pdfium");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  PdfBackend(final String value) {
+    this.value = value;
+  }
 
-    PdfBackend(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static PdfBackend fromValue(final String value) {
+    for (PdfBackend e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown PdfBackend value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static PdfBackend fromValue(final String value) {
-        for (PdfBackend e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown PdfBackend value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,68 +13,73 @@ import org.jspecify.annotations.Nullable;
 /**
  * Hierarchy extraction configuration for PDF text structure analysis.
  *
- * Enables extraction of document hierarchy levels (H1-H6) based on font size
- * clustering and semantic analysis. When enabled, hierarchical blocks are
- * included in page content.
+ * <p>Enables extraction of document hierarchy levels (H1-H6) based on font size clustering and
+ * semantic analysis. When enabled, hierarchical blocks are included in page content.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HierarchyConfig.Builder.class)
 public record HierarchyConfig(
     @Nullable @JsonProperty("enabled") Boolean enabled,
     @Nullable @JsonProperty("k_clusters") Long kClusters,
-    @Nullable @JsonProperty("include_bbox") Boolean includeBbox
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("include_bbox") Boolean includeBbox) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public HierarchyConfig {
+    if (enabled == null) {
+      enabled = true;
     }
-    public HierarchyConfig{
-        if (enabled == null) { enabled = true; }
-        if (kClusters == null) { kClusters = 3L; }
-        if (includeBbox == null) { includeBbox = true; }
+    if (kClusters == null) {
+      kClusters = 3L;
+    }
+    if (includeBbox == null) {
+      includeBbox = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for HierarchyConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private Boolean enabled;
+
+    @JsonProperty("k_clusters")
+    @Nullable
+    private Long kClusters;
+
+    @JsonProperty("include_bbox")
+    @Nullable
+    private Boolean includeBbox;
+
+    /** Sets the enabled field. */
+    @JsonProperty("enabled")
+    public Builder withEnabled(final @Nullable Boolean value) {
+      this.enabled = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for HierarchyConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private Boolean enabled;
-        @JsonProperty("k_clusters")
-        @Nullable private Long kClusters;
-        @JsonProperty("include_bbox")
-        @Nullable private Boolean includeBbox;
-
-        /** Sets the enabled field. */
-        @JsonProperty("enabled")
-        public Builder withEnabled(final @Nullable Boolean value) {
-            this.enabled = value;
-            return this;
-        }
-
-        /** Sets the kClusters field. */
-        @JsonProperty("k_clusters")
-        public Builder withKClusters(final @Nullable Long value) {
-            this.kClusters = value;
-            return this;
-        }
-
-        /** Sets the includeBbox field. */
-        @JsonProperty("include_bbox")
-        public Builder withIncludeBbox(final @Nullable Boolean value) {
-            this.includeBbox = value;
-            return this;
-        }
-
-        /** Constructs a HierarchyConfig instance from the builder's current state. */
-        public HierarchyConfig build() {
-            return new HierarchyConfig(
-                enabled,
-                kClusters,
-                includeBbox
-            );
-        }
+    /** Sets the kClusters field. */
+    @JsonProperty("k_clusters")
+    public Builder withKClusters(final @Nullable Long value) {
+      this.kClusters = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the includeBbox field. */
+    @JsonProperty("include_bbox")
+    public Builder withIncludeBbox(final @Nullable Boolean value) {
+      this.includeBbox = value;
+      return this;
+    }
+
+    /** Constructs a HierarchyConfig instance from the builder's current state. */
+    public HierarchyConfig build() {
+      return new HierarchyConfig(enabled, kClusters, includeBbox);
+    }
+  }
+  // CPD-ON
 }

@@ -4,56 +4,49 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * JATS contributor with role.
- */
+/** JATS contributor with role. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ContributorRole.Builder.class)
 public record ContributorRole(
-    @JsonProperty("name") String name,
-    @Nullable @JsonProperty("role") String role
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("name") String name, @Nullable @JsonProperty("role") String role) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ContributorRole deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private String name;
+    @Nullable private String role;
+
+    /** Sets the name field. */
+    @JsonProperty("name")
+    public Builder withName(final String value) {
+      this.name = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ContributorRole deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private String name;
-        @Nullable private String role;
-
-        /** Sets the name field. */
-        @JsonProperty("name")
-        public Builder withName(final String value) {
-            this.name = value;
-            return this;
-        }
-
-        /** Sets the role field. */
-        @JsonProperty("role")
-        public Builder withRole(final @Nullable String value) {
-            this.role = value;
-            return this;
-        }
-
-        /** Constructs a ContributorRole instance from the builder's current state. */
-        public ContributorRole build() {
-            return new ContributorRole(
-                name,
-                role
-            );
-        }
+    /** Sets the role field. */
+    @JsonProperty("role")
+    public Builder withRole(final @Nullable String value) {
+      this.role = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a ContributorRole instance from the builder's current state. */
+    public ContributorRole build() {
+      return new ContributorRole(name, role);
+    }
+  }
+  // CPD-ON
 }

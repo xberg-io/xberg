@@ -4,15 +4,13 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * EPUB metadata (Dublin Core extensions).
- */
+/** EPUB metadata (Dublin Core extensions). */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EpubMetadata.Builder.class)
 public record EpubMetadata(
@@ -21,82 +19,81 @@ public record EpubMetadata(
     @Nullable @JsonProperty("relation") String relation,
     @Nullable @JsonProperty("source") String source,
     @Nullable @JsonProperty("dc_type") String dcType,
-    @Nullable @JsonProperty("cover_image") String coverImage
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("cover_image") String coverImage) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for EpubMetadata deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @Nullable private String coverage;
+
+    @JsonProperty("dc_format")
+    @Nullable
+    private String dcFormat;
+
+    @Nullable private String relation;
+    @Nullable private String source;
+
+    @JsonProperty("dc_type")
+    @Nullable
+    private String dcType;
+
+    @JsonProperty("cover_image")
+    @Nullable
+    private String coverImage;
+
+    /** Sets the coverage field. */
+    @JsonProperty("coverage")
+    public Builder withCoverage(final @Nullable String value) {
+      this.coverage = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for EpubMetadata deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @Nullable private String coverage;
-        @JsonProperty("dc_format")
-        @Nullable private String dcFormat;
-        @Nullable private String relation;
-        @Nullable private String source;
-        @JsonProperty("dc_type")
-        @Nullable private String dcType;
-        @JsonProperty("cover_image")
-        @Nullable private String coverImage;
-
-        /** Sets the coverage field. */
-        @JsonProperty("coverage")
-        public Builder withCoverage(final @Nullable String value) {
-            this.coverage = value;
-            return this;
-        }
-
-        /** Sets the dcFormat field. */
-        @JsonProperty("dc_format")
-        public Builder withDcFormat(final @Nullable String value) {
-            this.dcFormat = value;
-            return this;
-        }
-
-        /** Sets the relation field. */
-        @JsonProperty("relation")
-        public Builder withRelation(final @Nullable String value) {
-            this.relation = value;
-            return this;
-        }
-
-        /** Sets the source field. */
-        @JsonProperty("source")
-        public Builder withSource(final @Nullable String value) {
-            this.source = value;
-            return this;
-        }
-
-        /** Sets the dcType field. */
-        @JsonProperty("dc_type")
-        public Builder withDcType(final @Nullable String value) {
-            this.dcType = value;
-            return this;
-        }
-
-        /** Sets the coverImage field. */
-        @JsonProperty("cover_image")
-        public Builder withCoverImage(final @Nullable String value) {
-            this.coverImage = value;
-            return this;
-        }
-
-        /** Constructs a EpubMetadata instance from the builder's current state. */
-        public EpubMetadata build() {
-            return new EpubMetadata(
-                coverage,
-                dcFormat,
-                relation,
-                source,
-                dcType,
-                coverImage
-            );
-        }
+    /** Sets the dcFormat field. */
+    @JsonProperty("dc_format")
+    public Builder withDcFormat(final @Nullable String value) {
+      this.dcFormat = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the relation field. */
+    @JsonProperty("relation")
+    public Builder withRelation(final @Nullable String value) {
+      this.relation = value;
+      return this;
+    }
+
+    /** Sets the source field. */
+    @JsonProperty("source")
+    public Builder withSource(final @Nullable String value) {
+      this.source = value;
+      return this;
+    }
+
+    /** Sets the dcType field. */
+    @JsonProperty("dc_type")
+    public Builder withDcType(final @Nullable String value) {
+      this.dcType = value;
+      return this;
+    }
+
+    /** Sets the coverImage field. */
+    @JsonProperty("cover_image")
+    public Builder withCoverImage(final @Nullable String value) {
+      this.coverImage = value;
+      return this;
+    }
+
+    /** Constructs a EpubMetadata instance from the builder's current state. */
+    public EpubMetadata build() {
+      return new EpubMetadata(coverage, dcFormat, relation, source, dcType, coverImage);
+    }
+  }
+  // CPD-ON
 }

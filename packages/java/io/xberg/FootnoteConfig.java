@@ -4,48 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Configuration for markdown footnote and citation parsing.
- */
+/** Configuration for markdown footnote and citation parsing. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = FootnoteConfig.Builder.class)
 public record FootnoteConfig(@Nullable @JsonProperty("parse_citations") Boolean parseCitations) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public FootnoteConfig {
+    if (parseCitations == null) {
+      parseCitations = true;
     }
-    public FootnoteConfig{
-        if (parseCitations == null) { parseCitations = true; }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for FootnoteConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("parse_citations")
+    @Nullable
+    private Boolean parseCitations;
+
+    /** Sets the parseCitations field. */
+    @JsonProperty("parse_citations")
+    public Builder withParseCitations(final @Nullable Boolean value) {
+      this.parseCitations = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for FootnoteConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("parse_citations")
-        @Nullable private Boolean parseCitations;
-
-        /** Sets the parseCitations field. */
-        @JsonProperty("parse_citations")
-        public Builder withParseCitations(final @Nullable Boolean value) {
-            this.parseCitations = value;
-            return this;
-        }
-
-        /** Constructs a FootnoteConfig instance from the builder's current state. */
-        public FootnoteConfig build() {
-            return new FootnoteConfig(
-                parseCitations
-            );
-        }
+    /** Constructs a FootnoteConfig instance from the builder's current state. */
+    public FootnoteConfig build() {
+      return new FootnoteConfig(parseCitations);
     }
-    // CPD-ON
+  }
+  // CPD-ON
 }

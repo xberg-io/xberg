@@ -4,62 +4,62 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * RAKE-specific parameters.
- */
+/** RAKE-specific parameters. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = RakeParams.Builder.class)
 public record RakeParams(
     @Nullable @JsonProperty("min_word_length") Long minWordLength,
-    @Nullable @JsonProperty("max_words_per_phrase") Long maxWordsPerPhrase
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("max_words_per_phrase") Long maxWordsPerPhrase) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public RakeParams {
+    if (minWordLength == null) {
+      minWordLength = 1L;
     }
-    public RakeParams{
-        if (minWordLength == null) { minWordLength = 1L; }
-        if (maxWordsPerPhrase == null) { maxWordsPerPhrase = 3L; }
+    if (maxWordsPerPhrase == null) {
+      maxWordsPerPhrase = 3L;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for RakeParams deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("min_word_length")
+    private Long minWordLength;
+
+    @JsonProperty("max_words_per_phrase")
+    private Long maxWordsPerPhrase;
+
+    /** Sets the minWordLength field. */
+    @JsonProperty("min_word_length")
+    public Builder withMinWordLength(final @Nullable Long value) {
+      this.minWordLength = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for RakeParams deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("min_word_length")
-        private Long minWordLength;
-        @JsonProperty("max_words_per_phrase")
-        private Long maxWordsPerPhrase;
-
-        /** Sets the minWordLength field. */
-        @JsonProperty("min_word_length")
-        public Builder withMinWordLength(final @Nullable Long value) {
-            this.minWordLength = value;
-            return this;
-        }
-
-        /** Sets the maxWordsPerPhrase field. */
-        @JsonProperty("max_words_per_phrase")
-        public Builder withMaxWordsPerPhrase(final @Nullable Long value) {
-            this.maxWordsPerPhrase = value;
-            return this;
-        }
-
-        /** Constructs a RakeParams instance from the builder's current state. */
-        public RakeParams build() {
-            return new RakeParams(
-                minWordLength,
-                maxWordsPerPhrase
-            );
-        }
+    /** Sets the maxWordsPerPhrase field. */
+    @JsonProperty("max_words_per_phrase")
+    public Builder withMaxWordsPerPhrase(final @Nullable Long value) {
+      this.maxWordsPerPhrase = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a RakeParams instance from the builder's current state. */
+    public RakeParams build() {
+      return new RakeParams(minWordLength, maxWordsPerPhrase);
+    }
+  }
+  // CPD-ON
 }

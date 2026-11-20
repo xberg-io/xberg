@@ -4,71 +4,66 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import java.util.Map;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Excel workbook representation.
  *
- * Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
- * extracted content and metadata.
+ * <p>Contains all sheets from an Excel file (.xlsx, .xls, etc.) with extracted content and
+ * metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExcelWorkbook.Builder.class)
 public record ExcelWorkbook(
     @JsonProperty("sheets") List<ExcelSheet> sheets,
     @JsonProperty("metadata") Map<String, String> metadata,
-    @Nullable @JsonProperty("revisions") List<DocumentRevision> revisions
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("revisions") List<DocumentRevision> revisions) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ExcelWorkbook deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private List<ExcelSheet> sheets = List.of();
+    private Map<String, String> metadata = Map.of();
+    @Nullable private List<DocumentRevision> revisions;
+
+    /** Sets the sheets field. */
+    @JsonProperty("sheets")
+    public Builder withSheets(final List<ExcelSheet> value) {
+      this.sheets = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ExcelWorkbook deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private List<ExcelSheet> sheets = List.of();
-        private Map<String, String> metadata = Map.of();
-        @Nullable private List<DocumentRevision> revisions;
-
-        /** Sets the sheets field. */
-        @JsonProperty("sheets")
-        public Builder withSheets(final List<ExcelSheet> value) {
-            this.sheets = value;
-            return this;
-        }
-
-        /** Sets the metadata field. */
-        @JsonProperty("metadata")
-        public Builder withMetadata(final Map<String, String> value) {
-            this.metadata = value;
-            return this;
-        }
-
-        /** Sets the revisions field. */
-        @JsonProperty("revisions")
-        public Builder withRevisions(final @Nullable List<DocumentRevision> value) {
-            this.revisions = value;
-            return this;
-        }
-
-        /** Constructs a ExcelWorkbook instance from the builder's current state. */
-        public ExcelWorkbook build() {
-            return new ExcelWorkbook(
-                sheets,
-                metadata,
-                revisions
-            );
-        }
+    /** Sets the metadata field. */
+    @JsonProperty("metadata")
+    public Builder withMetadata(final Map<String, String> value) {
+      this.metadata = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the revisions field. */
+    @JsonProperty("revisions")
+    public Builder withRevisions(final @Nullable List<DocumentRevision> value) {
+      this.revisions = value;
+      return this;
+    }
+
+    /** Constructs a ExcelWorkbook instance from the builder's current state. */
+    public ExcelWorkbook build() {
+      return new ExcelWorkbook(sheets, metadata, revisions);
+    }
+  }
+  // CPD-ON
 }

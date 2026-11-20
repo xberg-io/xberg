@@ -5,14 +5,14 @@
 package io.xberg;
 
 final class JsonMapperFactory {
-    private JsonMapperFactory() {}
+  private JsonMapperFactory() {}
 
-    static com.fasterxml.jackson.databind.ObjectMapper withNativePathSerialization(
-            final com.fasterxml.jackson.databind.ObjectMapper mapper) {
-        var module = new com.fasterxml.jackson.databind.module.SimpleModule();
-        module.addSerializer(
-            java.nio.file.Path.class,
-            com.fasterxml.jackson.databind.ser.std.ToStringSerializer.instance);
-        return mapper.registerModule(module);
-    }
+  static com.fasterxml.jackson.databind.ObjectMapper withNativePathSerialization(
+      final com.fasterxml.jackson.databind.ObjectMapper mapper) {
+    var module = new com.fasterxml.jackson.databind.module.SimpleModule();
+    module.addSerializer(
+        java.nio.file.Path.class,
+        com.fasterxml.jackson.databind.ser.std.ToStringSerializer.instance);
+    return mapper.registerModule(module);
+  }
 }

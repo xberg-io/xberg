@@ -4,68 +4,63 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * Inline text annotation — byte-range based formatting and links.
  *
- * Annotations reference byte offsets into the node's text content,
- * enabling precise identification of formatted regions.
+ * <p>Annotations reference byte offsets into the node's text content, enabling precise
+ * identification of formatted regions.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TextAnnotation.Builder.class)
 public record TextAnnotation(
     @JsonProperty("start") int start,
     @JsonProperty("end") int end,
-    @JsonProperty("kind") AnnotationKind kind
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("kind") AnnotationKind kind) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for TextAnnotation deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private int start;
+    private int end;
+    private AnnotationKind kind;
+
+    /** Sets the start field. */
+    @JsonProperty("start")
+    public Builder withStart(final int value) {
+      this.start = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for TextAnnotation deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private int start;
-        private int end;
-        private AnnotationKind kind;
-
-        /** Sets the start field. */
-        @JsonProperty("start")
-        public Builder withStart(final int value) {
-            this.start = value;
-            return this;
-        }
-
-        /** Sets the end field. */
-        @JsonProperty("end")
-        public Builder withEnd(final int value) {
-            this.end = value;
-            return this;
-        }
-
-        /** Sets the kind field. */
-        @JsonProperty("kind")
-        public Builder withKind(final AnnotationKind value) {
-            this.kind = value;
-            return this;
-        }
-
-        /** Constructs a TextAnnotation instance from the builder's current state. */
-        public TextAnnotation build() {
-            return new TextAnnotation(
-                start,
-                end,
-                kind
-            );
-        }
+    /** Sets the end field. */
+    @JsonProperty("end")
+    public Builder withEnd(final int value) {
+      this.end = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the kind field. */
+    @JsonProperty("kind")
+    public Builder withKind(final AnnotationKind value) {
+      this.kind = value;
+      return this;
+    }
+
+    /** Constructs a TextAnnotation instance from the builder's current state. */
+    public TextAnnotation build() {
+      return new TextAnnotation(start, end, kind);
+    }
+  }
+  // CPD-ON
 }

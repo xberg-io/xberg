@@ -2,9 +2,7 @@
 // alef:hash:35284ff033981de7b8b530954a5ac35bdcd5a270f48cd96313a2db6e707a1493
 package io.xberg;
 
-/**
- * A registered plugin returned an error during extraction.
- */
+/** A registered plugin returned an error during extraction. */
 public class PluginException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

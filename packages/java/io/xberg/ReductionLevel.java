@@ -7,60 +7,47 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/**
- * Intensity level for the token-reduction pipeline.
- */
+/** Intensity level for the token-reduction pipeline. */
 @SuppressWarnings("PMD")
 public enum ReductionLevel {
-    /**
-     * No reduction applied; text is returned as-is.
-     */
-    OFF("Off"),
-    /**
-     * Remove only the most common stopwords.
-     */
-    LIGHT("Light"),
-    /**
-     * Balanced stopword removal and redundancy filtering.
-     */
-    MODERATE("Moderate"),
-    /**
-     * Aggressive filtering; may remove less common content words.
-     */
-    AGGRESSIVE("Aggressive"),
-    /**
-     * Maximum compression; prioritizes brevity over completeness.
-     */
-    MAXIMUM("Maximum");
+  /** No reduction applied; text is returned as-is. */
+  OFF("Off"),
+  /** Remove only the most common stopwords. */
+  LIGHT("Light"),
+  /** Balanced stopword removal and redundancy filtering. */
+  MODERATE("Moderate"),
+  /** Aggressive filtering; may remove less common content words. */
+  AGGRESSIVE("Aggressive"),
+  /** Maximum compression; prioritizes brevity over completeness. */
+  MAXIMUM("Maximum");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  ReductionLevel(final String value) {
+    this.value = value;
+  }
 
-    ReductionLevel(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static ReductionLevel fromValue(final String value) {
+    for (ReductionLevel e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown ReductionLevel value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static ReductionLevel fromValue(final String value) {
-        for (ReductionLevel e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown ReductionLevel value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

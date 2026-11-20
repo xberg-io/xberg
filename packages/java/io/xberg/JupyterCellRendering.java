@@ -10,60 +10,53 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Controls how Jupyter notebook code cells are rendered during extraction.
  *
- * A code cell carries both its **source** and any **outputs** that were saved in
- * the notebook. Callers ingesting notebooks for AI agents want different slices of
- * this depending on the task. Xberg never executes cells — {@code Outputs} and {@code Both}
- * only surface outputs already stored in the {@code .ipynb}.
+ * <p>A code cell carries both its **source** and any **outputs** that were saved in the notebook.
+ * Callers ingesting notebooks for AI agents want different slices of this depending on the task.
+ * Xberg never executes cells — {@code Outputs} and {@code Both} only surface outputs already stored
+ * in the {@code .ipynb}.
  *
- * This toggle governs a code cell's **source body** and its **saved outputs**.
- * Markdown (prose) cells and structural markers (kernel language, cell id, tags,
- * execution count) are unaffected — prose always renders and markers orient the
- * reader regardless of mode.
+ * <p>This toggle governs a code cell's **source body** and its **saved outputs**. Markdown (prose)
+ * cells and structural markers (kernel language, cell id, tags, execution count) are unaffected —
+ * prose always renders and markers orient the reader regardless of mode.
  */
 @SuppressWarnings("PMD")
 public enum JupyterCellRendering {
-    /**
-     * Render the code source as a fenced code block; omit saved outputs.
-     */
-    SOURCE("source"),
-    /**
-     * Omit the code source; render only the saved cell outputs.
-     */
-    OUTPUTS("outputs"),
-    /**
-     * Render both the code source and the saved outputs (default; preserves the
-     * historical behavior).
-     */
-    BOTH("both");
+  /** Render the code source as a fenced code block; omit saved outputs. */
+  SOURCE("source"),
+  /** Omit the code source; render only the saved cell outputs. */
+  OUTPUTS("outputs"),
+  /**
+   * Render both the code source and the saved outputs (default; preserves the historical behavior).
+   */
+  BOTH("both");
 
+  /** The string value. */
+  private final String value;
 
-    /** The string value. */
-    private final String value;
+  JupyterCellRendering(final String value) {
+    this.value = value;
+  }
 
-    JupyterCellRendering(final String value) {
-        this.value = value;
+  /** Returns the string value. */
+  @JsonValue
+  public String getValue() {
+    return value;
+  }
+
+  /** Creates an instance from a string value. */
+  @JsonCreator
+  public static JupyterCellRendering fromValue(final String value) {
+    for (JupyterCellRendering e : values()) {
+      if (e.value.equalsIgnoreCase(value)) {
+        return e;
+      }
     }
+    throw new IllegalArgumentException("Unknown JupyterCellRendering value: " + value);
+  }
 
-    /** Returns the string value. */
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
-
-    /** Creates an instance from a string value. */
-    @JsonCreator
-    public static JupyterCellRendering fromValue(final String value) {
-        for (JupyterCellRendering e : values()) {
-            if (e.value.equalsIgnoreCase(value)) {
-                return e;
-            }
-        }
-        throw new IllegalArgumentException("Unknown JupyterCellRendering value: " + value);
-    }
-
-    /** Returns the wire-format string value (matches JSON serialization). */
-    @Override
-    public String toString() {
-        return value;
-    }
+  /** Returns the wire-format string value (matches JSON serialization). */
+  @Override
+  public String toString() {
+    return value;
+  }
 }

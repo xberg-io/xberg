@@ -4,17 +4,15 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import java.util.List;
-import java.util.Map;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Configuration for crawl, scrape, and map operations.
- */
+/** Configuration for crawl, scrape, and map operations. */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CrawlConfig.Builder.class)
@@ -68,784 +66,1000 @@ public record CrawlConfig(
     @Nullable @JsonProperty("document_max_size") Long documentMaxSize,
     @Nullable @JsonProperty("document_mime_types") List<String> documentMimeTypes,
     @JsonProperty("document_output_dir") java.nio.file.@Nullable Path documentOutputDir,
-    @Nullable @JsonProperty("document_content_encoding") DocumentContentEncoding documentContentEncoding,
+    @Nullable @JsonProperty("document_content_encoding")
+        DocumentContentEncoding documentContentEncoding,
     @JsonProperty("warc_output") java.nio.file.@Nullable Path warcOutput,
     @Nullable @JsonProperty("browser_profile") String browserProfile,
     @JsonProperty("save_browser_profile") boolean saveBrowserProfile,
     @Nullable @JsonProperty("ssrf") SsrfPolicy ssrf,
     @Nullable @JsonProperty("ssrf_deny_private_explicit") Boolean ssrfDenyPrivateExplicit,
     @Nullable @JsonProperty("danger_accept_invalid_certs") Boolean dangerAcceptInvalidCerts,
-    @Nullable @JsonProperty("subdomain_header_allowlist") List<String> subdomainHeaderAllowlist
-) {
-    public CrawlConfig(
-        Long maxDepth,
-        Long maxPages,
-        Long maxLinksPerPage,
-        Long maxConcurrent,
-        CrawlStrategyKind crawlStrategy,
-        ContentFilterKind contentFilter,
-        String bm25Query,
-        Double bm25Threshold,
-        boolean respectRobotsTxt,
-        Boolean softHttpErrors,
-        String userAgent,
-        boolean stayOnDomain,
-        boolean allowSubdomains,
-        List<String> includePaths,
-        List<String> excludePaths,
-        Boolean pathPatternsMatchQuery,
-        Boolean pathPatternsMatchUrl,
-        Boolean dedupIncludeQuery,
-        Boolean stripTrackingParams,
-        List<String> trackingParams,
-        Map<String, String> customHeaders,
-        Long requestTimeout,
-        Long rateLimitMs,
-        Long maxRedirects,
-        long retryCount,
-        List<Short> retryCodes,
-        Long retryInitialDelayMs,
-        Long retryMaxDelayMs,
-        double rateLimitJitterRatio,
-        boolean cookiesEnabled,
-        AuthConfig auth,
-        Long maxBodySize,
-        List<String> removeTags,
-        ContentConfig content,
-        Long mapLimit,
-        String mapSearch,
-        boolean downloadAssets,
-        List<AssetCategory> assetTypes,
-        Long maxAssetSize,
-        BrowserConfig browser,
-        ProxyConfig proxy,
-        List<String> userAgents,
-        boolean captureScreenshot,
-        Boolean followDocumentUrls,
-        Integer documentUrlDepth,
-        Boolean downloadDocuments,
-        Long documentMaxSize,
-        List<String> documentMimeTypes,
-        java.nio.file.Path documentOutputDir,
-        DocumentContentEncoding documentContentEncoding,
-        java.nio.file.Path warcOutput,
-        String browserProfile,
-        boolean saveBrowserProfile,
-        SsrfPolicy ssrf,
-        Boolean ssrfDenyPrivateExplicit
-    ) {
-        this(maxDepth, maxPages, maxLinksPerPage, maxConcurrent, crawlStrategy, contentFilter, bm25Query, bm25Threshold, respectRobotsTxt, softHttpErrors, userAgent, stayOnDomain, allowSubdomains, includePaths, excludePaths, pathPatternsMatchQuery, pathPatternsMatchUrl, dedupIncludeQuery, stripTrackingParams, trackingParams, customHeaders, requestTimeout, rateLimitMs, maxRedirects, retryCount, retryCodes, retryInitialDelayMs, retryMaxDelayMs, rateLimitJitterRatio, cookiesEnabled, auth, maxBodySize, removeTags, content, mapLimit, mapSearch, downloadAssets, assetTypes, maxAssetSize, browser, proxy, userAgents, captureScreenshot, followDocumentUrls, documentUrlDepth, downloadDocuments, documentMaxSize, documentMimeTypes, documentOutputDir, documentContentEncoding, warcOutput, browserProfile, saveBrowserProfile, ssrf, ssrfDenyPrivateExplicit, false, List.of());
+    @Nullable @JsonProperty("subdomain_header_allowlist") List<String> subdomainHeaderAllowlist) {
+  public CrawlConfig(
+      Long maxDepth,
+      Long maxPages,
+      Long maxLinksPerPage,
+      Long maxConcurrent,
+      CrawlStrategyKind crawlStrategy,
+      ContentFilterKind contentFilter,
+      String bm25Query,
+      Double bm25Threshold,
+      boolean respectRobotsTxt,
+      Boolean softHttpErrors,
+      String userAgent,
+      boolean stayOnDomain,
+      boolean allowSubdomains,
+      List<String> includePaths,
+      List<String> excludePaths,
+      Boolean pathPatternsMatchQuery,
+      Boolean pathPatternsMatchUrl,
+      Boolean dedupIncludeQuery,
+      Boolean stripTrackingParams,
+      List<String> trackingParams,
+      Map<String, String> customHeaders,
+      Long requestTimeout,
+      Long rateLimitMs,
+      Long maxRedirects,
+      long retryCount,
+      List<Short> retryCodes,
+      Long retryInitialDelayMs,
+      Long retryMaxDelayMs,
+      double rateLimitJitterRatio,
+      boolean cookiesEnabled,
+      AuthConfig auth,
+      Long maxBodySize,
+      List<String> removeTags,
+      ContentConfig content,
+      Long mapLimit,
+      String mapSearch,
+      boolean downloadAssets,
+      List<AssetCategory> assetTypes,
+      Long maxAssetSize,
+      BrowserConfig browser,
+      ProxyConfig proxy,
+      List<String> userAgents,
+      boolean captureScreenshot,
+      Boolean followDocumentUrls,
+      Integer documentUrlDepth,
+      Boolean downloadDocuments,
+      Long documentMaxSize,
+      List<String> documentMimeTypes,
+      java.nio.file.Path documentOutputDir,
+      DocumentContentEncoding documentContentEncoding,
+      java.nio.file.Path warcOutput,
+      String browserProfile,
+      boolean saveBrowserProfile,
+      SsrfPolicy ssrf,
+      Boolean ssrfDenyPrivateExplicit) {
+    this(
+        maxDepth,
+        maxPages,
+        maxLinksPerPage,
+        maxConcurrent,
+        crawlStrategy,
+        contentFilter,
+        bm25Query,
+        bm25Threshold,
+        respectRobotsTxt,
+        softHttpErrors,
+        userAgent,
+        stayOnDomain,
+        allowSubdomains,
+        includePaths,
+        excludePaths,
+        pathPatternsMatchQuery,
+        pathPatternsMatchUrl,
+        dedupIncludeQuery,
+        stripTrackingParams,
+        trackingParams,
+        customHeaders,
+        requestTimeout,
+        rateLimitMs,
+        maxRedirects,
+        retryCount,
+        retryCodes,
+        retryInitialDelayMs,
+        retryMaxDelayMs,
+        rateLimitJitterRatio,
+        cookiesEnabled,
+        auth,
+        maxBodySize,
+        removeTags,
+        content,
+        mapLimit,
+        mapSearch,
+        downloadAssets,
+        assetTypes,
+        maxAssetSize,
+        browser,
+        proxy,
+        userAgents,
+        captureScreenshot,
+        followDocumentUrls,
+        documentUrlDepth,
+        downloadDocuments,
+        documentMaxSize,
+        documentMimeTypes,
+        documentOutputDir,
+        documentContentEncoding,
+        warcOutput,
+        browserProfile,
+        saveBrowserProfile,
+        ssrf,
+        ssrfDenyPrivateExplicit,
+        false,
+        List.of());
+  }
+
+  public CrawlConfig(
+      Long maxDepth,
+      Long maxPages,
+      Long maxLinksPerPage,
+      Long maxConcurrent,
+      CrawlStrategyKind crawlStrategy,
+      ContentFilterKind contentFilter,
+      String bm25Query,
+      Double bm25Threshold,
+      boolean respectRobotsTxt,
+      Boolean softHttpErrors,
+      String userAgent,
+      boolean stayOnDomain,
+      boolean allowSubdomains,
+      List<String> includePaths,
+      List<String> excludePaths,
+      Boolean pathPatternsMatchQuery,
+      Boolean pathPatternsMatchUrl,
+      Boolean dedupIncludeQuery,
+      Boolean stripTrackingParams,
+      List<String> trackingParams,
+      Map<String, String> customHeaders,
+      Long requestTimeout,
+      Long rateLimitMs,
+      Long maxRedirects,
+      long retryCount,
+      List<Short> retryCodes,
+      Long retryInitialDelayMs,
+      Long retryMaxDelayMs,
+      double rateLimitJitterRatio,
+      boolean cookiesEnabled,
+      AuthConfig auth,
+      Long maxBodySize,
+      List<String> removeTags,
+      ContentConfig content,
+      Long mapLimit,
+      String mapSearch,
+      boolean downloadAssets,
+      List<AssetCategory> assetTypes,
+      Long maxAssetSize,
+      BrowserConfig browser,
+      ProxyConfig proxy,
+      List<String> userAgents,
+      boolean captureScreenshot,
+      Boolean followDocumentUrls,
+      Integer documentUrlDepth,
+      Boolean downloadDocuments,
+      Long documentMaxSize,
+      List<String> documentMimeTypes,
+      java.nio.file.Path documentOutputDir,
+      DocumentContentEncoding documentContentEncoding,
+      java.nio.file.Path warcOutput,
+      String browserProfile,
+      boolean saveBrowserProfile,
+      SsrfPolicy ssrf,
+      Boolean ssrfDenyPrivateExplicit,
+      Boolean dangerAcceptInvalidCerts) {
+    this(
+        maxDepth,
+        maxPages,
+        maxLinksPerPage,
+        maxConcurrent,
+        crawlStrategy,
+        contentFilter,
+        bm25Query,
+        bm25Threshold,
+        respectRobotsTxt,
+        softHttpErrors,
+        userAgent,
+        stayOnDomain,
+        allowSubdomains,
+        includePaths,
+        excludePaths,
+        pathPatternsMatchQuery,
+        pathPatternsMatchUrl,
+        dedupIncludeQuery,
+        stripTrackingParams,
+        trackingParams,
+        customHeaders,
+        requestTimeout,
+        rateLimitMs,
+        maxRedirects,
+        retryCount,
+        retryCodes,
+        retryInitialDelayMs,
+        retryMaxDelayMs,
+        rateLimitJitterRatio,
+        cookiesEnabled,
+        auth,
+        maxBodySize,
+        removeTags,
+        content,
+        mapLimit,
+        mapSearch,
+        downloadAssets,
+        assetTypes,
+        maxAssetSize,
+        browser,
+        proxy,
+        userAgents,
+        captureScreenshot,
+        followDocumentUrls,
+        documentUrlDepth,
+        downloadDocuments,
+        documentMaxSize,
+        documentMimeTypes,
+        documentOutputDir,
+        documentContentEncoding,
+        warcOutput,
+        browserProfile,
+        saveBrowserProfile,
+        ssrf,
+        ssrfDenyPrivateExplicit,
+        dangerAcceptInvalidCerts,
+        List.of());
+  }
+
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public CrawlConfig {
+    if (dedupIncludeQuery == null) {
+      dedupIncludeQuery = true;
     }
-    public CrawlConfig(
-        Long maxDepth,
-        Long maxPages,
-        Long maxLinksPerPage,
-        Long maxConcurrent,
-        CrawlStrategyKind crawlStrategy,
-        ContentFilterKind contentFilter,
-        String bm25Query,
-        Double bm25Threshold,
-        boolean respectRobotsTxt,
-        Boolean softHttpErrors,
-        String userAgent,
-        boolean stayOnDomain,
-        boolean allowSubdomains,
-        List<String> includePaths,
-        List<String> excludePaths,
-        Boolean pathPatternsMatchQuery,
-        Boolean pathPatternsMatchUrl,
-        Boolean dedupIncludeQuery,
-        Boolean stripTrackingParams,
-        List<String> trackingParams,
-        Map<String, String> customHeaders,
-        Long requestTimeout,
-        Long rateLimitMs,
-        Long maxRedirects,
-        long retryCount,
-        List<Short> retryCodes,
-        Long retryInitialDelayMs,
-        Long retryMaxDelayMs,
-        double rateLimitJitterRatio,
-        boolean cookiesEnabled,
-        AuthConfig auth,
-        Long maxBodySize,
-        List<String> removeTags,
-        ContentConfig content,
-        Long mapLimit,
-        String mapSearch,
-        boolean downloadAssets,
-        List<AssetCategory> assetTypes,
-        Long maxAssetSize,
-        BrowserConfig browser,
-        ProxyConfig proxy,
-        List<String> userAgents,
-        boolean captureScreenshot,
-        Boolean followDocumentUrls,
-        Integer documentUrlDepth,
-        Boolean downloadDocuments,
-        Long documentMaxSize,
-        List<String> documentMimeTypes,
-        java.nio.file.Path documentOutputDir,
-        DocumentContentEncoding documentContentEncoding,
-        java.nio.file.Path warcOutput,
-        String browserProfile,
-        boolean saveBrowserProfile,
-        SsrfPolicy ssrf,
-        Boolean ssrfDenyPrivateExplicit,
-        Boolean dangerAcceptInvalidCerts
-    ) {
-        this(maxDepth, maxPages, maxLinksPerPage, maxConcurrent, crawlStrategy, contentFilter, bm25Query, bm25Threshold, respectRobotsTxt, softHttpErrors, userAgent, stayOnDomain, allowSubdomains, includePaths, excludePaths, pathPatternsMatchQuery, pathPatternsMatchUrl, dedupIncludeQuery, stripTrackingParams, trackingParams, customHeaders, requestTimeout, rateLimitMs, maxRedirects, retryCount, retryCodes, retryInitialDelayMs, retryMaxDelayMs, rateLimitJitterRatio, cookiesEnabled, auth, maxBodySize, removeTags, content, mapLimit, mapSearch, downloadAssets, assetTypes, maxAssetSize, browser, proxy, userAgents, captureScreenshot, followDocumentUrls, documentUrlDepth, downloadDocuments, documentMaxSize, documentMimeTypes, documentOutputDir, documentContentEncoding, warcOutput, browserProfile, saveBrowserProfile, ssrf, ssrfDenyPrivateExplicit, dangerAcceptInvalidCerts, List.of());
+    if (requestTimeout == null) {
+      requestTimeout = 30000L;
     }
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    if (maxRedirects == null) {
+      maxRedirects = 10L;
     }
-    public CrawlConfig{
-        if (dedupIncludeQuery == null) { dedupIncludeQuery = true; }
-        if (requestTimeout == null) { requestTimeout = 30000L; }
-        if (maxRedirects == null) { maxRedirects = 10L; }
-        if (retryInitialDelayMs == null) { retryInitialDelayMs = 100L; }
-        if (retryMaxDelayMs == null) { retryMaxDelayMs = 60000L; }
-        if (downloadDocuments == null) { downloadDocuments = true; }
+    if (retryInitialDelayMs == null) {
+      retryInitialDelayMs = 100L;
+    }
+    if (retryMaxDelayMs == null) {
+      retryMaxDelayMs = 60000L;
+    }
+    if (downloadDocuments == null) {
+      downloadDocuments = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for CrawlConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("max_depth")
+    @Nullable
+    private Long maxDepth;
+
+    @JsonProperty("max_pages")
+    @Nullable
+    private Long maxPages;
+
+    @JsonProperty("max_links_per_page")
+    @Nullable
+    private Long maxLinksPerPage;
+
+    @JsonProperty("max_concurrent")
+    @Nullable
+    private Long maxConcurrent;
+
+    @JsonProperty("crawl_strategy")
+    private CrawlStrategyKind crawlStrategy;
+
+    @JsonProperty("content_filter")
+    @Nullable
+    private ContentFilterKind contentFilter;
+
+    @JsonProperty("bm25_query")
+    @Nullable
+    private String bm25Query;
+
+    @JsonProperty("bm25_threshold")
+    @Nullable
+    private Double bm25Threshold;
+
+    @JsonProperty("respect_robots_txt")
+    private boolean respectRobotsTxt;
+
+    @JsonProperty("soft_http_errors")
+    @Nullable
+    private Boolean softHttpErrors;
+
+    @JsonProperty("user_agent")
+    @Nullable
+    private String userAgent;
+
+    @JsonProperty("stay_on_domain")
+    private boolean stayOnDomain;
+
+    @JsonProperty("allow_subdomains")
+    private boolean allowSubdomains;
+
+    @JsonProperty("include_paths")
+    @Nullable
+    private List<String> includePaths;
+
+    @JsonProperty("exclude_paths")
+    @Nullable
+    private List<String> excludePaths;
+
+    @JsonProperty("path_patterns_match_query")
+    @Nullable
+    private Boolean pathPatternsMatchQuery;
+
+    @JsonProperty("path_patterns_match_url")
+    @Nullable
+    private Boolean pathPatternsMatchUrl;
+
+    @JsonProperty("dedup_include_query")
+    private Boolean dedupIncludeQuery = true;
+
+    @JsonProperty("strip_tracking_params")
+    @Nullable
+    private Boolean stripTrackingParams;
+
+    @JsonProperty("tracking_params")
+    @Nullable
+    private List<String> trackingParams;
+
+    @JsonProperty("custom_headers")
+    @Nullable
+    private Map<String, String> customHeaders;
+
+    @JsonProperty("request_timeout")
+    @Nullable
+    private Long requestTimeout;
+
+    @JsonProperty("rate_limit_ms")
+    @Nullable
+    private Long rateLimitMs;
+
+    @JsonProperty("max_redirects")
+    private Long maxRedirects;
+
+    @JsonProperty("retry_count")
+    private long retryCount;
+
+    @JsonProperty("retry_codes")
+    @Nullable
+    private List<Short> retryCodes;
+
+    @JsonProperty("retry_initial_delay_ms")
+    private Long retryInitialDelayMs;
+
+    @JsonProperty("retry_max_delay_ms")
+    private Long retryMaxDelayMs;
+
+    @JsonProperty("rate_limit_jitter_ratio")
+    private double rateLimitJitterRatio;
+
+    @JsonProperty("cookies_enabled")
+    private boolean cookiesEnabled;
+
+    @Nullable private AuthConfig auth;
+
+    @JsonProperty("max_body_size")
+    @Nullable
+    private Long maxBodySize;
+
+    @JsonProperty("remove_tags")
+    @Nullable
+    private List<String> removeTags;
+
+    @Nullable private ContentConfig content;
+
+    @JsonProperty("map_limit")
+    @Nullable
+    private Long mapLimit;
+
+    @JsonProperty("map_search")
+    @Nullable
+    private String mapSearch;
+
+    @JsonProperty("download_assets")
+    private boolean downloadAssets;
+
+    @JsonProperty("asset_types")
+    @Nullable
+    private List<AssetCategory> assetTypes;
+
+    @JsonProperty("max_asset_size")
+    @Nullable
+    private Long maxAssetSize;
+
+    @Nullable private BrowserConfig browser;
+    @Nullable private ProxyConfig proxy;
+
+    @JsonProperty("user_agents")
+    @Nullable
+    private List<String> userAgents;
+
+    @JsonProperty("capture_screenshot")
+    private boolean captureScreenshot;
+
+    @JsonProperty("follow_document_urls")
+    @Nullable
+    private Boolean followDocumentUrls;
+
+    @JsonProperty("document_url_depth")
+    @Nullable
+    private Integer documentUrlDepth;
+
+    @JsonProperty("download_documents")
+    private Boolean downloadDocuments = true;
+
+    @JsonProperty("document_max_size")
+    @Nullable
+    private Long documentMaxSize;
+
+    @JsonProperty("document_mime_types")
+    @Nullable
+    private List<String> documentMimeTypes;
+
+    @JsonProperty("document_output_dir")
+    private java.nio.file.@Nullable Path documentOutputDir;
+
+    @JsonProperty("document_content_encoding")
+    @Nullable
+    private DocumentContentEncoding documentContentEncoding;
+
+    @JsonProperty("warc_output")
+    private java.nio.file.@Nullable Path warcOutput;
+
+    @JsonProperty("browser_profile")
+    @Nullable
+    private String browserProfile;
+
+    @JsonProperty("save_browser_profile")
+    private boolean saveBrowserProfile;
+
+    @Nullable private SsrfPolicy ssrf;
+
+    @JsonProperty("ssrf_deny_private_explicit")
+    @Nullable
+    private Boolean ssrfDenyPrivateExplicit;
+
+    @JsonProperty("danger_accept_invalid_certs")
+    @Nullable
+    private Boolean dangerAcceptInvalidCerts;
+
+    @JsonProperty("subdomain_header_allowlist")
+    @Nullable
+    private List<String> subdomainHeaderAllowlist;
+
+    /** Sets the maxDepth field. */
+    @JsonProperty("max_depth")
+    public Builder withMaxDepth(final @Nullable Long value) {
+      this.maxDepth = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for CrawlConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("max_depth")
-        @Nullable private Long maxDepth;
-        @JsonProperty("max_pages")
-        @Nullable private Long maxPages;
-        @JsonProperty("max_links_per_page")
-        @Nullable private Long maxLinksPerPage;
-        @JsonProperty("max_concurrent")
-        @Nullable private Long maxConcurrent;
-        @JsonProperty("crawl_strategy")
-        private CrawlStrategyKind crawlStrategy;
-        @JsonProperty("content_filter")
-        @Nullable private ContentFilterKind contentFilter;
-        @JsonProperty("bm25_query")
-        @Nullable private String bm25Query;
-        @JsonProperty("bm25_threshold")
-        @Nullable private Double bm25Threshold;
-        @JsonProperty("respect_robots_txt")
-        private boolean respectRobotsTxt;
-        @JsonProperty("soft_http_errors")
-        @Nullable private Boolean softHttpErrors;
-        @JsonProperty("user_agent")
-        @Nullable private String userAgent;
-        @JsonProperty("stay_on_domain")
-        private boolean stayOnDomain;
-        @JsonProperty("allow_subdomains")
-        private boolean allowSubdomains;
-        @JsonProperty("include_paths")
-        @Nullable private List<String> includePaths;
-        @JsonProperty("exclude_paths")
-        @Nullable private List<String> excludePaths;
-        @JsonProperty("path_patterns_match_query")
-        @Nullable private Boolean pathPatternsMatchQuery;
-        @JsonProperty("path_patterns_match_url")
-        @Nullable private Boolean pathPatternsMatchUrl;
-        @JsonProperty("dedup_include_query")
-        private Boolean dedupIncludeQuery = true;
-        @JsonProperty("strip_tracking_params")
-        @Nullable private Boolean stripTrackingParams;
-        @JsonProperty("tracking_params")
-        @Nullable private List<String> trackingParams;
-        @JsonProperty("custom_headers")
-        @Nullable private Map<String, String> customHeaders;
-        @JsonProperty("request_timeout")
-        @Nullable private Long requestTimeout;
-        @JsonProperty("rate_limit_ms")
-        @Nullable private Long rateLimitMs;
-        @JsonProperty("max_redirects")
-        private Long maxRedirects;
-        @JsonProperty("retry_count")
-        private long retryCount;
-        @JsonProperty("retry_codes")
-        @Nullable private List<Short> retryCodes;
-        @JsonProperty("retry_initial_delay_ms")
-        private Long retryInitialDelayMs;
-        @JsonProperty("retry_max_delay_ms")
-        private Long retryMaxDelayMs;
-        @JsonProperty("rate_limit_jitter_ratio")
-        private double rateLimitJitterRatio;
-        @JsonProperty("cookies_enabled")
-        private boolean cookiesEnabled;
-        @Nullable private AuthConfig auth;
-        @JsonProperty("max_body_size")
-        @Nullable private Long maxBodySize;
-        @JsonProperty("remove_tags")
-        @Nullable private List<String> removeTags;
-        @Nullable private ContentConfig content;
-        @JsonProperty("map_limit")
-        @Nullable private Long mapLimit;
-        @JsonProperty("map_search")
-        @Nullable private String mapSearch;
-        @JsonProperty("download_assets")
-        private boolean downloadAssets;
-        @JsonProperty("asset_types")
-        @Nullable private List<AssetCategory> assetTypes;
-        @JsonProperty("max_asset_size")
-        @Nullable private Long maxAssetSize;
-        @Nullable private BrowserConfig browser;
-        @Nullable private ProxyConfig proxy;
-        @JsonProperty("user_agents")
-        @Nullable private List<String> userAgents;
-        @JsonProperty("capture_screenshot")
-        private boolean captureScreenshot;
-        @JsonProperty("follow_document_urls")
-        @Nullable private Boolean followDocumentUrls;
-        @JsonProperty("document_url_depth")
-        @Nullable private Integer documentUrlDepth;
-        @JsonProperty("download_documents")
-        private Boolean downloadDocuments = true;
-        @JsonProperty("document_max_size")
-        @Nullable private Long documentMaxSize;
-        @JsonProperty("document_mime_types")
-        @Nullable private List<String> documentMimeTypes;
-        @JsonProperty("document_output_dir")
-        private java.nio.file.@Nullable Path documentOutputDir;
-        @JsonProperty("document_content_encoding")
-        @Nullable private DocumentContentEncoding documentContentEncoding;
-        @JsonProperty("warc_output")
-        private java.nio.file.@Nullable Path warcOutput;
-        @JsonProperty("browser_profile")
-        @Nullable private String browserProfile;
-        @JsonProperty("save_browser_profile")
-        private boolean saveBrowserProfile;
-        @Nullable private SsrfPolicy ssrf;
-        @JsonProperty("ssrf_deny_private_explicit")
-        @Nullable private Boolean ssrfDenyPrivateExplicit;
-        @JsonProperty("danger_accept_invalid_certs")
-        @Nullable private Boolean dangerAcceptInvalidCerts;
-        @JsonProperty("subdomain_header_allowlist")
-        @Nullable private List<String> subdomainHeaderAllowlist;
-
-        /** Sets the maxDepth field. */
-        @JsonProperty("max_depth")
-        public Builder withMaxDepth(final @Nullable Long value) {
-            this.maxDepth = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxDepth(final long value) {
-            return withMaxDepth(Long.valueOf(value));
-        }
-
-        /** Sets the maxPages field. */
-        @JsonProperty("max_pages")
-        public Builder withMaxPages(final @Nullable Long value) {
-            this.maxPages = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxPages(final long value) {
-            return withMaxPages(Long.valueOf(value));
-        }
-
-        /** Sets the maxLinksPerPage field. */
-        @JsonProperty("max_links_per_page")
-        public Builder withMaxLinksPerPage(final @Nullable Long value) {
-            this.maxLinksPerPage = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxLinksPerPage(final long value) {
-            return withMaxLinksPerPage(Long.valueOf(value));
-        }
-
-        /** Sets the maxConcurrent field. */
-        @JsonProperty("max_concurrent")
-        public Builder withMaxConcurrent(final @Nullable Long value) {
-            this.maxConcurrent = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxConcurrent(final long value) {
-            return withMaxConcurrent(Long.valueOf(value));
-        }
-
-        /** Sets the crawlStrategy field. */
-        @JsonProperty("crawl_strategy")
-        public Builder withCrawlStrategy(final CrawlStrategyKind value) {
-            this.crawlStrategy = value;
-            return this;
-        }
-
-        /** Sets the contentFilter field. */
-        @JsonProperty("content_filter")
-        public Builder withContentFilter(final @Nullable ContentFilterKind value) {
-            this.contentFilter = value;
-            return this;
-        }
-
-        /** Sets the bm25Query field. */
-        @JsonProperty("bm25_query")
-        public Builder withBm25Query(final @Nullable String value) {
-            this.bm25Query = value;
-            return this;
-        }
-
-        /** Sets the bm25Threshold field. */
-        @JsonProperty("bm25_threshold")
-        public Builder withBm25Threshold(final @Nullable Double value) {
-            this.bm25Threshold = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withBm25Threshold(final double value) {
-            return withBm25Threshold(Double.valueOf(value));
-        }
-
-        /** Sets the respectRobotsTxt field. */
-        @JsonProperty("respect_robots_txt")
-        public Builder withRespectRobotsTxt(final boolean value) {
-            this.respectRobotsTxt = value;
-            return this;
-        }
-
-        /** Sets the softHttpErrors field. */
-        @JsonProperty("soft_http_errors")
-        public Builder withSoftHttpErrors(final @Nullable Boolean value) {
-            this.softHttpErrors = value;
-            return this;
-        }
-
-        /** Sets the userAgent field. */
-        @JsonProperty("user_agent")
-        public Builder withUserAgent(final @Nullable String value) {
-            this.userAgent = value;
-            return this;
-        }
-
-        /** Sets the stayOnDomain field. */
-        @JsonProperty("stay_on_domain")
-        public Builder withStayOnDomain(final boolean value) {
-            this.stayOnDomain = value;
-            return this;
-        }
-
-        /** Sets the allowSubdomains field. */
-        @JsonProperty("allow_subdomains")
-        public Builder withAllowSubdomains(final boolean value) {
-            this.allowSubdomains = value;
-            return this;
-        }
-
-        /** Sets the includePaths field. */
-        @JsonProperty("include_paths")
-        public Builder withIncludePaths(final @Nullable List<String> value) {
-            this.includePaths = value;
-            return this;
-        }
-
-        /** Sets the excludePaths field. */
-        @JsonProperty("exclude_paths")
-        public Builder withExcludePaths(final @Nullable List<String> value) {
-            this.excludePaths = value;
-            return this;
-        }
-
-        /** Sets the pathPatternsMatchQuery field. */
-        @JsonProperty("path_patterns_match_query")
-        public Builder withPathPatternsMatchQuery(final @Nullable Boolean value) {
-            this.pathPatternsMatchQuery = value;
-            return this;
-        }
-
-        /** Sets the pathPatternsMatchUrl field. */
-        @JsonProperty("path_patterns_match_url")
-        public Builder withPathPatternsMatchUrl(final @Nullable Boolean value) {
-            this.pathPatternsMatchUrl = value;
-            return this;
-        }
-
-        /** Sets the dedupIncludeQuery field. */
-        @JsonProperty("dedup_include_query")
-        public Builder withDedupIncludeQuery(final @Nullable Boolean value) {
-            this.dedupIncludeQuery = value;
-            return this;
-        }
-
-        /** Sets the stripTrackingParams field. */
-        @JsonProperty("strip_tracking_params")
-        public Builder withStripTrackingParams(final @Nullable Boolean value) {
-            this.stripTrackingParams = value;
-            return this;
-        }
-
-        /** Sets the trackingParams field. */
-        @JsonProperty("tracking_params")
-        public Builder withTrackingParams(final @Nullable List<String> value) {
-            this.trackingParams = value;
-            return this;
-        }
-
-        /** Sets the customHeaders field. */
-        @JsonProperty("custom_headers")
-        public Builder withCustomHeaders(final @Nullable Map<String, String> value) {
-            this.customHeaders = value;
-            return this;
-        }
-
-        /** Sets the requestTimeout field. */
-        @JsonProperty("request_timeout")
-        public Builder withRequestTimeout(final @Nullable Long value) {
-            this.requestTimeout = value;
-            return this;
-        }
-
-        /** Sets the rateLimitMs field. */
-        @JsonProperty("rate_limit_ms")
-        public Builder withRateLimitMs(final @Nullable Long value) {
-            this.rateLimitMs = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withRateLimitMs(final long value) {
-            return withRateLimitMs(Long.valueOf(value));
-        }
-
-        /** Sets the maxRedirects field. */
-        @JsonProperty("max_redirects")
-        public Builder withMaxRedirects(final @Nullable Long value) {
-            this.maxRedirects = value;
-            return this;
-        }
-
-        /** Sets the retryCount field. */
-        @JsonProperty("retry_count")
-        public Builder withRetryCount(final long value) {
-            this.retryCount = value;
-            return this;
-        }
-
-        /** Sets the retryCodes field. */
-        @JsonProperty("retry_codes")
-        public Builder withRetryCodes(final @Nullable List<Short> value) {
-            this.retryCodes = value;
-            return this;
-        }
-
-        /** Sets the retryInitialDelayMs field. */
-        @JsonProperty("retry_initial_delay_ms")
-        public Builder withRetryInitialDelayMs(final @Nullable Long value) {
-            this.retryInitialDelayMs = value;
-            return this;
-        }
-
-        /** Sets the retryMaxDelayMs field. */
-        @JsonProperty("retry_max_delay_ms")
-        public Builder withRetryMaxDelayMs(final @Nullable Long value) {
-            this.retryMaxDelayMs = value;
-            return this;
-        }
-
-        /** Sets the rateLimitJitterRatio field. */
-        @JsonProperty("rate_limit_jitter_ratio")
-        public Builder withRateLimitJitterRatio(final double value) {
-            this.rateLimitJitterRatio = value;
-            return this;
-        }
-
-        /** Sets the cookiesEnabled field. */
-        @JsonProperty("cookies_enabled")
-        public Builder withCookiesEnabled(final boolean value) {
-            this.cookiesEnabled = value;
-            return this;
-        }
-
-        /** Sets the auth field. */
-        @JsonProperty("auth")
-        public Builder withAuth(final @Nullable AuthConfig value) {
-            this.auth = value;
-            return this;
-        }
-
-        /** Sets the maxBodySize field. */
-        @JsonProperty("max_body_size")
-        public Builder withMaxBodySize(final @Nullable Long value) {
-            this.maxBodySize = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxBodySize(final long value) {
-            return withMaxBodySize(Long.valueOf(value));
-        }
-
-        /** Sets the removeTags field. */
-        @JsonProperty("remove_tags")
-        public Builder withRemoveTags(final @Nullable List<String> value) {
-            this.removeTags = value;
-            return this;
-        }
-
-        /** Sets the content field. */
-        @JsonProperty("content")
-        public Builder withContent(final @Nullable ContentConfig value) {
-            this.content = value;
-            return this;
-        }
-
-        /** Sets the mapLimit field. */
-        @JsonProperty("map_limit")
-        public Builder withMapLimit(final @Nullable Long value) {
-            this.mapLimit = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMapLimit(final long value) {
-            return withMapLimit(Long.valueOf(value));
-        }
-
-        /** Sets the mapSearch field. */
-        @JsonProperty("map_search")
-        public Builder withMapSearch(final @Nullable String value) {
-            this.mapSearch = value;
-            return this;
-        }
-
-        /** Sets the downloadAssets field. */
-        @JsonProperty("download_assets")
-        public Builder withDownloadAssets(final boolean value) {
-            this.downloadAssets = value;
-            return this;
-        }
-
-        /** Sets the assetTypes field. */
-        @JsonProperty("asset_types")
-        public Builder withAssetTypes(final @Nullable List<AssetCategory> value) {
-            this.assetTypes = value;
-            return this;
-        }
-
-        /** Sets the maxAssetSize field. */
-        @JsonProperty("max_asset_size")
-        public Builder withMaxAssetSize(final @Nullable Long value) {
-            this.maxAssetSize = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxAssetSize(final long value) {
-            return withMaxAssetSize(Long.valueOf(value));
-        }
-
-        /** Sets the browser field. */
-        @JsonProperty("browser")
-        public Builder withBrowser(final @Nullable BrowserConfig value) {
-            this.browser = value;
-            return this;
-        }
-
-        /** Sets the proxy field. */
-        @JsonProperty("proxy")
-        public Builder withProxy(final @Nullable ProxyConfig value) {
-            this.proxy = value;
-            return this;
-        }
-
-        /** Sets the userAgents field. */
-        @JsonProperty("user_agents")
-        public Builder withUserAgents(final @Nullable List<String> value) {
-            this.userAgents = value;
-            return this;
-        }
-
-        /** Sets the captureScreenshot field. */
-        @JsonProperty("capture_screenshot")
-        public Builder withCaptureScreenshot(final boolean value) {
-            this.captureScreenshot = value;
-            return this;
-        }
-
-        /** Sets the followDocumentUrls field. */
-        @JsonProperty("follow_document_urls")
-        public Builder withFollowDocumentUrls(final @Nullable Boolean value) {
-            this.followDocumentUrls = value;
-            return this;
-        }
-
-        /** Sets the documentUrlDepth field. */
-        @JsonProperty("document_url_depth")
-        public Builder withDocumentUrlDepth(final @Nullable Integer value) {
-            this.documentUrlDepth = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withDocumentUrlDepth(final int value) {
-            return withDocumentUrlDepth(Integer.valueOf(value));
-        }
-
-        /** Sets the downloadDocuments field. */
-        @JsonProperty("download_documents")
-        public Builder withDownloadDocuments(final @Nullable Boolean value) {
-            this.downloadDocuments = value;
-            return this;
-        }
-
-        /** Sets the documentMaxSize field. */
-        @JsonProperty("document_max_size")
-        public Builder withDocumentMaxSize(final @Nullable Long value) {
-            this.documentMaxSize = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withDocumentMaxSize(final long value) {
-            return withDocumentMaxSize(Long.valueOf(value));
-        }
-
-        /** Sets the documentMimeTypes field. */
-        @JsonProperty("document_mime_types")
-        public Builder withDocumentMimeTypes(final @Nullable List<String> value) {
-            this.documentMimeTypes = value;
-            return this;
-        }
-
-        /** Sets the documentOutputDir field. */
-        @JsonProperty("document_output_dir")
-        public Builder withDocumentOutputDir(final java.nio.file.@Nullable Path value) {
-            this.documentOutputDir = value;
-            return this;
-        }
-
-        /** Sets the documentContentEncoding field. */
-        @JsonProperty("document_content_encoding")
-        public Builder withDocumentContentEncoding(final @Nullable DocumentContentEncoding value) {
-            this.documentContentEncoding = value;
-            return this;
-        }
-
-        /** Sets the warcOutput field. */
-        @JsonProperty("warc_output")
-        public Builder withWarcOutput(final java.nio.file.@Nullable Path value) {
-            this.warcOutput = value;
-            return this;
-        }
-
-        /** Sets the browserProfile field. */
-        @JsonProperty("browser_profile")
-        public Builder withBrowserProfile(final @Nullable String value) {
-            this.browserProfile = value;
-            return this;
-        }
-
-        /** Sets the saveBrowserProfile field. */
-        @JsonProperty("save_browser_profile")
-        public Builder withSaveBrowserProfile(final boolean value) {
-            this.saveBrowserProfile = value;
-            return this;
-        }
-
-        /** Sets the ssrf field. */
-        @JsonProperty("ssrf")
-        public Builder withSsrf(final @Nullable SsrfPolicy value) {
-            this.ssrf = value;
-            return this;
-        }
-
-        /** Sets the ssrfDenyPrivateExplicit field. */
-        @JsonProperty("ssrf_deny_private_explicit")
-        public Builder withSsrfDenyPrivateExplicit(final @Nullable Boolean value) {
-            this.ssrfDenyPrivateExplicit = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withSsrfDenyPrivateExplicit(final boolean value) {
-            return withSsrfDenyPrivateExplicit(Boolean.valueOf(value));
-        }
-
-        /** Sets the dangerAcceptInvalidCerts field. */
-        @JsonProperty("danger_accept_invalid_certs")
-        public Builder withDangerAcceptInvalidCerts(final @Nullable Boolean value) {
-            this.dangerAcceptInvalidCerts = value;
-            return this;
-        }
-
-        /** Sets the subdomainHeaderAllowlist field. */
-        @JsonProperty("subdomain_header_allowlist")
-        public Builder withSubdomainHeaderAllowlist(final @Nullable List<String> value) {
-            this.subdomainHeaderAllowlist = value;
-            return this;
-        }
-
-        /** Constructs a CrawlConfig instance from the builder's current state. */
-        public CrawlConfig build() {
-            return new CrawlConfig(
-                maxDepth,
-                maxPages,
-                maxLinksPerPage,
-                maxConcurrent,
-                crawlStrategy,
-                contentFilter,
-                bm25Query,
-                bm25Threshold,
-                respectRobotsTxt,
-                softHttpErrors,
-                userAgent,
-                stayOnDomain,
-                allowSubdomains,
-                includePaths,
-                excludePaths,
-                pathPatternsMatchQuery,
-                pathPatternsMatchUrl,
-                dedupIncludeQuery,
-                stripTrackingParams,
-                trackingParams,
-                customHeaders,
-                requestTimeout,
-                rateLimitMs,
-                maxRedirects,
-                retryCount,
-                retryCodes,
-                retryInitialDelayMs,
-                retryMaxDelayMs,
-                rateLimitJitterRatio,
-                cookiesEnabled,
-                auth,
-                maxBodySize,
-                removeTags,
-                content,
-                mapLimit,
-                mapSearch,
-                downloadAssets,
-                assetTypes,
-                maxAssetSize,
-                browser,
-                proxy,
-                userAgents,
-                captureScreenshot,
-                followDocumentUrls,
-                documentUrlDepth,
-                downloadDocuments,
-                documentMaxSize,
-                documentMimeTypes,
-                documentOutputDir,
-                documentContentEncoding,
-                warcOutput,
-                browserProfile,
-                saveBrowserProfile,
-                ssrf,
-                ssrfDenyPrivateExplicit,
-                dangerAcceptInvalidCerts,
-                subdomainHeaderAllowlist
-            );
-        }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxDepth(final long value) {
+      return withMaxDepth(Long.valueOf(value));
     }
-    // CPD-ON
+
+    /** Sets the maxPages field. */
+    @JsonProperty("max_pages")
+    public Builder withMaxPages(final @Nullable Long value) {
+      this.maxPages = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxPages(final long value) {
+      return withMaxPages(Long.valueOf(value));
+    }
+
+    /** Sets the maxLinksPerPage field. */
+    @JsonProperty("max_links_per_page")
+    public Builder withMaxLinksPerPage(final @Nullable Long value) {
+      this.maxLinksPerPage = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxLinksPerPage(final long value) {
+      return withMaxLinksPerPage(Long.valueOf(value));
+    }
+
+    /** Sets the maxConcurrent field. */
+    @JsonProperty("max_concurrent")
+    public Builder withMaxConcurrent(final @Nullable Long value) {
+      this.maxConcurrent = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxConcurrent(final long value) {
+      return withMaxConcurrent(Long.valueOf(value));
+    }
+
+    /** Sets the crawlStrategy field. */
+    @JsonProperty("crawl_strategy")
+    public Builder withCrawlStrategy(final CrawlStrategyKind value) {
+      this.crawlStrategy = value;
+      return this;
+    }
+
+    /** Sets the contentFilter field. */
+    @JsonProperty("content_filter")
+    public Builder withContentFilter(final @Nullable ContentFilterKind value) {
+      this.contentFilter = value;
+      return this;
+    }
+
+    /** Sets the bm25Query field. */
+    @JsonProperty("bm25_query")
+    public Builder withBm25Query(final @Nullable String value) {
+      this.bm25Query = value;
+      return this;
+    }
+
+    /** Sets the bm25Threshold field. */
+    @JsonProperty("bm25_threshold")
+    public Builder withBm25Threshold(final @Nullable Double value) {
+      this.bm25Threshold = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withBm25Threshold(final double value) {
+      return withBm25Threshold(Double.valueOf(value));
+    }
+
+    /** Sets the respectRobotsTxt field. */
+    @JsonProperty("respect_robots_txt")
+    public Builder withRespectRobotsTxt(final boolean value) {
+      this.respectRobotsTxt = value;
+      return this;
+    }
+
+    /** Sets the softHttpErrors field. */
+    @JsonProperty("soft_http_errors")
+    public Builder withSoftHttpErrors(final @Nullable Boolean value) {
+      this.softHttpErrors = value;
+      return this;
+    }
+
+    /** Sets the userAgent field. */
+    @JsonProperty("user_agent")
+    public Builder withUserAgent(final @Nullable String value) {
+      this.userAgent = value;
+      return this;
+    }
+
+    /** Sets the stayOnDomain field. */
+    @JsonProperty("stay_on_domain")
+    public Builder withStayOnDomain(final boolean value) {
+      this.stayOnDomain = value;
+      return this;
+    }
+
+    /** Sets the allowSubdomains field. */
+    @JsonProperty("allow_subdomains")
+    public Builder withAllowSubdomains(final boolean value) {
+      this.allowSubdomains = value;
+      return this;
+    }
+
+    /** Sets the includePaths field. */
+    @JsonProperty("include_paths")
+    public Builder withIncludePaths(final @Nullable List<String> value) {
+      this.includePaths = value;
+      return this;
+    }
+
+    /** Sets the excludePaths field. */
+    @JsonProperty("exclude_paths")
+    public Builder withExcludePaths(final @Nullable List<String> value) {
+      this.excludePaths = value;
+      return this;
+    }
+
+    /** Sets the pathPatternsMatchQuery field. */
+    @JsonProperty("path_patterns_match_query")
+    public Builder withPathPatternsMatchQuery(final @Nullable Boolean value) {
+      this.pathPatternsMatchQuery = value;
+      return this;
+    }
+
+    /** Sets the pathPatternsMatchUrl field. */
+    @JsonProperty("path_patterns_match_url")
+    public Builder withPathPatternsMatchUrl(final @Nullable Boolean value) {
+      this.pathPatternsMatchUrl = value;
+      return this;
+    }
+
+    /** Sets the dedupIncludeQuery field. */
+    @JsonProperty("dedup_include_query")
+    public Builder withDedupIncludeQuery(final @Nullable Boolean value) {
+      this.dedupIncludeQuery = value;
+      return this;
+    }
+
+    /** Sets the stripTrackingParams field. */
+    @JsonProperty("strip_tracking_params")
+    public Builder withStripTrackingParams(final @Nullable Boolean value) {
+      this.stripTrackingParams = value;
+      return this;
+    }
+
+    /** Sets the trackingParams field. */
+    @JsonProperty("tracking_params")
+    public Builder withTrackingParams(final @Nullable List<String> value) {
+      this.trackingParams = value;
+      return this;
+    }
+
+    /** Sets the customHeaders field. */
+    @JsonProperty("custom_headers")
+    public Builder withCustomHeaders(final @Nullable Map<String, String> value) {
+      this.customHeaders = value;
+      return this;
+    }
+
+    /** Sets the requestTimeout field. */
+    @JsonProperty("request_timeout")
+    public Builder withRequestTimeout(final @Nullable Long value) {
+      this.requestTimeout = value;
+      return this;
+    }
+
+    /** Sets the rateLimitMs field. */
+    @JsonProperty("rate_limit_ms")
+    public Builder withRateLimitMs(final @Nullable Long value) {
+      this.rateLimitMs = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withRateLimitMs(final long value) {
+      return withRateLimitMs(Long.valueOf(value));
+    }
+
+    /** Sets the maxRedirects field. */
+    @JsonProperty("max_redirects")
+    public Builder withMaxRedirects(final @Nullable Long value) {
+      this.maxRedirects = value;
+      return this;
+    }
+
+    /** Sets the retryCount field. */
+    @JsonProperty("retry_count")
+    public Builder withRetryCount(final long value) {
+      this.retryCount = value;
+      return this;
+    }
+
+    /** Sets the retryCodes field. */
+    @JsonProperty("retry_codes")
+    public Builder withRetryCodes(final @Nullable List<Short> value) {
+      this.retryCodes = value;
+      return this;
+    }
+
+    /** Sets the retryInitialDelayMs field. */
+    @JsonProperty("retry_initial_delay_ms")
+    public Builder withRetryInitialDelayMs(final @Nullable Long value) {
+      this.retryInitialDelayMs = value;
+      return this;
+    }
+
+    /** Sets the retryMaxDelayMs field. */
+    @JsonProperty("retry_max_delay_ms")
+    public Builder withRetryMaxDelayMs(final @Nullable Long value) {
+      this.retryMaxDelayMs = value;
+      return this;
+    }
+
+    /** Sets the rateLimitJitterRatio field. */
+    @JsonProperty("rate_limit_jitter_ratio")
+    public Builder withRateLimitJitterRatio(final double value) {
+      this.rateLimitJitterRatio = value;
+      return this;
+    }
+
+    /** Sets the cookiesEnabled field. */
+    @JsonProperty("cookies_enabled")
+    public Builder withCookiesEnabled(final boolean value) {
+      this.cookiesEnabled = value;
+      return this;
+    }
+
+    /** Sets the auth field. */
+    @JsonProperty("auth")
+    public Builder withAuth(final @Nullable AuthConfig value) {
+      this.auth = value;
+      return this;
+    }
+
+    /** Sets the maxBodySize field. */
+    @JsonProperty("max_body_size")
+    public Builder withMaxBodySize(final @Nullable Long value) {
+      this.maxBodySize = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxBodySize(final long value) {
+      return withMaxBodySize(Long.valueOf(value));
+    }
+
+    /** Sets the removeTags field. */
+    @JsonProperty("remove_tags")
+    public Builder withRemoveTags(final @Nullable List<String> value) {
+      this.removeTags = value;
+      return this;
+    }
+
+    /** Sets the content field. */
+    @JsonProperty("content")
+    public Builder withContent(final @Nullable ContentConfig value) {
+      this.content = value;
+      return this;
+    }
+
+    /** Sets the mapLimit field. */
+    @JsonProperty("map_limit")
+    public Builder withMapLimit(final @Nullable Long value) {
+      this.mapLimit = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMapLimit(final long value) {
+      return withMapLimit(Long.valueOf(value));
+    }
+
+    /** Sets the mapSearch field. */
+    @JsonProperty("map_search")
+    public Builder withMapSearch(final @Nullable String value) {
+      this.mapSearch = value;
+      return this;
+    }
+
+    /** Sets the downloadAssets field. */
+    @JsonProperty("download_assets")
+    public Builder withDownloadAssets(final boolean value) {
+      this.downloadAssets = value;
+      return this;
+    }
+
+    /** Sets the assetTypes field. */
+    @JsonProperty("asset_types")
+    public Builder withAssetTypes(final @Nullable List<AssetCategory> value) {
+      this.assetTypes = value;
+      return this;
+    }
+
+    /** Sets the maxAssetSize field. */
+    @JsonProperty("max_asset_size")
+    public Builder withMaxAssetSize(final @Nullable Long value) {
+      this.maxAssetSize = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxAssetSize(final long value) {
+      return withMaxAssetSize(Long.valueOf(value));
+    }
+
+    /** Sets the browser field. */
+    @JsonProperty("browser")
+    public Builder withBrowser(final @Nullable BrowserConfig value) {
+      this.browser = value;
+      return this;
+    }
+
+    /** Sets the proxy field. */
+    @JsonProperty("proxy")
+    public Builder withProxy(final @Nullable ProxyConfig value) {
+      this.proxy = value;
+      return this;
+    }
+
+    /** Sets the userAgents field. */
+    @JsonProperty("user_agents")
+    public Builder withUserAgents(final @Nullable List<String> value) {
+      this.userAgents = value;
+      return this;
+    }
+
+    /** Sets the captureScreenshot field. */
+    @JsonProperty("capture_screenshot")
+    public Builder withCaptureScreenshot(final boolean value) {
+      this.captureScreenshot = value;
+      return this;
+    }
+
+    /** Sets the followDocumentUrls field. */
+    @JsonProperty("follow_document_urls")
+    public Builder withFollowDocumentUrls(final @Nullable Boolean value) {
+      this.followDocumentUrls = value;
+      return this;
+    }
+
+    /** Sets the documentUrlDepth field. */
+    @JsonProperty("document_url_depth")
+    public Builder withDocumentUrlDepth(final @Nullable Integer value) {
+      this.documentUrlDepth = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withDocumentUrlDepth(final int value) {
+      return withDocumentUrlDepth(Integer.valueOf(value));
+    }
+
+    /** Sets the downloadDocuments field. */
+    @JsonProperty("download_documents")
+    public Builder withDownloadDocuments(final @Nullable Boolean value) {
+      this.downloadDocuments = value;
+      return this;
+    }
+
+    /** Sets the documentMaxSize field. */
+    @JsonProperty("document_max_size")
+    public Builder withDocumentMaxSize(final @Nullable Long value) {
+      this.documentMaxSize = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withDocumentMaxSize(final long value) {
+      return withDocumentMaxSize(Long.valueOf(value));
+    }
+
+    /** Sets the documentMimeTypes field. */
+    @JsonProperty("document_mime_types")
+    public Builder withDocumentMimeTypes(final @Nullable List<String> value) {
+      this.documentMimeTypes = value;
+      return this;
+    }
+
+    /** Sets the documentOutputDir field. */
+    @JsonProperty("document_output_dir")
+    public Builder withDocumentOutputDir(final java.nio.file.@Nullable Path value) {
+      this.documentOutputDir = value;
+      return this;
+    }
+
+    /** Sets the documentContentEncoding field. */
+    @JsonProperty("document_content_encoding")
+    public Builder withDocumentContentEncoding(final @Nullable DocumentContentEncoding value) {
+      this.documentContentEncoding = value;
+      return this;
+    }
+
+    /** Sets the warcOutput field. */
+    @JsonProperty("warc_output")
+    public Builder withWarcOutput(final java.nio.file.@Nullable Path value) {
+      this.warcOutput = value;
+      return this;
+    }
+
+    /** Sets the browserProfile field. */
+    @JsonProperty("browser_profile")
+    public Builder withBrowserProfile(final @Nullable String value) {
+      this.browserProfile = value;
+      return this;
+    }
+
+    /** Sets the saveBrowserProfile field. */
+    @JsonProperty("save_browser_profile")
+    public Builder withSaveBrowserProfile(final boolean value) {
+      this.saveBrowserProfile = value;
+      return this;
+    }
+
+    /** Sets the ssrf field. */
+    @JsonProperty("ssrf")
+    public Builder withSsrf(final @Nullable SsrfPolicy value) {
+      this.ssrf = value;
+      return this;
+    }
+
+    /** Sets the ssrfDenyPrivateExplicit field. */
+    @JsonProperty("ssrf_deny_private_explicit")
+    public Builder withSsrfDenyPrivateExplicit(final @Nullable Boolean value) {
+      this.ssrfDenyPrivateExplicit = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withSsrfDenyPrivateExplicit(final boolean value) {
+      return withSsrfDenyPrivateExplicit(Boolean.valueOf(value));
+    }
+
+    /** Sets the dangerAcceptInvalidCerts field. */
+    @JsonProperty("danger_accept_invalid_certs")
+    public Builder withDangerAcceptInvalidCerts(final @Nullable Boolean value) {
+      this.dangerAcceptInvalidCerts = value;
+      return this;
+    }
+
+    /** Sets the subdomainHeaderAllowlist field. */
+    @JsonProperty("subdomain_header_allowlist")
+    public Builder withSubdomainHeaderAllowlist(final @Nullable List<String> value) {
+      this.subdomainHeaderAllowlist = value;
+      return this;
+    }
+
+    /** Constructs a CrawlConfig instance from the builder's current state. */
+    public CrawlConfig build() {
+      return new CrawlConfig(
+          maxDepth,
+          maxPages,
+          maxLinksPerPage,
+          maxConcurrent,
+          crawlStrategy,
+          contentFilter,
+          bm25Query,
+          bm25Threshold,
+          respectRobotsTxt,
+          softHttpErrors,
+          userAgent,
+          stayOnDomain,
+          allowSubdomains,
+          includePaths,
+          excludePaths,
+          pathPatternsMatchQuery,
+          pathPatternsMatchUrl,
+          dedupIncludeQuery,
+          stripTrackingParams,
+          trackingParams,
+          customHeaders,
+          requestTimeout,
+          rateLimitMs,
+          maxRedirects,
+          retryCount,
+          retryCodes,
+          retryInitialDelayMs,
+          retryMaxDelayMs,
+          rateLimitJitterRatio,
+          cookiesEnabled,
+          auth,
+          maxBodySize,
+          removeTags,
+          content,
+          mapLimit,
+          mapSearch,
+          downloadAssets,
+          assetTypes,
+          maxAssetSize,
+          browser,
+          proxy,
+          userAgents,
+          captureScreenshot,
+          followDocumentUrls,
+          documentUrlDepth,
+          downloadDocuments,
+          documentMaxSize,
+          documentMimeTypes,
+          documentOutputDir,
+          documentContentEncoding,
+          warcOutput,
+          browserProfile,
+          saveBrowserProfile,
+          ssrf,
+          ssrfDenyPrivateExplicit,
+          dangerAcceptInvalidCerts,
+          subdomainHeaderAllowlist);
+    }
+  }
+  // CPD-ON
 }

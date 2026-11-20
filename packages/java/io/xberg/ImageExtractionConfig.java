@@ -4,15 +4,13 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Image extraction configuration.
- */
+/** Image extraction configuration. */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageExtractionConfig.Builder.class)
 public record ImageExtractionConfig(
@@ -31,199 +29,245 @@ public record ImageExtractionConfig(
     @Nullable @JsonProperty("append_ocr_text") Boolean appendOcrText,
     @Nullable @JsonProperty("output_format") ImageOutputFormat outputFormat,
     @Nullable @JsonProperty("svg") SvgOptions svg,
-    @Nullable @JsonProperty("include_data_base64") Boolean includeDataBase64
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @Nullable @JsonProperty("include_data_base64") Boolean includeDataBase64) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public ImageExtractionConfig {
+    if (extractImages == null) {
+      extractImages = true;
     }
-    public ImageExtractionConfig{
-        if (extractImages == null) { extractImages = true; }
-        if (targetDpi == null) { targetDpi = 300; }
-        if (maxImageDimension == null) { maxImageDimension = 4096; }
-        if (injectPlaceholders == null) { injectPlaceholders = true; }
-        if (autoAdjustDpi == null) { autoAdjustDpi = true; }
-        if (minDpi == null) { minDpi = 72; }
-        if (maxDpi == null) { maxDpi = 600; }
-        if (runOcrOnImages == null) { runOcrOnImages = true; }
-        if (appendOcrText == null) { appendOcrText = true; }
+    if (targetDpi == null) {
+      targetDpi = 300;
+    }
+    if (maxImageDimension == null) {
+      maxImageDimension = 4096;
+    }
+    if (injectPlaceholders == null) {
+      injectPlaceholders = true;
+    }
+    if (autoAdjustDpi == null) {
+      autoAdjustDpi = true;
+    }
+    if (minDpi == null) {
+      minDpi = 72;
+    }
+    if (maxDpi == null) {
+      maxDpi = 600;
+    }
+    if (runOcrOnImages == null) {
+      runOcrOnImages = true;
+    }
+    if (appendOcrText == null) {
+      appendOcrText = true;
+    }
+  }
+
+  // CPD-OFF
+  /** Jackson builder for ImageExtractionConfig deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    @JsonProperty("extract_images")
+    @Nullable
+    private Boolean extractImages;
+
+    @JsonProperty("target_dpi")
+    @Nullable
+    private Integer targetDpi;
+
+    @JsonProperty("max_image_dimension")
+    @Nullable
+    private Integer maxImageDimension;
+
+    @JsonProperty("inject_placeholders")
+    @Nullable
+    private Boolean injectPlaceholders;
+
+    @JsonProperty("auto_adjust_dpi")
+    @Nullable
+    private Boolean autoAdjustDpi;
+
+    @JsonProperty("min_dpi")
+    @Nullable
+    private Integer minDpi;
+
+    @JsonProperty("max_dpi")
+    @Nullable
+    private Integer maxDpi;
+
+    @JsonProperty("max_images_per_page")
+    @Nullable
+    private Integer maxImagesPerPage;
+
+    @Nullable private Boolean classify;
+
+    @JsonProperty("include_page_rasters")
+    @Nullable
+    private Boolean includePageRasters;
+
+    @JsonProperty("run_ocr_on_images")
+    @Nullable
+    private Boolean runOcrOnImages;
+
+    @JsonProperty("ocr_text_only")
+    @Nullable
+    private Boolean ocrTextOnly;
+
+    @JsonProperty("append_ocr_text")
+    @Nullable
+    private Boolean appendOcrText;
+
+    @JsonProperty("output_format")
+    @Nullable
+    private ImageOutputFormat outputFormat = new ImageOutputFormat.Native();
+
+    @Nullable private SvgOptions svg;
+
+    @JsonProperty("include_data_base64")
+    @Nullable
+    private Boolean includeDataBase64;
+
+    /** Sets the extractImages field. */
+    @JsonProperty("extract_images")
+    public Builder withExtractImages(final @Nullable Boolean value) {
+      this.extractImages = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for ImageExtractionConfig deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        @JsonProperty("extract_images")
-        @Nullable private Boolean extractImages;
-        @JsonProperty("target_dpi")
-        @Nullable private Integer targetDpi;
-        @JsonProperty("max_image_dimension")
-        @Nullable private Integer maxImageDimension;
-        @JsonProperty("inject_placeholders")
-        @Nullable private Boolean injectPlaceholders;
-        @JsonProperty("auto_adjust_dpi")
-        @Nullable private Boolean autoAdjustDpi;
-        @JsonProperty("min_dpi")
-        @Nullable private Integer minDpi;
-        @JsonProperty("max_dpi")
-        @Nullable private Integer maxDpi;
-        @JsonProperty("max_images_per_page")
-        @Nullable private Integer maxImagesPerPage;
-        @Nullable private Boolean classify;
-        @JsonProperty("include_page_rasters")
-        @Nullable private Boolean includePageRasters;
-        @JsonProperty("run_ocr_on_images")
-        @Nullable private Boolean runOcrOnImages;
-        @JsonProperty("ocr_text_only")
-        @Nullable private Boolean ocrTextOnly;
-        @JsonProperty("append_ocr_text")
-        @Nullable private Boolean appendOcrText;
-        @JsonProperty("output_format")
-        @Nullable private ImageOutputFormat outputFormat = new ImageOutputFormat.Native();
-        @Nullable private SvgOptions svg;
-        @JsonProperty("include_data_base64")
-        @Nullable private Boolean includeDataBase64;
-
-        /** Sets the extractImages field. */
-        @JsonProperty("extract_images")
-        public Builder withExtractImages(final @Nullable Boolean value) {
-            this.extractImages = value;
-            return this;
-        }
-
-        /** Sets the targetDpi field. */
-        @JsonProperty("target_dpi")
-        public Builder withTargetDpi(final @Nullable Integer value) {
-            this.targetDpi = value;
-            return this;
-        }
-
-        /** Sets the maxImageDimension field. */
-        @JsonProperty("max_image_dimension")
-        public Builder withMaxImageDimension(final @Nullable Integer value) {
-            this.maxImageDimension = value;
-            return this;
-        }
-
-        /** Sets the injectPlaceholders field. */
-        @JsonProperty("inject_placeholders")
-        public Builder withInjectPlaceholders(final @Nullable Boolean value) {
-            this.injectPlaceholders = value;
-            return this;
-        }
-
-        /** Sets the autoAdjustDpi field. */
-        @JsonProperty("auto_adjust_dpi")
-        public Builder withAutoAdjustDpi(final @Nullable Boolean value) {
-            this.autoAdjustDpi = value;
-            return this;
-        }
-
-        /** Sets the minDpi field. */
-        @JsonProperty("min_dpi")
-        public Builder withMinDpi(final @Nullable Integer value) {
-            this.minDpi = value;
-            return this;
-        }
-
-        /** Sets the maxDpi field. */
-        @JsonProperty("max_dpi")
-        public Builder withMaxDpi(final @Nullable Integer value) {
-            this.maxDpi = value;
-            return this;
-        }
-
-        /** Sets the maxImagesPerPage field. */
-        @JsonProperty("max_images_per_page")
-        public Builder withMaxImagesPerPage(final @Nullable Integer value) {
-            this.maxImagesPerPage = value;
-            return this;
-        }
-
-        @com.fasterxml.jackson.annotation.JsonIgnore
-        public Builder withMaxImagesPerPage(final int value) {
-            return withMaxImagesPerPage(Integer.valueOf(value));
-        }
-
-        /** Sets the classify field. */
-        @JsonProperty("classify")
-        public Builder withClassify(final @Nullable Boolean value) {
-            this.classify = value;
-            return this;
-        }
-
-        /** Sets the includePageRasters field. */
-        @JsonProperty("include_page_rasters")
-        public Builder withIncludePageRasters(final @Nullable Boolean value) {
-            this.includePageRasters = value;
-            return this;
-        }
-
-        /** Sets the runOcrOnImages field. */
-        @JsonProperty("run_ocr_on_images")
-        public Builder withRunOcrOnImages(final @Nullable Boolean value) {
-            this.runOcrOnImages = value;
-            return this;
-        }
-
-        /** Sets the ocrTextOnly field. */
-        @JsonProperty("ocr_text_only")
-        public Builder withOcrTextOnly(final @Nullable Boolean value) {
-            this.ocrTextOnly = value;
-            return this;
-        }
-
-        /** Sets the appendOcrText field. */
-        @JsonProperty("append_ocr_text")
-        public Builder withAppendOcrText(final @Nullable Boolean value) {
-            this.appendOcrText = value;
-            return this;
-        }
-
-        /** Sets the outputFormat field. */
-        @JsonProperty("output_format")
-        public Builder withOutputFormat(final @Nullable ImageOutputFormat value) {
-            this.outputFormat = value;
-            return this;
-        }
-
-        /** Sets the svg field. */
-        @JsonProperty("svg")
-        public Builder withSvg(final @Nullable SvgOptions value) {
-            this.svg = value;
-            return this;
-        }
-
-        /** Sets the includeDataBase64 field. */
-        @JsonProperty("include_data_base64")
-        public Builder withIncludeDataBase64(final @Nullable Boolean value) {
-            this.includeDataBase64 = value;
-            return this;
-        }
-
-        /** Constructs a ImageExtractionConfig instance from the builder's current state. */
-        public ImageExtractionConfig build() {
-            return new ImageExtractionConfig(
-                extractImages,
-                targetDpi,
-                maxImageDimension,
-                injectPlaceholders,
-                autoAdjustDpi,
-                minDpi,
-                maxDpi,
-                maxImagesPerPage,
-                classify,
-                includePageRasters,
-                runOcrOnImages,
-                ocrTextOnly,
-                appendOcrText,
-                outputFormat,
-                svg,
-                includeDataBase64
-            );
-        }
+    /** Sets the targetDpi field. */
+    @JsonProperty("target_dpi")
+    public Builder withTargetDpi(final @Nullable Integer value) {
+      this.targetDpi = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Sets the maxImageDimension field. */
+    @JsonProperty("max_image_dimension")
+    public Builder withMaxImageDimension(final @Nullable Integer value) {
+      this.maxImageDimension = value;
+      return this;
+    }
+
+    /** Sets the injectPlaceholders field. */
+    @JsonProperty("inject_placeholders")
+    public Builder withInjectPlaceholders(final @Nullable Boolean value) {
+      this.injectPlaceholders = value;
+      return this;
+    }
+
+    /** Sets the autoAdjustDpi field. */
+    @JsonProperty("auto_adjust_dpi")
+    public Builder withAutoAdjustDpi(final @Nullable Boolean value) {
+      this.autoAdjustDpi = value;
+      return this;
+    }
+
+    /** Sets the minDpi field. */
+    @JsonProperty("min_dpi")
+    public Builder withMinDpi(final @Nullable Integer value) {
+      this.minDpi = value;
+      return this;
+    }
+
+    /** Sets the maxDpi field. */
+    @JsonProperty("max_dpi")
+    public Builder withMaxDpi(final @Nullable Integer value) {
+      this.maxDpi = value;
+      return this;
+    }
+
+    /** Sets the maxImagesPerPage field. */
+    @JsonProperty("max_images_per_page")
+    public Builder withMaxImagesPerPage(final @Nullable Integer value) {
+      this.maxImagesPerPage = value;
+      return this;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Builder withMaxImagesPerPage(final int value) {
+      return withMaxImagesPerPage(Integer.valueOf(value));
+    }
+
+    /** Sets the classify field. */
+    @JsonProperty("classify")
+    public Builder withClassify(final @Nullable Boolean value) {
+      this.classify = value;
+      return this;
+    }
+
+    /** Sets the includePageRasters field. */
+    @JsonProperty("include_page_rasters")
+    public Builder withIncludePageRasters(final @Nullable Boolean value) {
+      this.includePageRasters = value;
+      return this;
+    }
+
+    /** Sets the runOcrOnImages field. */
+    @JsonProperty("run_ocr_on_images")
+    public Builder withRunOcrOnImages(final @Nullable Boolean value) {
+      this.runOcrOnImages = value;
+      return this;
+    }
+
+    /** Sets the ocrTextOnly field. */
+    @JsonProperty("ocr_text_only")
+    public Builder withOcrTextOnly(final @Nullable Boolean value) {
+      this.ocrTextOnly = value;
+      return this;
+    }
+
+    /** Sets the appendOcrText field. */
+    @JsonProperty("append_ocr_text")
+    public Builder withAppendOcrText(final @Nullable Boolean value) {
+      this.appendOcrText = value;
+      return this;
+    }
+
+    /** Sets the outputFormat field. */
+    @JsonProperty("output_format")
+    public Builder withOutputFormat(final @Nullable ImageOutputFormat value) {
+      this.outputFormat = value;
+      return this;
+    }
+
+    /** Sets the svg field. */
+    @JsonProperty("svg")
+    public Builder withSvg(final @Nullable SvgOptions value) {
+      this.svg = value;
+      return this;
+    }
+
+    /** Sets the includeDataBase64 field. */
+    @JsonProperty("include_data_base64")
+    public Builder withIncludeDataBase64(final @Nullable Boolean value) {
+      this.includeDataBase64 = value;
+      return this;
+    }
+
+    /** Constructs a ImageExtractionConfig instance from the builder's current state. */
+    public ImageExtractionConfig build() {
+      return new ImageExtractionConfig(
+          extractImages,
+          targetDpi,
+          maxImageDimension,
+          injectPlaceholders,
+          autoAdjustDpi,
+          minDpi,
+          maxDpi,
+          maxImagesPerPage,
+          classify,
+          includePageRasters,
+          runOcrOnImages,
+          ocrTextOnly,
+          appendOcrText,
+          outputFormat,
+          svg,
+          includeDataBase64);
+    }
+  }
+  // CPD-ON
 }

@@ -4,56 +4,51 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
- * A single document match returned by max_sim_rank, with its position in
- * the input and MaxSim score.
+ * A single document match returned by max_sim_rank, with its position in the input and MaxSim
+ * score.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LateInteractionMatch.Builder.class)
 public record LateInteractionMatch(
-    @JsonProperty("index") long index,
-    @JsonProperty("score") float score
-) {
-    /** Creates a new Builder for constructing instances of this record. */
-    public static Builder builder() {
-        return new Builder();
+    @JsonProperty("index") long index, @JsonProperty("score") float score) {
+  /** Creates a new Builder for constructing instances of this record. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  // CPD-OFF
+  /** Jackson builder for LateInteractionMatch deserialization. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+  public static final class Builder {
+
+    private long index;
+    private float score;
+
+    /** Sets the index field. */
+    @JsonProperty("index")
+    public Builder withIndex(final long value) {
+      this.index = value;
+      return this;
     }
 
-    // CPD-OFF
-    /** Jackson builder for LateInteractionMatch deserialization. */
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-    public static final class Builder {
-
-        private long index;
-        private float score;
-
-        /** Sets the index field. */
-        @JsonProperty("index")
-        public Builder withIndex(final long value) {
-            this.index = value;
-            return this;
-        }
-
-        /** Sets the score field. */
-        @JsonProperty("score")
-        public Builder withScore(final float value) {
-            this.score = value;
-            return this;
-        }
-
-        /** Constructs a LateInteractionMatch instance from the builder's current state. */
-        public LateInteractionMatch build() {
-            return new LateInteractionMatch(
-                index,
-                score
-            );
-        }
+    /** Sets the score field. */
+    @JsonProperty("score")
+    public Builder withScore(final float value) {
+      this.score = value;
+      return this;
     }
-    // CPD-ON
+
+    /** Constructs a LateInteractionMatch instance from the builder's current state. */
+    public LateInteractionMatch build() {
+      return new LateInteractionMatch(index, score);
+    }
+  }
+  // CPD-ON
 }
