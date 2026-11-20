@@ -62,6 +62,7 @@ fn native_batch_rejects_multiple_results_without_honest_child_accounting() {
         &context,
         &[first.path(), second.path()],
         &output,
+        false,
         &ExtractionConfig::default(),
     )
     .unwrap_err();

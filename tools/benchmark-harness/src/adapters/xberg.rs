@@ -248,7 +248,7 @@ pub fn create_xberg_adapter(
         single_args
     });
 
-    let mut adapter = if batch {
+    let adapter = if batch {
         SubprocessAdapter::with_batch_capability(
             &framework_name,
             cli_path,
@@ -267,6 +267,13 @@ pub fn create_xberg_adapter(
     .with_supported_output_formats(vec![output_format])
     .with_ocr_language_policy(declared_ocr_language_policy(&framework_name))
     .with_executable_build_identity(build_identity);
+    // A V3 row must prove the V3 detector ran: a failed layout pass otherwise yields plausible
+    // text that the harness would score as PP-DocLayoutV3 output. ~keep
+    let mut adapter = if pipeline == XbergPipeline::LayoutV3 {
+        adapter.with_layout_failure_rejection()
+    } else {
+        adapter
+    };
     if let Some(single_args) = single_file_args {
         adapter = adapter.with_single_file_args(single_args);
     }
@@ -303,19 +310,26 @@ pub fn create_xberg_steady_adapter(
         xberg_framework_name(pipeline, output_format, false, pdf_backend),
         if batch { "-batch" } else { "" }
     );
+    let reject_layout_failures = pipeline == XbergPipeline::LayoutV3;
     if batch {
-        return Ok(NativeAdapter::with_identity(name, config));
+        let adapter = NativeAdapter::with_identity(name, config);
+        return Ok(if reject_layout_failures {
+            adapter.reject_layout_failures()
+        } else {
+            adapter
+        });
     }
     let cold_adapter = match max_threads {
         Some(max_threads) => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?
             .with_xberg_max_threads(max_threads),
         None => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?,
     };
-    Ok(NativeAdapter::with_identity_and_cold_adapter(
-        name,
-        config,
-        cold_adapter,
-    ))
+    let adapter = NativeAdapter::with_identity_and_cold_adapter(name, config, cold_adapter);
+    Ok(if reject_layout_failures {
+        adapter.reject_layout_failures()
+    } else {
+        adapter
+    })
 }
 
 fn steady_extraction_config(
@@ -799,6 +813,26 @@ mod tests {
             layout_v3.ocr.as_ref().map(|ocr| ocr.backend.as_str()),
             Some("tesseract")
         );
+    }
+
+    /// Negative control: the V3 adapters must refuse a document whose layout pass failed, so a
+    /// fallback read is never scored as PP-DocLayoutV3 output. ~keep
+    #[test]
+    fn only_the_layout_v3_adapter_rejects_a_failed_layout_pass() {
+        let adapter = |pipeline| {
+            create_xberg_steady_adapter(
+                pipeline,
+                OutputFormat::Markdown,
+                true,
+                true,
+                XbergPdfBackend::Native,
+                None,
+            )
+            .unwrap()
+        };
+        assert!(adapter(XbergPipeline::LayoutV3).rejects_layout_failures());
+        assert!(!adapter(XbergPipeline::Layout).rejects_layout_failures());
+        assert!(!adapter(XbergPipeline::Baseline).rejects_layout_failures());
     }
 
     #[test]
