@@ -13958,6 +13958,347 @@ as String,
 }
 
 /// @nodoc
+mixin _$VectorSegment {
+
+/// End point of the segment.
+ VectorPoint get to;
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$VectorSegmentCopyWith<VectorSegment> get copyWith => _$VectorSegmentCopyWithImpl<VectorSegment>(this as VectorSegment, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  final _this = this as VectorSegment;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is VectorSegment&&(identical(other.to, _this.to) || other.to == _this.to));
+}
+
+
+@override
+int get hashCode {
+  final _this = this as VectorSegment;
+  return Object.hash(runtimeType,_this.to);
+}
+
+@override
+String toString() {
+  final _this = this as VectorSegment;
+  return 'VectorSegment(to: ${_this.to})';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $VectorSegmentCopyWith<$Res>  {
+  factory $VectorSegmentCopyWith(VectorSegment value, $Res Function(VectorSegment) _then) = _$VectorSegmentCopyWithImpl;
+@useResult
+$Res call({
+ VectorPoint to
+});
+
+
+
+
+}
+/// @nodoc
+class _$VectorSegmentCopyWithImpl<$Res>
+    implements $VectorSegmentCopyWith<$Res> {
+  _$VectorSegmentCopyWithImpl(this._self, this._then);
+
+  final VectorSegment _self;
+  final $Res Function(VectorSegment) _then;
+
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? to = null,}) {
+  return _then(_self.copyWith(
+to: null == to ? _self.to : to // ignore: cast_nullable_to_non_nullable
+as VectorPoint,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [VectorSegment].
+extension VectorSegmentPatterns on VectorSegment {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( VectorSegment_Line value)?  line,TResult Function( VectorSegment_Cubic value)?  cubic,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case VectorSegment_Line() when line != null:
+return line(_that);case VectorSegment_Cubic() when cubic != null:
+return cubic(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( VectorSegment_Line value)  line,required TResult Function( VectorSegment_Cubic value)  cubic,}){
+final _that = this;
+switch (_that) {
+case VectorSegment_Line():
+return line(_that);case VectorSegment_Cubic():
+return cubic(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( VectorSegment_Line value)?  line,TResult? Function( VectorSegment_Cubic value)?  cubic,}){
+final _that = this;
+switch (_that) {
+case VectorSegment_Line() when line != null:
+return line(_that);case VectorSegment_Cubic() when cubic != null:
+return cubic(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( VectorPoint to)?  line,TResult Function( VectorPoint control1,  VectorPoint control2,  VectorPoint to)?  cubic,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case VectorSegment_Line() when line != null:
+return line(_that.to);case VectorSegment_Cubic() when cubic != null:
+return cubic(_that.control1,_that.control2,_that.to);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( VectorPoint to)  line,required TResult Function( VectorPoint control1,  VectorPoint control2,  VectorPoint to)  cubic,}) {final _that = this;
+switch (_that) {
+case VectorSegment_Line():
+return line(_that.to);case VectorSegment_Cubic():
+return cubic(_that.control1,_that.control2,_that.to);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( VectorPoint to)?  line,TResult? Function( VectorPoint control1,  VectorPoint control2,  VectorPoint to)?  cubic,}) {final _that = this;
+switch (_that) {
+case VectorSegment_Line() when line != null:
+return line(_that.to);case VectorSegment_Cubic() when cubic != null:
+return cubic(_that.control1,_that.control2,_that.to);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class VectorSegment_Line extends VectorSegment {
+  const VectorSegment_Line({required this.to}): super._();
+
+
+/// End point of the segment.
+@override final  VectorPoint to;
+
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$VectorSegment_LineCopyWith<VectorSegment_Line> get copyWith => _$VectorSegment_LineCopyWithImpl<VectorSegment_Line>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is VectorSegment_Line&&(identical(other.to, to) || other.to == to));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,to);
+}
+
+@override
+String toString() {
+    return 'VectorSegment.line(to: $to)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $VectorSegment_LineCopyWith<$Res> implements $VectorSegmentCopyWith<$Res> {
+  factory $VectorSegment_LineCopyWith(VectorSegment_Line value, $Res Function(VectorSegment_Line) _then) = _$VectorSegment_LineCopyWithImpl;
+@override @useResult
+$Res call({
+ VectorPoint to
+});
+
+
+
+
+}
+/// @nodoc
+class _$VectorSegment_LineCopyWithImpl<$Res>
+    implements $VectorSegment_LineCopyWith<$Res> {
+  _$VectorSegment_LineCopyWithImpl(this._self, this._then);
+
+  final VectorSegment_Line _self;
+  final $Res Function(VectorSegment_Line) _then;
+
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? to = null,}) {
+  return _then(VectorSegment_Line(
+to: null == to ? _self.to : to // ignore: cast_nullable_to_non_nullable
+as VectorPoint,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class VectorSegment_Cubic extends VectorSegment {
+  const VectorSegment_Cubic({required this.control1, required this.control2, required this.to}): super._();
+
+
+/// First control point.
+ final  VectorPoint control1;
+/// Second control point.
+ final  VectorPoint control2;
+/// End point of the segment.
+@override final  VectorPoint to;
+
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$VectorSegment_CubicCopyWith<VectorSegment_Cubic> get copyWith => _$VectorSegment_CubicCopyWithImpl<VectorSegment_Cubic>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is VectorSegment_Cubic&&(identical(other.control1, control1) || other.control1 == control1)&&(identical(other.control2, control2) || other.control2 == control2)&&(identical(other.to, to) || other.to == to));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,control1,control2,to);
+}
+
+@override
+String toString() {
+    return 'VectorSegment.cubic(control1: $control1, control2: $control2, to: $to)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $VectorSegment_CubicCopyWith<$Res> implements $VectorSegmentCopyWith<$Res> {
+  factory $VectorSegment_CubicCopyWith(VectorSegment_Cubic value, $Res Function(VectorSegment_Cubic) _then) = _$VectorSegment_CubicCopyWithImpl;
+@override @useResult
+$Res call({
+ VectorPoint control1, VectorPoint control2, VectorPoint to
+});
+
+
+
+
+}
+/// @nodoc
+class _$VectorSegment_CubicCopyWithImpl<$Res>
+    implements $VectorSegment_CubicCopyWith<$Res> {
+  _$VectorSegment_CubicCopyWithImpl(this._self, this._then);
+
+  final VectorSegment_Cubic _self;
+  final $Res Function(VectorSegment_Cubic) _then;
+
+/// Create a copy of VectorSegment
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? control1 = null,Object? control2 = null,Object? to = null,}) {
+  return _then(VectorSegment_Cubic(
+control1: null == control1 ? _self.control1 : control1 // ignore: cast_nullable_to_non_nullable
+as VectorPoint,control2: null == control2 ? _self.control2 : control2 // ignore: cast_nullable_to_non_nullable
+as VectorPoint,to: null == to ? _self.to : to // ignore: cast_nullable_to_non_nullable
+as VectorPoint,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$VlmFallbackPolicy {
 
 

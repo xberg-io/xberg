@@ -958,6 +958,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageDimensions dco_decode_box_autoadd_page_dimensions(dynamic raw);
 
   @protected
+  PageGeometry dco_decode_box_autoadd_page_geometry(dynamic raw);
+
+  @protected
   PageHierarchy dco_decode_box_autoadd_page_hierarchy(dynamic raw);
 
   @protected
@@ -1066,6 +1069,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserChunkConfig dco_decode_box_autoadd_user_chunk_config(dynamic raw);
+
+  @protected
+  VectorColor dco_decode_box_autoadd_vector_color(dynamic raw);
+
+  @protected
+  VectorDashPattern dco_decode_box_autoadd_vector_dash_pattern(dynamic raw);
+
+  @protected
+  VectorPoint dco_decode_box_autoadd_vector_point(dynamic raw);
+
+  @protected
+  VectorStroke dco_decode_box_autoadd_vector_stroke(dynamic raw);
 
   @protected
   XbergError dco_decode_box_autoadd_xberg_error(dynamic raw);
@@ -1938,6 +1953,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ListType dco_decode_list_type(dynamic raw);
 
   @protected
+  List<VectorPath> dco_decode_list_vector_path(dynamic raw);
+
+  @protected
+  List<VectorSegment> dco_decode_list_vector_segment(dynamic raw);
+
+  @protected
+  List<VectorSubpath> dco_decode_list_vector_subpath(dynamic raw);
+
+  @protected
   LlmBudgetConfig dco_decode_llm_budget_config(dynamic raw);
 
   @protected
@@ -2357,6 +2381,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageDimensions? dco_decode_opt_box_autoadd_page_dimensions(dynamic raw);
 
   @protected
+  PageGeometry? dco_decode_opt_box_autoadd_page_geometry(dynamic raw);
+
+  @protected
   PageHierarchy? dco_decode_opt_box_autoadd_page_hierarchy(dynamic raw);
 
   @protected
@@ -2460,6 +2487,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserChunkConfig? dco_decode_opt_box_autoadd_user_chunk_config(dynamic raw);
+
+  @protected
+  VectorColor? dco_decode_opt_box_autoadd_vector_color(dynamic raw);
+
+  @protected
+  VectorDashPattern? dco_decode_opt_box_autoadd_vector_dash_pattern(
+    dynamic raw,
+  );
+
+  @protected
+  VectorStroke? dco_decode_opt_box_autoadd_vector_stroke(dynamic raw);
 
   @protected
   YakeParams? dco_decode_opt_box_autoadd_yake_params(dynamic raw);
@@ -2601,6 +2639,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageDimensions dco_decode_page_dimensions(dynamic raw);
+
+  @protected
+  PageGeometry dco_decode_page_geometry(dynamic raw);
 
   @protected
   PageHierarchy dco_decode_page_hierarchy(dynamic raw);
@@ -2944,6 +2985,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  VectorColor dco_decode_vector_color(dynamic raw);
+
+  @protected
+  VectorDashPattern dco_decode_vector_dash_pattern(dynamic raw);
+
+  @protected
+  VectorLineCap dco_decode_vector_line_cap(dynamic raw);
+
+  @protected
+  VectorLineJoin dco_decode_vector_line_join(dynamic raw);
+
+  @protected
+  VectorPath dco_decode_vector_path(dynamic raw);
+
+  @protected
+  VectorPoint dco_decode_vector_point(dynamic raw);
+
+  @protected
+  VectorSegment dco_decode_vector_segment(dynamic raw);
+
+  @protected
+  VectorStroke dco_decode_vector_stroke(dynamic raw);
+
+  @protected
+  VectorSubpath dco_decode_vector_subpath(dynamic raw);
 
   @protected
   VlmFallbackPolicy dco_decode_vlm_fallback_policy(dynamic raw);
@@ -3838,6 +3906,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PageGeometry sse_decode_box_autoadd_page_geometry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PageHierarchy sse_decode_box_autoadd_page_hierarchy(
     SseDeserializer deserializer,
   );
@@ -3992,6 +4065,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserChunkConfig sse_decode_box_autoadd_user_chunk_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorColor sse_decode_box_autoadd_vector_color(SseDeserializer deserializer);
+
+  @protected
+  VectorDashPattern sse_decode_box_autoadd_vector_dash_pattern(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorPoint sse_decode_box_autoadd_vector_point(SseDeserializer deserializer);
+
+  @protected
+  VectorStroke sse_decode_box_autoadd_vector_stroke(
     SseDeserializer deserializer,
   );
 
@@ -5060,6 +5149,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ListType sse_decode_list_type(SseDeserializer deserializer);
 
   @protected
+  List<VectorPath> sse_decode_list_vector_path(SseDeserializer deserializer);
+
+  @protected
+  List<VectorSegment> sse_decode_list_vector_segment(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<VectorSubpath> sse_decode_list_vector_subpath(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   LlmBudgetConfig sse_decode_llm_budget_config(SseDeserializer deserializer);
 
   @protected
@@ -5603,6 +5705,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PageGeometry? sse_decode_opt_box_autoadd_page_geometry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PageHierarchy? sse_decode_opt_box_autoadd_page_hierarchy(
     SseDeserializer deserializer,
   );
@@ -5746,6 +5853,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserChunkConfig? sse_decode_opt_box_autoadd_user_chunk_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorColor? sse_decode_opt_box_autoadd_vector_color(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorDashPattern? sse_decode_opt_box_autoadd_vector_dash_pattern(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorStroke? sse_decode_opt_box_autoadd_vector_stroke(
     SseDeserializer deserializer,
   );
 
@@ -5935,6 +6057,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageDimensions sse_decode_page_dimensions(SseDeserializer deserializer);
+
+  @protected
+  PageGeometry sse_decode_page_geometry(SseDeserializer deserializer);
 
   @protected
   PageHierarchy sse_decode_page_hierarchy(SseDeserializer deserializer);
@@ -6338,6 +6463,35 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  VectorColor sse_decode_vector_color(SseDeserializer deserializer);
+
+  @protected
+  VectorDashPattern sse_decode_vector_dash_pattern(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VectorLineCap sse_decode_vector_line_cap(SseDeserializer deserializer);
+
+  @protected
+  VectorLineJoin sse_decode_vector_line_join(SseDeserializer deserializer);
+
+  @protected
+  VectorPath sse_decode_vector_path(SseDeserializer deserializer);
+
+  @protected
+  VectorPoint sse_decode_vector_point(SseDeserializer deserializer);
+
+  @protected
+  VectorSegment sse_decode_vector_segment(SseDeserializer deserializer);
+
+  @protected
+  VectorStroke sse_decode_vector_stroke(SseDeserializer deserializer);
+
+  @protected
+  VectorSubpath sse_decode_vector_subpath(SseDeserializer deserializer);
 
   @protected
   VlmFallbackPolicy sse_decode_vlm_fallback_policy(
@@ -7580,6 +7734,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_page_geometry(
+    PageGeometry self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_page_hierarchy(
     PageHierarchy self,
     SseSerializer serializer,
@@ -7780,6 +7940,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_user_chunk_config(
     UserChunkConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vector_color(
+    VectorColor self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vector_dash_pattern(
+    VectorDashPattern self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vector_point(
+    VectorPoint self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vector_stroke(
+    VectorStroke self,
     SseSerializer serializer,
   );
 
@@ -9182,6 +9366,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_type(ListType self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_vector_path(
+    List<VectorPath> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_vector_segment(
+    List<VectorSegment> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_vector_subpath(
+    List<VectorSubpath> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_llm_budget_config(
     LlmBudgetConfig self,
     SseSerializer serializer,
@@ -9836,6 +10038,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_page_geometry(
+    PageGeometry? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_page_hierarchy(
     PageHierarchy? self,
     SseSerializer serializer,
@@ -10009,6 +10217,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_user_chunk_config(
     UserChunkConfig? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_vector_color(
+    VectorColor? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_vector_dash_pattern(
+    VectorDashPattern? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_vector_stroke(
+    VectorStroke? self,
     SseSerializer serializer,
   );
 
@@ -10260,6 +10486,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PageDimensions self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_page_geometry(PageGeometry self, SseSerializer serializer);
 
   @protected
   void sse_encode_page_hierarchy(PageHierarchy self, SseSerializer serializer);
@@ -10788,6 +11017,39 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_color(VectorColor self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_dash_pattern(
+    VectorDashPattern self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_vector_line_cap(VectorLineCap self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_line_join(
+    VectorLineJoin self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_vector_path(VectorPath self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_point(VectorPoint self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_segment(VectorSegment self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_stroke(VectorStroke self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vector_subpath(VectorSubpath self, SseSerializer serializer);
 
   @protected
   void sse_encode_vlm_fallback_policy(

@@ -1107,6 +1107,7 @@ pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Opt
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: None,
+                geometry: None,
             }
         })
         .collect();
@@ -1663,6 +1664,7 @@ mod plain_page_rerender_tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }
     }
 

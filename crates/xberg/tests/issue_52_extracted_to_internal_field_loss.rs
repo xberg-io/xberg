@@ -66,6 +66,7 @@ fn source_document() -> ExtractedDocument {
         sheet_name: None,
         ocr_confidence: None,
         native_content: None,
+        geometry: None,
         image_preprocessing: None,
     }]);
     result.ocr_elements = Some(vec![OcrElement {

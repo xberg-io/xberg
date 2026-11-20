@@ -2123,6 +2123,7 @@ mod tests {
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: Some(format!("Text layer with {email}.")),
+                geometry: None,
             }]),
             ..Default::default()
         };
@@ -2182,6 +2183,7 @@ mod tests {
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: None,
+                geometry: None,
             }]),
             uris: Some(vec![ExtractedUri {
                 url: format!("mailto:{email}"),
