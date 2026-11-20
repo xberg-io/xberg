@@ -412,28 +412,28 @@ final class TikaJson {
     for (int i = 0; i < value.length(); i++) {
       char c = value.charAt(i);
       switch (c) {
-      case '\\':
+        case '\\':
         sb.append("\\\\");
         break;
-      case '"':
+        case '"':
         sb.append("\\\"");
         break;
-      case '\n':
+        case '\n':
         sb.append("\\n");
         break;
-      case '\r':
+        case '\r':
         sb.append("\\r");
         break;
-      case '\t':
+        case '\t':
         sb.append("\\t");
         break;
-      case '\b':
+        case '\b':
         sb.append("\\b");
         break;
-      case '\f':
+        case '\f':
         sb.append("\\f");
         break;
-      default:
+        default:
         if (c <= LAST_CONTROL_CHAR) {
           sb.append(String.format("\\u%04x", (int)c));
         } else {
