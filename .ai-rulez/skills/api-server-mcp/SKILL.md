@@ -46,9 +46,10 @@ There is **no** `POST /extract-url` (URL ingestion is a field on `ExtractInput` 
 
 Middleware, in order: `DefaultBodyLimit::max(limits.max_request_body_bytes)` +
 `RequestBodyLimitLayer` (default 100 MB), CORS, request-id, compression, catch-panic,
-sensitive-header stripping, tracing. CORS is built explicitly as
-`CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)` and warns loudly;
-restrict it with `XBERG_CORS_ORIGINS`.
+sensitive-header stripping, tracing. CORS is denied by default; `XBERG_CORS_ORIGINS` lists
+allowed origins (`*` allows all). `XBERG_API_TOKEN` enables bearer auth (`api/auth.rs`) on every
+route except `/health`; a non-loopback bind without a token is refused unless
+`XBERG_ALLOW_UNAUTHENTICATED` is set.
 
 ## Caching
 
@@ -113,7 +114,7 @@ comment rather than guessing a name.
 1. **Validate uploads** — MIME type, size, magic bytes; never trust the filename.
 2. **Size limits are configurable** — always read `limits.max_request_body_bytes`, never hardcode.
 3. **Errors must be actionable** — include the operation and a remediation hint in `ErrorResponse`.
-4. **CORS is permissive by default** — production deployments must set `XBERG_CORS_ORIGINS`.
+4. **CORS is denied by default** — browser clients must be listed in `XBERG_CORS_ORIGINS`.
 5. **Long work goes to `/extract-async`** — do not block a request thread on a multi-minute extraction.
 
 ### MCP

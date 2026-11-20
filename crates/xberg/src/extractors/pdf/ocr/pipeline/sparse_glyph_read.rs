@@ -126,6 +126,14 @@ struct PipelineTrial {
 }
 
 #[cfg(paddle_ocr)]
+#[path = "sparse_glyph_read_trial_tasks.rs"]
+mod trial_tasks;
+#[cfg(paddle_ocr)]
+pub(super) use trial_tasks::{
+    PanickedTrials, RetryRenderOutcome, RetryRenderRequest, TrialContext, spawn_retry_render, spawn_trials,
+};
+
+#[cfg(paddle_ocr)]
 pub(super) struct TrialPage {
     pub(super) rotation: u32,
     pub(super) hints: super::PageOcrHints,
@@ -143,54 +151,6 @@ pub(super) struct AcceptedTrial {
     pub output: Box<super::OcrPipelineOutput>,
     pub dimensions: (u32, u32),
     pub dpi: Dpi,
-}
-
-#[cfg(paddle_ocr)]
-pub(super) async fn run_batch(
-    pdf: &Arc<PdfDocument>,
-    config: &ExtractionConfig,
-    pipeline: Option<&crate::core::config::OcrPipelineConfig>,
-    indices: &[usize],
-    eligible: &ahash::AHashMap<usize, MarkedWords>,
-    page: impl Fn(usize) -> TrialPage,
-) -> crate::Result<std::collections::BTreeMap<usize, AcceptedTrial>> {
-    let mut accepted = std::collections::BTreeMap::new();
-    let Some(pipeline) = pipeline.filter(|_| !eligible.is_empty()) else {
-        return Ok(accepted);
-    };
-    let mut tasks = tokio::task::JoinSet::new();
-    for &index in indices {
-        let Some(words) = eligible.get(&index) else {
-            continue;
-        };
-        let trial = PipelineTrial {
-            pdf: Arc::clone(pdf),
-            index,
-            config: config.clone(),
-            pipeline: pipeline.clone(),
-            page: page(index),
-            words: words.clone(),
-        };
-        let task = async move { (index, trial.run().await) };
-        #[cfg(test)]
-        let task = crate::plugins::registry::inherit_test_ocr_backend(task);
-        tasks.spawn(crate::core::extractor::cacheability::inherit(task));
-    }
-    let mut abandon_at = None;
-    loop {
-        match super::next_page_task(&mut tasks, config.cancel_token.as_ref(), &mut abandon_at).await {
-            super::NextPageTask::Finished(Ok((index, result))) => {
-                if let Some(result) = result? {
-                    accepted.insert(index, result);
-                }
-            }
-            super::NextPageTask::Finished(Err(error)) => {
-                tracing::debug!(panicked = error.is_panic(), "Sparse glyph OCR task did not finish");
-            }
-            super::NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled),
-            super::NextPageTask::Drained | super::NextPageTask::Abandoned => return Ok(accepted),
-        }
-    }
 }
 
 #[cfg(paddle_ocr)]
@@ -278,6 +238,8 @@ impl PipelineTrial {
     }
 
     async fn run(self) -> crate::Result<Option<AcceptedTrial>> {
+        #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+        parallel_tests::hold_until_another_page_starts(&self.config, self.index).await;
         if let Ok((image, dpi, warnings)) = self.render().await
             // Failed and warning-bearing trials are retried by the ordinary renderer, so the
             // result only reports warnings from the selected normal render in batch order.
@@ -561,6 +523,8 @@ const IMPLICIT_ROTATED_CASE: usize = 0x3238_5103;
 const IMPLICIT_PANIC_CASE: usize = 0x3238_5104;
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const IMPLICIT_OVERRIDE_CASE: usize = 0x3238_5105;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const IMPLICIT_PARALLEL_CASE: usize = 0x3238_5106;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
@@ -589,7 +553,11 @@ fn implicit_pipeline_case(case: usize) -> bool {
     cfg!(paddle_ocr)
         && matches!(
             case,
-            IMPLICIT_MISSING_WORD_CASE | IMPLICIT_ROTATED_CASE | IMPLICIT_PANIC_CASE | IMPLICIT_OVERRIDE_CASE
+            IMPLICIT_MISSING_WORD_CASE
+                | IMPLICIT_ROTATED_CASE
+                | IMPLICIT_PANIC_CASE
+                | IMPLICIT_OVERRIDE_CASE
+                | IMPLICIT_PARALLEL_CASE
         )
 }
 
@@ -670,7 +638,10 @@ pub(super) fn test_attempt(
                 words.accounted_for(read),
                 "unmodified read must account for the marked words"
             );
-            if matches!(case, MISSING_WORD_CASE | IMPLICIT_MISSING_WORD_CASE) {
+            if matches!(
+                case,
+                MISSING_WORD_CASE | IMPLICIT_MISSING_WORD_CASE | IMPLICIT_PARALLEL_CASE
+            ) {
                 remove_marked_word(read, words);
                 assert!(!words.accounted_for(read));
             }
@@ -988,3 +959,7 @@ fn implicit_trial_skips_pages_that_khmer_number_recovery_may_claim() {
 #[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
 #[path = "sparse_glyph_read_review_tests.rs"]
 mod review_tests;
+
+#[cfg(all(test, feature = "bundle-tessdata-eng", paddle_ocr))]
+#[path = "sparse_glyph_read_parallel_tests.rs"]
+pub(super) mod parallel_tests;

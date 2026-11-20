@@ -78,8 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+
 ### Changed
 
+- **api:** Breaking. The REST server and the MCP HTTP transport now refuse to start on a non-loopback host (the Docker images bind `0.0.0.0`) unless `XBERG_API_TOKEN` is set or `XBERG_ALLOW_UNAUTHENTICATED=true` opts out (only for a trusted network). CORS is denied unless `XBERG_CORS_ORIGINS` lists origins (`*` allows all); the library `serve*` functions now read `XBERG_CORS_ORIGINS` and `XBERG_JOB_TIMEOUT_SECS` from the environment as the CLI does. `ServerConfig.cors_allows_all()` and `is_origin_allowed()` (exposed in the bindings) change meaning: an empty `cors_origins` list now denies instead of allowing every origin, and only `*` allows all. Also, `DELETE /cache/clear` and `POST /cache/warm` now count against the concurrency limit. Migration: set `XBERG_API_TOKEN` and send `Authorization: Bearer <token>`, or set `XBERG_ALLOW_UNAUTHENTICATED=true` behind a trusted proxy; add browser origins to `XBERG_CORS_ORIGINS`. (#3165)
 - **Breaking (libheif):** In the Rust-only `xberg-libheif` crate, `ImageHandle`, `Track`, `RegionItem` and the `Region` geometry types carry the input lifetime (`ImageHandle<'a>`, `Region<'a>`) and share ownership of the context's native state and input, so they stay valid after the `HeifContext` is dropped but cannot outlive a borrowed input; a live region also keeps the context from loading another image, since libheif resolves its transformed getters against that context's image properties. `Reader` now requires `Send` and is called under a lock, since libheif may read from worker threads. `HeifContext` is no longer `Send`. `read_file`, `read_reader` and `read_bytes` return a usage error while handles derived from the context are alive, and methods that take an `ImageHandle` reject one from another context. The `image` integration buffers its input in memory (up to 512 MiB). The removed internal `ImageHandle::context()` wrapped the shared native context without carrying its source. (#3229)
 
 ## [1.4.2] - 2026-11-19

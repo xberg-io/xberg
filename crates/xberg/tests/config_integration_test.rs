@@ -229,7 +229,7 @@ fn test_config_format_json() {
 }
 
 #[test]
-fn test_cors_configuration_allow_all() {
+fn test_cors_configuration_denies_by_default() {
     let dir = tempdir().expect("Operation failed");
     let config_path = dir.path().join("config.toml");
 
@@ -238,16 +238,16 @@ fn test_cors_configuration_allow_all() {
         r#"
 host = "127.0.0.1"
 port = 8000
-# Empty cors_origins means allow all
+# Empty cors_origins means deny cross-origin requests
 "#,
     )
     .expect("Operation failed");
 
     let config = ServerConfig::from_file(&config_path).expect("Operation failed");
 
-    assert!(config.cors_allows_all(), "Empty cors_origins should allow all");
-    assert!(config.is_origin_allowed("https://any.com"));
-    assert!(config.is_origin_allowed("http://localhost:3000"));
+    assert!(!config.cors_allows_all(), "Empty cors_origins should deny all");
+    assert!(!config.is_origin_allowed("https://any.com"));
+    assert!(!config.is_origin_allowed("http://localhost:3000"));
 }
 
 #[test]
@@ -482,7 +482,7 @@ port = 8000
         .expect("Operation failed");
 
         let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-        assert!(config.cors_allows_all(), "File config allows all origins");
+        assert!(!config.cors_allows_all(), "File config denies cross-origin by default");
 
         config.apply_env_overrides().expect("Operation failed");
 

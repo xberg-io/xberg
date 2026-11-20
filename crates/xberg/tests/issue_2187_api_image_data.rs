@@ -11,7 +11,7 @@ use axum::{
 use serde_json::{Value, json};
 use tower::ServiceExt;
 use xberg::plugins::{DocumentExtractor, Plugin};
-use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, Result, api::create_router};
+use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, Result};
 
 const MIME: &str = "text/prs.fallenstein.rst";
 const NAME: &str = "issue-2187-image-response";
@@ -309,4 +309,13 @@ async fn should_reject_invalid_multipart_image_data_options() {
                 .contains("include_image_data must be a boolean")
         );
     }
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router(config: ExtractionConfig) -> axum::Router {
+    xberg::api::create_router_with_auth(
+        config,
+        xberg::api::ApiSizeLimits::default(),
+        xberg::api::ApiAuth::new(None, false),
+    )
 }

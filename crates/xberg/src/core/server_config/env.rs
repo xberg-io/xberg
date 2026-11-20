@@ -16,6 +16,9 @@ use crate::{Result, XbergError};
 /// - `XBERG_MAX_MULTIPART_FIELD_BYTES` - Max multipart field size in bytes
 /// - `XBERG_JOB_TIMEOUT_SECS` - Async job fallback timeout in seconds
 ///
+/// Entrypoints that take some of these as arguments apply only the rest with
+/// [`apply_cors_origins_env`] and [`apply_job_timeout_secs_env`].
+///
 /// # Errors
 ///
 /// Returns `XbergError::Validation` if:
@@ -44,13 +47,7 @@ pub(crate) fn apply_env_overrides(
         })?;
     }
 
-    if let Ok(origins_str) = std::env::var("XBERG_CORS_ORIGINS") {
-        *cors_origins = origins_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-    }
+    apply_cors_origins_env(cors_origins);
 
     if let Ok(bytes_str) = std::env::var("XBERG_MAX_REQUEST_BODY_BYTES") {
         *max_request_body_bytes = bytes_str.parse::<usize>().map_err(|e| {
@@ -70,6 +67,28 @@ pub(crate) fn apply_env_overrides(
         })?;
     }
 
+    apply_job_timeout_secs_env(job_timeout_secs)?;
+
+    Ok(())
+}
+
+/// Apply the `XBERG_CORS_ORIGINS` override: a comma-separated list, blank entries dropped.
+pub(crate) fn apply_cors_origins_env(cors_origins: &mut Vec<String>) {
+    if let Ok(origins_str) = std::env::var("XBERG_CORS_ORIGINS") {
+        *cors_origins = origins_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+}
+
+/// Apply the `XBERG_JOB_TIMEOUT_SECS` override.
+///
+/// # Errors
+///
+/// Returns `XbergError::Validation` if the value cannot be parsed as u64.
+pub(crate) fn apply_job_timeout_secs_env(job_timeout_secs: &mut u64) -> Result<()> {
     if let Ok(secs_str) = std::env::var("XBERG_JOB_TIMEOUT_SECS") {
         *job_timeout_secs = secs_str.parse::<u64>().map_err(|e| {
             XbergError::validation(format!(

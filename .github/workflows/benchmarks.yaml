@@ -101,13 +101,13 @@ jobs:
       - name: Validate benchmark scripts
         run: mise run benchmark:validate:scripts
 
+      - name: Provision swap for fat-LTO release links
+        run: mise run benchmark:setup:swap
+
       - name: Cache benchmark harness
         uses: ./.github/actions/cache-benchmark-harness
         with:
           build-profile: release
-
-      - name: Provision swap for all-feature release link
-        run: mise run benchmark:setup:swap
 
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
         run: cargo build --locked --release -p xberg-cli --features all,xberg/sceptre-ocr-tract
