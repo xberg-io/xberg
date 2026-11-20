@@ -84,9 +84,11 @@ pub(crate) fn resize_rgb(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{DynamicImage, ImageBuffer, Rgb};
 
+    #[cfg(feature = "ocr-pipeline")]
     fn create_test_rgb_data(width: u32, height: u32) -> Vec<u8> {
+        use image::{ImageBuffer, Rgb};
+
         let mut image = ImageBuffer::new(width, height);
         for y in 0..height {
             for x in 0..width {
@@ -113,6 +115,8 @@ mod tests {
         new_height: u32,
         scale_factor: f64,
     ) -> Vec<u8> {
+        use image::{DynamicImage, ImageBuffer, Rgb};
+
         let image_buffer = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_raw(width, height, rgb_data.to_vec())
             .expect("reference input dimensions must match its buffer");
         let image = DynamicImage::ImageRgb8(image_buffer);
