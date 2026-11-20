@@ -44,6 +44,7 @@ fn page(content: &str) -> PageContent {
         sheet_name: None,
         ocr_confidence: None,
         native_content: None,
+        geometry: None,
     }
 }
 

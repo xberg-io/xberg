@@ -841,6 +841,10 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
 }
 
 /// Resolve the cache base directory.
+///
+/// An explicit `--cache-dir` wins; otherwise this is the same root the library reads from
+/// (`XBERG_CACHE_DIR`, then the platform cache directory), so `cache warm` stages models
+/// where `serve` and `extract` look for them.
 #[cfg(any(
     feature = "embeddings",
     feature = "layout-detection",
@@ -849,15 +853,7 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
     feature = "ner-onnx"
 ))]
 fn resolve_cache_base(cache_dir: Option<PathBuf>) -> PathBuf {
-    if let Some(dir) = cache_dir {
-        return dir;
-    }
-    if let Ok(env_path) = std::env::var("XBERG_CACHE_DIR") {
-        return PathBuf::from(env_path);
-    }
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".xberg")
+    cache_dir.unwrap_or_else(xberg::cache::resolve_cache_base_dir)
 }
 
 #[cfg(all(test, feature = "paddle-ocr", feature = "sceptre-ocr"))]

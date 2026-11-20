@@ -145,7 +145,13 @@ pub struct TesseractAPI {
     config: Arc<Mutex<TesseractConfiguration>>,
 }
 
+// SAFETY: The engine pointer is only touched through `handle`'s mutex, and every iterator borrows
+// the engine (`'api`) instead of copying the pointer, so moving the value to another thread
+// moves the single owner without duplicating access.
 unsafe impl Send for TesseractAPI {}
+// SAFETY: Every native call runs under `handle`'s mutex, and the shared configuration and result
+// epoch are themselves synchronized, so two threads sharing the engine serialize instead of
+// racing on native state.
 unsafe impl Sync for TesseractAPI {}
 
 /// Validates the arguments to [`TesseractAPI::set_image`] before they are
@@ -430,6 +436,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
+        // SAFETY: `datapath` and `language` are NUL-terminated buffers that outlive the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe { TessBaseAPIInit3(*handle, datapath.as_ptr(), language.as_ptr()) };
         if result != 0 {
             Err(TesseractError::InitError)
@@ -451,6 +459,8 @@ impl TesseractAPI {
         self.with_lazy_recognition(*handle, || {
             let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
 
+            // SAFETY: The returned int array is a new allocation this function adopts below;
+            // The held handle lock keeps the engine live and unchanged for the call.
             let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
             if confidences_ptr.is_null() {
                 return Ok(Vec::new());
@@ -482,6 +492,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
             let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            // SAFETY: The call only reads the engine's confidence accumulator.
+            // The held handle lock keeps the engine live and unchanged for the call.
             Ok(unsafe { TessBaseAPIMeanTextConf(*handle) })
         })
     }
@@ -505,6 +517,8 @@ impl TesseractAPI {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let value = CString::new(value).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Both C strings keep their buffers for the call, during which Tesseract copies them.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe { TessBaseAPISetVariable(*handle, name.as_ptr(), value.as_ptr()) };
         if result != 1 {
             Err(TesseractError::SetVariableError)
@@ -525,10 +539,14 @@ impl TesseractAPI {
     pub fn get_string_variable(&self, name: &str) -> Result<String> {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `name` outlives the call; a non-null result points at Tesseract's internal string and
+        // is copied to a `String` before the lock is released.
         let value_ptr = unsafe { TessBaseAPIGetStringVariable(*handle, name.as_ptr()) };
         if value_ptr.is_null() {
             return Err(TesseractError::GetVariableError);
         }
+        // SAFETY: `value_ptr` is non-null and points at Tesseract's NUL-terminated internal string; the
+        // held lock keeps it valid until the copy below completes.
         let c_str = unsafe { CStr::from_ptr(value_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -547,6 +565,8 @@ impl TesseractAPI {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let mut value: c_int = 0;
+        // SAFETY: `name` outlives the call and `value` is an initialized `c_int` out slot; Tesseract only
+        // writes it when it reports the variable exists.
         let found = unsafe { TessBaseAPIGetIntVariable(*handle, name.as_ptr(), &raw mut value) };
         if found == 0 {
             return Err(TesseractError::GetVariableError);
@@ -568,6 +588,8 @@ impl TesseractAPI {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let mut value: c_int = 0;
+        // SAFETY: `name` outlives the call and `value` is an initialized `c_int` out slot; Tesseract only
+        // writes it when it reports the variable exists.
         let found = unsafe { TessBaseAPIGetBoolVariable(*handle, name.as_ptr(), &raw mut value) };
         if found == 0 {
             return Err(TesseractError::GetVariableError);
@@ -589,6 +611,8 @@ impl TesseractAPI {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let mut value: c_double = 0.0;
+        // SAFETY: `name` outlives the call and `value` is an initialized `c_double` out slot; Tesseract
+        // only writes it when it reports the variable exists.
         let found = unsafe { TessBaseAPIGetDoubleVariable(*handle, name.as_ptr(), &raw mut value) };
         if found == 0 {
             return Err(TesseractError::GetVariableError);
@@ -607,6 +631,8 @@ impl TesseractAPI {
     /// Returns `Ok(())` if setting the page segmentation mode is successful, otherwise returns an error.
     pub fn set_page_seg_mode(&self, mode: TessPageSegMode) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The mode is passed by value into the engine.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPISetPageSegMode(*handle, mode as c_int) };
         Ok(())
     }
@@ -618,6 +644,8 @@ impl TesseractAPI {
     /// Returns the page segmentation mode.
     pub fn get_page_seg_mode(&self) -> Result<TessPageSegMode> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The call only reads the engine's page segmentation mode.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let mode = unsafe { TessBaseAPIGetPageSegMode(*handle) };
         TessPageSegMode::try_from_int(mode).ok_or(TesseractError::InvalidEnumValue(mode))
     }
@@ -671,8 +699,13 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+        // SAFETY: `monitor` is the monitor allocation the caller of this method created and keeps alive
+        // across the call, and it may be null.
+        // The held handle lock keeps the engine live and unchanged for the call.
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe { shim::xberg_tess_recognize(*handle, monitor) };
+        // SAFETY: `monitor` may be null and is kept alive by the caller across the call;
+        // The held handle lock keeps the engine live and unchanged for the call.
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let result = unsafe { TessBaseAPIRecognize(*handle, monitor) };
         if result != 0 {
@@ -700,8 +733,12 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
             let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            // SAFETY: `page` is a plain index and the returned text allocation is checked for null below.
+            // The held handle lock keeps the engine live and unchanged for the call.
             #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
             let text_ptr = unsafe { shim::xberg_tess_get_hocr_text(*handle, page) };
+            // SAFETY: Same contract as the shim call above: a live engine under the held lock, and a
+            // returned allocation that is null-checked before it is copied and released.
             #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
             let text_ptr = unsafe { TessBaseAPIGetHOCRText(*handle, page) };
             if text_ptr.is_null() {
@@ -725,6 +762,8 @@ impl TesseractAPI {
     pub fn get_alto_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
+            // SAFETY: `page` is a plain index; the returned allocation is checked for null before it is copied
+            // and released.
             let text_ptr = unsafe { TessBaseAPIGetAltoText(*handle, page) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -748,6 +787,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
             let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            // SAFETY: `page` is a plain index; the returned allocation is checked for null before it is copied
+            // and released.
             let text_ptr = unsafe { TessBaseAPIGetTsvText(*handle, page) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -770,6 +811,8 @@ impl TesseractAPI {
     pub fn set_input_name(&self, name: &str) -> Result<()> {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `name` keeps its NUL-terminated buffer for the call, during which Tesseract copies it.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPISetInputName(*handle, name.as_ptr()) };
         Ok(())
     }
@@ -781,10 +824,14 @@ impl TesseractAPI {
     /// Returns the input name as a string.
     pub fn get_input_name(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result points at the engine's internal input name, which is copied while the
+        // lock is still held.
         let name_ptr = unsafe { TessBaseAPIGetInputName(*handle) };
         if name_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: `name_ptr` is non-null and points at the engine's NUL-terminated internal string; the held
+        // lock keeps it valid for this copy.
         let c_str = unsafe { CStr::from_ptr(name_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -796,10 +843,14 @@ impl TesseractAPI {
     /// Returns the data path as a string.
     pub fn get_datapath(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result points at the engine's internal data path, which is copied while the
+        // lock is still held.
         let path_ptr = unsafe { TessBaseAPIGetDatapath(*handle) };
         if path_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: `path_ptr` is non-null and points at the engine's NUL-terminated internal string; the held
+        // lock keeps it valid for this copy.
         let c_str = unsafe { CStr::from_ptr(path_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -865,6 +916,8 @@ impl TesseractAPI {
     pub fn get_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
+            // SAFETY: `page` is a plain index; the returned text allocation is null-checked and then adopted by
+            // `copy_owned_native_text` below.
             let text_ptr = unsafe { TessBaseAPIGetBoxText(*handle, page) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -887,6 +940,8 @@ impl TesseractAPI {
     pub fn get_lstm_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
+            // SAFETY: `page` is a plain index; the returned text allocation is null-checked and then adopted by
+            // `copy_owned_native_text` below.
             let text_ptr = unsafe { TessBaseAPIGetLSTMBoxText(*handle, page) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -909,6 +964,8 @@ impl TesseractAPI {
     pub fn get_word_str_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
+            // SAFETY: `page` is a plain index; the returned text allocation is null-checked and then adopted by
+            // `copy_owned_native_text` below.
             let text_ptr = unsafe { TessBaseAPIGetWordStrBoxText(*handle, page) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -927,6 +984,8 @@ impl TesseractAPI {
     pub fn get_unlv_text(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
+            // SAFETY: The returned text allocation is null-checked and then adopted by `copy_owned_native_text`
+            // below.
             let text_ptr = unsafe { TessBaseAPIGetUNLVText(*handle) };
             if text_ptr.is_null() {
                 return Err(TesseractError::OcrError);
@@ -946,16 +1005,22 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.with_lazy_recognition(*handle, || {
             let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            // SAFETY: The returned int array is a new allocation this function owns and frees below;
+            // The held handle lock keeps the engine live and unchanged for the call.
             let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
             if confidences_ptr.is_null() {
                 return Err(TesseractError::OcrError);
             }
             let mut confidences = Vec::new();
             let mut i = 0;
+            // SAFETY: A non-null result from a live engine is an owned int array terminated by -1; starting at
+            // zero and advancing only past a non-sentinel entry keeps the read inside the allocation.
             while unsafe { *confidences_ptr.offset(i) } != -1 {
+                // SAFETY: The loop condition just read this entry at the same index, so the read is in bounds.
                 confidences.push(unsafe { *confidences_ptr.offset(i) });
                 i += 1;
             }
+            // SAFETY: The original allocation is released once, after every value has been copied.
             unsafe { TessDeleteIntArray(confidences_ptr) };
             Ok(confidences)
         })
@@ -977,6 +1042,8 @@ impl TesseractAPI {
         // AdaptToWordStr may recognize on demand and then replaces the page results. ~keep
         self.invalidate_results();
         let wordstr = CString::new(wordstr).map_err(|_| TesseractError::NullByteInString)?;
+        // SAFETY: `wordstr` keeps its NUL-terminated buffer for the call; the results were invalidated
+        // above because adaptation may replace them.
         let result = unsafe { TessBaseAPIAdaptToWordStr(*handle, mode, wordstr.as_ptr()) };
         Ok(result != 0)
     }
@@ -994,6 +1061,9 @@ impl TesseractAPI {
         let mut orient_conf = 0.0;
         let mut script_name_ptr: *const c_char = std::ptr::null();
         let mut script_conf = 0.0;
+        // SAFETY: All out slots are initialized locals the shim writes through, and it may leave the script
+        // pointer null, which the caller handles.
+        // The held handle lock keeps the engine live and unchanged for the call.
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe {
             shim::xberg_tess_detect_orientation_script(
@@ -1004,6 +1074,8 @@ impl TesseractAPI {
                 &mut script_conf,
             )
         };
+        // SAFETY: Same contract as the shim call above: initialized out slots, a possibly null script
+        // pointer the caller handles, and a live engine under the held lock.
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let result = unsafe {
             TessBaseAPIDetectOrientationScript(
@@ -1039,6 +1111,8 @@ impl TesseractAPI {
     /// Returns `Ok(())` if setting the minimum orientation margin is successful, otherwise returns an error.
     pub fn set_min_orientation_margin(&self, margin: f64) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The margin is passed by value into the engine.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPISetMinOrientationMargin(*handle, margin) };
         Ok(())
     }
@@ -1050,6 +1124,8 @@ impl TesseractAPI {
     /// Returns a `PageIterator` object.
     pub fn get_page_iterator(&self) -> Result<PageIterator<'_>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is a new iterator allocation for the current recognition result; the
+        // null check rejects failure and `PageIterator::from_raw` adopts the allocation.
         let iterator = unsafe { TessBaseAPIGetIterator(*handle) };
         if iterator.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -1071,6 +1147,8 @@ impl TesseractAPI {
     pub fn set_input_image(&self, pix: *mut c_void) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
+        // SAFETY: `pix` is the caller's Leptonica PIX, whose liveness this signature cannot check (#3228);
+        // the engine takes it as its input image for the call's duration.
         unsafe { TessBaseAPISetInputImage(*handle, pix) };
         Ok(())
     }
@@ -1082,6 +1160,8 @@ impl TesseractAPI {
     /// Returns a pointer to the input image.
     pub fn get_input_image(&self) -> Result<*mut c_void> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is the engine's own PIX, valid only while the engine keeps it; the lock
+        // is held for that reason and the pointer is not freed here.
         let pix = unsafe { TessBaseAPIGetInputImage(*handle) };
         if pix.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1102,6 +1182,8 @@ impl TesseractAPI {
     pub fn set_output_name(&self, name: &str) -> Result<()> {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `name` keeps its NUL-terminated buffer for the call, during which Tesseract copies it.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPISetOutputName(*handle, name.as_ptr()) };
         Ok(())
     }
@@ -1120,6 +1202,8 @@ impl TesseractAPI {
         let name = CString::new(name).map_err(|_| TesseractError::NullByteInString)?;
         let value = CString::new(value).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: Both C strings keep their buffers for the call, during which Tesseract copies them.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe { TessBaseAPISetDebugVariable(*handle, name.as_ptr(), value.as_ptr()) };
         if result != 1 {
             Err(TesseractError::SetVariableError)
@@ -1140,6 +1224,8 @@ impl TesseractAPI {
     pub fn print_variables_to_file(&self, filename: &str) -> Result<()> {
         let filename = CString::new(filename).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `filename` keeps its NUL-terminated buffer for the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe { TessBaseAPIPrintVariablesToFile(*handle, filename.as_ptr()) };
         if result != 0 {
             Err(TesseractError::IoError)
@@ -1156,6 +1242,8 @@ impl TesseractAPI {
     pub fn init_for_analyse_page(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
+        // SAFETY: The engine is initialized; the call only resets its layout state.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPIInitForAnalysePage(*handle) };
         Ok(())
     }
@@ -1171,6 +1259,8 @@ impl TesseractAPI {
     pub fn read_config_file(&self, filename: &str) -> Result<()> {
         let filename = CString::new(filename).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `filename` keeps its NUL-terminated buffer for the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPIReadConfigFile(*handle, filename.as_ptr()) };
         Ok(())
     }
@@ -1187,6 +1277,8 @@ impl TesseractAPI {
     pub fn read_debug_config_file(&self, filename: &str) -> Result<()> {
         let filename = CString::new(filename).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `filename` keeps its NUL-terminated buffer for the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPIReadDebugConfigFile(*handle, filename.as_ptr()) };
         Ok(())
     }
@@ -1232,6 +1324,9 @@ impl TesseractAPI {
         self.invalidate_results();
         // `TessBaseAPIProcessPages` returns a success flag; the text of every page is written
         // by the renderer, so it is read back from the renderer's output file. ~keep
+        // SAFETY: `filename` and `retry_ptr` (when non-null) stay live for the call, and `renderer_handle`
+        // is borrowed from the renderer kept alive until after the lock is dropped.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let succeeded = unsafe {
             TessBaseAPIProcessPages(*handle, filename.as_ptr(), retry_ptr, timeout_millisec, renderer_handle)
         } != 0;
@@ -1353,6 +1448,8 @@ impl TesseractAPI {
     /// Returns `Ok(())` if clearing the adaptive classifier is successful, otherwise returns an error.
     pub fn clear_adaptive_classifier(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: The call only resets the engine's adaptive classifier.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPIClearAdaptiveClassifier(*handle) };
         Ok(())
     }
@@ -1366,8 +1463,12 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+        // SAFETY: The shim reaches the same engine through the live handle.
+        // The held handle lock keeps the engine live and unchanged for the call.
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
         let result = unsafe { shim::xberg_tess_clear(*handle) };
+        // SAFETY: Same contract as the shim call above: Clear runs on the live engine under the
+        // held lock and touches no Rust memory.
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let result = {
             unsafe { TessBaseAPIClear(*handle) };
@@ -1388,6 +1489,8 @@ impl TesseractAPI {
     pub fn end(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
+        // SAFETY: The engine stays allocated; End only releases its recognition state.
+        // The held handle lock keeps the engine live and unchanged for the call.
         unsafe { TessBaseAPIEnd(*handle) };
         Ok(())
     }
@@ -1404,6 +1507,8 @@ impl TesseractAPI {
     pub fn is_valid_word(&self, word: &str) -> Result<i32> {
         let word = CString::new(word).map_err(|_| TesseractError::NullByteInString)?;
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `word` keeps its NUL-terminated buffer for the call, which only reads the engine's
+        // dictionary.
         Ok(unsafe { TessBaseAPIIsValidWord(*handle, word.as_ptr()) })
     }
 
@@ -1420,6 +1525,8 @@ impl TesseractAPI {
         self.invalidate_results();
         let mut out_offset = 0;
         let mut out_slope = 0.0;
+        // SAFETY: Both out slots are initialized locals Tesseract writes through; the results were
+        // invalidated above because layout analysis replaces them.
         let succeeded = unsafe { TessBaseAPIGetTextDirection(*handle, &mut out_offset, &mut out_slope) } != 0;
         if succeeded {
             Ok((out_offset, out_slope))
@@ -1451,6 +1558,9 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
+        // SAFETY: `datapath` and `language` are NUL-terminated buffers, `config_ptrs` keeps the config
+        // strings alive, and `config_ptr_ptrs` holds their pointers; all outlive the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe {
             TessBaseAPIInit1(
                 *handle,
@@ -1485,6 +1595,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
+        // SAFETY: `datapath` and `language` are NUL-terminated buffers that outlive the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe { TessBaseAPIInit2(*handle, datapath.as_ptr(), language.as_ptr(), oem) };
         if result != 0 {
             Err(TesseractError::InitError)
@@ -1516,6 +1628,10 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
+        // SAFETY: `datapath` and `language` are NUL-terminated buffers, `config_ptrs` keeps the config
+        // strings alive, and the null var arrays are paired with zero counts, so nothing is read
+        // through them.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe {
             TessBaseAPIInit4(
                 *handle,
@@ -1560,6 +1676,9 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::InitError)?;
+        // SAFETY: The call reads `data_size` bytes from `data`, a bound the caller must keep within the
+        // slice; the language and config strings outlive the call.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let result = unsafe {
             TessBaseAPIInit5(
                 *handle,
@@ -1646,6 +1765,9 @@ impl TesseractAPI {
         // PIX that no other thread uses during the call, the contract tracked in #3228. The
         // thresholder copies the image and keeps no reference to `pix`, but Tesseract strips
         // a PNG alpha channel by rewriting `pix` in place first. ~keep
+        // SAFETY: The safe signature cannot check `pix`: soundness rests on the caller passing a live PIX
+        // that no other thread uses during the call (the contract in #3228), and Tesseract may
+        // rewrite it in place before copying it.
         unsafe { TessBaseAPISetImage2(*handle, pix) };
         Ok(())
     }
@@ -1709,8 +1831,12 @@ impl TesseractAPI {
                 return Err(TesseractError::UninitializedError);
             }
 
+            // SAFETY: The handle was checked for null above and the returned allocation is null-checked below;
+            // The held handle lock keeps the engine live and unchanged for the call.
             #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
             let text_ptr = unsafe { shim::xberg_tess_get_utf8_text(*handle) };
+            // SAFETY: Same contract as the shim call above: a live engine under the held lock, and a
+            // returned allocation that is null-checked before it is copied and released.
             #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
             let text_ptr = unsafe { TessBaseAPIGetUTF8Text(*handle) };
             if text_ptr.is_null() {
@@ -1733,6 +1859,8 @@ impl TesseractAPI {
     /// Returns the iterator for the OCR results as a `ResultIterator` if successful, otherwise returns an error.
     pub fn get_iterator(&self) -> Result<ResultIterator<'_>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is a new iterator allocation for the current result; `ResultIterator`
+        // adopts it below and the null check rejects failure.
         let iterator = unsafe { TessBaseAPIGetIterator(*handle) };
         if iterator.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1750,6 +1878,8 @@ impl TesseractAPI {
     /// Returns the mutable iterator for the OCR results as a `MutableIterator` if successful, otherwise returns an error.
     pub fn get_mutable_iterator(&self) -> Result<MutableIterator<'_>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is a new mutable iterator allocation for the current result; the null
+        // check rejects failure and `MutableIterator` adopts it below.
         let iterator = unsafe { TessBaseAPIGetMutableIterator(*handle) };
         if iterator.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1769,6 +1899,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
+        // SAFETY: A non-null result is a new iterator over the layout analysis just run; the null check
+        // rejects failure and `PageIterator` adopts it below.
         let iterator = unsafe { TessBaseAPIAnalyseLayout(*handle) };
         if iterator.is_null() {
             Err(TesseractError::NullPointerError)
@@ -1790,10 +1922,14 @@ impl TesseractAPI {
     /// Returns the Unicode character as a String if successful, otherwise returns an error.
     pub fn get_unichar(&self, unichar_id: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result points at Tesseract's NUL-terminated static string for the id; it is
+        // copied below and must not be freed by the caller.
         let char_ptr = unsafe { TessBaseAPIGetUnichar(*handle, unichar_id) };
         if char_ptr.is_null() {
             Err(TesseractError::NullPointerError)
         } else {
+            // SAFETY: `char_ptr` is non-null and points at Tesseract's static NUL-terminated string; the copy
+            // completes before the pointer is dropped.
             let c_str = unsafe { CStr::from_ptr(char_ptr) };
             Ok(c_str.to_str()?.to_owned())
         }
@@ -1804,6 +1940,8 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
+        // SAFETY: A non-null result is a new iterator over the layout analysis just run; the null check
+        // rejects failure and `PageIterator` adopts it below.
         let iterator = unsafe { TessBaseAPIAnalyseLayout(*handle) };
         if iterator.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -1836,6 +1974,9 @@ impl TesseractAPI {
     /// ```
     pub fn get_words(&self) -> Result<BoundingBoxArray> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is a new Leptonica BOXA this function owns; null is the documented
+        // empty result and is returned without touching it.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let boxa = unsafe { TessBaseAPIGetWords(*handle, std::ptr::null_mut()) };
         if boxa.is_null() {
             return Ok(BoundingBoxArray {
@@ -1844,6 +1985,8 @@ impl TesseractAPI {
                 para_ids: None,
             });
         }
+        // SAFETY: `boxa` is the non-null BOXA returned above and owned by this function for the rest of the
+        // call; the count is read from it before any box is touched.
         let count = unsafe { boxaGetCount(boxa) };
         let mut boxes = Vec::with_capacity(boxa_count_to_usize(count));
         for i in 0..count {
@@ -1851,8 +1994,12 @@ impl TesseractAPI {
             let mut y = 0_i32;
             let mut w = 0_i32;
             let mut h = 0_i32;
+            // SAFETY: `boxa` owns its boxes and `i` is below the count just read; the returned box is borrowed
+            // from `boxa` and only used before `boxaDestroy`.
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
+                // SAFETY: `bx` is non-null and borrowed from the live `boxa`; the four out slots are initialized
+                // locals, and level 0 returns a reference to `bx` only for the duration of the call.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
@@ -1860,6 +2007,8 @@ impl TesseractAPI {
             }
         }
         let mut boxa_mut = boxa;
+        // SAFETY: The BOXA is owned by this function and released exactly once, after every geometry has
+        // been copied; `boxa_mut` is the only alias.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
@@ -1890,6 +2039,9 @@ impl TesseractAPI {
     /// ```
     pub fn get_regions(&self) -> Result<BoundingBoxArray> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: A non-null result is a new Leptonica BOXA this function owns; null is the documented
+        // empty result and is returned without touching it.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let boxa = unsafe { TessBaseAPIGetRegions(*handle, std::ptr::null_mut()) };
         if boxa.is_null() {
             return Ok(BoundingBoxArray {
@@ -1898,6 +2050,8 @@ impl TesseractAPI {
                 para_ids: None,
             });
         }
+        // SAFETY: `boxa` is the non-null BOXA returned above and owned by this function for the rest of the
+        // call; the count is read before any box is touched.
         let count = unsafe { boxaGetCount(boxa) };
         let mut boxes = Vec::with_capacity(boxa_count_to_usize(count));
         for i in 0..count {
@@ -1905,8 +2059,12 @@ impl TesseractAPI {
             let mut y = 0_i32;
             let mut w = 0_i32;
             let mut h = 0_i32;
+            // SAFETY: `boxa` owns its boxes and `i` is below the count just read; the returned box is borrowed
+            // from `boxa` and only used before `boxaDestroy`.
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
+                // SAFETY: `bx` is non-null and borrowed from the live `boxa`; the four out slots are initialized
+                // locals, and level 0 returns a reference to `bx` only for the duration of the call.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
@@ -1914,6 +2072,8 @@ impl TesseractAPI {
             }
         }
         let mut boxa_mut = boxa;
+        // SAFETY: The BOXA is owned by this function and released exactly once, after every geometry has
+        // been copied.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
@@ -1950,6 +2110,9 @@ impl TesseractAPI {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let mut blockids_ptr: *mut c_int = std::ptr::null_mut();
         let mut paraids_ptr: *mut c_int = std::ptr::null_mut();
+        // SAFETY: The two out slots start null and receive owned int arrays (or stay null) exactly as the
+        // null checks below expect.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let boxa = unsafe {
             TessBaseAPIGetTextlines1(*handle, 0, 0, std::ptr::null_mut(), &mut blockids_ptr, &mut paraids_ptr)
         };
@@ -1960,6 +2123,8 @@ impl TesseractAPI {
                 para_ids: None,
             });
         }
+        // SAFETY: `boxa` is the non-null BOXA returned above and owned by this function for the rest of the
+        // call.
         let count = unsafe { boxaGetCount(boxa) };
         let n = boxa_count_to_usize(count);
         let mut boxes = Vec::with_capacity(n);
@@ -1978,27 +2143,41 @@ impl TesseractAPI {
             let mut y = 0_i32;
             let mut w = 0_i32;
             let mut h = 0_i32;
+            // SAFETY: `boxa` owns its boxes and `i` is below the count just read; the returned box is borrowed
+            // from `boxa` and only used before `boxaDestroy`.
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
+                // SAFETY: `bx` is non-null and borrowed from the live `boxa`; the four out slots are initialized
+                // locals, and level 0 returns a reference to `bx` only for the duration of the call.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
                     if let Some(ref mut ids) = block_ids_vec {
+                        // SAFETY: `blockids_ptr` is the non-null array Tesseract returned for this boxa, with one
+                        // box, and `i` is below that count.
                         ids.push(unsafe { *blockids_ptr.offset(i as isize) });
                     }
                     if let Some(ref mut ids) = para_ids_vec {
+                        // SAFETY: `paraids_ptr` is the non-null array Tesseract returned for this boxa, with one
+                        // box, and `i` is below that count.
                         ids.push(unsafe { *paraids_ptr.offset(i as isize) });
                     }
                 }
             }
         }
         if !blockids_ptr.is_null() {
+            // SAFETY: The array was returned by Tesseract for this call and is released once, after every id has
+            // been copied.
             unsafe { TessDeleteIntArray(blockids_ptr) };
         }
         if !paraids_ptr.is_null() {
+            // SAFETY: The array was returned by Tesseract for this call and is released once, after every id has
+            // been copied.
             unsafe { TessDeleteIntArray(paraids_ptr) };
         }
         let mut boxa_mut = boxa;
+        // SAFETY: The BOXA is owned by this function and released exactly once, after every geometry and id
+        // has been copied.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
@@ -2035,6 +2214,9 @@ impl TesseractAPI {
     pub fn get_component_images(&self, level: TessPageIteratorLevel, text_only: bool) -> Result<BoundingBoxArray> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let mut blockids_ptr: *mut c_int = std::ptr::null_mut();
+        // SAFETY: The block-id out slot starts null and receives an owned array (or stays null) exactly as
+        // the null check below expects.
+        // The held handle lock keeps the engine live and unchanged for the call.
         let boxa = unsafe {
             TessBaseAPIGetComponentImages(
                 *handle,
@@ -2051,6 +2233,8 @@ impl TesseractAPI {
                 para_ids: None,
             });
         }
+        // SAFETY: `boxa` is the non-null BOXA returned above and owned by this function for the rest of the
+        // call.
         let count = unsafe { boxaGetCount(boxa) };
         let n = boxa_count_to_usize(count);
         let mut boxes = Vec::with_capacity(n);
@@ -2064,21 +2248,31 @@ impl TesseractAPI {
             let mut y = 0_i32;
             let mut w = 0_i32;
             let mut h = 0_i32;
+            // SAFETY: `boxa` owns its boxes and `i` is below the count just read; the returned box is borrowed
+            // from `boxa` and only used before `boxaDestroy`.
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
+                // SAFETY: `bx` is non-null and borrowed from the live `boxa`; the four out slots are initialized
+                // locals, and level 0 returns a reference to `bx` only for the duration of the call.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
                     if let Some(ref mut ids) = block_ids_vec {
+                        // SAFETY: `blockids_ptr` is the non-null array Tesseract returned for this boxa, with one
+                        // box, and `i` is below that count.
                         ids.push(unsafe { *blockids_ptr.offset(i as isize) });
                     }
                 }
             }
         }
         if !blockids_ptr.is_null() {
+            // SAFETY: The array was returned by Tesseract for this call and is released once, after every id has
+            // been copied.
             unsafe { TessDeleteIntArray(blockids_ptr) };
         }
         let mut boxa_mut = boxa;
+        // SAFETY: The BOXA is owned by this function and released exactly once, after every geometry and id
+        // has been copied.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
@@ -2098,14 +2292,22 @@ impl TesseractAPI {
         self.invalidate_results();
         let _call = NativeCall::start().ok_or(TesseractError::AnalyseLayoutError)?;
 
+        // SAFETY: The result is checked together with the result iterator below; on partial failure the
+        // non-null iterator is deleted there.
         let page_iter = unsafe { TessBaseAPIAnalyseLayout(*handle) };
+        // SAFETY: The result is checked together with the page iterator below; on partial failure the
+        // non-null iterator is deleted there.
         let result_iter = unsafe { TessBaseAPIGetIterator(*handle) };
 
         if page_iter.is_null() || result_iter.is_null() {
             if !page_iter.is_null() {
+                // SAFETY: `page_iter` is non-null here, was created by this engine under the held lock, and is
+                // deleted once because it is not handed to a wrapper.
                 unsafe { TessPageIteratorDelete(page_iter) };
             }
             if !result_iter.is_null() {
+                // SAFETY: `result_iter` is non-null here, was created by this engine under the held lock, and is
+                // deleted once because it is not handed to a wrapper.
                 unsafe { TessResultIteratorDelete(result_iter) };
             }
             return Err(TesseractError::NullPointerError);
@@ -2173,6 +2375,8 @@ impl Clone for TesseractAPI {
                 variables: HashMap::new(),
             });
 
+        // SAFETY: The constructor takes no pointers; a non-null result is a new engine allocation stored in
+        // the clone's own handle slot.
         let new_handle = unsafe { TessBaseAPICreate() };
         let generation = if new_handle.is_null() {
             0
@@ -2400,6 +2604,8 @@ fn finalize_idle_engines() {
         }
         let handle = engine.addr as *mut c_void;
         if !handle.is_null() {
+            // SAFETY: The registry lock is held and the entry is idle, so no owner can take the engine back
+            // while it is ended and freed here; the address came from the same entry.
             unsafe {
                 TessBaseAPIEnd(handle);
                 TessBaseAPIDelete(handle);
@@ -2412,6 +2618,8 @@ fn finalize_idle_engines() {
 #[cfg(not(target_arch = "wasm32"))]
 static TESSERACT_CLEANUP: OnceLock<()> = OnceLock::new();
 
+// SAFETY: Declaration only: `atexit` is the C runtime's registration function with this
+// signature, and the handler it receives is `extern "C"` and never unwinds.
 #[cfg(not(target_arch = "wasm32"))]
 unsafe extern "C" {
     fn atexit(f: extern "C" fn()) -> c_int;
@@ -2456,6 +2664,8 @@ extern "C" fn tesseract_atexit_cleanup() {
 /// destructors after an exported call returns. Registering there would set
 /// [`PROCESS_EXITING`] after the first recognition and refuse every later engine.
 fn ensure_tesseract_cleanup_registered() {
+    // SAFETY: `atexit` only stores the function pointer, and a failed registration is ignored; the
+    // handler itself is safe to install once per process.
     #[cfg(not(target_arch = "wasm32"))]
     let _ = TESSERACT_CLEANUP.get_or_init(|| unsafe {
         let _ = atexit(tesseract_atexit_cleanup);
@@ -2617,6 +2827,8 @@ ffi_extern! {
 #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
 mod shim {
     use std::os::raw::{c_char, c_float, c_int, c_void};
+    // SAFETY: Declaration only: these are the C++ shim entry points built by `build.rs`, and
+    // each call site passes a live engine handle and the out slots the signature expects.
     unsafe extern "C" {
         pub(super) fn xberg_tess_recognize(handle: *mut c_void, monitor: *mut c_void) -> c_int;
         pub(super) fn xberg_tess_get_hocr_text(handle: *mut c_void, page: c_int) -> *mut c_char;
@@ -2927,6 +3139,8 @@ mod live_engine_tests {
             "a forgotten engine must stay registered so the exit cleanup can End it"
         );
         assert!(unregister_engine(addr as *mut c_void, generation));
+        // SAFETY: The engine was forgotten, so this test is its only owner; it is ended and deleted once
+        // after the registry entry was removed.
         unsafe {
             TessBaseAPIEnd(addr as *mut c_void);
             TessBaseAPIDelete(addr as *mut c_void);

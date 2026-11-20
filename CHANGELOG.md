@@ -80,7 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+- **pdf:** `pdf_options.extract_vector_geometry` (default `false`) returns each PDF page's vector geometry on `pages[].geometry`: every painted path's subpaths, segments, bounding box, fill colour, stroke colour/width/dash, and Optional Content layer, in page coordinates with the content-stream and Form XObject transforms applied. The coordinate frame is the same one text bounds use, so a label can be matched to the shape it annotates. Off by default because a dense drawing sheet can hold more than ten thousand paths. (#2966)
+- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
 
 ### Changed
 
@@ -91,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **layout:** `serve` and `extract` read layout models from the Xberg cache (`XBERG_CACHE_DIR/layout`, the platform cache directory by default) before the Hugging Face cache, so the models the Docker image warms at build time are used instead of downloaded again; a warmed model now resolves with `HF_HUB_OFFLINE=1` and no Hub request. `cache warm` defaults to the same root as the runtime instead of `.xberg` in the current directory, and `xberg::cache::resolve_cache_base_dir()` exposes the resolved root. (#3320)
 - **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
 - **pdf:** A born-digital equation line is written as display math (`$$...$$`) and an equation inside a sentence as inline math (`$...$`) in Markdown, instead of plain text; Plain keeps the undelimited source. (#2331)
 - **pdf:** A running header or footer whose only change is its page number no longer stays in the body, on native and scanned pages. Scanned pages also strip cross-page furniture by default, matching `ContentFilterConfig::strip_repeating_text`. (#2331)

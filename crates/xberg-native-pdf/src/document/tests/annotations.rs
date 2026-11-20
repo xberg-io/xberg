@@ -100,13 +100,11 @@ fn test_parse_string_value_static_none() {
 }
 
 #[test]
-fn test_decode_pdf_text_string_utf8_bom_treated_as_pdfdoc() {
-    // UTF-8 BOM (EF BB BF) is NOT recognized by this function;
-    // it only handles UTF-16 BOMs. Bytes fall through to PDFDocEncoding. ~keep
+fn test_decode_pdf_text_string_utf8_bom() {
+    // PDF 2.0 allows UTF-8 text strings introduced by an EF BB BF BOM.
     let bytes = vec![0xEF, 0xBB, 0xBF, b'H', b'e', b'l', b'l', b'o'];
     let result = PdfDocument::decode_pdf_text_string(&bytes);
-    // 0xEF -> ï, 0xBB -> », 0xBF -> ¿ in PDFDocEncoding (Latin-1 range) ~keep
-    assert_eq!(result, "\u{00EF}\u{00BB}\u{00BF}Hello");
+    assert_eq!(result, "Hello");
 }
 
 #[test]

@@ -47,3 +47,48 @@ cache or running inference.
 
 You can point the reranker and embedding `Custom` presets at any compatible
 ONNX repository on the Hub; see the [reranking](/guides/reranking/) guide.
+
+## Offline and air-gapped use
+
+Warm one directory on a machine with network access, copy it to the target host, and run with the
+same environment plus `HF_HUB_OFFLINE=1`.
+
+```bash title="Terminal"
+# On a connected host: one root for both cache layouts
+export XBERG_CACHE_DIR=/srv/xberg-cache
+export HF_HUB_CACHE=/srv/xberg-cache/huggingface
+xberg cache warm --all-table-models   # add --all-embeddings, --ner, --all-grammars as needed
+
+# On the offline host: the same variables, plus offline mode
+export XBERG_CACHE_DIR=/srv/xberg-cache
+export HF_HUB_CACHE=/srv/xberg-cache/huggingface
+export HF_HUB_OFFLINE=1
+xberg doctor        # reports each capability as available, cached or missing
+xberg serve --host 0.0.0.0 --port 8000
+```
+
+`HF_HUB_OFFLINE=1` (or `HUGGINGFACE_HUB_OFFLINE=1`) makes every Hub lookup local-only, so a missing
+model fails immediately with an `offline mode is enabled` error instead of retrying the network. Only
+warm on the connected host: `cache warm` obeys the same flag and cannot download.
+
+`XBERG_CACHE_DIR` is read by `cache warm`, `serve`, `extract`, the MCP server and `doctor` alike, so
+one value keeps them on the same models. `--cache-dir` on `cache warm` overrides it for warming only;
+the runtime processes still read `XBERG_CACHE_DIR` (and the Hugging Face variables for Hub-downloaded
+artifacts), so prefer the environment variables when the warm and serving hosts differ.
+
+| Feature | Warmed by `cache warm` | Stored under |
+| ------- | ---------------------- | ------------ |
+| Layout detection and table structure — RT-DETR, TATR | Always | `XBERG_CACHE_DIR/layout/` |
+| Layout option — PP-DocLayout-V3 (~131 MB) | `--layout-model pp_doc_layout_v3` | `XBERG_CACHE_DIR/layout/` |
+| Layout option — SLANeXt wired/wireless, SLANet+, table classifier (~730 MB) | `--all-table-models` | `XBERG_CACHE_DIR/layout/` |
+| Tesseract language data | Always (OCR builds) | `XBERG_CACHE_DIR/tessdata/` |
+| Formula recognition (LaTeX-OCR) | Always when compiled in | `XBERG_CACHE_DIR/formula-recognition/` |
+| PaddleOCR — detection, classification, recognition, orientation | Always (OCR builds) | Hugging Face cache (`HF_HUB_CACHE`) |
+| Dense, sparse and late-interaction embeddings | `--all-embeddings` or `--embedding-model <preset>` | Hugging Face cache |
+| Rerankers, tokenizers, Whisper | On first use; no warm flag | Hugging Face cache |
+| GLiNER NER | `--ner`, `--ner-model <model>` or `--all-ner-models` | Hugging Face cache |
+
+Layout models are read from `XBERG_CACHE_DIR/layout/` first and fall back to the Hugging Face cache,
+so a layout model staged by an earlier `cache warm` needs no Hub request. `cache manifest` lists every
+model file with its SHA-256 digest and size if you pre-populate caches by other means.
+

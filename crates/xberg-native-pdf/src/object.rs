@@ -78,6 +78,63 @@ pub fn encode_pdf_text_string(s: &str) -> Vec<u8> {
     }
 }
 
+/// Decode a PDF text string byte sequence.
+///
+/// A text string is either PDFDocEncoding, UTF-16BE with a `FE FF` byte order
+/// mark, or — in PDF 2.0 — UTF-8 with an `EF BB BF` byte order mark
+/// (ISO 32000-1 §7.9.2.2, ISO 32000-2 §7.9.2.2). UTF-16LE with a `FF FE` BOM is
+/// accepted leniently because producers emit it even though it is not the
+/// specified form. Valid UTF-8 without a BOM is also accepted leniently.
+///
+/// Language-tag escape sequences (`ESC` … `ESC`, §7.9.2.2) are removed, as is
+/// the trailing NUL terminator some producers append to C-string text.
+pub fn decode_pdf_text_string(bytes: &[u8]) -> String {
+    let decoded = if bytes.starts_with(&[0xFE, 0xFF]) {
+        decode_utf16(&bytes[2..], u16::from_be_bytes)
+    } else if bytes.starts_with(&[0xFF, 0xFE]) {
+        decode_utf16(&bytes[2..], u16::from_le_bytes)
+    } else if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        String::from_utf8_lossy(&bytes[3..]).into_owned()
+    } else {
+        match std::str::from_utf8(bytes) {
+            Ok(text) => text.to_string(),
+            Err(_) => bytes
+                .iter()
+                .filter_map(|&b| crate::fonts::font_dict::pdfdoc_encoding_lookup(b))
+                .collect(),
+        }
+    };
+    strip_language_tags(&decoded).trim_end_matches('\0').to_string()
+}
+
+fn decode_utf16(bytes: &[u8], to_unit: fn([u8; 2]) -> u16) -> String {
+    let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|chunk| to_unit(*chunk)).collect();
+    String::from_utf16_lossy(&units)
+}
+
+/// Remove `ESC`-delimited language identifiers (§7.9.2.2). An unterminated
+/// escape sequence is kept as-is rather than swallowing the rest of the string.
+fn strip_language_tags(text: &str) -> String {
+    if !text.contains('\u{1B}') {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('\u{1B}') {
+        out.push_str(&rest[..start]);
+        let after_escape = &rest[start + 1..];
+        match after_escape.find('\u{1B}') {
+            Some(end) => rest = &after_escape[end + 1..],
+            None => {
+                out.push_str(&rest[start..]);
+                return out;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 impl Object {
     /// Create a PDF text string object from a Rust string.
     ///

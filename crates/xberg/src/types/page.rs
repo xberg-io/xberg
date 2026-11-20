@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::Arc;
 
 use super::extraction::BoundingBox;
+use super::geometry::PageGeometry;
 use super::serde_helpers::serde_vec_arc;
 use super::tables::Table;
 
@@ -276,6 +277,17 @@ pub struct PageContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "alef-meta", alef(since = "1.3.8"))]
     pub native_content: Option<String>,
+
+    /// Vector geometry (lines, curves and filled shapes) of this page.
+    ///
+    /// Set only for PDF pages when `pdf_options.extract_vector_geometry` is on; `None` on
+    /// every other page, for every other format, and on a page that drew no path. Coordinates
+    /// are in page points with y increasing upwards — the same frame as text bounds in
+    /// [`ElementMetadata::coordinates`](super::ElementMetadata) — and content-stream and Form
+    /// XObject transforms are already applied. See [`PageGeometry`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "api", schema(nullable = false))]
+    pub geometry: Option<PageGeometry>,
 }
 
 /// Aggregate OCR legibility score for a page, reported by the backend that produced its text.
@@ -475,7 +487,10 @@ fn is_default_bool(v: &bool) -> bool {
 
 #[cfg(test)]
 mod binding_value_serde_tests {
-    use super::{HierarchicalBlock, HierarchicalBoundingBox, PageContent, PageDimensions, PageInfo, PageOcrConfidence};
+    use super::{
+        HierarchicalBlock, HierarchicalBoundingBox, PageContent, PageDimensions, PageGeometry, PageInfo,
+        PageOcrConfidence,
+    };
     use serde_json::json;
 
     #[cfg(feature = "api")]
@@ -627,6 +642,7 @@ mod binding_value_serde_tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }
     }
 
@@ -710,5 +726,44 @@ mod binding_value_serde_tests {
 
         assert_eq!(page.native_content, None);
         assert_eq!(page.content, "hello");
+    }
+
+    #[test]
+    fn geometry_is_omitted_when_absent_and_round_trips_when_present() {
+        let absent = serde_json::to_value(page_content_without_ocr_confidence()).expect("the page serializes");
+        assert!(
+            !absent
+                .as_object()
+                .expect("the page serializes as an object")
+                .contains_key("geometry"),
+            "an absent geometry must not be serialized: {absent}"
+        );
+
+        let mut page = page_content_without_ocr_confidence();
+        page.geometry = Some(PageGeometry {
+            paths: vec![crate::types::VectorPath {
+                bounding_box: crate::types::BoundingBox {
+                    x0: 72.0,
+                    y0: 700.0,
+                    x1: 300.0,
+                    y1: 700.0,
+                },
+                ..Default::default()
+            }],
+        });
+
+        let present = serde_json::to_value(&page).expect("the page serializes");
+        assert_eq!(
+            present["geometry"],
+            json!({
+                "paths": [{
+                    "bounding_box": {"x0": 72.0, "y0": 700.0, "x1": 300.0, "y1": 700.0}
+                }]
+            })
+        );
+
+        let round_tripped: PageContent = serde_json::from_value(present).expect("the page deserializes");
+        assert_eq!(round_tripped.geometry, page.geometry);
+        assert_eq!(round_tripped.content, "hello");
     }
 }

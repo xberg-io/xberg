@@ -15,7 +15,7 @@
 use crate::annotation_types::{AnnotationFlags, AnnotationSubtype, WidgetFieldType};
 use crate::document::PdfDocument;
 use crate::error::Result;
-use crate::object::Object;
+use crate::object::{Object, decode_pdf_text_string};
 
 /// A PDF annotation.
 ///
@@ -497,7 +497,7 @@ impl PdfDocument {
 
     fn pdf_string_field(dict: &std::collections::HashMap<String, Object>, key: &str) -> Option<String> {
         dict.get(key).and_then(|v| match v {
-            Object::String(s) => Some(String::from_utf8_lossy(s).to_string()),
+            Object::String(s) => Some(decode_pdf_text_string(s)),
             _ => None,
         })
     }
@@ -505,7 +505,7 @@ impl PdfDocument {
     /// Parse a string value from various PDF object types.
     fn parse_string_value(obj: Option<&Object>) -> Option<String> {
         match obj {
-            Some(Object::String(s)) => Some(String::from_utf8_lossy(s).to_string()),
+            Some(Object::String(s)) => Some(decode_pdf_text_string(s)),
             Some(Object::Name(n)) => Some(n.clone()),
             Some(Object::Integer(i)) => Some(i.to_string()),
             Some(Object::Real(f)) => Some(f.to_string()),
@@ -520,12 +520,12 @@ impl PdfDocument {
                 let opts: Vec<String> = arr
                     .iter()
                     .filter_map(|o| match o {
-                        Object::String(s) => Some(String::from_utf8_lossy(s).to_string()),
+                        Object::String(s) => Some(decode_pdf_text_string(s)),
                         Object::Name(n) => Some(n.clone()),
                         Object::Array(inner) if !inner.is_empty() => {
                             // Option can be [export_value, display_value] ~keep
                             inner.first().and_then(|first| match first {
-                                Object::String(s) => Some(String::from_utf8_lossy(s).to_string()),
+                                Object::String(s) => Some(decode_pdf_text_string(s)),
                                 _ => None,
                             })
                         }

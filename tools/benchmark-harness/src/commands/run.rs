@@ -323,9 +323,10 @@ pub(crate) fn selected_frameworks_use_tesseract(frameworks: &[String]) -> bool {
         })
 }
 
-pub(crate) const XBERG_RUN_PIPELINES: [XbergPipeline; 9] = [
+pub(crate) const XBERG_RUN_PIPELINES: [XbergPipeline; 10] = [
     XbergPipeline::Baseline,
     XbergPipeline::Layout,
+    XbergPipeline::LayoutV3,
     XbergPipeline::PaddleOcr,
     XbergPipeline::BaselinePaddle,
     XbergPipeline::LayoutPaddle,
@@ -336,7 +337,10 @@ pub(crate) const XBERG_RUN_PIPELINES: [XbergPipeline; 9] = [
 ];
 
 pub(crate) fn should_register_xberg_pipeline(pipeline: XbergPipeline, has_explicit_frameworks: bool) -> bool {
-    !matches!(pipeline, XbergPipeline::PaddleOcr | XbergPipeline::SceptreTract) || has_explicit_frameworks
+    !matches!(
+        pipeline,
+        XbergPipeline::LayoutV3 | XbergPipeline::PaddleOcr | XbergPipeline::SceptreTract
+    ) || has_explicit_frameworks
 }
 
 /// Parses `run --pdf-backends`. An empty list (the flag omitted) means "unchanged default
@@ -473,7 +477,12 @@ fn register_steady_xberg_adapter(
     pipeline: XbergPipeline,
     pdf_backend: XbergPdfBackend,
 ) -> bool {
-    if !context.has_explicit_frameworks || !matches!(pipeline, XbergPipeline::Baseline | XbergPipeline::Layout) {
+    if !context.has_explicit_frameworks
+        || !matches!(
+            pipeline,
+            XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
+        )
+    {
         return false;
     }
     let format_slug = match context.format {

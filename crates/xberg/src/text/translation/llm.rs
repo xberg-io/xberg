@@ -220,6 +220,7 @@ mod tests {
                 sheet_name: None,
                 ocr_confidence: None,
                 native_content: Some("text layer".to_string()),
+                geometry: None,
             }]),
             ..Default::default()
         };

@@ -211,6 +211,33 @@ impl InternalDocumentBuilder {
         page: Option<u32>,
         bbox: Option<BoundingBox>,
     ) -> u32 {
+        self.push_table_from_cells_with_roles(cells, cell_styles, None, page, bbox)
+    }
+
+    /// Push a table whose source also declares its column labels.
+    ///
+    /// A source that marks a cell as a column label (`<th>` in HTML) declares structure the cell
+    /// text alone cannot distinguish from a data row, so the labels travel on
+    /// [`Table::columns`] instead of being re-inferred from position. Everything else behaves
+    /// exactly as [`Self::push_table_from_cells_with_styles`], which delegates here.
+    pub(crate) fn push_table_from_cells_with_columns(
+        &mut self,
+        cells: &[Vec<String>],
+        columns: Option<Vec<String>>,
+        page: Option<u32>,
+        bbox: Option<BoundingBox>,
+    ) -> u32 {
+        self.push_table_from_cells_with_roles(cells, &[], columns, page, bbox)
+    }
+
+    fn push_table_from_cells_with_roles(
+        &mut self,
+        cells: &[Vec<String>],
+        cell_styles: &[crate::types::TableCellStyle],
+        columns: Option<Vec<String>>,
+        page: Option<u32>,
+        bbox: Option<BoundingBox>,
+    ) -> u32 {
         // A cell keeps its equation in the cell, so the equation cannot also be
         // an element without emptying the cell or repeating it beside the table.
         // The formula list is still expected to hold every formula in the
@@ -242,6 +269,7 @@ impl InternalDocumentBuilder {
             page_number: page.unwrap_or(0),
             bounding_box: bbox,
             cell_styles: cell_styles.to_vec(),
+            columns,
             ..Default::default()
         };
         self.push_table(table, page, bbox)

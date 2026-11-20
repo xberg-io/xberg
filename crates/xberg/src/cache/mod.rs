@@ -11,6 +11,19 @@ pub(crate) mod version;
 
 pub use cleanup::{clear_cache_directory, get_cache_metadata};
 pub use core::{CacheStats, GenericCache};
+
+/// Resolve the xberg cache base directory, the parent of every per-module cache.
+///
+/// Resolution order: `XBERG_CACHE_DIR`, the platform cache directory
+/// (`~/Library/Caches/xberg` on macOS, `$XDG_CACHE_HOME/xberg` or `~/.cache/xberg`
+/// on Linux, `%LOCALAPPDATA%/xberg` on Windows), then `~/.cache/xberg`.
+///
+/// Exposed so the CLI's `cache warm` and every in-process reader agree on one root.
+#[cfg_attr(alef, alef(skip))]
+pub fn resolve_cache_base_dir() -> std::path::PathBuf {
+    crate::cache_dir::resolve_cache_base()
+}
+
 #[cfg(feature = "ocr")]
 pub(crate) use utilities::blake3_hash_bytes;
 pub(crate) use utilities::blake3_hash_file;

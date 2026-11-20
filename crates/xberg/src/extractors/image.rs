@@ -684,6 +684,7 @@ fn finish_cached_layout_document(
         sheet_name: None,
         ocr_confidence: None,
         native_content: None,
+        geometry: None,
         image_preprocessing: whole_image_doc.metadata.image_preprocessing.clone(),
     }]);
     ImageExtractor::mark_ocr_extraction(&mut assembled);
@@ -3146,7 +3147,10 @@ fn single_block_table_config(
     Some(second)
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"),
+    not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))
+))]
 fn note_tall_standalone_ocr_clamp(doc: &mut InternalDocument) {
     const MIN_TALL_ASPECT: usize = 4;
     let Some(preprocessing) = doc.metadata.image_preprocessing.as_ref() else {
@@ -3184,6 +3188,26 @@ fn note_tall_standalone_ocr_clamp(doc: &mut InternalDocument) {
 /// markdown formatting based on detected layout classes.
 pub struct ImageExtractor;
 
+/// Reads a clamped tall picture's OCR text again from disjoint source strips.
+///
+/// The picture path shares the PDF route's strip plan and acceptance rule, so only the
+/// certificate differs. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+async fn recover_tall_strips(
+    mut ocr_result: crate::types::ExtractedDocument,
+    content: &[u8],
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    config: &ExtractionConfig,
+    ocr_config: &crate::core::config::OcrConfig,
+    recover_tall: bool,
+) -> Result<crate::types::ExtractedDocument> {
+    if recover_tall {
+        crate::extractors::pdf::ocr::try_replace_standalone(&mut ocr_result, content, backend, config, ocr_config)
+            .await?;
+    }
+    Ok(ocr_result)
+}
+
 impl ImageExtractor {
     /// Create a new image extractor.
     pub(crate) fn new() -> Self {
@@ -3213,8 +3237,11 @@ impl ImageExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let first = self.extract_with_ocr_pass(content, mime_type, config).await?;
+        let first = self.extract_with_ocr_pass(content, mime_type, config, true).await?;
+        #[allow(unused_mut)]
         let mut result = self.reread_standalone_table(content, mime_type, config, first).await?;
+        // The strip route records its own success or skip from the same preprocessing frame. ~keep
+        #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
         note_tall_standalone_ocr_clamp(&mut result);
         Ok(result)
     }
@@ -3244,7 +3271,10 @@ impl ImageExtractor {
             return Ok(first);
         };
         tracing::debug!("standalone table re-read: reading the picture again as one block");
-        match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
+        match self
+            .extract_with_ocr_pass(content, mime_type, &single_block, false)
+            .await
+        {
             Ok(mut second) => match image_table_reread::second_read_is_usable(&first, &second) {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
@@ -3272,8 +3302,11 @@ impl ImageExtractor {
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
+        recover_tall: bool,
     ) -> Result<InternalDocument> {
         use crate::plugins::registry::get_ocr_backend_registry;
+        #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+        let _ = recover_tall;
 
         let default_ocr_config;
         let ocr_config = match config.ocr.as_ref() {
@@ -3464,6 +3497,8 @@ impl ImageExtractor {
             }
             ocr_result
         };
+        #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+        let ocr_result = recover_tall_strips(ocr_result, content, &backend, config, ocr_config, recover_tall).await?;
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let photo_title = Box::pin(image_photo_title::recover_if_eligible(
@@ -3672,6 +3707,7 @@ impl ImageExtractor {
                         sheet_name: None,
                         ocr_confidence: whole_image_ocr_confidence,
                         native_content: None,
+                        geometry: None,
                     }]);
                 }
             }
@@ -3714,6 +3750,7 @@ impl ImageExtractor {
                     sheet_name: None,
                     ocr_confidence: None,
                     native_content: None,
+                    geometry: None,
                 }]);
             }
             Ok(doc)
@@ -3848,6 +3885,7 @@ impl ImageExtractor {
                 // stage keys its summary at page 1 -- the same page this builds (#1568).
                 ocr_confidence: pipeline_ocr_confidence.remove(&1),
                 native_content: None,
+                geometry: None,
             }]);
         }
 
@@ -6922,6 +6960,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }]);
         doc.metadata.additional.insert(
             std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),
