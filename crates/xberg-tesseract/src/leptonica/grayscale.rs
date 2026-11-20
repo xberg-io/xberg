@@ -76,14 +76,18 @@ impl Pix {
     ///
     /// Unlike [`Pix::grayscale_stats`], this reads every pixel (no sampling
     /// stride), because per-region operations such as shaded-row normalization
-    /// need the full-resolution raster, not a sampled estimate. The wrapper
-    /// does not check depth before narrowing each raw value to a byte.
+    /// need the full-resolution raster, not a sampled estimate. Any other depth is
+    /// refused: `pixGetPixel` returns the raw packed value, which is a palette
+    /// index, a 1-bit flag or packed RGBA, and narrowing it to a byte would
+    /// return meaningless intensities.
     ///
     /// # Errors
     ///
-    /// Returns `TesseractError::OcrError` if the image is zero-sized or if
+    /// Returns `TesseractError::InvalidParameterError` if the image is not 8 bpp,
+    /// and `TesseractError::OcrError` if the image is zero-sized or if
     /// `pixGetPixel` fails on any pixel.
     pub fn grayscale_bytes(&self) -> Result<Vec<u8>> {
+        self.require_grayscale()?;
         let width = self.width();
         let height = self.height();
         if width <= 0 || height <= 0 {

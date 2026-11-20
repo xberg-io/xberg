@@ -49,6 +49,9 @@ ffi_extern! {
     /// Returns the bit depth of the Pix (1, 2, 4, 8, 16, or 32).
     fn pixGetDepth(pix: *const c_void) -> i32;
 
+    /// Returns the Pix's colormap, or null when it has none. The Pix keeps ownership.
+    fn pixGetColormap(pix: *mut c_void) -> *mut c_void;
+
     /// Returns the number of 32-bit words per row (words-per-line).
     fn pixGetWpl(pix: *const c_void) -> i32;
 
@@ -626,7 +629,9 @@ impl Pix {
     }
 
     fn require_grayscale(&self) -> Result<()> {
-        if self.depth() == 8 {
+        // SAFETY: self keeps the Pix alive; the call only reads the colormap pointer. ~keep
+        let colormapped = !unsafe { pixGetColormap(self.ptr) }.is_null();
+        if self.depth() == 8 && !colormapped {
             Ok(())
         } else {
             Err(TesseractError::InvalidParameterError)
@@ -985,6 +990,9 @@ impl Drop for Pix {
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 #[path = "leptonica/grayscale.rs"]
 mod grayscale;
+
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+mod binary;
 
 #[cfg(test)]
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
