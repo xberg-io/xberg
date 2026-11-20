@@ -193,8 +193,13 @@ def _license_header(payload: bytes, notices: dict[str, bytes]) -> bytes:
     missing = [name for name in notices if name not in declared]
     if not missing:
         return payload
-    declared_lines = "".join(f"\nLicense-File: {name}" for name in missing)
-    return (head + declared_lines + separator + body).encode("utf-8")
+    declarations = "\n".join(f"License-File: {name}" for name in missing)
+    if separator:
+        return (head + "\n" + declarations + separator + body).encode("utf-8")
+    # Header-only metadata has no blank line separating the body; appending "\nLicense-File:"
+    # to the whole payload would turn the declaration into body text instead of a header.
+    prefix = head.rstrip("\n")
+    return (((prefix + "\n") if prefix else "") + declarations + "\n").encode("utf-8")
 
 
 def _pyproject_license_files(payload: bytes, notices: dict[str, bytes]) -> bytes:

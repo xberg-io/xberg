@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from email import message_from_bytes
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("package-notices.py").resolve()
@@ -44,11 +45,14 @@ def digest(content: bytes) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(content).digest()).decode().rstrip("=")
 
 
-def build_wheel(directory: Path) -> Path:
+def build_wheel(directory: Path, *, header_only: bool = False) -> Path:
     path = directory / "demo-1.0.0-py3-none-any.whl"
+    metadata = b"Metadata-Version: 2.4\nName: demo\nVersion: 1.0.0\n"
+    if not header_only:
+        metadata += b"\nBody.\n"
     files = {
         "demo/__init__.py": b"VALUE = 1\n",
-        "demo-1.0.0.dist-info/METADATA": b"Metadata-Version: 2.4\nName: demo\nVersion: 1.0.0\n\nBody.\n",
+        "demo-1.0.0.dist-info/METADATA": metadata,
         "demo-1.0.0.dist-info/WHEEL": b"Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\n",
     }
     rows = [[name, f"sha256={digest(content)}", str(len(content))] for name, content in files.items()]
@@ -89,9 +93,11 @@ def build_tarball(directory: Path, *, roots: tuple[str, ...] = ("demo-1.0.0",)) 
     return path
 
 
-def build_sdist(directory: Path) -> Path:
+def build_sdist(directory: Path, *, header_only: bool = False) -> Path:
     path = build_tarball(directory)
-    pkg_info = b"Metadata-Version: 2.4\nName: demo\nVersion: 1.0.0\n\nBody.\n"
+    pkg_info = b"Metadata-Version: 2.4\nName: demo\nVersion: 1.0.0\n"
+    if not header_only:
+        pkg_info += b"\nBody.\n"
     pyproject = (
         b'[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n\n'
         b'[project]\nname = "demo"\nversion = "1.0.0"\nlicense = "MIT"\nlicense-files = ["LICENSE"]\n'
@@ -159,15 +165,37 @@ class PackageNoticesTests(unittest.TestCase):
                 packaged = f"demo-1.0.0.dist-info/licenses/{name}"
                 assert archive.namelist().count(packaged) == 1
                 assert archive.read(packaged) == notice_bytes(name)
-            metadata = archive.read("demo-1.0.0.dist-info/METADATA").decode()
-        assert "License-File: LICENSE" in metadata
-        assert "License-File: THIRD_PARTY_LICENSES.md" in metadata
+            metadata = archive.read("demo-1.0.0.dist-info/METADATA")
+        message = message_from_bytes(metadata)
+        assert message.get_all("License-File") == ["LICENSE", "THIRD_PARTY_LICENSES.md"]
+        assert message.get_payload().strip() == "Body."
         rows = {row[0]: row[1:] for row in record_rows(wheel)}
         for name in NOTICES:
             packaged = f"demo-1.0.0.dist-info/licenses/{name}"
             assert rows[packaged] == [f"sha256={digest(notice_bytes(name))}", str(len(notice_bytes(name)))]
         assert rows["demo-1.0.0.dist-info/RECORD"] == ["", ""]
         assert rows["demo-1.0.0.dist-info/METADATA"][0].startswith("sha256=")
+
+    def test_should_declare_license_files_in_header_only_metadata(self) -> None:
+        wheel = build_wheel(self.root, header_only=True)
+        result = run_script("inject", "--format", "wheel", "--expected-count", "1", str(wheel))
+        assert result.returncode == 0, result.stderr
+        with zipfile.ZipFile(wheel) as archive:
+            metadata = archive.read("demo-1.0.0.dist-info/METADATA")
+        message = message_from_bytes(metadata)
+        assert message.get_all("License-File") == ["LICENSE", "THIRD_PARTY_LICENSES.md"]
+        assert message.get_payload().strip() == ""
+
+        sdist_dir = self.root / "sdist"
+        sdist_dir.mkdir()
+        sdist = build_sdist(sdist_dir, header_only=True)
+        result = run_script("inject", "--format", "sdist", "--expected-count", "1", str(sdist))
+        assert result.returncode == 0, result.stderr
+        with tarfile.open(sdist) as archive:
+            pkg_info = archive.extractfile("demo-1.0.0/PKG-INFO").read()
+        message = message_from_bytes(pkg_info)
+        assert message.get_all("License-File") == ["LICENSE", "THIRD_PARTY_LICENSES.md"]
+        assert message.get_payload().strip() == ""
 
     def test_should_make_wheel_injection_idempotent(self) -> None:
         wheel = build_wheel(self.root)
@@ -263,7 +291,9 @@ class PackageNoticesTests(unittest.TestCase):
             }
         for name in NOTICES:
             assert contents[name] == notice_bytes(name)
-        assert b"License-File: THIRD_PARTY_LICENSES.md" in contents["PKG-INFO"]
+        pkg_info = message_from_bytes(contents["PKG-INFO"])
+        assert pkg_info.get_all("License-File") == ["LICENSE", "THIRD_PARTY_LICENSES.md"]
+        assert pkg_info.get_payload().strip() == "Body."
         assert b'"THIRD_PARTY_LICENSES.md"' in contents["pyproject.toml"]
 
         multi = self.root / "multi"

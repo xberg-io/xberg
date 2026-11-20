@@ -4929,8 +4929,49 @@ jobs:
 
       - uses: rubygems/configure-rubygems-credentials@v2.1.0
 
-      # The gemspec now lists THIRD_PARTY_LICENSES.md, so both notices are already inside
-      # data.tar.gz and checksums.yaml.gz; this only re-reads the built bytes.
+      # The linux-x86_64 leg keeps the source gem (KEEP_SOURCE=true) beside its native gem, so
+      # the four matrix legs contribute five files: one source gem plus four platform gems.
+      # Every one is built from the patched gemspec and carries the notices; assert the exact
+      # inventory before the shared verifier checks bytes.
+      - name: Assert the expected gem inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gems=(dist/rubygems-*/*.gem)
+          [ "${#gems[@]}" -eq 5 ] || {
+            echo "::error::expected five gems (one source plus four platform gems), found ${#gems[@]}: ${gems[*]##*/}"
+            exit 1
+          }
+          names=()
+          for gem in "${gems[@]}"; do names+=("$(basename "$gem")"); done
+          platforms=(x86_64-linux aarch64-linux arm64-darwin x64-mingw-ucrt)
+          for platform in "${platforms[@]}"; do
+            matches=0
+            for name in "${names[@]}"; do
+              [[ "$name" == xberg-*-"$platform".gem ]] && matches=$((matches + 1))
+            done
+            [ "$matches" -eq 1 ] || {
+              echo "::error::expected exactly one $platform gem, found $matches: ${names[*]}"
+              exit 1
+            }
+          done
+          sources=()
+          for name in "${names[@]}"; do
+            native=0
+            for platform in "${platforms[@]}"; do
+              [[ "$name" == xberg-*-"$platform".gem ]] && native=1
+            done
+            [ "$native" -eq 0 ] && sources+=("$name")
+          done
+          [ "${#sources[@]}" -eq 1 ] && [[ "${sources[0]}" == xberg-*.gem ]] || {
+            echo "::error::expected exactly one source gem without a platform suffix, found: ${sources[*]:-none}"
+            exit 1
+          }
+          printf 'Gem inventory (%d): %s\n' "${#names[@]}" "${names[*]}"
+
+      # The gemspec lists THIRD_PARTY_LICENSES.md, so both notices are already inside each
+      # gem's data.tar.gz and checksums.yaml.gz; this only re-reads the built bytes.
       - name: Verify Ruby gem package contents
         uses: xberg-io/actions/verify-package-contents@v1
         with:
@@ -4938,7 +4979,7 @@ jobs:
           artifact-path: dist
           package-name: xberg
           artifact-format: gem
-          expected-artifact-count: "4"
+          expected-artifact-count: "5"
           required-notice-files: |
             LICENSE
             THIRD_PARTY_LICENSES.md
