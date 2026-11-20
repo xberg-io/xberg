@@ -10,7 +10,18 @@ fn refuses_asset_before_loading_when_size_exceeds_remaining_budget() {
     let asset = root.path().join("model.onnx");
     File::create(&asset).unwrap().set_len(4096).unwrap();
     let mut budget = ArtifactBudget::new(4);
-    let error = read_verified(&asset, "model.onnx", &"0".repeat(64), root.path(), 4096, &mut budget).unwrap_err();
+    let error = read_verified(
+        &asset,
+        &ArtifactExpectation {
+            remote: "model.onnx",
+            sha256: &"0".repeat(64),
+            size_bytes: 4096,
+            max_bytes: 4096,
+        },
+        root.path(),
+        &mut budget,
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("remaining artifact byte limit"));
     assert_eq!(budget.remaining(), 4);
 }
@@ -23,12 +34,34 @@ fn accepts_exact_pinned_bytes_and_rejects_same_size_mutation() {
     std::fs::write(&asset, b"test").unwrap();
     let mut budget = ArtifactBudget::new(8);
     assert_eq!(
-        read_verified(&asset, "tokenizer.json", &checksum, root.path(), 4, &mut budget).unwrap(),
+        read_verified(
+            &asset,
+            &ArtifactExpectation {
+                remote: "tokenizer.json",
+                sha256: &checksum,
+                size_bytes: 4,
+                max_bytes: 4
+            },
+            root.path(),
+            &mut budget,
+        )
+        .unwrap(),
         b"test"
     );
     assert_eq!(budget.remaining(), 4);
     std::fs::write(&asset, b"fake").unwrap();
-    let error = read_verified(&asset, "tokenizer.json", &checksum, root.path(), 4, &mut budget).unwrap_err();
+    let error = read_verified(
+        &asset,
+        &ArtifactExpectation {
+            remote: "tokenizer.json",
+            sha256: &checksum,
+            size_bytes: 4,
+            max_bytes: 4,
+        },
+        root.path(),
+        &mut budget,
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("checksum mismatch"));
 }
 
@@ -71,12 +104,34 @@ fn accepts_hub_cache_symlinks_inside_root_and_rejects_escape() {
     std::os::unix::fs::symlink(inside, &link).unwrap();
     let mut budget = ArtifactBudget::new(8);
     assert_eq!(
-        read_verified(&link, "model.onnx", &checksum, root.path(), 4, &mut budget).unwrap(),
+        read_verified(
+            &link,
+            &ArtifactExpectation {
+                remote: "model.onnx",
+                sha256: &checksum,
+                size_bytes: 4,
+                max_bytes: 4
+            },
+            root.path(),
+            &mut budget,
+        )
+        .unwrap(),
         b"test"
     );
     std::fs::remove_file(&link).unwrap();
     std::os::unix::fs::symlink(external, &link).unwrap();
-    let error = read_verified(&link, "model.onnx", &checksum, root.path(), 4, &mut budget).unwrap_err();
+    let error = read_verified(
+        &link,
+        &ArtifactExpectation {
+            remote: "model.onnx",
+            sha256: &checksum,
+            size_bytes: 4,
+            max_bytes: 4,
+        },
+        root.path(),
+        &mut budget,
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("escapes the configured cache root"));
 }
 
@@ -85,6 +140,7 @@ fn rejects_manifest_extras_and_ambiguous_companion_pins() {
     let mut config = configuration();
     let line = format!("{}  unrelated.json\n", "0".repeat(64));
     config.model.sha256_manifest.push_str(&line);
+    config.model.size_manifest.push_str("1  unrelated.json\n");
     assert!(
         ArtifactInventory::new(&config.model)
             .unwrap_err()
@@ -98,8 +154,10 @@ fn rejects_manifest_extras_and_ambiguous_companion_pins() {
         .model
         .sha256_manifest
         .replace("  model.onnx", "  onnx/model.onnx");
+    config.model.size_manifest = config.model.size_manifest.replace("  model.onnx", "  onnx/model.onnx");
     let line = format!("{}  onnx/tokenizer.json\n", "0".repeat(64));
     config.model.sha256_manifest.push_str(&line);
+    config.model.size_manifest.push_str("1  onnx/tokenizer.json\n");
     assert!(
         ArtifactInventory::new(&config.model)
             .unwrap_err()

@@ -3,8 +3,8 @@ use super::artifacts::ArtifactInventory;
 use super::policy::validate_config;
 use super::tests::configuration;
 use crate::candidate_models::{
-    CANDIDATE_MODELS, CLASSIFICATION_MODELS_REVISION, nli_classifier, nli_minilm2_l6_h768_classifier,
-    nli_minilm2_l6_h768_graph,
+    CANDIDATE_MODELS, CLASSIFICATION_MODELS_REVISION, CandidateFile, nli_classifier_with_files,
+    nli_minilm2_l6_h768_classifier, nli_minilm2_l6_h768_graph,
 };
 use sha2::{Digest, Sha256};
 
@@ -96,24 +96,27 @@ fn stage_nli(host_graph: &str) -> StagedNli {
         };
         files.push((graph, bytes));
     }
-    let mut manifest = String::new();
     let staged = StagedNli {
         directory,
         config: configuration(),
         host_graph_sha256: hex::encode(Sha256::digest(&host_graph_bytes)),
     };
     std::fs::create_dir_all(staged.path("")).unwrap();
+    let mut pins = Vec::new();
     for (name, bytes) in files {
         std::fs::write(staged.path(name), &bytes).unwrap();
-        manifest.push_str(&format!(
-            "{}  nli-minilm2-l6-h768/{name}\n",
-            hex::encode(Sha256::digest(&bytes))
-        ));
+        pins.push(CandidateFile {
+            path: format!("nli-minilm2-l6-h768/{name}"),
+            sha256: hex::encode(Sha256::digest(&bytes)),
+            size_bytes: bytes.len() as u64,
+            repository: "xberg-io/classification-models".to_owned(),
+            revision: CLASSIFICATION_MODELS_REVISION.to_owned(),
+            license: "Apache-2.0".to_owned(),
+            source: "spdx:test".to_owned(),
+        });
     }
-    let mut probe = CANDIDATE_MODELS[0];
-    probe.sha256_manifest = manifest.leak();
     let mut staged = staged;
-    staged.config.model = nli_classifier(&probe).unwrap();
+    staged.config.model = nli_classifier_with_files(&CANDIDATE_MODELS[0], host_graph, &pins).unwrap();
     staged.config.hypothesis_template = "topic {label}".to_owned();
     staged.config.cache_directory = Some(staged.directory.path().to_str().unwrap().to_owned());
     staged
@@ -160,6 +163,24 @@ async fn one_corrupted_byte_in_any_staged_file_is_rejected_by_the_adapter() {
             "{name}: {error}"
         );
     }
+}
+
+#[tokio::test]
+async fn a_wrong_size_file_fails_through_prepare_before_its_checksum() {
+    let Some(graph) = expected_host_graph() else {
+        return;
+    };
+    let staged = stage_nli(graph);
+    let path = staged.path("tokenizer.json");
+    let mut bytes = std::fs::read(&path).unwrap();
+    bytes.push(b' ');
+    std::fs::write(&path, &bytes).unwrap();
+    let error = prepare(&staged).await.unwrap_err().to_string();
+    assert!(
+        error.contains("size mismatch") && error.contains("nli-minilm2-l6-h768/tokenizer.json"),
+        "{error}"
+    );
+    assert!(!error.contains("checksum mismatch"), "size must fail first: {error}");
 }
 
 #[tokio::test]
