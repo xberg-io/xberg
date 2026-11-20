@@ -1185,6 +1185,13 @@ fn mixed_layer_lines_to_put_first(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+/// Whether the layer-occurrence map may be captured for a page. A scale-only geometry read is
+/// the only mapping `finish_layer_prepend` can trust, so any refusal leaves the map empty.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn captures_matched_layer_occurrences(observed_scale_only: bool, alternative_raster: bool) -> bool {
+    observed_scale_only && !alternative_raster
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 struct MixedOcrContext<'a> {
     // Caller inputs.
@@ -2265,6 +2272,15 @@ impl MixedOcrContext<'_> {
             .cloned()
     }
 
+    /// The backend of the direct single-backend route, or the same structured error every caller
+    /// reports when the route reached a page without one.
+    fn direct_backend(&self) -> crate::Result<std::sync::Arc<dyn crate::plugins::OcrBackend>> {
+        self.backend.clone().ok_or_else(|| crate::XbergError::Ocr {
+            message: "OCR backend was not resolved for the direct page route".to_string(),
+            source: None,
+        })
+    }
+
     #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
     fn time_limit_token(&self) -> Option<crate::cancellation::CancellationToken> {
         self.config
@@ -2422,17 +2438,22 @@ impl MixedOcrContext<'_> {
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> OcrRunResult<()> {
         self.recover_pipeline_budget_refused(budget_refused).await?;
+        let pipeline = self.effective_pipeline.clone().ok_or_else(|| crate::XbergError::Ocr {
+            message: "the pipeline route was entered without an effective pipeline".to_string(),
+            source: None,
+        })?;
         let page_images = share_rendered_page_images(page_images);
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         self.run_pipeline_pages_async(
             &page_images,
+            pipeline,
             #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
             trial_pages,
             security_limits,
         )
         .await?;
         #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-        self.run_pipeline_pages_sequential(&page_images).await?;
+        self.run_pipeline_pages_sequential(&page_images, pipeline).await?;
         if self.capture_rasters {
             self.capture_pipeline_rasters(&page_images)?;
         }
@@ -2567,13 +2588,10 @@ impl MixedOcrContext<'_> {
     async fn run_pipeline_pages_async(
         &mut self,
         page_images: &[(usize, std::sync::Arc<image::DynamicImage>)],
+        pipeline: crate::core::config::OcrPipelineConfig,
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))] trial_pages: Vec<usize>,
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> OcrRunResult<()> {
-        let pipeline = self
-            .effective_pipeline
-            .clone()
-            .expect("the pipeline route is entered only with an effective pipeline");
         let render_doc = std::sync::Arc::clone(&self.render_doc);
         let stage_config = self.pipeline_stage_config.clone();
         let config = self.config;
@@ -2915,11 +2933,8 @@ impl MixedOcrContext<'_> {
     async fn run_pipeline_pages_sequential(
         &mut self,
         page_images: &[(usize, std::sync::Arc<image::DynamicImage>)],
+        pipeline: crate::core::config::OcrPipelineConfig,
     ) -> OcrRunResult<()> {
-        let pipeline = self
-            .effective_pipeline
-            .clone()
-            .expect("the pipeline route is entered only with an effective pipeline");
         for (page_idx, image) in page_images {
             if self.config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                 break;
@@ -3184,10 +3199,7 @@ impl MixedOcrContext<'_> {
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> OcrRunResult<()> {
         // Reached only when `effective_pipeline` is `None`, so `backend` was resolved above.
-        let backend = self.backend.clone().ok_or_else(|| crate::XbergError::Ocr {
-            message: "OCR backend was not resolved for the direct page route".to_string(),
-            source: None,
-        })?;
+        let backend = self.direct_backend()?;
 
         // One page at a time. `max_content_size` bounds what a single page may cost to render
         // and encode; summing a whole batch against it made that ceiling a function of the
@@ -3677,6 +3689,7 @@ impl MixedOcrContext<'_> {
                 None,
                 extraction_result,
                 false,
+                false,
                 encoded,
                 backend,
             )
@@ -3805,6 +3818,7 @@ impl MixedOcrContext<'_> {
             retry_dpi,
             extraction_result,
             observed_scale_only,
+            true,
             encoded,
             backend,
         )
@@ -3828,6 +3842,7 @@ impl MixedOcrContext<'_> {
         retry_dpi: Option<crate::pdf::render::OcrRasterDpi>,
         mut extraction_result: crate::types::ExtractedDocument,
         observed_scale_only: bool,
+        run_geometry_evidence: bool,
         encoded: &[EncodedPage],
         backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     ) -> OcrRunResult<()> {
@@ -3840,14 +3855,21 @@ impl MixedOcrContext<'_> {
         {
             self.khmer_supplements.insert(page_number, text);
         }
+        // The sequential route never ran the geometry and language passes before this split, so
+        // the shared recorder keeps them behind the caller's flag instead of changing page
+        // decisions in a no-tokio build.
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        self.capture_native_coverage(page_idx, correction_degrees, &extraction_result);
+        if run_geometry_evidence {
+            self.capture_native_coverage(page_idx, correction_degrees, observed_scale_only, &extraction_result);
+        }
         crate::extraction::derive::adopt_public_ocr_document(
             &mut extraction_result,
             self.config.security_limits.as_ref().unwrap_or(&Default::default()),
         )?;
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        self.recover_language_evidence(page_idx, correction_degrees, &mut extraction_result);
+        if run_geometry_evidence {
+            self.recover_language_evidence(page_idx, correction_degrees, &mut extraction_result);
+        }
         if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
             self.preprocessing_by_page.insert(page_number, metadata);
         }
@@ -3950,6 +3972,7 @@ impl MixedOcrContext<'_> {
         &mut self,
         page_idx: usize,
         correction_degrees: u32,
+        observed_scale_only: bool,
         extraction_result: &crate::types::ExtractedDocument,
     ) {
         let page_number = (page_idx + 1) as u32;
@@ -4002,9 +4025,10 @@ impl MixedOcrContext<'_> {
             }
         }
         #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-        if correction_degrees == 0
-            && !self.alternative_raster_pages.contains(&page_number)
-            && let Some(layer) = self.page_layers.as_ref().and_then(|layers| layers.get(&page_number))
+        if captures_matched_layer_occurrences(
+            observed_scale_only,
+            self.alternative_raster_pages.contains(&page_number),
+        ) && let Some(layer) = self.page_layers.as_ref().and_then(|layers| layers.get(&page_number))
             && let Some(matched) =
                 super::document::MatchedLayerOccurrences::capture(&self.render_doc, page_idx, layer, extraction_result)
         {
@@ -4183,10 +4207,7 @@ impl MixedOcrContext<'_> {
                 },
             };
             let recovery = if trigger.needs_fallback {
-                let backend = self.backend.clone().ok_or_else(|| crate::XbergError::Ocr {
-                    message: "OCR backend was not resolved for the direct page route".to_string(),
-                    source: None,
-                })?;
+                let backend = self.direct_backend()?;
                 recover_page_text_from_image_xobjects(
                     &backend,
                     &self.render_doc,
@@ -4433,7 +4454,10 @@ impl MixedOcrContext<'_> {
         let mut accepted_replacements = self.decide_replacements();
         self.prune_noise_lines(&mut accepted_replacements);
 
-        #[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_mut))]
+        #[cfg_attr(
+            not(all(feature = "ocr", not(target_arch = "wasm32"))),
+            allow(unused_mut, unused_variables)
+        )]
         let (mut complete_native_pages, clean_native_ink_pages, page_layers_first) = self.assemble_layer_prepend(
             &mut accepted_replacements,
             native_preservation_enabled,
@@ -4454,21 +4478,15 @@ impl MixedOcrContext<'_> {
             native_preservation_enabled,
             ink_proof_layout_free,
         );
-        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         self.reject_native_yielding_pages(
             &mut accepted_replacements,
             complete_native_pages,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             &clean_native_ink_pages,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             &type0_loss_pages,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             &lost_glyph_ink_pages,
-            native_preservation_enabled,
-        )?;
-        #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-        self.reject_native_yielding_pages(
-            &mut accepted_replacements,
-            complete_native_pages,
-            &clean_native_ink_pages,
-            native_preservation_enabled,
         )?;
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -5058,13 +5076,14 @@ impl MixedOcrContext<'_> {
                 // heuristic call would.
                 None => {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-                    let mut paragraphs = stripped_fallback_pages
+                    let stripped_page = stripped_fallback_pages
                         .as_ref()
                         .and_then(|pages| pages.get((*page_number - 1) as usize))
-                        .cloned()
-                        .unwrap_or_else(|| self.ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default());
+                        .cloned();
                     #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
-                    let mut paragraphs = self.ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default();
+                    let stripped_page = None;
+                    let mut paragraphs = stripped_page
+                        .unwrap_or_else(|| self.ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default());
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
@@ -5208,18 +5227,19 @@ impl MixedOcrContext<'_> {
 
     /// Reject only certified automatic replacements, preserving the original native page objects.
     /// Recheck the final OCR structure because the document-global pass can add rich payload. ~keep
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     #[allow(clippy::too_many_arguments)]
     fn reject_native_yielding_pages(
         &mut self,
         accepted_replacements: &mut ahash::AHashMap<u32, String>,
         complete_native_pages: std::collections::HashSet<u32>,
-        clean_native_ink_pages: &std::collections::HashSet<u32>,
-        type0_loss_pages: &ahash::AHashSet<u32>,
-        lost_glyph_ink_pages: &ahash::AHashMap<u32, usize>,
-        _native_preservation_enabled: bool,
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] clean_native_ink_pages: &std::collections::HashSet<
+            u32,
+        >,
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] type0_loss_pages: &ahash::AHashSet<u32>,
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] lost_glyph_ink_pages: &ahash::AHashMap<u32, usize>,
     ) -> OcrRunResult<()> {
         for page in complete_native_pages {
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let plain = self
                 .structured_ocr_pages
                 .get(&page)
@@ -5241,42 +5261,7 @@ impl MixedOcrContext<'_> {
                         },
                     )
                 });
-            let has_formula = self
-                .accumulated_formulas
-                .iter()
-                .any(|formula| formula.page.is_none_or(|owner| owner == page));
-            if plain && !has_formula && super::document::native_preservation_is_automatic(self.config, page) {
-                accepted_replacements.remove(&page);
-                self.structured_ocr_pages.remove(&page);
-                self.ocr_confidence_by_page.remove(&page);
-                self.preprocessing_by_page.remove(&page);
-                if self.all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
-                    && self.pages.single_native_type0_page.is_some()
-                    && let Some(lost) = lost_glyph_ink_pages.get(&page)
-                {
-                    return Err(lost_glyph_ocr_rejection(*lost));
-                }
-                if type0_loss_pages.contains(&page)
-                    && self.all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
-                    && self.page_count == 1
-                    && self.pages.single_native_type0_page.is_some()
-                {
-                    return Err(type0_ocr_rejection());
-                }
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-    fn reject_native_yielding_pages(
-        &mut self,
-        accepted_replacements: &mut ahash::AHashMap<u32, String>,
-        complete_native_pages: std::collections::HashSet<u32>,
-        _clean_native_ink_pages: &std::collections::HashSet<u32>,
-        _native_preservation_enabled: bool,
-    ) -> OcrRunResult<()> {
-        for page in complete_native_pages {
+            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let plain = self
                 .structured_ocr_pages
                 .get(&page)
@@ -5291,6 +5276,22 @@ impl MixedOcrContext<'_> {
                 self.structured_ocr_pages.remove(&page);
                 self.ocr_confidence_by_page.remove(&page);
                 self.preprocessing_by_page.remove(&page);
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                {
+                    if self.all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                        && self.pages.single_native_type0_page.is_some()
+                        && let Some(lost) = lost_glyph_ink_pages.get(&page)
+                    {
+                        return Err(lost_glyph_ocr_rejection(*lost));
+                    }
+                    if type0_loss_pages.contains(&page)
+                        && self.all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                        && self.page_count == 1
+                        && self.pages.single_native_type0_page.is_some()
+                    {
+                        return Err(type0_ocr_rejection());
+                    }
+                }
             }
         }
         Ok(())
@@ -13717,5 +13718,18 @@ mod mixed_fallback_furniture_tests {
             pages[0][0].block_bbox, header_bbox,
             "the surviving header geometry must be back in the raster frame"
         );
+    }
+}
+
+#[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod matched_layer_evidence_tests {
+    use super::captures_matched_layer_occurrences;
+
+    #[test]
+    fn matched_layer_occurrences_stay_empty_without_scale_only_geometry() {
+        assert!(!captures_matched_layer_occurrences(false, false));
+        assert!(!captures_matched_layer_occurrences(false, true));
+        assert!(captures_matched_layer_occurrences(true, false));
+        assert!(!captures_matched_layer_occurrences(true, true));
     }
 }
