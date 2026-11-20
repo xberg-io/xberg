@@ -86,6 +86,8 @@ impl<'a> Encoder<'a> {
 #[allow(unsafe_code)]
 impl<'a> Drop for Encoder<'a> {
     fn drop(&mut self) {
+        // SAFETY: `inner` is the encoder libheif allocated for this wrapper and released exactly once here;
+        // nothing else owns it.
         unsafe { lh::heif_encoder_release(self.inner) };
     }
 }
@@ -96,6 +98,8 @@ impl<'a> Encoder<'a> {
     #[allow(unsafe_code)]
     pub fn name(&self) -> String {
         let _lock = ENCODER_MUTEX.lock();
+        // SAFETY: The mutex serializes access to the encoder's plugin state and `inner` stays live for the
+        // borrow; the returned name is owned by the encoder and copied before the lock is released.
         let res = unsafe { lh::heif_encoder_get_name(self.inner) };
         cstr_to_str(res).unwrap_or("").to_owned()
     }
@@ -103,7 +107,10 @@ impl<'a> Encoder<'a> {
     #[allow(unsafe_code)]
     pub fn set_quality(&mut self, quality: EncoderQuality) -> Result<()> {
         let err = match quality {
+            // SAFETY: `self` is exclusively borrowed and the flag is passed by value into the live encoder.
             EncoderQuality::LossLess => unsafe { lh::heif_encoder_set_lossless(self.inner, 1) },
+            // SAFETY: `self` is exclusively borrowed; the lossless flag is cleared first and the quality is
+            // only set once that call succeeded.
             EncoderQuality::Lossy(value) => unsafe {
                 let middle_err = lh::heif_encoder_set_lossless(self.inner, 0);
                 HeifError::from_heif_error(middle_err)?;
@@ -119,6 +126,8 @@ impl<'a> Encoder<'a> {
         let param_value = match parameter_type {
             EncoderParameterType::Int => {
                 let mut value = 0;
+                // SAFETY: `c_param_name` keeps its NUL-terminated buffer for the call and the out slot is an
+                // initialized `c_int`; `inner` is live for the shared borrow.
                 let err = unsafe {
                     lh::heif_encoder_get_parameter_integer(self.inner, c_param_name.as_ptr(), &mut value as _)
                 };
@@ -127,6 +136,8 @@ impl<'a> Encoder<'a> {
             }
             EncoderParameterType::Bool => {
                 let mut value = 0;
+                // SAFETY: `c_param_name` keeps its NUL-terminated buffer for the call and the out slot is an
+                // initialized `c_int`; `inner` is live for the shared borrow.
                 let err = unsafe {
                     lh::heif_encoder_get_parameter_boolean(self.inner, c_param_name.as_ptr(), &mut value as _)
                 };
@@ -135,6 +146,9 @@ impl<'a> Encoder<'a> {
             }
             EncoderParameterType::String => {
                 let value: Vec<u8> = vec![0; 51];
+                // SAFETY: `value` is a 51-byte buffer and libheif is told the writable capacity is 50, so it
+                // writes at most 50 characters plus its own NUL terminator; `c_param_name` outlives the
+                // call.
                 let err = unsafe {
                     lh::heif_encoder_get_parameter_string(self.inner, c_param_name.as_ptr(), value.as_ptr() as _, 50)
                 };
@@ -166,12 +180,18 @@ impl<'a> Encoder<'a> {
     pub fn set_parameter_value(&self, name: &str, value: EncoderParameterValue) -> Result<()> {
         let c_param_name = CString::new(name).unwrap();
         let err = match value {
+            // SAFETY: `c_param_name` keeps its NUL-terminated buffer for the call and the value is a scalar.
+            // The encoder is mutated through its live native pointer.
             EncoderParameterValue::Bool(v) => unsafe {
                 lh::heif_encoder_set_parameter_boolean(self.inner, c_param_name.as_ptr(), v.into())
             },
+            // SAFETY: `c_param_name` keeps its NUL-terminated buffer for the call and the value is a scalar.
+            // The encoder is mutated through its live native pointer.
             EncoderParameterValue::Int(v) => unsafe {
                 lh::heif_encoder_set_parameter_integer(self.inner, c_param_name.as_ptr(), v)
             },
+            // SAFETY: Both C strings keep their buffers for the call, during which libheif copies the value;
+            // the encoder is mutated through its live native pointer.
             EncoderParameterValue::String(v) => unsafe {
                 let c_param_value = CString::new(v).unwrap();
                 lh::heif_encoder_set_parameter_string(self.inner, c_param_name.as_ptr(), c_param_value.as_ptr())
@@ -185,6 +205,9 @@ impl<'a> Encoder<'a> {
 #[allow(unsafe_code)]
 fn parameters_types(c_encoder: &mut lh::heif_encoder) -> Result<EncoderParametersTypes> {
     let mut res = EncoderParametersTypes::new();
+    // SAFETY: `c_encoder` is exclusively borrowed by the caller, and the returned array is libheif's
+    // own, terminated by a null entry; it stays valid while the encoder lives, and every name
+    // is copied into a `String` before the walk advances.
     unsafe {
         let mut param_pointers = lh::heif_encoder_list_parameters(c_encoder);
         if !param_pointers.is_null() {
@@ -365,6 +388,8 @@ impl<'a> EncoderDescriptor<'a> {
     /// This name should stay constant over different encoder versions.
     #[allow(unsafe_code)]
     pub fn id(&self) -> &str {
+        // SAFETY: The descriptor and the name string it points into are owned by libheif's encoder
+        // registry, which outlives the descriptor borrow `'a`; the result borrows `&self`.
         let name = unsafe { lh::heif_encoder_descriptor_get_id_name(self.inner) };
         cstr_to_str(name).unwrap_or_default()
     }
@@ -374,12 +399,16 @@ impl<'a> EncoderDescriptor<'a> {
     #[allow(unsafe_code)]
     pub fn name(&self) -> String {
         let _lock = ENCODER_MUTEX.lock();
+        // SAFETY: The mutex serializes registry access, the descriptor and its name outlive the `'a`
+        // borrow, and the name is copied into a `String` before the lock is released.
         let name = unsafe { lh::heif_encoder_descriptor_get_name(self.inner) };
         cstr_to_str(name).unwrap_or_default().to_owned()
     }
 
     #[allow(unsafe_code)]
     pub fn compression_format(&self) -> CompressionFormat {
+        // SAFETY: The descriptor is borrowed from libheif's registry for `'a`; the call only reads its
+        // format enum.
         let c_format = unsafe { lh::heif_encoder_descriptor_get_compression_format(self.inner) };
         match CompressionFormat::n(c_format) {
             Some(res) => res,
@@ -389,11 +418,15 @@ impl<'a> EncoderDescriptor<'a> {
 
     #[allow(unsafe_code)]
     pub fn supports_lossy_compression(&self) -> bool {
+        // SAFETY: The descriptor is borrowed from libheif's registry for `'a`; the call only reads a
+        // capability flag.
         unsafe { lh::heif_encoder_descriptor_supports_lossy_compression(self.inner) != 0 }
     }
 
     #[allow(unsafe_code)]
     pub fn supports_lossless_compression(&self) -> bool {
+        // SAFETY: The descriptor is borrowed from libheif's registry for `'a`; the call only reads a
+        // capability flag.
         unsafe { lh::heif_encoder_descriptor_supports_lossless_compression(self.inner) != 0 }
     }
 }
