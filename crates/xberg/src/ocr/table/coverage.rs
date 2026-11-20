@@ -77,7 +77,8 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
 }
 
 /// A row may replace one single-line element with the same ordered tokens. Spending each
-/// row once preserves repeated source lines, and unmatched text stays intact.
+/// row once preserves repeated source lines, and unmatched text stays intact. This is the exact
+/// comparison: only a leader-aware caller asks for [`ExactTableRows::ignoring_marks`].
 fn claim_matching_table_rows(
     elements: &[InternalElement],
     bbox: &BoundingBox,
@@ -106,9 +107,12 @@ impl ExactTableRows {
         Self::with_marks(cells, false)
     }
 
-    /// Rows compared without their leader tokens (made only of `. \u{b7} _ \u{2026} =`), so a dot leader
-    /// or a stray `=` between a label and its values does not keep a line whose every word the table
-    /// carries (#2783). Signs, dashes, brackets and currency symbols stay significant.
+    /// Rows compared without the leader artifacts a recognizer picks up between a label and its
+    /// values. The detected table and the recognized line disagree on those tokens -- a cell
+    /// holds `14`, the line reads `....... 14`, or the leader picks up a stray dash as
+    /// `.....-.` -- so comparing every token leaves the line in the page next to the row the
+    /// table already carries (#2503). Every alphanumeric token, sign, bracket and currency symbol
+    /// still has to match in order, so numbers cannot be traded between rows.
     pub(crate) fn ignoring_marks(cells: &[Vec<String>]) -> Self {
         Self::with_marks(cells, true)
     }
@@ -138,9 +142,18 @@ fn is_leader_mark(character: char) -> bool {
     matches!(character, '.' | '\u{b7}' | '_' | '\u{2026}' | '=')
 }
 
+/// Whether an OCR token is a leader artifact rather than data.
+///
+/// It has to contain a leader mark and no letter or digit, so `.....`, `=`, `.....-.` and
+/// `............--` are dropped while a lone `-`, `$`, `(5)`, `1,234` and `1.234` stay
+/// significant (#2783).
+fn is_leader_artifact(token: &str) -> bool {
+    token.chars().any(is_leader_mark) && !token.chars().any(char::is_alphanumeric)
+}
+
 fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>, ignore_marks: bool) -> String {
     tokens
-        .filter(|token| !ignore_marks || !token.chars().all(is_leader_mark))
+        .filter(|token| !ignore_marks || !is_leader_artifact(token))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -230,43 +243,81 @@ mod tests {
         vec![cells.iter().map(|cell| cell.to_string()).collect()]
     }
 
-    fn claims_ignoring_marks(cells: &[&str], line: &str) -> bool {
+    fn claims(cells: &[&str], line: &str) -> bool {
         ExactTableRows::ignoring_marks(&row(cells)).claim(line.split_whitespace())
     }
 
     #[test]
-    fn rows_ignoring_marks_claim_a_line_with_a_leader_and_a_stray_mark_but_exact_rows_do_not() {
+    fn rows_claim_a_line_with_a_leader_and_a_stray_mark_but_exact_rows_do_not() {
         let cells = row(&["Pool repairs", "14", "140,506"]);
         let line = "Pool repairs ......... 14 = 140,506";
 
         assert!(!ExactTableRows::new(&cells).claim(line.split_whitespace()));
-        assert!(ExactTableRows::ignoring_marks(&cells).claim(line.split_whitespace()));
-        assert!(!claims_ignoring_marks(
+        assert!(claims(&["Pool repairs", "14", "140,506"], line));
+        assert!(!claims(
             &["Pool repairs", "14", "140,506"],
             "Pool repairs ... 15 = 140,506"
         ));
     }
 
     #[test]
-    fn rows_ignoring_marks_keep_signs_brackets_separators_and_dashes_significant() {
-        assert!(!claims_ignoring_marks(&["Item", "5"], "Item (5)"));
-        assert!(!claims_ignoring_marks(&["Item", "12"], "Item -12"));
-        assert!(!claims_ignoring_marks(&["Item", "1,234"], "Item 1.234"));
-        assert!(!claims_ignoring_marks(&["Item", "$5"], "Item 5"));
-        assert!(!claims_ignoring_marks(&["Item", "\u{2014}", "5"], "Item 5"));
-        assert!(claims_ignoring_marks(&["Item", "\u{2014}", "5"], "Item \u{2014} 5"));
-        assert!(claims_ignoring_marks(&["Item", "-", "5"], "Item ..... - 5"));
+    fn rows_claim_a_line_whose_leader_picked_up_a_dash() {
+        assert!(claims(
+            &["Storm drains", "36", "845.60", "338,224", "331,760", "(6,464)"],
+            "Storm drains ............-. 36 845.60 338,224 331,760 (6,464)"
+        ));
+        assert!(claims(
+            &["Code review", "25", "1,510.35"],
+            "Code review ............-- 25 1,510.35"
+        ));
     }
 
     #[test]
-    fn rows_ignoring_marks_never_claim_a_row_made_only_of_leader_marks() {
-        assert!(!claims_ignoring_marks(&["....."], "....."));
-        assert!(!claims_ignoring_marks(&["=", "..."], "= ..."));
-        assert!(!claims_ignoring_marks(&["Item", "5"], "....."));
+    fn rows_keep_signs_brackets_separators_and_dashes_significant() {
+        assert!(!claims(&["Item", "5"], "Item (5)"));
+        assert!(!claims(&["Item", "12"], "Item -12"));
+        assert!(!claims(&["Item", "1,234"], "Item 1.234"));
+        assert!(!claims(&["Item", "$5"], "Item 5"));
+        assert!(!claims(&["Item", "\u{2014}", "5"], "Item 5"));
+        assert!(claims(&["Item", "\u{2014}", "5"], "Item \u{2014} 5"));
+        assert!(claims(&["Item", "-", "5"], "Item ..... - 5"));
     }
 
     #[test]
-    fn rows_ignoring_marks_spend_each_identical_row_once() {
+    fn rows_never_claim_a_row_made_only_of_leader_marks() {
+        assert!(!claims(&["....."], "....."));
+        assert!(!claims(&["=", "..."], "= ..."));
+        assert!(!claims(&["Item", "5"], "....."));
+    }
+
+    #[test]
+    fn rows_claim_a_line_when_the_table_split_its_cells_differently() {
+        // The detector and the recognized line disagree on where the cells end; the ordered
+        // tokens are the same, so the row is still the one the line carries (#2503).
+        let cells = vec![vec![
+            "Parks and".to_string(),
+            "trails 14".to_string(),
+            "1,204.50".to_string(),
+            "628,382".to_string(),
+            "544,118".to_string(),
+            "(84,264)".to_string(),
+        ]];
+        let mut rows = ExactTableRows::ignoring_marks(&cells);
+
+        assert!(rows.claim("Parks and trails 14 1,204.50 628,382 544,118 (84,264)".split_whitespace()));
+        assert!(!rows.claim("Parks and trails 14 1,204.50 628,382 544,118 (84,265)".split_whitespace()));
+    }
+
+    #[test]
+    fn rows_do_not_claim_a_line_with_an_extra_number() {
+        let cells = row(&["Parks and trails", "14", "1,204.50"]);
+        let mut rows = ExactTableRows::ignoring_marks(&cells);
+
+        assert!(!rows.claim("Parks and trails 14 1,204.50 628,382".split_whitespace()));
+    }
+
+    #[test]
+    fn rows_spend_each_identical_row_once() {
         let cells = vec![
             vec!["Fee".to_string(), "5".to_string()],
             vec!["Fee".to_string(), "5".to_string()],
