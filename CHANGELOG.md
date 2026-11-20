@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** Native extraction keeps a raised ordinal suffix (`2nd`, `24th`) in its sentence when the mark is a multi-glyph run set up to 0.5em above its base, while a lone raised mark keeps the narrower reach. (#3317)
 - **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
 
 ## [1.4.2] - 2026-11-19

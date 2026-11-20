@@ -2606,7 +2606,13 @@ fn is_inline_style_transition(
 /// gate rejects outright -- it cannot change the outcome of any pair that passes today. ~keep
 fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_delta: f32, font_size: f32) -> bool {
     let smaller_font_size = previous.font_size.min(next.font_size);
-    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+    crate::script_run::is_script_run_baseline_offset_for_width(
+        baseline_delta,
+        font_size,
+        smaller_font_size,
+        next.width,
+        next.font_size,
+    )
 }
 
 /// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,
