@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)
 - **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
 
 ### Changed
