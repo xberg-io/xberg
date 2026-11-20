@@ -42,6 +42,8 @@ impl PointRegion<'_> {
     pub fn point(&self) -> (i32, i32) {
         let mut x = 0;
         let mut y = 0;
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; only the two out
+        // coordinates are written.
         unsafe {
             lh::heif_region_get_point(self.0.as_ptr(), &mut x, &mut y);
         }
@@ -56,6 +58,8 @@ impl PointRegion<'_> {
     pub fn point_transformed(&self, image_id: ItemId) -> (f64, f64) {
         let mut x = 0.;
         let mut y = 0.;
+        // SAFETY: `self.0` owns the region and shares the context whose image properties this transformed
+        // getter resolves against, so both stay live; only the out coordinates are written.
         unsafe {
             lh::heif_region_get_point_transformed(self.0.as_ptr(), image_id, &mut x, &mut y);
         }
@@ -95,6 +99,8 @@ impl RectangleRegion<'_> {
     #[allow(unsafe_code)]
     pub fn rectangle(&self) -> Rectangle {
         let mut res = Rectangle::default();
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; libheif only writes the
+        // four out fields of the initialized `Rectangle`.
         unsafe {
             lh::heif_region_get_rectangle(
                 self.0.as_ptr(),
@@ -114,6 +120,8 @@ impl RectangleRegion<'_> {
     #[allow(unsafe_code)]
     pub fn rectangle_transformed(&self, image_id: ItemId) -> RectangleTransformed {
         let mut res = RectangleTransformed::default();
+        // SAFETY: `self.0` owns the region and shares the context whose image properties this transformed
+        // getter resolves against, so both stay live; only the out fields are written.
         unsafe {
             lh::heif_region_get_rectangle_transformed(
                 self.0.as_ptr(),
@@ -158,6 +166,8 @@ impl EllipseRegion<'_> {
     #[allow(unsafe_code)]
     pub fn ellipse(&self) -> Ellipse {
         let mut res = Ellipse::default();
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; libheif only writes the
+        // four out fields of the initialized `Ellipse`.
         unsafe {
             lh::heif_region_get_ellipse(
                 self.0.as_ptr(),
@@ -180,6 +190,8 @@ impl EllipseRegion<'_> {
     #[allow(unsafe_code)]
     pub fn ellipse_transformed(&self, image_id: ItemId) -> EllipseTransformed {
         let mut res = EllipseTransformed::default();
+        // SAFETY: `self.0` owns the region and shares the context whose image properties this transformed
+        // getter resolves against, so both stay live; only the out fields are written.
         unsafe {
             lh::heif_region_get_ellipse_transformed(
                 self.0.as_ptr(),
@@ -209,10 +221,14 @@ impl PolygonRegion<'_> {
     /// The points are returned as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
     pub fn polygon_points(&self) -> Vec<(i32, i32)> {
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; the query only reads the
+        // stored point count.
         let num_points = unsafe { lh::heif_region_get_polygon_num_points(self.0.as_ptr()) };
         let size = num_points.max(0) as usize;
         let mut points: Vec<(i32, i32)> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves the point count just queried from the same immutable region, the
+            // bound libheif is given, and `set_len` runs only for the points that call wrote.
             unsafe {
                 lh::heif_region_get_polygon_points(self.0.as_ptr(), points.as_mut_ptr() as _);
                 points.set_len(size);
@@ -232,10 +248,15 @@ impl PolygonRegion<'_> {
     /// The points are returned as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
     pub fn polygon_points_transformed(&self, image_id: ItemId) -> Vec<(f64, f64)> {
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; the query only reads the
+        // stored point count.
         let num_points = unsafe { lh::heif_region_get_polygon_num_points(self.0.as_ptr()) };
         let size = num_points.max(0) as usize;
         let mut points: Vec<(f64, f64)> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves the point count just queried from the same immutable region, the
+            // context the transform reads is kept alive by `self.0`, and `set_len` covers only the
+            // points that call wrote.
             unsafe {
                 lh::heif_region_get_polygon_points_transformed(self.0.as_ptr(), image_id, points.as_mut_ptr() as _);
                 points.set_len(size);
@@ -261,10 +282,14 @@ impl PolylineRegion<'_> {
     /// The points are returned as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
     pub fn polyline_points(&self) -> Vec<(i32, i32)> {
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; the query only reads the
+        // stored point count.
         let num_points = unsafe { lh::heif_region_get_polyline_num_points(self.0.as_ptr()) };
         let size = num_points.max(0) as usize;
         let mut points: Vec<(i32, i32)> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves the point count just queried from the same immutable region, the
+            // bound libheif is given, and `set_len` runs only for the points that call wrote.
             unsafe {
                 lh::heif_region_get_polyline_points(self.0.as_ptr(), points.as_mut_ptr() as _);
                 points.set_len(size);
@@ -285,10 +310,15 @@ impl PolylineRegion<'_> {
     /// The points are returned as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
     pub fn polyline_points_transformed(&self, image_id: ItemId) -> Vec<(f64, f64)> {
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; the query only reads the
+        // stored point count.
         let num_points = unsafe { lh::heif_region_get_polyline_num_points(self.0.as_ptr()) };
         let size = num_points.max(0) as usize;
         let mut points: Vec<(f64, f64)> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves the point count just queried from the same immutable region, the
+            // context the transform reads is kept alive by `self.0`, and `set_len` covers only the
+            // points that call wrote.
             unsafe {
                 lh::heif_region_get_polyline_points_transformed(self.0.as_ptr(), image_id, points.as_mut_ptr() as _);
                 points.set_len(size);
@@ -307,6 +337,8 @@ impl ReferencedMaskRegion<'_> {
     pub fn referenced_mask(&self) -> (Rectangle, ItemId) {
         let mut rectangle = Rectangle::default();
         let mut item_id = 0;
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; libheif only writes the
+        // four out rectangle fields and the out item id.
         unsafe {
             lh::heif_region_get_referenced_mask_ID(
                 self.0.as_ptr(),
@@ -339,8 +371,12 @@ impl InlineMaskRegion<'_> {
     #[allow(unsafe_code)]
     pub fn inline_mask_data(&self) -> (Rectangle, Vec<u8>) {
         let mut rectangle = Rectangle::default();
+        // SAFETY: `self.0` is the owned native region, live for the `&self` borrow; the query only reads the
+        // stored mask byte length.
         let size = unsafe { lh::heif_region_get_inline_mask_data_len(self.0.as_ptr()) };
         let mut data: Vec<u8> = Vec::with_capacity(size);
+        // SAFETY: The vector reserves the length just queried from the same immutable region, so libheif
+        // writes within its capacity; `set_len` runs after that call and only for that length.
         unsafe {
             lh::heif_region_get_inline_mask_data(
                 self.0.as_ptr(),
@@ -433,6 +469,8 @@ pub enum Region<'a> {
 impl<'a> Region<'a> {
     #[allow(unsafe_code)]
     fn new(region_ptr: ptr::NonNull<lh::heif_region>, context: &Rc<ContextOwner<'a>>) -> Option<Self> {
+        // SAFETY: `region_ptr` is non-null by its type and points at the live region the caller is about to
+        // move into `OwnedRegion`; the shared reference lives only for this call.
         let region_type = unsafe { lh::heif_region_get_type(region_ptr.as_ref()) };
         let region = OwnedRegion::new(region_ptr, context);
         match region_type {
@@ -513,6 +551,8 @@ impl<'a> RegionItem<'a> {
 
     #[allow(unsafe_code)]
     pub fn id(&self) -> ItemId {
+        // SAFETY: `inner` is a live region item owned by this wrapper and released once in Drop; the query
+        // only reads its id.
         unsafe { lh::heif_region_item_get_id(self.inner) }
     }
 
@@ -526,6 +566,7 @@ impl<'a> RegionItem<'a> {
     pub fn reference_size(&self) -> (u32, u32) {
         let mut width = 0;
         let mut height = 0;
+        // SAFETY: `inner` is live and both out slots are initialized integers libheif writes through.
         unsafe {
             lh::heif_region_item_get_reference_size(self.inner, &mut width, &mut height);
         }
@@ -535,11 +576,14 @@ impl<'a> RegionItem<'a> {
     /// Get the regions that are part of a region item.
     #[allow(unsafe_code)]
     pub fn regions(&self) -> Vec<Region<'a>> {
+        // SAFETY: `inner` is live and owned by this wrapper; the query only reads the stored region count.
         let num_regions = unsafe { lh::heif_region_item_get_number_of_regions(self.inner) };
         let size = num_regions.max(0) as usize;
         let mut region_ptrs: Vec<*mut lh::heif_region> = Vec::with_capacity(size);
         let mut regions: Vec<Region<'a>> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves exactly `num_regions` pointer slots, the bound libheif is given, and
+            // `set_len` runs only for that count. Each returned pointer is a region this value adopts.
             unsafe {
                 lh::heif_region_item_get_list_of_regions(self.inner, region_ptrs.as_mut_ptr(), num_regions);
                 region_ptrs.set_len(size);
@@ -557,6 +601,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_point(&mut self, x: i32, y: i32) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `self` is exclusively borrowed and `region_ptr` is a writable out slot; on success
+        // libheif stores an owned region that `own` adopts.
         let err = unsafe { lh::heif_region_item_add_region_point(self.inner, x, y, &mut region_ptr) };
         HeifError::from_heif_error(err)?;
         Ok(Region::Point(PointRegion(self.own(get_non_null_ptr(region_ptr)?))))
@@ -566,6 +612,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_rectangle(&mut self, rectangle: Rectangle) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `self` is exclusively borrowed and `region_ptr` is a writable out slot; the rectangle is
+        // passed by value and on success libheif stores an owned region that `own` adopts.
         let err = unsafe {
             lh::heif_region_item_add_region_rectangle(
                 self.inner,
@@ -586,6 +634,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_ellipse(&mut self, center_x: i32, center_y: i32, radius_x: u32, radius_y: u32) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `self` is exclusively borrowed and `region_ptr` is a writable out slot; the geometry is
+        // passed by value and on success libheif stores an owned region that `own` adopts.
         let err = unsafe {
             lh::heif_region_item_add_region_ellipse(self.inner, center_x, center_y, radius_x, radius_y, &mut region_ptr)
         };
@@ -601,6 +651,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_polygon(&mut self, points: &[(i32, i32)]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `points` is a live slice whose `(i32, i32)` pairs have the array layout libheif reads for
+        // `len` entries, `self` is exclusively borrowed, and `region_ptr` is a writable out slot.
         let err = unsafe {
             lh::heif_region_item_add_region_polygon(
                 self.inner,
@@ -623,6 +675,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_polyline(&mut self, points: &[(i32, i32)]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `points` is a live slice whose `(i32, i32)` pairs have the array layout libheif reads for
+        // `len` entries, `self` is exclusively borrowed, and `region_ptr` is a writable out slot.
         let err = unsafe {
             lh::heif_region_item_add_region_polyline(
                 self.inner,
@@ -641,6 +695,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_referenced_mask(&mut self, rectangle: Rectangle, mask_item_id: ItemId) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `self` is exclusively borrowed and `region_ptr` is a writable out slot; the mask id and
+        // rectangle are passed by value.
         let err = unsafe {
             lh::heif_region_item_add_region_referenced_mask(
                 self.inner,
@@ -670,6 +726,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_inline_mask_data(&mut self, rectangle: Rectangle, mask_data: &[u8]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `mask_data` is a live slice of `len` bytes, `self` is exclusively borrowed, and
+        // `region_ptr` is a writable out slot.
         let err = unsafe {
             lh::heif_region_item_add_region_inline_mask_data(
                 self.inner,
@@ -706,6 +764,8 @@ impl<'a> RegionItem<'a> {
     #[allow(unsafe_code)]
     pub fn add_inline_mask(&mut self, rectangle: Rectangle, image: &Image) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
+        // SAFETY: `image.inner` is the live image the borrow of `image` keeps alive for the call, `self` is
+        // exclusively borrowed, and `region_ptr` is a writable out slot.
         let err = unsafe {
             lh::heif_region_item_add_region_inline_mask(
                 self.inner,

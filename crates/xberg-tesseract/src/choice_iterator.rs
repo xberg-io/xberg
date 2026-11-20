@@ -21,8 +21,8 @@ impl<'api> ChoiceIterator<'api> {
     /// `raw` must be a non-null `TessChoiceIterator` that `api`'s engine created from the result
     /// at `epoch`, owned by nothing else.
     pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
-        // SAFETY: forwarded from this function's contract. ~keep
         ChoiceIterator {
+            // SAFETY: forwarded from this function's contract. ~keep
             inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
     }

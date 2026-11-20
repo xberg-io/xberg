@@ -5,6 +5,7 @@
 //! `crate::extract_batch` delegate here via a process-global default
 //! [`crate::engine::Engine`].
 
+use crate::cancellation::check_cancelled;
 use crate::core::extractor::cache_context::{CacheDependency, apply_context, fingerprint};
 use crate::core::extractor::cacheability;
 use std::borrow::Cow;
@@ -112,7 +113,7 @@ async fn extract_scoped(
     if let Err(error) = config
         .validate()
         .and_then(|()| validate_input_overrides(std::slice::from_ref(&input)))
-        .and_then(|()| ensure_not_cancelled(config))
+        .and_then(|()| check_cancelled(config.cancel_token.as_ref()))
     {
         inner.progress.emit(ProgressEvent {
             stage: PROGRESS_STAGE_ERROR.to_string(),
@@ -240,15 +241,8 @@ fn resolve_explicit_layout_page_config(input: &ExtractInput, config: &Extraction
     resolved.layout.get_or_insert_with(Default::default);
     resolved.use_cache = false;
     resolved.validate()?;
-    ensure_not_cancelled(&resolved)?;
+    check_cancelled(resolved.cancel_token.as_ref())?;
     Ok(resolved)
-}
-
-fn ensure_not_cancelled(config: &ExtractionConfig) -> Result<()> {
-    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 /// The extraction path proper, unwrapped from cache/progress bookkeeping so
@@ -356,7 +350,7 @@ async fn extract_batch_scoped<I: BatchInputRef>(
     if let Err(error) = config
         .validate()
         .and_then(|()| validate_input_overrides(inputs.iter().map(BatchInputRef::input)))
-        .and_then(|()| ensure_not_cancelled(config))
+        .and_then(|()| check_cancelled(config.cancel_token.as_ref()))
     {
         inner.progress.emit(ProgressEvent {
             stage: BATCH_PROGRESS_STAGE_ERROR.to_string(),
