@@ -541,7 +541,7 @@ fn should_keep_the_plus_of_a_subscripted_base_out_of_the_exponent_of_the_base() 
     assert!(content.contains("g<sup>j</sup> ~K~<sup>+</sup>"), "{content}");
 }
 
-fn inline_superscript_pdf(prefix: &str, mark: &str, tail: &str) -> Vec<u8> {
+fn inline_superscript_pdf(prefix: &str, mark: &str, tail: &str, overhang: f32) -> Vec<u8> {
     let metrics = script_pdf(&format!(
         "BT /F1 12 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET\n\
          BT /F1 8.04 Tf 1 0 0 1 72 600 Tm ({mark}) Tj ET"
@@ -558,7 +558,9 @@ fn inline_superscript_pdf(prefix: &str, mark: &str, tail: &str) -> Vec<u8> {
         .filter(|glyph| (glyph.font_size - 8.04).abs() < 0.01)
         .map(|glyph| glyph.advance_width)
         .sum();
-    let mark_x = 72.0 + prefix_width;
+    // The producer's advance can end a hair past the mark's origin, as on the reported PDF; a
+    // negative gap inside `SnapReach`'s kerning slack must still read as attached. ~keep
+    let mark_x = 72.0 + prefix_width - overhang;
     let tail_x = mark_x + mark_width;
     script_pdf(&format!(
         "BT /F1 12 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET\n\
@@ -569,7 +571,12 @@ fn inline_superscript_pdf(prefix: &str, mark: &str, tail: &str) -> Vec<u8> {
 
 #[test]
 fn should_keep_an_inline_superscript_ordinal_in_its_sentence() {
-    let bytes = inline_superscript_pdf("The appeal was refused on 2", "nd", " June, 2021 of an application.");
+    let bytes = inline_superscript_pdf(
+        "The appeal was refused on 2",
+        "nd",
+        " June, 2021 of an application.",
+        0.02,
+    );
     let output = markdown(&bytes);
     assert_eq!(
         output.trim(),
@@ -583,6 +590,6 @@ fn should_keep_an_inline_superscript_ordinal_in_its_sentence() {
 fn should_keep_a_lone_raised_footnote_mark_as_it_was() {
     // A single glyph is below the ordinal run's measured width, so the wider reach leaves it
     // exactly as it was: an inline superscript, not a suffix joined onto the preceding line.
-    let bytes = inline_superscript_pdf("Clause 123", "1", " continues.");
+    let bytes = inline_superscript_pdf("Clause 123", "1", " continues.", 0.0);
     assert_eq!(markdown(&bytes).trim(), "Clause 123<sup>1</sup> continues.");
 }
