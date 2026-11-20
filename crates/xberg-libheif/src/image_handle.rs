@@ -41,63 +41,87 @@ impl<'a> ImageHandle<'a> {
 
     #[allow(unsafe_code)]
     pub fn item_id(&self) -> ItemId {
+        // SAFETY: `inner` is a live handle owned by this wrapper for the whole `&self` borrow; the
+        // call only reads the item id libheif stored when the handle was created.
         unsafe { lh::heif_image_handle_get_item_id(self.inner) }
     }
 
     #[allow(unsafe_code)]
     pub fn width(&self) -> u32 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; libheif only reads the width it
+        // parsed when the handle was created.
         unsafe { lh::heif_image_handle_get_width(self.inner) as _ }
     }
 
     #[allow(unsafe_code)]
     pub fn height(&self) -> u32 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; libheif only reads the height it
+        // parsed when the handle was created.
         unsafe { lh::heif_image_handle_get_height(self.inner) as _ }
     }
 
     #[allow(unsafe_code)]
     pub fn has_alpha_channel(&self) -> bool {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the call only reads a flag from its
+        // parsed state.
         unsafe { lh::heif_image_handle_has_alpha_channel(self.inner) != 0 }
     }
 
     #[allow(unsafe_code)]
     pub fn is_premultiplied_alpha(&self) -> bool {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the call only reads a flag from its
+        // parsed state.
         unsafe { lh::heif_image_handle_is_premultiplied_alpha(self.inner) != 0 }
     }
 
     #[allow(unsafe_code)]
     pub fn is_primary(&self) -> bool {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the call only reads a flag from its
+        // parsed state.
         unsafe { lh::heif_image_handle_is_primary_image(self.inner) != 0 }
     }
 
     #[allow(unsafe_code)]
     pub fn luma_bits_per_pixel(&self) -> u8 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads its parsed
+        // bit depth.
         unsafe { lh::heif_image_handle_get_luma_bits_per_pixel(self.inner) as _ }
     }
 
     #[allow(unsafe_code)]
     pub fn chroma_bits_per_pixel(&self) -> u8 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads its parsed
+        // bit depth.
         unsafe { lh::heif_image_handle_get_chroma_bits_per_pixel(self.inner) as _ }
     }
 
     /// Get the image width from the 'ispe' box.
     #[allow(unsafe_code)]
     pub fn ispe_width(&self) -> i32 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads its parsed
+        // `ispe` box.
         unsafe { lh::heif_image_handle_get_ispe_width(self.inner) as _ }
     }
 
     /// Get the image height from the 'ispe' box.
     #[allow(unsafe_code)]
     pub fn ispe_height(&self) -> i32 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads its parsed
+        // `ispe` box.
         unsafe { lh::heif_image_handle_get_ispe_height(self.inner) as _ }
     }
 
     #[allow(unsafe_code)]
     pub fn has_depth_image(&self) -> bool {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the call only reads a flag from its
+        // parsed state.
         unsafe { lh::heif_image_handle_has_depth_image(self.inner) != 0 }
     }
 
     #[allow(unsafe_code)]
     pub fn number_of_depth_images(&self) -> i32 {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the count is read from its parsed
+        // state.
         unsafe { lh::heif_image_handle_get_number_of_depth_images(self.inner) }
     }
 
@@ -106,6 +130,8 @@ impl<'a> ImageHandle<'a> {
         if item_ids.is_empty() {
             0
         } else {
+            // SAFETY: `inner` is live and the exclusive slice supplies writable storage for exactly
+            // `item_ids.len()` ids, the bound libheif is given.
             unsafe {
                 lh::heif_image_handle_get_list_of_depth_image_IDs(
                     self.inner,
@@ -119,16 +145,23 @@ impl<'a> ImageHandle<'a> {
     #[allow(unsafe_code)]
     pub fn depth_image_handle(&self, depth_image_id: ItemId) -> Result<Self> {
         let mut out_depth_handler = MaybeUninit::<_>::uninit();
+        // SAFETY: `out_depth_handler` is writable storage for the out parameter, and `inner` is live for
+        // the call. On success libheif stores a handle this value adopts; on error the slot is
+        // never read.
         let err = unsafe {
             lh::heif_image_handle_get_depth_image_handle(self.inner, depth_image_id, out_depth_handler.as_mut_ptr())
         };
         HeifError::from_heif_error(err)?;
+        // SAFETY: The preceding call succeeded, which is libheif's contract for having written the
+        // depth handle into the slot.
         let out_depth_handler = unsafe { out_depth_handler.assume_init() };
         Ok(ImageHandle::new(out_depth_handler, &self.context))
     }
 
     #[allow(unsafe_code)]
     pub fn number_of_thumbnails(&self) -> usize {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the count is read from its parsed
+        // state.
         unsafe { lh::heif_image_handle_get_number_of_thumbnails(self.inner) as _ }
     }
 
@@ -137,6 +170,8 @@ impl<'a> ImageHandle<'a> {
         if item_ids.is_empty() {
             0
         } else {
+            // SAFETY: `inner` is live and the exclusive slice supplies writable storage for exactly
+            // `item_ids.len()` ids, the bound libheif is given.
             unsafe {
                 lh::heif_image_handle_get_list_of_thumbnail_IDs(self.inner, item_ids.as_mut_ptr(), item_ids.len() as _)
                     as usize
@@ -147,10 +182,15 @@ impl<'a> ImageHandle<'a> {
     #[allow(unsafe_code)]
     pub fn thumbnail(&self, thumbnail_id: ItemId) -> Result<Self> {
         let mut out_thumbnail_handler = MaybeUninit::<_>::uninit();
+        // SAFETY: `out_thumbnail_handler` is writable storage for the out parameter, and `inner` is live
+        // for the call. On success libheif stores a handle this value adopts; on error the slot
+        // is never read.
         let err = unsafe {
             lh::heif_image_handle_get_thumbnail(self.inner, thumbnail_id, out_thumbnail_handler.as_mut_ptr())
         };
         HeifError::from_heif_error(err)?;
+        // SAFETY: The preceding call succeeded, which is libheif's contract for having written the
+        // thumbnail handle into the slot.
         let out_thumbnail_handler = unsafe { out_thumbnail_handler.assume_init() };
         Ok(ImageHandle::new(out_thumbnail_handler, &self.context))
     }
@@ -177,6 +217,8 @@ impl<'a> ImageHandle<'a> {
             Some(s) => s.as_ptr(),
             None => ptr::null(),
         };
+        // SAFETY: `inner` is live and `filter_ptr` is either null or points into `c_type_filter`, which
+        // outlives the call.
         unsafe { lh::heif_image_handle_get_number_of_metadata_blocks(self.inner, filter_ptr) }
     }
 
@@ -193,6 +235,8 @@ impl<'a> ImageHandle<'a> {
                 Some(s) => s.as_ptr(),
                 None => ptr::null(),
             };
+            // SAFETY: `inner` is live, `filter_ptr` borrows `c_type_filter` for the call, and the exclusive
+            // slice supplies writable storage for `item_ids.len()` ids.
             unsafe {
                 lh::heif_image_handle_get_list_of_metadata_block_IDs(
                     self.inner,
@@ -206,23 +250,31 @@ impl<'a> ImageHandle<'a> {
 
     #[allow(unsafe_code)]
     pub fn metadata_type(&self, metadata_id: ItemId) -> Option<&str> {
+        // SAFETY: `inner` is live and the returned string is owned by the handle's parsed metadata, so it
+        // stays valid for the `&self` borrow `cstr_to_str` ties the result to.
         let c_type: *const c_char = unsafe { lh::heif_image_handle_get_metadata_type(self.inner, metadata_id) };
         cstr_to_str(c_type)
     }
 
     #[allow(unsafe_code)]
     pub fn metadata_content_type(&self, metadata_id: ItemId) -> Option<&str> {
+        // SAFETY: `inner` is live and the returned string is owned by the handle's parsed metadata, so it
+        // stays valid for the `&self` borrow `cstr_to_str` ties the result to.
         let c_type = unsafe { lh::heif_image_handle_get_metadata_content_type(self.inner, metadata_id) };
         cstr_to_str(c_type)
     }
 
     #[allow(unsafe_code)]
     pub fn metadata_size(&self, metadata_id: ItemId) -> usize {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads the stored
+        // metadata size.
         unsafe { lh::heif_image_handle_get_metadata_size(self.inner, metadata_id) }
     }
 
     #[allow(unsafe_code)]
     pub fn metadata_item_uri_type(&self, metadata_id: ItemId) -> Option<&str> {
+        // SAFETY: `inner` is live and the returned string is owned by the handle's parsed metadata, so it
+        // stays valid for the `&self` borrow `cstr_to_str` ties the result to.
         let c_type = unsafe { lh::heif_image_handle_get_metadata_item_uri_type(self.inner, metadata_id) };
         cstr_to_str(c_type)
     }
@@ -238,6 +290,9 @@ impl<'a> ImageHandle<'a> {
             });
         }
         let mut result: Vec<u8> = Vec::with_capacity(size);
+        // SAFETY: The handle's metadata item is immutable, so the size queried above still holds. libheif
+        // fills exactly that many bytes into the reserved capacity before `set_len` runs, and
+        // `inner` is live.
         unsafe {
             let err = lh::heif_image_handle_get_metadata(self.inner, metadata_id, result.as_ptr() as _);
             HeifError::from_heif_error(err)?;
@@ -282,6 +337,8 @@ impl<'a> ImageHandle<'a> {
     pub fn preferred_decoding_colorspace(&self) -> Result<ColorSpace> {
         let mut lh_colorspace = lh::heif_colorspace_heif_colorspace_undefined;
         let mut lh_chroma = lh::heif_chroma_heif_chroma_undefined;
+        // SAFETY: Both out slots are initialized values and `inner` is live; libheif only overwrites
+        // them with enum values.
         let err = unsafe {
             lh::heif_image_handle_get_preferred_decoding_colorspace(self.inner, &mut lh_colorspace, &mut lh_chroma)
         };
@@ -291,18 +348,26 @@ impl<'a> ImageHandle<'a> {
 
     #[allow(unsafe_code)]
     pub fn color_profile_raw(&self) -> Option<ColorProfileRaw> {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the query only reads the stored
+        // profile size.
         let size = unsafe { lh::heif_image_handle_get_raw_color_profile_size(self.inner) };
         if size == 0 {
             return None;
         }
         let mut result: Vec<u8> = Vec::with_capacity(size);
+        // SAFETY: `result` reserves the size just queried from the same immutable handle, so libheif
+        // writes within its capacity; the error code is checked before the length is set.
         let err = unsafe { lh::heif_image_handle_get_raw_color_profile(self.inner, result.as_ptr() as _) };
         if err.code != 0 {
             return None;
         }
+        // SAFETY: The profile getter succeeded and wrote `size` bytes into the reserved capacity, so
+        // every byte in that range is initialized.
         unsafe {
             result.set_len(size);
         }
+        // SAFETY: `inner` is a live handle owned by this wrapper; the call only reads the profile type
+        // from its parsed state.
         let c_profile_type = unsafe { lh::heif_image_handle_get_color_profile_type(self.inner) };
         let profile_type = ColorProfileType::from(c_profile_type as u32);
 
@@ -315,10 +380,15 @@ impl<'a> ImageHandle<'a> {
     #[allow(unsafe_code)]
     pub fn color_profile_nclx(&self) -> Option<ColorProfileNCLX> {
         let mut profile_ptr = MaybeUninit::<_>::uninit();
+        // SAFETY: `profile_ptr` is writable storage for the out parameter and `inner` is live. libheif
+        // stores an owned profile only on success, and the error code is checked before the slot
+        // is read.
         let err = unsafe { lh::heif_image_handle_get_nclx_color_profile(self.inner, profile_ptr.as_mut_ptr()) };
         if err.code != 0 {
             return None;
         }
+        // SAFETY: The getter returned success, which is libheif's contract for having written the
+        // profile pointer; the null check below covers the no-profile case.
         let profile_ptr = unsafe { profile_ptr.assume_init() };
         if profile_ptr.is_null() {
             return None;
@@ -330,6 +400,9 @@ impl<'a> ImageHandle<'a> {
     #[allow(unsafe_code)]
     pub fn add_region_item(&mut self, reference_width: u32, reference_height: u32) -> Result<RegionItem<'a>> {
         let mut lh_region_item_ptr: *mut lh::heif_region_item = ptr::null_mut();
+        // SAFETY: `self` is exclusively borrowed, so no region item can be added or read concurrently,
+        // and `lh_region_item_ptr` is a writable out slot. On success libheif stores an owned
+        // region item, which `RegionItem` adopts.
         let err = unsafe {
             lh::heif_image_handle_add_region_item(
                 self.inner,
@@ -350,17 +423,23 @@ impl<'a> ImageHandle<'a> {
     #[cfg(feature = "v1_18")]
     #[allow(unsafe_code)]
     pub fn region_items(&self) -> Vec<RegionItem<'a>> {
+        // SAFETY: `inner` is a live handle owned by this wrapper; the count is read from its parsed
+        // state.
         let num_items = unsafe { lh::heif_image_handle_get_number_of_region_items(self.inner) };
         let size = num_items.max(0) as usize;
         let mut item_ids: Vec<ItemId> = Vec::with_capacity(size);
         let mut items: Vec<RegionItem<'a>> = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves `num_items` entries, the bound libheif is given, and `set_len` runs
+            // only for the ids that call reported. `inner` is live.
             unsafe {
                 lh::heif_image_handle_get_list_of_region_item_ids(self.inner, item_ids.as_mut_ptr(), num_items);
                 item_ids.set_len(size);
             }
             for item_id in item_ids {
                 let mut item_ptr = ptr::null_mut();
+                // SAFETY: `self.context` keeps the native context live and `item_ptr` is a writable out slot; a
+                // successful lookup returns an owned region item that `RegionItem` adopts.
                 let err = unsafe { lh::heif_context_get_region_item(self.context.ptr(), item_id, &mut item_ptr) };
                 if HeifError::from_heif_error(err).is_ok()
                     && let Some(region_item_ptr) = ptr::NonNull::new(item_ptr)
@@ -375,11 +454,15 @@ impl<'a> ImageHandle<'a> {
     #[allow(unsafe_code)]
     pub fn auxiliary_images<T: Into<Option<AuxiliaryImagesFilter>>>(&self, filter: T) -> Vec<ImageHandle<'a>> {
         let filter = filter.into().unwrap_or_default();
+        // SAFETY: `inner` is a live handle owned by this wrapper; the count is read from its parsed
+        // state.
         let num_items = unsafe { lh::heif_image_handle_get_number_of_auxiliary_images(self.inner, filter.0) };
         let size = num_items.max(0) as usize;
         let mut item_ids: Vec<ItemId> = Vec::with_capacity(size);
         let mut image_handles = Vec::with_capacity(size);
         if size > 0 {
+            // SAFETY: The vector reserves `num_items` entries, the bound libheif is given, and `set_len` runs
+            // only for the ids that call reported. `inner` is live.
             unsafe {
                 let real_size = lh::heif_image_handle_get_list_of_auxiliary_image_IDs(
                     self.inner,
@@ -392,6 +475,8 @@ impl<'a> ImageHandle<'a> {
             for item_id in item_ids {
                 let mut handle_ptr = ptr::null_mut();
                 let err =
+                    // SAFETY: `inner` is live and `handle_ptr` is a writable out slot; a successful lookup returns
+                    // an owned handle that `ImageHandle::new` adopts.
                     unsafe { lh::heif_image_handle_get_auxiliary_image_handle(self.inner, item_id, &mut handle_ptr) };
                 if HeifError::from_heif_error(err).is_ok() && !handle_ptr.is_null() {
                     image_handles.push(ImageHandle::new(handle_ptr, &self.context));

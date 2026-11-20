@@ -589,6 +589,23 @@ fn default_span() -> u32 {
     1
 }
 
+/// Decode the retained [`TableGrid`] an extractor attached to a table element.
+///
+/// The grid is carried as JSON on an internal element attribute rather than in the public
+/// [`Table`](super::Table) DTO, which keeps the published cell grid unchanged. Any extractor
+/// that sees a source grid can attach one: HTML keeps its `<th>` roles and merge spans this way,
+/// not only PDF. The value is re-validated against the table it describes before it is used.
+pub(crate) fn decode_retained_grid(attributes: Option<&ahash::AHashMap<String, String>>) -> Option<TableGrid> {
+    let encoded = attributes?.get(super::internal::NATIVE_TABLE_GRID_ATTRIBUTE)?;
+    match serde_json::from_str::<TableGrid>(encoded) {
+        Ok(grid) => Some(grid),
+        Err(error) => {
+            tracing::warn!(%error, "discarding invalid retained table geometry");
+            None
+        }
+    }
+}
+
 /// Inline text annotation — byte-range based formatting and links.
 ///
 /// Annotations reference byte offsets into the node's text content,

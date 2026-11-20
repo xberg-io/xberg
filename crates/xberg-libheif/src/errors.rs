@@ -178,7 +178,7 @@ impl HeifError {
         let message = if err.message.is_null() {
             ""
         } else {
-            // SAFETY requirement: This pointer must still refer to libheif's NUL-terminated
+            // SAFETY: This pointer must still refer to libheif's NUL-terminated
             // object-backed or static message. The safe signature does not enforce that
             // provenance or lifetime. The message is copied into HeifError below.
             let res = unsafe { CStr::from_ptr(err.message).to_str() };

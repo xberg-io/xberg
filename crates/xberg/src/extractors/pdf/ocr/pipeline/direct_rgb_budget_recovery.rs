@@ -197,15 +197,16 @@ mod tests {
                 assert!(!super::super::super::document::native_preservation_is_automatic(
                     &config, 1
                 ));
-                assert!(super::super::super::tall_source::supports(&config, &ocr));
+                assert!(super::super::super::tall_source::unsupported_reason(&config, &ocr).is_none());
             }
             if path == "/ocr/language" {
                 assert!(super::super::super::document::native_preservation_is_automatic(
                     &config, 1
                 ));
+                // Languages are a property of the resolved backend, not of the config. ~keep
                 assert_eq!(
                     super::super::super::tall_source::unsupported_reason(&config, &ocr),
-                    Some("the OCR language is not English only")
+                    None
                 );
             }
             if super::super::budget_retry_backend(&config, &ocr, &failed).is_some() {

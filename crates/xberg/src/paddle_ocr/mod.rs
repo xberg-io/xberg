@@ -52,6 +52,8 @@ mod tract_parity;
 
 #[cfg(paddle_ocr)]
 pub use backend::PaddleOcrBackend;
+#[cfg(feature = "paddle-ocr-ort")]
+pub(crate) use backend::clear_paddle_engine_caches;
 pub use config::{PaddleInferenceBackend, PaddleLanguage, PaddleOcrConfig};
 pub use model_manager::{ModelPaths, RecModelPaths, ResolvedRecModel, SharedModelPaths};
 
