@@ -1004,6 +1004,12 @@ Default cache directories:
 
 Override with `XBERG_CACHE_DIR` or `--cache-dir`.
 
+`XBERG_CACHE_DIR` is also what `serve`, `extract`, the MCP server and `doctor` read, so using the
+environment variable (rather than `--cache-dir`) keeps warming and serving on the same models. For an
+air-gapped deployment, warm with `XBERG_CACHE_DIR` and `HF_HUB_CACHE` pointing at one root, then run
+with the same values plus `HF_HUB_OFFLINE=1`; the per-feature model list is in
+[Model Sources](/reference/model-sources/#offline-and-air-gapped-use).
+
 NER warming downloads exported GLiNER artifacts from `xberg-io/gliner-models`,
 not arbitrary GLiNER source repositories. If that Hugging Face repository is
 private or not publicly readable, configure credentials supported by `hf-hub`
