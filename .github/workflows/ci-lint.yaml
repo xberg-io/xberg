@@ -15,7 +15,7 @@ on:
       - "*.yaml"
       - "*.yml"
       - "*.md"
-      # Root lockfiles. This job runs `uv sync --locked` and the shipped-licenses job runs
+      # Root lockfiles. This job runs `uv sync --locked` and, through the poly hooks,
       # cargo-deny against Cargo.lock -- but neither file matched any pattern above, so the
       # one change that fixes a stale lock could not trigger the job that rejects it. A root
       # uv.lock pinning xberg at 1.1.6 survived two releases that way. ~keep
@@ -51,32 +51,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: xberg-io/actions/check-toolchain@v1
-
-  shipped-licenses:
-    if: >-
-      ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
-    name: Shipped license graphs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: false
-      # cargo-deny shells out to `cargo metadata`, so the pinned toolchain has to be present
-      # even though nothing here compiles. ~keep
-      - name: Setup Rust for cargo metadata
-        uses: xberg-io/actions/setup-rust@v1
-        with:
-          disable-cache: "true"
-          use-sccache: "false"
-          install-llvm-cov: "false"
-      - name: Install cargo-deny
-        uses: xberg-io/actions/setup-mise@v1
-        with:
-          install-args: cargo-deny
-      # deny.toml is only enforced at release time, and only for the Windows no-heic CLI, so a
-      # license that reaches the `all` CLI or a binding went unaudited until then. ~keep
-      - name: Check every shipped graph against deny.toml
-        run: mise run rust:check:licenses
 
   governance-validation:
     if: github.ref == 'refs/heads/main'

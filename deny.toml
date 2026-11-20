@@ -43,9 +43,11 @@ confidence-threshold = 0.8
 # Every entry here is asserted matched: `mise run rust:check:licenses` fails when no checked
 # graph encounters one, so a renamed or removed dependency cannot leave a stale acceptance
 # behind. The benchmark-only `inferno` (CDDL-1.0, tools/benchmark-harness `profiling`) and
-# `intel-mkl-src` (unlicensed, only reachable through `candle-mkl`) deliberately have none: the
-# check is rooted at each shipped manifest, neither crate is in those graphs, and an acceptance
-# would let a shipped graph that pulls one pass instead of failing on the license itself.
+# `intel-mkl-src` (an unrecognized Intel license file, only reachable through `candle-mkl`)
+# deliberately have none: the check is rooted at each shipped manifest, neither crate is in
+# those graphs, and accepting either would hide it from every shipped graph too. Crates whose
+# manifest omits `license` are held to an explicit list in that script instead of passing on a
+# cargo-deny warning.
 exceptions = [
   { allow = ["MPL-2.0"], crate = "cbindgen" },
   { allow = ["MPL-2.0"], crate = "option-ext" },

@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
 EXPECTED_WORKFLOWS = 19
-EXPECTED_JOBS = 82
-EXPECTED_CHECKOUTS = 82
+EXPECTED_JOBS = 81
+EXPECTED_CHECKOUTS = 81
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 ACTIONS_BUMP_WORKFLOW = "maintenance-actions-bump.yaml"
@@ -134,6 +134,18 @@ class MainOnlyCiTests(unittest.TestCase):
     def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []
+
+    def test_focused_pr_license_job_uses_pinned_cargo_deny_and_the_repo_task(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        job = workflow["jobs"]["licenses"]
+        setup_mise = [step for step in job["steps"] if step.get("uses") == "xberg-io/actions/setup-mise@v1"]
+        assert len(setup_mise) == 1
+        assert setup_mise[0]["with"]["install-args"] == "cargo-deny"
+        assert any(step.get("uses") == "xberg-io/actions/setup-rust@v1" for step in job["steps"])
+        assert [step["run"] for step in job["steps"] if "run" in step] == ["mise run rust:check:licenses"]
+        triggers = workflow.get("on", workflow.get(True))
+        for event in ("pull_request", "push"):
+            assert "packages/**" in triggers[event]["paths"]
 
     def test_python_callback_smoke_rejects_automatic_runs(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
