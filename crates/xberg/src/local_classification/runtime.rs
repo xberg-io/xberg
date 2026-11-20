@@ -129,11 +129,11 @@ fn classify_admitted(
     control.check()?;
     validate_cpu_runtime()?;
     let session_options = crate::ort_options::ort_session_options();
-    let prepared = *state
+    let prepared = state
         .prepared_options
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if prepared != Some(session_options) {
+    if prepared.as_ref() != Some(&session_options) {
         return Err(invalid(
             "ORT options changed; explicitly prepare the local NLI classifier again",
         ));
