@@ -109,6 +109,13 @@ mod tall_source;
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
+pub(crate) use tall_source::try_replace_standalone;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 pub(super) use tall_source::with_document_region_ocr_budget;
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
