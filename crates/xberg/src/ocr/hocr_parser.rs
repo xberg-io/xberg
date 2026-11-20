@@ -285,7 +285,8 @@ pub(crate) fn parse_hocr_preserving_rejected_table_words(
 }
 
 /// Remove exact table rows while the parser still has each physical line's word boxes. With
-/// `ignore_marks`, rows are compared on their alphanumeric tokens alone (dot-leader rows, #2783).
+/// `ignore_marks`, rows are compared without leader artifacts, so a dot leader or a stray mark
+/// the table cell lacks does not keep the line (#2503).
 pub(crate) fn parse_hocr_without_claimed_table_rows(
     hocr_html: &str,
     page_offset: u32,

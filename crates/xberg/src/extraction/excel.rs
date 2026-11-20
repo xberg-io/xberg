@@ -89,10 +89,8 @@ use package_metadata::{
     extract_ods_office_metadata_from_bytes, extract_ods_office_metadata_from_file,
     extract_xlsx_office_metadata_from_bytes, extract_xlsx_office_metadata_from_file,
 };
-use package_metadata::{
-    extract_xlsx_comments_from_bytes, extract_xlsx_comments_from_file, extract_xlsx_revisions_from_bytes,
-    extract_xlsx_revisions_from_file,
-};
+#[cfg(test)]
+use package_metadata::{extract_xlsx_comments_from_bytes, extract_xlsx_revisions_from_bytes};
 
 mod datetime;
 mod table_budget;
@@ -101,7 +99,7 @@ use table_budget::SkippedSheets;
 /// Format dispatch and the `read_excel_file`/`read_excel_bytes` entry points, split out to
 /// keep this file under the line-count limit.
 mod open;
-pub(crate) use open::{read_excel_bytes, read_excel_file};
+pub(crate) use open::{is_xlsx_family_path, read_excel_bytes, read_excel_file, read_xlsx_family_file};
 
 /// Result of reading a spreadsheet: the parsed workbook plus any
 /// [`ProcessingWarning`]s accumulated while reading it (a sheet that failed
