@@ -1051,16 +1051,12 @@ fn build_table<'a>(
     Some(table_node)
 }
 
-#[cfg(any(
-    feature = "pdf",
-    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
-))]
 fn build_retained_grid_html<'a>(
     arena: &'a comrak::Arena<'a>,
     table: &crate::types::Table,
     attributes: Option<&ahash::AHashMap<String, String>>,
 ) -> Option<&'a AstNode<'a>> {
-    let grid = crate::types::internal::table_grid::decode_retained_grid(attributes)?;
+    let grid = crate::types::document_structure::decode_retained_grid(attributes)?;
     let occupied = crate::extraction::derive::validated_table_grid_occupancy(table, &grid)?;
     let anchors: ahash::AHashMap<_, _> = grid.cells.iter().map(|cell| ((cell.row, cell.col), cell)).collect();
     let mut annotations = super::table_math::read_annotations(attributes, &table.cells);
@@ -1068,28 +1064,81 @@ fn build_retained_grid_html<'a>(
         annotations.entry(position).or_default().extend(scripts);
     }
     let options = super::markdown::comrak_options();
-    // A rowspan may cross the detected header/body boundary, so all rows share one row group. ~keep
-    let mut html = String::from("<table>\n<tbody>\n");
-    for (row, columns) in occupied.iter().enumerate() {
-        html.push_str("<tr>");
-        for (col, covered) in columns.iter().enumerate() {
-            if let Some(cell) = anchors.get(&(row as u32, col as u32)) {
-                let inline = annotations.get(&(row, col)).map(Vec::as_slice).unwrap_or(&[]);
-                append_grid_html_cell(arena, cell, inline, &options, &mut html);
-            } else if !covered {
-                html.push_str("<td></td>");
-            }
-        }
-        html.push_str("</tr>\n");
+    let header_rows = closed_header_rows(&grid);
+    let row_html = GridHtmlRows {
+        anchors: &anchors,
+        occupied: &occupied,
+        annotations: &annotations,
+        options: &options,
+    };
+    let mut html = String::from("<table>\n");
+    if header_rows > 0 {
+        html.push_str("<thead>\n");
+        row_html.append(arena, &mut html, 0..header_rows);
+        html.push_str("</thead>\n");
     }
+    html.push_str("<tbody>\n");
+    row_html.append(arena, &mut html, header_rows..grid.rows);
     html.push_str("</tbody>\n</table>\n");
     Some(mk(arena, NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock::new(html))))
 }
 
-#[cfg(any(
-    feature = "pdf",
-    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
-))]
+/// Number of leading rows that may close a `<thead>`.
+///
+/// A row group can only end between rows that no merge crosses, so the leading run of rows whose
+/// cells are all header roles stops before the first row whose header cell spans further down, or
+/// before the first data cell. A source can declare header cells anywhere (a row header in a body
+/// row, several header tiers under a title), and a row group cannot express that shape, so those
+/// cells keep their `<th>` role inside `<tbody>` instead of losing it to a guessed group split.
+fn closed_header_rows(grid: &crate::types::TableGrid) -> u32 {
+    let mut header_rows = 0;
+    for row in 0..grid.rows {
+        let mut saw_cell = false;
+        let mut spans_past_row = false;
+        for cell in grid.cells.iter().filter(|cell| cell.row == row) {
+            if !cell.is_header {
+                return header_rows;
+            }
+            saw_cell = true;
+            spans_past_row |= cell.row_span > 1;
+        }
+        if !saw_cell || spans_past_row {
+            return header_rows;
+        }
+        header_rows = row + 1;
+    }
+    header_rows
+}
+
+/// The retained-grid context a run of HTML table rows is written from.
+struct GridHtmlRows<'a, 'o> {
+    anchors: &'a ahash::AHashMap<(u32, u32), &'a crate::types::GridCell>,
+    occupied: &'a [Vec<bool>],
+    annotations: &'a ahash::AHashMap<(usize, usize), Vec<TextAnnotation>>,
+    options: &'a comrak::Options<'o>,
+}
+
+impl GridHtmlRows<'_, '_> {
+    fn append<'a>(&self, arena: &'a comrak::Arena<'a>, html: &mut String, rows: std::ops::Range<u32>) {
+        for row in rows {
+            html.push_str("<tr>");
+            for (col, covered) in self.occupied[row as usize].iter().enumerate() {
+                if let Some(cell) = self.anchors.get(&(row, col as u32)) {
+                    let inline = self
+                        .annotations
+                        .get(&(row as usize, col))
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]);
+                    append_grid_html_cell(arena, cell, inline, self.options, html);
+                } else if !covered {
+                    html.push_str("<td></td>");
+                }
+            }
+            html.push_str("</tr>\n");
+        }
+    }
+}
+
 fn append_grid_html_cell<'a>(
     arena: &'a comrak::Arena<'a>,
     cell: &crate::types::GridCell,
@@ -1412,10 +1461,6 @@ fn build_comrak_ast_with_table_mode<'a>(
                         anchor.append(mk_text(arena, &format!("[TABLE:{table_id}]")));
                         parent.append(anchor);
                     }
-                    #[cfg(any(
-                        feature = "pdf",
-                        all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
-                    ))]
                     if table_mode == TableRenderMode::Html
                         && let Some(table_node) = build_retained_grid_html(arena, table, elem_attributes)
                     {
@@ -1789,6 +1834,73 @@ mod tests {
         let mut output = String::new();
         format_commonmark(root, &Options::default(), &mut output).unwrap();
         output
+    }
+
+    fn grid_cell(row: u32, col: u32, row_span: u32, col_span: u32, is_header: bool) -> crate::types::GridCell {
+        crate::types::GridCell {
+            content: format!("r{row}c{col}"),
+            row,
+            col,
+            row_span,
+            col_span,
+            is_header,
+            bbox: None,
+            heading_level: None,
+            style_name: None,
+        }
+    }
+
+    #[test]
+    fn header_group_closes_only_where_no_header_span_crosses() {
+        let leading_header = crate::types::TableGrid {
+            rows: 2,
+            cols: 2,
+            cells: vec![
+                grid_cell(0, 0, 1, 1, true),
+                grid_cell(0, 1, 1, 1, true),
+                grid_cell(1, 0, 1, 1, false),
+                grid_cell(1, 1, 1, 1, false),
+            ],
+        };
+        assert_eq!(closed_header_rows(&leading_header), 1);
+
+        let data_first = crate::types::TableGrid {
+            rows: 2,
+            cols: 2,
+            cells: vec![
+                grid_cell(0, 0, 1, 1, false),
+                grid_cell(0, 1, 1, 1, true),
+                grid_cell(1, 0, 1, 1, false),
+                grid_cell(1, 1, 1, 1, false),
+            ],
+        };
+        assert_eq!(closed_header_rows(&data_first), 0, "a data cell ends the group");
+
+        let crossing = crate::types::TableGrid {
+            rows: 2,
+            cols: 2,
+            cells: vec![
+                grid_cell(0, 0, 2, 1, true),
+                grid_cell(0, 1, 1, 1, true),
+                grid_cell(1, 1, 1, 1, false),
+            ],
+        };
+        assert_eq!(
+            closed_header_rows(&crossing),
+            0,
+            "a header span crossing into the next row cannot be closed by a group boundary"
+        );
+
+        let two_tiers = crate::types::TableGrid {
+            rows: 3,
+            cols: 1,
+            cells: vec![
+                grid_cell(0, 0, 1, 1, true),
+                grid_cell(1, 0, 1, 1, true),
+                grid_cell(2, 0, 1, 1, false),
+            ],
+        };
+        assert_eq!(closed_header_rows(&two_tiers), 2);
     }
 
     #[test]
