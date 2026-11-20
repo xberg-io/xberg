@@ -173,6 +173,29 @@ fn grayscale_bytes_refuses_a_colormapped_8_bpp_image() {
 }
 
 #[test]
+fn binary_bytes_reports_set_bits_as_ink_and_refuses_grayscale_images() {
+    const WIDTH: u32 = 16;
+    const HEIGHT: u32 = 8;
+    let mut data = Vec::with_capacity((WIDTH * HEIGHT) as usize);
+    for _ in 0..HEIGHT {
+        data.extend(std::iter::repeat_n(40u8, (WIDTH / 2) as usize));
+        data.extend(std::iter::repeat_n(210u8, (WIDTH / 2) as usize));
+    }
+    let gray = Pix::from_grayscale_bytes(&data, WIDTH, HEIGHT).expect("make grayscale image");
+    let binary = gray.otsu_threshold().expect("one-bit raster");
+    let row_width = WIDTH as usize;
+    let expected: Vec<u8> = (0..row_width * HEIGHT as usize)
+        .map(|index| u8::from(index % row_width < row_width / 2))
+        .collect();
+
+    assert_eq!(binary.binary_bytes().expect("read binary pixels"), expected);
+    assert!(matches!(
+        gray.binary_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
 fn deskew_reports_rotation_for_slanted_rows() {
     const WIDTH: usize = 384;
     const HEIGHT: usize = 256;

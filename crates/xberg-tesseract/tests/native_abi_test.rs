@@ -194,6 +194,32 @@ fn choice_text_can_be_read_repeatedly_without_being_freed() {
     assert!(choices.confidence().expect("confidence") > 0.0);
 }
 
+/// Tesseract's choice iterator asserts that the current word is non-null and aborts the process
+/// without a pre-check, so an exhausted iterator must be refused before the native call.
+#[test]
+fn choice_iterator_is_refused_after_the_last_word() {
+    let api = new_engine();
+    api.set_variable("lstm_choice_mode", "1").expect("choice mode");
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+    assert!(words.extract_all_words().expect("words").words.len() > 1);
+    while words.next_word().expect("advance") {}
+
+    assert!(matches!(words.choices(), Err(TesseractError::InvalidParameterError)));
+}
+
+#[test]
+fn choice_iterator_is_refused_on_an_empty_page() {
+    let api = new_engine();
+    api.set_variable("lstm_choice_mode", "1").expect("choice mode");
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.get_utf8_text().expect("recognize the blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    assert!(matches!(words.choices(), Err(TesseractError::InvalidParameterError)));
+}
+
 #[test]
 fn iterator_fails_once_the_engine_recognizes_again() {
     let api = new_engine();
@@ -285,6 +311,21 @@ fn iterator_over_a_blank_page_fails_once_a_getter_recognizes_again() {
     let words = api.get_iterator().expect("result iterator");
 
     let _ = api.get_utf8_text();
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+/// Tesseract never marks an empty recognition final, so every text getter on a blank page
+/// recognizes again and replaces `PAGE_RES`. The second getter must also end the iterators the
+/// first one left valid.
+#[test]
+fn iterator_over_a_blank_page_fails_once_a_lazy_getter_recognizes_again() {
+    let api = new_engine();
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.get_utf8_text().expect("recognize the blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    api.get_utf8_text().expect("recognize the blank page again");
 
     assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
 }

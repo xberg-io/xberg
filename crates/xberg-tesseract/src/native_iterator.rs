@@ -1,7 +1,8 @@
 use crate::api::TesseractAPI;
+use crate::enums::TessPageIteratorLevel;
 use crate::error::{Result, TesseractError};
 use std::ops::Deref;
-use std::os::raw::c_void;
+use std::os::raw::{c_int, c_void};
 use std::sync::{Mutex, MutexGuard};
 
 /// A native iterator allocation tied to the engine that produced it and to one recognition
@@ -84,4 +85,42 @@ impl<'api> NativeIterator<'api> {
     pub(crate) fn lock_for_release(&self) -> Option<MutexGuard<'_, *mut c_void>> {
         self.raw.lock().ok()
     }
+}
+
+impl IteratorGuard<'_> {
+    /// Fails when the iterator holds no current word.
+    ///
+    /// Tesseract's choice iterator asserts that the current word is non-null and ends the process
+    /// before a caller can reject a null result, so a caller that needs a word checks here first.
+    pub(crate) fn require_current_word(&self) -> Result<()> {
+        let (mut left, mut top, mut right, mut bottom) = (0, 0, 0, 0);
+        // `PageIterator::Empty(RIL_WORD)` holds exactly when there is no word, and `BoundingBox`
+        // reports it by returning false; the outputs are writable C ints. ~keep
+        // SAFETY: the guard keeps the iterator and its recognition result current. ~keep
+        let found = unsafe {
+            TessPageIteratorBoundingBox(
+                *self.raw,
+                TessPageIteratorLevel::RIL_WORD as c_int,
+                &mut left,
+                &mut top,
+                &mut right,
+                &mut bottom,
+            )
+        };
+        if found == 0 {
+            return Err(TesseractError::InvalidParameterError);
+        }
+        Ok(())
+    }
+}
+
+ffi_extern! {
+    fn TessPageIteratorBoundingBox(
+        handle: *mut c_void,
+        level: c_int,
+        left: *mut c_int,
+        top: *mut c_int,
+        right: *mut c_int,
+        bottom: *mut c_int,
+    ) -> c_int;
 }

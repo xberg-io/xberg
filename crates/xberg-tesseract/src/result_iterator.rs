@@ -152,11 +152,16 @@ impl<'api> ResultIterator<'api> {
     /// Opens a choice iterator over the alternatives of the current word.
     ///
     /// The choice iterator reads the same recognition result and goes stale with it. Alternatives
-    /// are only recorded when `lstm_choice_mode` is set before recognition.
+    /// are only recorded when `lstm_choice_mode` is set before recognition. Fails with
+    /// [`TesseractError::InvalidParameterError`] when the iterator has no current word.
     pub fn choices(&self) -> Result<ChoiceIterator<'api>> {
         let handle = self.inner.lock()?;
-        // SAFETY: the iterator is locked and its result is current, so the word it points at is live.
-        // A non-null result is a new allocation owned by the caller. ~keep
+        // Tesseract's choice iterator asserts that the current word is non-null before the null
+        // check below can run, so refuse a position without one. ~keep
+        handle.require_current_word()?;
+        // SAFETY: the iterator is locked, its result is current and a current word exists, so
+        // the word it points at is live. A non-null result is a new allocation owned by the
+        // caller. ~keep
         let raw = unsafe { TessResultIteratorGetChoiceIterator(*handle) };
         if raw.is_null() {
             return Err(TesseractError::NullPointerError);

@@ -3,7 +3,7 @@ use crate::error::{Result, TesseractError};
 use crate::monitor::TessMonitor;
 use crate::mutable_iterator::MutableIterator;
 use crate::page_iterator::{TessBaseAPIGetIterator, TessPageIteratorBoundingBox, TessPageIteratorDelete};
-use crate::result_iterator::{copy_and_delete_tess_text, TessResultIteratorDelete};
+use crate::result_iterator::{TessResultIteratorDelete, copy_and_delete_tess_text};
 use crate::result_renderer::TessResultRenderer;
 use crate::{PageIterator, ResultIterator};
 use std::collections::HashMap;
@@ -135,8 +135,9 @@ pub struct TesseractAPI {
     /// discards the result bumps it while holding the handle lock, which makes an iterator
     /// created earlier fail with [`TesseractError::StaleIterator`] instead of reading freed data.
     results_epoch: AtomicU64,
-    /// `true` once a recognition produced the current result, so that a text getter which
-    /// would recognize on demand knows whether it replaces an existing result.
+    /// `true` once a recognition produced a result Tesseract will reuse. A text getter that
+    /// would recognize on demand replaces `PAGE_RES`, and thereby every existing iterator,
+    /// exactly when this is `false`.
     recognized: AtomicBool,
     /// Identifies this engine in the live-engine registry. A later engine can get the same
     /// handle address after the exit cleanup freed this one, but never the same generation.
@@ -215,6 +216,41 @@ fn boxa_count_to_usize(count: c_int) -> usize {
     usize::try_from(count).unwrap_or(0)
 }
 
+/// Reports whether the engine currently holds a recognition result with at least one block.
+///
+/// Tesseract reports an empty page by building a `PAGE_RES` with no blocks and leaving its own
+/// recognition flag `false`, so the next text getter recognizes again and replaces `PAGE_RES`.
+/// A block therefore exists exactly when recognition is final, which makes this probe the native
+/// signal for whether an existing result survives the next getter. The caller holds the handle
+/// lock.
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+fn native_result_has_blocks(handle: *mut c_void) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    // The C API has no `TessPageIteratorEmpty`; `PageIterator::Empty` returns `true` for a null
+    // block, and `BoundingBox` reports exactly that by returning false (pageiterator.cpp). ~keep
+    // SAFETY: the caller holds the engine lock, so the result cannot be replaced while the probe
+    // iterator exists. The iterator is a new allocation owned here and deleted before returning. ~keep
+    unsafe {
+        let probe = TessBaseAPIGetIterator(handle);
+        if probe.is_null() {
+            return false;
+        }
+        let (mut left, mut top, mut right, mut bottom) = (0, 0, 0, 0);
+        let found = TessPageIteratorBoundingBox(
+            probe,
+            TessPageIteratorLevel::RIL_BLOCK as c_int,
+            &mut left,
+            &mut top,
+            &mut right,
+            &mut bottom,
+        ) != 0;
+        TessPageIteratorDelete(probe);
+        found
+    }
+}
+
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 impl TesseractAPI {
     /// Creates a new instance of the Tesseract API.
@@ -264,12 +300,21 @@ impl TesseractAPI {
         self.results_epoch.fetch_add(1, Ordering::SeqCst);
     }
 
-    /// Tesseract recognizes on demand when a text getter or confidence getter runs before any
-    /// recognition, which discards the current layout result. The caller holds the handle lock.
-    fn before_lazy_recognition(&self) {
+    /// Runs a getter that recognizes on demand, keeping the result epoch in step with what the
+    /// engine actually recognized. Tesseract discards the current layout result when the getter
+    /// recognizes, and replaces `PAGE_RES` on every empty-page getter because it never marks an
+    /// empty recognition final; bumping the epoch whenever this flag is `false` ends every iterator
+    /// created from the result about to be replaced. The post-call probe keeps the flag equal to
+    /// the native recognition state, including after an empty or failed recognition. The caller
+    /// holds the handle lock.
+    fn with_lazy_recognition<T>(&self, handle: *mut c_void, get: impl FnOnce() -> Result<T>) -> Result<T> {
         if !self.recognized.swap(true, Ordering::SeqCst) {
             self.results_epoch.fetch_add(1, Ordering::SeqCst);
         }
+        let outcome = get();
+        self.recognized
+            .store(native_result_has_blocks(handle), Ordering::SeqCst);
+        outcome
     }
 
     /// Allows the process-exit cleanup to free this engine.
@@ -403,28 +448,29 @@ impl TesseractAPI {
         // pointer is a live TessBaseAPI: the slot is private and only `new` and `clone` fill it, but a
         // Clone whose TessBaseAPICreate failed stores null there (#3228). ~keep
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
 
-        let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
-        if confidences_ptr.is_null() {
-            return Ok(Vec::new());
-        }
-        let mut confidences = Vec::new();
-        let mut i = 0;
-        // SAFETY: A non-null result from a valid native call is an owned int array
-        // terminated by -1. Starting at zero and advancing only past a non-sentinel
-        // entry keeps the read within the allocation, including the sentinel. ~keep
-        while unsafe { *confidences_ptr.offset(i) } != -1 {
-            // SAFETY: The loop condition just read this entry. The index and owning
-            // pointer have not changed since that in-bounds read. ~keep
-            confidences.push(unsafe { *confidences_ptr.offset(i) });
-            i += 1;
-        }
-        // SAFETY: This passes the original returned allocation to its matching
-        // native deleter once, after all confidence values have been copied. ~keep
-        unsafe { TessDeleteIntArray(confidences_ptr) };
-        Ok(confidences)
+            let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
+            if confidences_ptr.is_null() {
+                return Ok(Vec::new());
+            }
+            let mut confidences = Vec::new();
+            let mut i = 0;
+            // SAFETY: A non-null result from a valid native call is an owned int array
+            // terminated by -1. Starting at zero and advancing only past a non-sentinel
+            // entry keeps the read within the allocation, including the sentinel. ~keep
+            while unsafe { *confidences_ptr.offset(i) } != -1 {
+                // SAFETY: The loop condition just read this entry. The index and owning
+                // pointer have not changed since that in-bounds read. ~keep
+                confidences.push(unsafe { *confidences_ptr.offset(i) });
+                i += 1;
+            }
+            // SAFETY: This passes the original returned allocation to its matching
+            // native deleter once, after all confidence values have been copied. ~keep
+            unsafe { TessDeleteIntArray(confidences_ptr) };
+            Ok(confidences)
+        })
     }
 
     /// Gets the mean text confidence.
@@ -434,9 +480,10 @@ impl TesseractAPI {
     /// Returns the mean text confidence as an integer.
     pub fn mean_text_conf(&self) -> Result<i32> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
-        Ok(unsafe { TessBaseAPIMeanTextConf(*handle) })
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            Ok(unsafe { TessBaseAPIMeanTextConf(*handle) })
+        })
     }
 
     /// Sets a Tesseract variable.
@@ -633,27 +680,8 @@ impl TesseractAPI {
         } else {
             // Tesseract returns success for an empty page before it marks the recognition done, so a
             // later text getter recognizes again and replaces the result. Only a non-empty result is final. ~keep
-            // SAFETY: the engine handle lock is held, and the probe iterator is deleted before returning.
-            // The C API has no TessPageIteratorEmpty; PageIterator::BoundingBox returns false exactly when
-            // Empty(level) holds (pageiterator.cpp), so a failing RIL_BLOCK box means no blocks. ~keep
-            let has_results = unsafe {
-                let probe = TessBaseAPIGetIterator(*handle);
-                let (mut left, mut top, mut right, mut bottom) = (0, 0, 0, 0);
-                let found = !probe.is_null()
-                    && TessPageIteratorBoundingBox(
-                        probe,
-                        TessPageIteratorLevel::RIL_BLOCK as c_int,
-                        &mut left,
-                        &mut top,
-                        &mut right,
-                        &mut bottom,
-                    ) != 0;
-                if !probe.is_null() {
-                    TessPageIteratorDelete(probe);
-                }
-                found
-            };
-            self.recognized.store(has_results, Ordering::SeqCst);
+            self.recognized
+                .store(native_result_has_blocks(*handle), Ordering::SeqCst);
             ensure_tesseract_cleanup_registered();
             Ok(())
         }
@@ -670,18 +698,19 @@ impl TesseractAPI {
     /// Returns the HOCR text for the specified page as a string.
     pub fn get_hocr_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
-        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
-        let text_ptr = unsafe { shim::xberg_tess_get_hocr_text(*handle, page) };
-        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
-        let text_ptr = unsafe { TessBaseAPIGetHOCRText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+            let text_ptr = unsafe { shim::xberg_tess_get_hocr_text(*handle, page) };
+            #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
+            let text_ptr = unsafe { TessBaseAPIGetHOCRText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets the ALTO text for the specified page.
@@ -695,14 +724,15 @@ impl TesseractAPI {
     /// Returns the ALTO text for the specified page as a string.
     pub fn get_alto_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let text_ptr = unsafe { TessBaseAPIGetAltoText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let text_ptr = unsafe { TessBaseAPIGetAltoText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets the TSV text for the specified page.
@@ -716,15 +746,16 @@ impl TesseractAPI {
     /// Returns the TSV text for the specified page as a string.
     pub fn get_tsv_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
-        let text_ptr = unsafe { TessBaseAPIGetTsvText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            let text_ptr = unsafe { TessBaseAPIGetTsvText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Sets the input name.
@@ -833,14 +864,15 @@ impl TesseractAPI {
     /// Returns the box text for the specified page as a string.
     pub fn get_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let text_ptr = unsafe { TessBaseAPIGetBoxText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let text_ptr = unsafe { TessBaseAPIGetBoxText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets the LSTM box text for the specified page.
@@ -854,14 +886,15 @@ impl TesseractAPI {
     /// Returns the LSTM box text for the specified page as a string.
     pub fn get_lstm_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let text_ptr = unsafe { TessBaseAPIGetLSTMBoxText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let text_ptr = unsafe { TessBaseAPIGetLSTMBoxText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets the word str box text for the specified page.
@@ -875,14 +908,15 @@ impl TesseractAPI {
     /// Returns the word str box text for the specified page as a string.
     pub fn get_word_str_box_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let text_ptr = unsafe { TessBaseAPIGetWordStrBoxText(*handle, page) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let text_ptr = unsafe { TessBaseAPIGetWordStrBoxText(*handle, page) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets the UNLV text.
@@ -892,14 +926,15 @@ impl TesseractAPI {
     /// Returns the UNLV text as a string.
     pub fn get_unlv_text(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let text_ptr = unsafe { TessBaseAPIGetUNLVText(*handle) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        unsafe { copy_owned_native_text(text_ptr) }
+        self.with_lazy_recognition(*handle, || {
+            let text_ptr = unsafe { TessBaseAPIGetUNLVText(*handle) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            // SAFETY: `text_ptr` is non-null and was returned by the Tesseract text API, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            unsafe { copy_owned_native_text(text_ptr) }
+        })
     }
 
     /// Gets all word confidences.
@@ -909,20 +944,21 @@ impl TesseractAPI {
     /// Returns a vector of all word confidences.
     pub fn all_word_confidences(&self) -> Result<Vec<i32>> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
-        let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
-        if confidences_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
-        let mut confidences = Vec::new();
-        let mut i = 0;
-        while unsafe { *confidences_ptr.offset(i) } != -1 {
-            confidences.push(unsafe { *confidences_ptr.offset(i) });
-            i += 1;
-        }
-        unsafe { TessDeleteIntArray(confidences_ptr) };
-        Ok(confidences)
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+            let confidences_ptr = unsafe { TessBaseAPIAllWordConfidences(*handle) };
+            if confidences_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
+            let mut confidences = Vec::new();
+            let mut i = 0;
+            while unsafe { *confidences_ptr.offset(i) } != -1 {
+                confidences.push(unsafe { *confidences_ptr.offset(i) });
+                i += 1;
+            }
+            unsafe { TessDeleteIntArray(confidences_ptr) };
+            Ok(confidences)
+        })
     }
 
     /// Adapts to the word string.
@@ -1666,27 +1702,28 @@ impl TesseractAPI {
     /// Returns the recognized text as a String if successful, otherwise returns an error.
     pub fn get_utf8_text(&self) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        self.before_lazy_recognition();
-        let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
+        self.with_lazy_recognition(*handle, || {
+            let _call = NativeCall::start().ok_or(TesseractError::OcrError)?;
 
-        if *handle == std::ptr::null_mut() {
-            return Err(TesseractError::UninitializedError);
-        }
+            if *handle == std::ptr::null_mut() {
+                return Err(TesseractError::UninitializedError);
+            }
 
-        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
-        let text_ptr = unsafe { shim::xberg_tess_get_utf8_text(*handle) };
-        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
-        let text_ptr = unsafe { TessBaseAPIGetUTF8Text(*handle) };
-        if text_ptr.is_null() {
-            return Err(TesseractError::OcrError);
-        }
+            #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+            let text_ptr = unsafe { shim::xberg_tess_get_utf8_text(*handle) };
+            #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
+            let text_ptr = unsafe { TessBaseAPIGetUTF8Text(*handle) };
+            if text_ptr.is_null() {
+                return Err(TesseractError::OcrError);
+            }
 
-        // SAFETY: `text_ptr` is non-null and was returned by TessBaseAPIGetUTF8Text, which hands over a
-        // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
-        let result = unsafe { copy_owned_native_text(text_ptr) }?;
+            // SAFETY: `text_ptr` is non-null and was returned by TessBaseAPIGetUTF8Text, which hands over a
+            // NUL-terminated allocation released only by TessDeleteText; the guard frees it exactly once. ~keep
+            let result = unsafe { copy_owned_native_text(text_ptr) }?;
 
-        ensure_tesseract_cleanup_registered();
-        Ok(result)
+            ensure_tesseract_cleanup_registered();
+            Ok(result)
+        })
     }
 
     /// Gets the iterator for the OCR results.

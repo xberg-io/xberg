@@ -991,6 +991,9 @@ impl Drop for Pix {
 #[path = "leptonica/grayscale.rs"]
 mod grayscale;
 
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+mod binary;
+
 #[cfg(test)]
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 #[path = "leptonica/tests.rs"]
