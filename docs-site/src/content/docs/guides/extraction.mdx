@@ -816,6 +816,64 @@ other targets. This example handles an unsupported MIME type:
 `OSError` (Python), `IOException` (Rust), and system-level errors always propagate through. These indicate real system problems (permissions, disk space, etc.) that your application should handle.
 :::
 
+## PDF Vector Geometry
+
+Text extraction drops the drawing. Construction drawings, CAD plans, floor plans and
+vector charts keep their meaning in the paths: walls, grid lines, hatches, borders and
+symbols are strokes and fills, not glyphs. Xberg can return those paths alongside the text
+so a caller can measure a room, follow a wall, or match a label to the shape it annotates.
+
+This output is **off by default**, because a dense sheet can hold more than ten thousand
+paths and reporting them all is work most callers do not need. Enable it with
+`ExtractionConfig.pdf_options.extract_vector_geometry = true`
+(`PdfConfig::extract_vector_geometry` in Rust).
+
+```toml title="xberg.toml"
+[pdf_options]
+extract_vector_geometry = true
+```
+
+```rust title="pdf_vector_geometry.rs"
+use xberg::{extract, ExtractInput, ExtractionConfig, PdfConfig};
+
+let config = ExtractionConfig {
+    pdf_options: Some(PdfConfig {
+        extract_vector_geometry: true,
+        ..Default::default()
+    }),
+    ..Default::default()
+};
+
+let output = extract(ExtractInput::from_uri("floor-plan.pdf"), &config).await?;
+for page in output.results[0].pages.as_deref().unwrap_or_default() {
+    let Some(geometry) = &page.geometry else { continue };
+    for path in &geometry.paths {
+        if let Some(stroke) = &path.stroke {
+            println!("path {:?} stroked {} pt", path.bounding_box, stroke.width);
+        }
+    }
+}
+```
+
+Each page's `geometry.paths` lists one entry per painted path, in drawing order. A path
+holds its subpaths (`start`, `segments`, `closed`), an axis-aligned `bounding_box`, an
+optional `fill_color`, an optional `stroke` (colour, width, dash pattern, line cap and
+line join) and the Optional Content `layer` name the producer tagged it with, such as
+`A-WALL`. Segments are straight (`line`) or cubic Bézier (`cubic`); clipping paths that
+paint nothing are not listed.
+
+Coordinates are page points with **y increasing upwards**, measured from the page's
+lower-left corner. Content-stream `cm` transforms and Form XObject `/Matrix` transforms
+are applied, so a symbol drawn inside a scaled form is reported at its final on-page size.
+Page `/Rotate` and rendering DPI are not applied. This is the same frame as text bounds in
+`ElementMetadata.coordinates` and `DocumentNode.bbox`, so a label's box and the rule or
+room it sits in can be compared directly.
+
+Asking for geometry also turns on per-page tracking (`pages.extract_pages`), because the
+paths are returned on `pages[]`. Geometry is `None` on non-PDF documents, on a page that
+drew no path, and on pages whose content stream cannot be parsed; a parse failure is
+logged and leaves the rest of the extraction intact.
+
 ## Next Steps
 
 - [Configuration](/guides/configuration/) — all configuration options and file formats

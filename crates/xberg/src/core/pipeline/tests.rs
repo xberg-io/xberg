@@ -2001,6 +2001,7 @@ async fn nfc_normalization_applies_to_the_kept_text_layer() {
         sheet_name: None,
         ocr_confidence: None,
         native_content: Some("cafe\u{0301}".to_string()),
+        geometry: None,
     }]);
     let config = ExtractionConfig {
         postprocessor: Some(crate::core::config::PostProcessorConfig {
@@ -3127,6 +3128,7 @@ mod document_counts {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }
     }
 
@@ -3329,6 +3331,7 @@ mod embedded_image_ocr_text_fold_tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }
     }
 

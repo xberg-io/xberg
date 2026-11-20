@@ -684,6 +684,7 @@ fn finish_cached_layout_document(
         sheet_name: None,
         ocr_confidence: None,
         native_content: None,
+        geometry: None,
         image_preprocessing: whole_image_doc.metadata.image_preprocessing.clone(),
     }]);
     ImageExtractor::mark_ocr_extraction(&mut assembled);
@@ -3672,6 +3673,7 @@ impl ImageExtractor {
                         sheet_name: None,
                         ocr_confidence: whole_image_ocr_confidence,
                         native_content: None,
+                        geometry: None,
                     }]);
                 }
             }
@@ -3714,6 +3716,7 @@ impl ImageExtractor {
                     sheet_name: None,
                     ocr_confidence: None,
                     native_content: None,
+                    geometry: None,
                 }]);
             }
             Ok(doc)
@@ -3848,6 +3851,7 @@ impl ImageExtractor {
                 // stage keys its summary at page 1 -- the same page this builds (#1568).
                 ocr_confidence: pipeline_ocr_confidence.remove(&1),
                 native_content: None,
+                geometry: None,
             }]);
         }
 
@@ -6922,6 +6926,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         }]);
         doc.metadata.additional.insert(
             std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),

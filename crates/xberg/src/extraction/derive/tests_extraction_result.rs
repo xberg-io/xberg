@@ -781,6 +781,7 @@ fn page_content_prebuilt_pages_no_page_elements_unchanged() {
         sheet_name: None,
         ocr_confidence: None,
         native_content: None,
+        geometry: None,
     }]);
 
     let raw = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Markdown);
@@ -851,6 +852,7 @@ fn page_content_page_without_matching_elements_unchanged() {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         },
         crate::types::page::PageContent {
             page_number: 2,
@@ -866,6 +868,7 @@ fn page_content_page_without_matching_elements_unchanged() {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         },
     ]);
 
