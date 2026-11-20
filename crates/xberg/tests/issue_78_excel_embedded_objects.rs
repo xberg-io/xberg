@@ -17,7 +17,7 @@ use std::io::Write as _;
 use zip::write::{SimpleFileOptions, ZipWriter};
 
 mod helpers;
-use helpers::extract_bytes_document;
+use helpers::{extract_bytes_document, extract_uri_document};
 
 const XLSX_MIME: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -85,6 +85,32 @@ fn make_xlsx_with_embedded_text_file(embedded_contents: &[u8]) -> Vec<u8> {
         )
         .unwrap();
 
+        zip.start_file("docProps/core.xml", options).unwrap();
+        zip.write_all(
+            br#"<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:title>Workbook title</dc:title>
+            </cp:coreProperties>"#,
+        )
+        .unwrap();
+
+        zip.start_file("xl/revisions/revisionHeaders.xml", options).unwrap();
+        zip.write_all(
+            br#"<headers xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                <header guid="{11111111-2222-3333-4444-555555555555}" userName="Reviewer"/>
+            </headers>"#,
+        )
+        .unwrap();
+
+        zip.start_file("xl/comments1.xml", options).unwrap();
+        zip.write_all(
+            br#"<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                <authors><author>Reviewer</author></authors>
+                <commentList><comment ref="A1" authorId="0"><text><t>Check this</t></text></comment></commentList>
+            </comments>"#,
+        )
+        .unwrap();
+
         zip.start_file("xl/embeddings/oleObject1.txt", options).unwrap();
         zip.write_all(embedded_contents).unwrap();
 
@@ -98,7 +124,12 @@ async fn should_attach_embedded_object_as_child_document() {
     let embedded_text = b"embedded note contents";
     let bytes = make_xlsx_with_embedded_text_file(embedded_text);
 
-    let result = extract_bytes_document(&bytes, XLSX_MIME, &xberg::ExtractionConfig::default())
+    let mut config = xberg::ExtractionConfig {
+        use_cache: false,
+        max_archive_depth: 1,
+        ..Default::default()
+    };
+    let result = extract_bytes_document(&bytes, XLSX_MIME, &config)
         .await
         .expect("workbook with an embedded object must still extract successfully");
 
@@ -113,6 +144,36 @@ async fn should_attach_embedded_object_as_child_document() {
         "child document content must contain the embedded file's text: {:?}",
         children[0].result.content
     );
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("embedded.xlsx");
+    std::fs::write(&path, &bytes).unwrap();
+    let from_path = extract_uri_document(&path, None, &config).await.unwrap();
+    assert_eq!(from_path.content, result.content);
+    for extracted in [&result, &from_path] {
+        assert_eq!(extracted.metadata.title.as_deref(), Some("Workbook title"));
+        let comments = extracted
+            .metadata
+            .additional
+            .get("comments")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert!(comments.contains("Check this"));
+        let revisions = extracted.revisions.as_ref().unwrap();
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].author.as_deref(), Some("Reviewer"));
+    }
+    let path_children = from_path.children.as_ref().unwrap();
+    assert_eq!(path_children.len(), 1);
+    assert_eq!(path_children[0].path, children[0].path);
+    assert_eq!(path_children[0].result.content, children[0].result.content);
+
+    config.max_archive_depth = 0;
+    let disabled_path = directory.path().join("embedded-disabled.xlsx");
+    std::fs::write(&disabled_path, &bytes).unwrap();
+    let disabled = extract_uri_document(&disabled_path, None, &config).await.unwrap();
+    assert_eq!(disabled.content, from_path.content);
+    assert!(disabled.children.is_none());
 }
 
 #[tokio::test]

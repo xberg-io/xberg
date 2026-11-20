@@ -10,7 +10,7 @@
 use crate::core::config::ExtractionConfig;
 use crate::types::{ArchiveEntry, ProcessingWarning};
 use std::borrow::Cow;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek};
 
 /// Build a `ProcessingWarning` tagged with this module's conventional `<source_label>_embedded_objects` source.
 fn embedded_objects_warning(source_label: &str, message: String) -> ProcessingWarning {
@@ -22,17 +22,12 @@ fn embedded_objects_warning(source_label: &str, message: String) -> ProcessingWa
 
 /// Collect ZIP entry names under `embeddings_prefix` (entries whose name is strictly
 /// longer than the prefix -- i.e. the directory entry itself is excluded).
-fn collect_embedding_names(archive: &mut zip::ZipArchive<Cursor<&[u8]>>, embeddings_prefix: &str) -> Vec<String> {
-    (0..archive.len())
-        .filter_map(|i| {
-            let file = archive.by_index(i).ok()?;
-            let name = file.name().ok()?.into_owned();
-            if name.starts_with(embeddings_prefix) && name.len() > embeddings_prefix.len() {
-                Some(name)
-            } else {
-                None
-            }
-        })
+fn collect_embedding_names<R: Read + Seek>(archive: &zip::ZipArchive<R>, embeddings_prefix: &str) -> Vec<String> {
+    archive
+        .file_names()
+        .filter_map(std::result::Result::ok)
+        .filter(|name| name.starts_with(embeddings_prefix) && name.len() > embeddings_prefix.len())
+        .map(Cow::into_owned)
         .collect()
 }
 
@@ -111,16 +106,24 @@ pub(crate) async fn extract_ooxml_embedded_objects(
     source_label: &str,
     config: &ExtractionConfig,
 ) -> (Vec<ArchiveEntry>, Vec<ProcessingWarning>) {
+    extract_ooxml_embedded_objects_from_reader(Cursor::new(zip_bytes), embeddings_prefix, source_label, config).await
+}
+
+pub(crate) async fn extract_ooxml_embedded_objects_from_reader<R: Read + Seek + Send>(
+    reader: R,
+    embeddings_prefix: &str,
+    source_label: &str,
+    config: &ExtractionConfig,
+) -> (Vec<ArchiveEntry>, Vec<ProcessingWarning>) {
     let mut children = Vec::new();
     let mut warnings = Vec::new();
 
-    let cursor = Cursor::new(zip_bytes);
-    let mut archive = match zip::ZipArchive::new(cursor) {
+    let mut archive = match zip::ZipArchive::new(reader) {
         Ok(a) => a,
         Err(_) => return (children, warnings),
     };
 
-    let mut embedding_names = collect_embedding_names(&mut archive, embeddings_prefix);
+    let mut embedding_names = collect_embedding_names(&archive, embeddings_prefix);
     if embedding_names.is_empty() {
         return (children, warnings);
     }
@@ -175,8 +178,8 @@ pub(crate) async fn extract_ooxml_embedded_objects(
 /// Returns the resulting `ArchiveEntry` (`None` when the entry was skipped or failed) plus
 /// any warnings raised along the way, mirroring the original inline `for` loop body of
 /// `extract_ooxml_embedded_objects` one entry at a time.
-async fn process_embedded_entry(
-    archive: &mut zip::ZipArchive<Cursor<&[u8]>>,
+async fn process_embedded_entry<R: Read + Seek + Send>(
+    archive: &mut zip::ZipArchive<R>,
     entry_name: &str,
     embeddings_prefix: &str,
     source_label: &str,
@@ -213,8 +216,8 @@ async fn process_embedded_entry(
 /// Read one archive entry's bytes, enforcing `embedded_capacity_cap` on both the
 /// allocation hint and the actual read, and skipping (with a pushed warning where
 /// applicable) an unreadable, empty, or oversized entry.
-fn read_embedded_entry_bytes(
-    archive: &mut zip::ZipArchive<Cursor<&[u8]>>,
+fn read_embedded_entry_bytes<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
     entry_name: &str,
     filename: &str,
     embedded_capacity_cap: u64,
