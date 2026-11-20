@@ -434,7 +434,7 @@ fn preprocess_slanet(img: &RgbImage) -> Array4<f32> {
     let new_w = (orig_w as f32 * scale).round().max(1.0) as u32;
     let new_h = (orig_h as f32 * scale).round().max(1.0) as u32;
 
-    let resized = image::imageops::resize(img, new_w, new_h, image::imageops::FilterType::Triangle);
+    let resized = crate::image::resize::resize_rgb_triangle(img, new_w, new_h);
 
     let w = INPUT_SIZE as usize;
     let h = INPUT_SIZE as usize;

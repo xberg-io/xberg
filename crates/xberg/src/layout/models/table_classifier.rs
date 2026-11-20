@@ -187,7 +187,7 @@ fn preprocess_lcnet(img: &RgbImage) -> Result<Array4<f32>, LayoutError> {
     let new_w = (orig_w as f32 * scale).round().max(1.0) as u32;
     let new_h = (orig_h as f32 * scale).round().max(1.0) as u32;
 
-    let resized = image::imageops::resize(img, new_w, new_h, image::imageops::FilterType::Triangle);
+    let resized = crate::image::resize::resize_rgb_triangle(img, new_w, new_h);
 
     let crop_x = (new_w.saturating_sub(INPUT_SIZE)) / 2;
     let crop_y = (new_h.saturating_sub(INPUT_SIZE)) / 2;
