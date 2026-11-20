@@ -142,6 +142,60 @@ fn no_op_transforms_return_independent_pixels_and_resolution() {
 }
 
 #[test]
+fn grayscale_bytes_refuses_images_that_are_not_8_bpp() {
+    let rgb = make_rgb_pix(8, 8, 200);
+    assert_eq!(rgb.depth(), 32);
+    assert!(matches!(
+        rgb.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+
+    let gray = rgb.to_grayscale().expect("to_grayscale");
+    assert_eq!(gray.grayscale_bytes().expect("8 bpp read").len(), 64);
+}
+
+ffi_extern! {
+    fn pixcmapCreate(depth: i32) -> *mut c_void;
+    fn pixSetColormap(pix: *mut c_void, colormap: *mut c_void) -> i32;
+}
+
+#[test]
+fn grayscale_bytes_refuses_a_colormapped_8_bpp_image() {
+    let pix = Pix::from_grayscale_bytes(&[7; 16], 4, 4).expect("8 bpp image");
+    assert!(pix.grayscale_bytes().is_ok());
+    // SAFETY: the new colormap is transferred to the live Pix, which owns and frees it. ~keep
+    let status = unsafe { pixSetColormap(pix.as_ptr(), pixcmapCreate(8)) };
+    assert_eq!(status, 0);
+    assert!(matches!(
+        pix.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
+fn binary_bytes_reports_set_bits_as_ink_and_refuses_grayscale_images() {
+    const WIDTH: u32 = 16;
+    const HEIGHT: u32 = 8;
+    let mut data = Vec::with_capacity((WIDTH * HEIGHT) as usize);
+    for _ in 0..HEIGHT {
+        data.extend(std::iter::repeat_n(40u8, (WIDTH / 2) as usize));
+        data.extend(std::iter::repeat_n(210u8, (WIDTH / 2) as usize));
+    }
+    let gray = Pix::from_grayscale_bytes(&data, WIDTH, HEIGHT).expect("make grayscale image");
+    let binary = gray.otsu_threshold().expect("one-bit raster");
+    let row_width = WIDTH as usize;
+    let expected: Vec<u8> = (0..row_width * HEIGHT as usize)
+        .map(|index| u8::from(index % row_width < row_width / 2))
+        .collect();
+
+    assert_eq!(binary.binary_bytes().expect("read binary pixels"), expected);
+    assert!(matches!(
+        gray.binary_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
 fn deskew_reports_rotation_for_slanted_rows() {
     const WIDTH: usize = 384;
     const HEIGHT: usize = 256;

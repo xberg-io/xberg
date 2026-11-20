@@ -10,45 +10,52 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Content rendering mode for code extraction.
  *
- * <p>Controls how extracted code content is represented in the {@code content} field of {@code
- * ExtractedDocument}.
+ * Controls how extracted code content is represented in the {@code content} field
+ * of {@code ExtractedDocument}.
  */
 @SuppressWarnings("PMD")
 public enum CodeContentMode {
-  /** Use TSLP semantic chunks as content (default). */
-  CHUNKS("chunks"),
-  /** Use raw source code as content. */
-  RAW("raw"),
-  /** Emit function/class headings + docstrings (no code bodies). */
-  STRUCTURE("structure");
+    /**
+     * Use TSLP semantic chunks as content (default).
+     */
+    CHUNKS("chunks"),
+    /**
+     * Use raw source code as content.
+     */
+    RAW("raw"),
+    /**
+     * Emit function/class headings + docstrings (no code bodies).
+     */
+    STRUCTURE("structure");
 
-  /** The string value. */
-  private final String value;
 
-  CodeContentMode(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static CodeContentMode fromValue(final String value) {
-    for (CodeContentMode e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    CodeContentMode(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown CodeContentMode value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static CodeContentMode fromValue(final String value) {
+        for (CodeContentMode e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown CodeContentMode value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

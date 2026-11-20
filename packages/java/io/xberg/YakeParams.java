@@ -4,47 +4,48 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** YAKE-specific parameters. */
+/**
+ * YAKE-specific parameters.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = YakeParams.Builder.class)
 public record YakeParams(@Nullable @JsonProperty("window_size") Long windowSize) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public YakeParams {
-    if (windowSize == null) {
-      windowSize = 2L;
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for YakeParams deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("window_size")
-    private Long windowSize;
-
-    /** Sets the windowSize field. */
-    @JsonProperty("window_size")
-    public Builder withWindowSize(final @Nullable Long value) {
-      this.windowSize = value;
-      return this;
+    public YakeParams{
+        if (windowSize == null) { windowSize = 2L; }
     }
 
-    /** Constructs a YakeParams instance from the builder's current state. */
-    public YakeParams build() {
-      return new YakeParams(windowSize);
+    // CPD-OFF
+    /** Jackson builder for YakeParams deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
+
+        @JsonProperty("window_size")
+        private Long windowSize;
+
+        /** Sets the windowSize field. */
+        @JsonProperty("window_size")
+        public Builder withWindowSize(final @Nullable Long value) {
+            this.windowSize = value;
+            return this;
+        }
+
+        /** Constructs a YakeParams instance from the builder's current state. */
+        public YakeParams build() {
+            return new YakeParams(
+                windowSize
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

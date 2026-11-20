@@ -8,53 +8,61 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-/** Embedding model types supported by Xberg. */
+/**
+ * Embedding model types supported by Xberg.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = EmbeddingModelType.Preset.class, name = "preset"),
-  @JsonSubTypes.Type(value = EmbeddingModelType.Custom.class, name = "custom"),
-  @JsonSubTypes.Type(value = EmbeddingModelType.Llm.class, name = "llm"),
-  @JsonSubTypes.Type(value = EmbeddingModelType.Plugin.class, name = "plugin")
+    @JsonSubTypes.Type(value = EmbeddingModelType.Preset.class, name = "preset"),
+    @JsonSubTypes.Type(value = EmbeddingModelType.Custom.class, name = "custom"),
+    @JsonSubTypes.Type(value = EmbeddingModelType.Llm.class, name = "llm"),
+    @JsonSubTypes.Type(value = EmbeddingModelType.Plugin.class, name = "plugin")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface EmbeddingModelType {
 
-  /** Use a preset model configuration (recommended) */
-  record Preset(@JsonProperty("name") String name) implements EmbeddingModelType {}
+    /**
+     * Use a preset model configuration (recommended)
+     */
+    record Preset(@JsonProperty("name") String name) implements EmbeddingModelType { }
 
-  /** Use a custom ONNX model from HuggingFace */
-  record Custom(
-      @JsonProperty("model_id") String modelId, @JsonProperty("dimensions") long dimensions)
-      implements EmbeddingModelType {}
+    /**
+     * Use a custom ONNX model from HuggingFace
+     */
+    record Custom(
+        @JsonProperty("model_id") String modelId,
+        @JsonProperty("dimensions") long dimensions
+    ) implements EmbeddingModelType {
+    }
 
-  /**
-   * Provider-hosted embedding model via liter-llm.
-   *
-   * <p>Uses the model specified in the nested {@code LlmConfig} (e.g., {@code
-   * "openai/text-embedding-3-small"}).
-   */
-  record Llm(@JsonProperty("llm") LlmConfig llm) implements EmbeddingModelType {}
+    /**
+     * Provider-hosted embedding model via liter-llm.
+     *
+     * Uses the model specified in the nested {@code LlmConfig} (e.g.,
+     * {@code "openai/text-embedding-3-small"}).
+     */
+    record Llm(@JsonProperty("llm") LlmConfig llm) implements EmbeddingModelType { }
 
-  /**
-   * In-process embedding backend registered via the plugin system.
-   *
-   * <p>The caller registers an EmbeddingBackend(crate.plugins.EmbeddingBackend) once (e.g. a
-   * wrapper around an already-loaded {@code llama-cpp-python}, {@code sentence-transformers}, or
-   * tuned ONNX model), then references it by name in config. Xberg calls back into the registered
-   * backend during chunking and standalone embed requests — no HuggingFace download, no ONNX
-   * Runtime requirement, no HTTP sidecar.
-   *
-   * <p>When this variant is selected, only the following EmbeddingConfig fields apply: {@code
-   * normalize} (post-call L2 normalization) and {@code max_embed_duration_secs} (dispatcher
-   * timeout). Model-loading fields ({@code batch_size}, {@code cache_dir}, {@code
-   * show_download_progress}, {@code acceleration}) are ignored — the host owns the model lifecycle,
-   * so there is no download to report progress for.
-   *
-   * <p>Semantic chunking falls back to ChunkingConfig.max_characters when this variant is used,
-   * since there is no preset to look a chunk-size ceiling up against — size your context window via
-   * {@code max_characters} directly.
-   *
-   * <p>See {@code register_embedding_backend}.
-   */
-  record Plugin(@JsonProperty("name") String name) implements EmbeddingModelType {}
+    /**
+     * In-process embedding backend registered via the plugin system.
+     *
+     * The caller registers an EmbeddingBackend(crate.plugins.EmbeddingBackend) once
+     * (e.g. a wrapper around an already-loaded {@code llama-cpp-python}, {@code sentence-transformers},
+     * or tuned ONNX model), then references it by name in config. Xberg calls back
+     * into the registered backend during chunking and standalone embed requests —
+     * no HuggingFace download, no ONNX Runtime requirement, no HTTP sidecar.
+     *
+     * When this variant is selected, only the following EmbeddingConfig fields
+     * apply: {@code normalize} (post-call L2 normalization) and {@code max_embed_duration_secs}
+     * (dispatcher timeout). Model-loading fields ({@code batch_size}, {@code cache_dir},
+     * {@code show_download_progress}, {@code acceleration}) are ignored — the host owns the
+     * model lifecycle, so there is no download to report progress for.
+     *
+     * Semantic chunking falls back to ChunkingConfig.max_characters when this variant
+     * is used, since there is no preset to look a chunk-size ceiling up against — size your
+     * context window via {@code max_characters} directly.
+     *
+     * See {@code register_embedding_backend}.
+     */
+    record Plugin(@JsonProperty("name") String name) implements EmbeddingModelType { }
 }

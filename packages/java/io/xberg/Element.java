@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Semantic element extracted from document.
  *
- * <p>Represents a logical unit of content with semantic classification, unique identifier, and
- * metadata for tracking origin and position.
+ * Represents a logical unit of content with semantic classification,
+ * unique identifier, and metadata for tracking origin and position.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = Element.Builder.class)
@@ -22,60 +22,63 @@ public record Element(
     @Nullable @JsonProperty("element_id") String elementId,
     @JsonProperty("element_type") ElementType elementType,
     @JsonProperty("text") String text,
-    @JsonProperty("metadata") ElementMetadata metadata) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for Element deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("element_id")
-    @Nullable
-    private String elementId;
-
-    @JsonProperty("element_type")
-    private ElementType elementType;
-
-    private String text;
-    private ElementMetadata metadata;
-
-    /** Sets the elementId field. */
-    @JsonProperty("element_id")
-    public Builder withElementId(final @Nullable String value) {
-      this.elementId = value;
-      return this;
+    @JsonProperty("metadata") ElementMetadata metadata
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the elementType field. */
-    @JsonProperty("element_type")
-    public Builder withElementType(final ElementType value) {
-      this.elementType = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for Element deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the text field. */
-    @JsonProperty("text")
-    public Builder withText(final String value) {
-      this.text = value;
-      return this;
-    }
+        @JsonProperty("element_id")
+        @Nullable private String elementId;
+        @JsonProperty("element_type")
+        private ElementType elementType;
+        private String text;
+        private ElementMetadata metadata;
 
-    /** Sets the metadata field. */
-    @JsonProperty("metadata")
-    public Builder withMetadata(final ElementMetadata value) {
-      this.metadata = value;
-      return this;
-    }
+        /** Sets the elementId field. */
+        @JsonProperty("element_id")
+        public Builder withElementId(final @Nullable String value) {
+            this.elementId = value;
+            return this;
+        }
 
-    /** Constructs a Element instance from the builder's current state. */
-    public Element build() {
-      return new Element(elementId, elementType, text, metadata);
+        /** Sets the elementType field. */
+        @JsonProperty("element_type")
+        public Builder withElementType(final ElementType value) {
+            this.elementType = value;
+            return this;
+        }
+
+        /** Sets the text field. */
+        @JsonProperty("text")
+        public Builder withText(final String value) {
+            this.text = value;
+            return this;
+        }
+
+        /** Sets the metadata field. */
+        @JsonProperty("metadata")
+        public Builder withMetadata(final ElementMetadata value) {
+            this.metadata = value;
+            return this;
+        }
+
+        /** Constructs a Element instance from the builder's current state. */
+        public Element build() {
+            return new Element(
+                elementId,
+                elementType,
+                text,
+                metadata
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

@@ -7,39 +7,44 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Content filter applied to each crawled page before it reaches the result. */
+/**
+ * Content filter applied to each crawled page before it reaches the result.
+ */
 @SuppressWarnings("PMD")
 public enum ContentFilterKind {
-  /** Keep only pages scoring at or above {@code bm25_threshold} for {@code bm25_query}. */
-  BM25("bm25");
+    /**
+     * Keep only pages scoring at or above {@code bm25_threshold} for {@code bm25_query}.
+     */
+    BM25("bm25");
 
-  /** The string value. */
-  private final String value;
 
-  ContentFilterKind(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ContentFilterKind fromValue(final String value) {
-    for (ContentFilterKind e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ContentFilterKind(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ContentFilterKind value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ContentFilterKind fromValue(final String value) {
+        for (ContentFilterKind e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ContentFilterKind value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

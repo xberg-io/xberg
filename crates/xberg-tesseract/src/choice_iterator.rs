@@ -1,41 +1,29 @@
+use crate::api::TesseractAPI;
 use crate::error::{Result, TesseractError};
+use crate::native_iterator::NativeIterator;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
-use std::sync::{Arc, Mutex};
 
-/// Owns a native choice iterator allocation.
+/// Owns a native choice iterator allocation, created by [`ResultIterator::choices`](crate::ResultIterator::choices).
 ///
-/// # Safety
-///
-/// Queries require a live, uniquely owned `TessChoiceIterator` and the source word's
-/// recognition data, including its `WERD_RES` in the API-owned `PAGE_RES`. Choice text
-/// borrows from that native data. The originating `TessBaseAPI` must remain live and
-/// must not run Init, SetImage, Recognize, Clear, End, DetectOS or any operation that
-/// replaces or invalidates those results while the iterator is in use.
-///
-/// The raw constructor does not validate ownership, type or backing lifetime.
-/// The mutex only serializes calls through this wrapper. These requirements are not enforced
-/// by the API. See [#3228](https://github.com/xberg-io/xberg/issues/3228).
-pub struct ChoiceIterator {
-    handle: Arc<Mutex<*mut c_void>>,
+/// It borrows the [`TesseractAPI`](crate::TesseractAPI) that produced the source iterator and
+/// reads the same recognition result: once the engine replaces that result, every query returns
+/// [`TesseractError::StaleIterator`]. Choice text is copied before the engine lock is released.
+pub struct ChoiceIterator<'api> {
+    inner: NativeIterator<'api>,
 }
 
-// SAFETY: Moving the wrapper transfers the handle and its deletion obligation without accessing native data.
-// Subsequent use or deletion still depends on the ownership and coordination in ChoiceIterator's Safety section (#3228). ~keep
-unsafe impl Send for ChoiceIterator {}
-// SAFETY: Shared methods serialize native access through this wrapper's mutex. Access through
-// other wrappers or the API must be externally coordinated as in ChoiceIterator's Safety section (#3228). ~keep
-unsafe impl Sync for ChoiceIterator {}
-
-impl ChoiceIterator {
-    /// Creates a new instance of the ChoiceIterator.
+impl<'api> ChoiceIterator<'api> {
+    /// Wraps a choice iterator created by `api` from the recognition result at `epoch`.
     ///
-    /// # Arguments
+    /// # Safety
     ///
-    /// * `handle` - Pointer to the ChoiceIterator.
-    pub fn new(handle: *mut c_void) -> Self {
+    /// `raw` must be a non-null `TessChoiceIterator` that `api`'s engine created from the result
+    /// at `epoch`, owned by nothing else.
+    pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
+        // SAFETY: forwarded from this function's contract. ~keep
         ChoiceIterator {
-            handle: Arc::new(Mutex::new(handle)),
+            inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
     }
 
@@ -45,7 +33,7 @@ impl ChoiceIterator {
     ///
     /// Returns `true` if the next choice is successful, otherwise returns `false`.
     pub fn next(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         // SAFETY: The guard serializes advancement on a live choice iterator whose source word is still valid. ~keep
         Ok(unsafe { TessChoiceIteratorNext(*handle) != 0 })
     }
@@ -56,8 +44,8 @@ impl ChoiceIterator {
     ///
     /// Returns the UTF-8 text as a `String` if successful, otherwise returns an error.
     pub fn get_utf8_text(&self) -> Result<String> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // Requires the live handle and backing data documented on `ChoiceIterator`. ~keep
+        let handle = self.inner.lock()?;
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         // SAFETY: The guard prevents advancement through this wrapper. The source word must remain valid.
         // The returned string borrows Tesseract's internal storage and requires no deallocation. ~keep
         let text_ptr = unsafe { TessChoiceIteratorGetUTF8Text(*handle) };
@@ -75,16 +63,16 @@ impl ChoiceIterator {
     ///
     /// Returns the confidence as a `f32`.
     pub fn confidence(&self) -> Result<f32> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         // SAFETY: The guard serializes the read of the current choice confidence, returned as a C float.
-        // Requires the live handle and backing data documented on `ChoiceIterator`. ~keep
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessChoiceIteratorConfidence(*handle) })
     }
 }
 
-impl Drop for ChoiceIterator {
+impl Drop for ChoiceIterator<'_> {
     fn drop(&mut self) {
-        if let Ok(handle) = self.handle.lock() {
+        if let Some(handle) = self.inner.lock_for_release() {
             // SAFETY: The wrapper must own the choice iterator allocation. This native deleter frees it. ~keep
             unsafe { TessChoiceIteratorDelete(*handle) };
         }

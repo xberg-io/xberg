@@ -10,27 +10,36 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Optional;
 
-/** Sparse-embedding model types supported by Xberg. */
+/**
+ * Sparse-embedding model types supported by Xberg.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = SparseEmbeddingModelType.Preset.class, name = "preset"),
-  @JsonSubTypes.Type(value = SparseEmbeddingModelType.Custom.class, name = "custom"),
-  @JsonSubTypes.Type(value = SparseEmbeddingModelType.Plugin.class, name = "plugin")
+    @JsonSubTypes.Type(value = SparseEmbeddingModelType.Preset.class, name = "preset"),
+    @JsonSubTypes.Type(value = SparseEmbeddingModelType.Custom.class, name = "custom"),
+    @JsonSubTypes.Type(value = SparseEmbeddingModelType.Plugin.class, name = "plugin")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface SparseEmbeddingModelType {
 
-  /** Use a preset SPLADE model (recommended). */
-  record Preset(@JsonProperty("name") String name) implements SparseEmbeddingModelType {}
+    /**
+     * Use a preset SPLADE model (recommended).
+     */
+    record Preset(@JsonProperty("name") String name) implements SparseEmbeddingModelType { }
 
-  /** Use a custom SPLADE ({@code BertForMaskedLM}) ONNX model from HuggingFace. */
-  record Custom(
-      @JsonProperty("model_id") String modelId,
-      @JsonProperty("model_file") Optional<String> modelFile,
-      @JsonProperty("additional_files") List<String> additionalFiles,
-      @JsonProperty("max_length") Optional<Long> maxLength)
-      implements SparseEmbeddingModelType {}
+    /**
+     * Use a custom SPLADE ({@code BertForMaskedLM}) ONNX model from HuggingFace.
+     */
+    record Custom(
+        @JsonProperty("model_id") String modelId,
+        @JsonProperty("model_file") Optional<String> modelFile,
+        @JsonProperty("additional_files") List<String> additionalFiles,
+        @JsonProperty("max_length") Optional<Long> maxLength
+    ) implements SparseEmbeddingModelType {
+    }
 
-  /** In-process sparse-embedding backend registered via the plugin system. */
-  record Plugin(@JsonProperty("name") String name) implements SparseEmbeddingModelType {}
+    /**
+     * In-process sparse-embedding backend registered via the plugin system.
+     */
+    record Plugin(@JsonProperty("name") String name) implements SparseEmbeddingModelType { }
 }

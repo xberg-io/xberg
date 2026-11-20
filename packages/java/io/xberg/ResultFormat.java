@@ -10,44 +10,49 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Result-shape selection for extraction results.
  *
- * <p>Distinct from {@code OutputFormat} (which controls rendering — Plain, Markdown, HTML, etc.).
- * {@code ResultFormat} controls the *shape* of the result: a unified content blob vs. an
- * element-based decomposition.
+ * Distinct from {@code OutputFormat} (which controls rendering — Plain, Markdown,
+ * HTML, etc.). {@code ResultFormat} controls the *shape* of the result: a unified content
+ * blob vs. an element-based decomposition.
  */
 @SuppressWarnings("PMD")
 public enum ResultFormat {
-  /** Unified format with all content in {@code content} field */
-  UNIFIED("unified"),
-  /** Element-based format with semantic element extraction */
-  ELEMENT_BASED("element_based");
+    /**
+     * Unified format with all content in {@code content} field
+     */
+    UNIFIED("unified"),
+    /**
+     * Element-based format with semantic element extraction
+     */
+    ELEMENT_BASED("element_based");
 
-  /** The string value. */
-  private final String value;
 
-  ResultFormat(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ResultFormat fromValue(final String value) {
-    for (ResultFormat e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ResultFormat(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ResultFormat value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ResultFormat fromValue(final String value) {
+        for (ResultFormat e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ResultFormat value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

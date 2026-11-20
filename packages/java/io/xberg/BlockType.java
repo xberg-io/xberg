@@ -7,69 +7,104 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Types of block-level elements in Djot. */
+/**
+ * Types of block-level elements in Djot.
+ */
 @SuppressWarnings("PMD")
 public enum BlockType {
-  /** Standard prose paragraph. */
-  PARAGRAPH("paragraph"),
-  /** Section heading (level stored in {@code FormattedBlock.level}). */
-  HEADING("heading"),
-  /** Block quotation container. */
-  BLOCKQUOTE("blockquote"),
-  /** Fenced or indented code block. */
-  CODE_BLOCK("code_block"),
-  /** Individual item within a list. */
-  LIST_ITEM("list_item"),
-  /** Numbered (ordered) list container. */
-  ORDERED_LIST("ordered_list"),
-  /** Unnumbered (bullet) list container. */
-  BULLET_LIST("bullet_list"),
-  /** Task / checkbox list container. */
-  TASK_LIST("task_list"),
-  /** Definition list container. */
-  DEFINITION_LIST("definition_list"),
-  /** Term part of a definition list entry. */
-  DEFINITION_TERM("definition_term"),
-  /** Description / definition part of a definition list entry. */
-  DEFINITION_DESCRIPTION("definition_description"),
-  /** Generic {@code div} container with optional attributes. */
-  DIV("div"),
-  /** Logical section container, often associated with a heading. */
-  SECTION("section"),
-  /** Horizontal rule / thematic break. */
-  THEMATIC_BREAK("thematic_break"),
-  /** Raw content block in a specified format (e.g. HTML, LaTeX). */
-  RAW_BLOCK("raw_block"),
-  /** Display-mode mathematical expression. */
-  MATH_DISPLAY("math_display");
+    /**
+     * Standard prose paragraph.
+     */
+    PARAGRAPH("paragraph"),
+    /**
+     * Section heading (level stored in {@code FormattedBlock.level}).
+     */
+    HEADING("heading"),
+    /**
+     * Block quotation container.
+     */
+    BLOCKQUOTE("blockquote"),
+    /**
+     * Fenced or indented code block.
+     */
+    CODE_BLOCK("code_block"),
+    /**
+     * Individual item within a list.
+     */
+    LIST_ITEM("list_item"),
+    /**
+     * Numbered (ordered) list container.
+     */
+    ORDERED_LIST("ordered_list"),
+    /**
+     * Unnumbered (bullet) list container.
+     */
+    BULLET_LIST("bullet_list"),
+    /**
+     * Task / checkbox list container.
+     */
+    TASK_LIST("task_list"),
+    /**
+     * Definition list container.
+     */
+    DEFINITION_LIST("definition_list"),
+    /**
+     * Term part of a definition list entry.
+     */
+    DEFINITION_TERM("definition_term"),
+    /**
+     * Description / definition part of a definition list entry.
+     */
+    DEFINITION_DESCRIPTION("definition_description"),
+    /**
+     * Generic {@code div} container with optional attributes.
+     */
+    DIV("div"),
+    /**
+     * Logical section container, often associated with a heading.
+     */
+    SECTION("section"),
+    /**
+     * Horizontal rule / thematic break.
+     */
+    THEMATIC_BREAK("thematic_break"),
+    /**
+     * Raw content block in a specified format (e.g. HTML, LaTeX).
+     */
+    RAW_BLOCK("raw_block"),
+    /**
+     * Display-mode mathematical expression.
+     */
+    MATH_DISPLAY("math_display");
 
-  /** The string value. */
-  private final String value;
 
-  BlockType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static BlockType fromValue(final String value) {
-    for (BlockType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    BlockType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown BlockType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static BlockType fromValue(final String value) {
+        for (BlockType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown BlockType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

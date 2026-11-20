@@ -4,15 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** Result of parsing a structured data file (JSON, JSONL, YAML, or TOML). */
+/**
+ * Result of parsing a structured data file (JSON, JSONL, YAML, or TOML).
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = StructuredDataResult.Builder.class)
 public record StructuredDataResult(
@@ -21,74 +23,80 @@ public record StructuredDataResult(
     @JsonProperty("metadata") Map<String, String> metadata,
     @JsonProperty("text_fields") List<String> textFields,
     @Nullable @JsonProperty("value") Object value,
-    @JsonProperty("flattened") List<String> flattened) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for StructuredDataResult deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String content;
-    private String format;
-    private Map<String, String> metadata = Map.of();
-
-    @JsonProperty("text_fields")
-    private List<String> textFields = List.of();
-
-    @Nullable private Object value;
-    private List<String> flattened = List.of();
-
-    /** Sets the content field. */
-    @JsonProperty("content")
-    public Builder withContent(final String value) {
-      this.content = value;
-      return this;
+    @JsonProperty("flattened") List<String> flattened
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the format field. */
-    @JsonProperty("format")
-    public Builder withFormat(final String value) {
-      this.format = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for StructuredDataResult deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the metadata field. */
-    @JsonProperty("metadata")
-    public Builder withMetadata(final Map<String, String> value) {
-      this.metadata = value;
-      return this;
-    }
+        private String content;
+        private String format;
+        private Map<String, String> metadata = Map.of();
+        @JsonProperty("text_fields")
+        private List<String> textFields = List.of();
+        @Nullable private Object value;
+        private List<String> flattened = List.of();
 
-    /** Sets the textFields field. */
-    @JsonProperty("text_fields")
-    public Builder withTextFields(final List<String> value) {
-      this.textFields = value;
-      return this;
-    }
+        /** Sets the content field. */
+        @JsonProperty("content")
+        public Builder withContent(final String value) {
+            this.content = value;
+            return this;
+        }
 
-    /** Sets the value field. */
-    @JsonProperty("value")
-    public Builder withValue(final @Nullable Object value) {
-      this.value = value;
-      return this;
-    }
+        /** Sets the format field. */
+        @JsonProperty("format")
+        public Builder withFormat(final String value) {
+            this.format = value;
+            return this;
+        }
 
-    /** Sets the flattened field. */
-    @JsonProperty("flattened")
-    public Builder withFlattened(final List<String> value) {
-      this.flattened = value;
-      return this;
-    }
+        /** Sets the metadata field. */
+        @JsonProperty("metadata")
+        public Builder withMetadata(final Map<String, String> value) {
+            this.metadata = value;
+            return this;
+        }
 
-    /** Constructs a StructuredDataResult instance from the builder's current state. */
-    public StructuredDataResult build() {
-      return new StructuredDataResult(content, format, metadata, textFields, value, flattened);
+        /** Sets the textFields field. */
+        @JsonProperty("text_fields")
+        public Builder withTextFields(final List<String> value) {
+            this.textFields = value;
+            return this;
+        }
+
+        /** Sets the value field. */
+        @JsonProperty("value")
+        public Builder withValue(final @Nullable Object value) {
+            this.value = value;
+            return this;
+        }
+
+        /** Sets the flattened field. */
+        @JsonProperty("flattened")
+        public Builder withFlattened(final List<String> value) {
+            this.flattened = value;
+            return this;
+        }
+
+        /** Constructs a StructuredDataResult instance from the builder's current state. */
+        public StructuredDataResult build() {
+            return new StructuredDataResult(
+                content,
+                format,
+                metadata,
+                textFields,
+                value,
+                flattened
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

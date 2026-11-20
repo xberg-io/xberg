@@ -10,44 +10,51 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Output format for conversion.
  *
- * <p>Specifies the target markup language format for the conversion output.
+ * Specifies the target markup language format for the conversion output.
  */
 @SuppressWarnings("PMD")
 public enum HtmlToMarkdownRsOutputFormat {
-  /** Standard Markdown ({@code CommonMark} compatible). Default. */
-  MARKDOWN("Markdown"),
-  /** Djot lightweight markup language. */
-  DJOT("Djot"),
-  /** Plain text output (no markup, visible text only). */
-  PLAIN("Plain");
+    /**
+     * Standard Markdown ({@code CommonMark} compatible). Default.
+     */
+    MARKDOWN("Markdown"),
+    /**
+     * Djot lightweight markup language.
+     */
+    DJOT("Djot"),
+    /**
+     * Plain text output (no markup, visible text only).
+     */
+    PLAIN("Plain");
 
-  /** The string value. */
-  private final String value;
 
-  HtmlToMarkdownRsOutputFormat(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static HtmlToMarkdownRsOutputFormat fromValue(final String value) {
-    for (HtmlToMarkdownRsOutputFormat e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    HtmlToMarkdownRsOutputFormat(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown HtmlToMarkdownRsOutputFormat value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static HtmlToMarkdownRsOutputFormat fromValue(final String value) {
+        for (HtmlToMarkdownRsOutputFormat e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown HtmlToMarkdownRsOutputFormat value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

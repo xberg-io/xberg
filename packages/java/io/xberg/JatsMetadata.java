@@ -4,85 +4,84 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** JATS (Journal Article Tag Suite) metadata. */
+/**
+ * JATS (Journal Article Tag Suite) metadata.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = JatsMetadata.Builder.class)
 public record JatsMetadata(
     @Nullable @JsonProperty("copyright") String copyright,
     @Nullable @JsonProperty("license") String license,
     @JsonProperty("history_dates") Map<String, String> historyDates,
-    @JsonProperty("contributor_roles") List<ContributorRole> contributorRoles) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public JatsMetadata {
-    if (historyDates == null) {
-      historyDates = Map.of();
+    @JsonProperty("contributor_roles") List<ContributorRole> contributorRoles
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (contributorRoles == null) {
-      contributorRoles = List.of();
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for JatsMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private String copyright;
-    @Nullable private String license;
-
-    @JsonProperty("history_dates")
-    @Nullable
-    private Map<String, String> historyDates = Map.of();
-
-    @JsonProperty("contributor_roles")
-    @Nullable
-    private List<ContributorRole> contributorRoles = List.of();
-
-    /** Sets the copyright field. */
-    @JsonProperty("copyright")
-    public Builder withCopyright(final @Nullable String value) {
-      this.copyright = value;
-      return this;
+    public JatsMetadata{
+        if (historyDates == null) { historyDates = Map.of(); }
+        if (contributorRoles == null) { contributorRoles = List.of(); }
     }
 
-    /** Sets the license field. */
-    @JsonProperty("license")
-    public Builder withLicense(final @Nullable String value) {
-      this.license = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for JatsMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the historyDates field. */
-    @JsonProperty("history_dates")
-    public Builder withHistoryDates(final @Nullable Map<String, String> value) {
-      this.historyDates = value;
-      return this;
-    }
+        @Nullable private String copyright;
+        @Nullable private String license;
+        @JsonProperty("history_dates")
+        @Nullable private Map<String, String> historyDates = Map.of();
+        @JsonProperty("contributor_roles")
+        @Nullable private List<ContributorRole> contributorRoles = List.of();
 
-    /** Sets the contributorRoles field. */
-    @JsonProperty("contributor_roles")
-    public Builder withContributorRoles(final @Nullable List<ContributorRole> value) {
-      this.contributorRoles = value;
-      return this;
-    }
+        /** Sets the copyright field. */
+        @JsonProperty("copyright")
+        public Builder withCopyright(final @Nullable String value) {
+            this.copyright = value;
+            return this;
+        }
 
-    /** Constructs a JatsMetadata instance from the builder's current state. */
-    public JatsMetadata build() {
-      return new JatsMetadata(copyright, license, historyDates, contributorRoles);
+        /** Sets the license field. */
+        @JsonProperty("license")
+        public Builder withLicense(final @Nullable String value) {
+            this.license = value;
+            return this;
+        }
+
+        /** Sets the historyDates field. */
+        @JsonProperty("history_dates")
+        public Builder withHistoryDates(final @Nullable Map<String, String> value) {
+            this.historyDates = value;
+            return this;
+        }
+
+        /** Sets the contributorRoles field. */
+        @JsonProperty("contributor_roles")
+        public Builder withContributorRoles(final @Nullable List<ContributorRole> value) {
+            this.contributorRoles = value;
+            return this;
+        }
+
+        /** Constructs a JatsMetadata instance from the builder's current state. */
+        public JatsMetadata build() {
+            return new JatsMetadata(
+                copyright,
+                license,
+                historyDates,
+                contributorRoles
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

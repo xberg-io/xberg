@@ -10,46 +10,55 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Content layer classification for document nodes.
  *
- * <p>Replaces separate body/furniture arrays with per-node granularity.
+ * Replaces separate body/furniture arrays with per-node granularity.
  */
 @SuppressWarnings("PMD")
 public enum ContentLayer {
-  /** Main document body content. */
-  BODY("body"),
-  /** Page/section header (running header). */
-  HEADER("header"),
-  /** Page/section footer (running footer). */
-  FOOTER("footer"),
-  /** Footnote content. */
-  FOOTNOTE("footnote");
+    /**
+     * Main document body content.
+     */
+    BODY("body"),
+    /**
+     * Page/section header (running header).
+     */
+    HEADER("header"),
+    /**
+     * Page/section footer (running footer).
+     */
+    FOOTER("footer"),
+    /**
+     * Footnote content.
+     */
+    FOOTNOTE("footnote");
 
-  /** The string value. */
-  private final String value;
 
-  ContentLayer(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ContentLayer fromValue(final String value) {
-    for (ContentLayer e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ContentLayer(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ContentLayer value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ContentLayer fromValue(final String value) {
+        for (ContentLayer e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ContentLayer value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

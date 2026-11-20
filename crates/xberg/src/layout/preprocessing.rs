@@ -7,7 +7,7 @@ use ndarray::Array4;
 /// -> NCHW f32. This is also the preprocessing contract of the original
 /// Docling Heron ONNX export.
 pub(crate) fn preprocess_rescale(img: &RgbImage, target_size: u32) -> Array4<f32> {
-    let resized = image::imageops::resize(img, target_size, target_size, image::imageops::FilterType::Triangle);
+    let resized = crate::image::resize::resize_rgb_triangle(img, target_size, target_size);
     let pixels = resized.as_raw();
     let ts = target_size as usize;
 
@@ -33,7 +33,7 @@ pub(crate) fn preprocess_letterbox(img: &RgbImage, target_width: u32, target_hei
     let new_w = (orig_w * scale) as u32;
     let new_h = (orig_h * scale) as u32;
 
-    let resized = image::imageops::resize(img, new_w, new_h, image::imageops::FilterType::Triangle);
+    let resized = crate::image::resize::resize_rgb_triangle(img, new_w, new_h);
 
     let tw = target_width as usize;
     let th = target_height as usize;

@@ -7,43 +7,52 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Text direction enumeration for HTML documents. */
+/**
+ * Text direction enumeration for HTML documents.
+ */
 @SuppressWarnings("PMD")
 public enum TextDirection {
-  /** Left-to-right text direction */
-  LEFT_TO_RIGHT("ltr"),
-  /** Right-to-left text direction */
-  RIGHT_TO_LEFT("rtl"),
-  /** Automatic text direction detection */
-  AUTO("auto");
+    /**
+     * Left-to-right text direction
+     */
+    LEFT_TO_RIGHT("ltr"),
+    /**
+     * Right-to-left text direction
+     */
+    RIGHT_TO_LEFT("rtl"),
+    /**
+     * Automatic text direction detection
+     */
+    AUTO("auto");
 
-  /** The string value. */
-  private final String value;
 
-  TextDirection(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static TextDirection fromValue(final String value) {
-    for (TextDirection e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    TextDirection(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown TextDirection value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static TextDirection fromValue(final String value) {
+        for (TextDirection e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown TextDirection value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

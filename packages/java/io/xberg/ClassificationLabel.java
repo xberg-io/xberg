@@ -4,54 +4,61 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** A single label + confidence pair. */
+/**
+ * A single label + confidence pair.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ClassificationLabel.Builder.class)
 public record ClassificationLabel(
-    @JsonProperty("label") String label, @Nullable @JsonProperty("confidence") Float confidence) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ClassificationLabel deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String label;
-    @Nullable private Float confidence;
-
-    /** Sets the label field. */
-    @JsonProperty("label")
-    public Builder withLabel(final String value) {
-      this.label = value;
-      return this;
+    @JsonProperty("label") String label,
+    @Nullable @JsonProperty("confidence") Float confidence
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the confidence field. */
-    @JsonProperty("confidence")
-    public Builder withConfidence(final @Nullable Float value) {
-      this.confidence = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ClassificationLabel deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withConfidence(final float value) {
-      return withConfidence(Float.valueOf(value));
-    }
+        private String label;
+        @Nullable private Float confidence;
 
-    /** Constructs a ClassificationLabel instance from the builder's current state. */
-    public ClassificationLabel build() {
-      return new ClassificationLabel(label, confidence);
+        /** Sets the label field. */
+        @JsonProperty("label")
+        public Builder withLabel(final String value) {
+            this.label = value;
+            return this;
+        }
+
+        /** Sets the confidence field. */
+        @JsonProperty("confidence")
+        public Builder withConfidence(final @Nullable Float value) {
+            this.confidence = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withConfidence(final float value) {
+            return withConfidence(Float.valueOf(value));
+        }
+
+        /** Constructs a ClassificationLabel instance from the builder's current state. */
+        public ClassificationLabel build() {
+            return new ClassificationLabel(
+                label,
+                confidence
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

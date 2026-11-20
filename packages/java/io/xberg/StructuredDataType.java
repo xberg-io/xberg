@@ -7,43 +7,52 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Structured data type classification. */
+/**
+ * Structured data type classification.
+ */
 @SuppressWarnings("PMD")
 public enum StructuredDataType {
-  /** JSON-LD structured data */
-  JSON_LD("json-ld"),
-  /** Microdata */
-  MICRODATA("microdata"),
-  /** RDFa */
-  RDFA("rdfa");
+    /**
+     * JSON-LD structured data
+     */
+    JSON_LD("json-ld"),
+    /**
+     * Microdata
+     */
+    MICRODATA("microdata"),
+    /**
+     * RDFa
+     */
+    RDFA("rdfa");
 
-  /** The string value. */
-  private final String value;
 
-  StructuredDataType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static StructuredDataType fromValue(final String value) {
-    for (StructuredDataType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    StructuredDataType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown StructuredDataType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static StructuredDataType fromValue(final String value) {
+        for (StructuredDataType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown StructuredDataType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

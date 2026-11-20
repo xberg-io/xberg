@@ -4,68 +4,76 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** Link element in Djot. */
+/**
+ * Link element in Djot.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DjotLink.Builder.class)
 public record DjotLink(
     @JsonProperty("url") String url,
     @JsonProperty("text") String text,
     @Nullable @JsonProperty("title") String title,
-    @Nullable @JsonProperty("attributes") Attributes attributes) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for DjotLink deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String url;
-    private String text;
-    @Nullable private String title;
-    @Nullable private Attributes attributes;
-
-    /** Sets the url field. */
-    @JsonProperty("url")
-    public Builder withUrl(final String value) {
-      this.url = value;
-      return this;
+    @Nullable @JsonProperty("attributes") Attributes attributes
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the text field. */
-    @JsonProperty("text")
-    public Builder withText(final String value) {
-      this.text = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for DjotLink deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the title field. */
-    @JsonProperty("title")
-    public Builder withTitle(final @Nullable String value) {
-      this.title = value;
-      return this;
-    }
+        private String url;
+        private String text;
+        @Nullable private String title;
+        @Nullable private Attributes attributes;
 
-    /** Sets the attributes field. */
-    @JsonProperty("attributes")
-    public Builder withAttributes(final @Nullable Attributes value) {
-      this.attributes = value;
-      return this;
-    }
+        /** Sets the url field. */
+        @JsonProperty("url")
+        public Builder withUrl(final String value) {
+            this.url = value;
+            return this;
+        }
 
-    /** Constructs a DjotLink instance from the builder's current state. */
-    public DjotLink build() {
-      return new DjotLink(url, text, title, attributes);
+        /** Sets the text field. */
+        @JsonProperty("text")
+        public Builder withText(final String value) {
+            this.text = value;
+            return this;
+        }
+
+        /** Sets the title field. */
+        @JsonProperty("title")
+        public Builder withTitle(final @Nullable String value) {
+            this.title = value;
+            return this;
+        }
+
+        /** Sets the attributes field. */
+        @JsonProperty("attributes")
+        public Builder withAttributes(final @Nullable Attributes value) {
+            this.attributes = value;
+            return this;
+        }
+
+        /** Constructs a DjotLink instance from the builder's current state. */
+        public DjotLink build() {
+            return new DjotLink(
+                url,
+                text,
+                title,
+                attributes
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

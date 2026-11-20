@@ -4,14 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** Image element metadata. */
+/**
+ * Image element metadata.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageMetadataType.Builder.class)
 public record ImageMetadataType(
@@ -20,74 +22,80 @@ public record ImageMetadataType(
     @Nullable @JsonProperty("title") String title,
     @Nullable @JsonProperty("dimensions") ImageDimensions dimensions,
     @JsonProperty("image_type") ImageType imageType,
-    @JsonProperty("attributes") List<KeyValueAttribute> attributes) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ImageMetadataType deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String src;
-    @Nullable private String alt;
-    @Nullable private String title;
-    @Nullable private ImageDimensions dimensions;
-
-    @JsonProperty("image_type")
-    private ImageType imageType;
-
-    private List<KeyValueAttribute> attributes = List.of();
-
-    /** Sets the src field. */
-    @JsonProperty("src")
-    public Builder withSrc(final String value) {
-      this.src = value;
-      return this;
+    @JsonProperty("attributes") List<KeyValueAttribute> attributes
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the alt field. */
-    @JsonProperty("alt")
-    public Builder withAlt(final @Nullable String value) {
-      this.alt = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ImageMetadataType deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the title field. */
-    @JsonProperty("title")
-    public Builder withTitle(final @Nullable String value) {
-      this.title = value;
-      return this;
-    }
+        private String src;
+        @Nullable private String alt;
+        @Nullable private String title;
+        @Nullable private ImageDimensions dimensions;
+        @JsonProperty("image_type")
+        private ImageType imageType;
+        private List<KeyValueAttribute> attributes = List.of();
 
-    /** Sets the dimensions field. */
-    @JsonProperty("dimensions")
-    public Builder withDimensions(final @Nullable ImageDimensions value) {
-      this.dimensions = value;
-      return this;
-    }
+        /** Sets the src field. */
+        @JsonProperty("src")
+        public Builder withSrc(final String value) {
+            this.src = value;
+            return this;
+        }
 
-    /** Sets the imageType field. */
-    @JsonProperty("image_type")
-    public Builder withImageType(final ImageType value) {
-      this.imageType = value;
-      return this;
-    }
+        /** Sets the alt field. */
+        @JsonProperty("alt")
+        public Builder withAlt(final @Nullable String value) {
+            this.alt = value;
+            return this;
+        }
 
-    /** Sets the attributes field. */
-    @JsonProperty("attributes")
-    public Builder withAttributes(final List<KeyValueAttribute> value) {
-      this.attributes = value;
-      return this;
-    }
+        /** Sets the title field. */
+        @JsonProperty("title")
+        public Builder withTitle(final @Nullable String value) {
+            this.title = value;
+            return this;
+        }
 
-    /** Constructs a ImageMetadataType instance from the builder's current state. */
-    public ImageMetadataType build() {
-      return new ImageMetadataType(src, alt, title, dimensions, imageType, attributes);
+        /** Sets the dimensions field. */
+        @JsonProperty("dimensions")
+        public Builder withDimensions(final @Nullable ImageDimensions value) {
+            this.dimensions = value;
+            return this;
+        }
+
+        /** Sets the imageType field. */
+        @JsonProperty("image_type")
+        public Builder withImageType(final ImageType value) {
+            this.imageType = value;
+            return this;
+        }
+
+        /** Sets the attributes field. */
+        @JsonProperty("attributes")
+        public Builder withAttributes(final List<KeyValueAttribute> value) {
+            this.attributes = value;
+            return this;
+        }
+
+        /** Constructs a ImageMetadataType instance from the builder's current state. */
+        public ImageMetadataType build() {
+            return new ImageMetadataType(
+                src,
+                alt,
+                title,
+                dimensions,
+                imageType,
+                attributes
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

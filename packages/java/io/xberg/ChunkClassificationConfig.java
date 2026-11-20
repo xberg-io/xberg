@@ -4,20 +4,21 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Configuration for the chunk-classification post-processor.
  *
- * <p>Chunk classification is always multi-label: a chunk may match zero, one, or many of the
- * configured definitions. This is the chunk-level equivalent of {@code PageClassificationConfig},
- * but scoped to individual chunks ({@code ExtractedDocument.chunks}) rather than whole pages, and
- * built for large taxonomies where each label needs its own description rather than a bare name.
+ * Chunk classification is always multi-label: a chunk may match zero, one, or
+ * many of the configured definitions. This is the chunk-level equivalent of
+ * {@code PageClassificationConfig}, but scoped to individual chunks
+ * ({@code ExtractedDocument.chunks}) rather than whole pages, and built for large
+ * taxonomies where each label needs its own description rather than a bare name.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ChunkClassificationConfig.Builder.class)
@@ -26,82 +27,77 @@ public record ChunkClassificationConfig(
     @JsonProperty("definitions") List<ChunkClassificationDefinition> definitions,
     @JsonProperty("llm") LlmConfig llm,
     @Nullable @JsonProperty("batch_size") Long batchSize,
-    @Nullable @JsonProperty("max_concurrency") Long maxConcurrency) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public ChunkClassificationConfig {
-    if (batchSize == null) {
-      batchSize = 10L;
+    @Nullable @JsonProperty("max_concurrency") Long maxConcurrency
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (maxConcurrency == null) {
-      maxConcurrency = 4L;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ChunkClassificationConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("prompt_template")
-    @Nullable
-    private String promptTemplate;
-
-    private List<ChunkClassificationDefinition> definitions = List.of();
-    private LlmConfig llm;
-
-    @JsonProperty("batch_size")
-    @Nullable
-    private Long batchSize;
-
-    @JsonProperty("max_concurrency")
-    @Nullable
-    private Long maxConcurrency;
-
-    /** Sets the promptTemplate field. */
-    @JsonProperty("prompt_template")
-    public Builder withPromptTemplate(final @Nullable String value) {
-      this.promptTemplate = value;
-      return this;
+    public ChunkClassificationConfig{
+        if (batchSize == null) { batchSize = 10L; }
+        if (maxConcurrency == null) { maxConcurrency = 4L; }
     }
 
-    /** Sets the definitions field. */
-    @JsonProperty("definitions")
-    public Builder withDefinitions(final List<ChunkClassificationDefinition> value) {
-      this.definitions = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ChunkClassificationConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the llm field. */
-    @JsonProperty("llm")
-    public Builder withLlm(final LlmConfig value) {
-      this.llm = value;
-      return this;
-    }
+        @JsonProperty("prompt_template")
+        @Nullable private String promptTemplate;
+        private List<ChunkClassificationDefinition> definitions = List.of();
+        private LlmConfig llm;
+        @JsonProperty("batch_size")
+        @Nullable private Long batchSize;
+        @JsonProperty("max_concurrency")
+        @Nullable private Long maxConcurrency;
 
-    /** Sets the batchSize field. */
-    @JsonProperty("batch_size")
-    public Builder withBatchSize(final @Nullable Long value) {
-      this.batchSize = value;
-      return this;
-    }
+        /** Sets the promptTemplate field. */
+        @JsonProperty("prompt_template")
+        public Builder withPromptTemplate(final @Nullable String value) {
+            this.promptTemplate = value;
+            return this;
+        }
 
-    /** Sets the maxConcurrency field. */
-    @JsonProperty("max_concurrency")
-    public Builder withMaxConcurrency(final @Nullable Long value) {
-      this.maxConcurrency = value;
-      return this;
-    }
+        /** Sets the definitions field. */
+        @JsonProperty("definitions")
+        public Builder withDefinitions(final List<ChunkClassificationDefinition> value) {
+            this.definitions = value;
+            return this;
+        }
 
-    /** Constructs a ChunkClassificationConfig instance from the builder's current state. */
-    public ChunkClassificationConfig build() {
-      return new ChunkClassificationConfig(
-          promptTemplate, definitions, llm, batchSize, maxConcurrency);
+        /** Sets the llm field. */
+        @JsonProperty("llm")
+        public Builder withLlm(final LlmConfig value) {
+            this.llm = value;
+            return this;
+        }
+
+        /** Sets the batchSize field. */
+        @JsonProperty("batch_size")
+        public Builder withBatchSize(final @Nullable Long value) {
+            this.batchSize = value;
+            return this;
+        }
+
+        /** Sets the maxConcurrency field. */
+        @JsonProperty("max_concurrency")
+        public Builder withMaxConcurrency(final @Nullable Long value) {
+            this.maxConcurrency = value;
+            return this;
+        }
+
+        /** Constructs a ChunkClassificationConfig instance from the builder's current state. */
+        public ChunkClassificationConfig build() {
+            return new ChunkClassificationConfig(
+                promptTemplate,
+                definitions,
+                llm,
+                batchSize,
+                maxConcurrency
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

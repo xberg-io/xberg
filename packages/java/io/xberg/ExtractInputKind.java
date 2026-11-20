@@ -7,41 +7,48 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Source kind for ExtractInput. */
+/**
+ * Source kind for ExtractInput.
+ */
 @SuppressWarnings("PMD")
 public enum ExtractInputKind {
-  /** Raw in-memory bytes. */
-  BYTES("bytes"),
-  /** A filesystem path, {@code file://} URI, or HTTP(S) URL. */
-  URI("uri");
+    /**
+     * Raw in-memory bytes.
+     */
+    BYTES("bytes"),
+    /**
+     * A filesystem path, {@code file://} URI, or HTTP(S) URL.
+     */
+    URI("uri");
 
-  /** The string value. */
-  private final String value;
 
-  ExtractInputKind(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ExtractInputKind fromValue(final String value) {
-    for (ExtractInputKind e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ExtractInputKind(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ExtractInputKind value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ExtractInputKind fromValue(final String value) {
+        for (ExtractInputKind e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ExtractInputKind value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

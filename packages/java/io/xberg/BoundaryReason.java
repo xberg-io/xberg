@@ -7,47 +7,60 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Reason for boundary detection. */
+/**
+ * Reason for boundary detection.
+ */
 @SuppressWarnings("PMD")
 public enum BoundaryReason {
-  /** Start of PDF. */
-  START("start"),
-  /** Page-one marker ("Page 1", "1 of N") detected. */
-  PAGE_ONE_MARKER("page_one_marker"),
-  /** Letterhead reset after signature block. */
-  LETTERHEAD_RESET("letterhead_reset"),
-  /** Text density shift with low bigram overlap. */
-  DENSITY_SHIFT("density_shift"),
-  /** End of PDF. */
-  END("end");
+    /**
+     * Start of PDF.
+     */
+    START("start"),
+    /**
+     * Page-one marker ("Page 1", "1 of N") detected.
+     */
+    PAGE_ONE_MARKER("page_one_marker"),
+    /**
+     * Letterhead reset after signature block.
+     */
+    LETTERHEAD_RESET("letterhead_reset"),
+    /**
+     * Text density shift with low bigram overlap.
+     */
+    DENSITY_SHIFT("density_shift"),
+    /**
+     * End of PDF.
+     */
+    END("end");
 
-  /** The string value. */
-  private final String value;
 
-  BoundaryReason(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static BoundaryReason fromValue(final String value) {
-    for (BoundaryReason e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    BoundaryReason(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown BoundaryReason value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static BoundaryReason fromValue(final String value) {
+        for (BoundaryReason e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown BoundaryReason value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

@@ -7,8 +7,9 @@ package io.xberg;
 /**
  * Chunk-classification enrichment knob: how to multi-label individual chunks.
  *
- * <p>Operates on {@code ExtractedDocument.chunks} in place — the caller must have already produced
- * chunks (e.g. via {@code ExtractionConfig.chunking}) for this stage to have any effect; a document
- * with no chunks is a no-op.
+ * Operates on {@code ExtractedDocument.chunks} in place — the caller must have
+ * already produced chunks (e.g. via {@code ExtractionConfig.chunking}) for this
+ * stage to have any effect; a document with no chunks is a no-op.
  */
-public record ChunkClassificationEnrichmentConfig(ChunkClassificationConfig config) {}
+public record ChunkClassificationEnrichmentConfig(ChunkClassificationConfig config) {
+}

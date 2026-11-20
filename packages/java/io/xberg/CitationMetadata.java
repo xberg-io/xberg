@@ -4,14 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** Citation file metadata (RIS, PubMed, EndNote). */
+/**
+ * Citation file metadata (RIS, PubMed, EndNote).
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CitationMetadata.Builder.class)
 public record CitationMetadata(
@@ -20,89 +22,86 @@ public record CitationMetadata(
     @JsonProperty("authors") List<String> authors,
     @Nullable @JsonProperty("year_range") YearRange yearRange,
     @JsonProperty("dois") List<String> dois,
-    @JsonProperty("keywords") List<String> keywords) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public CitationMetadata {
-    if (authors == null) {
-      authors = List.of();
+    @JsonProperty("keywords") List<String> keywords
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (dois == null) {
-      dois = List.of();
-    }
-    if (keywords == null) {
-      keywords = List.of();
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for CitationMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("citation_count")
-    private long citationCount;
-
-    @Nullable private String format;
-    @Nullable private List<String> authors = List.of();
-
-    @JsonProperty("year_range")
-    @Nullable
-    private YearRange yearRange;
-
-    @Nullable private List<String> dois = List.of();
-    @Nullable private List<String> keywords = List.of();
-
-    /** Sets the citationCount field. */
-    @JsonProperty("citation_count")
-    public Builder withCitationCount(final long value) {
-      this.citationCount = value;
-      return this;
+    public CitationMetadata{
+        if (authors == null) { authors = List.of(); }
+        if (dois == null) { dois = List.of(); }
+        if (keywords == null) { keywords = List.of(); }
     }
 
-    /** Sets the format field. */
-    @JsonProperty("format")
-    public Builder withFormat(final @Nullable String value) {
-      this.format = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for CitationMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the authors field. */
-    @JsonProperty("authors")
-    public Builder withAuthors(final @Nullable List<String> value) {
-      this.authors = value;
-      return this;
-    }
+        @JsonProperty("citation_count")
+        private long citationCount;
+        @Nullable private String format;
+        @Nullable private List<String> authors = List.of();
+        @JsonProperty("year_range")
+        @Nullable private YearRange yearRange;
+        @Nullable private List<String> dois = List.of();
+        @Nullable private List<String> keywords = List.of();
 
-    /** Sets the yearRange field. */
-    @JsonProperty("year_range")
-    public Builder withYearRange(final @Nullable YearRange value) {
-      this.yearRange = value;
-      return this;
-    }
+        /** Sets the citationCount field. */
+        @JsonProperty("citation_count")
+        public Builder withCitationCount(final long value) {
+            this.citationCount = value;
+            return this;
+        }
 
-    /** Sets the dois field. */
-    @JsonProperty("dois")
-    public Builder withDois(final @Nullable List<String> value) {
-      this.dois = value;
-      return this;
-    }
+        /** Sets the format field. */
+        @JsonProperty("format")
+        public Builder withFormat(final @Nullable String value) {
+            this.format = value;
+            return this;
+        }
 
-    /** Sets the keywords field. */
-    @JsonProperty("keywords")
-    public Builder withKeywords(final @Nullable List<String> value) {
-      this.keywords = value;
-      return this;
-    }
+        /** Sets the authors field. */
+        @JsonProperty("authors")
+        public Builder withAuthors(final @Nullable List<String> value) {
+            this.authors = value;
+            return this;
+        }
 
-    /** Constructs a CitationMetadata instance from the builder's current state. */
-    public CitationMetadata build() {
-      return new CitationMetadata(citationCount, format, authors, yearRange, dois, keywords);
+        /** Sets the yearRange field. */
+        @JsonProperty("year_range")
+        public Builder withYearRange(final @Nullable YearRange value) {
+            this.yearRange = value;
+            return this;
+        }
+
+        /** Sets the dois field. */
+        @JsonProperty("dois")
+        public Builder withDois(final @Nullable List<String> value) {
+            this.dois = value;
+            return this;
+        }
+
+        /** Sets the keywords field. */
+        @JsonProperty("keywords")
+        public Builder withKeywords(final @Nullable List<String> value) {
+            this.keywords = value;
+            return this;
+        }
+
+        /** Constructs a CitationMetadata instance from the builder's current state. */
+        public CitationMetadata build() {
+            return new CitationMetadata(
+                citationCount,
+                format,
+                authors,
+                yearRange,
+                dois,
+                keywords
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

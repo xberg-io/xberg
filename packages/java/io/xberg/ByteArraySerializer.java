@@ -5,27 +5,27 @@
 package io.xberg;
 
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.JsonSerializer;
 
 /**
  * Serialises {@code byte[]} as a JSON array of integers.
  *
- * <p>Jackson's default serialiser encodes {@code byte[]} as a base64 string, but Rust's {@code
- * serde} for {@code Vec<u8>} expects {@code [72, 101, 108, ...]}. Annotate any {@code byte[]} field
- * sent to the FFI layer with {@code @JsonSerialize(using = ByteArraySerializer.class)}.
+ * <p>Jackson's default serialiser encodes {@code byte[]} as a base64 string, but
+ * Rust's {@code serde} for {@code Vec<u8>} expects {@code [72, 101, 108, ...]}.
+ * Annotate any {@code byte[]} field sent to the FFI layer with
+ * {@code @JsonSerialize(using = ByteArraySerializer.class)}.
  */
 @SuppressWarnings("PMD")
 public class ByteArraySerializer extends JsonSerializer<byte[]> {
 
-  @Override
-  public void serialize(
-      final byte[] value, final JsonGenerator gen, final SerializerProvider provider)
-      throws java.io.IOException {
-    gen.writeStartArray();
-    for (byte b : value) {
-      gen.writeNumber(b & 0xFF);
+    @Override
+    public void serialize(final byte[] value, final JsonGenerator gen,
+            final SerializerProvider provider) throws java.io.IOException {
+        gen.writeStartArray();
+        for (byte b : value) {
+            gen.writeNumber(b & 0xFF);
+        }
+        gen.writeEndArray();
     }
-    gen.writeEndArray();
-  }
 }

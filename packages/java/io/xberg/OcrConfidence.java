@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,51 +13,55 @@ import org.jspecify.annotations.Nullable;
 /**
  * Confidence scores for an OCR element.
  *
- * <p>Separates detection confidence (how confident that text exists at this location) from
- * recognition confidence (how confident about the actual text content).
+ * Separates detection confidence (how confident that text exists at this location)
+ * from recognition confidence (how confident about the actual text content).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrConfidence.Builder.class)
 public record OcrConfidence(
     @Nullable @JsonProperty("detection") Double detection,
-    @JsonProperty("recognition") double recognition) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OcrConfidence deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private Double detection;
-    private double recognition;
-
-    /** Sets the detection field. */
-    @JsonProperty("detection")
-    public Builder withDetection(final @Nullable Double value) {
-      this.detection = value;
-      return this;
+    @JsonProperty("recognition") double recognition
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withDetection(final double value) {
-      return withDetection(Double.valueOf(value));
-    }
+    // CPD-OFF
+    /** Jackson builder for OcrConfidence deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the recognition field. */
-    @JsonProperty("recognition")
-    public Builder withRecognition(final double value) {
-      this.recognition = value;
-      return this;
-    }
+        @Nullable private Double detection;
+        private double recognition;
 
-    /** Constructs a OcrConfidence instance from the builder's current state. */
-    public OcrConfidence build() {
-      return new OcrConfidence(detection, recognition);
+        /** Sets the detection field. */
+        @JsonProperty("detection")
+        public Builder withDetection(final @Nullable Double value) {
+            this.detection = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withDetection(final double value) {
+            return withDetection(Double.valueOf(value));
+        }
+
+        /** Sets the recognition field. */
+        @JsonProperty("recognition")
+        public Builder withRecognition(final double value) {
+            this.recognition = value;
+            return this;
+        }
+
+        /** Constructs a OcrConfidence instance from the builder's current state. */
+        public OcrConfidence build() {
+            return new OcrConfidence(
+                detection,
+                recognition
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

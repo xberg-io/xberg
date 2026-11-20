@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,57 +13,55 @@ import org.jspecify.annotations.Nullable;
 /**
  * Thresholds for multi-document boundary detection.
  *
- * <p>All fields are public; callers override any subset via struct-update syntax.
+ * All fields are public; callers override any subset via struct-update syntax.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = MultidocThresholds.Builder.class)
 public record MultidocThresholds(
     @Nullable @JsonProperty("density_shift_threshold") Float densityShiftThreshold,
-    @Nullable @JsonProperty("bigram_overlap_min") Float bigramOverlapMin) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public MultidocThresholds {
-    if (densityShiftThreshold == null) {
-      densityShiftThreshold = 0.3f;
+    @Nullable @JsonProperty("bigram_overlap_min") Float bigramOverlapMin
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (bigramOverlapMin == null) {
-      bigramOverlapMin = 0.1f;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for MultidocThresholds deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("density_shift_threshold")
-    private Float densityShiftThreshold;
-
-    @JsonProperty("bigram_overlap_min")
-    private Float bigramOverlapMin;
-
-    /** Sets the densityShiftThreshold field. */
-    @JsonProperty("density_shift_threshold")
-    public Builder withDensityShiftThreshold(final @Nullable Float value) {
-      this.densityShiftThreshold = value;
-      return this;
+    public MultidocThresholds{
+        if (densityShiftThreshold == null) { densityShiftThreshold = 0.3f; }
+        if (bigramOverlapMin == null) { bigramOverlapMin = 0.1f; }
     }
 
-    /** Sets the bigramOverlapMin field. */
-    @JsonProperty("bigram_overlap_min")
-    public Builder withBigramOverlapMin(final @Nullable Float value) {
-      this.bigramOverlapMin = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for MultidocThresholds deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a MultidocThresholds instance from the builder's current state. */
-    public MultidocThresholds build() {
-      return new MultidocThresholds(densityShiftThreshold, bigramOverlapMin);
+        @JsonProperty("density_shift_threshold")
+        private Float densityShiftThreshold;
+        @JsonProperty("bigram_overlap_min")
+        private Float bigramOverlapMin;
+
+        /** Sets the densityShiftThreshold field. */
+        @JsonProperty("density_shift_threshold")
+        public Builder withDensityShiftThreshold(final @Nullable Float value) {
+            this.densityShiftThreshold = value;
+            return this;
+        }
+
+        /** Sets the bigramOverlapMin field. */
+        @JsonProperty("bigram_overlap_min")
+        public Builder withBigramOverlapMin(final @Nullable Float value) {
+            this.bigramOverlapMin = value;
+            return this;
+        }
+
+        /** Constructs a MultidocThresholds instance from the builder's current state. */
+        public MultidocThresholds build() {
+            return new MultidocThresholds(
+                densityShiftThreshold,
+                bigramOverlapMin
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

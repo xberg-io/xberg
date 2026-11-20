@@ -10,42 +10,47 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * List indentation character type.
  *
- * <p>Controls whether list items are indented with spaces or tabs.
+ * Controls whether list items are indented with spaces or tabs.
  */
 @SuppressWarnings("PMD")
 public enum ListIndentType {
-  /** Use spaces for indentation. Default. Width controlled by {@code list_indent_width}. */
-  SPACES("Spaces"),
-  /** Use tabs for indentation. */
-  TABS("Tabs");
+    /**
+     * Use spaces for indentation. Default. Width controlled by {@code list_indent_width}.
+     */
+    SPACES("Spaces"),
+    /**
+     * Use tabs for indentation.
+     */
+    TABS("Tabs");
 
-  /** The string value. */
-  private final String value;
 
-  ListIndentType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ListIndentType fromValue(final String value) {
-    for (ListIndentType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ListIndentType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ListIndentType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ListIndentType fromValue(final String value) {
+        for (ListIndentType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ListIndentType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

@@ -4,14 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
-/** Metadata for a semantic element. */
+/**
+ * Metadata for a semantic element.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ElementMetadata.Builder.class)
 public record ElementMetadata(
@@ -19,80 +21,82 @@ public record ElementMetadata(
     @Nullable @JsonProperty("filename") String filename,
     @Nullable @JsonProperty("coordinates") BoundingBox coordinates,
     @Nullable @JsonProperty("element_index") Long elementIndex,
-    @JsonProperty("additional") Map<String, String> additional) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ElementMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("page_number")
-    @Nullable
-    private Integer pageNumber;
-
-    @Nullable private String filename;
-    @Nullable private BoundingBox coordinates;
-
-    @JsonProperty("element_index")
-    @Nullable
-    private Long elementIndex;
-
-    private Map<String, String> additional = Map.of();
-
-    /** Sets the pageNumber field. */
-    @JsonProperty("page_number")
-    public Builder withPageNumber(final @Nullable Integer value) {
-      this.pageNumber = value;
-      return this;
+    @JsonProperty("additional") Map<String, String> additional
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withPageNumber(final int value) {
-      return withPageNumber(Integer.valueOf(value));
-    }
+    // CPD-OFF
+    /** Jackson builder for ElementMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the filename field. */
-    @JsonProperty("filename")
-    public Builder withFilename(final @Nullable String value) {
-      this.filename = value;
-      return this;
-    }
+        @JsonProperty("page_number")
+        @Nullable private Integer pageNumber;
+        @Nullable private String filename;
+        @Nullable private BoundingBox coordinates;
+        @JsonProperty("element_index")
+        @Nullable private Long elementIndex;
+        private Map<String, String> additional = Map.of();
 
-    /** Sets the coordinates field. */
-    @JsonProperty("coordinates")
-    public Builder withCoordinates(final @Nullable BoundingBox value) {
-      this.coordinates = value;
-      return this;
-    }
+        /** Sets the pageNumber field. */
+        @JsonProperty("page_number")
+        public Builder withPageNumber(final @Nullable Integer value) {
+            this.pageNumber = value;
+            return this;
+        }
 
-    /** Sets the elementIndex field. */
-    @JsonProperty("element_index")
-    public Builder withElementIndex(final @Nullable Long value) {
-      this.elementIndex = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withPageNumber(final int value) {
+            return withPageNumber(Integer.valueOf(value));
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withElementIndex(final long value) {
-      return withElementIndex(Long.valueOf(value));
-    }
+        /** Sets the filename field. */
+        @JsonProperty("filename")
+        public Builder withFilename(final @Nullable String value) {
+            this.filename = value;
+            return this;
+        }
 
-    /** Sets the additional field. */
-    @JsonProperty("additional")
-    public Builder withAdditional(final Map<String, String> value) {
-      this.additional = value;
-      return this;
-    }
+        /** Sets the coordinates field. */
+        @JsonProperty("coordinates")
+        public Builder withCoordinates(final @Nullable BoundingBox value) {
+            this.coordinates = value;
+            return this;
+        }
 
-    /** Constructs a ElementMetadata instance from the builder's current state. */
-    public ElementMetadata build() {
-      return new ElementMetadata(pageNumber, filename, coordinates, elementIndex, additional);
+        /** Sets the elementIndex field. */
+        @JsonProperty("element_index")
+        public Builder withElementIndex(final @Nullable Long value) {
+            this.elementIndex = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withElementIndex(final long value) {
+            return withElementIndex(Long.valueOf(value));
+        }
+
+        /** Sets the additional field. */
+        @JsonProperty("additional")
+        public Builder withAdditional(final Map<String, String> value) {
+            this.additional = value;
+            return this;
+        }
+
+        /** Constructs a ElementMetadata instance from the builder's current state. */
+        public ElementMetadata build() {
+            return new ElementMetadata(
+                pageNumber,
+                filename,
+                coordinates,
+                elementIndex,
+                additional
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

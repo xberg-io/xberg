@@ -7,45 +7,56 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Image type classification. */
+/**
+ * Image type classification.
+ */
 @SuppressWarnings("PMD")
 public enum ImageType {
-  /** Data URI image */
-  DATA_URI("data-uri"),
-  /** Inline SVG */
-  INLINE_SVG("inline-svg"),
-  /** External image URL */
-  EXTERNAL("external"),
-  /** Relative path image */
-  RELATIVE("relative");
+    /**
+     * Data URI image
+     */
+    DATA_URI("data-uri"),
+    /**
+     * Inline SVG
+     */
+    INLINE_SVG("inline-svg"),
+    /**
+     * External image URL
+     */
+    EXTERNAL("external"),
+    /**
+     * Relative path image
+     */
+    RELATIVE("relative");
 
-  /** The string value. */
-  private final String value;
 
-  ImageType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ImageType fromValue(final String value) {
-    for (ImageType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ImageType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ImageType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ImageType fromValue(final String value) {
+        for (ImageType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ImageType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

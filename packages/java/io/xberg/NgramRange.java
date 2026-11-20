@@ -4,58 +4,60 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** Inclusive word-count range used to form keyword candidates. */
+/**
+ * Inclusive word-count range used to form keyword candidates.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = NgramRange.Builder.class)
 public record NgramRange(
-    @Nullable @JsonProperty("min") Long min, @Nullable @JsonProperty("max") Long max) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public NgramRange {
-    if (min == null) {
-      min = 1L;
+    @Nullable @JsonProperty("min") Long min,
+    @Nullable @JsonProperty("max") Long max
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (max == null) {
-      max = 3L;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for NgramRange deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private Long min;
-    private Long max;
-
-    /** Sets the min field. */
-    @JsonProperty("min")
-    public Builder withMin(final @Nullable Long value) {
-      this.min = value;
-      return this;
+    public NgramRange{
+        if (min == null) { min = 1L; }
+        if (max == null) { max = 3L; }
     }
 
-    /** Sets the max field. */
-    @JsonProperty("max")
-    public Builder withMax(final @Nullable Long value) {
-      this.max = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for NgramRange deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a NgramRange instance from the builder's current state. */
-    public NgramRange build() {
-      return new NgramRange(min, max);
+        private Long min;
+        private Long max;
+
+        /** Sets the min field. */
+        @JsonProperty("min")
+        public Builder withMin(final @Nullable Long value) {
+            this.min = value;
+            return this;
+        }
+
+        /** Sets the max field. */
+        @JsonProperty("max")
+        public Builder withMax(final @Nullable Long value) {
+            this.max = value;
+            return this;
+        }
+
+        /** Constructs a NgramRange instance from the builder's current state. */
+        public NgramRange build() {
+            return new NgramRange(
+                min,
+                max
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

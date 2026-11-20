@@ -7,42 +7,45 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Formula recognition model selection. */
+/**
+ * Formula recognition model selection.
+ */
 @SuppressWarnings("PMD")
 public enum FormulaModel {
-  /**
-   * RapidLaTeXOCR (MIT, pix2tex-derived): resizer + encoder + decoder ONNX, ~180 MB total,
-   * downloaded on demand.
-   */
-  LATEX_OCR("latex_ocr");
+    /**
+     * RapidLaTeXOCR (MIT, pix2tex-derived): resizer + encoder + decoder ONNX,
+     * ~180 MB total, downloaded on demand.
+     */
+    LATEX_OCR("latex_ocr");
 
-  /** The string value. */
-  private final String value;
 
-  FormulaModel(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static FormulaModel fromValue(final String value) {
-    for (FormulaModel e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    FormulaModel(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown FormulaModel value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static FormulaModel fromValue(final String value) {
+        for (FormulaModel e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown FormulaModel value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,49 +13,51 @@ import org.jspecify.annotations.Nullable;
 /**
  * Hardware acceleration configuration for ONNX Runtime models.
  *
- * <p>Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used for inference in
- * layout detection and embedding generation.
+ * Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
+ * for inference in layout detection and embedding generation.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = AccelerationConfig.Builder.class)
 public record AccelerationConfig(
     @Nullable @JsonProperty("provider") ExecutionProviderType provider,
-    @Nullable @JsonProperty("device_id") Integer deviceId) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for AccelerationConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private ExecutionProviderType provider = ExecutionProviderType.AUTO;
-
-    @JsonProperty("device_id")
-    @Nullable
-    private Integer deviceId;
-
-    /** Sets the provider field. */
-    @JsonProperty("provider")
-    public Builder withProvider(final @Nullable ExecutionProviderType value) {
-      this.provider = value;
-      return this;
+    @Nullable @JsonProperty("device_id") Integer deviceId
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the deviceId field. */
-    @JsonProperty("device_id")
-    public Builder withDeviceId(final @Nullable Integer value) {
-      this.deviceId = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for AccelerationConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a AccelerationConfig instance from the builder's current state. */
-    public AccelerationConfig build() {
-      return new AccelerationConfig(provider, deviceId);
+        @Nullable private ExecutionProviderType provider = ExecutionProviderType.AUTO;
+        @JsonProperty("device_id")
+        @Nullable private Integer deviceId;
+
+        /** Sets the provider field. */
+        @JsonProperty("provider")
+        public Builder withProvider(final @Nullable ExecutionProviderType value) {
+            this.provider = value;
+            return this;
+        }
+
+        /** Sets the deviceId field. */
+        @JsonProperty("device_id")
+        public Builder withDeviceId(final @Nullable Integer value) {
+            this.deviceId = value;
+            return this;
+        }
+
+        /** Constructs a AccelerationConfig instance from the builder's current state. */
+        public AccelerationConfig build() {
+            return new AccelerationConfig(
+                provider,
+                deviceId
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

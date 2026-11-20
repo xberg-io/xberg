@@ -4,12 +4,14 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/** Non-fatal per-input extraction error captured by ExtractionResult. */
+/**
+ * Non-fatal per-input extraction error captured by ExtractionResult.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExtractionErrorItem.Builder.class)
 public record ExtractionErrorItem(
@@ -17,66 +19,71 @@ public record ExtractionErrorItem(
     @JsonProperty("code") int code,
     @JsonProperty("error_type") String errorType,
     @JsonProperty("source") String source,
-    @JsonProperty("message") String message) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ExtractionErrorItem deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private long index;
-    private int code;
-
-    @JsonProperty("error_type")
-    private String errorType;
-
-    private String source;
-    private String message;
-
-    /** Sets the index field. */
-    @JsonProperty("index")
-    public Builder withIndex(final long value) {
-      this.index = value;
-      return this;
+    @JsonProperty("message") String message
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the code field. */
-    @JsonProperty("code")
-    public Builder withCode(final int value) {
-      this.code = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ExtractionErrorItem deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the errorType field. */
-    @JsonProperty("error_type")
-    public Builder withErrorType(final String value) {
-      this.errorType = value;
-      return this;
-    }
+        private long index;
+        private int code;
+        @JsonProperty("error_type")
+        private String errorType;
+        private String source;
+        private String message;
 
-    /** Sets the source field. */
-    @JsonProperty("source")
-    public Builder withSource(final String value) {
-      this.source = value;
-      return this;
-    }
+        /** Sets the index field. */
+        @JsonProperty("index")
+        public Builder withIndex(final long value) {
+            this.index = value;
+            return this;
+        }
 
-    /** Sets the message field. */
-    @JsonProperty("message")
-    public Builder withMessage(final String value) {
-      this.message = value;
-      return this;
-    }
+        /** Sets the code field. */
+        @JsonProperty("code")
+        public Builder withCode(final int value) {
+            this.code = value;
+            return this;
+        }
 
-    /** Constructs a ExtractionErrorItem instance from the builder's current state. */
-    public ExtractionErrorItem build() {
-      return new ExtractionErrorItem(index, code, errorType, source, message);
+        /** Sets the errorType field. */
+        @JsonProperty("error_type")
+        public Builder withErrorType(final String value) {
+            this.errorType = value;
+            return this;
+        }
+
+        /** Sets the source field. */
+        @JsonProperty("source")
+        public Builder withSource(final String value) {
+            this.source = value;
+            return this;
+        }
+
+        /** Sets the message field. */
+        @JsonProperty("message")
+        public Builder withMessage(final String value) {
+            this.message = value;
+            return this;
+        }
+
+        /** Constructs a ExtractionErrorItem instance from the builder's current state. */
+        public ExtractionErrorItem build() {
+            return new ExtractionErrorItem(
+                index,
+                code,
+                errorType,
+                source,
+                message
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

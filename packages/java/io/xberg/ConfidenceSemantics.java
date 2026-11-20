@@ -10,53 +10,59 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * How a backend's reported page-level confidence must be interpreted.
  *
- * <p>Backend confidence scores are not interchangeable. Tesseract's mean word confidence is a
- * classifier score validated to track legibility on a 0-100 scale. Sceptre (EasyOCR-based) reports
- * a length-penalised {@code custom_mean} that is rescaled into the same 0-100 range but is *not*
- * comparable — its ordering can be inverted relative to legibility (a dense prose page can score
- * lower than a nearly-blank one). A page-rejection gate calibrated on Tesseract's scale was once
- * applied unconditionally to sceptre's output and rejected every page of a 16-page document,
- * emptying it. This descriptor exists so gating code can ask a backend what its number means
- * instead of assuming.
+ * Backend confidence scores are not interchangeable. Tesseract's mean word confidence is a
+ * classifier score validated to track legibility on a 0-100 scale. Sceptre (EasyOCR-based)
+ * reports a length-penalised {@code custom_mean} that is rescaled into the same 0-100 range but is
+ * *not* comparable — its ordering can be inverted relative to legibility (a dense prose page
+ * can score lower than a nearly-blank one). A page-rejection gate calibrated on Tesseract's
+ * scale was once applied unconditionally to sceptre's output and rejected every page of a
+ * 16-page document, emptying it. This descriptor exists so gating code can ask a backend what
+ * its number means instead of assuming.
  */
 @SuppressWarnings("PMD")
 public enum ConfidenceSemantics {
-  /** Validated to track legibility on a known scale — usable as an absolute quality gate. */
-  LEGIBILITY("Legibility"),
-  /**
-   * A number is reported, but it is not validated to correlate with legibility. Never gate on it.
-   */
-  UNCALIBRATED("Uncalibrated"),
-  /** No page-level confidence is reported at all. */
-  NONE("None");
+    /**
+     * Validated to track legibility on a known scale — usable as an absolute quality gate.
+     */
+    LEGIBILITY("Legibility"),
+    /**
+     * A number is reported, but it is not validated to correlate with legibility.
+     * Never gate on it.
+     */
+    UNCALIBRATED("Uncalibrated"),
+    /**
+     * No page-level confidence is reported at all.
+     */
+    NONE("None");
 
-  /** The string value. */
-  private final String value;
 
-  ConfidenceSemantics(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ConfidenceSemantics fromValue(final String value) {
-    for (ConfidenceSemantics e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ConfidenceSemantics(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ConfidenceSemantics value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ConfidenceSemantics fromValue(final String value) {
+        for (ConfidenceSemantics e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ConfidenceSemantics value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

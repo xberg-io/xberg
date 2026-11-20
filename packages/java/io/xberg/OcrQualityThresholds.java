@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Quality thresholds for OCR fallback decisions and pipeline quality gating.
  *
- * <p>Fields default to conservative extraction behavior. Suspected OCR recognition noise is
+ * Fields default to conservative extraction behavior. Suspected OCR recognition noise is
  * reported but retained unless destructive filtering is explicitly enabled.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
@@ -27,12 +27,10 @@ public record OcrQualityThresholds(
     @Nullable @JsonProperty("min_garbage_chars") Long minGarbageChars,
     @Nullable @JsonProperty("max_fragmented_word_ratio") Double maxFragmentedWordRatio,
     @Nullable @JsonProperty("critical_fragmented_word_ratio") Double criticalFragmentedWordRatio,
-    @Nullable @JsonProperty("max_ocr_output_fragmented_word_ratio")
-        Double maxOcrOutputFragmentedWordRatio,
+    @Nullable @JsonProperty("max_ocr_output_fragmented_word_ratio") Double maxOcrOutputFragmentedWordRatio,
     @Nullable @JsonProperty("min_ocr_mean_confidence") Double minOcrMeanConfidence,
     @Nullable @JsonProperty("min_words_for_ocr_output_check") Long minWordsForOcrOutputCheck,
-    @Nullable @JsonProperty("max_ocr_output_dict_invalid_word_ratio")
-        Double maxOcrOutputDictInvalidWordRatio,
+    @Nullable @JsonProperty("max_ocr_output_dict_invalid_word_ratio") Double maxOcrOutputDictInvalidWordRatio,
     @Nullable @JsonProperty("discard_suspected_ocr_noise") Boolean discardSuspectedOcrNoise,
     @Nullable @JsonProperty("prune_symbol_noise_lines") Boolean pruneSymbolNoiseLines,
     @Nullable @JsonProperty("min_avg_word_length") Double minAvgWordLength,
@@ -47,428 +45,323 @@ public record OcrQualityThresholds(
     @Nullable @JsonProperty("enable_provenance_ocr_routing") Boolean enableProvenanceOcrRouting,
     @Nullable @JsonProperty("min_provenance_fallback_ratio") Double minProvenanceFallbackRatio,
     @Nullable @JsonProperty("enable_plausibility_ocr_routing") Boolean enablePlausibilityOcrRouting,
-    @Nullable @JsonProperty("min_reliable_language_chunk_ratio")
-        Double minReliableLanguageChunkRatio) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public OcrQualityThresholds {
-    if (minTotalNonWhitespace == null) {
-      minTotalNonWhitespace = 64L;
+    @Nullable @JsonProperty("min_reliable_language_chunk_ratio") Double minReliableLanguageChunkRatio
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (minNonWhitespacePerPage == null) {
-      minNonWhitespacePerPage = 32.0;
-    }
-    if (minMeaningfulWordLen == null) {
-      minMeaningfulWordLen = 4L;
-    }
-    if (minMeaningfulWords == null) {
-      minMeaningfulWords = 3L;
-    }
-    if (minAlnumRatio == null) {
-      minAlnumRatio = 0.3;
-    }
-    if (minGarbageChars == null) {
-      minGarbageChars = 5L;
-    }
-    if (maxFragmentedWordRatio == null) {
-      maxFragmentedWordRatio = 0.6;
-    }
-    if (criticalFragmentedWordRatio == null) {
-      criticalFragmentedWordRatio = 0.8;
-    }
-    if (maxOcrOutputFragmentedWordRatio == null) {
-      maxOcrOutputFragmentedWordRatio = 0.35;
-    }
-    if (minOcrMeanConfidence == null) {
-      minOcrMeanConfidence = 75.0;
-    }
-    if (minWordsForOcrOutputCheck == null) {
-      minWordsForOcrOutputCheck = 20L;
-    }
-    if (maxOcrOutputDictInvalidWordRatio == null) {
-      maxOcrOutputDictInvalidWordRatio = 1.01;
-    }
-    if (pruneSymbolNoiseLines == null) {
-      pruneSymbolNoiseLines = true;
-    }
-    if (minAvgWordLength == null) {
-      minAvgWordLength = 2.0;
-    }
-    if (minWordsForAvgLengthCheck == null) {
-      minWordsForAvgLengthCheck = 50L;
-    }
-    if (minConsecutiveRepeatRatio == null) {
-      minConsecutiveRepeatRatio = 0.08;
-    }
-    if (minWordsForRepeatCheck == null) {
-      minWordsForRepeatCheck = 50L;
-    }
-    if (substantiveMinChars == null) {
-      substantiveMinChars = 100L;
-    }
-    if (nonTextMinChars == null) {
-      nonTextMinChars = 20L;
-    }
-    if (alnumWsRatioThreshold == null) {
-      alnumWsRatioThreshold = 0.4;
-    }
-    if (pipelineMinQuality == null) {
-      pipelineMinQuality = 0.5;
-    }
-    if (minUndecodableRatio == null) {
-      minUndecodableRatio = 0.5;
-    }
-    if (enableProvenanceOcrRouting == null) {
-      enableProvenanceOcrRouting = true;
-    }
-    if (minProvenanceFallbackRatio == null) {
-      minProvenanceFallbackRatio = 0.5;
-    }
-    if (enablePlausibilityOcrRouting == null) {
-      enablePlausibilityOcrRouting = true;
-    }
-    if (minReliableLanguageChunkRatio == null) {
-      minReliableLanguageChunkRatio = 0.1;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OcrQualityThresholds deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("min_total_non_whitespace")
-    @Nullable
-    private Long minTotalNonWhitespace;
-
-    @JsonProperty("min_non_whitespace_per_page")
-    @Nullable
-    private Double minNonWhitespacePerPage;
-
-    @JsonProperty("min_meaningful_word_len")
-    @Nullable
-    private Long minMeaningfulWordLen;
-
-    @JsonProperty("min_meaningful_words")
-    @Nullable
-    private Long minMeaningfulWords;
-
-    @JsonProperty("min_alnum_ratio")
-    @Nullable
-    private Double minAlnumRatio;
-
-    @JsonProperty("min_garbage_chars")
-    @Nullable
-    private Long minGarbageChars;
-
-    @JsonProperty("max_fragmented_word_ratio")
-    @Nullable
-    private Double maxFragmentedWordRatio;
-
-    @JsonProperty("critical_fragmented_word_ratio")
-    @Nullable
-    private Double criticalFragmentedWordRatio;
-
-    @JsonProperty("max_ocr_output_fragmented_word_ratio")
-    @Nullable
-    private Double maxOcrOutputFragmentedWordRatio;
-
-    @JsonProperty("min_ocr_mean_confidence")
-    @Nullable
-    private Double minOcrMeanConfidence;
-
-    @JsonProperty("min_words_for_ocr_output_check")
-    @Nullable
-    private Long minWordsForOcrOutputCheck;
-
-    @JsonProperty("max_ocr_output_dict_invalid_word_ratio")
-    @Nullable
-    private Double maxOcrOutputDictInvalidWordRatio;
-
-    @JsonProperty("discard_suspected_ocr_noise")
-    @Nullable
-    private Boolean discardSuspectedOcrNoise;
-
-    @JsonProperty("prune_symbol_noise_lines")
-    @Nullable
-    private Boolean pruneSymbolNoiseLines;
-
-    @JsonProperty("min_avg_word_length")
-    @Nullable
-    private Double minAvgWordLength;
-
-    @JsonProperty("min_words_for_avg_length_check")
-    @Nullable
-    private Long minWordsForAvgLengthCheck;
-
-    @JsonProperty("min_consecutive_repeat_ratio")
-    @Nullable
-    private Double minConsecutiveRepeatRatio;
-
-    @JsonProperty("min_words_for_repeat_check")
-    @Nullable
-    private Long minWordsForRepeatCheck;
-
-    @JsonProperty("substantive_min_chars")
-    @Nullable
-    private Long substantiveMinChars;
-
-    @JsonProperty("non_text_min_chars")
-    @Nullable
-    private Long nonTextMinChars;
-
-    @JsonProperty("alnum_ws_ratio_threshold")
-    @Nullable
-    private Double alnumWsRatioThreshold;
-
-    @JsonProperty("pipeline_min_quality")
-    @Nullable
-    private Double pipelineMinQuality;
-
-    @JsonProperty("min_undecodable_ratio")
-    @Nullable
-    private Double minUndecodableRatio;
-
-    @JsonProperty("enable_provenance_ocr_routing")
-    @Nullable
-    private Boolean enableProvenanceOcrRouting;
-
-    @JsonProperty("min_provenance_fallback_ratio")
-    @Nullable
-    private Double minProvenanceFallbackRatio;
-
-    @JsonProperty("enable_plausibility_ocr_routing")
-    @Nullable
-    private Boolean enablePlausibilityOcrRouting;
-
-    @JsonProperty("min_reliable_language_chunk_ratio")
-    @Nullable
-    private Double minReliableLanguageChunkRatio;
-
-    /** Sets the minTotalNonWhitespace field. */
-    @JsonProperty("min_total_non_whitespace")
-    public Builder withMinTotalNonWhitespace(final @Nullable Long value) {
-      this.minTotalNonWhitespace = value;
-      return this;
+    public OcrQualityThresholds{
+        if (minTotalNonWhitespace == null) { minTotalNonWhitespace = 64L; }
+        if (minNonWhitespacePerPage == null) { minNonWhitespacePerPage = 32.0; }
+        if (minMeaningfulWordLen == null) { minMeaningfulWordLen = 4L; }
+        if (minMeaningfulWords == null) { minMeaningfulWords = 3L; }
+        if (minAlnumRatio == null) { minAlnumRatio = 0.3; }
+        if (minGarbageChars == null) { minGarbageChars = 5L; }
+        if (maxFragmentedWordRatio == null) { maxFragmentedWordRatio = 0.6; }
+        if (criticalFragmentedWordRatio == null) { criticalFragmentedWordRatio = 0.8; }
+        if (maxOcrOutputFragmentedWordRatio == null) { maxOcrOutputFragmentedWordRatio = 0.35; }
+        if (minOcrMeanConfidence == null) { minOcrMeanConfidence = 75.0; }
+        if (minWordsForOcrOutputCheck == null) { minWordsForOcrOutputCheck = 20L; }
+        if (maxOcrOutputDictInvalidWordRatio == null) { maxOcrOutputDictInvalidWordRatio = 1.01; }
+        if (pruneSymbolNoiseLines == null) { pruneSymbolNoiseLines = true; }
+        if (minAvgWordLength == null) { minAvgWordLength = 2.0; }
+        if (minWordsForAvgLengthCheck == null) { minWordsForAvgLengthCheck = 50L; }
+        if (minConsecutiveRepeatRatio == null) { minConsecutiveRepeatRatio = 0.08; }
+        if (minWordsForRepeatCheck == null) { minWordsForRepeatCheck = 50L; }
+        if (substantiveMinChars == null) { substantiveMinChars = 100L; }
+        if (nonTextMinChars == null) { nonTextMinChars = 20L; }
+        if (alnumWsRatioThreshold == null) { alnumWsRatioThreshold = 0.4; }
+        if (pipelineMinQuality == null) { pipelineMinQuality = 0.5; }
+        if (minUndecodableRatio == null) { minUndecodableRatio = 0.5; }
+        if (enableProvenanceOcrRouting == null) { enableProvenanceOcrRouting = true; }
+        if (minProvenanceFallbackRatio == null) { minProvenanceFallbackRatio = 0.5; }
+        if (enablePlausibilityOcrRouting == null) { enablePlausibilityOcrRouting = true; }
+        if (minReliableLanguageChunkRatio == null) { minReliableLanguageChunkRatio = 0.1; }
     }
 
-    /** Sets the minNonWhitespacePerPage field. */
-    @JsonProperty("min_non_whitespace_per_page")
-    public Builder withMinNonWhitespacePerPage(final @Nullable Double value) {
-      this.minNonWhitespacePerPage = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for OcrQualityThresholds deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the minMeaningfulWordLen field. */
-    @JsonProperty("min_meaningful_word_len")
-    public Builder withMinMeaningfulWordLen(final @Nullable Long value) {
-      this.minMeaningfulWordLen = value;
-      return this;
-    }
+        @JsonProperty("min_total_non_whitespace")
+        @Nullable private Long minTotalNonWhitespace;
+        @JsonProperty("min_non_whitespace_per_page")
+        @Nullable private Double minNonWhitespacePerPage;
+        @JsonProperty("min_meaningful_word_len")
+        @Nullable private Long minMeaningfulWordLen;
+        @JsonProperty("min_meaningful_words")
+        @Nullable private Long minMeaningfulWords;
+        @JsonProperty("min_alnum_ratio")
+        @Nullable private Double minAlnumRatio;
+        @JsonProperty("min_garbage_chars")
+        @Nullable private Long minGarbageChars;
+        @JsonProperty("max_fragmented_word_ratio")
+        @Nullable private Double maxFragmentedWordRatio;
+        @JsonProperty("critical_fragmented_word_ratio")
+        @Nullable private Double criticalFragmentedWordRatio;
+        @JsonProperty("max_ocr_output_fragmented_word_ratio")
+        @Nullable private Double maxOcrOutputFragmentedWordRatio;
+        @JsonProperty("min_ocr_mean_confidence")
+        @Nullable private Double minOcrMeanConfidence;
+        @JsonProperty("min_words_for_ocr_output_check")
+        @Nullable private Long minWordsForOcrOutputCheck;
+        @JsonProperty("max_ocr_output_dict_invalid_word_ratio")
+        @Nullable private Double maxOcrOutputDictInvalidWordRatio;
+        @JsonProperty("discard_suspected_ocr_noise")
+        @Nullable private Boolean discardSuspectedOcrNoise;
+        @JsonProperty("prune_symbol_noise_lines")
+        @Nullable private Boolean pruneSymbolNoiseLines;
+        @JsonProperty("min_avg_word_length")
+        @Nullable private Double minAvgWordLength;
+        @JsonProperty("min_words_for_avg_length_check")
+        @Nullable private Long minWordsForAvgLengthCheck;
+        @JsonProperty("min_consecutive_repeat_ratio")
+        @Nullable private Double minConsecutiveRepeatRatio;
+        @JsonProperty("min_words_for_repeat_check")
+        @Nullable private Long minWordsForRepeatCheck;
+        @JsonProperty("substantive_min_chars")
+        @Nullable private Long substantiveMinChars;
+        @JsonProperty("non_text_min_chars")
+        @Nullable private Long nonTextMinChars;
+        @JsonProperty("alnum_ws_ratio_threshold")
+        @Nullable private Double alnumWsRatioThreshold;
+        @JsonProperty("pipeline_min_quality")
+        @Nullable private Double pipelineMinQuality;
+        @JsonProperty("min_undecodable_ratio")
+        @Nullable private Double minUndecodableRatio;
+        @JsonProperty("enable_provenance_ocr_routing")
+        @Nullable private Boolean enableProvenanceOcrRouting;
+        @JsonProperty("min_provenance_fallback_ratio")
+        @Nullable private Double minProvenanceFallbackRatio;
+        @JsonProperty("enable_plausibility_ocr_routing")
+        @Nullable private Boolean enablePlausibilityOcrRouting;
+        @JsonProperty("min_reliable_language_chunk_ratio")
+        @Nullable private Double minReliableLanguageChunkRatio;
 
-    /** Sets the minMeaningfulWords field. */
-    @JsonProperty("min_meaningful_words")
-    public Builder withMinMeaningfulWords(final @Nullable Long value) {
-      this.minMeaningfulWords = value;
-      return this;
-    }
+        /** Sets the minTotalNonWhitespace field. */
+        @JsonProperty("min_total_non_whitespace")
+        public Builder withMinTotalNonWhitespace(final @Nullable Long value) {
+            this.minTotalNonWhitespace = value;
+            return this;
+        }
 
-    /** Sets the minAlnumRatio field. */
-    @JsonProperty("min_alnum_ratio")
-    public Builder withMinAlnumRatio(final @Nullable Double value) {
-      this.minAlnumRatio = value;
-      return this;
-    }
+        /** Sets the minNonWhitespacePerPage field. */
+        @JsonProperty("min_non_whitespace_per_page")
+        public Builder withMinNonWhitespacePerPage(final @Nullable Double value) {
+            this.minNonWhitespacePerPage = value;
+            return this;
+        }
 
-    /** Sets the minGarbageChars field. */
-    @JsonProperty("min_garbage_chars")
-    public Builder withMinGarbageChars(final @Nullable Long value) {
-      this.minGarbageChars = value;
-      return this;
-    }
+        /** Sets the minMeaningfulWordLen field. */
+        @JsonProperty("min_meaningful_word_len")
+        public Builder withMinMeaningfulWordLen(final @Nullable Long value) {
+            this.minMeaningfulWordLen = value;
+            return this;
+        }
 
-    /** Sets the maxFragmentedWordRatio field. */
-    @JsonProperty("max_fragmented_word_ratio")
-    public Builder withMaxFragmentedWordRatio(final @Nullable Double value) {
-      this.maxFragmentedWordRatio = value;
-      return this;
-    }
+        /** Sets the minMeaningfulWords field. */
+        @JsonProperty("min_meaningful_words")
+        public Builder withMinMeaningfulWords(final @Nullable Long value) {
+            this.minMeaningfulWords = value;
+            return this;
+        }
 
-    /** Sets the criticalFragmentedWordRatio field. */
-    @JsonProperty("critical_fragmented_word_ratio")
-    public Builder withCriticalFragmentedWordRatio(final @Nullable Double value) {
-      this.criticalFragmentedWordRatio = value;
-      return this;
-    }
+        /** Sets the minAlnumRatio field. */
+        @JsonProperty("min_alnum_ratio")
+        public Builder withMinAlnumRatio(final @Nullable Double value) {
+            this.minAlnumRatio = value;
+            return this;
+        }
 
-    /** Sets the maxOcrOutputFragmentedWordRatio field. */
-    @JsonProperty("max_ocr_output_fragmented_word_ratio")
-    public Builder withMaxOcrOutputFragmentedWordRatio(final @Nullable Double value) {
-      this.maxOcrOutputFragmentedWordRatio = value;
-      return this;
-    }
+        /** Sets the minGarbageChars field. */
+        @JsonProperty("min_garbage_chars")
+        public Builder withMinGarbageChars(final @Nullable Long value) {
+            this.minGarbageChars = value;
+            return this;
+        }
 
-    /** Sets the minOcrMeanConfidence field. */
-    @JsonProperty("min_ocr_mean_confidence")
-    public Builder withMinOcrMeanConfidence(final @Nullable Double value) {
-      this.minOcrMeanConfidence = value;
-      return this;
-    }
+        /** Sets the maxFragmentedWordRatio field. */
+        @JsonProperty("max_fragmented_word_ratio")
+        public Builder withMaxFragmentedWordRatio(final @Nullable Double value) {
+            this.maxFragmentedWordRatio = value;
+            return this;
+        }
 
-    /** Sets the minWordsForOcrOutputCheck field. */
-    @JsonProperty("min_words_for_ocr_output_check")
-    public Builder withMinWordsForOcrOutputCheck(final @Nullable Long value) {
-      this.minWordsForOcrOutputCheck = value;
-      return this;
-    }
+        /** Sets the criticalFragmentedWordRatio field. */
+        @JsonProperty("critical_fragmented_word_ratio")
+        public Builder withCriticalFragmentedWordRatio(final @Nullable Double value) {
+            this.criticalFragmentedWordRatio = value;
+            return this;
+        }
 
-    /** Sets the maxOcrOutputDictInvalidWordRatio field. */
-    @JsonProperty("max_ocr_output_dict_invalid_word_ratio")
-    public Builder withMaxOcrOutputDictInvalidWordRatio(final @Nullable Double value) {
-      this.maxOcrOutputDictInvalidWordRatio = value;
-      return this;
-    }
+        /** Sets the maxOcrOutputFragmentedWordRatio field. */
+        @JsonProperty("max_ocr_output_fragmented_word_ratio")
+        public Builder withMaxOcrOutputFragmentedWordRatio(final @Nullable Double value) {
+            this.maxOcrOutputFragmentedWordRatio = value;
+            return this;
+        }
 
-    /** Sets the discardSuspectedOcrNoise field. */
-    @JsonProperty("discard_suspected_ocr_noise")
-    public Builder withDiscardSuspectedOcrNoise(final @Nullable Boolean value) {
-      this.discardSuspectedOcrNoise = value;
-      return this;
-    }
+        /** Sets the minOcrMeanConfidence field. */
+        @JsonProperty("min_ocr_mean_confidence")
+        public Builder withMinOcrMeanConfidence(final @Nullable Double value) {
+            this.minOcrMeanConfidence = value;
+            return this;
+        }
 
-    /** Sets the pruneSymbolNoiseLines field. */
-    @JsonProperty("prune_symbol_noise_lines")
-    public Builder withPruneSymbolNoiseLines(final @Nullable Boolean value) {
-      this.pruneSymbolNoiseLines = value;
-      return this;
-    }
+        /** Sets the minWordsForOcrOutputCheck field. */
+        @JsonProperty("min_words_for_ocr_output_check")
+        public Builder withMinWordsForOcrOutputCheck(final @Nullable Long value) {
+            this.minWordsForOcrOutputCheck = value;
+            return this;
+        }
 
-    /** Sets the minAvgWordLength field. */
-    @JsonProperty("min_avg_word_length")
-    public Builder withMinAvgWordLength(final @Nullable Double value) {
-      this.minAvgWordLength = value;
-      return this;
-    }
+        /** Sets the maxOcrOutputDictInvalidWordRatio field. */
+        @JsonProperty("max_ocr_output_dict_invalid_word_ratio")
+        public Builder withMaxOcrOutputDictInvalidWordRatio(final @Nullable Double value) {
+            this.maxOcrOutputDictInvalidWordRatio = value;
+            return this;
+        }
 
-    /** Sets the minWordsForAvgLengthCheck field. */
-    @JsonProperty("min_words_for_avg_length_check")
-    public Builder withMinWordsForAvgLengthCheck(final @Nullable Long value) {
-      this.minWordsForAvgLengthCheck = value;
-      return this;
-    }
+        /** Sets the discardSuspectedOcrNoise field. */
+        @JsonProperty("discard_suspected_ocr_noise")
+        public Builder withDiscardSuspectedOcrNoise(final @Nullable Boolean value) {
+            this.discardSuspectedOcrNoise = value;
+            return this;
+        }
 
-    /** Sets the minConsecutiveRepeatRatio field. */
-    @JsonProperty("min_consecutive_repeat_ratio")
-    public Builder withMinConsecutiveRepeatRatio(final @Nullable Double value) {
-      this.minConsecutiveRepeatRatio = value;
-      return this;
-    }
+        /** Sets the pruneSymbolNoiseLines field. */
+        @JsonProperty("prune_symbol_noise_lines")
+        public Builder withPruneSymbolNoiseLines(final @Nullable Boolean value) {
+            this.pruneSymbolNoiseLines = value;
+            return this;
+        }
 
-    /** Sets the minWordsForRepeatCheck field. */
-    @JsonProperty("min_words_for_repeat_check")
-    public Builder withMinWordsForRepeatCheck(final @Nullable Long value) {
-      this.minWordsForRepeatCheck = value;
-      return this;
-    }
+        /** Sets the minAvgWordLength field. */
+        @JsonProperty("min_avg_word_length")
+        public Builder withMinAvgWordLength(final @Nullable Double value) {
+            this.minAvgWordLength = value;
+            return this;
+        }
 
-    /** Sets the substantiveMinChars field. */
-    @JsonProperty("substantive_min_chars")
-    public Builder withSubstantiveMinChars(final @Nullable Long value) {
-      this.substantiveMinChars = value;
-      return this;
-    }
+        /** Sets the minWordsForAvgLengthCheck field. */
+        @JsonProperty("min_words_for_avg_length_check")
+        public Builder withMinWordsForAvgLengthCheck(final @Nullable Long value) {
+            this.minWordsForAvgLengthCheck = value;
+            return this;
+        }
 
-    /** Sets the nonTextMinChars field. */
-    @JsonProperty("non_text_min_chars")
-    public Builder withNonTextMinChars(final @Nullable Long value) {
-      this.nonTextMinChars = value;
-      return this;
-    }
+        /** Sets the minConsecutiveRepeatRatio field. */
+        @JsonProperty("min_consecutive_repeat_ratio")
+        public Builder withMinConsecutiveRepeatRatio(final @Nullable Double value) {
+            this.minConsecutiveRepeatRatio = value;
+            return this;
+        }
 
-    /** Sets the alnumWsRatioThreshold field. */
-    @JsonProperty("alnum_ws_ratio_threshold")
-    public Builder withAlnumWsRatioThreshold(final @Nullable Double value) {
-      this.alnumWsRatioThreshold = value;
-      return this;
-    }
+        /** Sets the minWordsForRepeatCheck field. */
+        @JsonProperty("min_words_for_repeat_check")
+        public Builder withMinWordsForRepeatCheck(final @Nullable Long value) {
+            this.minWordsForRepeatCheck = value;
+            return this;
+        }
 
-    /** Sets the pipelineMinQuality field. */
-    @JsonProperty("pipeline_min_quality")
-    public Builder withPipelineMinQuality(final @Nullable Double value) {
-      this.pipelineMinQuality = value;
-      return this;
-    }
+        /** Sets the substantiveMinChars field. */
+        @JsonProperty("substantive_min_chars")
+        public Builder withSubstantiveMinChars(final @Nullable Long value) {
+            this.substantiveMinChars = value;
+            return this;
+        }
 
-    /** Sets the minUndecodableRatio field. */
-    @JsonProperty("min_undecodable_ratio")
-    public Builder withMinUndecodableRatio(final @Nullable Double value) {
-      this.minUndecodableRatio = value;
-      return this;
-    }
+        /** Sets the nonTextMinChars field. */
+        @JsonProperty("non_text_min_chars")
+        public Builder withNonTextMinChars(final @Nullable Long value) {
+            this.nonTextMinChars = value;
+            return this;
+        }
 
-    /** Sets the enableProvenanceOcrRouting field. */
-    @JsonProperty("enable_provenance_ocr_routing")
-    public Builder withEnableProvenanceOcrRouting(final @Nullable Boolean value) {
-      this.enableProvenanceOcrRouting = value;
-      return this;
-    }
+        /** Sets the alnumWsRatioThreshold field. */
+        @JsonProperty("alnum_ws_ratio_threshold")
+        public Builder withAlnumWsRatioThreshold(final @Nullable Double value) {
+            this.alnumWsRatioThreshold = value;
+            return this;
+        }
 
-    /** Sets the minProvenanceFallbackRatio field. */
-    @JsonProperty("min_provenance_fallback_ratio")
-    public Builder withMinProvenanceFallbackRatio(final @Nullable Double value) {
-      this.minProvenanceFallbackRatio = value;
-      return this;
-    }
+        /** Sets the pipelineMinQuality field. */
+        @JsonProperty("pipeline_min_quality")
+        public Builder withPipelineMinQuality(final @Nullable Double value) {
+            this.pipelineMinQuality = value;
+            return this;
+        }
 
-    /** Sets the enablePlausibilityOcrRouting field. */
-    @JsonProperty("enable_plausibility_ocr_routing")
-    public Builder withEnablePlausibilityOcrRouting(final @Nullable Boolean value) {
-      this.enablePlausibilityOcrRouting = value;
-      return this;
-    }
+        /** Sets the minUndecodableRatio field. */
+        @JsonProperty("min_undecodable_ratio")
+        public Builder withMinUndecodableRatio(final @Nullable Double value) {
+            this.minUndecodableRatio = value;
+            return this;
+        }
 
-    /** Sets the minReliableLanguageChunkRatio field. */
-    @JsonProperty("min_reliable_language_chunk_ratio")
-    public Builder withMinReliableLanguageChunkRatio(final @Nullable Double value) {
-      this.minReliableLanguageChunkRatio = value;
-      return this;
-    }
+        /** Sets the enableProvenanceOcrRouting field. */
+        @JsonProperty("enable_provenance_ocr_routing")
+        public Builder withEnableProvenanceOcrRouting(final @Nullable Boolean value) {
+            this.enableProvenanceOcrRouting = value;
+            return this;
+        }
 
-    /** Constructs a OcrQualityThresholds instance from the builder's current state. */
-    public OcrQualityThresholds build() {
-      return new OcrQualityThresholds(
-          minTotalNonWhitespace,
-          minNonWhitespacePerPage,
-          minMeaningfulWordLen,
-          minMeaningfulWords,
-          minAlnumRatio,
-          minGarbageChars,
-          maxFragmentedWordRatio,
-          criticalFragmentedWordRatio,
-          maxOcrOutputFragmentedWordRatio,
-          minOcrMeanConfidence,
-          minWordsForOcrOutputCheck,
-          maxOcrOutputDictInvalidWordRatio,
-          discardSuspectedOcrNoise,
-          pruneSymbolNoiseLines,
-          minAvgWordLength,
-          minWordsForAvgLengthCheck,
-          minConsecutiveRepeatRatio,
-          minWordsForRepeatCheck,
-          substantiveMinChars,
-          nonTextMinChars,
-          alnumWsRatioThreshold,
-          pipelineMinQuality,
-          minUndecodableRatio,
-          enableProvenanceOcrRouting,
-          minProvenanceFallbackRatio,
-          enablePlausibilityOcrRouting,
-          minReliableLanguageChunkRatio);
+        /** Sets the minProvenanceFallbackRatio field. */
+        @JsonProperty("min_provenance_fallback_ratio")
+        public Builder withMinProvenanceFallbackRatio(final @Nullable Double value) {
+            this.minProvenanceFallbackRatio = value;
+            return this;
+        }
+
+        /** Sets the enablePlausibilityOcrRouting field. */
+        @JsonProperty("enable_plausibility_ocr_routing")
+        public Builder withEnablePlausibilityOcrRouting(final @Nullable Boolean value) {
+            this.enablePlausibilityOcrRouting = value;
+            return this;
+        }
+
+        /** Sets the minReliableLanguageChunkRatio field. */
+        @JsonProperty("min_reliable_language_chunk_ratio")
+        public Builder withMinReliableLanguageChunkRatio(final @Nullable Double value) {
+            this.minReliableLanguageChunkRatio = value;
+            return this;
+        }
+
+        /** Constructs a OcrQualityThresholds instance from the builder's current state. */
+        public OcrQualityThresholds build() {
+            return new OcrQualityThresholds(
+                minTotalNonWhitespace,
+                minNonWhitespacePerPage,
+                minMeaningfulWordLen,
+                minMeaningfulWords,
+                minAlnumRatio,
+                minGarbageChars,
+                maxFragmentedWordRatio,
+                criticalFragmentedWordRatio,
+                maxOcrOutputFragmentedWordRatio,
+                minOcrMeanConfidence,
+                minWordsForOcrOutputCheck,
+                maxOcrOutputDictInvalidWordRatio,
+                discardSuspectedOcrNoise,
+                pruneSymbolNoiseLines,
+                minAvgWordLength,
+                minWordsForAvgLengthCheck,
+                minConsecutiveRepeatRatio,
+                minWordsForRepeatCheck,
+                substantiveMinChars,
+                nonTextMinChars,
+                alnumWsRatioThreshold,
+                pipelineMinQuality,
+                minUndecodableRatio,
+                enableProvenanceOcrRouting,
+                minProvenanceFallbackRatio,
+                enablePlausibilityOcrRouting,
+                minReliableLanguageChunkRatio
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

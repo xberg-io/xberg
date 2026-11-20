@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for document chunking and analysis heuristics.
  *
- * <p>Every threshold is a public field so callers can override any subset via struct-update syntax:
- * {@code HeuristicsConfig { text_layer_threshold: 0.5, ..Default.default() }}.
+ * Every threshold is a public field so callers can override any subset via
+ * struct-update syntax: {@code HeuristicsConfig { text_layer_threshold: 0.5, ..Default.default() }}.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HeuristicsConfig.Builder.class)
@@ -29,179 +29,148 @@ public record HeuristicsConfig(
     @Nullable @JsonProperty("min_chars_per_page") Integer minCharsPerPage,
     @Nullable @JsonProperty("max_xlsx_sheet_count") Integer maxXlsxSheetCount,
     @Nullable @JsonProperty("max_xlsx_workbook_cells") Long maxXlsxWorkbookCells,
-    @Nullable @JsonProperty("max_pptx_embedded_count") Integer maxPptxEmbeddedCount) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public HeuristicsConfig {
-    if (enablePdfTextHeuristics == null) {
-      enablePdfTextHeuristics = true;
+    @Nullable @JsonProperty("max_pptx_embedded_count") Integer maxPptxEmbeddedCount
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (textLayerThreshold == null) {
-      textLayerThreshold = 0.7f;
-    }
-    if (fileSizeThresholdBytes == null) {
-      fileSizeThresholdBytes = 10485760L;
-    }
-    if (pageCountThreshold == null) {
-      pageCountThreshold = 50;
-    }
-    if (targetPagesPerChunk == null) {
-      targetPagesPerChunk = 10;
-    }
-    if (maxPagesPerChunk == null) {
-      maxPagesPerChunk = 25;
-    }
-    if (diskProcessingThresholdBytes == null) {
-      diskProcessingThresholdBytes = 52428800L;
-    }
-    if (minCharsPerPage == null) {
-      minCharsPerPage = 50;
-    }
-    if (maxXlsxSheetCount == null) {
-      maxXlsxSheetCount = 200;
-    }
-    if (maxXlsxWorkbookCells == null) {
-      maxXlsxWorkbookCells = 5000000L;
-    }
-    if (maxPptxEmbeddedCount == null) {
-      maxPptxEmbeddedCount = 50;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for HeuristicsConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("enable_pdf_text_heuristics")
-    private Boolean enablePdfTextHeuristics = true;
-
-    @JsonProperty("text_layer_threshold")
-    private Float textLayerThreshold;
-
-    @JsonProperty("file_size_threshold_bytes")
-    private Long fileSizeThresholdBytes;
-
-    @JsonProperty("page_count_threshold")
-    private Integer pageCountThreshold;
-
-    @JsonProperty("target_pages_per_chunk")
-    private Integer targetPagesPerChunk;
-
-    @JsonProperty("max_pages_per_chunk")
-    private Integer maxPagesPerChunk;
-
-    @JsonProperty("disk_processing_threshold_bytes")
-    private Long diskProcessingThresholdBytes;
-
-    @JsonProperty("min_chars_per_page")
-    private Integer minCharsPerPage;
-
-    @JsonProperty("max_xlsx_sheet_count")
-    private Integer maxXlsxSheetCount;
-
-    @JsonProperty("max_xlsx_workbook_cells")
-    private Long maxXlsxWorkbookCells;
-
-    @JsonProperty("max_pptx_embedded_count")
-    private Integer maxPptxEmbeddedCount;
-
-    /** Sets the enablePdfTextHeuristics field. */
-    @JsonProperty("enable_pdf_text_heuristics")
-    public Builder withEnablePdfTextHeuristics(final @Nullable Boolean value) {
-      this.enablePdfTextHeuristics = value;
-      return this;
+    public HeuristicsConfig{
+        if (enablePdfTextHeuristics == null) { enablePdfTextHeuristics = true; }
+        if (textLayerThreshold == null) { textLayerThreshold = 0.7f; }
+        if (fileSizeThresholdBytes == null) { fileSizeThresholdBytes = 10485760L; }
+        if (pageCountThreshold == null) { pageCountThreshold = 50; }
+        if (targetPagesPerChunk == null) { targetPagesPerChunk = 10; }
+        if (maxPagesPerChunk == null) { maxPagesPerChunk = 25; }
+        if (diskProcessingThresholdBytes == null) { diskProcessingThresholdBytes = 52428800L; }
+        if (minCharsPerPage == null) { minCharsPerPage = 50; }
+        if (maxXlsxSheetCount == null) { maxXlsxSheetCount = 200; }
+        if (maxXlsxWorkbookCells == null) { maxXlsxWorkbookCells = 5000000L; }
+        if (maxPptxEmbeddedCount == null) { maxPptxEmbeddedCount = 50; }
     }
 
-    /** Sets the textLayerThreshold field. */
-    @JsonProperty("text_layer_threshold")
-    public Builder withTextLayerThreshold(final @Nullable Float value) {
-      this.textLayerThreshold = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for HeuristicsConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the fileSizeThresholdBytes field. */
-    @JsonProperty("file_size_threshold_bytes")
-    public Builder withFileSizeThresholdBytes(final @Nullable Long value) {
-      this.fileSizeThresholdBytes = value;
-      return this;
-    }
+        @JsonProperty("enable_pdf_text_heuristics")
+        private Boolean enablePdfTextHeuristics = true;
+        @JsonProperty("text_layer_threshold")
+        private Float textLayerThreshold;
+        @JsonProperty("file_size_threshold_bytes")
+        private Long fileSizeThresholdBytes;
+        @JsonProperty("page_count_threshold")
+        private Integer pageCountThreshold;
+        @JsonProperty("target_pages_per_chunk")
+        private Integer targetPagesPerChunk;
+        @JsonProperty("max_pages_per_chunk")
+        private Integer maxPagesPerChunk;
+        @JsonProperty("disk_processing_threshold_bytes")
+        private Long diskProcessingThresholdBytes;
+        @JsonProperty("min_chars_per_page")
+        private Integer minCharsPerPage;
+        @JsonProperty("max_xlsx_sheet_count")
+        private Integer maxXlsxSheetCount;
+        @JsonProperty("max_xlsx_workbook_cells")
+        private Long maxXlsxWorkbookCells;
+        @JsonProperty("max_pptx_embedded_count")
+        private Integer maxPptxEmbeddedCount;
 
-    /** Sets the pageCountThreshold field. */
-    @JsonProperty("page_count_threshold")
-    public Builder withPageCountThreshold(final @Nullable Integer value) {
-      this.pageCountThreshold = value;
-      return this;
-    }
+        /** Sets the enablePdfTextHeuristics field. */
+        @JsonProperty("enable_pdf_text_heuristics")
+        public Builder withEnablePdfTextHeuristics(final @Nullable Boolean value) {
+            this.enablePdfTextHeuristics = value;
+            return this;
+        }
 
-    /** Sets the targetPagesPerChunk field. */
-    @JsonProperty("target_pages_per_chunk")
-    public Builder withTargetPagesPerChunk(final @Nullable Integer value) {
-      this.targetPagesPerChunk = value;
-      return this;
-    }
+        /** Sets the textLayerThreshold field. */
+        @JsonProperty("text_layer_threshold")
+        public Builder withTextLayerThreshold(final @Nullable Float value) {
+            this.textLayerThreshold = value;
+            return this;
+        }
 
-    /** Sets the maxPagesPerChunk field. */
-    @JsonProperty("max_pages_per_chunk")
-    public Builder withMaxPagesPerChunk(final @Nullable Integer value) {
-      this.maxPagesPerChunk = value;
-      return this;
-    }
+        /** Sets the fileSizeThresholdBytes field. */
+        @JsonProperty("file_size_threshold_bytes")
+        public Builder withFileSizeThresholdBytes(final @Nullable Long value) {
+            this.fileSizeThresholdBytes = value;
+            return this;
+        }
 
-    /** Sets the diskProcessingThresholdBytes field. */
-    @JsonProperty("disk_processing_threshold_bytes")
-    public Builder withDiskProcessingThresholdBytes(final @Nullable Long value) {
-      this.diskProcessingThresholdBytes = value;
-      return this;
-    }
+        /** Sets the pageCountThreshold field. */
+        @JsonProperty("page_count_threshold")
+        public Builder withPageCountThreshold(final @Nullable Integer value) {
+            this.pageCountThreshold = value;
+            return this;
+        }
 
-    /** Sets the minCharsPerPage field. */
-    @JsonProperty("min_chars_per_page")
-    public Builder withMinCharsPerPage(final @Nullable Integer value) {
-      this.minCharsPerPage = value;
-      return this;
-    }
+        /** Sets the targetPagesPerChunk field. */
+        @JsonProperty("target_pages_per_chunk")
+        public Builder withTargetPagesPerChunk(final @Nullable Integer value) {
+            this.targetPagesPerChunk = value;
+            return this;
+        }
 
-    /** Sets the maxXlsxSheetCount field. */
-    @JsonProperty("max_xlsx_sheet_count")
-    public Builder withMaxXlsxSheetCount(final @Nullable Integer value) {
-      this.maxXlsxSheetCount = value;
-      return this;
-    }
+        /** Sets the maxPagesPerChunk field. */
+        @JsonProperty("max_pages_per_chunk")
+        public Builder withMaxPagesPerChunk(final @Nullable Integer value) {
+            this.maxPagesPerChunk = value;
+            return this;
+        }
 
-    /** Sets the maxXlsxWorkbookCells field. */
-    @JsonProperty("max_xlsx_workbook_cells")
-    public Builder withMaxXlsxWorkbookCells(final @Nullable Long value) {
-      this.maxXlsxWorkbookCells = value;
-      return this;
-    }
+        /** Sets the diskProcessingThresholdBytes field. */
+        @JsonProperty("disk_processing_threshold_bytes")
+        public Builder withDiskProcessingThresholdBytes(final @Nullable Long value) {
+            this.diskProcessingThresholdBytes = value;
+            return this;
+        }
 
-    /** Sets the maxPptxEmbeddedCount field. */
-    @JsonProperty("max_pptx_embedded_count")
-    public Builder withMaxPptxEmbeddedCount(final @Nullable Integer value) {
-      this.maxPptxEmbeddedCount = value;
-      return this;
-    }
+        /** Sets the minCharsPerPage field. */
+        @JsonProperty("min_chars_per_page")
+        public Builder withMinCharsPerPage(final @Nullable Integer value) {
+            this.minCharsPerPage = value;
+            return this;
+        }
 
-    /** Constructs a HeuristicsConfig instance from the builder's current state. */
-    public HeuristicsConfig build() {
-      return new HeuristicsConfig(
-          enablePdfTextHeuristics,
-          textLayerThreshold,
-          fileSizeThresholdBytes,
-          pageCountThreshold,
-          targetPagesPerChunk,
-          maxPagesPerChunk,
-          diskProcessingThresholdBytes,
-          minCharsPerPage,
-          maxXlsxSheetCount,
-          maxXlsxWorkbookCells,
-          maxPptxEmbeddedCount);
+        /** Sets the maxXlsxSheetCount field. */
+        @JsonProperty("max_xlsx_sheet_count")
+        public Builder withMaxXlsxSheetCount(final @Nullable Integer value) {
+            this.maxXlsxSheetCount = value;
+            return this;
+        }
+
+        /** Sets the maxXlsxWorkbookCells field. */
+        @JsonProperty("max_xlsx_workbook_cells")
+        public Builder withMaxXlsxWorkbookCells(final @Nullable Long value) {
+            this.maxXlsxWorkbookCells = value;
+            return this;
+        }
+
+        /** Sets the maxPptxEmbeddedCount field. */
+        @JsonProperty("max_pptx_embedded_count")
+        public Builder withMaxPptxEmbeddedCount(final @Nullable Integer value) {
+            this.maxPptxEmbeddedCount = value;
+            return this;
+        }
+
+        /** Constructs a HeuristicsConfig instance from the builder's current state. */
+        public HeuristicsConfig build() {
+            return new HeuristicsConfig(
+                enablePdfTextHeuristics,
+                textLayerThreshold,
+                fileSizeThresholdBytes,
+                pageCountThreshold,
+                targetPagesPerChunk,
+                maxPagesPerChunk,
+                diskProcessingThresholdBytes,
+                minCharsPerPage,
+                maxXlsxSheetCount,
+                maxXlsxWorkbookCells,
+                maxPptxEmbeddedCount
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

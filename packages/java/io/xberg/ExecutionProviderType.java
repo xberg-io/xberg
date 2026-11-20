@@ -10,49 +10,60 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * ONNX Runtime execution provider type.
  *
- * <p>Determines which hardware backend is used for model inference. {@code Auto} (default) selects
- * the best available provider per platform.
+ * Determines which hardware backend is used for model inference.
+ * {@code Auto} (default) selects the best available provider per platform.
  */
 @SuppressWarnings("PMD")
 public enum ExecutionProviderType {
-  /** Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere. */
-  AUTO("auto"),
-  /** CPU execution provider (always available). */
-  CPU("cpu"),
-  /** Apple CoreML (macOS/iOS Neural Engine + GPU). */
-  CORE_ML("coreml"),
-  /** NVIDIA CUDA GPU acceleration. */
-  CUDA("cuda"),
-  /** NVIDIA TensorRT (optimized CUDA inference). */
-  TENSOR_RT("tensorrt");
+    /**
+     * Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
+     */
+    AUTO("auto"),
+    /**
+     * CPU execution provider (always available).
+     */
+    CPU("cpu"),
+    /**
+     * Apple CoreML (macOS/iOS Neural Engine + GPU).
+     */
+    CORE_ML("coreml"),
+    /**
+     * NVIDIA CUDA GPU acceleration.
+     */
+    CUDA("cuda"),
+    /**
+     * NVIDIA TensorRT (optimized CUDA inference).
+     */
+    TENSOR_RT("tensorrt");
 
-  /** The string value. */
-  private final String value;
 
-  ExecutionProviderType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ExecutionProviderType fromValue(final String value) {
-    for (ExecutionProviderType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ExecutionProviderType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ExecutionProviderType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ExecutionProviderType fromValue(final String value) {
+        for (ExecutionProviderType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ExecutionProviderType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

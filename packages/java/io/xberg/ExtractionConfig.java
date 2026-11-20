@@ -4,18 +4,18 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Main extraction configuration.
  *
- * <p>This struct contains all configuration options for the extraction process. It can be loaded
- * from TOML, YAML, or JSON files, or created programmatically.
+ * This struct contains all configuration options for the extraction process.
+ * It can be loaded from TOML, YAML, or JSON files, or created programmatically.
  */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
@@ -48,10 +48,7 @@ public record ExtractionConfig(
     @Nullable @JsonProperty("result_format") ResultFormat resultFormat,
     @Nullable @JsonProperty("security_limits") SecurityLimits securityLimits,
     @Nullable @JsonProperty("max_embedded_file_bytes") Long maxEmbeddedFileBytes,
-    @JsonDeserialize(using = OutputFormatDeserializer.class)
-        @Nullable
-        @JsonProperty("output_format")
-        OutputFormat outputFormat,
+    @JsonDeserialize(using = OutputFormatDeserializer.class) @Nullable @JsonProperty("output_format") OutputFormat outputFormat,
     @Nullable @JsonProperty("escape_markdown") Boolean escapeMarkdown,
     @Nullable @JsonProperty("table_anchors") Boolean tableAnchors,
     @Nullable @JsonProperty("jupyter_cell_rendering") JupyterCellRendering jupyterCellRendering,
@@ -71,8 +68,7 @@ public record ExtractionConfig(
     @Nullable @JsonProperty("url") UrlExtractionConfig url,
     @Nullable @JsonProperty("max_archive_depth") Long maxArchiveDepth,
     @Nullable @JsonProperty("tree_sitter") TreeSitterConfig treeSitter,
-    @Nullable @JsonProperty("structured_extraction")
-        StructuredExtractionConfig structuredExtraction,
+    @Nullable @JsonProperty("structured_extraction") StructuredExtractionConfig structuredExtraction,
     @Nullable @JsonProperty("ner") NerConfig ner,
     @Nullable @JsonProperty("redaction") RedactionConfig redaction,
     @Nullable @JsonProperty("summarization") SummarizationConfig summarization,
@@ -80,704 +76,613 @@ public record ExtractionConfig(
     @Nullable @JsonProperty("page_classification") PageClassificationConfig pageClassification,
     @Nullable @JsonProperty("chunk_classification") ChunkClassificationConfig chunkClassification,
     @Nullable @JsonProperty("captioning") CaptioningConfig captioning,
-    @Nullable @JsonProperty("qr_codes") Boolean qrCodes) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public ExtractionConfig {
-    if (useCache == null) {
-      useCache = true;
-    }
-    if (enableQualityProcessing == null) {
-      enableQualityProcessing = true;
-    }
-    if (escapeMarkdown == null) {
-      escapeMarkdown = true;
-    }
-    if (applyNotebookCellTags == null) {
-      applyNotebookCellTags = true;
-    }
-    if (maxArchiveDepth == null) {
-      maxArchiveDepth = 3L;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ExtractionConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("mime_detection_policy")
-    @Nullable
-    private MimeDetectionPolicy mimeDetectionPolicy = MimeDetectionPolicy.PREFER_CONTENT;
-
-    @JsonProperty("use_cache")
-    @Nullable
-    private Boolean useCache;
-
-    @JsonProperty("enable_quality_processing")
-    @Nullable
-    private Boolean enableQualityProcessing;
-
-    @Nullable private OcrConfig ocr;
-
-    @JsonProperty("force_ocr")
-    @Nullable
-    private Boolean forceOcr;
-
-    @JsonProperty("ocr_strategy")
-    @Nullable
-    private OcrStrategy ocrStrategy = new OcrStrategy.Auto();
-
-    @JsonProperty("force_ocr_pages")
-    @Nullable
-    private List<Integer> forceOcrPages;
-
-    @JsonProperty("disable_ocr")
-    @Nullable
-    private Boolean disableOcr;
-
-    @JsonProperty("ocr_near_empty_fallback")
-    @Nullable
-    private Boolean ocrNearEmptyFallback;
-
-    @JsonProperty("ocr_scanned_page_quality_gate")
-    @Nullable
-    private Boolean ocrScannedPageQualityGate;
-
-    @JsonProperty("ocr_embedded_images")
-    @Nullable
-    private Boolean ocrEmbeddedImages;
-
-    @Nullable private ChunkingConfig chunking;
-
-    @JsonProperty("content_filter")
-    @Nullable
-    private ContentFilterConfig contentFilter;
-
-    @Nullable private ImageExtractionConfig images;
-
-    @JsonProperty("pdf_options")
-    @Nullable
-    private PdfConfig pdfOptions;
-
-    @JsonProperty("token_reduction")
-    @Nullable
-    private TokenReductionOptions tokenReduction;
-
-    @JsonProperty("language_detection")
-    @Nullable
-    private LanguageDetectionConfig languageDetection;
-
-    @Nullable private PageConfig pages;
-    @Nullable private KeywordConfig keywords;
-    @Nullable private PostProcessorConfig postprocessor;
-
-    @JsonProperty("html_options")
-    @Nullable
-    private ConversionOptions htmlOptions;
-
-    @JsonProperty("html_output")
-    @Nullable
-    private HtmlOutputConfig htmlOutput;
-
-    @JsonProperty("extraction_timeout_secs")
-    @Nullable
-    private Long extractionTimeoutSecs;
-
-    @JsonProperty("max_concurrent_extractions")
-    @Nullable
-    private Long maxConcurrentExtractions;
-
-    @JsonProperty("result_format")
-    @Nullable
-    private ResultFormat resultFormat = ResultFormat.UNIFIED;
-
-    @JsonProperty("security_limits")
-    @Nullable
-    private SecurityLimits securityLimits;
-
-    @JsonProperty("max_embedded_file_bytes")
-    @Nullable
-    private Long maxEmbeddedFileBytes;
-
-    @JsonProperty("output_format")
-    @Nullable
-    private OutputFormat outputFormat = new OutputFormat.Plain();
-
-    @JsonProperty("escape_markdown")
-    @Nullable
-    private Boolean escapeMarkdown;
-
-    @JsonProperty("table_anchors")
-    @Nullable
-    private Boolean tableAnchors;
-
-    @JsonProperty("jupyter_cell_rendering")
-    @Nullable
-    private JupyterCellRendering jupyterCellRendering = JupyterCellRendering.BOTH;
-
-    @JsonProperty("apply_notebook_cell_tags")
-    @Nullable
-    private Boolean applyNotebookCellTags;
-
-    @Nullable private LayoutDetectionConfig layout;
-    @Nullable private TranscriptionConfig transcription;
-
-    @JsonProperty("use_layout_for_markdown")
-    @Nullable
-    private Boolean useLayoutForMarkdown;
-
-    @JsonProperty("include_document_structure")
-    @Nullable
-    private Boolean includeDocumentStructure;
-
-    @JsonProperty("strict_parse")
-    @Nullable
-    private Boolean strictParse;
-
-    @Nullable private AccelerationConfig acceleration;
-
-    @JsonProperty("cache_namespace")
-    @Nullable
-    private String cacheNamespace;
-
-    @JsonProperty("cache_ttl_secs")
-    @Nullable
-    private Long cacheTtlSecs;
-
-    @Nullable private EmailConfig email;
-    @Nullable private CsvConfig csv;
-    @Nullable private GeoJsonExtractionConfig geojson;
-    @Nullable private ConcurrencyConfig concurrency;
-    @Nullable private UrlExtractionConfig url;
-
-    @JsonProperty("max_archive_depth")
-    @Nullable
-    private Long maxArchiveDepth;
-
-    @JsonProperty("tree_sitter")
-    @Nullable
-    private TreeSitterConfig treeSitter;
-
-    @JsonProperty("structured_extraction")
-    @Nullable
-    private StructuredExtractionConfig structuredExtraction;
-
-    @Nullable private NerConfig ner;
-    @Nullable private RedactionConfig redaction;
-    @Nullable private SummarizationConfig summarization;
-    @Nullable private TranslationConfig translation;
-
-    @JsonProperty("page_classification")
-    @Nullable
-    private PageClassificationConfig pageClassification;
-
-    @JsonProperty("chunk_classification")
-    @Nullable
-    private ChunkClassificationConfig chunkClassification;
-
-    @Nullable private CaptioningConfig captioning;
-
-    @JsonProperty("qr_codes")
-    @Nullable
-    private Boolean qrCodes;
-
-    /** Sets the mimeDetectionPolicy field. */
-    @JsonProperty("mime_detection_policy")
-    public Builder withMimeDetectionPolicy(final @Nullable MimeDetectionPolicy value) {
-      this.mimeDetectionPolicy = value;
-      return this;
-    }
-
-    /** Sets the useCache field. */
-    @JsonProperty("use_cache")
-    public Builder withUseCache(final @Nullable Boolean value) {
-      this.useCache = value;
-      return this;
-    }
-
-    /** Sets the enableQualityProcessing field. */
-    @JsonProperty("enable_quality_processing")
-    public Builder withEnableQualityProcessing(final @Nullable Boolean value) {
-      this.enableQualityProcessing = value;
-      return this;
-    }
-
-    /** Sets the ocr field. */
-    @JsonProperty("ocr")
-    public Builder withOcr(final @Nullable OcrConfig value) {
-      this.ocr = value;
-      return this;
-    }
-
-    /** Sets the forceOcr field. */
-    @JsonProperty("force_ocr")
-    public Builder withForceOcr(final @Nullable Boolean value) {
-      this.forceOcr = value;
-      return this;
-    }
-
-    /** Sets the ocrStrategy field. */
-    @JsonProperty("ocr_strategy")
-    public Builder withOcrStrategy(final @Nullable OcrStrategy value) {
-      this.ocrStrategy = value;
-      return this;
-    }
-
-    /** Sets the forceOcrPages field. */
-    @JsonProperty("force_ocr_pages")
-    public Builder withForceOcrPages(final @Nullable List<Integer> value) {
-      this.forceOcrPages = value;
-      return this;
-    }
-
-    /** Sets the disableOcr field. */
-    @JsonProperty("disable_ocr")
-    public Builder withDisableOcr(final @Nullable Boolean value) {
-      this.disableOcr = value;
-      return this;
-    }
-
-    /** Sets the ocrNearEmptyFallback field. */
-    @JsonProperty("ocr_near_empty_fallback")
-    public Builder withOcrNearEmptyFallback(final @Nullable Boolean value) {
-      this.ocrNearEmptyFallback = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withOcrNearEmptyFallback(final boolean value) {
-      return withOcrNearEmptyFallback(Boolean.valueOf(value));
-    }
-
-    /** Sets the ocrScannedPageQualityGate field. */
-    @JsonProperty("ocr_scanned_page_quality_gate")
-    public Builder withOcrScannedPageQualityGate(final @Nullable Boolean value) {
-      this.ocrScannedPageQualityGate = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withOcrScannedPageQualityGate(final boolean value) {
-      return withOcrScannedPageQualityGate(Boolean.valueOf(value));
-    }
-
-    /** Sets the ocrEmbeddedImages field. */
-    @JsonProperty("ocr_embedded_images")
-    public Builder withOcrEmbeddedImages(final @Nullable Boolean value) {
-      this.ocrEmbeddedImages = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withOcrEmbeddedImages(final boolean value) {
-      return withOcrEmbeddedImages(Boolean.valueOf(value));
-    }
-
-    /** Sets the chunking field. */
-    @JsonProperty("chunking")
-    public Builder withChunking(final @Nullable ChunkingConfig value) {
-      this.chunking = value;
-      return this;
-    }
-
-    /** Sets the contentFilter field. */
-    @JsonProperty("content_filter")
-    public Builder withContentFilter(final @Nullable ContentFilterConfig value) {
-      this.contentFilter = value;
-      return this;
-    }
-
-    /** Sets the images field. */
-    @JsonProperty("images")
-    public Builder withImages(final @Nullable ImageExtractionConfig value) {
-      this.images = value;
-      return this;
-    }
-
-    /** Sets the pdfOptions field. */
-    @JsonProperty("pdf_options")
-    public Builder withPdfOptions(final @Nullable PdfConfig value) {
-      this.pdfOptions = value;
-      return this;
-    }
-
-    /** Sets the tokenReduction field. */
-    @JsonProperty("token_reduction")
-    public Builder withTokenReduction(final @Nullable TokenReductionOptions value) {
-      this.tokenReduction = value;
-      return this;
-    }
-
-    /** Sets the languageDetection field. */
-    @JsonProperty("language_detection")
-    public Builder withLanguageDetection(final @Nullable LanguageDetectionConfig value) {
-      this.languageDetection = value;
-      return this;
-    }
-
-    /** Sets the pages field. */
-    @JsonProperty("pages")
-    public Builder withPages(final @Nullable PageConfig value) {
-      this.pages = value;
-      return this;
-    }
-
-    /** Sets the keywords field. */
-    @JsonProperty("keywords")
-    public Builder withKeywords(final @Nullable KeywordConfig value) {
-      this.keywords = value;
-      return this;
-    }
-
-    /** Sets the postprocessor field. */
-    @JsonProperty("postprocessor")
-    public Builder withPostprocessor(final @Nullable PostProcessorConfig value) {
-      this.postprocessor = value;
-      return this;
-    }
-
-    /** Sets the htmlOptions field. */
-    @JsonProperty("html_options")
-    public Builder withHtmlOptions(final @Nullable ConversionOptions value) {
-      this.htmlOptions = value;
-      return this;
-    }
-
-    /** Sets the htmlOutput field. */
-    @JsonProperty("html_output")
-    public Builder withHtmlOutput(final @Nullable HtmlOutputConfig value) {
-      this.htmlOutput = value;
-      return this;
-    }
-
-    /** Sets the extractionTimeoutSecs field. */
-    @JsonProperty("extraction_timeout_secs")
-    public Builder withExtractionTimeoutSecs(final @Nullable Long value) {
-      this.extractionTimeoutSecs = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withExtractionTimeoutSecs(final long value) {
-      return withExtractionTimeoutSecs(Long.valueOf(value));
-    }
-
-    /** Sets the maxConcurrentExtractions field. */
-    @JsonProperty("max_concurrent_extractions")
-    public Builder withMaxConcurrentExtractions(final @Nullable Long value) {
-      this.maxConcurrentExtractions = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withMaxConcurrentExtractions(final long value) {
-      return withMaxConcurrentExtractions(Long.valueOf(value));
-    }
-
-    /** Sets the resultFormat field. */
-    @JsonProperty("result_format")
-    public Builder withResultFormat(final @Nullable ResultFormat value) {
-      this.resultFormat = value;
-      return this;
-    }
-
-    /** Sets the securityLimits field. */
-    @JsonProperty("security_limits")
-    public Builder withSecurityLimits(final @Nullable SecurityLimits value) {
-      this.securityLimits = value;
-      return this;
-    }
-
-    /** Sets the maxEmbeddedFileBytes field. */
-    @JsonProperty("max_embedded_file_bytes")
-    public Builder withMaxEmbeddedFileBytes(final @Nullable Long value) {
-      this.maxEmbeddedFileBytes = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withMaxEmbeddedFileBytes(final long value) {
-      return withMaxEmbeddedFileBytes(Long.valueOf(value));
-    }
-
-    /** Sets the outputFormat field. */
-    @JsonProperty("output_format")
-    public Builder withOutputFormat(final @Nullable OutputFormat value) {
-      this.outputFormat = value;
-      return this;
-    }
-
-    /** Sets the escapeMarkdown field. */
-    @JsonProperty("escape_markdown")
-    public Builder withEscapeMarkdown(final @Nullable Boolean value) {
-      this.escapeMarkdown = value;
-      return this;
-    }
-
-    /** Sets the tableAnchors field. */
-    @JsonProperty("table_anchors")
-    public Builder withTableAnchors(final @Nullable Boolean value) {
-      this.tableAnchors = value;
-      return this;
-    }
-
-    /** Sets the jupyterCellRendering field. */
-    @JsonProperty("jupyter_cell_rendering")
-    public Builder withJupyterCellRendering(final @Nullable JupyterCellRendering value) {
-      this.jupyterCellRendering = value;
-      return this;
-    }
-
-    /** Sets the applyNotebookCellTags field. */
-    @JsonProperty("apply_notebook_cell_tags")
-    public Builder withApplyNotebookCellTags(final @Nullable Boolean value) {
-      this.applyNotebookCellTags = value;
-      return this;
-    }
-
-    /** Sets the layout field. */
-    @JsonProperty("layout")
-    public Builder withLayout(final @Nullable LayoutDetectionConfig value) {
-      this.layout = value;
-      return this;
-    }
-
-    /** Sets the transcription field. */
-    @JsonProperty("transcription")
-    public Builder withTranscription(final @Nullable TranscriptionConfig value) {
-      this.transcription = value;
-      return this;
-    }
-
-    /** Sets the useLayoutForMarkdown field. */
-    @JsonProperty("use_layout_for_markdown")
-    public Builder withUseLayoutForMarkdown(final @Nullable Boolean value) {
-      this.useLayoutForMarkdown = value;
-      return this;
-    }
-
-    /** Sets the includeDocumentStructure field. */
-    @JsonProperty("include_document_structure")
-    public Builder withIncludeDocumentStructure(final @Nullable Boolean value) {
-      this.includeDocumentStructure = value;
-      return this;
-    }
-
-    /** Sets the strictParse field. */
-    @JsonProperty("strict_parse")
-    public Builder withStrictParse(final @Nullable Boolean value) {
-      this.strictParse = value;
-      return this;
-    }
-
-    /** Sets the acceleration field. */
-    @JsonProperty("acceleration")
-    public Builder withAcceleration(final @Nullable AccelerationConfig value) {
-      this.acceleration = value;
-      return this;
-    }
-
-    /** Sets the cacheNamespace field. */
-    @JsonProperty("cache_namespace")
-    public Builder withCacheNamespace(final @Nullable String value) {
-      this.cacheNamespace = value;
-      return this;
-    }
-
-    /** Sets the cacheTtlSecs field. */
-    @JsonProperty("cache_ttl_secs")
-    public Builder withCacheTtlSecs(final @Nullable Long value) {
-      this.cacheTtlSecs = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withCacheTtlSecs(final long value) {
-      return withCacheTtlSecs(Long.valueOf(value));
-    }
-
-    /** Sets the email field. */
-    @JsonProperty("email")
-    public Builder withEmail(final @Nullable EmailConfig value) {
-      this.email = value;
-      return this;
-    }
-
-    /** Sets the csv field. */
-    @JsonProperty("csv")
-    public Builder withCsv(final @Nullable CsvConfig value) {
-      this.csv = value;
-      return this;
-    }
-
-    /** Sets the geojson field. */
-    @JsonProperty("geojson")
-    public Builder withGeojson(final @Nullable GeoJsonExtractionConfig value) {
-      this.geojson = value;
-      return this;
-    }
-
-    /** Sets the concurrency field. */
-    @JsonProperty("concurrency")
-    public Builder withConcurrency(final @Nullable ConcurrencyConfig value) {
-      this.concurrency = value;
-      return this;
-    }
-
-    /** Sets the url field. */
-    @JsonProperty("url")
-    public Builder withUrl(final @Nullable UrlExtractionConfig value) {
-      this.url = value;
-      return this;
-    }
-
-    /** Sets the maxArchiveDepth field. */
-    @JsonProperty("max_archive_depth")
-    public Builder withMaxArchiveDepth(final @Nullable Long value) {
-      this.maxArchiveDepth = value;
-      return this;
-    }
-
-    /** Sets the treeSitter field. */
-    @JsonProperty("tree_sitter")
-    public Builder withTreeSitter(final @Nullable TreeSitterConfig value) {
-      this.treeSitter = value;
-      return this;
-    }
-
-    /** Sets the structuredExtraction field. */
-    @JsonProperty("structured_extraction")
-    public Builder withStructuredExtraction(final @Nullable StructuredExtractionConfig value) {
-      this.structuredExtraction = value;
-      return this;
-    }
-
-    /** Sets the ner field. */
-    @JsonProperty("ner")
-    public Builder withNer(final @Nullable NerConfig value) {
-      this.ner = value;
-      return this;
-    }
-
-    /** Sets the redaction field. */
-    @JsonProperty("redaction")
-    public Builder withRedaction(final @Nullable RedactionConfig value) {
-      this.redaction = value;
-      return this;
-    }
-
-    /** Sets the summarization field. */
-    @JsonProperty("summarization")
-    public Builder withSummarization(final @Nullable SummarizationConfig value) {
-      this.summarization = value;
-      return this;
-    }
-
-    /** Sets the translation field. */
-    @JsonProperty("translation")
-    public Builder withTranslation(final @Nullable TranslationConfig value) {
-      this.translation = value;
-      return this;
-    }
-
-    /** Sets the pageClassification field. */
-    @JsonProperty("page_classification")
-    public Builder withPageClassification(final @Nullable PageClassificationConfig value) {
-      this.pageClassification = value;
-      return this;
-    }
-
-    /** Sets the chunkClassification field. */
-    @JsonProperty("chunk_classification")
-    public Builder withChunkClassification(final @Nullable ChunkClassificationConfig value) {
-      this.chunkClassification = value;
-      return this;
-    }
-
-    /** Sets the captioning field. */
-    @JsonProperty("captioning")
-    public Builder withCaptioning(final @Nullable CaptioningConfig value) {
-      this.captioning = value;
-      return this;
-    }
-
-    /** Sets the qrCodes field. */
-    @JsonProperty("qr_codes")
-    public Builder withQrCodes(final @Nullable Boolean value) {
-      this.qrCodes = value;
-      return this;
-    }
-
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withQrCodes(final boolean value) {
-      return withQrCodes(Boolean.valueOf(value));
-    }
-
-    /** Constructs a ExtractionConfig instance from the builder's current state. */
-    public ExtractionConfig build() {
-      return new ExtractionConfig(
-          mimeDetectionPolicy,
-          useCache,
-          enableQualityProcessing,
-          ocr,
-          forceOcr,
-          ocrStrategy,
-          forceOcrPages,
-          disableOcr,
-          ocrNearEmptyFallback,
-          ocrScannedPageQualityGate,
-          ocrEmbeddedImages,
-          chunking,
-          contentFilter,
-          images,
-          pdfOptions,
-          tokenReduction,
-          languageDetection,
-          pages,
-          keywords,
-          postprocessor,
-          htmlOptions,
-          htmlOutput,
-          extractionTimeoutSecs,
-          maxConcurrentExtractions,
-          resultFormat,
-          securityLimits,
-          maxEmbeddedFileBytes,
-          outputFormat,
-          escapeMarkdown,
-          tableAnchors,
-          jupyterCellRendering,
-          applyNotebookCellTags,
-          layout,
-          transcription,
-          useLayoutForMarkdown,
-          includeDocumentStructure,
-          strictParse,
-          acceleration,
-          cacheNamespace,
-          cacheTtlSecs,
-          email,
-          csv,
-          geojson,
-          concurrency,
-          url,
-          maxArchiveDepth,
-          treeSitter,
-          structuredExtraction,
-          ner,
-          redaction,
-          summarization,
-          translation,
-          pageClassification,
-          chunkClassification,
-          captioning,
-          qrCodes);
-    }
-  }
-  // CPD-ON
+    @Nullable @JsonProperty("qr_codes") Boolean qrCodes
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
+    }
+    public ExtractionConfig{
+        if (useCache == null) { useCache = true; }
+        if (enableQualityProcessing == null) { enableQualityProcessing = true; }
+        if (escapeMarkdown == null) { escapeMarkdown = true; }
+        if (applyNotebookCellTags == null) { applyNotebookCellTags = true; }
+        if (maxArchiveDepth == null) { maxArchiveDepth = 3L; }
+    }
+
+    // CPD-OFF
+    /** Jackson builder for ExtractionConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
+
+        @JsonProperty("mime_detection_policy")
+        @Nullable private MimeDetectionPolicy mimeDetectionPolicy = MimeDetectionPolicy.PREFER_CONTENT;
+        @JsonProperty("use_cache")
+        @Nullable private Boolean useCache;
+        @JsonProperty("enable_quality_processing")
+        @Nullable private Boolean enableQualityProcessing;
+        @Nullable private OcrConfig ocr;
+        @JsonProperty("force_ocr")
+        @Nullable private Boolean forceOcr;
+        @JsonProperty("ocr_strategy")
+        @Nullable private OcrStrategy ocrStrategy = new OcrStrategy.Auto();
+        @JsonProperty("force_ocr_pages")
+        @Nullable private List<Integer> forceOcrPages;
+        @JsonProperty("disable_ocr")
+        @Nullable private Boolean disableOcr;
+        @JsonProperty("ocr_near_empty_fallback")
+        @Nullable private Boolean ocrNearEmptyFallback;
+        @JsonProperty("ocr_scanned_page_quality_gate")
+        @Nullable private Boolean ocrScannedPageQualityGate;
+        @JsonProperty("ocr_embedded_images")
+        @Nullable private Boolean ocrEmbeddedImages;
+        @Nullable private ChunkingConfig chunking;
+        @JsonProperty("content_filter")
+        @Nullable private ContentFilterConfig contentFilter;
+        @Nullable private ImageExtractionConfig images;
+        @JsonProperty("pdf_options")
+        @Nullable private PdfConfig pdfOptions;
+        @JsonProperty("token_reduction")
+        @Nullable private TokenReductionOptions tokenReduction;
+        @JsonProperty("language_detection")
+        @Nullable private LanguageDetectionConfig languageDetection;
+        @Nullable private PageConfig pages;
+        @Nullable private KeywordConfig keywords;
+        @Nullable private PostProcessorConfig postprocessor;
+        @JsonProperty("html_options")
+        @Nullable private ConversionOptions htmlOptions;
+        @JsonProperty("html_output")
+        @Nullable private HtmlOutputConfig htmlOutput;
+        @JsonProperty("extraction_timeout_secs")
+        @Nullable private Long extractionTimeoutSecs;
+        @JsonProperty("max_concurrent_extractions")
+        @Nullable private Long maxConcurrentExtractions;
+        @JsonProperty("result_format")
+        @Nullable private ResultFormat resultFormat = ResultFormat.UNIFIED;
+        @JsonProperty("security_limits")
+        @Nullable private SecurityLimits securityLimits;
+        @JsonProperty("max_embedded_file_bytes")
+        @Nullable private Long maxEmbeddedFileBytes;
+        @JsonProperty("output_format")
+        @Nullable private OutputFormat outputFormat = new OutputFormat.Plain();
+        @JsonProperty("escape_markdown")
+        @Nullable private Boolean escapeMarkdown;
+        @JsonProperty("table_anchors")
+        @Nullable private Boolean tableAnchors;
+        @JsonProperty("jupyter_cell_rendering")
+        @Nullable private JupyterCellRendering jupyterCellRendering = JupyterCellRendering.BOTH;
+        @JsonProperty("apply_notebook_cell_tags")
+        @Nullable private Boolean applyNotebookCellTags;
+        @Nullable private LayoutDetectionConfig layout;
+        @Nullable private TranscriptionConfig transcription;
+        @JsonProperty("use_layout_for_markdown")
+        @Nullable private Boolean useLayoutForMarkdown;
+        @JsonProperty("include_document_structure")
+        @Nullable private Boolean includeDocumentStructure;
+        @JsonProperty("strict_parse")
+        @Nullable private Boolean strictParse;
+        @Nullable private AccelerationConfig acceleration;
+        @JsonProperty("cache_namespace")
+        @Nullable private String cacheNamespace;
+        @JsonProperty("cache_ttl_secs")
+        @Nullable private Long cacheTtlSecs;
+        @Nullable private EmailConfig email;
+        @Nullable private CsvConfig csv;
+        @Nullable private GeoJsonExtractionConfig geojson;
+        @Nullable private ConcurrencyConfig concurrency;
+        @Nullable private UrlExtractionConfig url;
+        @JsonProperty("max_archive_depth")
+        @Nullable private Long maxArchiveDepth;
+        @JsonProperty("tree_sitter")
+        @Nullable private TreeSitterConfig treeSitter;
+        @JsonProperty("structured_extraction")
+        @Nullable private StructuredExtractionConfig structuredExtraction;
+        @Nullable private NerConfig ner;
+        @Nullable private RedactionConfig redaction;
+        @Nullable private SummarizationConfig summarization;
+        @Nullable private TranslationConfig translation;
+        @JsonProperty("page_classification")
+        @Nullable private PageClassificationConfig pageClassification;
+        @JsonProperty("chunk_classification")
+        @Nullable private ChunkClassificationConfig chunkClassification;
+        @Nullable private CaptioningConfig captioning;
+        @JsonProperty("qr_codes")
+        @Nullable private Boolean qrCodes;
+
+        /** Sets the mimeDetectionPolicy field. */
+        @JsonProperty("mime_detection_policy")
+        public Builder withMimeDetectionPolicy(final @Nullable MimeDetectionPolicy value) {
+            this.mimeDetectionPolicy = value;
+            return this;
+        }
+
+        /** Sets the useCache field. */
+        @JsonProperty("use_cache")
+        public Builder withUseCache(final @Nullable Boolean value) {
+            this.useCache = value;
+            return this;
+        }
+
+        /** Sets the enableQualityProcessing field. */
+        @JsonProperty("enable_quality_processing")
+        public Builder withEnableQualityProcessing(final @Nullable Boolean value) {
+            this.enableQualityProcessing = value;
+            return this;
+        }
+
+        /** Sets the ocr field. */
+        @JsonProperty("ocr")
+        public Builder withOcr(final @Nullable OcrConfig value) {
+            this.ocr = value;
+            return this;
+        }
+
+        /** Sets the forceOcr field. */
+        @JsonProperty("force_ocr")
+        public Builder withForceOcr(final @Nullable Boolean value) {
+            this.forceOcr = value;
+            return this;
+        }
+
+        /** Sets the ocrStrategy field. */
+        @JsonProperty("ocr_strategy")
+        public Builder withOcrStrategy(final @Nullable OcrStrategy value) {
+            this.ocrStrategy = value;
+            return this;
+        }
+
+        /** Sets the forceOcrPages field. */
+        @JsonProperty("force_ocr_pages")
+        public Builder withForceOcrPages(final @Nullable List<Integer> value) {
+            this.forceOcrPages = value;
+            return this;
+        }
+
+        /** Sets the disableOcr field. */
+        @JsonProperty("disable_ocr")
+        public Builder withDisableOcr(final @Nullable Boolean value) {
+            this.disableOcr = value;
+            return this;
+        }
+
+        /** Sets the ocrNearEmptyFallback field. */
+        @JsonProperty("ocr_near_empty_fallback")
+        public Builder withOcrNearEmptyFallback(final @Nullable Boolean value) {
+            this.ocrNearEmptyFallback = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withOcrNearEmptyFallback(final boolean value) {
+            return withOcrNearEmptyFallback(Boolean.valueOf(value));
+        }
+
+        /** Sets the ocrScannedPageQualityGate field. */
+        @JsonProperty("ocr_scanned_page_quality_gate")
+        public Builder withOcrScannedPageQualityGate(final @Nullable Boolean value) {
+            this.ocrScannedPageQualityGate = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withOcrScannedPageQualityGate(final boolean value) {
+            return withOcrScannedPageQualityGate(Boolean.valueOf(value));
+        }
+
+        /** Sets the ocrEmbeddedImages field. */
+        @JsonProperty("ocr_embedded_images")
+        public Builder withOcrEmbeddedImages(final @Nullable Boolean value) {
+            this.ocrEmbeddedImages = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withOcrEmbeddedImages(final boolean value) {
+            return withOcrEmbeddedImages(Boolean.valueOf(value));
+        }
+
+        /** Sets the chunking field. */
+        @JsonProperty("chunking")
+        public Builder withChunking(final @Nullable ChunkingConfig value) {
+            this.chunking = value;
+            return this;
+        }
+
+        /** Sets the contentFilter field. */
+        @JsonProperty("content_filter")
+        public Builder withContentFilter(final @Nullable ContentFilterConfig value) {
+            this.contentFilter = value;
+            return this;
+        }
+
+        /** Sets the images field. */
+        @JsonProperty("images")
+        public Builder withImages(final @Nullable ImageExtractionConfig value) {
+            this.images = value;
+            return this;
+        }
+
+        /** Sets the pdfOptions field. */
+        @JsonProperty("pdf_options")
+        public Builder withPdfOptions(final @Nullable PdfConfig value) {
+            this.pdfOptions = value;
+            return this;
+        }
+
+        /** Sets the tokenReduction field. */
+        @JsonProperty("token_reduction")
+        public Builder withTokenReduction(final @Nullable TokenReductionOptions value) {
+            this.tokenReduction = value;
+            return this;
+        }
+
+        /** Sets the languageDetection field. */
+        @JsonProperty("language_detection")
+        public Builder withLanguageDetection(final @Nullable LanguageDetectionConfig value) {
+            this.languageDetection = value;
+            return this;
+        }
+
+        /** Sets the pages field. */
+        @JsonProperty("pages")
+        public Builder withPages(final @Nullable PageConfig value) {
+            this.pages = value;
+            return this;
+        }
+
+        /** Sets the keywords field. */
+        @JsonProperty("keywords")
+        public Builder withKeywords(final @Nullable KeywordConfig value) {
+            this.keywords = value;
+            return this;
+        }
+
+        /** Sets the postprocessor field. */
+        @JsonProperty("postprocessor")
+        public Builder withPostprocessor(final @Nullable PostProcessorConfig value) {
+            this.postprocessor = value;
+            return this;
+        }
+
+        /** Sets the htmlOptions field. */
+        @JsonProperty("html_options")
+        public Builder withHtmlOptions(final @Nullable ConversionOptions value) {
+            this.htmlOptions = value;
+            return this;
+        }
+
+        /** Sets the htmlOutput field. */
+        @JsonProperty("html_output")
+        public Builder withHtmlOutput(final @Nullable HtmlOutputConfig value) {
+            this.htmlOutput = value;
+            return this;
+        }
+
+        /** Sets the extractionTimeoutSecs field. */
+        @JsonProperty("extraction_timeout_secs")
+        public Builder withExtractionTimeoutSecs(final @Nullable Long value) {
+            this.extractionTimeoutSecs = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withExtractionTimeoutSecs(final long value) {
+            return withExtractionTimeoutSecs(Long.valueOf(value));
+        }
+
+        /** Sets the maxConcurrentExtractions field. */
+        @JsonProperty("max_concurrent_extractions")
+        public Builder withMaxConcurrentExtractions(final @Nullable Long value) {
+            this.maxConcurrentExtractions = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withMaxConcurrentExtractions(final long value) {
+            return withMaxConcurrentExtractions(Long.valueOf(value));
+        }
+
+        /** Sets the resultFormat field. */
+        @JsonProperty("result_format")
+        public Builder withResultFormat(final @Nullable ResultFormat value) {
+            this.resultFormat = value;
+            return this;
+        }
+
+        /** Sets the securityLimits field. */
+        @JsonProperty("security_limits")
+        public Builder withSecurityLimits(final @Nullable SecurityLimits value) {
+            this.securityLimits = value;
+            return this;
+        }
+
+        /** Sets the maxEmbeddedFileBytes field. */
+        @JsonProperty("max_embedded_file_bytes")
+        public Builder withMaxEmbeddedFileBytes(final @Nullable Long value) {
+            this.maxEmbeddedFileBytes = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withMaxEmbeddedFileBytes(final long value) {
+            return withMaxEmbeddedFileBytes(Long.valueOf(value));
+        }
+
+        /** Sets the outputFormat field. */
+        @JsonProperty("output_format")
+        public Builder withOutputFormat(final @Nullable OutputFormat value) {
+            this.outputFormat = value;
+            return this;
+        }
+
+        /** Sets the escapeMarkdown field. */
+        @JsonProperty("escape_markdown")
+        public Builder withEscapeMarkdown(final @Nullable Boolean value) {
+            this.escapeMarkdown = value;
+            return this;
+        }
+
+        /** Sets the tableAnchors field. */
+        @JsonProperty("table_anchors")
+        public Builder withTableAnchors(final @Nullable Boolean value) {
+            this.tableAnchors = value;
+            return this;
+        }
+
+        /** Sets the jupyterCellRendering field. */
+        @JsonProperty("jupyter_cell_rendering")
+        public Builder withJupyterCellRendering(final @Nullable JupyterCellRendering value) {
+            this.jupyterCellRendering = value;
+            return this;
+        }
+
+        /** Sets the applyNotebookCellTags field. */
+        @JsonProperty("apply_notebook_cell_tags")
+        public Builder withApplyNotebookCellTags(final @Nullable Boolean value) {
+            this.applyNotebookCellTags = value;
+            return this;
+        }
+
+        /** Sets the layout field. */
+        @JsonProperty("layout")
+        public Builder withLayout(final @Nullable LayoutDetectionConfig value) {
+            this.layout = value;
+            return this;
+        }
+
+        /** Sets the transcription field. */
+        @JsonProperty("transcription")
+        public Builder withTranscription(final @Nullable TranscriptionConfig value) {
+            this.transcription = value;
+            return this;
+        }
+
+        /** Sets the useLayoutForMarkdown field. */
+        @JsonProperty("use_layout_for_markdown")
+        public Builder withUseLayoutForMarkdown(final @Nullable Boolean value) {
+            this.useLayoutForMarkdown = value;
+            return this;
+        }
+
+        /** Sets the includeDocumentStructure field. */
+        @JsonProperty("include_document_structure")
+        public Builder withIncludeDocumentStructure(final @Nullable Boolean value) {
+            this.includeDocumentStructure = value;
+            return this;
+        }
+
+        /** Sets the strictParse field. */
+        @JsonProperty("strict_parse")
+        public Builder withStrictParse(final @Nullable Boolean value) {
+            this.strictParse = value;
+            return this;
+        }
+
+        /** Sets the acceleration field. */
+        @JsonProperty("acceleration")
+        public Builder withAcceleration(final @Nullable AccelerationConfig value) {
+            this.acceleration = value;
+            return this;
+        }
+
+        /** Sets the cacheNamespace field. */
+        @JsonProperty("cache_namespace")
+        public Builder withCacheNamespace(final @Nullable String value) {
+            this.cacheNamespace = value;
+            return this;
+        }
+
+        /** Sets the cacheTtlSecs field. */
+        @JsonProperty("cache_ttl_secs")
+        public Builder withCacheTtlSecs(final @Nullable Long value) {
+            this.cacheTtlSecs = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withCacheTtlSecs(final long value) {
+            return withCacheTtlSecs(Long.valueOf(value));
+        }
+
+        /** Sets the email field. */
+        @JsonProperty("email")
+        public Builder withEmail(final @Nullable EmailConfig value) {
+            this.email = value;
+            return this;
+        }
+
+        /** Sets the csv field. */
+        @JsonProperty("csv")
+        public Builder withCsv(final @Nullable CsvConfig value) {
+            this.csv = value;
+            return this;
+        }
+
+        /** Sets the geojson field. */
+        @JsonProperty("geojson")
+        public Builder withGeojson(final @Nullable GeoJsonExtractionConfig value) {
+            this.geojson = value;
+            return this;
+        }
+
+        /** Sets the concurrency field. */
+        @JsonProperty("concurrency")
+        public Builder withConcurrency(final @Nullable ConcurrencyConfig value) {
+            this.concurrency = value;
+            return this;
+        }
+
+        /** Sets the url field. */
+        @JsonProperty("url")
+        public Builder withUrl(final @Nullable UrlExtractionConfig value) {
+            this.url = value;
+            return this;
+        }
+
+        /** Sets the maxArchiveDepth field. */
+        @JsonProperty("max_archive_depth")
+        public Builder withMaxArchiveDepth(final @Nullable Long value) {
+            this.maxArchiveDepth = value;
+            return this;
+        }
+
+        /** Sets the treeSitter field. */
+        @JsonProperty("tree_sitter")
+        public Builder withTreeSitter(final @Nullable TreeSitterConfig value) {
+            this.treeSitter = value;
+            return this;
+        }
+
+        /** Sets the structuredExtraction field. */
+        @JsonProperty("structured_extraction")
+        public Builder withStructuredExtraction(final @Nullable StructuredExtractionConfig value) {
+            this.structuredExtraction = value;
+            return this;
+        }
+
+        /** Sets the ner field. */
+        @JsonProperty("ner")
+        public Builder withNer(final @Nullable NerConfig value) {
+            this.ner = value;
+            return this;
+        }
+
+        /** Sets the redaction field. */
+        @JsonProperty("redaction")
+        public Builder withRedaction(final @Nullable RedactionConfig value) {
+            this.redaction = value;
+            return this;
+        }
+
+        /** Sets the summarization field. */
+        @JsonProperty("summarization")
+        public Builder withSummarization(final @Nullable SummarizationConfig value) {
+            this.summarization = value;
+            return this;
+        }
+
+        /** Sets the translation field. */
+        @JsonProperty("translation")
+        public Builder withTranslation(final @Nullable TranslationConfig value) {
+            this.translation = value;
+            return this;
+        }
+
+        /** Sets the pageClassification field. */
+        @JsonProperty("page_classification")
+        public Builder withPageClassification(final @Nullable PageClassificationConfig value) {
+            this.pageClassification = value;
+            return this;
+        }
+
+        /** Sets the chunkClassification field. */
+        @JsonProperty("chunk_classification")
+        public Builder withChunkClassification(final @Nullable ChunkClassificationConfig value) {
+            this.chunkClassification = value;
+            return this;
+        }
+
+        /** Sets the captioning field. */
+        @JsonProperty("captioning")
+        public Builder withCaptioning(final @Nullable CaptioningConfig value) {
+            this.captioning = value;
+            return this;
+        }
+
+        /** Sets the qrCodes field. */
+        @JsonProperty("qr_codes")
+        public Builder withQrCodes(final @Nullable Boolean value) {
+            this.qrCodes = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withQrCodes(final boolean value) {
+            return withQrCodes(Boolean.valueOf(value));
+        }
+
+        /** Constructs a ExtractionConfig instance from the builder's current state. */
+        public ExtractionConfig build() {
+            return new ExtractionConfig(
+                mimeDetectionPolicy,
+                useCache,
+                enableQualityProcessing,
+                ocr,
+                forceOcr,
+                ocrStrategy,
+                forceOcrPages,
+                disableOcr,
+                ocrNearEmptyFallback,
+                ocrScannedPageQualityGate,
+                ocrEmbeddedImages,
+                chunking,
+                contentFilter,
+                images,
+                pdfOptions,
+                tokenReduction,
+                languageDetection,
+                pages,
+                keywords,
+                postprocessor,
+                htmlOptions,
+                htmlOutput,
+                extractionTimeoutSecs,
+                maxConcurrentExtractions,
+                resultFormat,
+                securityLimits,
+                maxEmbeddedFileBytes,
+                outputFormat,
+                escapeMarkdown,
+                tableAnchors,
+                jupyterCellRendering,
+                applyNotebookCellTags,
+                layout,
+                transcription,
+                useLayoutForMarkdown,
+                includeDocumentStructure,
+                strictParse,
+                acceleration,
+                cacheNamespace,
+                cacheTtlSecs,
+                email,
+                csv,
+                geojson,
+                concurrency,
+                url,
+                maxArchiveDepth,
+                treeSitter,
+                structuredExtraction,
+                ner,
+                redaction,
+                summarization,
+                translation,
+                pageClassification,
+                chunkClassification,
+                captioning,
+                qrCodes
+            );
+        }
+    }
+    // CPD-ON
 }

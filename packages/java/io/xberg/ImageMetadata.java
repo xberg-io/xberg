@@ -4,16 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.Map;
 
 /**
  * Image metadata extracted from image files.
  *
- * <p>Includes dimensions, format, and EXIF data.
+ * Includes dimensions, format, and EXIF data.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageMetadata.Builder.class)
@@ -21,55 +21,61 @@ public record ImageMetadata(
     @JsonProperty("width") int width,
     @JsonProperty("height") int height,
     @JsonProperty("format") String format,
-    @JsonProperty("exif") Map<String, String> exif) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ImageMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private int width;
-    private int height;
-    private String format;
-    private Map<String, String> exif = Map.of();
-
-    /** Sets the width field. */
-    @JsonProperty("width")
-    public Builder withWidth(final int value) {
-      this.width = value;
-      return this;
+    @JsonProperty("exif") Map<String, String> exif
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the height field. */
-    @JsonProperty("height")
-    public Builder withHeight(final int value) {
-      this.height = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ImageMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the format field. */
-    @JsonProperty("format")
-    public Builder withFormat(final String value) {
-      this.format = value;
-      return this;
-    }
+        private int width;
+        private int height;
+        private String format;
+        private Map<String, String> exif = Map.of();
 
-    /** Sets the exif field. */
-    @JsonProperty("exif")
-    public Builder withExif(final Map<String, String> value) {
-      this.exif = value;
-      return this;
-    }
+        /** Sets the width field. */
+        @JsonProperty("width")
+        public Builder withWidth(final int value) {
+            this.width = value;
+            return this;
+        }
 
-    /** Constructs a ImageMetadata instance from the builder's current state. */
-    public ImageMetadata build() {
-      return new ImageMetadata(width, height, format, exif);
+        /** Sets the height field. */
+        @JsonProperty("height")
+        public Builder withHeight(final int value) {
+            this.height = value;
+            return this;
+        }
+
+        /** Sets the format field. */
+        @JsonProperty("format")
+        public Builder withFormat(final String value) {
+            this.format = value;
+            return this;
+        }
+
+        /** Sets the exif field. */
+        @JsonProperty("exif")
+        public Builder withExif(final Map<String, String> value) {
+            this.exif = value;
+            return this;
+        }
+
+        /** Constructs a ImageMetadata instance from the builder's current state. */
+        public ImageMetadata build() {
+            return new ImageMetadata(
+                width,
+                height,
+                format,
+                exif
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

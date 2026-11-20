@@ -2,10 +2,11 @@
 // alef:hash:28edbb4e6b26c2e060ca0678fef750d991755502ee26e137bea4f4cefccf8425
 package io.xberg;
 
-/** Errors that can occur during heuristics analysis. */
+/**
+ * Errors that can occur during heuristics analysis.
+ */
 public class HeuristicsErrorException extends XbergRsException implements IHeuristicsError {
   private static final long serialVersionUID = 1L;
-
   /** Creates a new HeuristicsErrorException with the given message. */
   public HeuristicsErrorException(final String message) {
     super(message);

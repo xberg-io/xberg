@@ -4,76 +4,74 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Element attributes in Djot.
  *
- * <p>Represents the attributes attached to elements using {.class #id key="value"} syntax.
+ * Represents the attributes attached to elements using {.class #id key="value"} syntax.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = Attributes.Builder.class)
 public record Attributes(
     @Nullable @JsonProperty("id") String id,
     @JsonProperty("classes") List<String> classes,
-    @JsonProperty("key_values") List<KeyValueAttribute> keyValues) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public Attributes {
-    if (classes == null) {
-      classes = List.of();
+    @JsonProperty("key_values") List<KeyValueAttribute> keyValues
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (keyValues == null) {
-      keyValues = List.of();
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for Attributes deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private String id;
-    @Nullable private List<String> classes = List.of();
-
-    @JsonProperty("key_values")
-    @Nullable
-    private List<KeyValueAttribute> keyValues = List.of();
-
-    /** Sets the id field. */
-    @JsonProperty("id")
-    public Builder withId(final @Nullable String value) {
-      this.id = value;
-      return this;
+    public Attributes{
+        if (classes == null) { classes = List.of(); }
+        if (keyValues == null) { keyValues = List.of(); }
     }
 
-    /** Sets the classes field. */
-    @JsonProperty("classes")
-    public Builder withClasses(final @Nullable List<String> value) {
-      this.classes = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for Attributes deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the keyValues field. */
-    @JsonProperty("key_values")
-    public Builder withKeyValues(final @Nullable List<KeyValueAttribute> value) {
-      this.keyValues = value;
-      return this;
-    }
+        @Nullable private String id;
+        @Nullable private List<String> classes = List.of();
+        @JsonProperty("key_values")
+        @Nullable private List<KeyValueAttribute> keyValues = List.of();
 
-    /** Constructs a Attributes instance from the builder's current state. */
-    public Attributes build() {
-      return new Attributes(id, classes, keyValues);
+        /** Sets the id field. */
+        @JsonProperty("id")
+        public Builder withId(final @Nullable String value) {
+            this.id = value;
+            return this;
+        }
+
+        /** Sets the classes field. */
+        @JsonProperty("classes")
+        public Builder withClasses(final @Nullable List<String> value) {
+            this.classes = value;
+            return this;
+        }
+
+        /** Sets the keyValues field. */
+        @JsonProperty("key_values")
+        public Builder withKeyValues(final @Nullable List<KeyValueAttribute> value) {
+            this.keyValues = value;
+            return this;
+        }
+
+        /** Constructs a Attributes instance from the builder's current state. */
+        public Attributes build() {
+            return new Attributes(
+                id,
+                classes,
+                keyValues
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

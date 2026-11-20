@@ -7,49 +7,64 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Semantic classification of an extracted URI. */
+/**
+ * Semantic classification of an extracted URI.
+ */
 @SuppressWarnings("PMD")
 public enum UriKind {
-  /** A clickable hyperlink (web URL, file link). */
-  HYPERLINK("hyperlink"),
-  /** An image or media resource reference. */
-  IMAGE("image"),
-  /** An internal anchor or cross-reference target. */
-  ANCHOR("anchor"),
-  /** A citation or bibliographic reference (DOI, academic ref). */
-  CITATION("citation"),
-  /** A general reference (e.g. {@code \ref{}} in LaTeX, {@code :ref:} in RST). */
-  REFERENCE("reference"),
-  /** An email address ({@code mailto:} link or bare email). */
-  EMAIL("email");
+    /**
+     * A clickable hyperlink (web URL, file link).
+     */
+    HYPERLINK("hyperlink"),
+    /**
+     * An image or media resource reference.
+     */
+    IMAGE("image"),
+    /**
+     * An internal anchor or cross-reference target.
+     */
+    ANCHOR("anchor"),
+    /**
+     * A citation or bibliographic reference (DOI, academic ref).
+     */
+    CITATION("citation"),
+    /**
+     * A general reference (e.g. {@code \ref{}} in LaTeX, {@code :ref:} in RST).
+     */
+    REFERENCE("reference"),
+    /**
+     * An email address ({@code mailto:} link or bare email).
+     */
+    EMAIL("email");
 
-  /** The string value. */
-  private final String value;
 
-  UriKind(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static UriKind fromValue(final String value) {
-    for (UriKind e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    UriKind(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown UriKind value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static UriKind fromValue(final String value) {
+        for (UriKind e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown UriKind value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

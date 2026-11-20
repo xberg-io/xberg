@@ -10,43 +10,45 @@ import java.util.List;
 /**
  * Path A Bridge implementation for IEmbeddingBackend.
  *
- * <p>Wraps a user-supplied implementation and delegates all method calls. This adapter conforms to
- * the hand-authored sealed interface.
+ * Wraps a user-supplied implementation and delegates all method calls.
+ * This adapter conforms to the hand-authored sealed interface.
  */
 public final class EmbeddingBackendAdapter implements IEmbeddingBackend {
-  private final IEmbeddingBackend impl;
+    private final IEmbeddingBackend impl;
 
-  public EmbeddingBackendAdapter(IEmbeddingBackend impl) {
-    this.impl = impl;
-  }
+    public EmbeddingBackendAdapter(IEmbeddingBackend impl) {
+        this.impl = impl;
+    }
 
-  @Override
-  public String name() {
-    return impl.name();
-  }
+    @Override
+    public String name() {
+        return impl.name();
+    }
 
-  @Override
-  public String version() {
-    return impl.version();
-  }
+    @Override
+    public String version() {
+        return impl.version();
+    }
 
-  @Override
-  public void initialize() throws Exception {
-    impl.initialize();
-  }
+    @Override
+    public void initialize() throws Exception {
+        impl.initialize();
+    }
 
-  @Override
-  public void shutdown() throws Exception {
-    impl.shutdown();
-  }
+    @Override
+    public void shutdown() throws Exception {
+        impl.shutdown();
+    }
 
-  @Override
-  public long dimensions() throws Exception {
-    return impl.dimensions();
-  }
+    @Override
+    public long dimensions() throws Exception {
+        return impl.dimensions();
+    }
 
-  @Override
-  public List<List<Float>> embed(List<String> texts) throws Exception {
-    return impl.embed(texts);
-  }
+    @Override
+    public List<List<Float>> embed(List<String> texts) throws Exception {
+        return impl.embed(texts);
+    }
+
+
 }

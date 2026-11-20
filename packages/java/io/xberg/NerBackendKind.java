@@ -7,47 +7,50 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** NER backend selector. */
+/**
+ * NER backend selector.
+ */
 @SuppressWarnings("PMD")
 public enum NerBackendKind {
-  /**
-   * {@code xberg-gliner} ONNX inference. Requires {@code ner-onnx} feature. Models download lazily
-   * from {@code xberg-io/gliner-models}.
-   */
-  ONNX("onnx"),
-  /**
-   * liter-llm zero-shot NER via structured-output prompts. Requires {@code ner-llm} feature. Useful
-   * when domain-specific categories outstrip the ONNX taxonomy.
-   */
-  LLM("llm");
+    /**
+     * {@code xberg-gliner} ONNX inference. Requires {@code ner-onnx} feature. Models
+     * download lazily from {@code xberg-io/gliner-models}.
+     */
+    ONNX("onnx"),
+    /**
+     * liter-llm zero-shot NER via structured-output prompts. Requires {@code ner-llm}
+     * feature. Useful when domain-specific categories outstrip the ONNX taxonomy.
+     */
+    LLM("llm");
 
-  /** The string value. */
-  private final String value;
 
-  NerBackendKind(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static NerBackendKind fromValue(final String value) {
-    for (NerBackendKind e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    NerBackendKind(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown NerBackendKind value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static NerBackendKind fromValue(final String value) {
+        for (NerBackendKind e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown NerBackendKind value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

@@ -2,10 +2,11 @@
 // alef:hash:0bf67f3c380e97978d60ba667afd7fad8969fa34075ac3f91d4d6821e42de5cc
 package io.xberg;
 
-/** Errors produced while resolving a preset against caller overrides. */
+/**
+ * Errors produced while resolving a preset against caller overrides.
+ */
 public class ResolveErrorException extends XbergRsException implements IResolveError {
   private static final long serialVersionUID = 1L;
-
   /** Creates a new ResolveErrorException with the given message. */
   public ResolveErrorException(final String message) {
     super(message);

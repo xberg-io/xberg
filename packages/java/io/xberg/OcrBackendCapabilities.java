@@ -4,16 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 
 /**
  * A registered OCR backend's declared name and language capabilities.
  *
- * <p>Returned by list_ocr_backend_capabilities. See that function's documentation for the
+ * Returned by list_ocr_backend_capabilities. See that function's documentation for the
  * determinism guarantees and the important caveat about what an empty {@code supported_languages}
  * means.
  */
@@ -21,41 +21,44 @@ import java.util.List;
 @JsonDeserialize(builder = OcrBackendCapabilities.Builder.class)
 public record OcrBackendCapabilities(
     @JsonProperty("name") String name,
-    @JsonProperty("supported_languages") List<String> supportedLanguages) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OcrBackendCapabilities deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String name;
-
-    @JsonProperty("supported_languages")
-    private List<String> supportedLanguages = List.of();
-
-    /** Sets the name field. */
-    @JsonProperty("name")
-    public Builder withName(final String value) {
-      this.name = value;
-      return this;
+    @JsonProperty("supported_languages") List<String> supportedLanguages
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the supportedLanguages field. */
-    @JsonProperty("supported_languages")
-    public Builder withSupportedLanguages(final List<String> value) {
-      this.supportedLanguages = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for OcrBackendCapabilities deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a OcrBackendCapabilities instance from the builder's current state. */
-    public OcrBackendCapabilities build() {
-      return new OcrBackendCapabilities(name, supportedLanguages);
+        private String name;
+        @JsonProperty("supported_languages")
+        private List<String> supportedLanguages = List.of();
+
+        /** Sets the name field. */
+        @JsonProperty("name")
+        public Builder withName(final String value) {
+            this.name = value;
+            return this;
+        }
+
+        /** Sets the supportedLanguages field. */
+        @JsonProperty("supported_languages")
+        public Builder withSupportedLanguages(final List<String> value) {
+            this.supportedLanguages = value;
+            return this;
+        }
+
+        /** Constructs a OcrBackendCapabilities instance from the builder's current state. */
+        public OcrBackendCapabilities build() {
+            return new OcrBackendCapabilities(
+                name,
+                supportedLanguages
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

@@ -181,8 +181,15 @@ mod engine_cache;
 // `layout-detection` renders PDF pages itself and needs `image::dpi` to honour a configured
 // render DPI (#1577); it does not imply `ocr-pipeline`, so the module gate has to cover both or
 // `pdf + layout-detection` fails to compile. The submodules that genuinely need the OCR
-// dependency set stay gated inside `image/mod.rs`. ~keep
-#[cfg(any(feature = "ocr-pipeline", feature = "layout-detection"))]
+// dependency set stay gated inside `image/mod.rs`, and the model preprocessors cover the
+// layout/orientation features. ~keep
+#[cfg(any(
+    feature = "ocr-pipeline",
+    feature = "layout-detection",
+    feature = "layout-tract",
+    feature = "auto-rotate",
+    feature = "auto-rotate-tract"
+))]
 /// Image preprocessing and DPI utilities for OCR and layout pipelines.
 pub mod image;
 

@@ -10,49 +10,52 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which layout detection model runs on each page.
  *
- * <p>Wire format is snake_case in all serializers (JSON, TOML, YAML).
+ * Wire format is snake_case in all serializers (JSON, TOML, YAML).
  */
 @SuppressWarnings("PMD")
 public enum LayoutDetectionModel {
-  /** RT-DETR v2 -- default, 17 classes. Runs on the ORT and pure-Rust tract engines. */
-  RT_DETR("rt_detr"),
-  /**
-   * PP-DocLayout-V3 -- experimental, 25 classes mapped to the canonical labels (~131MB download).
-   *
-   * <p>Requires the ORT-backed {@code layout-detection} feature: selecting it on a tract-only or
-   * WASM build is an error, never a silent fallback to RT-DETR. Only the bounding boxes and classes
-   * are used; the model's masks and reading-order output are ignored. Quality relative to RT-DETR
-   * has not been qualified.
-   */
-  PP_DOC_LAYOUT_V3("pp_doc_layout_v3");
+    /**
+     * RT-DETR v2 -- default, 17 classes. Runs on the ORT and pure-Rust tract engines.
+     */
+    RT_DETR("rt_detr"),
+    /**
+     * PP-DocLayout-V3 -- experimental, 25 classes mapped to the canonical labels (~131MB download).
+     *
+     * Requires the ORT-backed {@code layout-detection} feature: selecting it on a tract-only
+     * or WASM build is an error, never a silent fallback to RT-DETR. Only the
+     * bounding boxes and classes are used; the model's masks and reading-order
+     * output are ignored. Quality relative to RT-DETR has not been qualified.
+     */
+    PP_DOC_LAYOUT_V3("pp_doc_layout_v3");
 
-  /** The string value. */
-  private final String value;
 
-  LayoutDetectionModel(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static LayoutDetectionModel fromValue(final String value) {
-    for (LayoutDetectionModel e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    LayoutDetectionModel(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown LayoutDetectionModel value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static LayoutDetectionModel fromValue(final String value) {
+        for (LayoutDetectionModel e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown LayoutDetectionModel value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

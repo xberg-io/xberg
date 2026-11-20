@@ -4,19 +4,19 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * PDF-specific metadata.
  *
- * <p>Contains metadata fields specific to PDF documents that are not in the common {@code Metadata}
- * structure. Common fields like title, authors, keywords, and dates are at the {@code Metadata}
- * level.
+ * Contains metadata fields specific to PDF documents that are not in the common
+ * {@code Metadata} structure. Common fields like title, authors, keywords, and dates
+ * are at the {@code Metadata} level.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PdfMetadata.Builder.class)
@@ -32,184 +32,167 @@ public record PdfMetadata(
     @Nullable @JsonProperty("fabricated_text_pages") List<Integer> fabricatedTextPages,
     @Nullable @JsonProperty("implausible_text_pages") List<Integer> implausibleTextPages,
     @Nullable @JsonProperty("layout_gated_pages") List<Integer> layoutGatedPages,
-    @Nullable @JsonProperty("layout_gate_reasons") List<String> layoutGateReasons) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for PdfMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("pdf_version")
-    @Nullable
-    private String pdfVersion;
-
-    @Nullable private String producer;
-
-    @JsonProperty("is_encrypted")
-    @Nullable
-    private Boolean isEncrypted;
-
-    @Nullable private Long width;
-    @Nullable private Long height;
-
-    @JsonProperty("page_count")
-    @Nullable
-    private Integer pageCount;
-
-    @JsonProperty("scanned_confidence")
-    @Nullable
-    private Float scannedConfidence;
-
-    @JsonProperty("scanned_pages")
-    @Nullable
-    private List<Integer> scannedPages;
-
-    @JsonProperty("fabricated_text_pages")
-    @Nullable
-    private List<Integer> fabricatedTextPages;
-
-    @JsonProperty("implausible_text_pages")
-    @Nullable
-    private List<Integer> implausibleTextPages;
-
-    @JsonProperty("layout_gated_pages")
-    @Nullable
-    private List<Integer> layoutGatedPages;
-
-    @JsonProperty("layout_gate_reasons")
-    @Nullable
-    private List<String> layoutGateReasons;
-
-    /** Sets the pdfVersion field. */
-    @JsonProperty("pdf_version")
-    public Builder withPdfVersion(final @Nullable String value) {
-      this.pdfVersion = value;
-      return this;
+    @Nullable @JsonProperty("layout_gate_reasons") List<String> layoutGateReasons
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the producer field. */
-    @JsonProperty("producer")
-    public Builder withProducer(final @Nullable String value) {
-      this.producer = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for PdfMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the isEncrypted field. */
-    @JsonProperty("is_encrypted")
-    public Builder withIsEncrypted(final @Nullable Boolean value) {
-      this.isEncrypted = value;
-      return this;
-    }
+        @JsonProperty("pdf_version")
+        @Nullable private String pdfVersion;
+        @Nullable private String producer;
+        @JsonProperty("is_encrypted")
+        @Nullable private Boolean isEncrypted;
+        @Nullable private Long width;
+        @Nullable private Long height;
+        @JsonProperty("page_count")
+        @Nullable private Integer pageCount;
+        @JsonProperty("scanned_confidence")
+        @Nullable private Float scannedConfidence;
+        @JsonProperty("scanned_pages")
+        @Nullable private List<Integer> scannedPages;
+        @JsonProperty("fabricated_text_pages")
+        @Nullable private List<Integer> fabricatedTextPages;
+        @JsonProperty("implausible_text_pages")
+        @Nullable private List<Integer> implausibleTextPages;
+        @JsonProperty("layout_gated_pages")
+        @Nullable private List<Integer> layoutGatedPages;
+        @JsonProperty("layout_gate_reasons")
+        @Nullable private List<String> layoutGateReasons;
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withIsEncrypted(final boolean value) {
-      return withIsEncrypted(Boolean.valueOf(value));
-    }
+        /** Sets the pdfVersion field. */
+        @JsonProperty("pdf_version")
+        public Builder withPdfVersion(final @Nullable String value) {
+            this.pdfVersion = value;
+            return this;
+        }
 
-    /** Sets the width field. */
-    @JsonProperty("width")
-    public Builder withWidth(final @Nullable Long value) {
-      this.width = value;
-      return this;
-    }
+        /** Sets the producer field. */
+        @JsonProperty("producer")
+        public Builder withProducer(final @Nullable String value) {
+            this.producer = value;
+            return this;
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withWidth(final long value) {
-      return withWidth(Long.valueOf(value));
-    }
+        /** Sets the isEncrypted field. */
+        @JsonProperty("is_encrypted")
+        public Builder withIsEncrypted(final @Nullable Boolean value) {
+            this.isEncrypted = value;
+            return this;
+        }
 
-    /** Sets the height field. */
-    @JsonProperty("height")
-    public Builder withHeight(final @Nullable Long value) {
-      this.height = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withIsEncrypted(final boolean value) {
+            return withIsEncrypted(Boolean.valueOf(value));
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withHeight(final long value) {
-      return withHeight(Long.valueOf(value));
-    }
+        /** Sets the width field. */
+        @JsonProperty("width")
+        public Builder withWidth(final @Nullable Long value) {
+            this.width = value;
+            return this;
+        }
 
-    /** Sets the pageCount field. */
-    @JsonProperty("page_count")
-    public Builder withPageCount(final @Nullable Integer value) {
-      this.pageCount = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withWidth(final long value) {
+            return withWidth(Long.valueOf(value));
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withPageCount(final int value) {
-      return withPageCount(Integer.valueOf(value));
-    }
+        /** Sets the height field. */
+        @JsonProperty("height")
+        public Builder withHeight(final @Nullable Long value) {
+            this.height = value;
+            return this;
+        }
 
-    /** Sets the scannedConfidence field. */
-    @JsonProperty("scanned_confidence")
-    public Builder withScannedConfidence(final @Nullable Float value) {
-      this.scannedConfidence = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withHeight(final long value) {
+            return withHeight(Long.valueOf(value));
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withScannedConfidence(final float value) {
-      return withScannedConfidence(Float.valueOf(value));
-    }
+        /** Sets the pageCount field. */
+        @JsonProperty("page_count")
+        public Builder withPageCount(final @Nullable Integer value) {
+            this.pageCount = value;
+            return this;
+        }
 
-    /** Sets the scannedPages field. */
-    @JsonProperty("scanned_pages")
-    public Builder withScannedPages(final @Nullable List<Integer> value) {
-      this.scannedPages = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withPageCount(final int value) {
+            return withPageCount(Integer.valueOf(value));
+        }
 
-    /** Sets the fabricatedTextPages field. */
-    @JsonProperty("fabricated_text_pages")
-    public Builder withFabricatedTextPages(final @Nullable List<Integer> value) {
-      this.fabricatedTextPages = value;
-      return this;
-    }
+        /** Sets the scannedConfidence field. */
+        @JsonProperty("scanned_confidence")
+        public Builder withScannedConfidence(final @Nullable Float value) {
+            this.scannedConfidence = value;
+            return this;
+        }
 
-    /** Sets the implausibleTextPages field. */
-    @JsonProperty("implausible_text_pages")
-    public Builder withImplausibleTextPages(final @Nullable List<Integer> value) {
-      this.implausibleTextPages = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withScannedConfidence(final float value) {
+            return withScannedConfidence(Float.valueOf(value));
+        }
 
-    /** Sets the layoutGatedPages field. */
-    @JsonProperty("layout_gated_pages")
-    public Builder withLayoutGatedPages(final @Nullable List<Integer> value) {
-      this.layoutGatedPages = value;
-      return this;
-    }
+        /** Sets the scannedPages field. */
+        @JsonProperty("scanned_pages")
+        public Builder withScannedPages(final @Nullable List<Integer> value) {
+            this.scannedPages = value;
+            return this;
+        }
 
-    /** Sets the layoutGateReasons field. */
-    @JsonProperty("layout_gate_reasons")
-    public Builder withLayoutGateReasons(final @Nullable List<String> value) {
-      this.layoutGateReasons = value;
-      return this;
-    }
+        /** Sets the fabricatedTextPages field. */
+        @JsonProperty("fabricated_text_pages")
+        public Builder withFabricatedTextPages(final @Nullable List<Integer> value) {
+            this.fabricatedTextPages = value;
+            return this;
+        }
 
-    /** Constructs a PdfMetadata instance from the builder's current state. */
-    public PdfMetadata build() {
-      return new PdfMetadata(
-          pdfVersion,
-          producer,
-          isEncrypted,
-          width,
-          height,
-          pageCount,
-          scannedConfidence,
-          scannedPages,
-          fabricatedTextPages,
-          implausibleTextPages,
-          layoutGatedPages,
-          layoutGateReasons);
+        /** Sets the implausibleTextPages field. */
+        @JsonProperty("implausible_text_pages")
+        public Builder withImplausibleTextPages(final @Nullable List<Integer> value) {
+            this.implausibleTextPages = value;
+            return this;
+        }
+
+        /** Sets the layoutGatedPages field. */
+        @JsonProperty("layout_gated_pages")
+        public Builder withLayoutGatedPages(final @Nullable List<Integer> value) {
+            this.layoutGatedPages = value;
+            return this;
+        }
+
+        /** Sets the layoutGateReasons field. */
+        @JsonProperty("layout_gate_reasons")
+        public Builder withLayoutGateReasons(final @Nullable List<String> value) {
+            this.layoutGateReasons = value;
+            return this;
+        }
+
+        /** Constructs a PdfMetadata instance from the builder's current state. */
+        public PdfMetadata build() {
+            return new PdfMetadata(
+                pdfVersion,
+                producer,
+                isEncrypted,
+                width,
+                height,
+                pageCount,
+                scannedConfidence,
+                scannedPages,
+                fabricatedTextPages,
+                implausibleTextPages,
+                layoutGatedPages,
+                layoutGateReasons
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

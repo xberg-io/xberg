@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,44 +13,49 @@ import org.jspecify.annotations.Nullable;
 /**
  * A single page covered by a chunk, with an optional bounding box on that page.
  *
- * <p>See ChunkMetadata.page_spans (#1295) for population semantics.
+ * See ChunkMetadata.page_spans (#1295) for population semantics.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageSpan.Builder.class)
 public record PageSpan(
-    @JsonProperty("page") int page, @Nullable @JsonProperty("bbox") BoundingBox bbox) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for PageSpan deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private int page;
-    @Nullable private BoundingBox bbox;
-
-    /** Sets the page field. */
-    @JsonProperty("page")
-    public Builder withPage(final int value) {
-      this.page = value;
-      return this;
+    @JsonProperty("page") int page,
+    @Nullable @JsonProperty("bbox") BoundingBox bbox
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the bbox field. */
-    @JsonProperty("bbox")
-    public Builder withBbox(final @Nullable BoundingBox value) {
-      this.bbox = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for PageSpan deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a PageSpan instance from the builder's current state. */
-    public PageSpan build() {
-      return new PageSpan(page, bbox);
+        private int page;
+        @Nullable private BoundingBox bbox;
+
+        /** Sets the page field. */
+        @JsonProperty("page")
+        public Builder withPage(final int value) {
+            this.page = value;
+            return this;
+        }
+
+        /** Sets the bbox field. */
+        @JsonProperty("bbox")
+        public Builder withBbox(final @Nullable BoundingBox value) {
+            this.bbox = value;
+            return this;
+        }
+
+        /** Constructs a PageSpan instance from the builder's current state. */
+        public PageSpan build() {
+            return new PageSpan(
+                page,
+                bbox
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

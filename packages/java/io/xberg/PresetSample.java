@@ -4,51 +4,57 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/** Pointer to a sample input + its reference output bundled with the preset. */
+/**
+ * Pointer to a sample input + its reference output bundled with the preset.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PresetSample.Builder.class)
 public record PresetSample(
-    @JsonProperty("input_path") String inputPath, @JsonProperty("output_path") String outputPath) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for PresetSample deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("input_path")
-    private String inputPath;
-
-    @JsonProperty("output_path")
-    private String outputPath;
-
-    /** Sets the inputPath field. */
-    @JsonProperty("input_path")
-    public Builder withInputPath(final String value) {
-      this.inputPath = value;
-      return this;
+    @JsonProperty("input_path") String inputPath,
+    @JsonProperty("output_path") String outputPath
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the outputPath field. */
-    @JsonProperty("output_path")
-    public Builder withOutputPath(final String value) {
-      this.outputPath = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for PresetSample deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a PresetSample instance from the builder's current state. */
-    public PresetSample build() {
-      return new PresetSample(inputPath, outputPath);
+        @JsonProperty("input_path")
+        private String inputPath;
+        @JsonProperty("output_path")
+        private String outputPath;
+
+        /** Sets the inputPath field. */
+        @JsonProperty("input_path")
+        public Builder withInputPath(final String value) {
+            this.inputPath = value;
+            return this;
+        }
+
+        /** Sets the outputPath field. */
+        @JsonProperty("output_path")
+        public Builder withOutputPath(final String value) {
+            this.outputPath = value;
+            return this;
+        }
+
+        /** Constructs a PresetSample instance from the builder's current state. */
+        public PresetSample build() {
+            return new PresetSample(
+                inputPath,
+                outputPath
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

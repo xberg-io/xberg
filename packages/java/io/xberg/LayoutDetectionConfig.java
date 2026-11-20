@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +13,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * Layout detection configuration.
  *
- * <p>Controls layout detection behavior in the extraction pipeline. When set on
- * ExtractionConfig(super.ExtractionConfig), layout detection is enabled for PDF extraction.
+ * Controls layout detection behavior in the extraction pipeline.
+ * When set on ExtractionConfig(super.ExtractionConfig), layout detection
+ * is enabled for PDF extraction.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LayoutDetectionConfig.Builder.class)
@@ -24,160 +25,135 @@ public record LayoutDetectionConfig(
     @Nullable @JsonProperty("apply_heuristics") Boolean applyHeuristics,
     @Nullable @JsonProperty("table_model") TableModel tableModel,
     @Nullable @JsonProperty("formula_model") FormulaModel formulaModel,
-    @Nullable @JsonProperty("table_overlap_preference")
-        TableOverlapPreference tableOverlapPreference,
+    @Nullable @JsonProperty("table_overlap_preference") TableOverlapPreference tableOverlapPreference,
     @Nullable @JsonProperty("acceleration") AccelerationConfig acceleration,
     @Nullable @JsonProperty("enable_chart_understanding") Boolean enableChartUnderstanding,
-    @Nullable @JsonProperty("model") LayoutDetectionModel model) {
-  public LayoutDetectionConfig(
-      LayoutStrategy strategy,
-      Float confidenceThreshold,
-      Boolean applyHeuristics,
-      TableModel tableModel,
-      FormulaModel formulaModel,
-      TableOverlapPreference tableOverlapPreference,
-      AccelerationConfig acceleration,
-      Boolean enableChartUnderstanding) {
-    this(
-        strategy,
-        confidenceThreshold,
-        applyHeuristics,
-        tableModel,
-        formulaModel,
-        tableOverlapPreference,
-        acceleration,
-        enableChartUnderstanding,
-        LayoutDetectionModel.RT_DETR);
-  }
-
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public LayoutDetectionConfig {
-    if (applyHeuristics == null) {
-      applyHeuristics = true;
+    @Nullable @JsonProperty("model") LayoutDetectionModel model
+) {
+    public LayoutDetectionConfig(
+        LayoutStrategy strategy,
+        Float confidenceThreshold,
+        Boolean applyHeuristics,
+        TableModel tableModel,
+        FormulaModel formulaModel,
+        TableOverlapPreference tableOverlapPreference,
+        AccelerationConfig acceleration,
+        Boolean enableChartUnderstanding
+    ) {
+        this(strategy, confidenceThreshold, applyHeuristics, tableModel, formulaModel, tableOverlapPreference, acceleration, enableChartUnderstanding, LayoutDetectionModel.RT_DETR);
     }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for LayoutDetectionConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private LayoutStrategy strategy = LayoutStrategy.ALWAYS;
-
-    @JsonProperty("confidence_threshold")
-    @Nullable
-    private Float confidenceThreshold;
-
-    @JsonProperty("apply_heuristics")
-    @Nullable
-    private Boolean applyHeuristics;
-
-    @JsonProperty("table_model")
-    @Nullable
-    private TableModel tableModel = TableModel.TATR;
-
-    @JsonProperty("formula_model")
-    @Nullable
-    private FormulaModel formulaModel;
-
-    @JsonProperty("table_overlap_preference")
-    @Nullable
-    private TableOverlapPreference tableOverlapPreference = TableOverlapPreference.CONTENT;
-
-    @Nullable private AccelerationConfig acceleration;
-
-    @JsonProperty("enable_chart_understanding")
-    @Nullable
-    private Boolean enableChartUnderstanding;
-
-    @Nullable private LayoutDetectionModel model = LayoutDetectionModel.RT_DETR;
-
-    /** Sets the strategy field. */
-    @JsonProperty("strategy")
-    public Builder withStrategy(final @Nullable LayoutStrategy value) {
-      this.strategy = value;
-      return this;
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
+    }
+    public LayoutDetectionConfig{
+        if (applyHeuristics == null) { applyHeuristics = true; }
     }
 
-    /** Sets the confidenceThreshold field. */
-    @JsonProperty("confidence_threshold")
-    public Builder withConfidenceThreshold(final @Nullable Float value) {
-      this.confidenceThreshold = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for LayoutDetectionConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withConfidenceThreshold(final float value) {
-      return withConfidenceThreshold(Float.valueOf(value));
-    }
+        @Nullable private LayoutStrategy strategy = LayoutStrategy.ALWAYS;
+        @JsonProperty("confidence_threshold")
+        @Nullable private Float confidenceThreshold;
+        @JsonProperty("apply_heuristics")
+        @Nullable private Boolean applyHeuristics;
+        @JsonProperty("table_model")
+        @Nullable private TableModel tableModel = TableModel.TATR;
+        @JsonProperty("formula_model")
+        @Nullable private FormulaModel formulaModel;
+        @JsonProperty("table_overlap_preference")
+        @Nullable private TableOverlapPreference tableOverlapPreference = TableOverlapPreference.CONTENT;
+        @Nullable private AccelerationConfig acceleration;
+        @JsonProperty("enable_chart_understanding")
+        @Nullable private Boolean enableChartUnderstanding;
+        @Nullable private LayoutDetectionModel model = LayoutDetectionModel.RT_DETR;
 
-    /** Sets the applyHeuristics field. */
-    @JsonProperty("apply_heuristics")
-    public Builder withApplyHeuristics(final @Nullable Boolean value) {
-      this.applyHeuristics = value;
-      return this;
-    }
+        /** Sets the strategy field. */
+        @JsonProperty("strategy")
+        public Builder withStrategy(final @Nullable LayoutStrategy value) {
+            this.strategy = value;
+            return this;
+        }
 
-    /** Sets the tableModel field. */
-    @JsonProperty("table_model")
-    public Builder withTableModel(final @Nullable TableModel value) {
-      this.tableModel = value;
-      return this;
-    }
+        /** Sets the confidenceThreshold field. */
+        @JsonProperty("confidence_threshold")
+        public Builder withConfidenceThreshold(final @Nullable Float value) {
+            this.confidenceThreshold = value;
+            return this;
+        }
 
-    /** Sets the formulaModel field. */
-    @JsonProperty("formula_model")
-    public Builder withFormulaModel(final @Nullable FormulaModel value) {
-      this.formulaModel = value;
-      return this;
-    }
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withConfidenceThreshold(final float value) {
+            return withConfidenceThreshold(Float.valueOf(value));
+        }
 
-    /** Sets the tableOverlapPreference field. */
-    @JsonProperty("table_overlap_preference")
-    public Builder withTableOverlapPreference(final @Nullable TableOverlapPreference value) {
-      this.tableOverlapPreference = value;
-      return this;
-    }
+        /** Sets the applyHeuristics field. */
+        @JsonProperty("apply_heuristics")
+        public Builder withApplyHeuristics(final @Nullable Boolean value) {
+            this.applyHeuristics = value;
+            return this;
+        }
 
-    /** Sets the acceleration field. */
-    @JsonProperty("acceleration")
-    public Builder withAcceleration(final @Nullable AccelerationConfig value) {
-      this.acceleration = value;
-      return this;
-    }
+        /** Sets the tableModel field. */
+        @JsonProperty("table_model")
+        public Builder withTableModel(final @Nullable TableModel value) {
+            this.tableModel = value;
+            return this;
+        }
 
-    /** Sets the enableChartUnderstanding field. */
-    @JsonProperty("enable_chart_understanding")
-    public Builder withEnableChartUnderstanding(final @Nullable Boolean value) {
-      this.enableChartUnderstanding = value;
-      return this;
-    }
+        /** Sets the formulaModel field. */
+        @JsonProperty("formula_model")
+        public Builder withFormulaModel(final @Nullable FormulaModel value) {
+            this.formulaModel = value;
+            return this;
+        }
 
-    /** Sets the model field. */
-    @JsonProperty("model")
-    public Builder withModel(final @Nullable LayoutDetectionModel value) {
-      this.model = value;
-      return this;
-    }
+        /** Sets the tableOverlapPreference field. */
+        @JsonProperty("table_overlap_preference")
+        public Builder withTableOverlapPreference(final @Nullable TableOverlapPreference value) {
+            this.tableOverlapPreference = value;
+            return this;
+        }
 
-    /** Constructs a LayoutDetectionConfig instance from the builder's current state. */
-    public LayoutDetectionConfig build() {
-      return new LayoutDetectionConfig(
-          strategy,
-          confidenceThreshold,
-          applyHeuristics,
-          tableModel,
-          formulaModel,
-          tableOverlapPreference,
-          acceleration,
-          enableChartUnderstanding,
-          model);
+        /** Sets the acceleration field. */
+        @JsonProperty("acceleration")
+        public Builder withAcceleration(final @Nullable AccelerationConfig value) {
+            this.acceleration = value;
+            return this;
+        }
+
+        /** Sets the enableChartUnderstanding field. */
+        @JsonProperty("enable_chart_understanding")
+        public Builder withEnableChartUnderstanding(final @Nullable Boolean value) {
+            this.enableChartUnderstanding = value;
+            return this;
+        }
+
+        /** Sets the model field. */
+        @JsonProperty("model")
+        public Builder withModel(final @Nullable LayoutDetectionModel value) {
+            this.model = value;
+            return this;
+        }
+
+        /** Constructs a LayoutDetectionConfig instance from the builder's current state. */
+        public LayoutDetectionConfig build() {
+            return new LayoutDetectionConfig(
+                strategy,
+                confidenceThreshold,
+                applyHeuristics,
+                tableModel,
+                formulaModel,
+                tableOverlapPreference,
+                acceleration,
+                enableChartUnderstanding,
+                model
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

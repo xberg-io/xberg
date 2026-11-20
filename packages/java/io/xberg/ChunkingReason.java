@@ -8,35 +8,52 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-/** Reason for chunking a document. */
+/**
+ * Reason for chunking a document.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = ChunkingReason.LargeFile.class, name = "LargeFile"),
-  @JsonSubTypes.Type(value = ChunkingReason.ManyPages.class, name = "ManyPages"),
-  @JsonSubTypes.Type(value = ChunkingReason.OcrRequired.class, name = "OcrRequired"),
-  @JsonSubTypes.Type(value = ChunkingReason.LargeAndManyPages.class, name = "LargeAndManyPages")
+    @JsonSubTypes.Type(value = ChunkingReason.LargeFile.class, name = "LargeFile"),
+    @JsonSubTypes.Type(value = ChunkingReason.ManyPages.class, name = "ManyPages"),
+    @JsonSubTypes.Type(value = ChunkingReason.OcrRequired.class, name = "OcrRequired"),
+    @JsonSubTypes.Type(value = ChunkingReason.LargeAndManyPages.class, name = "LargeAndManyPages")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface ChunkingReason {
 
-  /** File exceeds size threshold. */
-  record LargeFile(
-      @JsonProperty("size_bytes") long sizeBytes,
-      @JsonProperty("threshold_bytes") long thresholdBytes)
-      implements ChunkingReason {}
+    /**
+     * File exceeds size threshold.
+     */
+    record LargeFile(
+        @JsonProperty("size_bytes") long sizeBytes,
+        @JsonProperty("threshold_bytes") long thresholdBytes
+    ) implements ChunkingReason {
+    }
 
-  /** Document has many pages. */
-  record ManyPages(
-      @JsonProperty("page_count") int pageCount, @JsonProperty("threshold") int threshold)
-      implements ChunkingReason {}
+    /**
+     * Document has many pages.
+     */
+    record ManyPages(
+        @JsonProperty("page_count") int pageCount,
+        @JsonProperty("threshold") int threshold
+    ) implements ChunkingReason {
+    }
 
-  /** PDF requires OCR and is large. */
-  record OcrRequired(
-      @JsonProperty("page_count") int pageCount, @JsonProperty("force_ocr") boolean forceOcr)
-      implements ChunkingReason {}
+    /**
+     * PDF requires OCR and is large.
+     */
+    record OcrRequired(
+        @JsonProperty("page_count") int pageCount,
+        @JsonProperty("force_ocr") boolean forceOcr
+    ) implements ChunkingReason {
+    }
 
-  /** Both size and page count exceed thresholds. */
-  record LargeAndManyPages(
-      @JsonProperty("size_bytes") long sizeBytes, @JsonProperty("page_count") int pageCount)
-      implements ChunkingReason {}
+    /**
+     * Both size and page count exceed thresholds.
+     */
+    record LargeAndManyPages(
+        @JsonProperty("size_bytes") long sizeBytes,
+        @JsonProperty("page_count") int pageCount
+    ) implements ChunkingReason {
+    }
 }

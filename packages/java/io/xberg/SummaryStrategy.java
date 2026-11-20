@@ -7,48 +7,51 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Summarisation strategy. */
+/**
+ * Summarisation strategy.
+ */
 @SuppressWarnings("PMD")
 public enum SummaryStrategy {
-  /**
-   * Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external
-   * service required.
-   */
-  EXTRACTIVE("extractive"),
-  /**
-   * Abstractive summary produced by liter-llm. Requires {@code liter-llm} feature and a configured
-   * {@code LlmConfig}. Token usage is captured in
-   * ExtractedDocument.llm_usage(super.extraction.ExtractedDocument.llm_usage).
-   */
-  ABSTRACTIVE("abstractive");
+    /**
+     * Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic,
+     * fast, no external service required.
+     */
+    EXTRACTIVE("extractive"),
+    /**
+     * Abstractive summary produced by liter-llm. Requires {@code liter-llm} feature and
+     * a configured {@code LlmConfig}. Token usage is captured in
+     * ExtractedDocument.llm_usage(super.extraction.ExtractedDocument.llm_usage).
+     */
+    ABSTRACTIVE("abstractive");
 
-  /** The string value. */
-  private final String value;
 
-  SummaryStrategy(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static SummaryStrategy fromValue(final String value) {
-    for (SummaryStrategy e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    SummaryStrategy(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown SummaryStrategy value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static SummaryStrategy fromValue(final String value) {
+        for (SummaryStrategy e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown SummaryStrategy value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

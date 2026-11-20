@@ -7,59 +7,84 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Page Segmentation Mode for Tesseract OCR. */
+/**
+ * Page Segmentation Mode for Tesseract OCR.
+ */
 @SuppressWarnings("PMD")
 public enum PSMMode {
-  /** Orientation and script detection only. */
-  OSD_ONLY("OsdOnly"),
-  /** Automatic page segmentation with OSD. */
-  AUTO_OSD("AutoOsd"),
-  /** Automatic page segmentation without OSD or OCR. */
-  AUTO_ONLY("AutoOnly"),
-  /** Fully automatic page segmentation with no OSD (default). */
-  AUTO("Auto"),
-  /** Assume a single column of text of variable sizes. */
-  SINGLE_COLUMN("SingleColumn"),
-  /** Assume a single uniform block of vertically aligned text. */
-  SINGLE_BLOCK_VERTICAL("SingleBlockVertical"),
-  /** Assume a single uniform block of text. */
-  SINGLE_BLOCK("SingleBlock"),
-  /** Treat the image as a single text line. */
-  SINGLE_LINE("SingleLine"),
-  /** Treat the image as a single word. */
-  SINGLE_WORD("SingleWord"),
-  /** Treat the image as a single word in a circle. */
-  CIRCLE_WORD("CircleWord"),
-  /** Treat the image as a single character. */
-  SINGLE_CHAR("SingleChar");
+    /**
+     * Orientation and script detection only.
+     */
+    OSD_ONLY("OsdOnly"),
+    /**
+     * Automatic page segmentation with OSD.
+     */
+    AUTO_OSD("AutoOsd"),
+    /**
+     * Automatic page segmentation without OSD or OCR.
+     */
+    AUTO_ONLY("AutoOnly"),
+    /**
+     * Fully automatic page segmentation with no OSD (default).
+     */
+    AUTO("Auto"),
+    /**
+     * Assume a single column of text of variable sizes.
+     */
+    SINGLE_COLUMN("SingleColumn"),
+    /**
+     * Assume a single uniform block of vertically aligned text.
+     */
+    SINGLE_BLOCK_VERTICAL("SingleBlockVertical"),
+    /**
+     * Assume a single uniform block of text.
+     */
+    SINGLE_BLOCK("SingleBlock"),
+    /**
+     * Treat the image as a single text line.
+     */
+    SINGLE_LINE("SingleLine"),
+    /**
+     * Treat the image as a single word.
+     */
+    SINGLE_WORD("SingleWord"),
+    /**
+     * Treat the image as a single word in a circle.
+     */
+    CIRCLE_WORD("CircleWord"),
+    /**
+     * Treat the image as a single character.
+     */
+    SINGLE_CHAR("SingleChar");
 
-  /** The string value. */
-  private final String value;
 
-  PSMMode(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static PSMMode fromValue(final String value) {
-    for (PSMMode e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    PSMMode(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown PSMMode value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static PSMMode fromValue(final String value) {
+        for (PSMMode e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown PSMMode value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

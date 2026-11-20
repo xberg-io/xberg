@@ -4,48 +4,55 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/** Horizontal and vertical image resolution in dots per inch. */
+/**
+ * Horizontal and vertical image resolution in dots per inch.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageDpi.Builder.class)
 public record ImageDpi(
-    @JsonProperty("horizontal") double horizontal, @JsonProperty("vertical") double vertical) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ImageDpi deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private double horizontal;
-    private double vertical;
-
-    /** Sets the horizontal field. */
-    @JsonProperty("horizontal")
-    public Builder withHorizontal(final double value) {
-      this.horizontal = value;
-      return this;
+    @JsonProperty("horizontal") double horizontal,
+    @JsonProperty("vertical") double vertical
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the vertical field. */
-    @JsonProperty("vertical")
-    public Builder withVertical(final double value) {
-      this.vertical = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ImageDpi deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a ImageDpi instance from the builder's current state. */
-    public ImageDpi build() {
-      return new ImageDpi(horizontal, vertical);
+        private double horizontal;
+        private double vertical;
+
+        /** Sets the horizontal field. */
+        @JsonProperty("horizontal")
+        public Builder withHorizontal(final double value) {
+            this.horizontal = value;
+            return this;
+        }
+
+        /** Sets the vertical field. */
+        @JsonProperty("vertical")
+        public Builder withVertical(final double value) {
+            this.vertical = value;
+            return this;
+        }
+
+        /** Constructs a ImageDpi instance from the builder's current state. */
+        public ImageDpi build() {
+            return new ImageDpi(
+                horizontal,
+                vertical
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

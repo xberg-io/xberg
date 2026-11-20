@@ -4,49 +4,55 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/** Attributes associated with a named Djot element. */
+/**
+ * Attributes associated with a named Djot element.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DjotAttributeGroup.Builder.class)
 public record DjotAttributeGroup(
     @JsonProperty("identifier") String identifier,
-    @JsonProperty("attributes") Attributes attributes) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for DjotAttributeGroup deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String identifier;
-    private Attributes attributes;
-
-    /** Sets the identifier field. */
-    @JsonProperty("identifier")
-    public Builder withIdentifier(final String value) {
-      this.identifier = value;
-      return this;
+    @JsonProperty("attributes") Attributes attributes
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the attributes field. */
-    @JsonProperty("attributes")
-    public Builder withAttributes(final Attributes value) {
-      this.attributes = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for DjotAttributeGroup deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a DjotAttributeGroup instance from the builder's current state. */
-    public DjotAttributeGroup build() {
-      return new DjotAttributeGroup(identifier, attributes);
+        private String identifier;
+        private Attributes attributes;
+
+        /** Sets the identifier field. */
+        @JsonProperty("identifier")
+        public Builder withIdentifier(final String value) {
+            this.identifier = value;
+            return this;
+        }
+
+        /** Sets the attributes field. */
+        @JsonProperty("attributes")
+        public Builder withAttributes(final Attributes value) {
+            this.attributes = value;
+            return this;
+        }
+
+        /** Constructs a DjotAttributeGroup instance from the builder's current state. */
+        public DjotAttributeGroup build() {
+            return new DjotAttributeGroup(
+                identifier,
+                attributes
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

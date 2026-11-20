@@ -7,51 +7,58 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Outcome of a single doctor check. */
+/**
+ * Outcome of a single doctor check.
+ */
 @SuppressWarnings("PMD")
 public enum ProbeStatus {
-  /** The backend or setting will work as configured. */
-  PASS("pass"),
-  /**
-   * The check ran and found something actionable, but nothing is broken (e.g. stray cache files,
-   * stale model revisions). Never fails the report.
-   */
-  WARN("warn"),
-  /** The configured setup will not work (or will silently degrade) on this host. */
-  FAIL("fail"),
-  /**
-   * The check cannot run locally (e.g. model not cached, feature not compiled in); first real use
-   * decides, possibly after a download.
-   */
-  SKIP("skip");
+    /**
+     * The backend or setting will work as configured.
+     */
+    PASS("pass"),
+    /**
+     * The check ran and found something actionable, but nothing is broken
+     * (e.g. stray cache files, stale model revisions). Never fails the report.
+     */
+    WARN("warn"),
+    /**
+     * The configured setup will not work (or will silently degrade) on this host.
+     */
+    FAIL("fail"),
+    /**
+     * The check cannot run locally (e.g. model not cached, feature not compiled in);
+     * first real use decides, possibly after a download.
+     */
+    SKIP("skip");
 
-  /** The string value. */
-  private final String value;
 
-  ProbeStatus(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ProbeStatus fromValue(final String value) {
-    for (ProbeStatus e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ProbeStatus(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ProbeStatus value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ProbeStatus fromValue(final String value) {
+        for (ProbeStatus e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ProbeStatus value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

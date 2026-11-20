@@ -4,17 +4,17 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A single changed cell within a table.
  *
- * <p>Defined here (rather than only in {@code crate.diff}) so {@code RevisionDelta} can reference
- * it unconditionally, without requiring the {@code diff} Cargo feature. {@code crate.diff}
- * re-exports this type verbatim.
+ * Defined here (rather than only in {@code crate.diff}) so {@code RevisionDelta} can
+ * reference it unconditionally, without requiring the {@code diff} Cargo feature.
+ * {@code crate.diff} re-exports this type verbatim.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CellChange.Builder.class)
@@ -22,55 +22,61 @@ public record CellChange(
     @JsonProperty("row") long row,
     @JsonProperty("col") long col,
     @JsonProperty("from") String from,
-    @JsonProperty("to") String to) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for CellChange deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private long row;
-    private long col;
-    private String from;
-    private String to;
-
-    /** Sets the row field. */
-    @JsonProperty("row")
-    public Builder withRow(final long value) {
-      this.row = value;
-      return this;
+    @JsonProperty("to") String to
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the col field. */
-    @JsonProperty("col")
-    public Builder withCol(final long value) {
-      this.col = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for CellChange deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the from field. */
-    @JsonProperty("from")
-    public Builder withFrom(final String value) {
-      this.from = value;
-      return this;
-    }
+        private long row;
+        private long col;
+        private String from;
+        private String to;
 
-    /** Sets the to field. */
-    @JsonProperty("to")
-    public Builder withTo(final String value) {
-      this.to = value;
-      return this;
-    }
+        /** Sets the row field. */
+        @JsonProperty("row")
+        public Builder withRow(final long value) {
+            this.row = value;
+            return this;
+        }
 
-    /** Constructs a CellChange instance from the builder's current state. */
-    public CellChange build() {
-      return new CellChange(row, col, from, to);
+        /** Sets the col field. */
+        @JsonProperty("col")
+        public Builder withCol(final long value) {
+            this.col = value;
+            return this;
+        }
+
+        /** Sets the from field. */
+        @JsonProperty("from")
+        public Builder withFrom(final String value) {
+            this.from = value;
+            return this;
+        }
+
+        /** Sets the to field. */
+        @JsonProperty("to")
+        public Builder withTo(final String value) {
+            this.to = value;
+            return this;
+        }
+
+        /** Constructs a CellChange instance from the builder's current state. */
+        public CellChange build() {
+            return new CellChange(
+                row,
+                col,
+                from,
+                to
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

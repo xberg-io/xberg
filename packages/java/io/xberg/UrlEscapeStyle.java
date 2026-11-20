@@ -10,51 +10,56 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * URL encoding strategy for link and image destinations.
  *
- * <p>Controls how special characters in URL destinations are handled when they require escaping to
- * produce valid Markdown.
+ * Controls how special characters in URL destinations are handled when they
+ * require escaping to produce valid Markdown.
  *
- * <p>The {@code Angle} variant (default) wraps the destination in angle brackets: {@code
- * [text](&lt;url with spaces&gt;)}. This is the CommonMark-specified escape hatch but breaks when
- * the URL itself contains {@code &gt;}.
+ * The {@code Angle} variant (default) wraps the destination in angle brackets:
+ * {@code [text](&lt;url with spaces&gt;)}. This is the CommonMark-specified escape hatch
+ * but breaks when the URL itself contains {@code &gt;}.
  *
- * <p>The {@code Percent} variant percent-encodes every character that is not an RFC 3986 unreserved
- * character or {@code /}, producing a destination safe for all Markdown parsers: {@code
- * [text](url%20with%20spaces)}.
+ * The {@code Percent} variant percent-encodes every character that is not an RFC 3986
+ * unreserved character or {@code /}, producing a destination safe for all Markdown
+ * parsers: {@code [text](url%20with%20spaces)}.
  */
 @SuppressWarnings("PMD")
 public enum UrlEscapeStyle {
-  /** Wrap destinations that contain spaces or newlines in angle brackets. Default. */
-  ANGLE("Angle"),
-  /** Percent-encode all characters that are not RFC 3986 unreserved or {@code /}. */
-  PERCENT("Percent");
+    /**
+     * Wrap destinations that contain spaces or newlines in angle brackets. Default.
+     */
+    ANGLE("Angle"),
+    /**
+     * Percent-encode all characters that are not RFC 3986 unreserved or {@code /}.
+     */
+    PERCENT("Percent");
 
-  /** The string value. */
-  private final String value;
 
-  UrlEscapeStyle(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static UrlEscapeStyle fromValue(final String value) {
-    for (UrlEscapeStyle e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    UrlEscapeStyle(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown UrlEscapeStyle value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static UrlEscapeStyle fromValue(final String value) {
+        for (UrlEscapeStyle e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown UrlEscapeStyle value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

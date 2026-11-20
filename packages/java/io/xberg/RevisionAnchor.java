@@ -9,35 +9,51 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.Optional;
 
-/** Best-effort document location for a revision. */
+/**
+ * Best-effort document location for a revision.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = RevisionAnchor.Paragraph.class, name = "paragraph"),
-  @JsonSubTypes.Type(value = RevisionAnchor.TableCell.class, name = "table_cell"),
-  @JsonSubTypes.Type(value = RevisionAnchor.Page.class, name = "page"),
-  @JsonSubTypes.Type(value = RevisionAnchor.Slide.class, name = "slide"),
-  @JsonSubTypes.Type(value = RevisionAnchor.Sheet.class, name = "sheet")
+    @JsonSubTypes.Type(value = RevisionAnchor.Paragraph.class, name = "paragraph"),
+    @JsonSubTypes.Type(value = RevisionAnchor.TableCell.class, name = "table_cell"),
+    @JsonSubTypes.Type(value = RevisionAnchor.Page.class, name = "page"),
+    @JsonSubTypes.Type(value = RevisionAnchor.Slide.class, name = "slide"),
+    @JsonSubTypes.Type(value = RevisionAnchor.Sheet.class, name = "sheet")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface RevisionAnchor {
 
-  /** Body paragraph, identified by its zero-based index in the document flow. */
-  record Paragraph(@JsonProperty("index") long index) implements RevisionAnchor {}
+    /**
+     * Body paragraph, identified by its zero-based index in the document flow.
+     */
+    record Paragraph(@JsonProperty("index") long index) implements RevisionAnchor { }
 
-  /** Cell inside a table. */
-  record TableCell(
-      @JsonProperty("row") long row,
-      @JsonProperty("col") long col,
-      @JsonProperty("table_index") long tableIndex)
-      implements RevisionAnchor {}
+    /**
+     * Cell inside a table.
+     */
+    record TableCell(
+        @JsonProperty("row") long row,
+        @JsonProperty("col") long col,
+        @JsonProperty("table_index") long tableIndex
+    ) implements RevisionAnchor {
+    }
 
-  /** Page, identified by its zero-based index. */
-  record Page(@JsonProperty("index") long index) implements RevisionAnchor {}
+    /**
+     * Page, identified by its zero-based index.
+     */
+    record Page(@JsonProperty("index") long index) implements RevisionAnchor { }
 
-  /** Presentation slide, identified by its zero-based index. */
-  record Slide(@JsonProperty("index") long index) implements RevisionAnchor {}
+    /**
+     * Presentation slide, identified by its zero-based index.
+     */
+    record Slide(@JsonProperty("index") long index) implements RevisionAnchor { }
 
-  /** Spreadsheet cell or range, identified by sheet index and optional name. */
-  record Sheet(@JsonProperty("index") long index, @JsonProperty("name") Optional<String> name)
-      implements RevisionAnchor {}
+    /**
+     * Spreadsheet cell or range, identified by sheet index and optional name.
+     */
+    record Sheet(
+        @JsonProperty("index") long index,
+        @JsonProperty("name") Optional<String> name
+    ) implements RevisionAnchor {
+    }
 }

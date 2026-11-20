@@ -4,50 +4,56 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
-/** dBASE field information. */
+/**
+ * dBASE field information.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DbfFieldInfo.Builder.class)
 public record DbfFieldInfo(
-    @JsonProperty("name") String name, @JsonProperty("field_type") String fieldType) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for DbfFieldInfo deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String name;
-
-    @JsonProperty("field_type")
-    private String fieldType;
-
-    /** Sets the name field. */
-    @JsonProperty("name")
-    public Builder withName(final String value) {
-      this.name = value;
-      return this;
+    @JsonProperty("name") String name,
+    @JsonProperty("field_type") String fieldType
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the fieldType field. */
-    @JsonProperty("field_type")
-    public Builder withFieldType(final String value) {
-      this.fieldType = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for DbfFieldInfo deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a DbfFieldInfo instance from the builder's current state. */
-    public DbfFieldInfo build() {
-      return new DbfFieldInfo(name, fieldType);
+        private String name;
+        @JsonProperty("field_type")
+        private String fieldType;
+
+        /** Sets the name field. */
+        @JsonProperty("name")
+        public Builder withName(final String value) {
+            this.name = value;
+            return this;
+        }
+
+        /** Sets the fieldType field. */
+        @JsonProperty("field_type")
+        public Builder withFieldType(final String value) {
+            this.fieldType = value;
+            return this;
+        }
+
+        /** Constructs a DbfFieldInfo instance from the builder's current state. */
+        public DbfFieldInfo build() {
+            return new DbfFieldInfo(
+                name,
+                fieldType
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

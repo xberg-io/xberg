@@ -4,18 +4,18 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Extracted table structure.
  *
- * <p>Represents a table detected and extracted from a document (PDF, image, etc.). Tables are
- * converted to both structured cell data and Markdown format.
+ * Represents a table detected and extracted from a document (PDF, image, etc.).
+ * Tables are converted to both structured cell data and Markdown format.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = Table.Builder.class)
@@ -26,97 +26,95 @@ public record Table(
     @Nullable @JsonProperty("bounding_box") BoundingBox boundingBox,
     @Nullable @JsonProperty("table_id") String tableId,
     @JsonProperty("cell_styles") List<TableCellStyle> cellStyles,
-    @Nullable @JsonProperty("columns") List<String> columns) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public Table {
-    if (cellStyles == null) {
-      cellStyles = List.of();
+    @Nullable @JsonProperty("columns") List<String> columns
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for Table deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private List<List<String>> cells = List.of();
-    private String markdown;
-
-    @JsonProperty("page_number")
-    private int pageNumber;
-
-    @JsonProperty("bounding_box")
-    @Nullable
-    private BoundingBox boundingBox;
-
-    @JsonProperty("table_id")
-    @Nullable
-    private String tableId;
-
-    @JsonProperty("cell_styles")
-    @Nullable
-    private List<TableCellStyle> cellStyles = List.of();
-
-    @Nullable private List<String> columns;
-
-    /** Sets the cells field. */
-    @JsonProperty("cells")
-    public Builder withCells(final List<List<String>> value) {
-      this.cells = value;
-      return this;
+    public Table{
+        if (cellStyles == null) { cellStyles = List.of(); }
     }
 
-    /** Sets the markdown field. */
-    @JsonProperty("markdown")
-    public Builder withMarkdown(final String value) {
-      this.markdown = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for Table deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the pageNumber field. */
-    @JsonProperty("page_number")
-    public Builder withPageNumber(final int value) {
-      this.pageNumber = value;
-      return this;
-    }
+        private List<List<String>> cells = List.of();
+        private String markdown;
+        @JsonProperty("page_number")
+        private int pageNumber;
+        @JsonProperty("bounding_box")
+        @Nullable private BoundingBox boundingBox;
+        @JsonProperty("table_id")
+        @Nullable private String tableId;
+        @JsonProperty("cell_styles")
+        @Nullable private List<TableCellStyle> cellStyles = List.of();
+        @Nullable private List<String> columns;
 
-    /** Sets the boundingBox field. */
-    @JsonProperty("bounding_box")
-    public Builder withBoundingBox(final @Nullable BoundingBox value) {
-      this.boundingBox = value;
-      return this;
-    }
+        /** Sets the cells field. */
+        @JsonProperty("cells")
+        public Builder withCells(final List<List<String>> value) {
+            this.cells = value;
+            return this;
+        }
 
-    /** Sets the tableId field. */
-    @JsonProperty("table_id")
-    public Builder withTableId(final @Nullable String value) {
-      this.tableId = value;
-      return this;
-    }
+        /** Sets the markdown field. */
+        @JsonProperty("markdown")
+        public Builder withMarkdown(final String value) {
+            this.markdown = value;
+            return this;
+        }
 
-    /** Sets the cellStyles field. */
-    @JsonProperty("cell_styles")
-    public Builder withCellStyles(final @Nullable List<TableCellStyle> value) {
-      this.cellStyles = value;
-      return this;
-    }
+        /** Sets the pageNumber field. */
+        @JsonProperty("page_number")
+        public Builder withPageNumber(final int value) {
+            this.pageNumber = value;
+            return this;
+        }
 
-    /** Sets the columns field. */
-    @JsonProperty("columns")
-    public Builder withColumns(final @Nullable List<String> value) {
-      this.columns = value;
-      return this;
-    }
+        /** Sets the boundingBox field. */
+        @JsonProperty("bounding_box")
+        public Builder withBoundingBox(final @Nullable BoundingBox value) {
+            this.boundingBox = value;
+            return this;
+        }
 
-    /** Constructs a Table instance from the builder's current state. */
-    public Table build() {
-      return new Table(cells, markdown, pageNumber, boundingBox, tableId, cellStyles, columns);
+        /** Sets the tableId field. */
+        @JsonProperty("table_id")
+        public Builder withTableId(final @Nullable String value) {
+            this.tableId = value;
+            return this;
+        }
+
+        /** Sets the cellStyles field. */
+        @JsonProperty("cell_styles")
+        public Builder withCellStyles(final @Nullable List<TableCellStyle> value) {
+            this.cellStyles = value;
+            return this;
+        }
+
+        /** Sets the columns field. */
+        @JsonProperty("columns")
+        public Builder withColumns(final @Nullable List<String> value) {
+            this.columns = value;
+            return this;
+        }
+
+        /** Constructs a Table instance from the builder's current state. */
+        public Table build() {
+            return new Table(
+                cells,
+                markdown,
+                pageNumber,
+                boundingBox,
+                tableId,
+                cellStyles,
+                columns
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

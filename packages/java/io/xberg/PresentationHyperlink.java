@@ -4,49 +4,56 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** A hyperlink discovered in a presentation slide. */
+/**
+ * A hyperlink discovered in a presentation slide.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PresentationHyperlink.Builder.class)
 public record PresentationHyperlink(
-    @JsonProperty("url") String url, @Nullable @JsonProperty("label") String label) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for PresentationHyperlink deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String url;
-    @Nullable private String label;
-
-    /** Sets the url field. */
-    @JsonProperty("url")
-    public Builder withUrl(final String value) {
-      this.url = value;
-      return this;
+    @JsonProperty("url") String url,
+    @Nullable @JsonProperty("label") String label
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the label field. */
-    @JsonProperty("label")
-    public Builder withLabel(final @Nullable String value) {
-      this.label = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for PresentationHyperlink deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a PresentationHyperlink instance from the builder's current state. */
-    public PresentationHyperlink build() {
-      return new PresentationHyperlink(url, label);
+        private String url;
+        @Nullable private String label;
+
+        /** Sets the url field. */
+        @JsonProperty("url")
+        public Builder withUrl(final String value) {
+            this.url = value;
+            return this;
+        }
+
+        /** Sets the label field. */
+        @JsonProperty("label")
+        public Builder withLabel(final @Nullable String value) {
+            this.label = value;
+            return this;
+        }
+
+        /** Constructs a PresentationHyperlink instance from the builder's current state. */
+        public PresentationHyperlink build() {
+            return new PresentationHyperlink(
+                url,
+                label
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

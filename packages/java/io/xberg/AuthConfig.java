@@ -8,24 +8,38 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-/** Authentication configuration. */
+/**
+ * Authentication configuration.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = AuthConfig.Basic.class, name = "basic"),
-  @JsonSubTypes.Type(value = AuthConfig.Bearer.class, name = "bearer"),
-  @JsonSubTypes.Type(value = AuthConfig.Header.class, name = "header")
+    @JsonSubTypes.Type(value = AuthConfig.Basic.class, name = "basic"),
+    @JsonSubTypes.Type(value = AuthConfig.Bearer.class, name = "bearer"),
+    @JsonSubTypes.Type(value = AuthConfig.Header.class, name = "header")
 })
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface AuthConfig {
 
-  /** HTTP Basic authentication. */
-  record Basic(@JsonProperty("username") String username, @JsonProperty("password") String password)
-      implements AuthConfig {}
+    /**
+     * HTTP Basic authentication.
+     */
+    record Basic(
+        @JsonProperty("username") String username,
+        @JsonProperty("password") String password
+    ) implements AuthConfig {
+    }
 
-  /** Bearer token authentication. */
-  record Bearer(@JsonProperty("token") String token) implements AuthConfig {}
+    /**
+     * Bearer token authentication.
+     */
+    record Bearer(@JsonProperty("token") String token) implements AuthConfig { }
 
-  /** Custom authentication header. */
-  record Header(@JsonProperty("name") String name, @JsonProperty("value") String value)
-      implements AuthConfig {}
+    /**
+     * Custom authentication header.
+     */
+    record Header(
+        @JsonProperty("name") String name,
+        @JsonProperty("value") String value
+    ) implements AuthConfig {
+    }
 }

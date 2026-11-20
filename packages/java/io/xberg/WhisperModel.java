@@ -10,49 +10,61 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Supported Whisper model sizes.
  *
- * <p>These map to published ONNX exports on Hugging Face (onnx-community or similar orgs). The
- * actual filenames and repos are resolved inside the transcription engine.
+ * These map to published ONNX exports on Hugging Face (onnx-community or
+ * similar orgs). The actual filenames and repos are resolved inside the
+ * transcription engine.
  */
 @SuppressWarnings("PMD")
 public enum WhisperModel {
-  /** Smallest, fastest, lowest quality. Good default for development and CI. */
-  TINY("tiny"),
-  /** Reasonable quality/speed tradeoff. */
-  BASE("base"),
-  /** Better accuracy with higher memory and cache use. */
-  SMALL("small"),
-  /** High quality; slower and more memory-intensive. */
-  MEDIUM("medium"),
-  /** Best quality (large-v3). Use only when latency and memory use are acceptable. */
-  LARGE_V3("large_v3");
+    /**
+     * Smallest, fastest, lowest quality. Good default for development and CI.
+     */
+    TINY("tiny"),
+    /**
+     * Reasonable quality/speed tradeoff.
+     */
+    BASE("base"),
+    /**
+     * Better accuracy with higher memory and cache use.
+     */
+    SMALL("small"),
+    /**
+     * High quality; slower and more memory-intensive.
+     */
+    MEDIUM("medium"),
+    /**
+     * Best quality (large-v3). Use only when latency and memory use are acceptable.
+     */
+    LARGE_V3("large_v3");
 
-  /** The string value. */
-  private final String value;
 
-  WhisperModel(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static WhisperModel fromValue(final String value) {
-    for (WhisperModel e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    WhisperModel(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown WhisperModel value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static WhisperModel fromValue(final String value) {
+        for (WhisperModel e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown WhisperModel value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

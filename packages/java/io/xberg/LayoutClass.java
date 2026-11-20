@@ -10,77 +10,115 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * The 18 canonical document layout classes.
  *
- * <p>All model backends (RT-DETR, YOLO, etc.) map their native class IDs to this shared set. Models
- * with fewer classes (DocLayNet: 11, PubLayNet: 5) map to the closest equivalent.
+ * All model backends (RT-DETR, YOLO, etc.) map their native class IDs
+ * to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
+ * map to the closest equivalent.
  *
- * <p>Wire format is snake_case in all serializers (JSON, TOML, YAML).
+ * Wire format is snake_case in all serializers (JSON, TOML, YAML).
  */
 @SuppressWarnings("PMD")
 public enum LayoutClass {
-  /** Figure or table caption text. */
-  CAPTION("caption"),
-  /** Chart or graph visualization. */
-  CHART("chart"),
-  /** Footnote or endnote text. */
-  FOOTNOTE("footnote"),
-  /** Mathematical formula or equation. */
-  FORMULA("formula"),
-  /** A single item in a bulleted or numbered list. */
-  LIST_ITEM("list_item"),
-  /** Running footer at the bottom of a page. */
-  PAGE_FOOTER("page_footer"),
-  /** Running header at the top of a page. */
-  PAGE_HEADER("page_header"),
-  /** Image, chart, or other graphical element. */
-  PICTURE("picture"),
-  /** Section heading. */
-  SECTION_HEADER("section_header"),
-  /** Data table. */
-  TABLE("table"),
-  /** Body text paragraph. */
-  TEXT("text"),
-  /** Document or chapter title. */
-  TITLE("title"),
-  /** Table of contents or index. */
-  DOCUMENT_INDEX("document_index"),
-  /** Source code block. */
-  CODE("code"),
-  /** Checkbox in selected state. */
-  CHECKBOX_SELECTED("checkbox_selected"),
-  /** Checkbox in unselected state. */
-  CHECKBOX_UNSELECTED("checkbox_unselected"),
-  /** Form field or form element. */
-  FORM("form"),
-  /** Key-value pair region (e.g. label + value in a form). */
-  KEY_VALUE_REGION("key_value_region");
+    /**
+     * Figure or table caption text.
+     */
+    CAPTION("caption"),
+    /**
+     * Chart or graph visualization.
+     */
+    CHART("chart"),
+    /**
+     * Footnote or endnote text.
+     */
+    FOOTNOTE("footnote"),
+    /**
+     * Mathematical formula or equation.
+     */
+    FORMULA("formula"),
+    /**
+     * A single item in a bulleted or numbered list.
+     */
+    LIST_ITEM("list_item"),
+    /**
+     * Running footer at the bottom of a page.
+     */
+    PAGE_FOOTER("page_footer"),
+    /**
+     * Running header at the top of a page.
+     */
+    PAGE_HEADER("page_header"),
+    /**
+     * Image, chart, or other graphical element.
+     */
+    PICTURE("picture"),
+    /**
+     * Section heading.
+     */
+    SECTION_HEADER("section_header"),
+    /**
+     * Data table.
+     */
+    TABLE("table"),
+    /**
+     * Body text paragraph.
+     */
+    TEXT("text"),
+    /**
+     * Document or chapter title.
+     */
+    TITLE("title"),
+    /**
+     * Table of contents or index.
+     */
+    DOCUMENT_INDEX("document_index"),
+    /**
+     * Source code block.
+     */
+    CODE("code"),
+    /**
+     * Checkbox in selected state.
+     */
+    CHECKBOX_SELECTED("checkbox_selected"),
+    /**
+     * Checkbox in unselected state.
+     */
+    CHECKBOX_UNSELECTED("checkbox_unselected"),
+    /**
+     * Form field or form element.
+     */
+    FORM("form"),
+    /**
+     * Key-value pair region (e.g. label + value in a form).
+     */
+    KEY_VALUE_REGION("key_value_region");
 
-  /** The string value. */
-  private final String value;
 
-  LayoutClass(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static LayoutClass fromValue(final String value) {
-    for (LayoutClass e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    LayoutClass(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown LayoutClass value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static LayoutClass fromValue(final String value) {
+        for (LayoutClass e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown LayoutClass value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

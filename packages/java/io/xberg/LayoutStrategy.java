@@ -10,52 +10,58 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which PDF pages the layout model runs on.
  *
- * <p>Layout detection renders each selected page to a raster and runs ONNX inference on it, which
- * dominates extraction cost. This controls page selection; LayoutStrategy.Always preserves the
- * historical behavior of running on every page. Wire format is snake_case in all serializers (JSON,
- * TOML, YAML).
+ * Layout detection renders each selected page to a raster and runs ONNX
+ * inference on it, which dominates extraction cost. This controls page
+ * selection; LayoutStrategy.Always preserves the historical behavior of
+ * running on every page. Wire format is snake_case in all serializers
+ * (JSON, TOML, YAML).
  */
 @SuppressWarnings("PMD")
 public enum LayoutStrategy {
-  /** Run layout detection unconditionally on every page. */
-  ALWAYS("always"),
-  /**
-   * Pre-screen each page with cheap geometry signals and run the model only on pages likely to
-   * benefit (multi-column, table-bearing, figure-heavy, form-like, or rotated pages).
-   *
-   * <p>Pages the pre-screen skips are processed exactly like pages where the model ran and found no
-   * regions. On the OCR path only inference is skipped; page rasters are still produced because OCR
-   * consumes them. For non-PDF inputs {@code Auto} behaves as LayoutStrategy.Always.
-   */
-  AUTO("auto");
+    /**
+     * Run layout detection unconditionally on every page.
+     */
+    ALWAYS("always"),
+    /**
+     * Pre-screen each page with cheap geometry signals and run the model
+     * only on pages likely to benefit (multi-column, table-bearing,
+     * figure-heavy, form-like, or rotated pages).
+     *
+     * Pages the pre-screen skips are processed exactly like pages where the
+     * model ran and found no regions. On the OCR path only inference is
+     * skipped; page rasters are still produced because OCR consumes them.
+     * For non-PDF inputs {@code Auto} behaves as LayoutStrategy.Always.
+     */
+    AUTO("auto");
 
-  /** The string value. */
-  private final String value;
 
-  LayoutStrategy(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static LayoutStrategy fromValue(final String value) {
-    for (LayoutStrategy e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    LayoutStrategy(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown LayoutStrategy value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static LayoutStrategy fromValue(final String value) {
+        for (LayoutStrategy e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown LayoutStrategy value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

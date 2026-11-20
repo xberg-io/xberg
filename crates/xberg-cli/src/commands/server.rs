@@ -47,11 +47,15 @@ pub fn serve_command(
         extraction_config,
         server_config.clone(),
     ))
-    .with_context(|| {
-        format!(
-            "Failed to start API server on {}. Ensure the port is not already in use and you have permission to bind to this address.",
-            server_config.listen_addr()
-        )
+    .map_err(|error| {
+        if matches!(&error, xberg::XbergError::Validation { message, .. } if message.starts_with("Refusing to bind")) {
+            anyhow::anyhow!(error)
+        } else {
+            anyhow::Error::new(error).context(format!(
+                "Failed to start API server on {}. Ensure the port is not already in use and you have permission to bind to this address.",
+                server_config.listen_addr()
+            ))
+        }
     })?;
 
     Ok(())

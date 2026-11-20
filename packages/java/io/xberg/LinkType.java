@@ -7,49 +7,64 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Link type classification. */
+/**
+ * Link type classification.
+ */
 @SuppressWarnings("PMD")
 public enum LinkType {
-  /** Anchor link (#section) */
-  ANCHOR("anchor"),
-  /** Internal link (same domain) */
-  INTERNAL("internal"),
-  /** External link (different domain) */
-  EXTERNAL("external"),
-  /** Email link (mailto:) */
-  EMAIL("email"),
-  /** Phone link (tel:) */
-  PHONE("phone"),
-  /** Other link type */
-  OTHER("other");
+    /**
+     * Anchor link (#section)
+     */
+    ANCHOR("anchor"),
+    /**
+     * Internal link (same domain)
+     */
+    INTERNAL("internal"),
+    /**
+     * External link (different domain)
+     */
+    EXTERNAL("external"),
+    /**
+     * Email link (mailto:)
+     */
+    EMAIL("email"),
+    /**
+     * Phone link (tel:)
+     */
+    PHONE("phone"),
+    /**
+     * Other link type
+     */
+    OTHER("other");
 
-  /** The string value. */
-  private final String value;
 
-  LinkType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static LinkType fromValue(final String value) {
-    for (LinkType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    LinkType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown LinkType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static LinkType fromValue(final String value) {
+        for (LinkType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown LinkType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

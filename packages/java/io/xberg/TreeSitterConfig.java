@@ -4,23 +4,30 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Configuration for tree-sitter language pack integration.
  *
- * <p>Controls grammar download behavior and code analysis options.
+ * Controls grammar download behavior and code analysis options.
  *
- * <p># Example (TOML)
+ * # Example (TOML)
  *
- * <p>{@code }{@code toml} [tree_sitter] languages = ["python", "rust"] groups = ["web"]
+ * {@code }{@code toml}
+ * [tree_sitter]
+ * languages = ["python", "rust"]
+ * groups = ["web"]
  *
- * <p>[tree_sitter.process] structure = true comments = true docstrings = true
+ * [tree_sitter.process]
+ * structure = true
+ * comments = true
+ * docstrings = true
+ *
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TreeSitterConfig.Builder.class)
@@ -29,72 +36,74 @@ public record TreeSitterConfig(
     @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
     @Nullable @JsonProperty("languages") List<String> languages,
     @Nullable @JsonProperty("groups") List<String> groups,
-    @Nullable @JsonProperty("process") TreeSitterProcessConfig process) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public TreeSitterConfig {
-    if (enabled == null) {
-      enabled = true;
+    @Nullable @JsonProperty("process") TreeSitterProcessConfig process
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for TreeSitterConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private Boolean enabled;
-
-    @JsonProperty("cache_dir")
-    private java.nio.file.@Nullable Path cacheDir;
-
-    @Nullable private List<String> languages;
-    @Nullable private List<String> groups;
-    @Nullable private TreeSitterProcessConfig process;
-
-    /** Sets the enabled field. */
-    @JsonProperty("enabled")
-    public Builder withEnabled(final @Nullable Boolean value) {
-      this.enabled = value;
-      return this;
+    public TreeSitterConfig{
+        if (enabled == null) { enabled = true; }
     }
 
-    /** Sets the cacheDir field. */
-    @JsonProperty("cache_dir")
-    public Builder withCacheDir(final java.nio.file.@Nullable Path value) {
-      this.cacheDir = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for TreeSitterConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the languages field. */
-    @JsonProperty("languages")
-    public Builder withLanguages(final @Nullable List<String> value) {
-      this.languages = value;
-      return this;
-    }
+        @Nullable private Boolean enabled;
+        @JsonProperty("cache_dir")
+        private java.nio.file.@Nullable Path cacheDir;
+        @Nullable private List<String> languages;
+        @Nullable private List<String> groups;
+        @Nullable private TreeSitterProcessConfig process;
 
-    /** Sets the groups field. */
-    @JsonProperty("groups")
-    public Builder withGroups(final @Nullable List<String> value) {
-      this.groups = value;
-      return this;
-    }
+        /** Sets the enabled field. */
+        @JsonProperty("enabled")
+        public Builder withEnabled(final @Nullable Boolean value) {
+            this.enabled = value;
+            return this;
+        }
 
-    /** Sets the process field. */
-    @JsonProperty("process")
-    public Builder withProcess(final @Nullable TreeSitterProcessConfig value) {
-      this.process = value;
-      return this;
-    }
+        /** Sets the cacheDir field. */
+        @JsonProperty("cache_dir")
+        public Builder withCacheDir(final java.nio.file.@Nullable Path value) {
+            this.cacheDir = value;
+            return this;
+        }
 
-    /** Constructs a TreeSitterConfig instance from the builder's current state. */
-    public TreeSitterConfig build() {
-      return new TreeSitterConfig(enabled, cacheDir, languages, groups, process);
+        /** Sets the languages field. */
+        @JsonProperty("languages")
+        public Builder withLanguages(final @Nullable List<String> value) {
+            this.languages = value;
+            return this;
+        }
+
+        /** Sets the groups field. */
+        @JsonProperty("groups")
+        public Builder withGroups(final @Nullable List<String> value) {
+            this.groups = value;
+            return this;
+        }
+
+        /** Sets the process field. */
+        @JsonProperty("process")
+        public Builder withProcess(final @Nullable TreeSitterProcessConfig value) {
+            this.process = value;
+            return this;
+        }
+
+        /** Constructs a TreeSitterConfig instance from the builder's current state. */
+        public TreeSitterConfig build() {
+            return new TreeSitterConfig(
+                enabled,
+                cacheDir,
+                languages,
+                groups,
+                process
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

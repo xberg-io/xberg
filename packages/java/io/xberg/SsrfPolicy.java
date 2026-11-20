@@ -4,14 +4,16 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** SSRF policy configuration. */
+/**
+ * SSRF policy configuration.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = SsrfPolicy.Builder.class)
 public record SsrfPolicy(
@@ -19,84 +21,78 @@ public record SsrfPolicy(
     @Nullable @JsonProperty("allowlist") List<HostMatcher> allowlist,
     @Nullable @JsonProperty("denylist") List<HostMatcher> denylist,
     @Nullable @JsonProperty("max_redirects") Byte maxRedirects,
-    @JsonProperty("scheme_allowlist") List<String> schemeAllowlist) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public SsrfPolicy {
-    if (denyPrivate == null) {
-      denyPrivate = true;
+    @JsonProperty("scheme_allowlist") List<String> schemeAllowlist
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (maxRedirects == null) {
-      maxRedirects = 5;
-    }
-    if (schemeAllowlist == null) {
-      schemeAllowlist = List.of("http", "https");
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for SsrfPolicy deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("deny_private")
-    @Nullable
-    private Boolean denyPrivate;
-
-    @Nullable private List<HostMatcher> allowlist;
-    @Nullable private List<HostMatcher> denylist;
-
-    @JsonProperty("max_redirects")
-    @Nullable
-    private Byte maxRedirects;
-
-    @JsonProperty("scheme_allowlist")
-    @Nullable
-    private List<String> schemeAllowlist = List.of("http", "https");
-
-    /** Sets the denyPrivate field. */
-    @JsonProperty("deny_private")
-    public Builder withDenyPrivate(final @Nullable Boolean value) {
-      this.denyPrivate = value;
-      return this;
+    public SsrfPolicy{
+        if (denyPrivate == null) { denyPrivate = true; }
+        if (maxRedirects == null) { maxRedirects = 5; }
+        if (schemeAllowlist == null) { schemeAllowlist = List.of("http", "https"); }
     }
 
-    /** Sets the allowlist field. */
-    @JsonProperty("allowlist")
-    public Builder withAllowlist(final @Nullable List<HostMatcher> value) {
-      this.allowlist = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for SsrfPolicy deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the denylist field. */
-    @JsonProperty("denylist")
-    public Builder withDenylist(final @Nullable List<HostMatcher> value) {
-      this.denylist = value;
-      return this;
-    }
+        @JsonProperty("deny_private")
+        @Nullable private Boolean denyPrivate;
+        @Nullable private List<HostMatcher> allowlist;
+        @Nullable private List<HostMatcher> denylist;
+        @JsonProperty("max_redirects")
+        @Nullable private Byte maxRedirects;
+        @JsonProperty("scheme_allowlist")
+        @Nullable private List<String> schemeAllowlist = List.of("http", "https");
 
-    /** Sets the maxRedirects field. */
-    @JsonProperty("max_redirects")
-    public Builder withMaxRedirects(final @Nullable Byte value) {
-      this.maxRedirects = value;
-      return this;
-    }
+        /** Sets the denyPrivate field. */
+        @JsonProperty("deny_private")
+        public Builder withDenyPrivate(final @Nullable Boolean value) {
+            this.denyPrivate = value;
+            return this;
+        }
 
-    /** Sets the schemeAllowlist field. */
-    @JsonProperty("scheme_allowlist")
-    public Builder withSchemeAllowlist(final @Nullable List<String> value) {
-      this.schemeAllowlist = value;
-      return this;
-    }
+        /** Sets the allowlist field. */
+        @JsonProperty("allowlist")
+        public Builder withAllowlist(final @Nullable List<HostMatcher> value) {
+            this.allowlist = value;
+            return this;
+        }
 
-    /** Constructs a SsrfPolicy instance from the builder's current state. */
-    public SsrfPolicy build() {
-      return new SsrfPolicy(denyPrivate, allowlist, denylist, maxRedirects, schemeAllowlist);
+        /** Sets the denylist field. */
+        @JsonProperty("denylist")
+        public Builder withDenylist(final @Nullable List<HostMatcher> value) {
+            this.denylist = value;
+            return this;
+        }
+
+        /** Sets the maxRedirects field. */
+        @JsonProperty("max_redirects")
+        public Builder withMaxRedirects(final @Nullable Byte value) {
+            this.maxRedirects = value;
+            return this;
+        }
+
+        /** Sets the schemeAllowlist field. */
+        @JsonProperty("scheme_allowlist")
+        public Builder withSchemeAllowlist(final @Nullable List<String> value) {
+            this.schemeAllowlist = value;
+            return this;
+        }
+
+        /** Constructs a SsrfPolicy instance from the builder's current state. */
+        public SsrfPolicy build() {
+            return new SsrfPolicy(
+                denyPrivate,
+                allowlist,
+                denylist,
+                maxRedirects,
+                schemeAllowlist
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

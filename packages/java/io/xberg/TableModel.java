@@ -10,54 +10,66 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which table structure recognition model to use.
  *
- * <p>Controls the model used for table cell detection within layout-detected table regions. Wire
- * format is snake_case in all serializers (JSON, TOML, YAML).
+ * Controls the model used for table cell detection within layout-detected
+ * table regions. Wire format is snake_case in all serializers (JSON, TOML,
+ * YAML).
  */
 @SuppressWarnings("PMD")
 public enum TableModel {
-  /** TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. */
-  TATR("tatr"),
-  /** SLANeXT wired variant -- 365MB, optimized for bordered tables. */
-  SLANET_WIRED("slanet_wired"),
-  /** SLANeXT wireless variant -- 365MB, optimized for borderless tables. */
-  SLANET_WIRELESS("slanet_wireless"),
-  /** SLANet-plus -- 7.78MB, lightweight general-purpose. */
-  SLANET_PLUS("slanet_plus"),
-  /**
-   * Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier
-   * (6.78MB) + both SLANeXT variants (730MB total).
-   */
-  SLANET_AUTO("slanet_auto"),
-  /** Disable table structure model inference entirely; use heuristic path only. */
-  DISABLED("disabled");
+    /**
+     * TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
+     */
+    TATR("tatr"),
+    /**
+     * SLANeXT wired variant -- 365MB, optimized for bordered tables.
+     */
+    SLANET_WIRED("slanet_wired"),
+    /**
+     * SLANeXT wireless variant -- 365MB, optimized for borderless tables.
+     */
+    SLANET_WIRELESS("slanet_wireless"),
+    /**
+     * SLANet-plus -- 7.78MB, lightweight general-purpose.
+     */
+    SLANET_PLUS("slanet_plus"),
+    /**
+     * Classifier-routed SLANeXT: auto-select wired/wireless per table.
+     * Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
+     */
+    SLANET_AUTO("slanet_auto"),
+    /**
+     * Disable table structure model inference entirely; use heuristic path only.
+     */
+    DISABLED("disabled");
 
-  /** The string value. */
-  private final String value;
 
-  TableModel(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static TableModel fromValue(final String value) {
-    for (TableModel e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    TableModel(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown TableModel value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static TableModel fromValue(final String value) {
+        for (TableModel e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown TableModel value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

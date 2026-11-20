@@ -4,55 +4,60 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A single labeled definition the chunk classifier may emit.
  *
- * <p>Unlike {@code PageClassificationConfig.labels} (bare label names), chunk classification
- * targets potentially large domain taxonomies where every label carries its own semantic
- * description, letting the LLM disambiguate similarly named labels without relying on the label
- * string alone.
+ * Unlike {@code PageClassificationConfig.labels} (bare label names), chunk
+ * classification targets potentially large domain taxonomies where every
+ * label carries its own semantic description, letting the LLM disambiguate
+ * similarly named labels without relying on the label string alone.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ChunkClassificationDefinition.Builder.class)
 public record ChunkClassificationDefinition(
-    @JsonProperty("label") String label, @JsonProperty("description") String description) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ChunkClassificationDefinition deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String label;
-    private String description;
-
-    /** Sets the label field. */
-    @JsonProperty("label")
-    public Builder withLabel(final String value) {
-      this.label = value;
-      return this;
+    @JsonProperty("label") String label,
+    @JsonProperty("description") String description
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the description field. */
-    @JsonProperty("description")
-    public Builder withDescription(final String value) {
-      this.description = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for ChunkClassificationDefinition deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a ChunkClassificationDefinition instance from the builder's current state. */
-    public ChunkClassificationDefinition build() {
-      return new ChunkClassificationDefinition(label, description);
+        private String label;
+        private String description;
+
+        /** Sets the label field. */
+        @JsonProperty("label")
+        public Builder withLabel(final String value) {
+            this.label = value;
+            return this;
+        }
+
+        /** Sets the description field. */
+        @JsonProperty("description")
+        public Builder withDescription(final String value) {
+            this.description = value;
+            return this;
+        }
+
+        /** Constructs a ChunkClassificationDefinition instance from the builder's current state. */
+        public ChunkClassificationDefinition build() {
+            return new ChunkClassificationDefinition(
+                label,
+                description
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

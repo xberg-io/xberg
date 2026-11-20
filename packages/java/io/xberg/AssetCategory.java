@@ -7,57 +7,80 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** The category of a downloaded asset. */
+/**
+ * The category of a downloaded asset.
+ */
 @SuppressWarnings("PMD")
 public enum AssetCategory {
-  /** A document file (PDF, DOC, etc.). */
-  DOCUMENT("document"),
-  /** An image file. */
-  IMAGE("image"),
-  /** An audio file. */
-  AUDIO("audio"),
-  /** A video file. */
-  VIDEO("video"),
-  /** A font file. */
-  FONT("font"),
-  /** A CSS stylesheet. */
-  STYLESHEET("stylesheet"),
-  /** A JavaScript file. */
-  SCRIPT("script"),
-  /** An archive file (ZIP, TAR, etc.). */
-  ARCHIVE("archive"),
-  /** A data file (JSON, XML, CSV, etc.). */
-  DATA("data"),
-  /** An unrecognized asset type. */
-  OTHER("other");
+    /**
+     * A document file (PDF, DOC, etc.).
+     */
+    DOCUMENT("document"),
+    /**
+     * An image file.
+     */
+    IMAGE("image"),
+    /**
+     * An audio file.
+     */
+    AUDIO("audio"),
+    /**
+     * A video file.
+     */
+    VIDEO("video"),
+    /**
+     * A font file.
+     */
+    FONT("font"),
+    /**
+     * A CSS stylesheet.
+     */
+    STYLESHEET("stylesheet"),
+    /**
+     * A JavaScript file.
+     */
+    SCRIPT("script"),
+    /**
+     * An archive file (ZIP, TAR, etc.).
+     */
+    ARCHIVE("archive"),
+    /**
+     * A data file (JSON, XML, CSV, etc.).
+     */
+    DATA("data"),
+    /**
+     * An unrecognized asset type.
+     */
+    OTHER("other");
 
-  /** The string value. */
-  private final String value;
 
-  AssetCategory(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static AssetCategory fromValue(final String value) {
-    for (AssetCategory e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    AssetCategory(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown AssetCategory value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static AssetCategory fromValue(final String value) {
+        for (AssetCategory e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown AssetCategory value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

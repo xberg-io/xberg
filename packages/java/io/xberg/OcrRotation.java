@@ -4,57 +4,62 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** Rotation information for an OCR element. */
+/**
+ * Rotation information for an OCR element.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrRotation.Builder.class)
 public record OcrRotation(
     @JsonProperty("angle_degrees") double angleDegrees,
-    @Nullable @JsonProperty("confidence") Double confidence) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OcrRotation deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("angle_degrees")
-    private double angleDegrees;
-
-    @Nullable private Double confidence;
-
-    /** Sets the angleDegrees field. */
-    @JsonProperty("angle_degrees")
-    public Builder withAngleDegrees(final double value) {
-      this.angleDegrees = value;
-      return this;
+    @Nullable @JsonProperty("confidence") Double confidence
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the confidence field. */
-    @JsonProperty("confidence")
-    public Builder withConfidence(final @Nullable Double value) {
-      this.confidence = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for OcrRotation deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withConfidence(final double value) {
-      return withConfidence(Double.valueOf(value));
-    }
+        @JsonProperty("angle_degrees")
+        private double angleDegrees;
+        @Nullable private Double confidence;
 
-    /** Constructs a OcrRotation instance from the builder's current state. */
-    public OcrRotation build() {
-      return new OcrRotation(angleDegrees, confidence);
+        /** Sets the angleDegrees field. */
+        @JsonProperty("angle_degrees")
+        public Builder withAngleDegrees(final double value) {
+            this.angleDegrees = value;
+            return this;
+        }
+
+        /** Sets the confidence field. */
+        @JsonProperty("confidence")
+        public Builder withConfidence(final @Nullable Double value) {
+            this.confidence = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withConfidence(final double value) {
+            return withConfidence(Double.valueOf(value));
+        }
+
+        /** Constructs a OcrRotation instance from the builder's current state. */
+        public OcrRotation build() {
+            return new OcrRotation(
+                angleDegrees,
+                confidence
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

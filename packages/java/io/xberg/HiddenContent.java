@@ -10,86 +10,89 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which text that a browser does not show at first the output holds.
  *
- * <p>The choice answers one question: can a reader get to the text? It does not depend on how the
+ * The choice answers one question: can a reader get to the text? It does not depend on how the
  * page hides it.
  *
- * <p>| Markup | {@code Drop} | {@code Reachable} | {@code All} | | --- | --- | --- | --- | | An
- * element with the {@code hidden} attribute, any value ({@code hidden="until-found"} too) | dropped
- * | kept | kept | | An element with inline {@code display: none}, {@code visibility: hidden} or
- * {@code font-size: 0} | dropped | kept | kept | | An element of an inline {@code &lt;svg&gt;} with
- * {@code display="none"} or {@code visibility="hidden"} | dropped | kept | kept | | A declarative
- * shadow root: a {@code &lt;template&gt;} whose {@code shadowrootmode} is {@code open} or {@code
- * closed} | dropped | kept | kept | | Any other {@code &lt;template&gt;}, and {@code
- * &lt;noscript&gt;} | dropped | dropped | kept | | {@code &lt;script&gt;}, {@code &lt;style&gt;},
- * comments, the value of {@code &lt;input type="hidden"&gt;} | dropped | dropped | dropped |
+ * | Markup | {@code Drop} | {@code Reachable} | {@code All} |
+ * | --- | --- | --- | --- |
+ * | An element with the {@code hidden} attribute, any value ({@code hidden="until-found"} too) | dropped | kept | kept |
+ * | An element with inline {@code display: none}, {@code visibility: hidden} or {@code font-size: 0} | dropped | kept | kept |
+ * | An element of an inline {@code &lt;svg&gt;} with {@code display="none"} or {@code visibility="hidden"} | dropped | kept | kept |
+ * | A declarative shadow root: a {@code &lt;template&gt;} whose {@code shadowrootmode} is {@code open} or {@code closed} | dropped | kept
+ * | kept |
+ * | Any other {@code &lt;template&gt;}, and {@code &lt;noscript&gt;} | dropped | dropped | kept |
+ * | {@code &lt;script&gt;}, {@code &lt;style&gt;}, comments, the value of {@code &lt;input type="hidden"&gt;} | dropped | dropped |
+ * dropped |
  *
- * <p>{@code aria-hidden} is not hidden for this option. It takes an element away from assistive
- * technology only: a browser still shows the element, so a reader sees its text, and every choice
- * keeps it. One rule is older than this option and does not change with it: for an inline {@code
- * &lt;svg aria-hidden="true"&gt;} no choice writes the title, the description or the label of the
- * graphic.
+ * {@code aria-hidden} is not hidden for this option. It takes an element away from assistive
+ * technology only: a browser still shows the element, so a reader sees its text, and every
+ * choice keeps it. One rule is older than this option and does not change with it: for an
+ * inline {@code &lt;svg aria-hidden="true"&gt;} no choice writes the title, the description or the label
+ * of the graphic.
  *
- * <p>Every choice also keeps what the converter never treated as hidden: {@code inert}, a closed
- * {@code &lt;details&gt;} or {@code &lt;dialog&gt;}, {@code &lt;datalist&gt;} and {@code
- * &lt;option&gt;} text, and an element hidden by a class name, a style sheet rule, {@code opacity},
- * {@code content-visibility}, a zero size or an off-screen position. The converter reads the inline
- * {@code style} attribute only. It does no layout and reads no style sheet, so it cannot tell that
- * a rule in a style sheet hides an element.
+ * Every choice also keeps what the converter never treated as hidden: {@code inert}, a closed
+ * {@code &lt;details&gt;} or {@code &lt;dialog&gt;}, {@code &lt;datalist&gt;} and {@code &lt;option&gt;} text, and an element hidden by a
+ * class
+ * name, a style sheet rule, {@code opacity}, {@code content-visibility}, a zero size or an off-screen
+ * position. The converter reads the inline {@code style} attribute only. It does no layout and reads no
+ * style sheet, so it cannot tell that a rule in a style sheet hides an element.
  *
- * <p>A kept element converts like the same element without the attribute or style. Kept {@code
- * &lt;template&gt;} and {@code &lt;noscript&gt;} content converts where it is written, as if the
- * two tags were not there: a row in a {@code &lt;template&gt;} inside a {@code &lt;table&gt;} is a
- * row of that table, and the content of a declarative shadow root comes before the other children
- * of its host element. Slots are not resolved. {@code All} keeps {@code &lt;noscript&gt;} content
- * with every preprocessing preset. A {@code &lt;template&gt;} or {@code &lt;noscript&gt;} in the
- * document head holds metadata ({@code &lt;link&gt;}, {@code &lt;meta&gt;}, {@code &lt;style&gt;}),
- * not text for a reader, and no choice keeps it. A document with no {@code &lt;head&gt;} tag has a
- * head too: it starts at the doctype, at the {@code &lt;html&gt;} tag or at the first metadata
- * element, and it ends where the body starts.
+ * A kept element converts like the same element without the attribute or style. Kept
+ * {@code &lt;template&gt;} and {@code &lt;noscript&gt;} content converts where it is written, as if the two tags were
+ * not there: a row in a {@code &lt;template&gt;} inside a {@code &lt;table&gt;} is a row of that table, and the content
+ * of a declarative shadow root comes before the other children of its host element. Slots are
+ * not resolved. {@code All} keeps {@code &lt;noscript&gt;} content with every preprocessing preset. A {@code &lt;template&gt;}
+ * or {@code &lt;noscript&gt;} in the document head holds metadata ({@code &lt;link&gt;}, {@code &lt;meta&gt;}, {@code &lt;style&gt;}), not
+ * text
+ * for a reader, and no choice keeps it. A document with no {@code &lt;head&gt;} tag has a head too: it
+ * starts at the doctype, at the {@code &lt;html&gt;} tag or at the first metadata element, and it ends
+ * where the body starts.
  */
 @SuppressWarnings("PMD")
 public enum HiddenContent {
-  /** Drop the text a browser does not show at first. Default. */
-  DROP("Drop"),
-  /**
-   * Keep the text of elements that are in the page and that the page can show: an inactive tab
-   * panel, a collapsed section, an answer shown on a click, a declarative shadow root.
-   */
-  REACHABLE("Reachable"),
-  /**
-   * Keep what {@code Reachable} keeps, and the content of {@code &lt;template&gt;} and {@code
-   * &lt;noscript&gt;}. A reader gets to that text only after a script copies it into the page, or
-   * with scripting off.
-   */
-  ALL("All");
+    /**
+     * Drop the text a browser does not show at first. Default.
+     */
+    DROP("Drop"),
+    /**
+     * Keep the text of elements that are in the page and that the page can show: an inactive tab
+     * panel, a collapsed section, an answer shown on a click, a declarative shadow root.
+     */
+    REACHABLE("Reachable"),
+    /**
+     * Keep what {@code Reachable} keeps, and the content of {@code &lt;template&gt;} and {@code &lt;noscript&gt;}. A reader
+     * gets to that text only after a script copies it into the page, or with scripting off.
+     */
+    ALL("All");
 
-  /** The string value. */
-  private final String value;
 
-  HiddenContent(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static HiddenContent fromValue(final String value) {
-    for (HiddenContent e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    HiddenContent(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown HiddenContent value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static HiddenContent fromValue(final String value) {
+        for (HiddenContent e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown HiddenContent value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

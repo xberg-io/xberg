@@ -4,52 +4,57 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * A footnote anchor reference in markdown text.
  *
- * <p>Represents a {@code [^label]} use-site (not a definition).
+ * Represents a {@code [^label]} use-site (not a definition).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = FootnoteAnchor.Builder.class)
 public record FootnoteAnchor(
-    @JsonProperty("label") String label, @JsonProperty("offset") long offset) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for FootnoteAnchor deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String label;
-    private long offset;
-
-    /** Sets the label field. */
-    @JsonProperty("label")
-    public Builder withLabel(final String value) {
-      this.label = value;
-      return this;
+    @JsonProperty("label") String label,
+    @JsonProperty("offset") long offset
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the offset field. */
-    @JsonProperty("offset")
-    public Builder withOffset(final long value) {
-      this.offset = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for FootnoteAnchor deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Constructs a FootnoteAnchor instance from the builder's current state. */
-    public FootnoteAnchor build() {
-      return new FootnoteAnchor(label, offset);
+        private String label;
+        private long offset;
+
+        /** Sets the label field. */
+        @JsonProperty("label")
+        public Builder withLabel(final String value) {
+            this.label = value;
+            return this;
+        }
+
+        /** Sets the offset field. */
+        @JsonProperty("offset")
+        public Builder withOffset(final long value) {
+            this.offset = value;
+            return this;
+        }
+
+        /** Constructs a FootnoteAnchor instance from the builder's current state. */
+        public FootnoteAnchor build() {
+            return new FootnoteAnchor(
+                label,
+                offset
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.14.0'
 scope = 'all'
-tree = 'sha256:7899ac9fbc6e4555f3d9722812583d79ea4b7d4e1b01ff14dfa9282996ac634f'
+tree = 'sha256:ecdf984b4d126f5e9ec48498d76ebe5889d3300751c6cf77867af83587549b26'
 
 [[include]]
 name = 'xberg-bindings'
@@ -113,7 +113,7 @@ digest = 'sha256:eab01d6de7f176f6b0c534dca686c08ec0501c54889417d2e3c40d4e167c4d2
 name = 'api-server-mcp'
 source = '.ai-rulez/skills/api-server-mcp/SKILL.md'
 commit = ''
-digest = 'sha256:6e02872d9c3833ab9b0e992107875887ae480469c526bcb9b44e4fe6582bd384'
+digest = 'sha256:c52aef33c794646de619ae451990a85395582ef209bd87a4e7324e1a53e87a69'
 
 [[served]]
 name = 'basemind-tools'
@@ -676,7 +676,7 @@ digest = 'sha256:ca15c92b4f222585ae4034c70e7cac73d28d9e89d77b0a2d7e28f48b12b744b
 kind = 'skill'
 id = 'api-server-mcp'
 path = 'skills/api-server-mcp'
-digest = 'sha256:e9fb0b0f4de5de12cec8477a68f33c91496b0cd14bad1a4ed75b7a41331f02e3'
+digest = 'sha256:925dfc42b91cfe71e6b65b0e751cd483bdd8961a66437835be7c4fe0a55a5d08'
 
 [[item]]
 kind = 'skill'

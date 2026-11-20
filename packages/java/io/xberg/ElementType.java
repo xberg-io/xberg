@@ -10,63 +10,88 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Semantic element type classification.
  *
- * <p>Categorizes text content into semantic units for downstream processing. Supports the element
- * types commonly found in Unstructured documents.
+ * Categorizes text content into semantic units for downstream processing.
+ * Supports the element types commonly found in Unstructured documents.
  */
 @SuppressWarnings("PMD")
 public enum ElementType {
-  /** Document title */
-  TITLE("title"),
-  /** Main narrative text body */
-  NARRATIVE_TEXT("narrative_text"),
-  /** Section heading */
-  HEADING("heading"),
-  /** List item (bullet, numbered, etc.) */
-  LIST_ITEM("list_item"),
-  /** Table element */
-  TABLE("table"),
-  /** Image element */
-  IMAGE("image"),
-  /** Page break marker */
-  PAGE_BREAK("page_break"),
-  /** Code block */
-  CODE_BLOCK("code_block"),
-  /** Mathematical formula (LaTeX source in {@code text}) */
-  FORMULA("formula"),
-  /** Block quote */
-  BLOCK_QUOTE("block_quote"),
-  /** Footer text */
-  FOOTER("footer"),
-  /** Header text */
-  HEADER("header");
+    /**
+     * Document title
+     */
+    TITLE("title"),
+    /**
+     * Main narrative text body
+     */
+    NARRATIVE_TEXT("narrative_text"),
+    /**
+     * Section heading
+     */
+    HEADING("heading"),
+    /**
+     * List item (bullet, numbered, etc.)
+     */
+    LIST_ITEM("list_item"),
+    /**
+     * Table element
+     */
+    TABLE("table"),
+    /**
+     * Image element
+     */
+    IMAGE("image"),
+    /**
+     * Page break marker
+     */
+    PAGE_BREAK("page_break"),
+    /**
+     * Code block
+     */
+    CODE_BLOCK("code_block"),
+    /**
+     * Mathematical formula (LaTeX source in {@code text})
+     */
+    FORMULA("formula"),
+    /**
+     * Block quote
+     */
+    BLOCK_QUOTE("block_quote"),
+    /**
+     * Footer text
+     */
+    FOOTER("footer"),
+    /**
+     * Header text
+     */
+    HEADER("header");
 
-  /** The string value. */
-  private final String value;
 
-  ElementType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ElementType fromValue(final String value) {
-    for (ElementType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ElementType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ElementType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ElementType fromValue(final String value) {
+        for (ElementType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ElementType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

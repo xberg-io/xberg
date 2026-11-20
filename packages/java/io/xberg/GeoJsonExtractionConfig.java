@@ -4,48 +4,49 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 /**
  * Configuration for GeoJSON extraction.
  *
- * <p>GeoJSON coordinates can dominate extraction output and duplicate large geometry payloads in
- * rendered content and metadata. The default therefore emits a bounded aggregate summary. Set
- * Self.include_full_coordinates only when callers need every coordinate in the extracted text and
- * accept output proportional to the input.
+ * GeoJSON coordinates can dominate extraction output and duplicate large geometry
+ * payloads in rendered content and metadata. The default therefore emits a bounded
+ * aggregate summary. Set Self.include_full_coordinates only when callers need
+ * every coordinate in the extracted text and accept output proportional to the input.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = GeoJsonExtractionConfig.Builder.class)
-public record GeoJsonExtractionConfig(
-    @JsonProperty("include_full_coordinates") boolean includeFullCoordinates) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for GeoJsonExtractionConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("include_full_coordinates")
-    private boolean includeFullCoordinates;
-
-    /** Sets the includeFullCoordinates field. */
-    @JsonProperty("include_full_coordinates")
-    public Builder withIncludeFullCoordinates(final boolean value) {
-      this.includeFullCoordinates = value;
-      return this;
+public record GeoJsonExtractionConfig(@JsonProperty("include_full_coordinates") boolean includeFullCoordinates) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Constructs a GeoJsonExtractionConfig instance from the builder's current state. */
-    public GeoJsonExtractionConfig build() {
-      return new GeoJsonExtractionConfig(includeFullCoordinates);
+    // CPD-OFF
+    /** Jackson builder for GeoJsonExtractionConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
+
+        @JsonProperty("include_full_coordinates")
+        private boolean includeFullCoordinates;
+
+        /** Sets the includeFullCoordinates field. */
+        @JsonProperty("include_full_coordinates")
+        public Builder withIncludeFullCoordinates(final boolean value) {
+            this.includeFullCoordinates = value;
+            return this;
+        }
+
+        /** Constructs a GeoJsonExtractionConfig instance from the builder's current state. */
+        public GeoJsonExtractionConfig build() {
+            return new GeoJsonExtractionConfig(
+                includeFullCoordinates
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

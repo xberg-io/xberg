@@ -4,13 +4,15 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
-/** Keyword extraction configuration. */
+/**
+ * Keyword extraction configuration.
+ */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = KeywordConfig.Builder.class)
 public record KeywordConfig(
@@ -20,102 +22,96 @@ public record KeywordConfig(
     @Nullable @JsonProperty("ngram_range") NgramRange ngramRange,
     @Nullable @JsonProperty("language") String language,
     @Nullable @JsonProperty("yake_params") YakeParams yakeParams,
-    @Nullable @JsonProperty("rake_params") RakeParams rakeParams) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public KeywordConfig {
-    if (maxKeywords == null) {
-      maxKeywords = 10L;
+    @Nullable @JsonProperty("rake_params") RakeParams rakeParams
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for KeywordConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @Nullable private KeywordAlgorithm algorithm = KeywordAlgorithm.YAKE;
-
-    @JsonProperty("max_keywords")
-    @Nullable
-    private Long maxKeywords;
-
-    @JsonProperty("min_score")
-    @Nullable
-    private Float minScore;
-
-    @JsonProperty("ngram_range")
-    @Nullable
-    private NgramRange ngramRange;
-
-    @Nullable private String language;
-
-    @JsonProperty("yake_params")
-    @Nullable
-    private YakeParams yakeParams;
-
-    @JsonProperty("rake_params")
-    @Nullable
-    private RakeParams rakeParams;
-
-    /** Sets the algorithm field. */
-    @JsonProperty("algorithm")
-    public Builder withAlgorithm(final @Nullable KeywordAlgorithm value) {
-      this.algorithm = value;
-      return this;
+    public KeywordConfig{
+        if (maxKeywords == null) { maxKeywords = 10L; }
     }
 
-    /** Sets the maxKeywords field. */
-    @JsonProperty("max_keywords")
-    public Builder withMaxKeywords(final @Nullable Long value) {
-      this.maxKeywords = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for KeywordConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the minScore field. */
-    @JsonProperty("min_score")
-    public Builder withMinScore(final @Nullable Float value) {
-      this.minScore = value;
-      return this;
-    }
+        @Nullable private KeywordAlgorithm algorithm = KeywordAlgorithm.YAKE;
+        @JsonProperty("max_keywords")
+        @Nullable private Long maxKeywords;
+        @JsonProperty("min_score")
+        @Nullable private Float minScore;
+        @JsonProperty("ngram_range")
+        @Nullable private NgramRange ngramRange;
+        @Nullable private String language;
+        @JsonProperty("yake_params")
+        @Nullable private YakeParams yakeParams;
+        @JsonProperty("rake_params")
+        @Nullable private RakeParams rakeParams;
 
-    /** Sets the ngramRange field. */
-    @JsonProperty("ngram_range")
-    public Builder withNgramRange(final @Nullable NgramRange value) {
-      this.ngramRange = value;
-      return this;
-    }
+        /** Sets the algorithm field. */
+        @JsonProperty("algorithm")
+        public Builder withAlgorithm(final @Nullable KeywordAlgorithm value) {
+            this.algorithm = value;
+            return this;
+        }
 
-    /** Sets the language field. */
-    @JsonProperty("language")
-    public Builder withLanguage(final @Nullable String value) {
-      this.language = value;
-      return this;
-    }
+        /** Sets the maxKeywords field. */
+        @JsonProperty("max_keywords")
+        public Builder withMaxKeywords(final @Nullable Long value) {
+            this.maxKeywords = value;
+            return this;
+        }
 
-    /** Sets the yakeParams field. */
-    @JsonProperty("yake_params")
-    public Builder withYakeParams(final @Nullable YakeParams value) {
-      this.yakeParams = value;
-      return this;
-    }
+        /** Sets the minScore field. */
+        @JsonProperty("min_score")
+        public Builder withMinScore(final @Nullable Float value) {
+            this.minScore = value;
+            return this;
+        }
 
-    /** Sets the rakeParams field. */
-    @JsonProperty("rake_params")
-    public Builder withRakeParams(final @Nullable RakeParams value) {
-      this.rakeParams = value;
-      return this;
-    }
+        /** Sets the ngramRange field. */
+        @JsonProperty("ngram_range")
+        public Builder withNgramRange(final @Nullable NgramRange value) {
+            this.ngramRange = value;
+            return this;
+        }
 
-    /** Constructs a KeywordConfig instance from the builder's current state. */
-    public KeywordConfig build() {
-      return new KeywordConfig(
-          algorithm, maxKeywords, minScore, ngramRange, language, yakeParams, rakeParams);
+        /** Sets the language field. */
+        @JsonProperty("language")
+        public Builder withLanguage(final @Nullable String value) {
+            this.language = value;
+            return this;
+        }
+
+        /** Sets the yakeParams field. */
+        @JsonProperty("yake_params")
+        public Builder withYakeParams(final @Nullable YakeParams value) {
+            this.yakeParams = value;
+            return this;
+        }
+
+        /** Sets the rakeParams field. */
+        @JsonProperty("rake_params")
+        public Builder withRakeParams(final @Nullable RakeParams value) {
+            this.rakeParams = value;
+            return this;
+        }
+
+        /** Constructs a KeywordConfig instance from the builder's current state. */
+        public KeywordConfig build() {
+            return new KeywordConfig(
+                algorithm,
+                maxKeywords,
+                minScore,
+                ngramRange,
+                language,
+                yakeParams,
+                rakeParams
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

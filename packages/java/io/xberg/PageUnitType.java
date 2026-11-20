@@ -10,45 +10,51 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Type of paginated unit in a document.
  *
- * <p>Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet
- * sheets).
+ * Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
  */
 @SuppressWarnings("PMD")
 public enum PageUnitType {
-  /** Standard document pages (PDF, DOCX, images) */
-  PAGE("page"),
-  /** Presentation slides (PPTX, ODP) */
-  SLIDE("slide"),
-  /** Spreadsheet sheets (XLSX, ODS) */
-  SHEET("sheet");
+    /**
+     * Standard document pages (PDF, DOCX, images)
+     */
+    PAGE("page"),
+    /**
+     * Presentation slides (PPTX, ODP)
+     */
+    SLIDE("slide"),
+    /**
+     * Spreadsheet sheets (XLSX, ODS)
+     */
+    SHEET("sheet");
 
-  /** The string value. */
-  private final String value;
 
-  PageUnitType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static PageUnitType fromValue(final String value) {
-    for (PageUnitType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    PageUnitType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown PageUnitType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static PageUnitType fromValue(final String value) {
+        for (PageUnitType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown PageUnitType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

@@ -10,72 +10,105 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Semantic structural classification of a text chunk.
  *
- * <p>Assigned by the heuristic classifier in {@code chunking.classifier}. Defaults to {@code
- * Unknown} when no rule matches. Designed to be extended in future versions without breaking
- * changes.
+ * Assigned by the heuristic classifier in {@code chunking.classifier}.
+ * Defaults to {@code Unknown} when no rule matches.
+ * Designed to be extended in future versions without breaking changes.
  */
 @SuppressWarnings("PMD")
 public enum ChunkType {
-  /** Section heading or document title. */
-  HEADING("heading"),
-  /** Party list: names, addresses, and signatories. */
-  PARTY_LIST("party_list"),
-  /** Definition clause ("X means…", "X shall mean…"). */
-  DEFINITIONS("definitions"),
-  /** Operative clause containing legal/contractual action verbs. */
-  OPERATIVE_CLAUSE("operative_clause"),
-  /** Signature block with signatures, names, and dates. */
-  SIGNATURE_BLOCK("signature_block"),
-  /** Schedule, annex, appendix, or exhibit section. */
-  SCHEDULE("schedule"),
-  /** Table-like content with aligned columns or repeated patterns. */
-  TABLE_LIKE("table_like"),
-  /** Mathematical formula or equation. */
-  FORMULA("formula"),
-  /** Code block or preformatted content. */
-  CODE_BLOCK("code_block"),
-  /** Function or method definition (tree-sitter structured code chunking). */
-  FUNCTION("function"),
-  /** Class, struct, interface, or trait definition (tree-sitter structured code chunking). */
-  CLASS("class"),
-  /** Module, namespace, or top-level file scope (tree-sitter structured code chunking). */
-  MODULE("module"),
-  /** Embedded or referenced image content. */
-  IMAGE("image"),
-  /** Organizational chart or hierarchy diagram. */
-  ORG_CHART("org_chart"),
-  /** Diagram, figure, or visual illustration. */
-  DIAGRAM("diagram"),
-  /** Unclassified or mixed content. */
-  UNKNOWN("unknown");
+    /**
+     * Section heading or document title.
+     */
+    HEADING("heading"),
+    /**
+     * Party list: names, addresses, and signatories.
+     */
+    PARTY_LIST("party_list"),
+    /**
+     * Definition clause ("X means…", "X shall mean…").
+     */
+    DEFINITIONS("definitions"),
+    /**
+     * Operative clause containing legal/contractual action verbs.
+     */
+    OPERATIVE_CLAUSE("operative_clause"),
+    /**
+     * Signature block with signatures, names, and dates.
+     */
+    SIGNATURE_BLOCK("signature_block"),
+    /**
+     * Schedule, annex, appendix, or exhibit section.
+     */
+    SCHEDULE("schedule"),
+    /**
+     * Table-like content with aligned columns or repeated patterns.
+     */
+    TABLE_LIKE("table_like"),
+    /**
+     * Mathematical formula or equation.
+     */
+    FORMULA("formula"),
+    /**
+     * Code block or preformatted content.
+     */
+    CODE_BLOCK("code_block"),
+    /**
+     * Function or method definition (tree-sitter structured code chunking).
+     */
+    FUNCTION("function"),
+    /**
+     * Class, struct, interface, or trait definition (tree-sitter structured code chunking).
+     */
+    CLASS("class"),
+    /**
+     * Module, namespace, or top-level file scope (tree-sitter structured code chunking).
+     */
+    MODULE("module"),
+    /**
+     * Embedded or referenced image content.
+     */
+    IMAGE("image"),
+    /**
+     * Organizational chart or hierarchy diagram.
+     */
+    ORG_CHART("org_chart"),
+    /**
+     * Diagram, figure, or visual illustration.
+     */
+    DIAGRAM("diagram"),
+    /**
+     * Unclassified or mixed content.
+     */
+    UNKNOWN("unknown");
 
-  /** The string value. */
-  private final String value;
 
-  ChunkType(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static ChunkType fromValue(final String value) {
-    for (ChunkType e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    ChunkType(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown ChunkType value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static ChunkType fromValue(final String value) {
+        for (ChunkType e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ChunkType value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

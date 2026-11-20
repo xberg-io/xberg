@@ -178,6 +178,7 @@ mod wasm_compat {
         0
     }
 }
+mod native_iterator;
 mod page_iterator;
 pub use page_iterator::{BlockInfo, PageIterator, ParaInfo, ParagraphExtractionOutcome};
 mod result_iterator;

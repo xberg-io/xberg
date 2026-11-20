@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,82 +13,87 @@ import org.jspecify.annotations.Nullable;
 /**
  * Controls thread usage for constrained environments.
  *
- * <p>Set {@code max_threads} to cap all internal thread pools (Rayon, ONNX Runtime intra-op), batch
- * concurrency and Tesseract recognition to a single limit. Set {@code max_concurrent_ocr} to give
- * recognition a limit of its own, which is the knob to reach for when the host has cores to spare
- * but not the memory to run a recognition session on each of them. It is applied as given and is
- * not capped by {@code max_threads}. The first extraction in a process fixes it for that process —
- * see the field's own documentation.
+ * Set {@code max_threads} to cap all internal thread pools (Rayon, ONNX Runtime
+ * intra-op), batch concurrency and Tesseract recognition to a single limit.
+ * Set {@code max_concurrent_ocr} to give recognition a limit of its own, which is
+ * the knob to reach for when the host has cores to spare but not the memory
+ * to run a recognition session on each of them. It is applied as given and
+ * is not capped by {@code max_threads}. The first extraction in a process fixes
+ * it for that process — see the field's own documentation.
  *
- * <p># Default budget when {@code max_threads} is unset
+ * # Default budget when {@code max_threads} is unset
  *
- * <p>Without an explicit {@code max_threads}, the effective budget is {@code
- * min(detected_cpu_cores, 8)} — a deliberate ceiling chosen for serverless/shared-tenant defaults,
- * not a full-host auto-scale. On a host with more than 8 cores this means the extra cores go
- * **unused** unless one of the following applies:
+ * Without an explicit {@code max_threads}, the effective budget is
+ * {@code min(detected_cpu_cores, 8)} — a deliberate ceiling chosen for
+ * serverless/shared-tenant defaults, not a full-host auto-scale. On a host
+ * with more than 8 cores this means the extra cores go **unused** unless one
+ * of the following applies:
  *
- * <p>- {@code max_threads} is set explicitly above 8 (the only way to exceed the ceiling on a
- * bare-metal or VM host with no CPU quota). - The process runs under a Linux cgroup CPU quota
- * (containers, Kubernetes {@code resources.limits.cpu}); in that case the quota itself is used as
- * the ceiling instead of the hardcoded 8, since the quota already reflects a
- * deliberately-configured resource limit.
+ * - {@code max_threads} is set explicitly above 8 (the only way to exceed the
+ *   ceiling on a bare-metal or VM host with no CPU quota).
+ * - The process runs under a Linux cgroup CPU quota (containers, Kubernetes
+ *   {@code resources.limits.cpu}); in that case the quota itself is used as the
+ *   ceiling instead of the hardcoded 8, since the quota already reflects a
+ *   deliberately-configured resource limit.
  *
- * <p>When neither applies and the host has more than 8 cores, a single {@code WARN}-level log is
- * emitted the first time the budget is resolved, naming the detected core count and the applied
- * cap, so the ceiling is discoverable without reading source.
+ * When neither applies and the host has more than 8 cores, a single
+ * {@code WARN}-level log is emitted the first time the budget is resolved,
+ * naming the detected core count and the applied cap, so the ceiling is
+ * discoverable without reading source.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ConcurrencyConfig.Builder.class)
 public record ConcurrencyConfig(
     @Nullable @JsonProperty("max_threads") Long maxThreads,
-    @Nullable @JsonProperty("max_concurrent_ocr") Long maxConcurrentOcr) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for ConcurrencyConfig deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("max_threads")
-    @Nullable
-    private Long maxThreads;
-
-    @JsonProperty("max_concurrent_ocr")
-    @Nullable
-    private Long maxConcurrentOcr;
-
-    /** Sets the maxThreads field. */
-    @JsonProperty("max_threads")
-    public Builder withMaxThreads(final @Nullable Long value) {
-      this.maxThreads = value;
-      return this;
+    @Nullable @JsonProperty("max_concurrent_ocr") Long maxConcurrentOcr
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withMaxThreads(final long value) {
-      return withMaxThreads(Long.valueOf(value));
-    }
+    // CPD-OFF
+    /** Jackson builder for ConcurrencyConfig deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the maxConcurrentOcr field. */
-    @JsonProperty("max_concurrent_ocr")
-    public Builder withMaxConcurrentOcr(final @Nullable Long value) {
-      this.maxConcurrentOcr = value;
-      return this;
-    }
+        @JsonProperty("max_threads")
+        @Nullable private Long maxThreads;
+        @JsonProperty("max_concurrent_ocr")
+        @Nullable private Long maxConcurrentOcr;
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withMaxConcurrentOcr(final long value) {
-      return withMaxConcurrentOcr(Long.valueOf(value));
-    }
+        /** Sets the maxThreads field. */
+        @JsonProperty("max_threads")
+        public Builder withMaxThreads(final @Nullable Long value) {
+            this.maxThreads = value;
+            return this;
+        }
 
-    /** Constructs a ConcurrencyConfig instance from the builder's current state. */
-    public ConcurrencyConfig build() {
-      return new ConcurrencyConfig(maxThreads, maxConcurrentOcr);
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withMaxThreads(final long value) {
+            return withMaxThreads(Long.valueOf(value));
+        }
+
+        /** Sets the maxConcurrentOcr field. */
+        @JsonProperty("max_concurrent_ocr")
+        public Builder withMaxConcurrentOcr(final @Nullable Long value) {
+            this.maxConcurrentOcr = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withMaxConcurrentOcr(final long value) {
+            return withMaxConcurrentOcr(Long.valueOf(value));
+        }
+
+        /** Constructs a ConcurrencyConfig instance from the builder's current state. */
+        public ConcurrencyConfig build() {
+            return new ConcurrencyConfig(
+                maxThreads,
+                maxConcurrentOcr
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

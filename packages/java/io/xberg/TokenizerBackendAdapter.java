@@ -8,38 +8,40 @@ package io.xberg;
 /**
  * Path A Bridge implementation for ITokenizerBackend.
  *
- * <p>Wraps a user-supplied implementation and delegates all method calls. This adapter conforms to
- * the hand-authored sealed interface.
+ * Wraps a user-supplied implementation and delegates all method calls.
+ * This adapter conforms to the hand-authored sealed interface.
  */
 public final class TokenizerBackendAdapter implements ITokenizerBackend {
-  private final ITokenizerBackend impl;
+    private final ITokenizerBackend impl;
 
-  public TokenizerBackendAdapter(ITokenizerBackend impl) {
-    this.impl = impl;
-  }
+    public TokenizerBackendAdapter(ITokenizerBackend impl) {
+        this.impl = impl;
+    }
 
-  @Override
-  public String name() {
-    return impl.name();
-  }
+    @Override
+    public String name() {
+        return impl.name();
+    }
 
-  @Override
-  public String version() {
-    return impl.version();
-  }
+    @Override
+    public String version() {
+        return impl.version();
+    }
 
-  @Override
-  public void initialize() throws Exception {
-    impl.initialize();
-  }
+    @Override
+    public void initialize() throws Exception {
+        impl.initialize();
+    }
 
-  @Override
-  public void shutdown() throws Exception {
-    impl.shutdown();
-  }
+    @Override
+    public void shutdown() throws Exception {
+        impl.shutdown();
+    }
 
-  @Override
-  public long count_tokens(String text) throws Exception {
-    return impl.count_tokens(text);
-  }
+    @Override
+    public long count_tokens(String text) throws Exception {
+        return impl.count_tokens(text);
+    }
+
+
 }

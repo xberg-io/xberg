@@ -4,8 +4,8 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * OCR processing metadata.
  *
- * <p>Captures information about OCR processing configuration and results.
+ * Captures information about OCR processing configuration and results.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrMetadata.Builder.class)
@@ -23,91 +23,93 @@ public record OcrMetadata(
     @JsonProperty("output_format") String outputFormat,
     @JsonProperty("table_count") int tableCount,
     @Nullable @JsonProperty("table_rows") Integer tableRows,
-    @Nullable @JsonProperty("table_cols") Integer tableCols) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OcrMetadata deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    private String language;
-    private int psm;
-
-    @JsonProperty("output_format")
-    private String outputFormat;
-
-    @JsonProperty("table_count")
-    private int tableCount;
-
-    @JsonProperty("table_rows")
-    @Nullable
-    private Integer tableRows;
-
-    @JsonProperty("table_cols")
-    @Nullable
-    private Integer tableCols;
-
-    /** Sets the language field. */
-    @JsonProperty("language")
-    public Builder withLanguage(final String value) {
-      this.language = value;
-      return this;
+    @Nullable @JsonProperty("table_cols") Integer tableCols
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    /** Sets the psm field. */
-    @JsonProperty("psm")
-    public Builder withPsm(final int value) {
-      this.psm = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for OcrMetadata deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the outputFormat field. */
-    @JsonProperty("output_format")
-    public Builder withOutputFormat(final String value) {
-      this.outputFormat = value;
-      return this;
-    }
+        private String language;
+        private int psm;
+        @JsonProperty("output_format")
+        private String outputFormat;
+        @JsonProperty("table_count")
+        private int tableCount;
+        @JsonProperty("table_rows")
+        @Nullable private Integer tableRows;
+        @JsonProperty("table_cols")
+        @Nullable private Integer tableCols;
 
-    /** Sets the tableCount field. */
-    @JsonProperty("table_count")
-    public Builder withTableCount(final int value) {
-      this.tableCount = value;
-      return this;
-    }
+        /** Sets the language field. */
+        @JsonProperty("language")
+        public Builder withLanguage(final String value) {
+            this.language = value;
+            return this;
+        }
 
-    /** Sets the tableRows field. */
-    @JsonProperty("table_rows")
-    public Builder withTableRows(final @Nullable Integer value) {
-      this.tableRows = value;
-      return this;
-    }
+        /** Sets the psm field. */
+        @JsonProperty("psm")
+        public Builder withPsm(final int value) {
+            this.psm = value;
+            return this;
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withTableRows(final int value) {
-      return withTableRows(Integer.valueOf(value));
-    }
+        /** Sets the outputFormat field. */
+        @JsonProperty("output_format")
+        public Builder withOutputFormat(final String value) {
+            this.outputFormat = value;
+            return this;
+        }
 
-    /** Sets the tableCols field. */
-    @JsonProperty("table_cols")
-    public Builder withTableCols(final @Nullable Integer value) {
-      this.tableCols = value;
-      return this;
-    }
+        /** Sets the tableCount field. */
+        @JsonProperty("table_count")
+        public Builder withTableCount(final int value) {
+            this.tableCount = value;
+            return this;
+        }
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withTableCols(final int value) {
-      return withTableCols(Integer.valueOf(value));
-    }
+        /** Sets the tableRows field. */
+        @JsonProperty("table_rows")
+        public Builder withTableRows(final @Nullable Integer value) {
+            this.tableRows = value;
+            return this;
+        }
 
-    /** Constructs a OcrMetadata instance from the builder's current state. */
-    public OcrMetadata build() {
-      return new OcrMetadata(language, psm, outputFormat, tableCount, tableRows, tableCols);
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withTableRows(final int value) {
+            return withTableRows(Integer.valueOf(value));
+        }
+
+        /** Sets the tableCols field. */
+        @JsonProperty("table_cols")
+        public Builder withTableCols(final @Nullable Integer value) {
+            this.tableCols = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withTableCols(final int value) {
+            return withTableCols(Integer.valueOf(value));
+        }
+
+        /** Constructs a OcrMetadata instance from the builder's current state. */
+        public OcrMetadata build() {
+            return new OcrMetadata(
+                language,
+                psm,
+                outputFormat,
+                tableCount,
+                tableRows,
+                tableCols
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

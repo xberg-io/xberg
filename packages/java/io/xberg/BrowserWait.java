@@ -7,43 +7,52 @@ package io.xberg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** Wait strategy for browser page rendering. */
+/**
+ * Wait strategy for browser page rendering.
+ */
 @SuppressWarnings("PMD")
 public enum BrowserWait {
-  /** Wait until network activity is idle. */
-  NETWORK_IDLE("network_idle"),
-  /** Wait for a specific CSS selector to appear in the DOM. */
-  SELECTOR("selector"),
-  /** Wait for a fixed duration after navigation. */
-  FIXED("fixed");
+    /**
+     * Wait until network activity is idle.
+     */
+    NETWORK_IDLE("network_idle"),
+    /**
+     * Wait for a specific CSS selector to appear in the DOM.
+     */
+    SELECTOR("selector"),
+    /**
+     * Wait for a fixed duration after navigation.
+     */
+    FIXED("fixed");
 
-  /** The string value. */
-  private final String value;
 
-  BrowserWait(final String value) {
-    this.value = value;
-  }
+    /** The string value. */
+    private final String value;
 
-  /** Returns the string value. */
-  @JsonValue
-  public String getValue() {
-    return value;
-  }
-
-  /** Creates an instance from a string value. */
-  @JsonCreator
-  public static BrowserWait fromValue(final String value) {
-    for (BrowserWait e : values()) {
-      if (e.value.equalsIgnoreCase(value)) {
-        return e;
-      }
+    BrowserWait(final String value) {
+        this.value = value;
     }
-    throw new IllegalArgumentException("Unknown BrowserWait value: " + value);
-  }
 
-  /** Returns the wire-format string value (matches JSON serialization). */
-  @Override
-  public String toString() {
-    return value;
-  }
+    /** Returns the string value. */
+    @JsonValue
+    public String getValue() {
+        return value;
+    }
+
+    /** Creates an instance from a string value. */
+    @JsonCreator
+    public static BrowserWait fromValue(final String value) {
+        for (BrowserWait e : values()) {
+            if (e.value.equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("Unknown BrowserWait value: " + value);
+    }
+
+    /** Returns the wire-format string value (matches JSON serialization). */
+    @Override
+    public String toString() {
+        return value;
+    }
 }

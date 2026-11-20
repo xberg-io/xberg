@@ -72,7 +72,11 @@ for route, loop, page in (
     loop_start = mixed.index(loop)
     branch = mixed[loop_start:].split("let result = match result.map_err", 1)[0]
     if route == "Tokio":
-        hints = re.search(r"\blet mut page_ocr_hints = hints_for_pipeline_page\(idx, [^\n]+;", branch)
+        # The rendered pages are spawned through the `spawn_page` closure, defined before
+        # the loop; it builds the hints once for every caller, including the retry-render
+        # requeue. Search the whole function so the closure is in range. ~keep
+        hints = re.search(r"\blet mut page_ocr_hints = hints_for_pipeline_page\(idx, [^\n]+;", mixed)
+        branch = mixed
         builder = mixed.split("let hints_for_pipeline_page =", 1)[1].split("let images_for_page =", 1)[0]
         fields = builder
     else:
