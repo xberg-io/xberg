@@ -1401,19 +1401,43 @@ const PREPROCESSING_FALLBACK_SOURCE_DPI: i32 = 300;
 const DEFAULT_PREPROCESSING_SAMPLE_STRIDE: usize = 4;
 /// Minimum normalized mean luminance for automatic document-page preprocessing.
 const CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD: f64 = 0.90;
-/// Normalized luminance at which a sampled pixel counts as near-white.
+/// Normalized luminance of the paper of a plain white page; a paper level above it is never read
+/// as ink, so a white page keeps the historical split exactly.
 const CLEAN_PAGE_LIGHT_PIXEL_THRESHOLD: f64 = 0.90;
 /// Minimum summed RGB channel value equivalent to the light-pixel threshold.
 const CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD: u16 =
     (CLEAN_PAGE_LIGHT_PIXEL_THRESHOLD * RGB_CHANNEL_MAX * RGB_CHANNEL_COUNT as f64).ceil() as u16;
-/// Minimum near-white sample fraction for automatic document-page preprocessing.
+/// Minimum paper-coloured fraction for automatic document-page preprocessing.
 const CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD: f64 = 0.80;
+/// Half-width, in grey levels, of the band below a raster's paper level that is still paper.
+///
+/// Absorbs glyph anti-aliasing, JPEG blocking and scanner noise: the edge of the paper is not one
+/// exact level but a ramp down from the bulk of it.
+const CLEAN_PAGE_PAPER_BAND_LEVELS: usize = 12;
+/// Share of the lightest pixels taken as the raster's paper level.
+///
+/// The paper is the bulk of the lightest pixels, not the maximum: one specular spot or a stray
+/// bright pixel is not paper, while a page keeps at least this share within its paper level.
+const CLEAN_PAGE_PAPER_TOP_SHARE: f64 = 0.15;
+/// Darkest normalized luminance a raster's paper bulk may have and still count as paper.
+///
+/// Lightly tinted and aged paper sits below the 90% near-white level — the #3337 tinted scans are
+/// 214,224,238, 88% of the channel range — while a photographed page in shade (75%) and a photo's
+/// background both stay below this floor and keep their raw pixels.
+const CLEAN_PAGE_MIN_PAPER_LUMINANCE: f64 = 0.80;
 /// Minimum separation between background and foreground luminance modes. ~keep
 const CLEAN_PAGE_MIN_FOREGROUND_CONTRAST: f64 = 0.20;
 /// Minimum image fraction required before a lower foreground mode counts as significant. ~keep
 const CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD: f64 = 0.005;
 /// Minimum population required for the lower foreground mode on small rasters. ~keep
 const CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD: usize = 8;
+/// Largest share of the raster that ink may cover on a page whose paper level is dominant.
+///
+/// A page of text inks 1-11% of its pixels; the shaded and graphic controls ink 18% or more, and
+/// for those the page mean and the ink colour decide. Reading the paper level from the raster
+/// (#3337) makes foreground mean ink on a tinted page, where the old fixed near-white split made
+/// the tint itself the foreground, so sparse ink is the tint-independent page signal.
+const CLEAN_PAGE_SPARSE_FOREGROUND_FRACTION: f64 = 0.15;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_NUMERATOR: usize = 3;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_DENOMINATOR: usize = 4;
 const CLEAN_PAGE_TEXT_COMPONENT_MIN_NARROW_ASPECT_RATIO: usize = 3;
@@ -1562,7 +1586,47 @@ fn prepare_decided_ocr_image(
     )
 }
 
+/// The channel sum at or above which a pixel of this raster counts as paper, or `None` when the
+/// raster holds no paper bulk.
+///
+/// The paper is the bulk of the lightest pixels ([`CLEAN_PAGE_PAPER_TOP_SHARE`]); its lower edge is
+/// the paper/ink split. A plain white page's edge sits at or above the historical
+/// [`CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD`], which then remains the split, so white pages keep the
+/// exact behaviour they had. A darker paper, a tint for instance, lowers the split until the tint
+/// counts as paper while the ink still does not.
+fn paper_channel_sum_floor(rgb_data: &[u8], pixel_count: usize) -> Option<u16> {
+    let mut luminance_histogram = [0usize; u8::MAX as usize + 1];
+    for pixel in rgb_data.as_chunks::<RGB_CHANNEL_COUNT>().0 {
+        let channel_sum = u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]);
+        luminance_histogram[usize::from(((channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as u8)] += 1;
+    }
+
+    let top_pixels = (pixel_count as f64 * CLEAN_PAGE_PAPER_TOP_SHARE).ceil() as usize;
+    let mut lighter_pixels = 0usize;
+    let mut paper_level = None;
+    for level in (0..=usize::from(u8::MAX)).rev() {
+        lighter_pixels += luminance_histogram[level];
+        if lighter_pixels >= top_pixels {
+            paper_level = Some(level);
+            break;
+        }
+    }
+    let paper_level = paper_level?;
+    if (paper_level as f64) < CLEAN_PAGE_MIN_PAPER_LUMINANCE * RGB_CHANNEL_MAX {
+        return None;
+    }
+    let paper_edge = paper_level.saturating_sub(CLEAN_PAGE_PAPER_BAND_LEVELS);
+    let paper_edge_sum = u16::try_from(paper_edge).ok()?.saturating_mul(RGB_CHANNEL_COUNT as u16);
+    Some(paper_edge_sum.min(CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD))
+}
+
 /// Classify bright, page-like RGB images that benefit from the default OCR preprocessing path.
+///
+/// "Page-like" means one dominant paper level covering most of the raster: white for a plain scan,
+/// a light tint for a shaded or aged one. The paper level is measured from the raster instead of
+/// compared with a fixed near-white value, so a tinted table page still takes the default
+/// preprocessing — and with it the glyph-height DPI resample — instead of reaching the backend at
+/// its own low resolution with 9 px digits (#3337, following the low-ppi picture case of #2503).
 fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) -> bool {
     let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
         return false;
@@ -1573,6 +1637,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     if pixel_count == 0 || rgb_data.len() != expected_len {
         return false;
     }
+
+    let Some(light_channel_floor) = paper_channel_sum_floor(rgb_data, pixel_count) else {
+        return false;
+    };
 
     let mut channel_sum = 0u128;
     let mut light_channel_sum = 0u128;
@@ -1586,7 +1654,7 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     for pixel in rgb_data.as_chunks::<RGB_CHANNEL_COUNT>().0 {
         let pixel_channel_sum = u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]);
         channel_sum += u128::from(pixel_channel_sum);
-        if pixel_channel_sum >= CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD {
+        if pixel_channel_sum >= light_channel_floor {
             light_channel_sum += u128::from(pixel_channel_sum);
             light_pixels += 1;
         } else {
@@ -1621,7 +1689,24 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     }
 
     // Dense dark glyphs can lower the page mean on a light background. Confirm text structure. ~keep
-    let Some((lower_mode_max, lower_mode_pixels)) = foreground_lower_mode(&foreground_histogram) else {
+    // Sparse ink is all ink: on a tinted page the paper is no longer foreground, so there is no
+    // second tone above the ink for the lower mode to separate, and 9 px digits ink too few pixels
+    // for the lower mode's population floor (#3337). The ink-colour and text-structure checks
+    // below still decide, exactly as they do for the lower mode. ~keep
+    let sparse_foreground = foreground_pixels as f64 <= CLEAN_PAGE_SPARSE_FOREGROUND_FRACTION * pixel_count_f64;
+    let significant_lower_mode = foreground_lower_mode(&foreground_histogram).filter(|(_, lower_mode_pixels)| {
+        *lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
+            && *lower_mode_pixels as f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD * pixel_count_f64
+    });
+    let ink_split = match significant_lower_mode {
+        Some(split) => Some(split),
+        None if !bright_mean && sparse_foreground => {
+            let paper_luminance_floor = (light_channel_floor / RGB_CHANNEL_COUNT as u16) as u8;
+            Some((paper_luminance_floor.saturating_sub(1), foreground_pixels))
+        }
+        None => None,
+    };
+    let Some((lower_mode_max, lower_mode_pixels)) = ink_split else {
         return false;
     };
     // A dark mean from mostly coloured ink is a graphic, not dense text; it keeps its raw pixels. ~keep
@@ -7288,6 +7373,181 @@ mod tests {
         assert!(
             should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
             "the dark text components qualify despite their contribution to the page mean"
+        );
+    }
+
+    /// The tint of the #3337 scans and of the #2432 reporter picture: 88% of the channel range, so
+    /// the historical fixed near-white split (90%) reads the whole page as ink.
+    const TINTED_PAPER: [u8; 3] = [214, 224, 238];
+    /// Ink of the same scans.
+    const TINTED_INK: [u8; 3] = [40, 52, 70];
+
+    /// One hollow digit-shaped block, `block` pixels tall, its top left corner at `(left, top)`.
+    fn draw_digit_block(raster: &mut image::RgbImage, left: u32, top: u32, block: u32, ink: [u8; 3]) {
+        let stroke = (block / 10).max(1);
+        for y in top..top + block {
+            for x in left..left + (block * 6 / 10).max(stroke * 2) {
+                let open = (top + stroke..top + block - stroke).contains(&y)
+                    && (left + stroke..left + block * 6 / 10 - stroke).contains(&x);
+                if !open {
+                    raster.put_pixel(x, y, image::Rgb(ink));
+                }
+            }
+        }
+    }
+
+    /// A six-column by twelve-row table of small glyph blocks on `paper`: the shape that loses its
+    /// numbers when a low-ppi tinted raster skips the 300 DPI resample (#3337).
+    fn low_ppi_table_raster(glyph_height: u32, paper: [u8; 3], ink: [u8; 3]) -> image::RgbImage {
+        let column_pitch = glyph_height * 4;
+        let row_pitch = glyph_height * 2;
+        let width = glyph_height * 3 + 5 * column_pitch + glyph_height * 4;
+        let height = glyph_height * 3 + 11 * row_pitch + glyph_height * 3;
+        let mut raster = image::RgbImage::from_pixel(width, height, image::Rgb(paper));
+        for row in 0..12 {
+            for column in 0..6 {
+                let left = glyph_height * 3 + column * column_pitch;
+                let top = glyph_height * 3 + row * row_pitch;
+                let digit_pitch = glyph_height * 6 / 10 + glyph_height / 2;
+                for digit in 0..3 {
+                    draw_digit_block(&mut raster, left + digit * digit_pitch, top, glyph_height, ink);
+                }
+            }
+        }
+        raster
+    }
+
+    /// Share of the pixels the historical fixed near-white split counts as paper.
+    fn near_white_share(raster: &image::RgbImage) -> f64 {
+        let light = raster
+            .as_raw()
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| {
+                pixel.iter().map(|&channel| u16::from(channel)).sum::<u16>() >= CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD
+            })
+            .count();
+        light as f64 / (raster.width() as usize * raster.height() as usize) as f64
+    }
+
+    /// #3337: a 100 DPI tinted scan is a page, so it must take the preprocessing that carries the
+    /// 300 DPI resample. Before the paper level was measured from the raster this returned false:
+    /// the tint covers 98% of the pixels and every one of them sits below the fixed near-white cut.
+    #[test]
+    fn tinted_100_dpi_table_takes_the_default_preprocessing_and_resamples() {
+        let raster = low_ppi_table_raster(9, TINTED_PAPER, TINTED_INK);
+        assert!(
+            near_white_share(&raster) < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD,
+            "the fixture must carry a tint the fixed near-white split rejects"
+        );
+
+        let prepared = prepare_ocr_image(
+            raster.as_raw().clone(),
+            raster.width(),
+            raster.height(),
+            None,
+            None,
+            false,
+            Some(100.0),
+            false,
+        );
+
+        assert!(prepared.apply_pix_preprocessing, "a tinted page is still a page");
+        let metadata = prepared.image_preprocessing.expect("the page must be DPI-normalized");
+        assert!(
+            !metadata.skipped_resize,
+            "100 DPI must be resampled to the 300 DPI target"
+        );
+        assert!((metadata.scale_factor - 3.0).abs() < 0.01, "{}", metadata.scale_factor);
+        assert_eq!(prepared.source_dpi, 300);
+    }
+
+    /// The same page with no resolution metadata: the glyph height decides, as for a white page.
+    #[test]
+    fn tinted_table_of_unknown_resolution_is_resampled_by_its_glyph_height() {
+        let raster = low_ppi_table_raster(9, TINTED_PAPER, TINTED_INK);
+
+        let prepared = prepare_ocr_image(
+            raster.as_raw().clone(),
+            raster.width(),
+            raster.height(),
+            None,
+            None,
+            false,
+            None,
+            false,
+        );
+
+        assert!(prepared.apply_pix_preprocessing);
+        let metadata = prepared.image_preprocessing.expect("the page must be DPI-normalized");
+        assert!(
+            metadata.scale_factor > 3.5,
+            "9 px glyphs must grow towards the 36 px target, got {}",
+            metadata.scale_factor
+        );
+    }
+
+    /// A 300 DPI tinted table already carries enough pixels for its glyphs and is not resampled.
+    #[test]
+    fn tinted_300_dpi_table_is_not_resampled() {
+        let raster = low_ppi_table_raster(27, TINTED_PAPER, TINTED_INK);
+
+        let prepared = prepare_ocr_image(
+            raster.as_raw().clone(),
+            raster.width(),
+            raster.height(),
+            None,
+            None,
+            false,
+            Some(300.0),
+            false,
+        );
+
+        assert!(prepared.apply_pix_preprocessing);
+        let metadata = prepared.image_preprocessing.expect("the page is measured, not resized");
+        assert!(metadata.skipped_resize);
+        assert_eq!(prepared.source_dpi, 300);
+    }
+
+    /// A plain low-ppi raster whose glyphs are already larger than the target gains nothing from a
+    /// resample; the tint criterion must not turn into "always upscale".
+    #[test]
+    fn plain_low_ppi_raster_with_legible_glyphs_is_not_resampled() {
+        let raster = low_ppi_table_raster(40, [255; 3], [0; 3]);
+
+        let prepared = prepare_ocr_image(
+            raster.as_raw().clone(),
+            raster.width(),
+            raster.height(),
+            None,
+            None,
+            false,
+            None,
+            false,
+        );
+
+        assert!(prepared.apply_pix_preprocessing);
+        let metadata = prepared.image_preprocessing.expect("the page is measured, not resized");
+        assert!(metadata.skipped_resize);
+        assert!((metadata.scale_factor - 1.0).abs() < 1e-9);
+    }
+
+    /// A tinted page of coloured graphics is not a table page; the existing ink-colour guard keeps
+    /// its raw pixels.
+    #[test]
+    fn dense_coloured_graphic_on_tinted_paper_keeps_raw_pixels() {
+        let mut raster = ring_grid_page(RING_GRID_SIDE / RING_GRID_PITCH, |_| COLOURED_INK, COLOURED_INK);
+        for pixel in raster.as_chunks_mut::<RGB_CHANNEL_COUNT>().0 {
+            if pixel.iter().all(|&channel| channel == u8::MAX) {
+                *pixel = TINTED_PAPER;
+            }
+        }
+        let side = RING_GRID_SIDE as u32;
+
+        assert!(
+            !should_apply_default_preprocessing(&raster, side, side),
+            "a tint must not turn a coloured graphic into a page"
         );
     }
 
