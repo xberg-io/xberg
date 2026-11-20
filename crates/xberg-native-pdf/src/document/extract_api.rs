@@ -66,19 +66,38 @@ pub fn order_on_script_base_lines(
     // annotates. The ordering passes read the stream order, and a single-column page is not
     // re-sorted by them, so put a mark that precedes its base back behind it. ~keep
     let mut marks_by_base: HashMap<usize, Vec<usize>> = HashMap::new();
-    let mut moved = HashSet::new();
     for (mark, base) in snapped.iter().enumerate() {
-        if let Some((_, base_index)) = base
-            && mark < *base_index
-        {
+        if let Some((_, base_index)) = base {
             marks_by_base.entry(*base_index).or_default().push(mark);
-            moved.insert(mark);
         }
     }
-    if !moved.is_empty() {
-        for marks in marks_by_base.values_mut() {
-            marks.sort_by(|&left, &right| spans[left].bbox.x.total_cmp(&spans[right].bbox.x));
+    // A cluster the stream split is rebuilt whole: its members that already follow the base are
+    // part of the same run, and leaving them where they are puts a trailing glyph of the run on
+    // the wrong side of one that arrived ahead of the base (`/t`, base, `1`). A member of a moved
+    // mark travels with it, so a nested mark that follows its parent looks ahead of its own base
+    // index yet still belongs to the cluster the parent is pulled into. ~keep
+    let mut moved = HashSet::new();
+    let mut rebuilt: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (&base, marks) in &marks_by_base {
+        if marks.iter().all(|&mark| mark > base) {
+            continue;
         }
+        let mut members = Vec::new();
+        let mut visited = HashSet::new();
+        let mut pending = marks.clone();
+        while let Some(mark) = pending.pop() {
+            if visited.insert(mark) {
+                members.push(mark);
+                pending.extend(marks_by_base.get(&mark).into_iter().flatten().copied());
+            }
+        }
+        members.sort_by(|&left, &right| spans[left].bbox.x.total_cmp(&spans[right].bbox.x));
+        moved.extend(members.iter().copied());
+        rebuilt.insert(base, members);
+    }
+    // A nested base inside a rebuilt cluster is already in its ancestor's member list.
+    rebuilt.retain(|base, _| !moved.contains(base));
+    if !moved.is_empty() {
         let mut ordered = Vec::with_capacity(spans.len());
         let mut pending: Vec<usize> = Vec::new();
         for index in 0..spans.len() {
@@ -86,11 +105,9 @@ pub fn order_on_script_base_lines(
                 continue;
             }
             pending.push(index);
-            // A moved mark can itself be the base of a nested one, so emit each base's marks as
-            // a stack rather than one level only. ~keep
             while let Some(index) = pending.pop() {
                 ordered.push(spans[index].clone());
-                if let Some(marks) = marks_by_base.get(&index) {
+                if let Some(marks) = rebuilt.get(&index) {
                     pending.extend(marks.iter().rev());
                 }
             }
@@ -2400,6 +2417,33 @@ mod order_on_script_base_lines_tests {
         // the position. The mark must land behind its base before the grouper reads the stream.
         order_on_script_base_lines(&mut spans, |_| {});
         assert_eq!(texts(&spans), ["against the", "refusal on 2", "nd", "June"]);
+    }
+
+    #[test]
+    fn should_rebuild_a_split_cluster_in_glyph_order_including_its_trailing_glyph() {
+        let mut spans = vec![
+            span("/t", 134.0, 703.0, 7.0, 7.0, 5),
+            span("(1 \u{2212} \u{3b4})", 100.0, 700.0, 30.0, 10.0, 1),
+            span("1", 130.0, 703.0, 4.0, 7.0, 5),
+        ];
+        // `1/t` arrives with only its first glyph ahead of the base. Moving that glyph alone
+        // leaves the exponent as `/t1`; the whole cluster must follow the base in glyph order.
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["(1 \u{2212} \u{3b4})", "1", "/t"]);
+    }
+
+    #[test]
+    fn should_move_a_nested_mark_with_the_parent_the_stream_put_ahead_of_its_base() {
+        let mut spans = vec![
+            span("2", 120.0, 703.5, 4.0, 9.0, 5),
+            span("3", 124.0, 706.5, 3.0, 7.0, 5),
+            span("(0)", 100.0, 700.0, 20.0, 12.0, 1),
+        ];
+        // `2` annotates the label and arrives ahead of it; `3` annotates `2` but follows it, so
+        // its own base index does not put it ahead of anything. It belongs to the cluster `2` is
+        // pulled into and must travel with it.
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["(0)", "2", "3"]);
     }
 
     #[test]
