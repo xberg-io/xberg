@@ -352,4 +352,118 @@ mod tests {
         assert_eq!(whitelist, "");
         assert_eq!(pools.han.counts(), (0, 1));
     }
+
+    #[test]
+    fn a_failed_engine_construction_does_not_leave_a_model_directory() {
+        use crate::ocr::processor::script_retry::live_directory;
+
+        let source = bundled_tessdata();
+        let mut unique = xberg_tesseract::bundled_eng_traineddata().unwrap().to_vec();
+        unique.extend_from_slice(b"unique revision");
+        std::fs::write(source.path().join("eng.traineddata"), unique).unwrap();
+        let path = source.path().to_str().unwrap().to_owned();
+        let models = ModelSet::snapshot(path, &["eng".into()], true).unwrap();
+        let pools = RetryApiPools::new(1);
+
+        let result: Result<(), OcrError> = pools.with_initializer(
+            RetryStage::Han,
+            &models,
+            3,
+            |_, _, _| Err(OcrError::TesseractInitializationFailed("injected failure".into())),
+            |_| Ok(()),
+        );
+
+        assert!(result.is_err());
+        let path = live_directory(&models).expect("capture should have created a directory");
+        assert!(!path.exists(), "a failed engine construction left {}", path.display());
+    }
+
+    #[cfg(unix)]
+    const TMPDIR_CHILD: &str = "XBERG_MODEL_TMPDIR_CHILD";
+    #[cfg(unix)]
+    const TMPDIR_TEST: &str =
+        "ocr::processor::api_pool::retry::tests::a_pool_run_removes_its_model_directories_from_tmpdir";
+
+    #[cfg(unix)]
+    fn model_directories(root: &std::path::Path, source: &std::path::Path) -> usize {
+        std::fs::read_dir(root)
+            .expect("temporary root")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path() != source)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .filter(|entry| entry.path().join("eng.traineddata").is_file())
+            .count()
+    }
+
+    #[cfg(unix)]
+    fn tmpdir_child() {
+        let root = std::env::temp_dir();
+        let source = root.join("source-tessdata");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(
+            source.join("eng.traineddata"),
+            xberg_tesseract::bundled_eng_traineddata().unwrap(),
+        )
+        .unwrap();
+        let path = source.to_str().unwrap().to_owned();
+        let pool = TesseractApiPool::with_capacity(1);
+        let models = ModelContext::for_path(path.clone(), 1).unwrap();
+        let lease = pool.checkout(&models, "eng", 1).unwrap();
+        let retry_models = ModelSet::snapshot(path, &["eng".into()], false).unwrap();
+        pool.retry()
+            .with_engine(RetryStage::Han, &retry_models, 1, |_| Ok(()))
+            .unwrap();
+        drop(lease);
+
+        assert_eq!(
+            model_directories(&root, &source),
+            2,
+            "the primary and retry engines should each have one distinct model directory"
+        );
+        super::super::super::script_retry::remove_shared_model_directories();
+        assert_eq!(model_directories(&root, &source), 0);
+
+        drop(pool);
+        std::fs::remove_dir_all(&source).unwrap();
+        let leftovers: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "the temporary root still holds {:?}",
+            leftovers.iter().map(|entry| entry.path()).collect::<Vec<_>>()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_pool_run_removes_its_model_directories_from_tmpdir() {
+        if std::env::var_os(TMPDIR_CHILD).is_some() {
+            tmpdir_child();
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", TMPDIR_TEST, "--nocapture", "--test-threads=1"])
+            .env(TMPDIR_CHILD, "1")
+            .env("TMPDIR", root.path())
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "the child did not run its pool path: {stdout}\n{stderr}"
+        );
+        let leftovers: Vec<_> = std::fs::read_dir(root.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "the child left {:?}",
+            leftovers.iter().map(|entry| entry.path()).collect::<Vec<_>>()
+        );
+    }
 }
