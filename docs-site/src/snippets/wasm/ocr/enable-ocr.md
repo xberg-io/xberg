@@ -4,7 +4,7 @@ target: wasm
 ---
 
 ```typescript title="Wasm"
-import init, { WasmExtractInputKind, extract } from "@xberg-io/xberg-wasm";
+import init, { WasmExtractInput, WasmExtractionConfig, WasmOcrConfig, extract } from "@xberg-io/xberg-wasm";
 
 async function extractWithOcr() {
   await init();
@@ -14,21 +14,15 @@ async function extractWithOcr() {
 
   // OCR is turned on per extraction through the `ocr` config block. There is no
   // separate global "enable OCR" call — the backend is selected by name here.
-  const output = await extract(
-    {
-      kind: "bytes",
-      bytes,
-      mimeType: "image/png",
-      filename: "scanned-page.png",
-    },
-    {
-      ocr: {
-        enabled: true,
-        backend: "tesseract",
-        language: ["eng"],
-      },
-    },
-  );
+  const ocr = WasmOcrConfig.default();
+  ocr.enabled = true;
+  ocr.backend = "tesseract";
+  ocr.language = ["eng"];
+
+  const config = WasmExtractionConfig.default();
+  config.ocr = ocr;
+
+  const output = await extract(WasmExtractInput.fromBytes(bytes, "image/png", "scanned-page.png"), config);
 
   console.log("Extracted text:");
   console.log(output.results[0].content);

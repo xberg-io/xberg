@@ -8,6 +8,7 @@ use crate::geometry::Rect;
 
 use crate::layout::text_block::TextSpan;
 use crate::structure::table_extractor::{Table, TableCell, TableRow, span_text_for_cell};
+use crate::text::cjk_ranges::{is_spatial_prose_cjk, suppress_table_cell_space};
 use std::collections::HashMap;
 
 mod fill_backgrounds;
@@ -415,21 +416,10 @@ fn looks_like_prose_paragraph(table: &Table) -> bool {
 /// consecutive CJK characters. Ruled / author-marked tables never reach here.
 fn looks_like_cjk_prose(table: &Table) -> bool {
     const MIN_CJK_RUN: usize = 12;
-    fn is_cjk(c: char) -> bool {
-        matches!(
-            c as u32,
-            0x3040..=0x30FF      // Hiragana + Katakana ~keep
-            | 0x3400..=0x4DBF    // CJK Ext A ~keep
-            | 0x4E00..=0x9FFF    // CJK Unified ~keep
-            | 0xF900..=0xFAFF    // CJK Compatibility ~keep
-            | 0xFF66..=0xFF9F    // Halfwidth Katakana ~keep
-            | 0xAC00..=0xD7AF    // Hangul Syllables ~keep
-        )
-    }
     table.rows.iter().flat_map(|r| &r.cells).any(|c| {
         let mut run = 0usize;
         for ch in c.text.chars() {
-            if is_cjk(ch) {
+            if is_spatial_prose_cjk(ch) {
                 run += 1;
                 if run >= MIN_CJK_RUN {
                     return true;
@@ -1790,6 +1780,128 @@ fn detect_header_row_above(spans: &[TextSpan], row_ys: &[f32], col_xs: &[f32]) -
     Some(header_max_top + 1.0)
 }
 
+fn record_cell_token(cell: &TableCell) -> &str {
+    if let [span] = cell.spans.as_slice()
+        && is_data_value(span.text.trim())
+    {
+        return span.text.trim();
+    }
+    cell.text.trim()
+}
+
+fn is_decimal_record(text: &str) -> bool {
+    text.contains('.') && is_data_value(text)
+}
+
+fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
+    if row.cells.len() != next.cells.len() {
+        return false;
+    }
+    let decimal_count = row
+        .cells
+        .iter()
+        .filter(|cell| is_decimal_record(record_cell_token(cell)))
+        .count();
+    if decimal_count <= row.cells.len() / 2 {
+        return false;
+    }
+    row.cells.iter().zip(&next.cells).all(|(cell, following)| {
+        let text = record_cell_token(cell);
+        let next_text = record_cell_token(following);
+        if text.is_empty()
+            || next_text.is_empty()
+            || is_data_value(text) != is_data_value(next_text)
+            || is_decimal_record(text) != is_decimal_record(next_text)
+            || cell.colspan != 1
+            || cell.rowspan != 1
+            || following.colspan != 1
+            || following.rowspan != 1
+            || following.spans.is_empty()
+        {
+            return false;
+        }
+        cell.spans.first().is_some_and(|style| {
+            let same_regular_style = cell.spans.iter().chain(&following.spans).all(|span| {
+                !span.font_weight.is_bold() && span.font_name == style.font_name && span.font_size == style.font_size
+            });
+            let bold_stub = !is_data_value(text)
+                && cell.spans.iter().all(|span| span.font_weight.is_bold())
+                && following.spans.iter().all(|span| !span.font_weight.is_bold());
+            same_regular_style || bold_stub
+        })
+    })
+}
+
+fn decimal_point_x(cell: &TableCell) -> Option<f32> {
+    let [span] = cell.spans.as_slice() else {
+        return None;
+    };
+    if span.rotation_degrees != 0.0 || span.wmode != 0 || span.char_x_offsets.len() != span.text.chars().count() {
+        return None;
+    }
+    let mut points = span.text.chars().enumerate().filter(|(_, glyph)| *glyph == '.');
+    let (index, _) = points.next()?;
+    let x = span.char_x_offsets[index];
+    (points.next().is_none() && (span.bbox.left()..=span.bbox.right()).contains(&x)).then_some(x)
+}
+
+fn group_covers_decimal_leaves(
+    group: &TableRow,
+    leaves: &TableRow,
+    owns: impl Fn(&TableCell, &[TableCell]) -> bool,
+) -> bool {
+    let mut start = 0;
+    for cell in &group.cells {
+        let end = start + cell.colspan as usize;
+        if cell.colspan > 1
+            && cell.rowspan == 1
+            && cell.text.chars().any(char::is_alphabetic)
+            && leaves.cells.get(start..end).is_some_and(|covered| {
+                covered.iter().all(|leaf| is_decimal_record(record_cell_token(leaf))) && owns(cell, covered)
+            })
+        {
+            return true;
+        }
+        start = end;
+    }
+    false
+}
+
+fn centered_decimal_labels(row: &TableRow, body: &TableRow, columns: &[ColumnCluster]) -> bool {
+    if row.cells.len() != columns.len() || body.cells.len() != columns.len() {
+        return false;
+    }
+    row.cells
+        .iter()
+        .zip(&body.cells)
+        .zip(columns)
+        .all(|((label, value), column)| centered_decimal_pair(label, value, column.x_min, column.x_max))
+}
+
+fn centered_decimal_pair(label: &TableCell, value: &TableCell, left: f32, right: f32) -> bool {
+    if !is_decimal_record(record_cell_token(label)) {
+        return true;
+    }
+    if !is_data_value(label.text.trim()) || !is_data_value(value.text.trim()) {
+        return false;
+    }
+    let (Some(label_point), Some(value_point)) = (decimal_point_x(label), decimal_point_x(value)) else {
+        return false;
+    };
+    let (label, value) = (label.spans[0].bbox, value.spans[0].bbox);
+    const ALIGNMENT_MARGIN: f32 = 0.12;
+    let margin = (right - left) * ALIGNMENT_MARGIN;
+    let center = (left + right) / 2.0;
+    (label.center().x - center).abs() <= margin
+        && label.left() - left > margin
+        && right - label.right() > margin
+        && (value.right() - right).abs() <= margin
+        && value.center().x > center + margin
+        && value.left() - label.left() > margin
+        && value.right() - label.right() > margin
+        && (label_point - value_point).abs() > margin
+}
+
 fn detect_tables_in_cluster(
     spans: &[TextSpan],
     all_lines: &[crate::elements::PathContent],
@@ -1929,15 +2041,59 @@ fn detect_tables_in_cluster(
                 ));
                 let mut header_rows_detected = 0;
                 let table_width = cluster.bbox.width;
-                for r in 0..table.rows.len().min(3) {
-                    let row_bottom = grid.rows[r].y_min;
-                    let has_separator = cluster.lines.iter().any(|&idx| {
-                        let path = &all_lines[idx];
+                let long_rules_at = |row_bottom: f32| {
+                    cluster.lines.iter().map(|&idx| &all_lines[idx]).filter(move |path| {
                         let rendered = path.rendered_bbox();
                         path.is_horizontal_line(LINE_AXIS_TOL)
                             && rendered.width > table_width * 0.8
                             && (rendered.center().y - row_bottom).abs() < config.row_tolerance
-                    });
+                    })
+                };
+                let solid_rule_weight = |row_bottom| {
+                    long_rules_at(row_bottom)
+                        .filter(|path| source_headers::dark_solid_stroke(path))
+                        .map(|path| path.stroke_width)
+                        .filter(|width| width.is_finite() && *width > 0.0)
+                        .max_by(f32::total_cmp)
+                };
+                for r in 0..table.rows.len().min(3) {
+                    let row_bottom = grid.rows[r].y_min;
+                    let has_separator = long_rules_at(row_bottom).next().is_some();
+                    // A spanning heading over centered decimal leaves can establish a header
+                    // band even when the rules below the leaves and records have equal weight. ~keep
+                    if r > 0
+                        && table
+                            .rows
+                            .get(r + 1)
+                            .is_some_and(|next| continues_decimal_records(&table.rows[r], next))
+                    {
+                        const HEADER_RULE_WEIGHT_CONTRAST: f32 = 0.5;
+                        let header_boundary = solid_rule_weight(row_bottom)
+                            .zip(solid_rule_weight(grid.rows[r + 1].y_min))
+                            .is_some_and(|(header, body)| {
+                                header - body >= HEADER_RULE_WEIGHT_CONTRAST
+                                    || (r == 1
+                                        && header == body
+                                        && group_covers_decimal_leaves(&table.rows[0], &table.rows[r], |_, _| true))
+                            });
+                        if r == 1
+                            && header_boundary
+                            && centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
+                            && let (Some(first), Some(last)) = (grid.columns.first(), grid.columns.last())
+                            && source_headers::has_painted_header_background(
+                                crate::geometry::Rect::new(
+                                    first.x_min,
+                                    row_bottom,
+                                    last.x_max - first.x_min,
+                                    grid.rows[0].y_max - row_bottom,
+                                ),
+                                all_lines.iter(),
+                            )
+                        {
+                            header_rows_detected = r + 1;
+                        }
+                        break;
+                    }
                     if has_separator {
                         header_rows_detected = r + 1;
                     } else if r == 0 && table.rows[r].has_colspan() {
@@ -3219,14 +3375,13 @@ fn detect_intersections(
             "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
         })
     });
-    let stacked_row_cuts = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
-    let shading = source_headers::shading_rectangles(lines);
+    let (stacked_row_cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
     for table in &mut tables {
-        source_headers::infer_complete_leading_header(table, &shading);
+        source_headers::infer_complete_leading_header(table, lines);
     }
     #[cfg(test)]
     header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
-    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &h_edges, &v_edges, config);
+    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &restart_members, &h_edges, &v_edges, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_section_split", || {
         header_source_diagnostic::tables(&tables)
@@ -3817,15 +3972,19 @@ const SECTION_DIVIDER_WIDTH_RATIO: f32 = 0.80;
 fn split_tables_at_section_dividers(
     tables: Vec<Table>,
     stacked_row_cuts: Vec<Option<Vec<usize>>>,
+    restart_members: &[bool],
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
     let mut result = Vec::new();
-    for (table, cuts) in tables.into_iter().zip(stacked_row_cuts) {
-        let mut parts = split_table_at_section_dividers(table, h_edges, v_edges, config);
-        // Divider matching uses the original fragment order. Only reorder a surviving whole merge. ~keep
-        if let (Some(cuts), [table]) = (cuts, parts.as_mut_slice()) {
+    for ((mut table, cuts), &restart_member) in tables.into_iter().zip(stacked_row_cuts).zip(restart_members) {
+        // Divider matching needs physically consecutive rows in a restart chain. ~keep
+        if restart_member && let Some(cuts) = &cuts {
+            order_stacked_fragments(&mut table.rows, cuts);
+        }
+        let mut parts = split_table_at_section_dividers(table, h_edges, v_edges, config, restart_member);
+        if !restart_member && let (Some(cuts), [table]) = (cuts, parts.as_mut_slice()) {
             order_stacked_fragments(&mut table.rows, &cuts);
         }
         result.extend(parts);
@@ -3855,6 +4014,7 @@ fn split_table_at_section_dividers(
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
+    descending_rows: bool,
 ) -> Vec<Table> {
     let Some(bbox) = table.bbox else {
         return vec![table];
@@ -3947,6 +4107,12 @@ fn split_table_at_section_dividers(
     let mut split_after: Vec<usize> = Vec::new();
     let tol = SNAP_TOL + 2.0; // generous tolerance for matching divider to row boundary ~keep
     for &dy in &divider_ys {
+        if descending_rows {
+            if let Some(index) = nearest_descending_section_cut(&row_bounds, dy, tol) {
+                split_after.push(index);
+            }
+            continue;
+        }
         let mut best_idx: Option<usize> = None;
         let mut best_dist = f32::INFINITY;
         for (i, bounds) in row_bounds.iter().enumerate() {
@@ -4001,6 +4167,19 @@ fn split_table_at_section_dividers(
     build_table_sections(&table, &exact, config.min_table_cells)
         .filter(|sections| sections.iter().all(passes_section_admission))
         .unwrap_or(legacy_sections)
+}
+
+fn nearest_descending_section_cut(rows: &[Option<(f32, f32)>], divider: f32, tolerance: f32) -> Option<usize> {
+    rows.windows(2)
+        .enumerate()
+        .filter_map(|(index, pair)| {
+            let distance = pair[0]
+                .map_or(f32::INFINITY, |(low, _)| (divider - low).abs())
+                .min(pair[1].map_or(f32::INFINITY, |(_, high)| (divider - high).abs()));
+            (distance <= tolerance).then_some((index, distance))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(index, _)| index)
 }
 
 fn exact_section_cuts(row_bounds: &[Option<(f32, f32)>], divider_ys: &[f32], legacy: &[usize]) -> Option<Vec<usize>> {
@@ -4165,13 +4344,14 @@ const MERGE_COL_DIFF_TOLERANCE: usize = 2;
 /// Merge tables that are vertically adjacent (small gap between bottom of one
 /// and top of another) and have similar column counts (difference <= `MERGE_COL_DIFF_TOLERANCE`).
 /// When column counts differ, the narrower table's rows are padded with empty cells.
+/// Independently outlined grids with an open seam stay separate unless they stack as one schema.
 fn merge_vertically_adjacent_tables(
     tables: &mut Vec<Table>,
     h_edges: &[Edge],
     v_edges: &[Edge],
-) -> Vec<Option<Vec<usize>>> {
+) -> (Vec<Option<Vec<usize>>>, Vec<bool>) {
     if tables.len() < 2 {
-        return vec![None; tables.len()];
+        return (vec![None; tables.len()], vec![false; tables.len()]);
     }
 
     // Keep the divider pass's input order, lowest PDF Y first. ~keep
@@ -4183,7 +4363,11 @@ fn merge_vertically_adjacent_tables(
 
     let mut merged: Vec<Table> = Vec::new();
     let mut stacked_row_cuts = Vec::new();
+    let mut restart_chain = None;
+    let mut fragment_cuts = Vec::new();
+    let mut restart_members = Vec::new();
     for table in tables.drain(..) {
+        let mut separated_restart = false;
         let should_merge = merged.last().is_some_and(|prev: &Table| {
             let col_diff = (prev.col_count as isize - table.col_count as isize).unsigned_abs();
             if col_diff > MERGE_COL_DIFF_TOLERANCE {
@@ -4192,15 +4376,35 @@ fn merge_vertically_adjacent_tables(
             match (prev.bbox, table.bbox) {
                 (Some(pb), Some(tb)) => {
                     let gap = (tb.top() - pb.bottom()).abs().min((pb.top() - tb.bottom()).abs());
-                    gap <= ADJACENT_TABLE_MERGE_GAP
+                    if gap > ADJACENT_TABLE_MERGE_GAP {
+                        return false;
+                    }
+                    if separated_ruled_grids(prev, &table, (pb, tb), h_edges, v_edges) {
+                        separated_restart = true;
+                        return false;
+                    }
+                    true
                 }
                 _ => false,
             }
         });
 
+        if separated_restart {
+            restart_chain.get_or_insert(merged.len() - 1);
+        } else if !should_merge && let Some(start) = restart_chain.take() {
+            finish_restart_chain(
+                start,
+                &mut merged,
+                &mut stacked_row_cuts,
+                &mut fragment_cuts,
+                &mut restart_members,
+            );
+        }
+
         if should_merge {
             let prev = merged.last_mut().unwrap();
             record_stacked_join(stacked_row_cuts.last_mut().unwrap(), prev, &table, h_edges, v_edges);
+            fragment_cuts.last_mut().unwrap().push(prev.rows.len());
             let target_cols = prev.col_count.max(table.col_count);
 
             if prev.col_count < target_cols {
@@ -4251,11 +4455,171 @@ fn merge_vertically_adjacent_tables(
         } else {
             stacked_row_cuts.push(table_has_ruled_outline(&table, h_edges, v_edges).then(Vec::new));
             merged.push(table);
+            fragment_cuts.push(Vec::new());
+            restart_members.push(false);
         }
     }
 
+    if let Some(start) = restart_chain {
+        finish_restart_chain(
+            start,
+            &mut merged,
+            &mut stacked_row_cuts,
+            &mut fragment_cuts,
+            &mut restart_members,
+        );
+    }
     *tables = merged;
-    stacked_row_cuts
+    (stacked_row_cuts, restart_members)
+}
+
+fn finish_restart_chain(
+    start: usize,
+    tables: &mut [Table],
+    stacked_row_cuts: &mut [Option<Vec<usize>>],
+    fragment_cuts: &mut [Vec<usize>],
+    restart_members: &mut [bool],
+) {
+    // Keep the original row order through divider matching. A surviving
+    // aggregate in this chain still needs its original fragment boundaries. ~keep
+    for (cuts, fragments) in stacked_row_cuts[start..].iter_mut().zip(&mut fragment_cuts[start..]) {
+        if cuts.is_none() && !fragments.is_empty() {
+            *cuts = Some(std::mem::take(fragments));
+        }
+    }
+    restart_members[start..].fill(true);
+    tables[start..].reverse();
+    stacked_row_cuts[start..].reverse();
+    fragment_cuts[start..].reverse();
+}
+
+// Both separations need an open seam, so its scan runs at most once per pair. ~keep
+fn separated_ruled_grids(
+    lower: &Table,
+    upper: &Table,
+    (lower_bounds, upper_bounds): (Rect, Rect),
+    horizontal: &[Edge],
+    vertical: &[Edge],
+) -> bool {
+    let mut open_seam = None;
+    let mut has_open_seam_once =
+        || *open_seam.get_or_insert_with(|| has_open_seam(lower_bounds, upper_bounds, vertical));
+    (has_closed_restart_rules(lower_bounds, upper_bounds, horizontal)
+        && has_open_seam_once()
+        && aligned_table_restarts(lower, upper))
+        || independent_ruled_tables(lower, upper, horizontal, vertical, has_open_seam_once)
+}
+
+// Require a painted closing rule and opening rule; the caller also requires
+// that no vertical ruling connects the two grids across the gap. ~keep
+fn has_closed_restart_rules(lower: Rect, upper: Rect, horizontal: &[Edge]) -> bool {
+    let lower_end = lower.bottom();
+    let upper_start = upper.top();
+    let tol = BAND_RULE_SPAN_TOL;
+    let closed = |y: f32, bounds: Rect| {
+        horizontal.iter().any(|edge| {
+            (edge.coord - y).abs() <= tol && edge.start <= bounds.left() + tol && edge.end >= bounds.right() - tol
+        })
+    };
+    (lower.left() - upper.left()).abs() <= tol
+        && (lower.right() - upper.right()).abs() <= tol
+        && closed(lower_end, lower)
+        && closed(upper_start, upper)
+}
+
+// Each grid's own outline closes it, so the grids need not share outer edges.
+// Only a same-schema stack merges, because `record_stacked_join` can then
+// restore its fragments to top-down page order. ~keep
+fn independent_ruled_tables(
+    lower: &Table,
+    upper: &Table,
+    horizontal: &[Edge],
+    vertical: &[Edge],
+    mut open_seam: impl FnMut() -> bool,
+) -> bool {
+    !stacks_as_one_grid(lower, upper)
+        && open_seam()
+        && table_has_ruled_outline(lower, horizontal, vertical)
+        && table_has_ruled_outline(upper, horizontal, vertical)
+}
+
+// A blank gap between the grids that no vertical rule crosses. ~keep
+fn has_open_seam(lower: Rect, upper: Rect, vertical: &[Edge]) -> bool {
+    let tol = BAND_RULE_SPAN_TOL;
+    upper.top() - lower.bottom() > 2.0 * tol
+        && !has_vertical_seam_connector(
+            vertical,
+            lower.left().min(upper.left()) - tol,
+            lower.right().max(upper.right()) + tol,
+            lower.bottom() + tol,
+            upper.top() - tol,
+        )
+}
+
+/// Largest endpoint miss at which two snapped collinear seam segments still connect.
+/// Kept far below a deliberate blank gap; `JOIN_TOL` would bridge a narrow seam outright.
+const SEAM_CONNECTOR_JOIN_TOL: f32 = 0.1;
+
+fn has_vertical_seam_connector(vertical: &[Edge], left: f32, right: f32, bottom: f32, top: f32) -> bool {
+    let mut segments: Vec<_> = vertical
+        .iter()
+        .copied()
+        .filter(|edge| edge.coord >= left && edge.coord <= right && edge.end >= bottom && edge.start <= top)
+        .collect();
+    segments.sort_unstable_by(|a, b| a.coord.total_cmp(&b.coord).then_with(|| a.start.total_cmp(&b.start)));
+
+    // Coordinates are already snapped. A real gap between two segments must stay open. ~keep
+    let mut coverage: Option<Edge> = None;
+    for edge in segments {
+        let span = match coverage.as_mut() {
+            Some(span) if span.coord == edge.coord && edge.start <= span.end + SEAM_CONNECTOR_JOIN_TOL => {
+                span.end = span.end.max(edge.end);
+                *span
+            }
+            _ => *coverage.insert(edge),
+        };
+        if span.start <= bottom && span.end >= top {
+            return true;
+        }
+    }
+    false
+}
+
+// A separated grid that restarts the same two-band schema after populated
+// records owns its own rows, even when its columns align with the preceding grid. ~keep
+fn aligned_table_restarts(lower: &Table, upper: &Table) -> bool {
+    if lower.col_count != upper.col_count || lower.rows.len() < 4 || upper.rows.len() < 4 {
+        return false;
+    }
+    let populated_record = |row: &TableRow| {
+        row.cells
+            .first()
+            .is_some_and(|cell| cell.text.chars().any(char::is_alphabetic))
+            && row
+                .cells
+                .iter()
+                .skip(1)
+                .filter(|cell| {
+                    let value = cell.text.trim().replace([',', '$'], "");
+                    is_numeric_cell(&value)
+                })
+                .count()
+                >= 3
+    };
+    lower.rows[..2].iter().zip(&upper.rows[..2]).all(|(a, b)| {
+        a.cells.len() == b.cells.len()
+            && a.cells
+                .iter()
+                .filter(|cell| cell.text.chars().any(char::is_alphabetic))
+                .count()
+                >= 3
+            && a.cells
+                .iter()
+                .zip(&b.cells)
+                .all(|(a, b)| a.text.trim() == b.text.trim())
+    }) && populated_record(&lower.rows[2])
+        && populated_record(&upper.rows[2])
+        && populated_record(upper.rows.last().unwrap())
 }
 
 fn record_stacked_join(
@@ -4268,16 +4632,20 @@ fn record_stacked_join(
     let Some(row_cuts) = cuts else {
         return;
     };
-    let aligned = lower.bbox.zip(upper.bbox).is_some_and(|(lower, upper)| {
-        lower.bottom() < upper.top()
-            && (lower.left() - upper.left()).abs() <= BAND_RULE_SPAN_TOL
-            && (lower.right() - upper.right()).abs() <= BAND_RULE_SPAN_TOL
-    });
-    if aligned && lower.col_count == upper.col_count && table_has_ruled_outline(upper, h_edges, v_edges) {
+    if stacks_as_one_grid(lower, upper) && table_has_ruled_outline(upper, h_edges, v_edges) {
         row_cuts.push(lower.rows.len());
     } else {
         *cuts = None;
     }
+}
+
+fn stacks_as_one_grid(lower: &Table, upper: &Table) -> bool {
+    lower.col_count == upper.col_count
+        && lower.bbox.zip(upper.bbox).is_some_and(|(lower, upper)| {
+            lower.bottom() < upper.top()
+                && (lower.left() - upper.left()).abs() <= BAND_RULE_SPAN_TOL
+                && (lower.right() - upper.right()).abs() <= BAND_RULE_SPAN_TOL
+        })
 }
 
 fn table_has_ruled_outline(table: &Table, h_edges: &[Edge], v_edges: &[Edge]) -> bool {
@@ -5103,39 +5471,14 @@ fn cell_span_separator(prev: &TextSpan, current: &TextSpan) -> &'static str {
     // gap above the inter-glyph threshold now gets at least a single
     // space. ~keep
 
-    // CJK / fullwidth-operator suppression — same rule as
-    // pipeline::converters::has_horizontal_gap.  pdftotext keeps an
-    // ideograph + adjacent fullwidth/math operator without a separator. ~keep
-    let is_cjk = |c: char| {
-        matches!(
-            c as u32,
-            0x3040..=0x309F
-            | 0x30A0..=0x30FF
-            | 0x4E00..=0x9FFF
-            | 0xAC00..=0xD7AF
-            | 0x3400..=0x4DBF
-            | 0x20000..=0x2A6DF
-        )
-    };
-    let is_fw_op = |c: char| {
-        matches!(
-            c as u32,
-            0xFF0B | 0xFF0D | 0xFF1A | 0xFF1B
-            | 0xFF1C..=0xFF1E
-            | 0x2260 | 0x2248
-            | 0x2264..=0x2265
-            | 0x00B5 | 0x03BC
-            | 0x00B1 | 0x00D7 | 0x00F7
-        )
-    };
-    let prev_tail = prev.text.chars().next_back();
-    let curr_head = current.text.chars().next();
-    if let (Some(p), Some(c)) = (prev_tail, curr_head) {
-        let p_cjk = is_cjk(p);
-        let c_cjk = is_cjk(c);
-        if (p_cjk || is_fw_op(p)) && (c_cjk || is_fw_op(c)) && (p_cjk || c_cjk) {
-            return "";
-        }
+    if prev
+        .text
+        .chars()
+        .next_back()
+        .zip(current.text.chars().next())
+        .is_some_and(|(left, right)| suppress_table_cell_space(left, right))
+    {
+        return "";
     }
 
     " "
@@ -5267,10 +5610,7 @@ fn can_merge_tables(upper: &Table, lower: &Table, x_tol: f32, y_tol: f32) -> boo
         return false;
     }
     let min_height = u_bbox.height.min(l_bbox.height);
-    if -gap > min_height * 0.5 {
-        return false;
-    }
-    true
+    (-gap).partial_cmp(&(min_height * 0.5)) != Some(std::cmp::Ordering::Greater)
 }
 
 fn merge_table_into(upper: &mut Table, lower: Table) {
@@ -6273,6 +6613,18 @@ mod tests {
     }
 
     #[test]
+    fn spatial_cjk_prose_detection_includes_hangul_syllables() {
+        let mut table = Table::new();
+        table.col_count = 2;
+        table.rows.push(TableRow {
+            cells: vec![prose_cell("한국어"), prose_cell("한국어문장은표로분류되면안된다")],
+            is_header: false,
+        });
+
+        assert!(looks_like_cjk_prose(&table));
+    }
+
+    #[test]
     fn test_looks_like_cjk_prose() {
         let row = |cells: &[&str]| TableRow {
             cells: cells.iter().map(|c| prose_cell(c)).collect(),
@@ -6563,6 +6915,7 @@ mod tests {
         bold_rows: &[usize],
         shaded_rows: &[usize],
         unshaded_header_column: Option<usize>,
+        overpaint_height: f32,
     ) -> Vec<Table> {
         use crate::elements::PathContent;
         let mut paths = Vec::new();
@@ -6593,6 +6946,12 @@ mod tests {
                 }
             }
         }
+        if overpaint_height > 0.0 {
+            let mut cover = PathContent::rect(0., 40., 240., overpaint_height);
+            cover.stroke_color = None;
+            cover.fill_color = Some(Color::new(1., 1., 1.));
+            paths.push(cover);
+        }
         let tables = detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::strict());
         assert_eq!(tables.len(), 1, "actual ruled detector must execute: {tables:?}");
         assert_eq!((tables[0].rows.len(), tables[0].col_count), (3, 3));
@@ -6601,7 +6960,7 @@ mod tests {
 
     #[test]
     fn source_header_complete_shaded_bold_labels_have_one_header_row() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, 0.0);
         assert!(tables[0].has_header);
         assert!(tables[0].rows[0].is_header);
         assert!(tables[0].rows[0].cells.iter().all(|cell| cell.is_header));
@@ -6610,35 +6969,59 @@ mod tests {
 
     #[test]
     fn source_header_bold_numeric_first_row_is_not_promoted() {
-        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None);
+        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None, 0.0);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
     }
 
     #[test]
     fn source_header_bold_body_is_not_promoted_to_a_second_tier() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None, 0.0);
         assert!(!tables[0].rows[1].is_header);
         assert!(tables[0].rows[1].cells.iter().all(|cell| !cell.is_header));
     }
 
     #[test]
     fn source_header_bold_without_independent_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None, 0.0);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_body_shading_does_not_prove_a_leading_header() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None, 0.0);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_partial_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1));
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1), 0.0);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
+    }
+
+    #[test]
+    fn source_header_overpainted_shading_does_not_promote_bold_labels() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, 20.0);
+        let table = &tables[0];
+        assert!(!table.has_header);
+        assert!(table.rows.iter().flat_map(|row| &row.cells).all(|cell| !cell.is_header));
+        assert_eq!(
+            table.rows[0]
+                .cells
+                .iter()
+                .map(|cell| cell.text.as_str())
+                .collect::<Vec<_>>(),
+            ["Item", "Count", "Status"]
+        );
+    }
+
+    #[test]
+    fn source_header_partial_overpaint_applies_the_visible_coverage_threshold() {
+        for (height, expected) in [(1.0, true), (2.0, true), (3.0, false)] {
+            let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, height);
+            assert_eq!(tables[0].has_header, expected, "overpaint height {height}");
+        }
     }
 
     fn nested_fill_source() -> (
@@ -8561,6 +8944,321 @@ mod tests {
         );
     }
 
+    const RIGHT_ALIGNED_DECIMAL_INK: [(f32, f32); 2] = [(28.0, 20.0); 2];
+    const CENTERED_LABEL_INK: [(f32, f32); 2] = [(15.0, 20.0), (28.0, 20.0)];
+
+    #[derive(Clone, Copy)]
+    enum HeaderPaint {
+        Plain,
+        Grouped,
+        Shaded,
+        ShadedGroup,
+        BoldGroup,
+    }
+
+    fn ruled_record_header_roles(
+        rows: &[[&str; 5]],
+        emphasized_after: Option<usize>,
+        paint: HeaderPaint,
+        decimal_ink: [(f32, f32); 2],
+        glyph_widths: bool,
+        shared_decimal_anchor: Option<f32>,
+    ) -> Vec<bool> {
+        let grouped = matches!(
+            paint,
+            HeaderPaint::Grouped | HeaderPaint::ShadedGroup | HeaderPaint::BoldGroup
+        );
+        let height = rows.len() as f32 * 20.0;
+        let mut lines: Vec<_> = (0..=rows.len())
+            .map(|row| make_h_line(100.0, 500.0 + row as f32 * 20.0, 250.0))
+            .collect();
+        if let Some(row) = emphasized_after {
+            lines[rows.len() - row - 1].stroke_width = 2.5;
+        }
+        lines.extend((0..=5).map(|column| {
+            let rule_height = if grouped && column == 3 { height - 21.0 } else { height };
+            make_v_line(100.0 + column as f32 * 50.0, 500.0, rule_height)
+        }));
+        if matches!(paint, HeaderPaint::Shaded | HeaderPaint::ShadedGroup) {
+            let mut fill = make_rect_path(100.0, 500.0 + height - 40.0, 250.0, 40.0);
+            fill.fill_color = Some(crate::layout::Color { r: 0.8, g: 0.8, b: 0.8 });
+            fill.stroke_color = None;
+            lines.insert(0, fill);
+        }
+        let spans: Vec<_> = rows
+            .iter()
+            .enumerate()
+            .flat_map(|(row, values)| {
+                values
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, value)| !value.is_empty())
+                    .map(move |(column, value)| {
+                        let (offset, width) = if value.contains('.') && is_data_value(value) {
+                            decimal_ink[usize::from(row != 1)]
+                        } else {
+                            (5.0, 20.0)
+                        };
+                        let mut span = create_test_span(
+                            value,
+                            100.0 + column as f32 * 50.0 + offset,
+                            500.0 + height - row as f32 * 20.0 - 15.0,
+                            width,
+                            10.0,
+                        );
+                        if matches!(paint, HeaderPaint::BoldGroup) && row <= 1 && column == 1 {
+                            span.font_weight = crate::layout::FontWeight::Bold;
+                            span.font_name = "Helvetica-Bold".to_string();
+                        }
+                        if glyph_widths && value.contains('.') && is_data_value(value) {
+                            span.char_widths = vec![width / value.len() as f32; value.len()];
+                            span.char_x_offsets = (0..value.len())
+                                .map(|digit| span.bbox.x + digit as f32 * width / value.len() as f32)
+                                .collect();
+                            if let Some(anchor) = shared_decimal_anchor {
+                                let dot = value.find('.').expect("fixture decimal point");
+                                span.char_x_offsets[dot] = 100.0 + column as f32 * 50.0 + anchor;
+                                span.char_widths[0] += if row == 1 { -2.0 } else { 4.0 };
+                                span.char_widths[dot] += if row == 1 { 2.0 } else { -4.0 };
+                            }
+                        }
+                        span
+                    })
+            })
+            .collect();
+        let config = TableDetectionConfig::default();
+        let clusters = group_lines_into_clusters(&lines, &config);
+        let [cluster] = clusters.as_slice() else {
+            panic!("expected one ruled grid");
+        };
+        let tables = detect_tables_in_cluster(&spans, &lines, cluster, &config);
+        let [table] = tables.as_slice() else {
+            panic!("expected one table");
+        };
+        assert_eq!(table.rows.len(), rows.len());
+        if grouped {
+            assert_eq!(table.rows[0].cells[2].colspan, 2);
+        }
+        table.rows.iter().map(|row| row.is_header).collect()
+    }
+
+    #[test]
+    fn fully_ruled_decimal_records_are_body_rows() {
+        let rows = [
+            ["Year", "Code", "BI", "PD", "MP"],
+            ["1998", "AB", "0.924", "0.863", "0.985"],
+            ["1999", "AB", "0.930", "0.888", "0.988"],
+            ["2000", "AB", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
+            [true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn emphasized_divider_does_not_promote_a_recurring_text_labeled_record() {
+        let mut rows = [
+            ["Measure", "Statistic", "North", "South", "West"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
+            [true, false, false, false]
+        );
+        rows[1][0] = "Throughput";
+        assert_eq!(
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
+            [true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn ruled_numeric_leaf_labels_keep_a_second_header_row() {
+        let rows = [
+            ["Group", "Code", "North", "South", "West"],
+            ["Year", "Type", "2022", "2023", "2024"],
+            ["1998", "AB", "0.924", "0.863", "0.985"],
+            ["1999", "AB", "0.930", "0.888", "0.988"],
+            ["2000", "AB", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn ruled_decimal_leaf_labels_keep_an_independently_separated_header_row() {
+        let mut rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Version", "Build", "1.0", "1.1", "2.0"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        rows[3][0] = "Throughput";
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        rows[0] = ["Group", "Code", "North", "South", "West"];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, CENTERED_LABEL_INK, true, None),
+            [true, false, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::Shaded, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Shaded,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
+            [true, false, false, false, false]
+        );
+    }
+
+    #[test]
+    fn painted_centered_decimal_header_keeps_the_only_record_in_the_body() {
+        let rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Version", "Build", "1.0", "1.1", "2.0"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
+            [true, true, false]
+        );
+    }
+
+    #[test]
+    fn centered_decimal_record_below_a_spanning_group_remains_body() {
+        let mut rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Latency", "p50", "0.9", "0.8", "0.9"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+        ];
+        for stub in ["Latency", "Throughput"] {
+            rows[1][0] = stub;
+            for rule in [None, Some(1)] {
+                assert_eq!(
+                    ruled_record_header_roles(&rows, rule, HeaderPaint::Grouped, CENTERED_LABEL_INK, true, None),
+                    [true, false, false, false],
+                    "{stub}, emphasized rule {rule:?}"
+                );
+                rows[1][1] = "Median";
+                assert_eq!(
+                    ruled_record_header_roles(&rows, rule, HeaderPaint::BoldGroup, CENTERED_LABEL_INK, true, None),
+                    [true, false, false, false],
+                    "bold Median, emphasized rule {rule:?}"
+                );
+                rows[1][1] = "p50";
+            }
+        }
+    }
+
+    fn assert_grouped_rates_record_roles(decimal_ink: [(f32, f32); 2], glyph_widths: bool) {
+        let rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Latency", "p50", "0.910", "0.850", "0.970"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::Grouped, decimal_ink, glyph_widths, None),
+            [true, false, false, false, false]
+        );
+    }
+
+    #[test]
+    fn grouped_rates_with_an_emphasized_first_record_keep_it_in_the_body() {
+        assert_grouped_rates_record_roles(RIGHT_ALIGNED_DECIMAL_INK, true);
+    }
+
+    #[test]
+    fn wide_decimal_record_sharing_right_edge_is_body() {
+        assert_grouped_rates_record_roles([(4.0, 44.0), (28.0, 20.0)], true);
+    }
+
+    #[test]
+    fn decimal_record_sharing_left_edge_is_body() {
+        assert_grouped_rates_record_roles([(15.0, 20.0), (15.0, 33.0)], true);
+    }
+
+    #[test]
+    fn decimal_record_spanning_column_width_is_body() {
+        assert_grouped_rates_record_roles([(-1.0, 52.0), (28.0, 20.0)], true);
+    }
+
+    #[test]
+    fn wide_raw_decimal_with_split_cell_text_is_body() {
+        assert_grouped_rates_record_roles([(4.0, 44.0), (28.0, 20.0)], false);
+    }
+
+    #[test]
+    fn decimal_aligned_records_remain_body_despite_different_ink_edges() {
+        let rows = [
+            ["Group", "Code", "North", "South", "West"],
+            ["Latency", "p50", "123.4", "123.4", "123.4"],
+            ["Latency", "p95", "1.23456", "1.23456", "1.23456"],
+            ["Latency", "p99", "1.34567", "1.34567", "1.34567"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                [(13.0, 20.0), (21.0, 28.0)],
+                true,
+                Some(25.0)
+            ),
+            [true, false, false, false]
+        );
+    }
+
     #[test]
     fn test_text_edge_columns_form_layout() {
         // Simulate a form layout: text aligns to specific X positions across
@@ -9288,6 +9986,454 @@ mod tests {
         );
     }
 
+    fn restart_grid(y: f32, values: [&str; 2]) -> Table {
+        let rows = [
+            ["", "", "Q/Q", "Q/Q %", "Y/Y"],
+            ["", "1Q 2019", "Change", "Change", "Change"],
+            ["Interest rate", values[0], "123", "12.2%", "10"],
+            ["Gross fair value", values[1], "29", "1.7%", "47"],
+        ];
+        Table {
+            rows: rows
+                .into_iter()
+                .map(|cells| TableRow {
+                    cells: cells
+                        .into_iter()
+                        .map(|text| TableCell {
+                            text: text.into(),
+                            spans: Vec::new(),
+                            colspan: 1,
+                            rowspan: 1,
+                            mcids: Vec::new(),
+                            bbox: None,
+                            is_header: false,
+                        })
+                        .collect(),
+                    is_header: false,
+                })
+                .collect(),
+            has_header: false,
+            col_count: 5,
+            bbox: Some(Rect::new(0.0, y, 300.0, 50.0)),
+        }
+    }
+
+    fn restart_rule(coord: f32) -> Edge {
+        Edge {
+            coord,
+            start: 0.0,
+            end: 300.0,
+        }
+    }
+
+    #[test]
+    fn intersection_merge_keeps_separated_schema_restarts_in_source_order() {
+        let mut tables = vec![
+            restart_grid(100.0, ["$1,076", "$1,706"]),
+            restart_grid(164.0, ["$1,130", "$1,767"]),
+            restart_grid(260.0, ["10", "20"]),
+            restart_grid(315.0, ["30", "40"]),
+        ];
+        let horizontal = [150.0, 164.0, 260.0, 310.0, 315.0, 365.0].map(restart_rule);
+        let vertical = [0.0, 300.0].map(|coord| Edge {
+            coord,
+            start: 260.0,
+            end: 365.0,
+        });
+        let (cuts, _) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+        assert_eq!(tables.len(), 3);
+        assert_eq!(tables[0].rows[2].cells[1].text, "$1,130");
+        assert_eq!(tables[1].rows[2].cells[1].text, "$1,076");
+        assert_eq!(tables[0].rows[3].cells[1].text, "$1,767");
+        assert_eq!(tables[1].rows[3].cells[1].text, "$1,706");
+        assert_eq!(tables[2].rows.len(), 8);
+        assert_eq!(cuts, [None, None, Some(vec![4])]);
+    }
+
+    #[test]
+    fn unequal_ruled_schemas_require_independent_outlines_to_stay_separate() {
+        let mut lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        lower.col_count = 3;
+        for row in &mut lower.rows {
+            row.cells.truncate(3);
+        }
+        let upper = restart_grid(157.0, ["$1,130", "$1,767"]);
+        let horizontal = [100.0, 150.0, 157.0, 207.0].map(restart_rule);
+        let sides = |start, end| [0.0, 300.0].map(|coord| Edge { coord, start, end });
+        let vertical = [sides(100.0, 150.0), sides(157.0, 207.0)].concat();
+
+        let mut separate = vec![lower.clone(), upper.clone()];
+        merge_vertically_adjacent_tables(&mut separate, &horizontal, &vertical);
+        assert_eq!(separate.len(), 2, "independent closed grids must not merge");
+        assert_eq!(separate[0].col_count, 5);
+        assert_eq!(separate[1].col_count, 3);
+
+        let bridge = Edge {
+            coord: 150.0,
+            start: 100.0,
+            end: 207.0,
+        };
+        let mut bridged = vertical.clone();
+        bridged.push(bridge);
+        for (rules, sides) in [
+            (horizontal.as_slice(), bridged.as_slice()),
+            (&horizontal[1..], vertical.as_slice()),
+            (horizontal.as_slice(), &vertical[1..]),
+            (&horizontal[..2], vertical.as_slice()),
+        ] {
+            let mut continuing = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut continuing, rules, sides);
+            assert_eq!(continuing.len(), 1);
+            assert_eq!(continuing[0].rows.len(), 8);
+            assert!(continuing[0].rows.iter().all(|row| row.cells.len() == 5));
+        }
+
+        let merges = |parts: [Edge; 2], reverse: bool| {
+            let mut ruling = vertical.clone();
+            ruling.extend(parts);
+            if reverse {
+                ruling.reverse();
+            }
+            snap_edges(&mut ruling);
+            let mut tables = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut tables, &horizontal, &ruling);
+            tables.len()
+        };
+        let first = Edge {
+            coord: 150.0,
+            start: 100.0,
+            end: 153.5,
+        };
+        let touching = Edge {
+            coord: 151.0,
+            start: 153.5,
+            end: 207.0,
+        };
+        let overlapping = Edge {
+            start: 153.0,
+            ..touching
+        };
+        let float_miss = Edge {
+            start: 153.51,
+            ..touching
+        };
+        assert_eq!(
+            [
+                merges([first, touching], false),
+                merges([first, touching], true),
+                merges([first, overlapping], false),
+                merges([first, overlapping], true),
+                merges([first, float_miss], false),
+                merges([first, float_miss], true),
+            ],
+            [1; 6],
+            "collinear segments that touch, overlap or miss by a float error connect the grids in either paint order",
+        );
+        let blank_gap = Edge {
+            start: 154.0,
+            ..touching
+        };
+        let different_axis = Edge {
+            coord: 165.0,
+            ..touching
+        };
+        for reverse in [false, true] {
+            assert_eq!(merges([first, blank_gap], reverse), 2, "a real blank gap remains open");
+            assert_eq!(
+                merges([first, different_axis], reverse),
+                2,
+                "different axes do not join"
+            );
+        }
+    }
+
+    type OutlinedGrid = (Table, [Edge; 2], [Edge; 2]);
+
+    fn outlined_grid(x: f32, y: f32, width: f32, rows: &[&[&str]]) -> OutlinedGrid {
+        let height = 20.0 * rows.len() as f32;
+        let table = Table {
+            rows: rows
+                .iter()
+                .map(|cells| TableRow {
+                    cells: cells
+                        .iter()
+                        .map(|text| TableCell {
+                            text: (*text).into(),
+                            spans: Vec::new(),
+                            colspan: 1,
+                            rowspan: 1,
+                            mcids: Vec::new(),
+                            bbox: None,
+                            is_header: false,
+                        })
+                        .collect(),
+                    is_header: false,
+                })
+                .collect(),
+            has_header: false,
+            col_count: rows[0].len(),
+            bbox: Some(Rect::new(x, y, width, height)),
+        };
+        let horizontal = [y, y + height].map(|coord| Edge {
+            coord,
+            start: x,
+            end: x + width,
+        });
+        let vertical = [x, x + width].map(|coord| Edge {
+            coord,
+            start: y,
+            end: y + height,
+        });
+        (table, horizontal, vertical)
+    }
+
+    fn merge_and_split_outlined(grids: &[&OutlinedGrid], connectors: &[Edge]) -> Vec<Vec<Vec<String>>> {
+        let mut tables: Vec<_> = grids.iter().map(|(table, _, _)| table.clone()).collect();
+        let horizontal: Vec<_> = grids.iter().flat_map(|(_, rules, _)| *rules).collect();
+        let mut vertical: Vec<_> = grids.iter().flat_map(|(_, _, sides)| *sides).collect();
+        vertical.extend_from_slice(connectors);
+        snap_edges(&mut vertical);
+        let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+        split_tables_at_section_dividers(
+            tables,
+            cuts,
+            &restart_members,
+            &horizontal,
+            &vertical,
+            &TableDetectionConfig::default(),
+        )
+        .iter()
+        .map(|table| {
+            table
+                .rows
+                .iter()
+                .map(|row| row.cells.iter().map(|cell| cell.text.clone()).collect())
+                .collect()
+        })
+        .collect()
+    }
+
+    fn grid_texts(grid: &OutlinedGrid) -> Vec<Vec<String>> {
+        grid.0
+            .rows
+            .iter()
+            .map(|row| row.cells.iter().map(|cell| cell.text.clone()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn outlined_tables_of_different_widths_stay_separate_in_page_order() {
+        let wide = outlined_grid(
+            0.0,
+            147.0,
+            300.0,
+            &[
+                &["Service", "Zone", "Period", "Capacity"],
+                &["Iris", "North", "Winter", "350"],
+                &["Hazel", "East", "Autumn", "470"],
+            ],
+        );
+        let wide_pairs = outlined_grid(0.0, 147.0, 300.0, &[&["Region", "North"], &["Tier", "Gold"]]);
+        let narrow = outlined_grid(0.0, 100.0, 150.0, &[&["Review", "Cadence"], &["Clock", "Week one"]]);
+        for upper in [&wide, &wide_pairs] {
+            assert_eq!(
+                merge_and_split_outlined(&[&narrow, upper], &[]),
+                [grid_texts(upper), grid_texts(&narrow)],
+                "a narrow outlined table under a wider one keeps its own schema, below it",
+            );
+            let connector = Edge {
+                coord: 0.0,
+                start: 100.0,
+                end: upper.0.bbox.unwrap().bottom(),
+            };
+            assert_eq!(merge_and_split_outlined(&[&narrow, upper], &[connector]).len(), 1);
+        }
+    }
+
+    #[test]
+    fn outlined_same_schema_stack_merges_in_top_down_order() {
+        let upper = outlined_grid(0.0, 147.0, 300.0, &[&["Region", "North"], &["Tier", "Gold"]]);
+        let lower = outlined_grid(0.0, 100.0, 300.0, &[&["Owner", "Operations"], &["Window", "Night"]]);
+        assert_eq!(
+            merge_and_split_outlined(&[&lower, &upper], &[]),
+            [[grid_texts(&upper), grid_texts(&lower)].concat()],
+        );
+    }
+
+    #[test]
+    fn outlined_header_band_above_a_double_rule_stays_a_separate_table_above_the_body() {
+        let band = outlined_grid(0.0, 143.0, 300.0, &[&["", "Revenue", "Margin"]]);
+        let body = outlined_grid(
+            0.0,
+            80.0,
+            300.0,
+            &[
+                &["Region", "2024", "2025", "2024", "2025"],
+                &["North", "120", "135", "8%", "9%"],
+                &["South", "98", "104", "6%", "7%"],
+            ],
+        );
+        assert_eq!(
+            merge_and_split_outlined(&[&body, &band], &[]),
+            [grid_texts(&band), grid_texts(&body)],
+        );
+    }
+
+    #[test]
+    fn outlined_totals_box_under_an_item_grid_stays_a_separate_table() {
+        let items = outlined_grid(
+            0.0,
+            126.0,
+            300.0,
+            &[
+                &["Item", "Qty", "Price", "Amount"],
+                &["Bolt", "10", "20", "200"],
+                &["Nut", "50", "20", "1,000"],
+            ],
+        );
+        let totals = outlined_grid(0.0, 80.0, 300.0, &[&["Subtotal", "1,200"], &["Total", "1,320"]]);
+        assert_eq!(
+            merge_and_split_outlined(&[&totals, &items], &[]),
+            [grid_texts(&items), grid_texts(&totals)],
+        );
+    }
+
+    #[test]
+    fn intersection_merge_still_joins_repeated_header_with_continuous_ruling() {
+        let horizontal = [150.0, 164.0].map(restart_rule);
+        let bridge = Edge {
+            coord: 0.0,
+            start: 100.0,
+            end: 214.0,
+        };
+        let lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        let upper = restart_grid(164.0, ["$1,130", "$1,767"]);
+        for (horizontal, vertical) in [
+            (horizontal.as_slice(), std::slice::from_ref(&bridge)),
+            (&horizontal[..1], &[][..]),
+        ] {
+            let mut tables = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut tables, horizontal, vertical);
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].rows.len(), 8);
+        }
+    }
+
+    #[test]
+    fn intersection_merge_orders_mixed_restart_continuations_after_dividers() {
+        let lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        let upper = restart_grid(164.0, ["$1,130", "$1,767"]);
+        let mut continuation = restart_grid(219.0, ["$2,130", "$2,767"]);
+        continuation.rows.drain(..2);
+        let vertical = [0.0, 300.0].map(|coord| Edge {
+            coord,
+            start: 164.0,
+            end: 269.0,
+        });
+        for ruled in [false, true] {
+            let mut horizontal = vec![restart_rule(150.0), restart_rule(164.0)];
+            if ruled {
+                horizontal.extend([214.0, 219.0, 269.0].map(restart_rule));
+            }
+            let vertical = if ruled { vertical.as_slice() } else { &[] };
+            let mut tables = vec![lower.clone(), upper.clone(), continuation.clone()];
+            let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, vertical);
+            assert_eq!(cuts[0], Some(vec![4]));
+            let tables = split_tables_at_section_dividers(
+                tables,
+                cuts,
+                &restart_members,
+                &[],
+                vertical,
+                &TableDetectionConfig::default(),
+            );
+            assert_eq!(tables.len(), 2);
+            let values: Vec<_> = tables[0].rows.iter().map(|row| row.cells[1].text.as_str()).collect();
+            assert_eq!(values, ["$2,130", "$2,767", "", "1Q 2019", "$1,130", "$1,767"]);
+            assert_eq!(tables[1].rows[2].cells[1].text, "$1,076");
+        }
+    }
+
+    #[test]
+    fn intersection_merge_descending_cut_uses_last_leading_edge_but_excludes_outer_edges() {
+        let rows = [Some((40.0, 50.0)), Some((25.0, 35.0)), Some((10.0, 20.0))];
+        assert_eq!(nearest_descending_section_cut(&rows, 20.0, 2.0), Some(1));
+        assert_eq!(nearest_descending_section_cut(&rows, 10.0, 2.0), None);
+        assert_eq!(nearest_descending_section_cut(&rows, 50.0, 2.0), None);
+    }
+
+    #[test]
+    fn intersection_merge_orders_positioned_parts_after_real_divider_split() {
+        let position = |mut table: Table| {
+            let bbox = table.bbox.unwrap();
+            let height = bbox.height / table.rows.len() as f32;
+            for (row_index, row) in table.rows.iter_mut().enumerate() {
+                let y = bbox.bottom() - (row_index + 1) as f32 * height;
+                for (column, cell) in row.cells.iter_mut().enumerate() {
+                    cell.bbox = Some(Rect::new(column as f32 * 60.0, y, 60.0, height));
+                }
+            }
+            table
+        };
+        let lower = position(restart_grid(100.0, ["$1,076", "$1,706"]));
+        let mut upper = position(restart_grid(164.0, ["$1,130", "$1,767"]));
+        for cell in &mut upper.rows[0].cells {
+            cell.bbox.as_mut().unwrap().height -= 1.0;
+        }
+        for cell in &mut upper.rows[2].cells {
+            let bounds = cell.bbox.as_mut().unwrap();
+            bounds.y += 1.0;
+            bounds.height -= 1.0;
+        }
+        let mut continuation = restart_grid(214.0, ["$2,130", "$2,767"]);
+        continuation.rows.drain(..2);
+        let mut continuation = position(continuation);
+        // Ink bounds sit just above each row's lower rule. The divider
+        // matches the next row's high edge without tying the preceding edge. ~keep
+        for row in &mut continuation.rows {
+            for cell in &mut row.cells {
+                let bbox = cell.bbox.unwrap();
+                cell.bbox = Some(Rect::new(bbox.x, bbox.y + 1.0, bbox.width, bbox.height - 1.0));
+            }
+        }
+        for ruled in [false, true] {
+            let mut horizontal = vec![
+                restart_rule(150.0),
+                restart_rule(164.0),
+                restart_rule(189.0),
+                restart_rule(214.0),
+            ];
+            let sides = |start, end| [0.0, 300.0].map(|coord| Edge { coord, start, end });
+            let mut vertical = sides(164.0, 214.0).to_vec();
+            if ruled {
+                horizontal.push(restart_rule(264.0));
+                vertical.extend(sides(214.0, 264.0));
+            }
+            let mut tables = vec![lower.clone(), upper.clone(), continuation.clone()];
+            let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+            assert_eq!(tables.iter().map(|table| table.rows.len()).collect::<Vec<_>>(), [6, 4]);
+            assert_eq!(restart_members, [true, true]);
+            for (divider, counts) in [(215.0, [2, 4, 4]), (240.0, [1, 5, 4]), (176.5, [5, 1, 4])] {
+                let parts = split_tables_at_section_dividers(
+                    tables.clone(),
+                    cuts.clone(),
+                    &restart_members,
+                    &[restart_rule(divider)],
+                    &[],
+                    &TableDetectionConfig::default(),
+                );
+                assert_eq!(parts.iter().map(|table| table.rows.len()).collect::<Vec<_>>(), counts);
+                let values: Vec<_> = parts[..2]
+                    .iter()
+                    .flat_map(|part| &part.rows)
+                    .map(|row| row.cells[1].text.as_str())
+                    .collect();
+                assert_eq!(values, ["$2,130", "$2,767", "", "1Q 2019", "$1,130", "$1,767"]);
+                assert_eq!(parts[2].rows[2].cells[1].text, "$1,076");
+            }
+        }
+    }
+
     #[test]
     fn test_merge_vertically_adjacent_tables() {
         // Two tables with 3 columns each, bboxes separated by 5pt (< ADJACENT_TABLE_MERGE_GAP).
@@ -9368,7 +10514,7 @@ mod tests {
         };
 
         let mut tables = vec![table1, table2];
-        let cuts = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
+        let (cuts, _) = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
         assert_eq!(
             cuts,
             vec![None],
@@ -9949,7 +11095,8 @@ mod tests {
                     .map(move |coord| Edge { coord, start, end })
             })
             .collect();
-        let parts = split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default());
+        let parts =
+            split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default(), false);
         let lengths: Vec<_> = parts.iter().map(|part| part.rows.len()).collect();
         assert_eq!(lengths, [3, 4], "the small section must not veto both valid sections");
         let retained: Vec<_> = parts.into_iter().flat_map(|part| part.rows).collect();

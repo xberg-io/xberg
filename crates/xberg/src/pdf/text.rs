@@ -93,6 +93,7 @@ fn heuristic_ligature_repair(_ctrl: char, _chars: &[char], _idx: usize) -> Strin
 /// Some PDFs embed raw HTML in their text layer (e.g. from web-to-PDF converters).
 /// This function detects common HTML tags to determine if the text should be
 /// converted from HTML to markdown rather than used as-is.
+#[cfg(feature = "html")]
 pub(crate) fn contains_html_markup(text: &str) -> bool {
     if !text.contains('<') {
         return false;

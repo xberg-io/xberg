@@ -90,6 +90,9 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       ref: ${{ steps.meta.outputs.ref }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      source_sha: ${{ steps.release-source.outputs.commit }}
+      php_registry_core_available: ${{ steps.php-registry-core.outputs.available }}
+      php_checkout_sha: ${{ steps.php-source.outputs.sha }}
       target_sha: ${{ steps.meta.outputs.target_sha }}
       matrix_ref: ${{ steps.meta.outputs.matrix_ref }}
       is_tag: ${{ steps.meta.outputs.is_tag }}
@@ -112,11 +115,14 @@ jobs:
       release_wasm: ${{ steps.meta.outputs.release_wasm }}
       release_php: ${{ steps.meta.outputs.release_php }}
       release_elixir: ${{ steps.meta.outputs.release_elixir }}
+      elixir_assets: ${{ steps.elixir-assets.outputs.names }}
+      elixir_assets_multiline: ${{ steps.elixir-assets.outputs.multiline }}
       release_c_ffi: ${{ steps.meta.outputs.release_c_ffi }}
       release_dart: ${{ steps.meta.outputs.release_dart }}
       release_swift: ${{ steps.meta.outputs.release_swift }}
       release_zig: ${{ steps.meta.outputs.release_zig }}
       release_kotlin: ${{ steps.meta.outputs.release_kotlin }}
+      release_kotlin_android: ${{ steps.meta.outputs.release_kotlin_android }}
     steps:
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -126,6 +132,7 @@ jobs:
           owner: xberg-io
 
       - name: Checkout
+        id: release-source
         uses: actions/checkout@v7
         with:
           ref: ${{ (inputs.republish == true && (inputs.ref || github.event.repository.default_branch)) || inputs.ref || inputs.tag || ((inputs.dry_run == true || inputs.dry_run == 'true' || github.event.client_payload.dry_run == true || github.event.client_payload.dry_run == 'true') && github.sha) || github.ref }}
@@ -151,6 +158,54 @@ jobs:
       - name: Resolve release metadata
         id: meta
         uses: xberg-io/actions/prepare-release-metadata@v1
+
+      - name: List expected Elixir NIF assets
+        id: elixir-assets
+        if: steps.meta.outputs.release_elixir == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Keep these targets in sync with alef.toml and the three Elixir NIF build matrices. ~keep
+          suffix="-v${VERSION}-nif-2.16"
+          names=()
+          for target in aarch64-apple-darwin {aarch64,x86_64}-unknown-linux-{gnu,musl}; do
+            names+=("libxberg_nif${suffix}-${target}.so.tar.gz")
+          done
+          names+=("xberg_nif${suffix}-x86_64-pc-windows-msvc.dll.tar.gz")
+          {
+            (IFS=,; echo "names=${names[*]}")
+            printf 'multiline<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${names[@]}")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve PHP source commit
+        id: php-source
+        if: steps.meta.outputs.release_php == 'true'
+        shell: bash
+        env:
+          PHP_CHECKOUT_REF: ${{ steps.meta.outputs.checkout_ref }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse --verify --end-of-options "${PHP_CHECKOUT_REF:?}^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check exact registry core for PHP qualification
+        id: php-registry-core
+        if: steps.meta.outputs.release_php == 'true' && steps.meta.outputs.dry_run == 'true'
+        shell: bash
+        env:
+          PHP_SOURCE_SHA: ${{ steps.php-source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          version="$(git show "$PHP_SOURCE_SHA:Cargo.toml" | sed -n '/^\[workspace.package\]$/,/^\[/s/^version = "\([^"]*\)"$/\1/p')"
+          test -n "$version"
+          index="$(curl --fail --silent --show-error --retry 3 --max-time 60 https://index.crates.io/xb/er/xberg)"
+          available="$(jq -s --arg version "$version" 'any(.[]; .vers == $version and .yanked == false)' <<< "$index")"
+          printf 'available=%s\n' "$available" >> "$GITHUB_OUTPUT"
+          if [[ "$available" != true ]]; then
+            echo "::notice::Skipping registry-backed PHP qualification: xberg $version is unavailable or yanked"
+          fi
 
       # Created NON-draft (published) so the `release: [created]` event fires
       # immediately and publish-docker.yaml runs as an independent parallel
@@ -205,6 +260,18 @@ jobs:
           registry: pypi
           package: xberg
           version: ${{ needs.prepare.outputs.version }}
+          # One wheel per python-wheels / python-wheels-musl leg plus the sdist. A version
+          # PyPI holds only part of (1.3.9: no Windows wheel, no sdist) reads as missing, so
+          # the builds re-run and publish-pypi uploads just the absent files. ~keep
+          required-files: |
+            *-macosx_*_arm64.whl
+            *-macosx_*_x86_64.whl
+            *-manylinux_*_aarch64.whl
+            *-manylinux_*_x86_64.whl
+            *-musllinux_*_aarch64.whl
+            *-musllinux_*_x86_64.whl
+            *-win_amd64.whl
+            *.tar.gz
 
   check-npm:
     name: Check npm for existing versions
@@ -214,7 +281,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       node_exists: ${{ steps.check.outputs.exists }}
-      wasm_exists: ${{ steps.check.outputs.wasm_exists }}
+      wasm_exists: ${{ fromJSON(steps.check.outputs.results).wasm_exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -245,11 +312,14 @@ jobs:
     name: Check Maven Central for existing version
     needs: prepare
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && (needs.prepare.outputs.release_java == 'true' || needs.prepare.outputs.release_kotlin == 'true')) }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' &&
+          (needs.prepare.outputs.release_java == 'true' ||
+           (needs.prepare.outputs.dry_run != 'true' &&
+            (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true')))) }}
     runs-on: ubuntu-latest
     outputs:
       java_exists: ${{ steps.check.outputs.exists }}
-      kotlin_exists: ${{ steps.check.outputs.kotlin_exists }}
+      kotlin_exists: ${{ fromJSON(steps.check.outputs.results).kotlin_exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -294,6 +364,45 @@ jobs:
           package: xberg-io/xberg
           version: ${{ needs.prepare.outputs.version }}
 
+  # PIE archives are gated on the release, not on Packagist: Packagist syncs every tag on its
+  # own, so it lists the version before any archive exists, and gating on it skipped the PHP
+  # builds on every re-run (v1.4.1: on Packagist, zero release assets). ~keep
+  check-php-pie:
+    name: Check GitHub Release for PHP PIE assets
+    needs: prepare
+    if: >-
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_php == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: List expected PIE assets
+        id: names
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Keep in sync with the php-extension matrix and verify-assets. ~keep
+          names=()
+          for php in 8.3 8.4 8.5; do
+            for platform in x86_64-linux-glibc arm64-linux-glibc arm64-darwin-bsdlibc; do
+              names+=("php_xberg-${TAG}_php${php}-${platform}-nts.tgz")
+            done
+            names+=("php_xberg-${TAG}-${php}-nts-vs17-x86_64.zip")
+          done
+          (IFS=,; echo "names=${names[*]}") >>"$GITHUB_OUTPUT"
+
+      - id: check
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: github-release
+          package: xberg
+          version: ${{ needs.prepare.outputs.version }}
+          repo: xberg-io/xberg
+          tag: ${{ needs.prepare.outputs.tag }}
+          assets: ${{ steps.names.outputs.names }}
+
   check-cratesio:
     name: Check crates.io for existing versions
     needs: prepare
@@ -302,16 +411,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       xberg_exists: ${{ steps.check.outputs.exists }}
-      tesseract_exists: ${{ steps.check.outputs.tesseract_exists }}
-      paddle_exists: ${{ steps.check.outputs.paddle_exists }}
-      candle_exists: ${{ steps.check.outputs.candle_exists }}
-      libheif_exists: ${{ steps.check.outputs.libheif_exists }}
-      gliner_exists: ${{ steps.check.outputs.gliner_exists }}
-      libwpd_exists: ${{ steps.check.outputs.libwpd_exists }}
-      native_pdf_exists: ${{ steps.check.outputs.native_pdf_exists }}
-      pdfium_exists: ${{ steps.check.outputs.pdfium_exists }}
-      cli_exists: ${{ steps.check.outputs.cli_exists }}
-      all_exist: ${{ steps.derive.outputs.all_exist }}
+      all_exist: ${{ steps.check.outputs.all-exist }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -329,23 +429,6 @@ jobs:
             native_pdf_exists=xberg-native-pdf
             pdfium_exists=xberg-pdfium-render
             cli_exists=xberg-cli
-
-      - id: derive
-        run: |
-          if [[ "${{ steps.check.outputs.exists }}" == "true" \
-            && "${{ steps.check.outputs.tesseract_exists }}" == "true" \
-            && "${{ steps.check.outputs.paddle_exists }}" == "true" \
-            && "${{ steps.check.outputs.candle_exists }}" == "true" \
-            && "${{ steps.check.outputs.libheif_exists }}" == "true" \
-            && "${{ steps.check.outputs.gliner_exists }}" == "true" \
-            && "${{ steps.check.outputs.libwpd_exists }}" == "true" \
-            && "${{ steps.check.outputs.native_pdf_exists }}" == "true" \
-            && "${{ steps.check.outputs.pdfium_exists }}" == "true" \
-            && "${{ steps.check.outputs.cli_exists }}" == "true" ]]; then
-            echo "all_exist=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "all_exist=false" >> "$GITHUB_OUTPUT"
-          fi
 
   check-hex:
     name: Check Hex.pm for existing versions
@@ -424,8 +507,15 @@ jobs:
     if: >-
       ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_cli == 'true') }}
     runs-on: ubuntu-latest
+    # `exists` gates the CLI builds, so it also covers the PyPI xberg-cli wheels built from
+    # them: with only the release assets checked, a re-run after a failed PyPI upload skipped
+    # the builds and the proxy publish alike. The npm proxy downloads the binaries at install
+    # time, so it is checked separately and needs no rebuild. ~keep
     outputs:
-      exists: ${{ steps.check.outputs.exists }}
+      exists: ${{ steps.check.outputs.exists == 'true' && steps.pypi.outputs.exists == 'true' }}
+      assets_exist: ${{ steps.check.outputs.exists }}
+      npm_exists: ${{ steps.npm.outputs.exists }}
+      pypi_exists: ${{ steps.pypi.outputs.exists }}
     steps:
       - id: check
         uses: xberg-io/actions/check-registry@v1
@@ -436,19 +526,43 @@ jobs:
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
           asset-prefix: xberg-cli-
-          assets: |
+          assets: >-
             xberg-cli-aarch64-apple-darwin.tar.gz,xberg-cli-x86_64-apple-darwin.tar.gz,xberg-cli-aarch64-unknown-linux-gnu.tar.gz,xberg-cli-aarch64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-unknown-linux-gnu.tar.gz,xberg-cli-x86_64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-pc-windows-msvc.zip
 
-  check-go:
-    name: Check GitHub Release for Go FFI assets
+      - id: npm
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: npm
+          package: "@xberg-io/xberg-cli"
+          version: ${{ needs.prepare.outputs.version }}
+
+      - id: pypi
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: pypi
+          package: xberg-cli
+          version: ${{ needs.prepare.outputs.version }}
+          required-files: |
+            *-macosx_*_arm64.whl
+            *-macosx_*_x86_64.whl
+            *-manylinux_*_aarch64.whl
+            *-manylinux_*_x86_64.whl
+            *-musllinux_*_aarch64.whl
+            *-musllinux_*_x86_64.whl
+            *-win_amd64.whl
+            *.tar.gz
+
+  check-swift:
+    name: Check GitHub Release for the Swift artifact bundle
     needs: prepare
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_go == 'true') }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true') }}
     runs-on: ubuntu-latest
     outputs:
       exists: ${{ steps.check.outputs.exists }}
     steps:
       - id: check
+        if: needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true'
         uses: xberg-io/actions/check-registry@v1
         with:
           registry: github-release
@@ -456,7 +570,28 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: xberg-go-
+          assets: Xberg-rs.artifactbundle.zip
+
+  check-go:
+    name: Check GitHub Release for Go FFI assets
+    needs: prepare
+    if: >-
+      ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_go == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - id: check
+        if: needs.prepare.outputs.dry_run != 'true'
+        uses: xberg-io/actions/check-registry@v1
+        with:
+          registry: github-release
+          package: xberg
+          version: ${{ needs.prepare.outputs.version }}
+          repo: xberg-io/xberg
+          tag: ${{ needs.prepare.outputs.tag }}
+          assets: >-
+            xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-macos-arm64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-macos-arm64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-macos-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-macos-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-windows-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-windows-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64-musl.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64-musl.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64-musl.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64-musl.tar.gz.sha256
 
   check-c-ffi:
     name: Check GitHub Release for C FFI assets
@@ -475,7 +610,10 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: xberg-ffi-
+          # One archive per c-ffi-libraries matrix platform; a prefix match alone took a
+          # single archive as the whole set. ~keep
+          assets: >-
+            xberg-ffi-linux-x86_64.tar.gz,xberg-ffi-linux-aarch64.tar.gz,xberg-ffi-macos-arm64.tar.gz,xberg-ffi-windows-x86_64.tar.gz
 
   check-elixir-release:
     name: Check GitHub Release for Elixir NIF assets
@@ -494,13 +632,17 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: libxberg_nif-
+          assets: ${{ needs.prepare.outputs.elixir_assets }}
 
   python-wheels:
     name: Build Python wheels (${{ matrix.os }})
     needs: [prepare, check-pypi]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_python == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-pypi.result == 'success' &&
+            (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -545,6 +687,13 @@ jobs:
           manylinux-aarch64-image: "manylinux_2_28"
           cibw-before-build-linux: |
             set -euo pipefail
+            if [ "$(uname -m)" = aarch64 ]; then
+              if [ "${CARGO_PROFILE_RELEASE_LTO:-}" != thin ]; then
+                echo "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" >&2
+                exit 1
+              fi
+              printf 'ARM64 manylinux Cargo release LTO: %s\n' "$CARGO_PROFILE_RELEASE_LTO"
+            fi
             pip install maturin uv
             source ~/.cargo/env
             # Prevent GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
@@ -560,17 +709,38 @@ jobs:
             # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
             ort_version=1.24.2
             case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
-            curl -fsSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
-            mkdir -p /opt/msort && tar -xzf /tmp/ort.tgz -C /opt/msort --strip-components=1
-          cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++ ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib'
+            ort_integrity="{project}/scripts/ci/actions/setup-onnx-runtime"
+            ort_tmp=$(mktemp -d)
+            ort_archive="$ort_tmp/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
+            trap 'rm -f -- "$ort_archive"; rmdir -- "$ort_tmp"' EXIT
+            bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256" --known
+            set -- --retry 5 --retry-delay 5
+            if curl --retry-all-errors --version >/dev/null 2>&1; then
+              set -- "$@" --retry-all-errors
+            fi
+            if curl --proto '=https' --proto-redir '=https' "$@" -fsSL -o "$ort_archive" \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/${ort_archive##*/}"; then
+              bash "$ort_integrity/verify-archive.sh" "$ort_archive" "$ort_integrity/checksums.sha256"
+              mkdir -p /opt/msort
+              tar -xzf "$ort_archive" -C /opt/msort --strip-components=1
+            else
+              case "$ort_arch" in aarch64) ort_rid=linux-arm64 ;; *) ort_rid=linux-x64 ;; esac
+              RUNNER_TEMP="$ort_tmp" bash "$ort_integrity/nuget-fallback.sh" "$ort_version" "$ort_rid" /opt/msort "$ort_integrity/checksums.sha256"
+            fi
+          cibw-environment: >-
+            MATURIN_BUILD_ARGS="--compatibility manylinux_2_28"
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc
+            CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++
+            ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib
+            ${{ matrix.os == 'ubuntu-24.04-arm' && 'CARGO_PROFILE_RELEASE_LTO=thin' || '' }}
           # The deployment target is the wheel's macOS floor, 15.0: the oldest macOS Apple
           # still supports. delocate bundles the libheif closure, so the hook builds it
           # from source at the target and PKG_CONFIG_PATH links the wheel against it
           # instead of Homebrew's runner-OS bottles (#1243). ~keep
           cibw-before-build-macos: bash {project}/scripts/ci/build-macos-heif-deps.sh
           cibw-environment-macos: 'MATURIN_BUILD_ARGS="" CARGO_BUILD_LOCKED=true MACOSX_DEPLOYMENT_TARGET=15.0 PKG_CONFIG_PATH=/tmp/xberg-heif/lib/pkgconfig'
-          cibw-before-build-windows: "rustup install 1.99.1-x86_64-pc-windows-msvc --profile minimal --component rust-src --component rustfmt --component clippy && rustup target add x86_64-pc-windows-msvc --toolchain 1.99.1-x86_64-pc-windows-msvc && pip install maturin uv && set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%"
-          cibw-environment-windows: 'MATURIN_BUILD_ARGS="--target x86_64-pc-windows-msvc" RUSTUP_TOOLCHAIN="1.99.1-x86_64-pc-windows-msvc" RUSTC_WRAPPER='
+          cibw-before-build-windows: "rustup install 1.100.0-x86_64-pc-windows-msvc --profile minimal --component rust-src --component rustfmt --component clippy && rustup target add x86_64-pc-windows-msvc --toolchain 1.100.0-x86_64-pc-windows-msvc && pip install maturin uv && set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%"
+          cibw-environment-windows: 'MATURIN_BUILD_ARGS="--target x86_64-pc-windows-msvc" RUSTUP_TOOLCHAIN="1.100.0-x86_64-pc-windows-msvc" RUSTC_WRAPPER='
 
       - name: Vendor ONNX Runtime into wheel
         if: runner.os == 'Linux'
@@ -650,7 +820,11 @@ jobs:
     name: Build Python wheels (musl-${{ matrix.arch }})
     needs: [prepare, check-pypi]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_python == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-pypi.result == 'success' &&
+            (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -677,11 +851,15 @@ jobs:
           [ -n "$id" ] || { echo "::error::git rev-parse HEAD produced an empty build id"; exit 1; }
           echo "value=$id" >> "$GITHUB_OUTPUT"
 
+      # The v1.4.0 aarch64 leg died with exit 143 ("runner received a shutdown signal") after
+      # 1h38m in the fat-LTO compile, where v1.3.9 finished in 55 min. Thin LTO bounds the
+      # single-module memory peak, like the other ARM64 legs; x86_64 keeps fat LTO. ~keep
       - name: Build Python wheel via Alpine Docker
         run: |
           docker build -f docker/Dockerfile.musl-python \
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
 
       - name: Verify musl wheel produced
@@ -749,7 +927,9 @@ jobs:
     name: Build Node bindings (${{ matrix.target }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -883,7 +1063,9 @@ jobs:
     name: Build Node bindings (linux-musl-${{ matrix.arch }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -914,6 +1096,7 @@ jobs:
           docker build -f docker/Dockerfile.musl-node \
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
       - name: Stage .node into napi platform dir for npm
         run: |
@@ -951,6 +1134,15 @@ jobs:
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
           python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
 
+      - name: Check out Node smoke launcher from the workflow revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout: scripts/ci/smoke-test-musl-node-binding.sh
+          sparse-checkout-cone-mode: false
+
       # The steps above only prove a .node file (and its vendored shared-lib
       # closure) exist on disk -- never that require()ing it actually works.
       # This installs it into a real Alpine (musl libc) container and runs a
@@ -962,7 +1154,7 @@ jobs:
       - name: Smoke-test musl Node binding (real extraction, not just require)
         run: |
           platform="linux-${{ matrix.napi_arch }}-musl"
-          bash scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}"
+          bash .release-tools/scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}" "$GITHUB_WORKSPACE"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -975,7 +1167,9 @@ jobs:
     name: Build Node bindings (linux-gnu-${{ matrix.arch }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1019,6 +1213,7 @@ jobs:
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg MANYLINUX_IMAGE=${{ matrix.image }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
       - name: Stage .node into napi platform dir for npm
         run: |
@@ -1243,11 +1438,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, label: linux-x86_64 }
-          - { os: ubuntu-24.04-arm, label: linux-aarch64 }
-          - { os: macos-26, label: macos-arm64 }
+          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux }
+          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux }
+          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin }
           - os: windows-latest
             label: windows-x86_64
+            gem_platform: x64-mingw-ucrt
             # This leg's binding features and the core features actually compiled are two
             # separate switches: `--no-default-features` here turns xberg-rb's OWN
             # `#[cfg(feature = "...")]`-gated match arms/fields off, while the Windows target
@@ -1290,6 +1486,8 @@ jobs:
       - uses: xberg-io/actions/setup-rust@v1
         with:
           toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || '' }}
+          # sccache's rustc spawn hits Windows error 206 on long GNU compiler arguments. ~keep
+          use-sccache: ${{ runner.os == 'Windows' && 'false' || 'true' }}
 
       # Ruby 3.3 is the ABI the release gem ships; mise.ci.toml locks it. ~keep
       - uses: xberg-io/actions/setup-mise@v1
@@ -1301,7 +1499,7 @@ jobs:
 
       # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
       # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1.339.0
         if: runner.os == 'Windows'
         with:
           ruby-version: "3.3"
@@ -1315,40 +1513,46 @@ jobs:
           package-dir: packages/ruby
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
-      - name: Package platform gem
-        working-directory: packages/ruby
-        run: |
-          bundle exec rake compile
-          bundle exec rake build
-        shell: bash
+      - name: Checkout Ruby packaging verifier
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: scripts/ci/package-ruby-native-gem.rb
 
-      - name: Drop source gem on non-canonical builders
-        if: ${{ matrix.label != 'linux-x86_64' }}
+      - name: Package and verify native gem
+        working-directory: packages/ruby
         shell: bash
+        env:
+          GEM_PLATFORM: ${{ matrix.gem_platform }}
+          GEM_VERSION: ${{ needs.prepare.outputs.version }}
+          KEEP_SOURCE: ${{ matrix.label == 'linux-x86_64' }}
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
         run: |
-          shopt -s nullglob
-          for f in packages/ruby/pkg/*.gem; do
-            base="$(basename "$f")"
-            case "$base" in
-              *-x86_64-linux.gem|*-aarch64-linux.gem|*-arm64-darwin.gem|*-x86_64-darwin.gem|*-x64-mingw-ucrt.gem) ;;
-              *) echo "Removing non-canonical source gem $base"; rm -f "$f" ;;
-            esac
-          done
+          set -euo pipefail
+          if [[ "$DRY_RUN" == "true" ]]; then
+            GEM_VERSION="$(ruby -rrubygems -e 'puts Gem::Specification.load("xberg.gemspec").version')"
+          fi
+          ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
       - uses: actions/upload-artifact@v7
         with:
           name: rubygems-${{ matrix.label }}
           path: packages/ruby/pkg/*.gem
+          if-no-files-found: error
           retention-days: 14
 
   php-extension:
     name: Build PHP extension (php${{ matrix.php }} ${{ matrix.platform.label }})
-    needs: [prepare, check-packagist, publish-crates]
-    # Skipped on dry runs for the same reason as `python-sdist`: the extension is packaged out of the
-    # workspace with internal `path = "..."` keys stripped, so it resolves `xberg = "^<version>"` from
-    # crates.io, which only exists after a real (non-dry-run) `publish-crates`.
+    needs: [prepare, check-php-pie, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_php == 'true' &&
+          ((needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.php_registry_core_available == 'true') ||
+           (needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' &&
+            (needs.check-php-pie.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.platform.os }}
     env:
       MISE_ENV: ci
@@ -1359,14 +1563,15 @@ jobs:
       matrix:
         php: ["8.3", "8.4", "8.5"]
         platform:
-          - { os: ubuntu-latest, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
+          # ~keep Ubuntu 26.04 can mix Clang headers and libclang during PHP bindgen.
+          - { os: ubuntu-24.04, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, label: linux-arm64, target: aarch64-unknown-linux-gnu }
           - { os: macos-26, label: macos-arm64, target: aarch64-apple-darwin }
-          - { os: windows-latest, label: windows-x86_64, target: x86_64-pc-windows-msvc }
+          - { os: windows-2022, label: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ref: ${{ needs.prepare.outputs.php_checkout_sha }}
           fetch-depth: 0
 
           submodules: false
@@ -1462,7 +1667,7 @@ jobs:
           lib-name: xberg_php
           php-version: ${{ matrix.php }}
           php-ts: nts
-          dry-run: ${{ needs.prepare.outputs.dry_run }}
+          dry-run: "false"
 
       # build-php-extension runs rewrite-native-deps, which strips `path =` from every
       # root [workspace.dependencies] entry so deinherit_workspace() can copy literal
@@ -1530,6 +1735,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           windows-compiler: ${{ contains(matrix.platform.target, 'windows') && 'vs17' || '' }}
           version: ${{ needs.prepare.outputs.version }}
+          dry-run: "false"
           output-dir: dist/php-package
 
       # The static stack's LGPL components (libheif, libde265) need their license texts and the
@@ -1668,7 +1874,7 @@ jobs:
           retention-days: 14
 
   cli-binaries:
-    name: Build CLI binary (${{ matrix.target }})
+    name: Build CLI binary (${{ matrix.target }}${{ matrix.archive_suffix }})
     needs: [prepare, check-cli]
     if: >-
       ${{ !inputs.plugins-only && (needs.prepare.outputs.release_cli == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
@@ -1689,7 +1895,17 @@ jobs:
               target: x86_64-apple-darwin,
               extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
             }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-2022, target: x86_64-pc-windows-msvc }
+          # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
+          # libheif stack (libheif + libde265 + x265, GPL/LGPL), which some redistributors cannot
+          # ship (#3294). `formats-no-heic` stays in `default`, so PDF and Office extraction are
+          # unchanged; only the HEIC/HEIF codecs are compiled out. ~keep
+          - {
+              os: windows-2022,
+              target: x86_64-pc-windows-msvc,
+              archive_suffix: "-no-gpl-lgpl",
+              cargo_features: "mcp,mcp-http,api",
+            }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1712,16 +1928,22 @@ jobs:
         with:
           ort-version: "1.24.2"
 
+      # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
+      # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
+      # ARM64 legs and the musl CLI profile; every other target keeps fat LTO. ~keep
       - uses: xberg-io/actions/build-rust-cli@v1
         id: build
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'thin' || 'fat' }}
         with:
           package-name: xberg-cli
           binary-name: xberg
           target: ${{ matrix.target }}
           # `heic` re-adds HEIC/HEIF to the prebuilt binaries — the CLI default
           # dropped it so `cargo install` works on stock Windows (#1361); CI has
-          # libheif so the official binaries keep HEIC. ~keep
-          extra-cargo-args: ${{ matrix.extra_cargo_args || '--features mcp,mcp-http,api,heic' }}
+          # libheif so the official binaries keep HEIC. The no-GPL archive names its
+          # features in `cargo_features`, which the license gate below also audits. ~keep
+          extra-cargo-args: ${{ matrix.cargo_features && format('--features {0}', matrix.cargo_features) || matrix.extra_cargo_args || '--features mcp,mcp-http,api,heic' }}
 
       # Stage ONNX Runtime for Intel macOS after the build so the ort-dynamic
       # compile is unaffected; this exports ORT_DYLIB_PATH for the vendor step.
@@ -1756,6 +1978,7 @@ jobs:
           sparse-checkout: |
             scripts/ci/verify-windows-dll-closure.ps1
             scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/verify_no_gpl_cli_archive.py
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
             mise.toml
@@ -1772,9 +1995,10 @@ jobs:
         env:
           BINARY_PATH: ${{ steps.build.outputs.binary-path }}
           TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.archive_suffix }}
         shell: bash
         run: |
-          STAGE="xberg-cli-${TARGET}"
+          STAGE="xberg-cli-${TARGET}${SUFFIX}"
           mkdir -p "$STAGE"
           cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -1848,12 +2072,71 @@ jobs:
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 
+      - name: Setup cargo-deny for the no-GPL license audit
+        if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "true"
+          install-args: cargo-deny
+
+      # Cargo metadata alone cannot prove this artifact is GPL-free: libheif, libde265 and x265
+      # are C libraries reached through `libheif-sys` and linked statically by the vcpkg port, so
+      # the crate license graph stays clean whether or not they are in the binary. `cargo deny`
+      # covers the Rust crates of the exact shipped feature graph (no `heic`), and the archive
+      # audit covers the linked/bundled codecs in xberg.exe and its sibling DLLs. ~keep
+      - name: Verify no GPL/LGPL codecs in the no-GPL CLI archive
+        if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.archive_suffix }}
+          FEATURES: ${{ matrix.cargo_features }}
+        run: |
+          set -euo pipefail
+          STAGE="xberg-cli-${TARGET}${SUFFIX}"
+          mise exec -- cargo deny --manifest-path crates/xberg-cli/Cargo.toml --locked \
+            --features "$FEATURES" --target "$TARGET" check licenses
+          "$STAGE/xberg.exe" formats --format json > "$RUNNER_TEMP/xberg-formats.json"
+          python .release-tools/scripts/ci/verify_no_gpl_cli_archive.py \
+            --archive "${STAGE}.zip" \
+            --formats-json "$RUNNER_TEMP/xberg-formats.json" \
+            --require-format pdf \
+            --require-format docx \
+            --require-format xlsx
+
+      - name: Checkout Linux CLI installer verification tools
+        if: endsWith(matrix.target, '-unknown-linux-gnu')
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .cli-release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/install.sh
+            scripts/ci/smoke-test-cli-installer.sh
+            scripts/ci/fixtures/musl-python-smoke.pdf
+            crates/xberg/tests/fixtures/office/merged_cells.docx
+
+      - name: Smoke test packaged Linux CLI in a clean container
+        if: endsWith(matrix.target, '-unknown-linux-gnu')
+        env:
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n '/^\[workspace.package\]$/,/^\[/s/^version = "\([^"]*\)".*/\1/p' Cargo.toml)"
+          test -n "$VERSION"
+          docker pull ubuntu:24.04
+          docker run --rm --network none -v "$PWD:/src:ro" ubuntu:24.04 \
+            bash /src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh "/src/xberg-cli-${TARGET}.tar.gz" "$VERSION" gnu
+
       - uses: actions/upload-artifact@v7
         with:
-          name: cli-${{ matrix.target }}
+          name: cli-${{ matrix.target }}${{ matrix.archive_suffix }}
           path: |
-            xberg-cli-${{ matrix.target }}.tar.gz
-            xberg-cli-${{ matrix.target }}.zip
+            xberg-cli-${{ matrix.target }}${{ matrix.archive_suffix }}.tar.gz
+            xberg-cli-${{ matrix.target }}${{ matrix.archive_suffix }}.zip
           if-no-files-found: ignore
           retention-days: 14
 
@@ -1907,6 +2190,37 @@ jobs:
           cp -a build-output/lib/. "$STAGE/lib/"
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
+
+      - name: Checkout Linux CLI installer verification tools
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .cli-release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/install.sh
+            scripts/ci/smoke-test-cli-installer.sh
+            scripts/ci/fixtures/musl-python-smoke.pdf
+            crates/xberg/tests/fixtures/office/merged_cells.docx
+
+      - name: Smoke test packaged Linux CLI in a clean container
+        env:
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n '/^\[workspace.package\]$/,/^\[/s/^version = "\([^"]*\)".*/\1/p' Cargo.toml)"
+          test -n "$VERSION"
+          docker pull debian:12-slim
+          # A republish may build an older checkout using the current workflow's smoke script. ~keep
+          test -r docker/Dockerfile.musl-build
+          mimalloc_required=0
+          if grep -Fxq '# xberg-release-smoke: mimalloc-required ~keep' docker/Dockerfile.musl-build; then
+            mimalloc_required=1
+          fi
+          docker run --rm --network none -e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required" -v "$PWD:/src:ro" debian:12-slim \
+            bash /src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh "/src/xberg-cli-${TARGET}.tar.gz" "$VERSION" musl
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1984,7 +2298,9 @@ jobs:
     name: Build Go FFI library (${{ matrix.platform }})
     needs: [prepare, check-go]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_go == 'true' && (needs.check-go.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_go == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || needs.check-go.outputs.exists != 'true' ||
+           needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -2006,9 +2322,10 @@ jobs:
           submodules: false
       # Zig is used only by the linux-gnu legs' glibc 2.28 floor build; one setup-mise call per
       # job keeps the mise cache for this key from carrying tools another call installed. ~keep
-      - name: Install Zig
+      - name: Set up mise and install Zig for GNU targets
         uses: xberg-io/actions/setup-mise@v1
         with:
+          install: ${{ contains(matrix.target, '-linux-gnu') && 'true' || 'false' }}
           install-args: zig
           config-ref: ${{ github.sha }}
 
@@ -2089,7 +2406,8 @@ jobs:
           - { os: ubuntu-latest, platform: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu }
           - { os: macos-26, platform: macos-arm64, target: aarch64-apple-darwin }
-          - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
+          # CRT staging requires a reviewed Visual Studio 2022 installation. ~keep
+          - { os: windows-2022, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -2387,7 +2705,11 @@ jobs:
     name: Build Kotlin Android natives (${{ matrix.abi }})
     needs: [prepare, check-maven]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_kotlin == 'true' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true') &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-maven.result == 'success' &&
+            (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2398,7 +2720,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
           submodules: false
       - uses: xberg-io/actions/setup-rust@v1
@@ -2406,6 +2728,8 @@ jobs:
         uses: ./.github/actions/install-system-deps
 
       - uses: xberg-io/actions/build-android-natives@v1
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.abi == 'arm64-v8a' && 'thin' || 'fat' }}
         with:
           # xberg-jni has no [features] table of its own; it pulls in
           # xberg's android-target feature automatically via
@@ -2590,13 +2914,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, windows-latest]
+        os: [macos-26, windows-2022]
         nif: ["2.16"]
         include:
           - os: macos-26
             label: macos-arm64
             target: aarch64-apple-darwin
-          - os: windows-latest
+          - os: windows-2022
             label: windows-x86_64
             target: x86_64-pc-windows-msvc
     steps:
@@ -2606,11 +2930,6 @@ jobs:
           fetch-depth: 0
 
           submodules: false
-      - name: Override ImageOS on Windows runners
-        if: runner.os == 'Windows'
-        shell: bash
-        run: echo "ImageOS=win25" >> "$GITHUB_ENV"
-
       # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:
@@ -2684,6 +3003,7 @@ jobs:
           dest-dir: crates/xberg-ffi
 
       - uses: xberg-io/actions/build-elixir-natives@v1
+        id: build-nif
         with:
           target: ${{ matrix.target }}
           nif-crate-name: xberg_nif
@@ -2745,6 +3065,7 @@ jobs:
             scripts/ci/vendor-windows-native-closure.ps1
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
+            scripts/ci/elixir_nif_assets.py
             mise.toml
             mise.lock
 
@@ -2760,7 +3081,17 @@ jobs:
         shell: pwsh
         env:
           DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          BUILDER_ARCHIVE: ${{ steps.build-nif.outputs.archive-path }}
+          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_API: ${{ matrix.nif }}
+          TARGET: ${{ matrix.target }}
         run: |
+          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
+          if ($env:DRY_RUN -ne 'true') {
+            $name = "xberg_nif-v${env:NIF_VERSION}-nif-${env:NIF_API}-${env:TARGET}.dll"
+            python (Join-Path $closureTools "elixir_nif_assets.py") normalize-windows $env:BUILDER_ARCHIVE $name
+            if ($LASTEXITCODE -ne 0) { throw "Windows NIF archive normalization failed" }
+          }
           $tarballs = @(Get-ChildItem -Path dist/elixir-natives -Filter "*.tar.gz" -File -ErrorAction SilentlyContinue)
           if ($tarballs.Count -eq 0) {
             if ($env:DRY_RUN -eq 'true') {
@@ -2769,12 +3100,11 @@ jobs:
             }
             throw "No Windows NIF archive to audit"
           }
-          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
           $ortRuntime = Get-Item -LiteralPath $env:ORT_DYLIB_PATH -ErrorAction Stop
           foreach ($archive in $tarballs) {
-            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "libxberg_nif-*.dll"
+            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "xberg_nif-*.dll"
             if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure staging failed for $($archive.FullName)" }
-            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "libxberg_nif-*.dll" -ArtifactKind raw -RequireCrtNotices
+            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "xberg_nif-*.dll" -ArtifactKind raw -RequireCrtNotices
             if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure audit failed for $($archive.FullName)" }
           }
 
@@ -2797,9 +3127,9 @@ jobs:
     name: Build Elixir NIF (linux-musl-${{ matrix.arch }} nif-${{ matrix.nif }})
     needs: [prepare, check-elixir-release, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -2807,9 +3137,13 @@ jobs:
         nif: ["2.16"]
         include:
           - os: ubuntu-latest
+            # The v1.4.2 dry run was still compiling at the 90-minute cap. ~keep
+            timeout: 240
             arch: x86_64
             target: x86_64-unknown-linux-musl
           - os: ubuntu-24.04-arm
+            # The native v1.4.0 ARM build was still compiling at the 90-minute cap. ~keep
+            timeout: 240
             arch: aarch64
             target: aarch64-unknown-linux-musl
     steps:
@@ -2819,6 +3153,21 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      - name: Resolve Elixir NIF version
+        id: nif-version
+        shell: bash
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            version="$(sed -n 's/^ *version: "\([^"]*\)",$/\1/p' packages/elixir/mix.exs)"
+          fi
+          [[ -n "$version" && "$version" != *$'\n'* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
       # `.dockerignore` excludes `**/.git/`, so build.rs cannot derive XBERG_BUILD_ID inside the
       # container and falls back to `""`, collapsing every artifact built at one crate version into
       # a single OCR cache key space (#1845). Asserted non-empty here because an empty
@@ -2837,37 +3186,38 @@ jobs:
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --output type=local,dest=./build-output .
 
-      # Nothing before this point has ever loaded libxberg_nif.so into a BEAM
-      # VM. This loads the freshly built .so directly (bypassing
-      # RustlerPrecompiled's release-download / force_build paths -- see
-      # scripts/ci/smoke_test_elixir_nif.exs for why) inside a genuine Alpine
-      # (musl libc) container and runs a real extraction against a known
-      # fixture, asserting the exact expected text comes back. No
-      # continue-on-error: a broken NIF must fail this job, not merely warn.
-      - name: Smoke-test musl Elixir NIF (real extraction, not just load)
-        run: |
-          bash scripts/ci/smoke-test-musl-elixir-nif.sh build-output
-
       - name: Package NIF as RustlerPrecompiled tarball
         env:
           TARGET: ${{ matrix.target }}
           NIF_API: ${{ matrix.nif }}
-          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist/elixir-natives staging
-          # RustlerPrecompiled's `lib_name/4` expects the extracted file to carry the full
-          # versioned name, not the bare crate name -- the tarball name alone is not enough.
-          # The manylinux job below already renames; this one did not, so a musl artifact
-          # would have failed to load had musl ever been added to `nif_targets`. ~keep
+          # RustlerPrecompiled loads the versioned .so by name after extracting the archive. ~keep
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
-          cp build-output/libxberg_nif.so "staging/${RENAMED}"
+          cp -a build-output/*.so* staging/
+          mv staging/libxberg_nif.so "staging/${RENAMED}"
           python3 scripts/ci/package-notices.py stage staging
           TARBALL="${RENAMED}.tar.gz"
-          tar -czf "dist/elixir-natives/${TARBALL}" -C staging "${RENAMED}" LICENSE THIRD_PARTY_LICENSES.md
+          tar -czf "dist/elixir-natives/${TARBALL}" -C staging .
           python3 scripts/ci/package-notices.py verify "dist/elixir-natives/${TARBALL}" .
           ( cd dist/elixir-natives && sha256sum "${TARBALL}" >"${TARBALL}.sha256" )
+
+      - name: Smoke-test the staged musl Elixir NIF archive
+        env:
+          TARGET: ${{ matrix.target }}
+          NIF_API: ${{ matrix.nif }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE_DIR=dist/elixir-natives
+          RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
+          (cd "$ARCHIVE_DIR" && sha256sum -c "${RENAMED}.tar.gz.sha256")
+          archive="$ARCHIVE_DIR/${RENAMED}.tar.gz"
+          bash scripts/ci/smoke-test-musl-elixir-nif.sh "$archive" "$archive.sha256"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -2937,9 +3287,8 @@ jobs:
 
       # Reproduces xberg-io/actions/build-elixir-natives@v1's naming contract
       # (scripts/build.py: lib{crate}-v{version}-nif-{api}-{target}.so[.tar.gz])
-      # by hand, since this leg bypasses that action. Unlike
-      # elixir-natives-musl's tarball (which ships libxberg_nif.so alone), the
-      # FULL vendored closure built inside the container ships beside the
+      # by hand, since this leg bypasses that action. The full vendored native
+      # dependency closure built inside the container ships beside the
       # renamed .so -- verify-glibc-floor.sh below walks every .so in the
       # tarball, and that vendored closure is exactly what was failing the
       # floor check before this fix. ~keep
@@ -3139,11 +3488,19 @@ jobs:
 
   upload-dart-release:
     name: Upload Dart server natives to GitHub Release
-    needs: [prepare, dart-server-natives]
+    needs: [prepare, check-pub, dart-server-natives]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_dart == 'true' && needs.dart-server-natives.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_dart == 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: GitHub Release (Dart)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            dart-server-natives
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
@@ -3200,9 +3557,9 @@ jobs:
 
   swift-target:
     name: Build Swift library (${{ matrix.target }})
-    needs: prepare
+    needs: [prepare, check-swift]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true') }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.check-swift.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: macos-26
     # One triple per job. The monolithic job built all five back to back and was killed by its
     # own 330-minute cap twice running (a timeout kill reports as `cancelled`, which is why it
@@ -3361,9 +3718,12 @@ jobs:
     # A real release checks the exact uploaded asset; a dry run checks the run artifact
     # because upload-release-assets intentionally creates no release. Only the real
     # release may rewrite Package.swift or move remote refs. ~keep
+    # A skipped upload means the bundle is already on the release; the job still runs so a
+    # release whose upload landed but whose manifest update did not gets pinned, and it moves
+    # nothing when the tag's Package.swift already pins that exact bundle. ~keep
     needs: [prepare, upload-swift-bundle]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_swift == 'true' && needs.upload-swift-bundle.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_swift == 'true' && (needs.upload-swift-bundle.result == 'success' || (needs.upload-swift-bundle.result == 'skipped' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -3400,8 +3760,29 @@ jobs:
           CHECKSUM=$(sha256sum bundle-dl/Xberg-rs.artifactbundle.zip | cut -d' ' -f1)
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
 
-      - name: Update Package.swift with version and checksum
+      - name: Check whether the tag already pins this bundle
+        id: pinned
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          CHECKSUM: ${{ steps.checksum.outputs.checksum }}
+        run: |
+          set -euo pipefail
+          # Read the remote tag, not the checkout: a re-run may have checked out the
+          # pre-move commit while an earlier run already moved the tag. ~keep
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          manifest="$(git show "refs/tags/${TAG}:Package.swift")"
+          if grep -qF "/releases/download/${TAG}/Xberg-rs.artifactbundle.zip\"" <<<"$manifest" \
+            && grep -qE "checksum:[[:space:]]*\"${CHECKSUM}\"" <<<"$manifest"; then
+            echo "Package.swift at ${TAG} already pins ${CHECKSUM}; leaving the tag where it is"
+            echo "pinned=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "pinned=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Update Package.swift with version and checksum
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned != 'true' }}
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
@@ -3416,7 +3797,7 @@ jobs:
           head -40 Package.swift
 
       - name: Commit and push Package.swift
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned != 'true' }}
         run: |
           git config user.name "xberg-dev-publisher[bot]"
           git config user.email "291994444+xberg-dev-publisher[bot]@users.noreply.github.com"
@@ -3429,6 +3810,22 @@ jobs:
           # ref must exist for SwiftPM to resolve the package with the substituted XCFramework
           # checksum.
           git push origin -f "HEAD:refs/heads/release/swift/${{ needs.prepare.outputs.version }}"
+
+      - name: Ensure the release/swift branch exists
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned == 'true' }}
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # HEAD may be the pre-pin commit; the branch must carry the pinned manifest. ~keep
+          branch="refs/heads/release/swift/${VERSION}"
+          if git ls-remote --exit-code origin "$branch" >/dev/null; then
+            echo "$branch exists"
+          else
+            git push origin "refs/tags/${TAG}^{commit}:${branch}"
+          fi
 
   zig-package:
     name: Build Zig package (smoke check)
@@ -3613,15 +4010,17 @@ jobs:
 
   upload-cli-release:
     name: Upload CLI binaries to GitHub Release
-    needs: [prepare, cli-binaries, cli-binaries-musl, cli-binaries-binstall]
+    needs: [prepare, check-cli, cli-binaries, cli-binaries-musl, cli-binaries-binstall]
     # Requiring all three to succeed meant one failed matrix leg skipped this job
     # outright, publishing a release with NONE of the nine CLI archives: v1.2.0
     # shipped 12 assets and v1.2.1 shipped 54, both with zero `xberg-cli-*`, off a
     # single hung aarch64-musl link (#1638). A skipped job reports no failure, so
     # two releases went out before anyone noticed. Upload whatever did build, and
     # let the completeness step below fail the run on the shortfall. ~keep
+    # Skipped when every asset is already on the release: a rebuild for the PyPI proxy must not
+    # replace archives whose hashes Scoop, Homebrew and binstall already consumed. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && (needs.cli-binaries.result == 'success' || needs.cli-binaries-musl.result == 'success' || needs.cli-binaries-binstall.result == 'success')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.assets_exist != 'true' || needs.prepare.outputs.force_republish == 'true') && (needs.cli-binaries.result == 'success' || needs.cli-binaries-musl.result == 'success' || needs.cli-binaries-binstall.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -3665,6 +4064,7 @@ jobs:
           xberg-cli-aarch64-unknown-linux-musl.tar.gz
           xberg-cli-x86_64-unknown-linux-musl.tar.gz
           xberg-cli-x86_64-pc-windows-msvc.zip
+          xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip
           xberg-cli-binstall-aarch64-unknown-linux-musl.tar.gz
           xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz"
           total=0
@@ -3678,8 +4078,8 @@ jobs:
             fi
           done <<<"$(echo "$expected" | tr -d ' ')"
           echo "expected=${total} missing=${missing} present=$((total - missing))"
-          if [ "$total" -ne 9 ]; then
-            echo "::error::the expected-asset list did not parse (counted ${total}, want 9)"
+          if [ "$total" -ne 10 ]; then
+            echo "::error::the expected-asset list did not parse (counted ${total}, want 10)"
             exit 1
           fi
           [ "$missing" -eq 0 ] || exit 1
@@ -3715,11 +4115,19 @@ jobs:
 
   upload-go-release:
     name: Upload Go FFI archives to GitHub Release
-    needs: [prepare, go-ffi-libraries]
+    needs: [prepare, check-go, go-ffi-libraries]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.go-ffi-libraries.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_go == 'true' && (needs.prepare.outputs.dry_run == 'true' || (needs.check-go.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true'))) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: GitHub Release (Go FFI)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            go-ffi-libraries
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -3762,12 +4170,15 @@ jobs:
     # its checkout asserts the original triggering SHA, failing with "ref does not
     # point to expected commit". Ordering also removes a concurrent tag-push race.
     # `skipped` is accepted so a non-Swift release still tags the Go module. ~keep
-    needs: [prepare, upload-go-release, update-swift-package-manifest]
+    # A skipped Go upload is accepted when check-go found the archives already released, so a
+    # re-run can still tag; the tag script is a no-op when the tags already name the release
+    # commit and fails when they name another. ~keep
+    needs: [prepare, check-go, upload-go-release, update-swift-package-manifest]
     # dry-run releases must NEVER mint real remote tags; the tag script has no
     # dry-run awareness of its own, so this job is skipped entirely when dry_run
     # is true instead of trying to thread a flag through the script. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.upload-go-release.result == 'success' && (needs.update-swift-package-manifest.result == 'success' || needs.update-swift-package-manifest.result == 'skipped')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.upload-go-release.result == 'success' || (needs.upload-go-release.result == 'skipped' && needs.check-go.outputs.exists == 'true')) && (needs.update-swift-package-manifest.result == 'success' || needs.update-swift-package-manifest.result == 'skipped')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -3803,11 +4214,19 @@ jobs:
 
   upload-c-ffi-release:
     name: Upload C FFI archives to GitHub Release
-    needs: [prepare, c-ffi-libraries]
+    needs: [prepare, check-c-ffi, c-ffi-libraries]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.c-ffi-libraries.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_c_ffi == 'true' && (needs.check-c-ffi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: GitHub Release (C FFI)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            c-ffi-libraries
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -3831,16 +4250,23 @@ jobs:
 
   upload-elixir-release:
     name: Upload Elixir NIF archives to GitHub Release
-    needs: [prepare, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
-    # `is_tag` alone does NOT exclude a dry run -- prepare synthesizes
-    # `v<version>-dryrun-<sha>`, so `is_tag` is true there too. Without the
-    # dry_run test this job would start uploading release assets as soon as the
-    # native builds stopped failing, and its download-artifact would find
-    # nothing because the dry-run upload above is skipped. ~keep
+    needs: [prepare, check-elixir-release, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.elixir-natives.result == 'success' || needs.elixir-natives-musl.result == 'success' || needs.elixir-natives-manylinux.result == 'success')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' &&
+          needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_elixir == 'true' &&
+          (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: GitHub Release (Elixir NIFs)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            elixir-natives
+            elixir-natives-musl
+            elixir-natives-manylinux
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -3854,13 +4280,31 @@ jobs:
           path: dist/elixir
           merge-multiple: true
 
+      - name: Verify current-run Elixir archives
+        shell: bash
+        env:
+          NIF_ASSETS: ${{ needs.prepare.outputs.elixir_assets }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$NIF_ASSETS"
+          if [[ "${#names[@]}" != 6 ]]; then
+            echo "::error::Expected six Elixir NIF asset names"
+            exit 1
+          fi
+          for name in "${names[@]}"; do
+            if [[ ! -s "dist/elixir/$name" ]]; then
+              echo "::error::Missing current-run Elixir NIF archive: $name"
+              exit 1
+            fi
+          done
+
       - uses: xberg-io/actions/upload-release-assets@v1
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           working-directory: dist/elixir
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           token: ${{ steps.app-token.outputs.token }}
-          assets: libxberg_nif-*.tar.gz
+          assets: ${{ needs.prepare.outputs.elixir_assets }}
 
   upload-php-pie-release:
     name: Upload PHP PIE archives to GitHub Release
@@ -3872,7 +4316,7 @@ jobs:
     # release went out with zero assets). Upload whatever legs did produce
     # an artifact instead of requiring all of them to succeed. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.php-extension.result != 'skipped') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && needs.php-extension.result != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -3902,11 +4346,19 @@ jobs:
 
   upload-swift-bundle:
     name: Upload Swift artifact bundle to GitHub Release
-    needs: [prepare, swift-artifactbundle]
+    needs: [prepare, check-swift, swift-artifactbundle]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.swift-artifactbundle.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_swift == 'true' && (needs.check-swift.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: GitHub Release (Swift)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            swift-artifactbundle
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -3961,21 +4413,41 @@ jobs:
           owner: xberg-io
 
       - uses: xberg-io/actions/verify-release-assets@v1
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        name: Verify CLI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_cli == 'true' }}
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           token: ${{ steps.app-token.outputs.token }}
           expected-assets: |
-            # CLI
             xberg-cli-*.tar.gz
             xberg-cli-*.zip
-            # Go FFI
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify Go FFI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_go == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
             xberg-go-*.tar.gz
-            # C FFI
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify C FFI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_c_ffi == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
             xberg-ffi-*.tar.gz
-            # Elixir NIF
-            libxberg_nif-*.tar.gz
-            # PHP PIE (a missing Linux leg shipped silently from 1.3.7 to 1.3.10, #2113)
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify PHP PIE release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_php == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
+            # Require every supported PHP version and platform (#2113).
             php_xberg-*_php8.3-x86_64-linux-glibc-nts.tgz
             php_xberg-*_php8.3-arm64-linux-glibc-nts.tgz
             php_xberg-*_php8.3-arm64-darwin-bsdlibc-nts.tgz
@@ -3988,6 +4460,13 @@ jobs:
             php_xberg-*_php8.5-arm64-linux-glibc-nts.tgz
             php_xberg-*_php8.5-arm64-darwin-bsdlibc-nts.tgz
             php_xberg-*-8.5-nts-vs17-x86_64.zip
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_elixir == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: ${{ needs.prepare.outputs.elixir_assets_multiline }}
 
       - uses: actions/download-artifact@v8
         if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_cli == 'true' }}
@@ -4048,6 +4527,21 @@ jobs:
             exit 1
           fi
 
+  # Publish-job gating. A job's `if:` says only whether its channel is wanted (target
+  # selected, tag, version not yet on the registry); its first step, require-job-results,
+  # then fails the job, naming the channel, when a build or upload it publishes from did not
+  # succeed. Putting `needs.<build>.result == 'success'` in the `if:` instead SKIPS the job
+  # on one failed matrix leg, and a skipped job leaves the run looking healthy for a channel
+  # that never shipped. Every registry channel is all-or-nothing per version: npm's parent
+  # package pins each platform package, Maven and NuGet versions are immutable once released,
+  # RubyGems/Hex/pub.dev versions cannot be replaced, and a PyPI wheel missing for a platform
+  # silently degrades pip to a source build. Channels depend on publish-crates only when they
+  # build or ship something that resolves the xberg crates from crates.io (python-sdist, the
+  # Ruby gem, the PHP extension, the Elixir NIFs and Hex package), and accept it `skipped`,
+  # which is what a re-run with every crate already published produces; they also require
+  # check-cratesio and validate-versions, whose failure would skip publish-crates too. WASM is
+  # the one exception: wasm-bindings is continue-on-error by design, so publish-wasm keeps
+  # its success requirement in the `if:` and stays best-effort. ~keep
   publish-crates:
     name: Publish crates.io packages
     needs: [prepare, validate-versions, check-cratesio]
@@ -4076,9 +4570,19 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [prepare, python-wheels, python-wheels-musl, python-sdist, check-pypi, publish-crates]
+    needs:
+      [
+        prepare,
+        python-wheels,
+        python-wheels-musl,
+        python-sdist,
+        check-pypi,
+        publish-crates,
+        validate-versions,
+        check-cratesio,
+      ]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') && needs.python-wheels.result == 'success' && needs.python-wheels-musl.result == 'success' && (needs.python-sdist.result == 'success' || (needs.prepare.outputs.dry_run == 'true' && needs.python-sdist.result == 'skipped'))) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     environment: pypi
     concurrency:
@@ -4088,6 +4592,21 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: PyPI
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            python-wheels
+            python-wheels-musl
+            ${{ needs.prepare.outputs.dry_run != 'true' && 'python-sdist' || '' }}
+          succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
+            publish-crates
+            ${{ needs.prepare.outputs.dry_run == 'true' && 'python-sdist' || '' }}
+
       - name: Checkout publication helpers
         uses: actions/checkout@v7
         with:
@@ -4166,15 +4685,23 @@ jobs:
 
   publish-cli-proxy:
     name: Publish CLI proxy to PyPI (wheels + sdist)
-    needs: [prepare, check-cli, cli-proxy-wheels, publish-crates]
+    needs: [prepare, check-cli, cli-proxy-wheels]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.pypi_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: PyPI (xberg-cli)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            cli-proxy-wheels
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
@@ -4214,14 +4741,26 @@ jobs:
 
   publish-rubygems:
     name: Publish Ruby gems
-    needs: [prepare, ruby-gem, check-rubygems, publish-crates]
+    needs: [prepare, ruby-gem, check-rubygems, publish-crates, validate-versions, check-cratesio]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_ruby == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_ruby == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: RubyGems
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            ruby-gem
+          succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
+            publish-crates
+
       # Only the mise config, so setup-mise installs the locked Ruby. ~keep
       - uses: actions/checkout@v7
         with:
@@ -4261,17 +4800,27 @@ jobs:
 
   publish-node:
     name: Publish Node packages
-    needs: [prepare, node-bindings, node-bindings-musl, node-bindings-manylinux, check-npm, publish-crates]
+    needs: [prepare, node-bindings, node-bindings-musl, node-bindings-manylinux, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.release_node == 'true' && (needs.prepare.outputs.dry_run == 'true' || (needs.check-npm.result == 'success' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: npm
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            node-bindings
+            node-bindings-musl
+            node-bindings-manylinux
+
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.checkout_ref || needs.prepare.outputs.ref }}
 
           submodules: false
       - uses: actions/download-artifact@v8
@@ -4373,6 +4922,34 @@ jobs:
             crates/xberg-node/package.json > "$tmp_pkg_json"
           mv "$tmp_pkg_json" crates/xberg-node/package.json
 
+      - name: Checkout Node dry-run verification tools
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows/publish.yaml
+            scripts/ci/verify-node-dry-run.py
+
+      - name: Verify and archive local npm packages
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/node-dry-run
+          npm pack ./crates/xberg-node --ignore-scripts --pack-destination dist/node-dry-run
+          python3 .release-tools/scripts/ci/verify-node-dry-run.py
+          cp crates/xberg-node/npm/*.tgz dist/node-dry-run/
+      - uses: actions/upload-artifact@v7
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        with:
+          name: node-dry-run-packages
+          path: dist/node-dry-run/*.tgz
+          if-no-files-found: error
+
       # ~keep This job is gated only on the MAIN package being absent from npm
       # (check-npm.outputs.node_exists), so a re-run after a partial failure re-publishes
       # every platform sub-package and the ones that already landed answer 403
@@ -4385,6 +4962,7 @@ jobs:
       # "Assert every optionalDependency is installable" step below is the real gate for
       # that -- it queries the registry instead of trusting this step's exit code.
       - name: Publish platform sub-packages
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         continue-on-error: true
         uses: xberg-io/actions/publish-npm@v1
         with:
@@ -4451,6 +5029,7 @@ jobs:
           echo "OK: every optionalDependency resolves on the npm registry"
 
       - name: Publish main @xberg-io/xberg package
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         uses: xberg-io/actions/publish-npm@v1
         with:
           package-dir: crates/xberg-node
@@ -4476,9 +5055,9 @@ jobs:
   # 1.0.0 release exists. ~keep
   publish-wasm:
     name: Publish WASM package
-    needs: [prepare, wasm-bindings, check-npm, publish-crates]
+    needs: [prepare, wasm-bindings, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.wasm-bindings.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.wasm-bindings.result == 'success' && needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -4572,11 +5151,25 @@ jobs:
 
   publish-packagist:
     name: Trigger Packagist update
-    needs: [prepare, upload-php-pie-release, check-packagist, publish-crates]
+    needs: [prepare, check-php-pie, php-extension, upload-php-pie-release, check-packagist]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.upload-php-pie-release.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: Packagist
+          needs: ${{ toJSON(needs) }}
+          # The PHP jobs skip legitimately only when the release already holds every PIE
+          # archive; skipped for any other reason (publish-crates failed) blocks Packagist. ~keep
+          succeeded: |
+            ${{ needs.check-php-pie.outputs.exists != 'true' && 'php-extension' || '' }}
+            ${{ needs.check-php-pie.outputs.exists != 'true' && 'upload-php-pie-release' || '' }}
+          succeeded-or-skipped: |
+            ${{ needs.check-php-pie.outputs.exists == 'true' && 'php-extension' || '' }}
+            ${{ needs.check-php-pie.outputs.exists == 'true' && 'upload-php-pie-release' || '' }}
+
       - uses: xberg-io/actions/publish-packagist@v1
         with:
           packagist-username: xberg-dev
@@ -4589,11 +5182,20 @@ jobs:
 
   publish-maven:
     name: Publish Maven (Java) package
-    needs: [prepare, java-natives, java-natives-musl, check-maven, publish-crates]
+    needs: [prepare, java-natives, java-natives-musl, check-maven]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-maven.outputs.java_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-maven.outputs.java_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: Maven Central
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            java-natives
+            java-natives-musl
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
@@ -4632,14 +5234,22 @@ jobs:
 
   publish-kotlin-android:
     name: Publish Kotlin Android (Maven Central via Gradle)
-    needs: [prepare, kotlin-android-natives, check-maven, publish-crates]
+    needs: [prepare, kotlin-android-natives, check-maven]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_kotlin == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' && (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true') && (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-maven.result == 'success' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: Maven Central (Kotlin Android)
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            kotlin-android-natives
+
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.ref }}
 
           submodules: false
       - uses: actions/download-artifact@v8
@@ -4648,17 +5258,21 @@ jobs:
           path: kotlin-android-artifacts
           merge-multiple: true
 
-      - name: Stage Android natives into Kotlin Android module
-        shell: bash
+      - name: Check out Android release guards from the workflow revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci/verify-android-jni.py
+            scripts/ci/verify-android-aar.init.gradle
+          sparse-checkout-cone-mode: false
+
+      - name: Validate and stage both Android JNI libraries
         run: |
-          for abi in arm64-v8a x86_64; do
-            dest="packages/kotlin-android/src/main/jniLibs/${abi}"
-            mkdir -p "$dest"
-            src="kotlin-android-artifacts/${abi}/libxberg_jni.so"
-            if [[ -f "$src" ]]; then
-              cp -v "$src" "$dest/"
-            fi
-          done
+          python3 .release-tools/scripts/ci/verify-android-jni.py stage \
+            kotlin-android-artifacts packages/kotlin-android/src/main/jniLibs
 
       # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - uses: android-actions/setup-android@v4
@@ -4669,23 +5283,41 @@ jobs:
         with:
           working-directory: packages/kotlin-android
           gradle-task: publishAndReleaseToMavenCentral
+          extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+          expected-version: ${{ needs.prepare.outputs.tag }}
         env:
-          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_USERNAME: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.CENTRAL_USERNAME || '' }}
+          MAVEN_PASSWORD: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.CENTRAL_PASSWORD || '' }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PRIVATE_KEY || '' }}
+          MAVEN_GPG_PASSPHRASE: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PASSPHRASE || '' }}
+
+      # The composite only prints its publish command in dry runs. Build the publication's AAR
+      # and verify its JNI contents by invoking the same guard directly. ~keep
+      - name: Verify the staged release AAR in dry runs
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        working-directory: packages/kotlin-android
+        run: gradle --no-daemon -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true verifyReleaseAarJni
 
   publish-nuget:
     name: Publish NuGet package
-    needs: [prepare, csharp-natives, csharp-natives-musl, check-nuget, publish-crates]
+    needs: [prepare, csharp-natives, csharp-natives-musl, check-nuget]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_csharp == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-nuget.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_csharp == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-nuget.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: NuGet
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            csharp-natives
+            csharp-natives-musl
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
@@ -4787,14 +5419,26 @@ jobs:
 
   publish-hex:
     name: Publish Elixir Hex package
-    needs: [prepare, finalize-github-release-after-uploads, check-hex, publish-crates]
-    # Runs whenever the release is finalized, independent of any sibling channel's
-    # result. Fetches its NIFs from the finalized release (not run-artifacts), so it
-    # only needs finalize to have succeeded. ~keep
+    needs: [prepare, upload-elixir-release, check-hex, publish-crates, validate-versions, check-cratesio]
+    # Fetches its NIFs from the release (not run-artifacts), so it needs only the NIF upload,
+    # or a skipped upload because the NIFs are already there; finalize also waits on every
+    # other channel's upload, and one of those failing used to skip Hex. The Hex package's
+    # source fallback resolves the xberg crates from crates.io, hence publish-crates. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (always() && needs.finalize-github-release-after-uploads.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-hex.outputs.elixir_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_elixir == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-hex.outputs.elixir_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: Hex
+          needs: ${{ toJSON(needs) }}
+          succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
+            upload-elixir-release
+            publish-crates
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
@@ -4807,21 +5451,41 @@ jobs:
           elixir-version: "1.17"
           otp-version: "27"
 
-      - name: Generate NIF checksum file
-        uses: xberg-io/actions/generate-elixir-checksums@v1
+      - name: Checkout Elixir release tools
+        uses: actions/checkout@v7
         with:
-          github-repo: xberg-io/xberg
-          tag: ${{ needs.prepare.outputs.tag }}
-          version: ${{ needs.prepare.outputs.version }}
-          lib-name: xberg_nif
-          # Must match the NIF versions actually built (elixir-natives matrix) and
-          # declared in packages/elixir/lib/xberg/native.ex (`nif_versions: ["2.16"]`).
-          # NIF 2.16 loads fine on OTP 27 (NIF minor versions are backward compatible),
-          # so a single 2.16 artifact covers every supported runtime. Requesting 2.17
-          # here made the checksum step hunt for assets that were never built. ~keep
-          nif-versions: "2.16"
-          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
-          output-path: packages/elixir/checksum-Elixir.Xberg.Native.exs
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: scripts/ci/elixir_nif_assets.py
+
+      - name: Generate NIF checksum file
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          NIF_ASSETS: ${{ needs.prepare.outputs.elixir_assets }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$NIF_ASSETS"
+          test "${#names[@]}" -gt 0
+          archives="$(mktemp -d)"
+          trap 'rm -rf -- "$archives"' EXIT
+          patterns=()
+          for name in "${names[@]}"; do
+            patterns+=(--pattern "$name")
+          done
+          for attempt in 1 2 3; do
+            if gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
+              "${patterns[@]}" --dir "$archives" --clobber; then
+              break
+            fi
+            test "$attempt" -lt 3
+            sleep 5
+          done
+          python3 .release-tools/scripts/ci/elixir_nif_assets.py checksums \
+            packages/elixir/checksum-Elixir.Xberg.Native.exs "${names[@]/#/$archives/}"
 
       - name: Build Elixir Hex tarball with dependency rewrite
         id: build-hex
@@ -4842,17 +5506,25 @@ jobs:
 
   trigger-pubdev:
     name: Trigger pub.dev publish workflow
-    needs: [prepare, check-pub, upload-dart-release, publish-crates]
+    needs: [prepare, check-pub, upload-dart-release]
     # Excluded from dry runs on purpose: `gh workflow run` dispatches a separate, real
     # publish-pubdev.yaml run with no dry-run awareness of its own -- an external, irreversible
     # side effect this workflow cannot take back once dispatched. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_dart == 'true' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') && needs.upload-dart-release.result == 'success') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_dart == 'true' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: pub.dev
+          needs: ${{ toJSON(needs) }}
+          succeeded: |
+            upload-dart-release
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -4878,24 +5550,46 @@ jobs:
 
   publish-zig:
     name: Publish Zig package metadata
-    needs: [prepare, finalize-github-release-after-uploads, check-zig, c-ffi-libraries, publish-crates]
-    # Consumes c-ffi RUN-artifacts, so c-ffi-libraries must have SUCCEEDED this run
-    # (a skip means there are no artifacts to download). Otherwise runs independent
-    # of any sibling channel's result, once the release is finalized. ~keep
+    needs: [prepare, upload-c-ffi-release, check-zig, c-ffi-libraries]
+    # Consumes this run's c-ffi artifacts, or the release's C FFI archives when
+    # c-ffi-libraries was skipped because they are already uploaded. Independent of every
+    # other channel: it waits on the C FFI upload, not on finalize. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (always() && needs.finalize-github-release-after-uploads.result == 'success' && needs.c-ffi-libraries.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require the jobs this channel publishes from
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: Zig
+          needs: ${{ toJSON(needs) }}
+          succeeded-or-skipped: |
+            c-ffi-libraries
+            upload-c-ffi-release
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
           submodules: false
 
       - uses: actions/download-artifact@v8
+        if: ${{ needs.c-ffi-libraries.result == 'success' }}
         with:
           pattern: c-ffi-*
           path: dist/c-ffi-downloaded
           merge-multiple: false
+
+      - name: Download C FFI archives from the release
+        if: ${{ needs.c-ffi-libraries.result != 'success' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'xberg-ffi-*.tar.gz' --dir dist/c-ffi-downloaded/release
+          ls -la dist/c-ffi-downloaded/release
 
       - name: Lay out FFI artifacts for multi-platform Zig bundle
         shell: bash
@@ -4998,6 +5692,9 @@ jobs:
           multi-platform-ffi-dir: ffi-artifacts
           module-name: xberg
           ffi-lib-name: xberg_ffi
+          # The only job that writes the release body (finalize-release edits draft and
+          # prerelease flags only), and the append is guarded by a marker, so running beside
+          # the other uploads cannot lose or duplicate notes. ~keep
           update-release-notes: "true"
           update-existing: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
@@ -5006,16 +5703,14 @@ jobs:
 
   publish-homebrew-formula:
     name: Update Homebrew formula
-    needs: [prepare, upload-cli-release, check-homebrew, publish-crates]
-    # Pins release-asset URLs that persist on the release, so a SKIPPED upload-cli
-    # on a same-tag retry (asset already uploaded) must not skip the formula bump;
-    # only a genuine upload failure should. Independent of all other channels. ~keep
+    needs: [prepare, upload-cli-release, check-homebrew]
+    # The formula builds from the source tarball, so it needs neither crates.io nor a
+    # successful CLI upload; it follows upload-cli-release only for ordering, and the
+    # asset-presence step below refuses a release with no CLI assets at all. ~keep
     # `always()` also runs on a cancelled workflow: run 38443926351 was cancelled yet this job
-    # pushed the 1.3.10 formula while the release had 0 assets (#2119). `!cancelled()` plus an
-    # explicit success/skipped check on the upload closes that; the asset-presence step below
-    # covers the skipped-because-already-uploaded retry. ~keep
+    # pushed the 1.3.10 formula while the release had 0 assets (#2119), hence `!cancelled()`. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && (needs.upload-cli-release.result == 'success' || needs.upload-cli-release.result == 'skipped') && (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped') && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-homebrew.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-homebrew.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -5111,14 +5806,15 @@ jobs:
         shell: bash
 
   # The Windows counterpart of publish-homebrew-formula. There is deliberately no
-  # `check-scoop` idempotency gate: the render step rewrites the manifest in place and
-  # the commit below is guarded by `git diff --quiet bucket/`, so re-running a release
-  # is already a no-op. ~keep
+  # `check-scoop` idempotency gate: the action rewrites the manifest in place and commits
+  # only when the staged manifest differs from the bucket, so re-running a release is a
+  # no-op. It reads the Windows zip from the release rather than this run, so it also runs
+  # when the CLI upload was skipped because check-cli found every asset there. ~keep
   publish-scoop-manifest:
     name: Update Scoop manifest
-    needs: [prepare, upload-cli-release]
+    needs: [prepare, check-cli, upload-cli-release]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_scoop == 'true' && needs.upload-cli-release.result == 'success' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.upload-cli-release.result == 'success' || (needs.upload-cli-release.result == 'skipped' && needs.prepare.outputs.dry_run != 'true' && needs.check-cli.outputs.assets_exist == 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -5156,40 +5852,7 @@ jobs:
           github-repo: ${{ github.repository }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           token: ${{ steps.source-token.outputs.token }}
-
-      - name: Commit and push to bucket
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        working-directory: scoop-bucket
-        env:
-          GH_TOKEN: ${{ steps.bucket-token.outputs.token }}
-        run: |
-          git config user.name "xberg-dev-publisher[bot]"
-          git config user.email "291994444+xberg-dev-publisher[bot]@users.noreply.github.com"
-          if git diff --quiet bucket/; then
-            echo "No manifest changes; skipping commit."
-            exit 0
-          fi
-          git add bucket/xberg.json
-          git commit -m "xberg ${{ needs.prepare.outputs.version }}"
-          # Six release pipelines push to this one bucket, so a concurrent release can land
-          # between our checkout and our push and reject it as non-fast-forward. Each repo
-          # touches only its own manifest, so rebasing onto the new tip and retrying is safe --
-          # there is nothing for two releases to genuinely conflict over. ~keep
-          for attempt in 1 2 3 4 5; do
-            if git push origin HEAD; then
-              exit 0
-            fi
-            echo "push rejected (attempt $attempt); rebasing onto the current bucket tip"
-            git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "::error::bucket rebase hit a real conflict; refusing to force the push"
-              exit 1
-            fi
-            sleep $((attempt * 3))
-          done
-          echo "::error::could not push to the bucket after 5 attempts"
-          exit 1
+          commit: "true"
 
   homebrew-bottles:
     name: Build Homebrew bottle (${{ matrix.bottle_tag }})
@@ -5464,14 +6127,23 @@ jobs:
 
   cli-proxy:
     name: Publish CLI proxy package (npm)
-    needs: [prepare, check-cli, publish-crates]
+    needs: [prepare, check-cli, upload-cli-release]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.npm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
+      - name: Require the CLI release assets the proxy downloads
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: npm (xberg-cli)
+          needs: ${{ toJSON(needs) }}
+          # Skipped is accepted only when check-cli found every asset on the release. ~keep
+          succeeded: ${{ needs.check-cli.outputs.assets_exist != 'true' && 'upload-cli-release' || '' }}
+          succeeded-or-skipped: ${{ needs.check-cli.outputs.assets_exist == 'true' && 'upload-cli-release' || '' }}
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
@@ -5504,9 +6176,9 @@ jobs:
 
   publish-integrations-pypi:
     name: Publish integrations to PyPI
-    needs: [prepare, publish-pypi, publish-crates]
+    needs: [prepare, publish-pypi]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-pypi.result != 'failure' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-pypi.result != 'failure' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true') }}
     runs-on: ubuntu-latest
     env:
       # uv must use the interpreter mise installed, not download its own. ~keep
@@ -5561,9 +6233,9 @@ jobs:
 
   publish-integrations-maven:
     name: Publish spring-ai integration to Maven Central
-    needs: [prepare, publish-maven, publish-crates]
+    needs: [prepare, publish-maven]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-maven.result != 'failure' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.is_tag == 'true') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-maven.result != 'failure' && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.is_tag == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -5609,16 +6281,16 @@ jobs:
 
   publish-integrations-npm:
     name: Publish ${{ matrix.package }} to npm
-    needs: [prepare, publish-node, publish-crates]
-    # Runs on dry runs too. Each integration package pins `@xberg-io/xberg` to the exact release
-    # version, and a dry-run `publish-node` never puts that version on npm, so `npm install` would die
-    # with ETARGET "No matching version found for @xberg-io/xberg@<version>" before anything ran. The
-    # "Resolve core dependency for dry run" step below repoints the pin at whatever version is
-    # currently on npm, so the dry run still exercises install/build/pack against a real, resolvable
-    # dependency -- it just isn't proof this exact release version resolves (publish-node's own
-    # dry-run pack step is what covers that). ~keep
+    needs: [prepare, check-npm, publish-node]
+    # A skipped core publish is usable for a real release only when the exact version is already on npm.
+    # Dry runs can use the published fallback version resolved below. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-node.result != 'failure' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true') }}
+      ${{ !inputs.plugins-only && (!cancelled() &&
+          needs.prepare.result == 'success' && needs.check-npm.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' &&
+          (needs.publish-node.result == 'success' ||
+           (needs.publish-node.result == 'skipped' &&
+            (needs.check-npm.outputs.node_exists == 'true' || needs.prepare.outputs.dry_run == 'true')))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

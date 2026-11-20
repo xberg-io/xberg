@@ -1,0 +1,2313 @@
+diff --git a/crates/xberg/src/extractors/pdf/ink_probe.rs b/crates/xberg/src/extractors/pdf/ink_probe.rs
+index c8334d83a4..b6c26ca91e 100644
+--- a/crates/xberg/src/extractors/pdf/ink_probe.rs
++++ b/crates/xberg/src/extractors/pdf/ink_probe.rs
+@@ -48,6 +48,7 @@ pub(super) struct ProbeOutcome {
+     /// Pages whose ink contradicts their layer; the script rule must leave them to OCR.
+     pub(super) contradicted: Vec<u32>,
+     pub(super) warnings: Vec<crate::types::ProcessingWarning>,
++    pub(super) reads: Option<std::sync::Arc<super::ocr::read_reuse::ProbeReads>>,
+ }
+ 
+ /// The failing pages the script rule would keep on lost-glyph markers alone: their layer is in a
+@@ -255,6 +256,10 @@ pub(super) async fn contradicted_pages(
+     eligible.sort_unstable();
+     eligible.dedup();
+     let (probe_config, thresholds) = discarding_noise(config);
++    let retention_limit = config.security_limits.clone().unwrap_or_default().max_content_size;
++    outcome.reads = Some(std::sync::Arc::new(super::ocr::read_reuse::ProbeReads::new(
++        retention_limit,
++    )));
+     let mut probed: Vec<u32> = Vec::new();
+     loop {
+         let batch = next_batch(&eligible, &probed, !outcome.contradicted.is_empty());
+@@ -262,14 +267,14 @@ pub(super) async fn contradicted_pages(
+             return Ok(outcome);
+         }
+         probed.extend_from_slice(&batch);
+-        let run = super::ocr::extract_mixed_ocr_native_with_layout_pages(
++        let run = super::ocr::extract_mixed_ocr_native_with_probe_reads(
+             layer.text,
+             boundaries,
+             (&batch, &[]),
+             content,
+             &probe_config,
+             layout_pages,
+-            (&[], &[]),
++            (&[], &[], outcome.reads.clone()),
+         )
+         .await;
+         super::ensure_pdf_not_cancelled(config)?;
+diff --git a/crates/xberg/src/extractors/pdf/mod.rs b/crates/xberg/src/extractors/pdf/mod.rs
+index fdb2bbca39..950f560451 100644
+--- a/crates/xberg/src/extractors/pdf/mod.rs
++++ b/crates/xberg/src/extractors/pdf/mod.rs
+@@ -3190,13 +3190,14 @@ impl PdfExtractor {
+             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+             let native_script_pages: Vec<u32> = Vec::new();
+             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+-            {
++            let probe_reads = {
+                 let layer = unreadable_script::NativeLayer {
+                     text: &native_text,
+                     boundaries: boundaries.as_deref(),
+                     page_count: pdf_metadata.pdf_specific.page_count,
+                 };
+                 let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
++                let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
+                 crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
+                 crate::core::diagnostics::dedup_extend_warnings(
+                     &mut ocr_fallback_warnings,
+@@ -3208,7 +3209,8 @@ impl PdfExtractor {
+                         &ink.contradicted,
+                     ),
+                 );
+-            }
++                reads
++            };
+             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+             let native_script_pages =
+                 unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);
+@@ -3357,7 +3359,21 @@ impl PdfExtractor {
+                         path,
+                         PageOcrLayoutContext {
+                             pages: layout_pages,
+-                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
++                            hints: {
++                                #[allow(unused_mut)]
++                                let mut hints = whole_document_ocr_hints(
++                                    &pdf_metadata,
++                                    &native_text,
++                                    boundaries.as_deref(),
++                                    config,
++                                );
++                                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                                if let Some(reads) = &probe_reads {
++                                    hints.get_or_insert_with(Default::default).probe_reads =
++                                        Some(std::sync::Arc::clone(reads));
++                                }
++                                hints
++                            },
+                         },
+                         #[cfg(feature = "layout-detection")]
+                         markdown_layout_images.take(),
+@@ -3600,7 +3616,26 @@ impl PdfExtractor {
+                 }
+                 ocr::OcrGateOutcome::RunFallbackOnPages(pages) => match boundaries.as_deref() {
+                     Some(bounds) if !bounds.is_empty() => {
+-                        match ocr::extract_mixed_ocr_native_with_layout_pages(
++                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                        let selected_run = ocr::extract_mixed_ocr_native_with_probe_reads(
++                            &native_text,
++                            bounds,
++                            (
++                                &pages,
++                                pdf_metadata
++                                    .pdf_specific
++                                    .fabricated_text_pages
++                                    .as_deref()
++                                    .unwrap_or(&[]),
++                            ),
++                            content,
++                            config,
++                            layout_pages,
++                            (&outlined_ocr_pages, &native_script_pages, probe_reads.clone()),
++                        )
++                        .await;
++                        #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
++                        let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
+                             &native_text,
+                             bounds,
+                             (
+@@ -3616,8 +3651,8 @@ impl PdfExtractor {
+                             layout_pages,
+                             (&outlined_ocr_pages, &native_script_pages),
+                         )
+-                        .await
+-                        {
++                        .await;
++                        match selected_run {
+                             Ok(mixed_run) => apply_targeted_mixed_run!(mixed_run),
+                             Err(e) => {
+                                 tracing::warn!(
+diff --git a/crates/xberg/src/extractors/pdf/ocr/mod.rs b/crates/xberg/src/extractors/pdf/ocr/mod.rs
+index 6d8ce1b662..e9c3326996 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/mod.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/mod.rs
+@@ -42,6 +42,10 @@ mod native_word_coverage;
+ mod orientation_retry;
+ #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+ pub(crate) use orientation_retry::recognition_retry_eligible;
++#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++pub(super) mod read_reuse;
++#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
+ mod pipeline;
+ #[cfg(all(
+     any(feature = "ocr", feature = "ocr-pipeline"),
+diff --git a/crates/xberg/src/extractors/pdf/ocr/pipeline.rs b/crates/xberg/src/extractors/pdf/ocr/pipeline.rs
+index 69c8350204..bcdac75203 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/pipeline.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/pipeline.rs
+@@ -573,6 +573,8 @@ type MixedLayoutOutcome = (
+ 
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+ struct MixedOcrPageSelection<'a> {
++    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++    probe_reads: Option<std::sync::Arc<super::read_reuse::ProbeReads>>,
+     ocr: &'a [u32],
+     raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
+     single_block: &'a [u32],
+@@ -649,6 +651,8 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
+         native_text,
+         boundaries,
+         MixedOcrPageSelection {
++            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++            probe_reads: None,
+             ocr: ocr_page_numbers,
+             raster_dpis: None,
+             single_block: single_block_page_numbers,
+@@ -673,6 +677,49 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
+     .map_err(crate::XbergError::from)
+ }
+ 
++#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++pub(crate) async fn extract_mixed_ocr_native_with_probe_reads(
++    native_text: &str,
++    boundaries: &[crate::types::PageBoundary],
++    selected_pages: (&[u32], &[u32]),
++    content: &[u8],
++    config: &ExtractionConfig,
++    layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
++    (preserve_native, native_script, probe_reads): (
++        &[u32],
++        &[u32],
++        Option<std::sync::Arc<super::read_reuse::ProbeReads>>,
++    ),
++) -> crate::Result<MixedOcrRun> {
++    let _ = &layout_pages;
++    extract_mixed_ocr_native_with_layout_inputs(
++        native_text,
++        boundaries,
++        MixedOcrPageSelection {
++            ocr: selected_pages.0,
++            raster_dpis: None,
++            single_block: selected_pages.1,
++            preserve_native,
++            native_script,
++            native_layers: None,
++            hidden_layer_backend: None,
++            single_native_type0_page: None,
++            probe_reads,
++        },
++        content,
++        config,
++        if config.force_ocr_pages.is_some() {
++            AllPagesFailedPolicy::ReturnError
++        } else {
++            AllPagesFailedPolicy::PreserveNative
++        },
++        #[cfg(feature = "layout-detection")]
++        MixedLayoutInputs::Resolve(layout_pages),
++    )
++    .await
++    .map_err(crate::XbergError::from)
++}
++
+ #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
+     native_text: &str,
+@@ -694,6 +741,8 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
+         native_text,
+         boundaries,
+         MixedOcrPageSelection {
++            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++            probe_reads: None,
+             ocr: scanned_pages,
+             raster_dpis: None,
+             single_block: &[],
+@@ -1413,6 +1462,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
+                     // document's first OCR'd page (#651).
+                     let page_rotation_degrees = page_rotations.get(page_idx).copied().unwrap_or(0);
+                     let page_ocr_hints = PageOcrHints {
++                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                        probe_reads: pages.probe_reads.clone(),
+                         source_dpi: rendered_page_source_dpi(&render_doc, page_idx, image_arc.width()),
+                         known_full_page_scan: crate::pdf::scan_detect::full_page_raster_density(&render_doc, page_idx)
+                             .is_some(),
+@@ -1635,6 +1686,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
+                     // comment).
+                     let page_rotation_degrees = page_rotations.get(*page_idx).copied().unwrap_or(0);
+                     let page_ocr_hints = PageOcrHints {
++                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                        probe_reads: pages.probe_reads.clone(),
+                         source_dpi: rendered_page_source_dpi(&render_doc, *page_idx, image.width()),
+                         known_full_page_scan: crate::pdf::scan_detect::full_page_raster_density(&render_doc, *page_idx)
+                             .is_some(),
+@@ -1954,6 +2007,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
+                 let cancel_token = config.cancel_token.clone();
+                 let original_config = ocr_config_resolved.clone();
+                 let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
++                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                let probe_reads = pages.probe_reads.clone();
+                 let task = crate::engine::seams::inherit_progress(async move {
+                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                         return (
+@@ -1972,6 +2027,34 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
+                         Ok(configs) => configs,
+                         Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
+                     };
++                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++                    let result = super::read_reuse::read(
++                        probe_reads.as_ref(),
++                        super::read_reuse::ReadIdentity {
++                            page: (idx + 1) as u32,
++                            backend: &backend_clone,
++                            configs: (&original_config, &config_clone),
++                            whole_page_raster,
++                            correction_degrees,
++                        },
++                        upright_data,
++                        cancel_token.as_ref(),
++                        |data| {
++                            crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
++                                &backend_clone,
++                                data,
++                                &original_config,
++                                &config_clone,
++                                crate::extractors::image::SparseRetryPolicy {
++                                    whole_page_raster,
++                                    allow_standard_retry: false,
++                                },
++                                cancel_token.as_ref(),
++                            )
++                        },
++                    )
++                    .await;
++                    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                     let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                         &backend_clone,
+                         upright_data,
+@@ -3289,6 +3372,8 @@ async fn extract_pages_with_per_page_pipeline(
+         .and_then(|hints| hints.native_page_layers.clone());
+     let raster_dpis = page_ocr_hints.as_ref().and_then(|hints| hints.raster_dpis.clone());
+     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++    let probe_reads = page_ocr_hints.as_ref().and_then(|hints| hints.probe_reads.clone());
++    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+     let single_native_type0_page = page_ocr_hints
+         .as_ref()
+         .and_then(|hints| hints.single_native_type0_page.clone());
+@@ -3317,6 +3402,8 @@ async fn extract_pages_with_per_page_pipeline(
+         &seed_text,
+         &boundaries,
+         MixedOcrPageSelection {
++            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++            probe_reads,
+             ocr: &page_numbers,
+             raster_dpis,
+             single_block: &single_block_pages,
+@@ -3716,6 +3803,8 @@ pub(super) struct DetachedOcrPage<'a> {
+ #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+ #[derive(Clone, Default)]
+ pub(crate) struct PageOcrHints {
++    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
++    pub(crate) probe_reads: Option<std::sync::Arc<super::read_reuse::ProbeReads>>,
+     pub(crate) source_dpi: Option<f64>,
+     #[cfg(feature = "pdf")]
+     pub(crate) raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
+@@ -4659,6 +4748,8 @@ pub(super) async fn extract_with_ocr_for_page(
+                     && base_ocr_config.auto_rotate.is_none()
+                     && base_ocr_config.tesseract_config.is_none()
+                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
++                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
++                let probe_reads = page_ocr_hints.as_ref().and_then(|hints| hints.probe_reads.clone());
+                 let task = crate::engine::seams::inherit_progress(async move {
+                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                         return (
+@@ -4699,6 +4790,33 @@ pub(super) async fn extract_with_ocr_for_page(
+                     let read_config = primary_config.as_ref().unwrap_or(&config_clone);
+                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                     let read_config = &config_clone;
++                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
++                    let read = super::read_reuse::read(
++                        probe_reads.as_ref().filter(|_| primary_config.is_none()),
++                        super::read_reuse::ReadIdentity {
++                            page: (page_index_offset + idx + 1) as u32,
++                            backend: &backend_clone,
++                            configs: (&original_config, read_config),
++                            whole_page_raster,
++                            correction_degrees,
++                        },
++                        upright_data,
++                        cancel_token.as_ref(),
++                        |data| {
++                            crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
++                                &backend_clone,
++                                data,
++                                &original_config,
++                                read_config,
++                                crate::extractors::image::SparseRetryPolicy {
++                                    whole_page_raster,
++                                    allow_standard_retry: false,
++                                },
++                                cancel_token.as_ref(),
++                            )
++                        },
++                    );
++                    #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+                     let read = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                         &backend_clone,
+                         upright_data,
+diff --git a/crates/xberg/src/extractors/pdf/ocr/pipeline/budget_refusal_tests.rs b/crates/xberg/src/extractors/pdf/ocr/pipeline/budget_refusal_tests.rs
+index 500cd2aa5b..0473badeb1 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/pipeline/budget_refusal_tests.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/pipeline/budget_refusal_tests.rs
+@@ -73,6 +73,8 @@ async fn read_refused_page(with_pipeline: bool) -> OcrRunResult<MixedOcrRun> {
+         "",
+         &boundaries,
+         MixedOcrPageSelection {
++            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++            probe_reads: None,
+             ocr: &[1],
+             single_block: &[],
+             preserve_native: &[],
+diff --git a/crates/xberg/src/extractors/pdf/ocr/pipeline/raster_budget_tests.rs b/crates/xberg/src/extractors/pdf/ocr/pipeline/raster_budget_tests.rs
+index 5a3629f7c6..db94888eb1 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/pipeline/raster_budget_tests.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/pipeline/raster_budget_tests.rs
+@@ -164,6 +164,8 @@ async fn read_mixed(
+         "",
+         &boundaries,
+         MixedOcrPageSelection {
++            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
++            probe_reads: None,
+             ocr: selected,
+             single_block: &[],
+             preserve_native: &[],
+diff --git a/crates/xberg/src/extractors/pdf/ocr/read_reuse.rs b/crates/xberg/src/extractors/pdf/ocr/read_reuse.rs
+new file mode 100644
+index 0000000000..79b13a626c
+--- /dev/null
++++ b/crates/xberg/src/extractors/pdf/ocr/read_reuse.rs
+@@ -0,0 +1,355 @@
++//! Raw reads shared only between one extraction's ink probe and its final page route.
++
++use std::io::Write;
++use std::sync::Arc;
++
++use crate::core::config::OcrConfig;
++use crate::plugins::{OcrBackend, OcrBackendType};
++use crate::types::ExtractedDocument;
++
++pub(crate) struct ProbeReads {
++    state: parking_lot::Mutex<State>,
++    limit: usize,
++}
++
++#[derive(Default)]
++struct State {
++    ready: bool,
++    bytes: usize,
++    reads: ahash::AHashMap<u32, Entry>,
++}
++
++struct Entry {
++    key: blake3::Hash,
++    backend: Arc<dyn OcrBackend>,
++    document: ExtractedDocument,
++    bytes: usize,
++}
++
++pub(super) struct ReadIdentity<'a> {
++    pub(super) page: u32,
++    pub(super) backend: &'a Arc<dyn OcrBackend>,
++    pub(super) configs: (&'a OcrConfig, &'a OcrConfig),
++    pub(super) whole_page_raster: bool,
++    pub(super) correction_degrees: u32,
++}
++
++struct ReadKey {
++    digest: blake3::Hash,
++    revision: (String, blake3::Hash),
++}
++
++impl ProbeReads {
++    pub(in crate::extractors::pdf) fn new(limit: usize) -> Self {
++        Self {
++            state: Default::default(),
++            limit,
++        }
++    }
++
++    pub(in crate::extractors::pdf) fn finish(&self, contradicted: &[u32]) -> bool {
++        let mut state = self.state.lock();
++        state.reads.retain(|page, _| contradicted.contains(page));
++        state.bytes = state.reads.values().map(|entry| entry.bytes).sum();
++        state.ready = true;
++        !state.reads.is_empty()
++    }
++
++    fn may_read(&self, page: u32) -> bool {
++        let state = self.state.lock();
++        !state.ready || state.reads.contains_key(&page)
++    }
++
++    fn collecting(&self) -> bool {
++        !self.state.lock().ready
++    }
++
++    fn take(&self, page: u32, key: &ReadKey, backend: &Arc<dyn OcrBackend>) -> Option<ExtractedDocument> {
++        let mut state = self.state.lock();
++        if !state.ready {
++            return None;
++        }
++        let entry = state.reads.get(&page)?;
++        if entry.key != key.digest || !Arc::ptr_eq(&entry.backend, backend) {
++            return None;
++        }
++        let entry = state.reads.remove(&page)?;
++        state.bytes -= entry.bytes;
++        Some(entry.document)
++    }
++
++    fn insert(&self, page: u32, backend: Arc<dyn OcrBackend>, key: ReadKey, read: &ExtractedDocument) {
++        let mut state = self.state.lock();
++        if state.ready {
++            return;
++        }
++        if let Some(previous) = state.reads.remove(&page) {
++            state.bytes -= previous.bytes;
++        }
++        let Some(bytes) = retained_size(read, self.limit.saturating_sub(state.bytes)) else {
++            return;
++        };
++        state.bytes += bytes;
++        state.reads.insert(
++            page,
++            Entry {
++                key: key.digest,
++                backend,
++                document: read.clone(),
++                bytes,
++            },
++        );
++    }
++}
++
++pub(super) async fn read<F, Fut>(
++    reuse: Option<&Arc<ProbeReads>>,
++    identity: ReadIdentity<'_>,
++    bytes: Arc<Vec<u8>>,
++    cancel: Option<&crate::cancellation::CancellationToken>,
++    recognize: F,
++) -> crate::Result<ExtractedDocument>
++where
++    F: FnOnce(Arc<Vec<u8>>) -> Fut,
++    Fut: std::future::Future<Output = crate::Result<ExtractedDocument>>,
++{
++    if reuse.is_none() {
++        return recognize(bytes).await;
++    }
++    check_cancelled(cancel)?;
++    let reuse = reuse.filter(|reads| reads.may_read(identity.page));
++    let key = match reuse {
++        Some(_) => key(&identity, Arc::clone(&bytes)).await,
++        None => None,
++    };
++    if let (Some(reuse), Some(key)) = (reuse, key.as_ref())
++        && let Some(document) = reuse.take(identity.page, key, identity.backend)
++        && revision(&identity).await == Some(key.revision.clone())
++    {
++        check_cancelled(cancel)?;
++        #[cfg(all(test, feature = "bundle-tessdata-eng"))]
++        crate::ocr::tesseract_backend::read_counter::record_probe_reuse(identity.configs.1);
++        tracing::trace!(page = identity.page, "reused ink-probe OCR read");
++        return Ok(document);
++    }
++    let document = recognize(bytes).await?;
++    check_cancelled(cancel)?;
++    if let (Some(reuse), Some(key)) = (reuse, key)
++        && reuse.collecting()
++        && revision(&identity).await == Some(key.revision.clone())
++    {
++        let reuse = Arc::clone(reuse);
++        let backend = Arc::clone(identity.backend);
++        let page = identity.page;
++        let document = super::super::spawn_pdf_blocking(move || {
++            reuse.insert(page, backend, key, &document);
++            Ok(document)
++        })
++        .await?;
++        check_cancelled(cancel)?;
++        return Ok(document);
++    }
++    Ok(document)
++}
++
++fn check_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> crate::Result<()> {
++    if cancel.is_some_and(|token| token.is_cancelled()) {
++        return Err(crate::XbergError::Cancelled);
++    }
++    Ok(())
++}
++
++async fn key(identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey> {
++    if identity.whole_page_raster
++        || observer_active()
++        || [identity.configs.0, identity.configs.1].iter().any(|config| {
++            config.auto_rotate == Some(true)
++                || (config.auto_rotate != Some(false)
++                    && config
++                        .tesseract_config
++                        .as_ref()
++                        .and_then(|config| config.preprocessing.as_ref())
++                        .is_some_and(|preprocessing| preprocessing.auto_rotate))
++        })
++        || !matches!(identity.backend.backend_type(), OcrBackendType::Tesseract)
++        || identity.configs.0.tessdata_bytes.is_some()
++        || identity.configs.1.tessdata_bytes.is_some()
++        || !identity
++            .configs
++            .1
++            .backend_options
++            .as_ref()?
++            .get("source_dpi")?
++            .as_f64()?
++            .is_finite()
++    {
++        return None;
++    }
++    let builtin = crate::plugins::registry::get_ocr_backend_registry()
++        .read()
++        .is_builtin_tesseract(identity.backend);
++    let revision = revision(identity).await?;
++    let mut hash = blake3::Hasher::new();
++    hash.update(b"ink-probe-raw-whole-image-sparse-no-standard-retry");
++    hash.update(&identity.page.to_le_bytes());
++    hash.update(&identity.correction_degrees.to_le_bytes());
++    hash_json(
++        &mut hash,
++        &(identity.backend.name(), &revision.0, revision.1.as_bytes()),
++    )
++    .ok()?;
++    for config in [identity.configs.0, identity.configs.1] {
++        hash_config(&mut hash, config, builtin).ok()?;
++    }
++    hash.update(&(bytes.len() as u64).to_le_bytes());
++    hash.update(blake3::hash(bytes.as_slice()).as_bytes());
++    Some(ReadKey {
++        digest: hash.finalize(),
++        revision,
++    })
++}
++
++fn observer_active() -> bool {
++    if !crate::core::extractor::cacheability::is_cacheable()
++        || crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested().is_some()
++    {
++        return true;
++    }
++    #[cfg(auto_rotate)]
++    if crate::ocr::tesseract_backend::orientation_evidence::CAPTURE
++        .try_with(|_| ())
++        .is_ok()
++    {
++        return true;
++    }
++    false
++}
++
++fn hash_config(hash: &mut blake3::Hasher, config: &OcrConfig, builtin: bool) -> serde_json::Result<()> {
++    let mut config = config.clone();
++    if builtin {
++        // Stock Tesseract leaves this discard policy to PDF scoring after the raw read. ~keep
++        let mut thresholds = config.effective_thresholds();
++        thresholds.discard_suspected_ocr_noise = false;
++        config.quality_thresholds = Some(thresholds);
++    }
++    hash_json(hash, &(&config, &config.security_limits, &config.acceleration))
++}
++
++async fn revision(identity: &ReadIdentity<'_>) -> Option<(String, blake3::Hash)> {
++    if observer_active() {
++        return None;
++    }
++    let version = identity.backend.version();
++    let config = identity.configs.1;
++    let languages = config.effective_tesseract_language();
++    let directory = config.tessdata_path.clone();
++    let environment = crate::ocr::processor::validation::TessdataEnv::from_process();
++    let model =
++        super::super::spawn_pdf_blocking(move || Ok(model_identity(&languages, directory.as_deref(), &environment)))
++            .await
++            .ok()??;
++    Some((version, model))
++}
++
++fn model_identity(
++    languages: &[String],
++    directory: Option<&std::path::Path>,
++    environment: &crate::ocr::processor::validation::TessdataEnv,
++) -> Option<blake3::Hash> {
++    let root = crate::ocr::processor::validation::existing_tessdata_dir_for(languages, directory, environment)?;
++    let root = std::fs::canonicalize(root).ok()?;
++    let mut hash = blake3::Hasher::new();
++    hash_json(&mut hash, &root).ok()?;
++    for language in languages.iter().map(String::as_str).chain(std::iter::once("osd")) {
++        hash_json(&mut hash, &language).ok()?;
++        match std::fs::File::open(root.join(format!("{language}.traineddata"))) {
++            Ok(mut file) => {
++                hash.update(&[1]);
++                let length = file.metadata().ok()?.len();
++                hash.update(&length.to_le_bytes());
++                if std::io::copy(&mut file, &mut HashWriter(&mut hash)).ok()? != length {
++                    return None;
++                }
++            }
++            Err(error) if language == "osd" && error.kind() == std::io::ErrorKind::NotFound => {
++                hash.update(&[0]);
++            }
++            Err(_) => return None,
++        }
++    }
++    Some(hash.finalize())
++}
++
++fn retained_size(document: &ExtractedDocument, limit: usize) -> Option<usize> {
++    if document.raw_ocr_source_frame.is_some() || document.llm_usage.as_ref().is_some_and(|usage| !usage.is_empty()) {
++        return None;
++    }
++    let mut writer = SizeWriter {
++        bytes: std::mem::size_of::<Entry>(),
++        limit,
++    };
++    serde_json::to_writer(
++        &mut writer,
++        &(
++            document,
++            &document.formatted_content,
++            &document.ocr_internal_document,
++            &document.internal_document,
++            &document.raw_ocr_source_frame,
++            document
++                .ocr_internal_document
++                .as_ref()
++                .map(|document| (&document.recorded_formulas, &document.page_marker_format)),
++            document
++                .internal_document
++                .as_ref()
++                .map(|document| (&document.recorded_formulas, &document.page_marker_format)),
++        ),
++    )
++    .ok()?;
++    Some(writer.bytes)
++}
++
++struct HashWriter<'a>(&'a mut blake3::Hasher);
++impl Write for HashWriter<'_> {
++    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
++        self.0.update(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> std::io::Result<()> {
++        Ok(())
++    }
++}
++
++fn hash_json(hash: &mut blake3::Hasher, value: &impl serde::Serialize) -> serde_json::Result<()> {
++    serde_json::to_writer(HashWriter(hash), value)?;
++    hash.update(&[0]);
++    Ok(())
++}
++
++struct SizeWriter {
++    bytes: usize,
++    limit: usize,
++}
++impl Write for SizeWriter {
++    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
++        self.bytes = self
++            .bytes
++            .checked_add(bytes.len())
++            .filter(|total| *total <= self.limit)
++            .ok_or_else(|| std::io::Error::other("ink probe retention limit"))?;
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> std::io::Result<()> {
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++#[path = "read_reuse_tests.rs"]
++mod tests;
++
++#[cfg(all(test, feature = "bundle-tessdata-eng"))]
++#[path = "stock_tests.rs"]
++mod stock_tests;
+diff --git a/crates/xberg/src/extractors/pdf/ocr/read_reuse_tests.rs b/crates/xberg/src/extractors/pdf/ocr/read_reuse_tests.rs
+new file mode 100644
+index 0000000000..ca4bd4d9c5
+--- /dev/null
++++ b/crates/xberg/src/extractors/pdf/ocr/read_reuse_tests.rs
+@@ -0,0 +1,726 @@
++use std::sync::Arc;
++use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
++
++use super::*;
++use crate::cancellation::CancellationToken;
++use crate::plugins::Plugin;
++
++struct Fake {
++    kind: OcrBackendType,
++    calls: AtomicUsize,
++    version: AtomicUsize,
++    fail: AtomicBool,
++    bump_version_on_read: AtomicBool,
++    policy_sensitive: AtomicBool,
++    cancel_on_version: parking_lot::Mutex<Option<CancellationToken>>,
++}
++
++impl Fake {
++    fn new(kind: OcrBackendType) -> Arc<Self> {
++        Arc::new(Self {
++            kind,
++            calls: AtomicUsize::new(0),
++            version: AtomicUsize::new(0),
++            fail: AtomicBool::new(false),
++            bump_version_on_read: AtomicBool::new(false),
++            policy_sensitive: AtomicBool::new(false),
++            cancel_on_version: parking_lot::Mutex::new(None),
++        })
++    }
++
++    fn calls(&self) -> usize {
++        self.calls.load(SeqCst)
++    }
++}
++
++impl Plugin for Fake {
++    fn name(&self) -> &str {
++        "read-reuse-fake"
++    }
++    fn version(&self) -> String {
++        if let Some(token) = self.cancel_on_version.lock().as_ref() {
++            token.cancel();
++        }
++        format!("v{}", self.version.load(SeqCst))
++    }
++    fn initialize(&self) -> crate::Result<()> {
++        Ok(())
++    }
++    fn shutdown(&self) -> crate::Result<()> {
++        Ok(())
++    }
++}
++
++#[async_trait::async_trait]
++impl OcrBackend for Fake {
++    async fn process_image(&self, image: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
++        let call = self.calls.fetch_add(1, SeqCst) + 1;
++        if self.bump_version_on_read.load(SeqCst) {
++            self.version.fetch_add(1, SeqCst);
++        }
++        if self.fail.load(SeqCst) {
++            return Err(crate::XbergError::ocr("fake backend failure".to_string()));
++        }
++        let mut document = ExtractedDocument {
++            content: format!("read {call} of {} bytes", image.len()),
++            ..Default::default()
++        };
++        if self.policy_sensitive.load(SeqCst) {
++            let day = if config.effective_thresholds().discard_suspected_ocr_noise {
++                "Tuesday"
++            } else {
++                "Thursday"
++            };
++            document.content = format!("The committee meets on {day}.");
++            document.tables = vec![crate::types::Table {
++                cells: vec![vec!["Day".into()], vec![day.into()]],
++                ..Default::default()
++            }];
++        }
++        Ok(document)
++    }
++    fn supports_language(&self, _language: &str) -> bool {
++        true
++    }
++    fn backend_type(&self) -> OcrBackendType {
++        self.kind
++    }
++}
++
++fn png(top_left: u8) -> Arc<Vec<u8>> {
++    let mut image = image::RgbImage::from_pixel(2, 2, image::Rgb([255, 255, 255]));
++    image.put_pixel(0, 0, image::Rgb([top_left; 3]));
++    let mut bytes = std::io::Cursor::new(Vec::new());
++    image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
++    Arc::new(bytes.into_inner())
++}
++
++fn effective_config() -> OcrConfig {
++    OcrConfig {
++        backend_options: Some(serde_json::json!({ "source_dpi": 300.0 })),
++        ..Default::default()
++    }
++}
++
++struct Fixture {
++    _models: tempfile::TempDir,
++    fake: Arc<Fake>,
++    backend: Arc<dyn OcrBackend>,
++    original: OcrConfig,
++    effective: OcrConfig,
++    pixels: Arc<Vec<u8>>,
++}
++
++impl Fixture {
++    fn new() -> Self {
++        let fake = Fake::new(OcrBackendType::Tesseract);
++        let backend: Arc<dyn OcrBackend> = fake.clone();
++        let models = tempfile::tempdir().unwrap();
++        std::fs::write(models.path().join("eng.traineddata"), b"fake model a").unwrap();
++        let mut effective = effective_config();
++        effective.tessdata_path = Some(models.path().into());
++        Self {
++            _models: models,
++            fake,
++            backend,
++            original: OcrConfig::default(),
++            effective,
++            pixels: png(0),
++        }
++    }
++
++    fn call(&self, page: u32) -> Call<'_> {
++        Call {
++            page,
++            backend: &self.backend,
++            original: &self.original,
++            effective: &self.effective,
++            bytes: &self.pixels,
++            whole_page_raster: false,
++            cancel: None,
++        }
++    }
++
++    async fn read(&self, reuse: &Arc<ProbeReads>, page: u32) -> crate::Result<ExtractedDocument> {
++        run(reuse, self.call(page)).await
++    }
++}
++
++struct Call<'a> {
++    page: u32,
++    backend: &'a Arc<dyn OcrBackend>,
++    original: &'a OcrConfig,
++    effective: &'a OcrConfig,
++    bytes: &'a Arc<Vec<u8>>,
++    whole_page_raster: bool,
++    cancel: Option<&'a CancellationToken>,
++}
++
++async fn run(reuse: &Arc<ProbeReads>, call: Call<'_>) -> crate::Result<ExtractedDocument> {
++    let identity = ReadIdentity {
++        page: call.page,
++        backend: call.backend,
++        configs: (call.original, call.effective),
++        whole_page_raster: call.whole_page_raster,
++        correction_degrees: 0,
++    };
++    let engine = Arc::clone(call.backend);
++    let config = call.effective.clone();
++    let recognize = move |bytes: Arc<Vec<u8>>| async move { engine.process_image(bytes.as_slice(), &config).await };
++    read(Some(reuse), identity, Arc::clone(call.bytes), call.cancel, recognize).await
++}
++
++fn reuse() -> Arc<ProbeReads> {
++    Arc::new(ProbeReads::new(1 << 20))
++}
++
++#[tokio::test]
++async fn final_read_takes_the_probe_read_once_for_a_contradicted_page() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    let probe = fixture.read(&reuse, 1).await.unwrap();
++    reuse.finish(&[1]);
++
++    let reused = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 1, "the final read must not OCR again");
++    assert_eq!(reused.content, probe.content);
++
++    let again = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "a retained read is handed out once");
++    assert_eq!(again.content, format!("read 2 of {} bytes", fixture.pixels.len()));
++}
++
++#[tokio::test]
++async fn finish_retains_only_contradicted_pages() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    fixture.read(&reuse, 2).await.unwrap();
++    reuse.finish(&[2]);
++
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 3, "an uncontradicted page is dropped at finish");
++    fixture.read(&reuse, 2).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 3, "the contradicted page is reused");
++}
++
++#[tokio::test]
++async fn same_pixels_on_another_page_are_not_reused() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    reuse.finish(&[1, 2]);
++
++    fixture.read(&reuse, 2).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "page 2 must not receive page 1's read");
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "page 1's read survives the page 2 miss");
++}
++
++#[tokio::test]
++async fn zero_retention_limit_reads_again_and_returns_each_document_intact() {
++    let fixture = Fixture::new();
++    let reuse = Arc::new(ProbeReads::new(0));
++    let size = fixture.pixels.len();
++    let probe = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(probe.content, format!("read 1 of {size} bytes"));
++    reuse.finish(&[1]);
++
++    let final_read = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(
++        fixture.fake.calls(),
++        2,
++        "nothing fits a zero budget, so the page is read again"
++    );
++    assert_eq!(final_read.content, format!("read 2 of {size} bytes"));
++}
++
++async fn assert_miss(fixture: &Fixture, reuse: &Arc<ProbeReads>, call: Call<'_>, what: &str) {
++    let before = fixture.fake.calls();
++    run(reuse, call).await.unwrap();
++    assert_eq!(fixture.fake.calls(), before + 1, "{what} must miss");
++}
++
++#[tokio::test]
++async fn identity_changes_miss_without_consuming_the_matching_read() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    reuse.finish(&[1]);
++
++    let changed = png(1);
++    assert_miss(
++        &fixture,
++        &reuse,
++        Call {
++            bytes: &changed,
++            ..fixture.call(1)
++        },
++        "a changed pixel",
++    )
++    .await;
++    let original = OcrConfig {
++        language: vec!["deu".to_string()],
++        ..Default::default()
++    };
++    let call = Call {
++        original: &original,
++        ..fixture.call(1)
++    };
++    assert_miss(&fixture, &reuse, call, "a changed original config").await;
++    let mut limited = fixture.effective.clone();
++    limited.security_limits = Some(crate::extractors::security::SecurityLimits {
++        max_iterations: 7,
++        ..Default::default()
++    });
++    let call = Call {
++        effective: &limited,
++        ..fixture.call(1)
++    };
++    assert_miss(&fixture, &reuse, call, "a changed serde-skipped security limit").await;
++    fixture.fake.version.store(1, SeqCst);
++    assert_miss(&fixture, &reuse, fixture.call(1), "a backend version change").await;
++    fixture.fake.version.store(0, SeqCst);
++
++    let other = Fake::new(OcrBackendType::Tesseract);
++    let other_backend: Arc<dyn OcrBackend> = other.clone();
++    run(
++        &reuse,
++        Call {
++            backend: &other_backend,
++            ..fixture.call(1)
++        },
++    )
++    .await
++    .unwrap();
++    assert_eq!(other.calls(), 1, "another backend instance must read for itself");
++
++    let before = fixture.fake.calls();
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(
++        fixture.fake.calls(),
++        before,
++        "every miss left the matching read in place"
++    );
++}
++
++#[tokio::test]
++async fn cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    reuse.finish(&[1]);
++
++    let cancelled = CancellationToken::new();
++    cancelled.cancel();
++    let result = run(
++        &reuse,
++        Call {
++            cancel: Some(&cancelled),
++            ..fixture.call(1)
++        },
++    )
++    .await;
++    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
++    assert_eq!(fixture.fake.calls(), 1);
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 1, "a pre-cancelled read leaves the retained read");
++}
++
++#[tokio::test]
++async fn cancellation_during_a_hit_returns_cancelled_without_ocr() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    reuse.finish(&[1]);
++
++    let token = CancellationToken::new();
++    *fixture.fake.cancel_on_version.lock() = Some(token.clone());
++    let result = run(
++        &reuse,
++        Call {
++            cancel: Some(&token),
++            ..fixture.call(1)
++        },
++    )
++    .await;
++    assert!(token.is_cancelled(), "the backend revision query must have run");
++    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
++    assert_eq!(fixture.fake.calls(), 1, "a cancelled hit must not fall through to OCR");
++}
++
++#[tokio::test]
++async fn geometry_observer_bypasses_retained_reads() {
++    use crate::ocr::preprocessing::geometry_evidence::observe;
++    let fixture = Fixture::new();
++    let reuse_a = reuse();
++    observe(fixture.read(&reuse_a, 1)).await.0.unwrap();
++    reuse_a.finish(&[1]);
++    fixture.read(&reuse_a, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "an observed probe read is not retained");
++
++    let reuse_b = reuse();
++    fixture.read(&reuse_b, 1).await.unwrap();
++    reuse_b.finish(&[1]);
++    observe(fixture.read(&reuse_b, 1)).await.0.unwrap();
++    assert_eq!(fixture.fake.calls(), 4, "an observed final read runs OCR");
++    fixture.read(&reuse_b, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 4, "the observed miss left the retained read");
++}
++
++#[tokio::test]
++async fn failed_backend_read_is_not_retained() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.fake.fail.store(true, SeqCst);
++    assert!(fixture.read(&reuse, 1).await.is_err());
++    fixture.fake.fail.store(false, SeqCst);
++    reuse.finish(&[1]);
++
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "the failed probe left nothing to reuse");
++}
++
++#[tokio::test]
++async fn backend_version_change_during_a_read_is_not_retained() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.fake.bump_version_on_read.store(true, SeqCst);
++    fixture.read(&reuse, 1).await.unwrap();
++    fixture.fake.bump_version_on_read.store(false, SeqCst);
++    assert_eq!(
++        fixture.fake.version.load(SeqCst),
++        1,
++        "the read must have changed the version"
++    );
++    // Restore the keyed version so the post-read revision check alone refuses the entry. ~keep
++    fixture.fake.version.store(0, SeqCst);
++    reuse.finish(&[1]);
++
++    fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(
++        fixture.fake.calls(),
++        2,
++        "a read whose backend changed under it is not retained"
++    );
++}
++
++#[tokio::test]
++async fn unkeyable_reads_are_never_retained() {
++    let fixture = Fixture::new();
++    let paddle = Fake::new(OcrBackendType::PaddleOCR);
++    let paddle_backend: Arc<dyn OcrBackend> = paddle.clone();
++    let no_dpi = OcrConfig::default();
++    let mut rotating = fixture.effective.clone();
++    rotating.auto_rotate = Some(true);
++    let mut nested_rotation = fixture.effective.clone();
++    nested_rotation.tesseract_config = Some(crate::types::TesseractConfig {
++        preprocessing: Some(crate::types::ImagePreprocessingConfig {
++            auto_rotate: true,
++            ..Default::default()
++        }),
++        ..Default::default()
++    });
++    let reuse = reuse();
++    for _ in 0..2 {
++        run(
++            &reuse,
++            Call {
++                whole_page_raster: true,
++                ..fixture.call(1)
++            },
++        )
++        .await
++        .unwrap();
++        run(
++            &reuse,
++            Call {
++                effective: &no_dpi,
++                ..fixture.call(2)
++            },
++        )
++        .await
++        .unwrap();
++        run(
++            &reuse,
++            Call {
++                backend: &paddle_backend,
++                ..fixture.call(3)
++            },
++        )
++        .await
++        .unwrap();
++        for (index, effective) in [&rotating, &nested_rotation].into_iter().enumerate() {
++            run(
++                &reuse,
++                Call {
++                    effective,
++                    ..fixture.call(4 + index as u32)
++                },
++            )
++            .await
++            .unwrap();
++        }
++        reuse.finish(&[1, 2, 3, 4, 5]);
++    }
++    assert_eq!(
++        fixture.fake.calls(),
++        8,
++        "scan, dpi-less and rotating reads are never reused"
++    );
++    assert_eq!(paddle.calls(), 2, "a non-Tesseract backend is read twice");
++}
++
++#[test]
++fn model_identity_tracks_override_traineddata_and_osd() {
++    let directory = tempfile::tempdir().unwrap();
++    let environment = crate::ocr::processor::validation::TessdataEnv::from_lookup(|_| None);
++    let languages = ["eng".to_string()];
++    let identity = || model_identity(&languages, Some(directory.path()), &environment);
++    std::fs::write(directory.path().join("eng.traineddata"), b"fake model a").unwrap();
++    let first = identity().expect("an override directory holding eng resolves");
++    assert_eq!(identity(), Some(first), "unchanged files hash identically");
++
++    std::fs::write(directory.path().join("eng.traineddata"), b"fake model b").unwrap();
++    let changed = identity().unwrap();
++    assert_ne!(changed, first, "changed language data changes the identity");
++
++    std::fs::write(directory.path().join("osd.traineddata"), b"fake osd").unwrap();
++    assert_ne!(identity().unwrap(), changed, "adding osd changes the identity");
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++struct StockFixture {
++    _models: tempfile::TempDir,
++    backend: Arc<dyn OcrBackend>,
++    config: OcrConfig,
++    pixels: Arc<Vec<u8>>,
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++fn stock_fixture() -> StockFixture {
++    crate::plugins::ensure_ocr_backends_initialized();
++    let registry = crate::plugins::registry::get_ocr_backend_registry();
++    let backend = registry.read().get("tesseract").unwrap();
++    assert!(registry.read().is_builtin_tesseract(&backend));
++    let models = tempfile::tempdir().unwrap();
++    std::fs::write(
++        models.path().join("eng.traineddata"),
++        xberg_tesseract::bundled_eng_traineddata().expect("verified bundled English model"),
++    )
++    .unwrap();
++    let config = OcrConfig {
++        tessdata_path: Some(models.path().into()),
++        auto_rotate: Some(false),
++        backend_options: Some(serde_json::json!({"source_dpi": 300.0, "use_cache": false})),
++        ..Default::default()
++    };
++    let image = image::RgbImage::from_pixel(64, 64, image::Rgb([255, 255, 255]));
++    let mut bytes = std::io::Cursor::new(Vec::new());
++    image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
++    StockFixture {
++        _models: models,
++        backend,
++        config,
++        pixels: Arc::new(bytes.into_inner()),
++    }
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++async fn stock_read(
++    fixture: &StockFixture,
++    reuse: &Arc<ProbeReads>,
++    config: &OcrConfig,
++    calls: &AtomicUsize,
++) -> crate::Result<ExtractedDocument> {
++    let identity = ReadIdentity {
++        page: 1,
++        backend: &fixture.backend,
++        configs: (config, config),
++        whole_page_raster: false,
++        correction_degrees: 0,
++    };
++    read(
++        Some(reuse),
++        identity,
++        Arc::clone(&fixture.pixels),
++        None,
++        |bytes| async move {
++            calls.fetch_add(1, SeqCst);
++            fixture.backend.process_image_owned(bytes, config).await
++        },
++    )
++    .await
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++#[tokio::test]
++async fn stock_builtin_reuses_its_own_raw_read_once() {
++    let fixture = stock_fixture();
++    let reuse = reuse();
++    let calls = AtomicUsize::new(0);
++    let mut probe = fixture.config.clone();
++    let mut thresholds = probe.effective_thresholds();
++    thresholds.discard_suspected_ocr_noise = true;
++    probe.quality_thresholds = Some(thresholds);
++    let original = stock_read(&fixture, &reuse, &probe, &calls).await.unwrap();
++    assert!(
++        matches!(&original.metadata.format, Some(crate::types::FormatMetadata::Ocr(meta)) if meta.language == "eng")
++    );
++    assert!(reuse.finish(&[1]));
++    let reused = stock_read(&fixture, &reuse, &fixture.config, &calls).await.unwrap();
++    assert_eq!(
++        calls.load(SeqCst),
++        1,
++        "count the actual builtin API call, with its disk cache disabled"
++    );
++    assert_eq!(
++        serde_json::to_value(reused).unwrap(),
++        serde_json::to_value(original).unwrap()
++    );
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++#[tokio::test]
++async fn stock_builtin_does_not_reuse_a_different_decode_budget() {
++    let fixture = stock_fixture();
++    let reuse = reuse();
++    let calls = AtomicUsize::new(0);
++    stock_read(&fixture, &reuse, &fixture.config, &calls).await.unwrap();
++    assert!(reuse.finish(&[1]));
++    let mut restricted = fixture.config.clone();
++    let mut limits = crate::extractors::security::SecurityLimits::default();
++    limits.max_content_size -= 1;
++    restricted.security_limits = Some(limits);
++    stock_read(&fixture, &reuse, &restricted, &calls).await.unwrap();
++    assert_eq!(
++        calls.load(SeqCst),
++        2,
++        "an effective reserved-budget change must invoke the builtin again"
++    );
++}
++
++#[tokio::test]
++async fn custom_backend_reads_changed_encoding_even_when_rgb_pixels_match() {
++    use image::ImageEncoder;
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    assert!(reuse.finish(&[1]));
++    let pixels = image::load_from_memory(fixture.pixels.as_slice()).unwrap().to_rgb8();
++    let mut encoded = Vec::new();
++    image::codecs::png::PngEncoder::new_with_quality(
++        &mut encoded,
++        image::codecs::png::CompressionType::Best,
++        image::codecs::png::FilterType::NoFilter,
++    )
++    .write_image(
++        pixels.as_raw(),
++        pixels.width(),
++        pixels.height(),
++        image::ExtendedColorType::Rgb8,
++    )
++    .unwrap();
++    assert_ne!(encoded.as_slice(), fixture.pixels.as_slice());
++    assert_eq!(image::load_from_memory(&encoded).unwrap().to_rgb8(), pixels);
++    let encoded = Arc::new(encoded);
++    let read = run(
++        &reuse,
++        Call {
++            bytes: &encoded,
++            ..fixture.call(1)
++        },
++    )
++    .await
++    .unwrap();
++    assert_eq!(
++        fixture.fake.calls(),
++        2,
++        "a non-built-in backend receives its exact encoded input"
++    );
++    assert_eq!(read.content, format!("read 2 of {} bytes", encoded.len()));
++}
++
++#[tokio::test]
++async fn model_change_alone_requires_a_fresh_backend_read() {
++    let fixture = Fixture::new();
++    let reuse = reuse();
++    fixture.read(&reuse, 1).await.unwrap();
++    assert!(reuse.finish(&[1]));
++    assert_eq!(fixture.fake.version(), "v0");
++    std::fs::write(fixture._models.path().join("eng.traineddata"), b"fake model b").unwrap();
++    let read = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.version(), "v0");
++    assert_eq!(fixture.fake.calls(), 2, "only the model bytes changed");
++    assert_eq!(read.content, format!("read 2 of {} bytes", fixture.pixels.len()));
++}
++
++#[tokio::test]
++async fn changed_policy_preserves_fresh_source_words_and_table_payload() {
++    let mut fixture = Fixture::new();
++    fixture.fake.policy_sensitive.store(true, SeqCst);
++    let mut thresholds = fixture.effective.effective_thresholds();
++    thresholds.discard_suspected_ocr_noise = true;
++    fixture.effective.quality_thresholds = Some(thresholds);
++    let reuse = reuse();
++    let probe = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(probe.content, "The committee meets on Tuesday.");
++    assert_eq!(probe.tables[0].cells, vec![vec!["Day"], vec!["Tuesday"]]);
++    assert!(reuse.finish(&[1]));
++    let mut changed = fixture.effective.clone();
++    changed.quality_thresholds.as_mut().unwrap().discard_suspected_ocr_noise = false;
++    let read = run(
++        &reuse,
++        Call {
++            effective: &changed,
++            ..fixture.call(1)
++        },
++    )
++    .await
++    .unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "only the effective discard policy changed");
++    assert_eq!(read.content, "The committee meets on Thursday.");
++    assert_eq!(read.tables[0].cells, vec![vec!["Day"], vec!["Thursday"]]);
++    let reused = fixture.read(&reuse, 1).await.unwrap();
++    assert_eq!(fixture.fake.calls(), 2, "the original policy still reuses its own read");
++    assert_eq!(reused.content, "The committee meets on Tuesday.");
++    assert_eq!(reused.tables[0].cells, vec![vec!["Day"], vec!["Tuesday"]]);
++}
++
++#[cfg(feature = "bundle-tessdata-eng")]
++#[tokio::test]
++async fn stock_builtin_does_not_reuse_a_different_encoded_working_size() {
++    use image::ImageEncoder;
++    let mut fixture = stock_fixture();
++    let reuse = reuse();
++    let calls = AtomicUsize::new(0);
++    stock_read(&fixture, &reuse, &fixture.config, &calls).await.unwrap();
++    assert!(reuse.finish(&[1]));
++    let pixels = image::load_from_memory(fixture.pixels.as_slice()).unwrap().to_rgb8();
++    let mut encoded = Vec::new();
++    image::codecs::png::PngEncoder::new_with_quality(
++        &mut encoded,
++        image::codecs::png::CompressionType::Best,
++        image::codecs::png::FilterType::NoFilter,
++    )
++    .write_image(
++        pixels.as_raw(),
++        pixels.width(),
++        pixels.height(),
++        image::ExtendedColorType::Rgb8,
++    )
++    .unwrap();
++    assert_ne!(
++        encoded.len(),
++        fixture.pixels.len(),
++        "the encoded workspace cost changed"
++    );
++    assert_eq!(image::load_from_memory(&encoded).unwrap().to_rgb8(), pixels);
++    fixture.pixels = Arc::new(encoded);
++    stock_read(&fixture, &reuse, &fixture.config, &calls).await.unwrap();
++    assert_eq!(
++        calls.load(SeqCst),
++        2,
++        "identical RGB can have a different encoded working cost"
++    );
++}
+diff --git a/crates/xberg/src/extractors/pdf/ocr/stock_tests.rs b/crates/xberg/src/extractors/pdf/ocr/stock_tests.rs
+new file mode 100644
+index 0000000000..88b0432e66
+--- /dev/null
++++ b/crates/xberg/src/extractors/pdf/ocr/stock_tests.rs
+@@ -0,0 +1,291 @@
++use std::sync::Arc;
++
++use super::*;
++use crate::extractors::security::SecurityLimits;
++use crate::ocr::tesseract_backend::read_counter;
++
++const ARABIC: &[u8] = include_bytes!(concat!(
++    env!("CARGO_MANIFEST_DIR"),
++    "/tests/fixtures/pdf/wrong-script-tounicode-2830/arabic.pdf"
++));
++
++/// `security_limits.max_archive_size` values that key `read_counter`, one per case.
++const NORMALIZATION_CASE: usize = 0x2862_5101;
++const ROUTE_CASE: usize = 0x2862_5102;
++
++/// Words the fixture prints; its `ToUnicode` map spells them in Arabic code points.
++const SOURCE_WORDS: [&str; 4] = ["committee", "architect", "residents", "library"];
++
++const HARBOR: [&str; 4] = [
++    "the harbor ferry leaves the north pier at seven every summer morning",
++    "fishermen unload their crates while gulls circle above the wooden market stalls",
++    "visitors buy smoked mackerel and fresh bread before walking along the seawall",
++    "by noon the tide turns and the small boats return to harbor",
++];
++const ORCHARD: [&str; 4] = [
++    "orchard workers gather apples from long rows of trees beside the river",
++    "baskets are carried to the barn where cider presses run until evening",
++    "children sort the bruised fruit into crates for the village bakery today",
++    "at dusk the farmer counts the harvest and closes the wooden gate",
++];
++
++struct Stock {
++    _models: tempfile::TempDir,
++    backend: Arc<dyn OcrBackend>,
++    config: OcrConfig,
++}
++
++fn limits(case: usize) -> SecurityLimits {
++    SecurityLimits {
++        max_archive_size: case,
++        ..Default::default()
++    }
++}
++
++fn stock(case: usize, backend_options: serde_json::Value) -> Stock {
++    crate::plugins::ensure_ocr_backends_initialized();
++    let registry = crate::plugins::registry::get_ocr_backend_registry();
++    let backend = registry.read().get("tesseract").unwrap();
++    assert!(registry.read().is_builtin_tesseract(&backend));
++    let models = tempfile::tempdir().unwrap();
++    std::fs::write(
++        models.path().join("eng.traineddata"),
++        xberg_tesseract::bundled_eng_traineddata().expect("verified bundled English model"),
++    )
++    .unwrap();
++    let config = OcrConfig {
++        backend: "tesseract".to_string(),
++        tessdata_path: Some(models.path().into()),
++        auto_rotate: Some(false),
++        backend_options: Some(backend_options),
++        security_limits: Some(limits(case)),
++        ..Default::default()
++    };
++    Stock {
++        _models: models,
++        backend,
++        config,
++    }
++}
++
++async fn stock_read(
++    stock: &Stock,
++    reuse: &Arc<ProbeReads>,
++    config: &OcrConfig,
++    pixels: &Arc<Vec<u8>>,
++) -> crate::Result<ExtractedDocument> {
++    let identity = ReadIdentity {
++        page: 1,
++        backend: &stock.backend,
++        configs: (config, config),
++        whole_page_raster: false,
++        correction_degrees: 0,
++    };
++    let engine = Arc::clone(&stock.backend);
++    read(Some(reuse), identity, Arc::clone(pixels), None, |bytes| async move {
++        engine.process_image_owned(bytes, config).await
++    })
++    .await
++}
++
++// Compare maps as JSON values while retaining the private OCR payload. ~keep
++fn whole_read(document: &ExtractedDocument) -> serde_json::Value {
++    serde_json::to_value((
++        document,
++        &document.formatted_content,
++        internal_read(&document.ocr_internal_document),
++        internal_read(&document.internal_document),
++        &document.raw_ocr_source_frame,
++    ))
++    .unwrap()
++}
++
++fn internal_read(document: &Option<crate::types::internal::InternalDocument>) -> serde_json::Value {
++    serde_json::to_value((
++        document,
++        document.as_ref().map(|document| {
++            (
++                document.uris_dropped,
++                &document.recorded_formulas,
++                document.ocr_text_only,
++                document.append_ocr_text,
++                document.escape_markdown,
++                document.include_watermarks,
++                &document.page_marker_format,
++                document.table_anchors,
++                format!("{:?}", document.ocr_coordinate_frame),
++                document.ocr_text_claimed_by_tables,
++            )
++        }),
++    ))
++    .unwrap()
++}
++
++fn assert_source_prose(text: &str) {
++    let lower = text.to_lowercase();
++    for word in SOURCE_WORDS {
++        assert!(lower.contains(word), "{word} missing from {text:?}");
++    }
++    assert!(
++        !text
++            .chars()
++            .any(|c| ('\u{0600}'..='\u{06FF}').contains(&c) || c == '\u{FFFD}'),
++        "{text:?}"
++    );
++}
++
++#[tokio::test]
++async fn stock_raw_read_of_a_text_raster_matches_an_uncached_final_read() {
++    let pixels = Arc::new(crate::pdf::render::render_pdf_page_to_png(ARABIC, 0, Some(150), None).unwrap());
++    let stock = stock(
++        NORMALIZATION_CASE,
++        serde_json::json!({"source_dpi": 150.0, "use_cache": false}),
++    );
++    let final_config = stock.config.clone();
++    let mut probe_config = final_config.clone();
++    let mut thresholds = probe_config.effective_thresholds();
++    thresholds.discard_suspected_ocr_noise = true;
++    probe_config.quality_thresholds = Some(thresholds);
++
++    let mut normalized = probe_config.clone();
++    normalized
++        .quality_thresholds
++        .as_mut()
++        .unwrap()
++        .discard_suspected_ocr_noise = false;
++    let mut expected = final_config.clone();
++    expected.quality_thresholds = Some(final_config.effective_thresholds());
++    assert_eq!(
++        serde_json::to_value(&normalized).unwrap(),
++        serde_json::to_value(&expected).unwrap(),
++        "the probe config differs from the final one in the discard flag alone"
++    );
++    assert_eq!(
++        format!("{:?}", probe_config.security_limits),
++        format!("{:?}", final_config.security_limits)
++    );
++
++    let reuse = Arc::new(ProbeReads::new(SecurityLimits::default().max_content_size));
++    let probe = stock_read(&stock, &reuse, &probe_config, &pixels).await.unwrap();
++    assert_eq!(read_counter::reads(NORMALIZATION_CASE), 1, "the probe reads once");
++    assert_source_prose(&probe.content);
++    assert!(reuse.finish(&[1]), "the text read was retained");
++
++    let reused = stock_read(&stock, &reuse, &final_config, &pixels).await.unwrap();
++    assert_eq!(
++        read_counter::reads(NORMALIZATION_CASE),
++        1,
++        "the final read is the probe read"
++    );
++    let independent = stock
++        .backend
++        .process_image_owned(Arc::clone(&pixels), &final_config)
++        .await
++        .unwrap();
++    assert_eq!(read_counter::reads(NORMALIZATION_CASE), 2, "the control read runs");
++    assert_source_prose(&independent.content);
++    assert_eq!(whole_read(&reused), whole_read(&probe));
++    assert_eq!(
++        whole_read(&reused),
++        whole_read(&independent),
++        "a read under discard_suspected_ocr_noise = true is the read the final config makes"
++    );
++}
++
++fn with_healthy_pages(source: &[u8]) -> Vec<u8> {
++    use lopdf::content::{Content, Operation};
++    use lopdf::{Object, Stream, dictionary};
++
++    let mut document = lopdf::Document::load_mem(source).unwrap();
++    let pages = document.get_pages();
++    assert_eq!(pages.len(), 1);
++    let original = *pages.values().next().unwrap();
++    let parent = document
++        .get_dictionary(original)
++        .unwrap()
++        .get(b"Parent")
++        .unwrap()
++        .as_reference()
++        .unwrap();
++    let font = document.add_object(dictionary! {
++        "Type" => "Font",
++        "Subtype" => "Type1",
++        "BaseFont" => "Helvetica",
++        "Encoding" => "WinAnsiEncoding",
++    });
++    let mut kids = vec![Object::Reference(original)];
++    for lines in [HARBOR, ORCHARD] {
++        let mut operations = vec![
++            Operation::new("BT", vec![]),
++            Operation::new("Tf", vec![Object::Name(b"F1".to_vec()), Object::Integer(11)]),
++            Operation::new("TL", vec![Object::Integer(14)]),
++            Operation::new("Td", vec![Object::Integer(50), Object::Integer(730)]),
++        ];
++        for line in lines.iter().cycle().take(lines.len() * 4) {
++            operations.push(Operation::new("Tj", vec![Object::string_literal(*line)]));
++            operations.push(Operation::new("T*", vec![]));
++        }
++        operations.push(Operation::new("ET", vec![]));
++        let stream = Stream::new(dictionary! {}, Content { operations }.encode().unwrap());
++        let contents = document.add_object(stream);
++        let page = document.add_object(dictionary! {
++            "Type" => "Page",
++            "Parent" => parent,
++            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
++            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
++            "Contents" => contents,
++        });
++        kids.push(Object::Reference(page));
++    }
++    let tree = document.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
++    tree.set("Kids", kids);
++    tree.set("Count", Object::Integer(3));
++    let mut bytes = Vec::new();
++    document.save_to(&mut bytes).unwrap();
++    bytes
++}
++
++#[tokio::test]
++async fn stock_public_mixed_route_reads_the_wrong_script_page_once() {
++    let pdf = with_healthy_pages(ARABIC);
++    let stock = stock(ROUTE_CASE, serde_json::json!({"use_cache": false}));
++    let config = crate::ExtractionConfig {
++        use_cache: false,
++        ocr: Some(stock.config.clone()),
++        pages: Some(crate::core::config::PageConfig {
++            extract_pages: true,
++            ..Default::default()
++        }),
++        result_format: crate::types::ResultFormat::ElementBased,
++        security_limits: Some(limits(ROUTE_CASE)),
++        ..Default::default()
++    };
++    let result = crate::core::extractor::extract_bytes(&pdf, "application/pdf", &config)
++        .await
++        .unwrap();
++    assert_eq!(
++        result.extraction_method,
++        Some(crate::types::ExtractionMethod::Mixed),
++        "{:?}",
++        result.processing_warnings
++    );
++    let pages = result.pages.as_ref().expect("pages were requested");
++    assert_eq!(pages.len(), 3);
++    assert_source_prose(&pages[0].content);
++    for (page, words) in [(&pages[1], ["mackerel", "seawall"]), (&pages[2], ["orchard", "cider"])] {
++        for word in words {
++            assert!(page.content.contains(word), "{word} missing from {:?}", page.content);
++        }
++    }
++    assert_eq!(
++        read_counter::reads(ROUTE_CASE),
++        1,
++        "the targeted route takes the probe's read of page 1: {:?}",
++        result.processing_warnings
++    );
++    assert_eq!(
++        read_counter::probe_reuses(ROUTE_CASE),
++        1,
++        "the final route must consume a retained probe read, not merely run OCR once"
++    );
++}
+diff --git a/crates/xberg/src/ocr/tesseract_backend.rs b/crates/xberg/src/ocr/tesseract_backend.rs
+index 358a1364f5..6e46a0e9b4 100644
+--- a/crates/xberg/src/ocr/tesseract_backend.rs
++++ b/crates/xberg/src/ocr/tesseract_backend.rs
+@@ -507,28 +507,43 @@ impl Plugin for TesseractBackend {
+ 
+ /// Counts reads per `security_limits.max_archive_size`, a field no scan read uses, so a test
+ /// picks a value of its own and concurrent tests never see each other's reads.
+-#[cfg(all(
+-    test,
+-    paddle_ocr,
+-    feature = "pdf",
+-    feature = "tokio-runtime",
+-    feature = "bundle-tessdata-eng"
+-))]
++#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
+ pub(crate) mod read_counter {
+     use super::OcrConfig;
+     use std::collections::HashMap;
+     use std::sync::{LazyLock, Mutex};
+ 
+-    static READS: LazyLock<Mutex<HashMap<usize, usize>>> = LazyLock::new(Default::default);
++    #[derive(Default)]
++    struct Counts {
++        reads: usize,
++        probe_reuses: usize,
++    }
++
++    static READS: LazyLock<Mutex<HashMap<usize, Counts>>> = LazyLock::new(Default::default);
+ 
+     pub(crate) fn record(config: &OcrConfig) {
+         if let Some(limits) = config.security_limits.as_ref() {
+-            *READS.lock().unwrap().entry(limits.max_archive_size).or_default() += 1;
++            READS.lock().unwrap().entry(limits.max_archive_size).or_default().reads += 1;
+         }
+     }
+ 
+     pub(crate) fn reads(key: usize) -> usize {
+-        READS.lock().unwrap().get(&key).copied().unwrap_or(0)
++        READS.lock().unwrap().get(&key).map_or(0, |counts| counts.reads)
++    }
++
++    pub(crate) fn record_probe_reuse(config: &OcrConfig) {
++        if let Some(limits) = config.security_limits.as_ref() {
++            READS
++                .lock()
++                .unwrap()
++                .entry(limits.max_archive_size)
++                .or_default()
++                .probe_reuses += 1;
++        }
++    }
++
++    pub(crate) fn probe_reuses(key: usize) -> usize {
++        READS.lock().unwrap().get(&key).map_or(0, |counts| counts.probe_reuses)
+     }
+ }
+ 
+@@ -573,13 +588,7 @@ impl TesseractBackend {
+         config: &OcrConfig,
+         policy: ImageOcrPolicy,
+     ) -> Result<ExtractedDocument> {
+-        #[cfg(all(
+-            test,
+-            paddle_ocr,
+-            feature = "pdf",
+-            feature = "tokio-runtime",
+-            feature = "bundle-tessdata-eng"
+-        ))]
++        #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
+         read_counter::record(config);
+         let tess_config = self.config_to_tesseract(config);
+         let tess_config_clone = tess_config.clone();
+diff --git a/crates/xberg/tests/pdf_ink_probe_reuse_2862.rs b/crates/xberg/tests/pdf_ink_probe_reuse_2862.rs
+new file mode 100644
+index 0000000000..742f0f1260
+--- /dev/null
++++ b/crates/xberg/tests/pdf_ink_probe_reuse_2862.rs
+@@ -0,0 +1,390 @@
++#![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
++
++mod helpers;
++
++use std::sync::{
++    Arc, Mutex,
++    atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
++};
++use xberg::plugins::{ConfidenceSemantics, OcrBackend, OcrBackendType, Plugin};
++use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat};
++
++const ARABIC: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic.pdf");
++const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-then-scanned-english.pdf");
++const TWO: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-and-bengali.pdf");
++const PROSE: &str = "The committee met on Tuesday to review the plan for the new library. Members asked about the schedule and the budget for the parking area. The architect said that building work would start after the winter. A quiet queue of residents waited to speak about the design of the reading rooms and the garden. ";
++const BACKEND: &str = "tesseract";
++
++type ObservedInput = (String, String, (u32, u32), serde_json::Value);
++
++struct Counted {
++    calls: AtomicUsize,
++    inputs: Mutex<Vec<ObservedInput>>,
++    failures: usize,
++    rejected_psm: AtomicI32,
++    low_quality: AtomicBool,
++    policy_sensitive: AtomicBool,
++    include_table: AtomicBool,
++    model_changes: AtomicBool,
++    physical_model_changes: AtomicBool,
++    models: tempfile::TempDir,
++    text: String,
++    cancel: Option<xberg::cancellation::CancellationToken>,
++}
++
++impl Plugin for Counted {
++    fn name(&self) -> &str {
++        BACKEND
++    }
++    fn version(&self) -> String {
++        if self.model_changes.load(Ordering::SeqCst) && self.calls.load(Ordering::SeqCst) > 0 {
++            "2.0.0".into()
++        } else {
++            "1.0.0".into()
++        }
++    }
++    fn initialize(&self) -> xberg::Result<()> {
++        Ok(())
++    }
++    fn shutdown(&self) -> xberg::Result<()> {
++        Ok(())
++    }
++}
++
++#[async_trait::async_trait]
++impl OcrBackend for Counted {
++    fn backend_type(&self) -> OcrBackendType {
++        OcrBackendType::Tesseract
++    }
++    fn supports_language(&self, _: &str) -> bool {
++        true
++    }
++    fn confidence_semantics(&self) -> ConfidenceSemantics {
++        ConfidenceSemantics::Legibility { scale_max: 100.0 }
++    }
++    async fn process_image(&self, image: &[u8], config: &OcrConfig) -> xberg::Result<ExtractedDocument> {
++        let call = self.calls.fetch_add(1, Ordering::SeqCst);
++        let pixels = image::load_from_memory(image).unwrap().to_rgb8();
++        self.inputs.lock().unwrap().push((
++            blake3::hash(image).to_hex().to_string(),
++            blake3::hash(pixels.as_raw()).to_hex().to_string(),
++            pixels.dimensions(),
++            serde_json::to_value(config).unwrap(),
++        ));
++        if let Some(token) = &self.cancel {
++            token.cancel();
++        }
++        let rejected_psm = config.tesseract_config.as_ref().and_then(|config| config.psm)
++            == Some(self.rejected_psm.load(Ordering::SeqCst));
++        if rejected_psm && !self.low_quality.load(Ordering::SeqCst) {
++            return Err(xberg::XbergError::ocr("selected stage refused"));
++        }
++        if call < self.failures {
++            return Err(xberg::XbergError::ocr("counted backend failure"));
++        }
++        if self.physical_model_changes.load(Ordering::SeqCst) && call == 0 {
++            std::fs::write(self.models.path().join("eng.traineddata"), b"fake model b").unwrap();
++        }
++        let mut document = ExtractedDocument::default();
++        document.content = if (self.policy_sensitive.load(Ordering::SeqCst)
++            && !config
++                .quality_thresholds
++                .as_ref()
++                .is_some_and(|thresholds| thresholds.discard_suspected_ocr_noise))
++            || ((self.model_changes.load(Ordering::SeqCst) || self.physical_model_changes.load(Ordering::SeqCst))
++                && call > 0)
++        {
++            self.text.replace("Tuesday", "Thursday")
++        } else {
++            self.text.clone()
++        };
++        if self.include_table.load(Ordering::SeqCst) {
++            let day = if document.content.contains("Thursday") {
++                "Thursday"
++            } else {
++                "Tuesday"
++            };
++            document.tables.push(xberg::types::Table {
++                cells: vec![
++                    vec!["Day".into(), "Meeting".into()],
++                    vec![day.into(), "Committee".into()],
++                ],
++                markdown: format!("| Day | Meeting |\n| --- | --- |\n| {day} | Committee |"),
++                page_number: 1,
++                ..Default::default()
++            });
++        }
++        document.metadata.additional.insert(
++            "mean_text_conf".into(),
++            serde_json::json!(if rejected_psm { 40 } else { 95 }),
++        );
++        document.metadata.additional.insert(
++            "word_count".into(),
++            serde_json::json!(self.text.split_whitespace().count()),
++        );
++        Ok(document)
++    }
++}
++
++struct Registered(Arc<Counted>);
++impl Drop for Registered {
++    fn drop(&mut self) {
++        xberg::plugins::unregister_ocr_backend(BACKEND).unwrap();
++    }
++}
++
++fn backend(failures: usize, text: String, cancel: Option<xberg::cancellation::CancellationToken>) -> Registered {
++    let models = tempfile::tempdir().unwrap();
++    std::fs::write(models.path().join("eng.traineddata"), b"fake model a").unwrap();
++    let backend = Arc::new(Counted {
++        calls: AtomicUsize::new(0),
++        inputs: Mutex::new(Vec::new()),
++        failures,
++        rejected_psm: AtomicI32::new(0),
++        low_quality: AtomicBool::new(false),
++        policy_sensitive: AtomicBool::new(false),
++        include_table: AtomicBool::new(false),
++        model_changes: AtomicBool::new(false),
++        physical_model_changes: AtomicBool::new(false),
++        models,
++        text,
++        cancel,
++    });
++    xberg::plugins::register_ocr_backend(backend.clone()).unwrap();
++    Registered(backend)
++}
++
++fn config(registered: &Registered) -> ExtractionConfig {
++    ExtractionConfig {
++        use_cache: false,
++        output_format: OutputFormat::Plain,
++        pages: Some(xberg::core::config::PageConfig {
++            extract_pages: true,
++            ..Default::default()
++        }),
++        ocr: Some(OcrConfig {
++            backend: BACKEND.into(),
++            tessdata_path: Some(registered.0.models.path().into()),
++            pipeline: Some(
++                serde_json::from_value(serde_json::json!({"stages": [
++                    {"backend": BACKEND, "priority": 100, "language": ["eng"]}
++                ]}))
++                .unwrap(),
++            ),
++            ..Default::default()
++        }),
++        ..Default::default()
++    }
++}
++
++fn extract(source: &[u8], config: &ExtractionConfig) -> xberg::Result<ExtractedDocument> {
++    helpers::extract_bytes_document_blocking(source, "application/pdf", config)
++}
++
++#[test]
++#[serial_test::serial]
++fn custom_backend_reads_each_encoded_input_and_keeps_words_and_confidence() {
++    for (source, pages, expected_calls) in [(ARABIC, 1, 2), (TWO, 2, 4), (THEN_SCANNED, 2, 3)] {
++        let registered = backend(0, PROSE.repeat(4), None);
++        let result = extract(source, &config(&registered)).unwrap();
++        let output = result.pages.as_ref().unwrap();
++        assert_eq!(output.len(), pages);
++        for page in output {
++            assert_eq!(
++                page.content.split_whitespace().collect::<Vec<_>>(),
++                PROSE.repeat(4).split_whitespace().collect::<Vec<_>>()
++            );
++            let confidence = page.ocr_confidence.as_ref().unwrap();
++            assert_eq!(confidence.score, Some(0.95));
++            assert_eq!(confidence.word_count as usize, PROSE.split_whitespace().count() * 4);
++        }
++        assert_eq!(
++            registered.0.calls.load(Ordering::SeqCst),
++            expected_calls,
++            "custom backends must receive each distinct encoded image: {:?}",
++            registered.0.inputs.lock().unwrap()
++        );
++    }
++}
++
++#[test]
++#[serial_test::serial]
++fn a_failed_probe_retains_native_text_and_does_not_reuse_a_failed_read() {
++    let registered = backend(usize::MAX, PROSE.repeat(4), None);
++    let result = extract(ARABIC, &config(&registered)).unwrap();
++    assert!(registered.0.calls.load(Ordering::SeqCst) > 0);
++    assert_eq!(result.extraction_method, Some(xberg::types::ExtractionMethod::Native));
++    assert!(result.content.chars().any(|c| ('\u{0600}'..='\u{06ff}').contains(&c)));
++}
++
++#[test]
++#[serial_test::serial]
++fn custom_backend_reads_do_not_survive_an_extraction() {
++    for text in [PROSE.repeat(4), PROSE.replace("Tuesday", "Thursday").repeat(4)] {
++        let registered = backend(0, text.clone(), None);
++        let result = extract(ARABIC, &config(&registered)).unwrap();
++        assert_eq!(
++            result.content.split_whitespace().collect::<Vec<_>>(),
++            text.split_whitespace().collect::<Vec<_>>()
++        );
++        assert_eq!(registered.0.calls.load(Ordering::SeqCst), 2);
++    }
++}
++
++#[test]
++#[serial_test::serial]
++fn cancellation_after_the_probe_does_not_publish_its_accepted_read() {
++    let token = xberg::cancellation::CancellationToken::new();
++    let registered = backend(0, PROSE.repeat(4), Some(token.clone()));
++    let config = ExtractionConfig {
++        cancel_token: Some(token),
++        ..config(&registered)
++    };
++    assert!(extract(ARABIC, &config).is_err());
++    assert_eq!(registered.0.calls.load(Ordering::SeqCst), 1);
++}
++
++#[test]
++#[serial_test::serial]
++fn probe_and_production_configs_can_return_different_source_words() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.policy_sensitive.store(true, Ordering::SeqCst);
++    let mut config = config(&registered);
++    config.ocr.as_mut().unwrap().pipeline = None;
++    let result = extract(ARABIC, &config).unwrap();
++    assert_eq!(
++        result.content.split_whitespace().collect::<Vec<_>>(),
++        PROSE
++            .replace("Tuesday", "Thursday")
++            .repeat(4)
++            .split_whitespace()
++            .collect::<Vec<_>>()
++    );
++    let inputs = registered.0.inputs.lock().unwrap();
++    assert_eq!(inputs.len(), 2);
++    assert_eq!(inputs[0].1, inputs[1].1, "decoded pixels are equal");
++    assert_eq!(inputs[0].3["quality_thresholds"]["discard_suspected_ocr_noise"], true);
++    assert_eq!(inputs[1].3["quality_thresholds"], serde_json::Value::Null);
++}
++
++#[test]
++#[serial_test::serial]
++fn a_changed_backend_model_is_read_again_after_the_accepted_probe() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.model_changes.store(true, Ordering::SeqCst);
++    let result = extract(ARABIC, &config(&registered)).unwrap();
++    assert_eq!(registered.0.version(), "2.0.0");
++    assert_eq!(
++        result.content.split_whitespace().collect::<Vec<_>>(),
++        PROSE
++            .replace("Tuesday", "Thursday")
++            .repeat(4)
++            .split_whitespace()
++            .collect::<Vec<_>>()
++    );
++    let inputs = registered.0.inputs.lock().unwrap();
++    assert_eq!(inputs.len(), 2);
++    assert_eq!(inputs[0].1, inputs[1].1);
++    assert_eq!(
++        inputs[0].3, inputs[1].3,
++        "same config with changed model is not a duplicate read"
++    );
++}
++
++#[test]
++#[serial_test::serial]
++fn production_keeps_the_table_payload_of_its_configured_read() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.policy_sensitive.store(true, Ordering::SeqCst);
++    registered.0.include_table.store(true, Ordering::SeqCst);
++    let mut config = config(&registered);
++    config.ocr.as_mut().unwrap().pipeline = None;
++    let result = extract(ARABIC, &config).unwrap();
++    assert_eq!(result.tables.len(), 1);
++    assert_eq!(
++        result.tables[0].cells,
++        vec![vec!["Day", "Meeting"], vec!["Thursday", "Committee"]]
++    );
++    assert_eq!(registered.0.calls.load(Ordering::SeqCst), 2);
++}
++
++fn retry_config(registered: &Registered) -> ExtractionConfig {
++    let mut config = config(registered);
++    config.ocr.as_mut().unwrap().pipeline = Some(
++        serde_json::from_value(
++            serde_json::json!({"quality_thresholds": {"pipeline_min_quality": 0.9}, "stages": [
++                {"backend": BACKEND, "priority": 100, "language": ["eng"], "tesseract_config": {"psm": 3}},
++                {"backend": BACKEND, "priority": 50, "language": ["eng"], "tesseract_config": {"psm": 6}}
++            ]}),
++        )
++        .unwrap(),
++    );
++    config
++}
++
++#[test]
++#[serial_test::serial]
++fn a_failed_custom_stage_and_its_fallback_run_on_each_encoded_input() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.rejected_psm.store(3, Ordering::SeqCst);
++    let result = extract(ARABIC, &retry_config(&registered)).unwrap();
++    assert!(result.content.contains("committee met on Tuesday"));
++    let inputs = registered.0.inputs.lock().unwrap();
++    let modes: Vec<_> = inputs
++        .iter()
++        .map(|input| input.3["tesseract_config"]["psm"].as_i64().unwrap())
++        .collect();
++    assert_eq!(modes, vec![3, 6, 3, 6], "the failed stage must execute on both routes");
++}
++
++#[test]
++#[serial_test::serial]
++fn a_quality_retry_still_runs_and_keeps_the_confident_fallback() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.rejected_psm.store(3, Ordering::SeqCst);
++    registered.0.low_quality.store(true, Ordering::SeqCst);
++    let result = extract(ARABIC, &retry_config(&registered)).unwrap();
++    assert!(result.content.contains("committee met on Tuesday"));
++    assert_eq!(
++        result.pages.as_ref().unwrap()[0].ocr_confidence.as_ref().unwrap().score,
++        Some(0.95)
++    );
++    let inputs = registered.0.inputs.lock().unwrap();
++    let modes: Vec<_> = inputs
++        .iter()
++        .map(|input| input.3["tesseract_config"]["psm"].as_i64().unwrap())
++        .collect();
++    assert_eq!(modes, vec![3, 6, 3, 6]);
++}
++
++#[test]
++#[serial_test::serial]
++fn custom_backend_keeps_the_table_payload_after_a_changed_encoding() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.include_table.store(true, Ordering::SeqCst);
++    let result = extract(ARABIC, &config(&registered)).unwrap();
++    assert_eq!(result.tables.len(), 1);
++    assert_eq!(
++        result.tables[0].cells,
++        vec![vec!["Day", "Meeting"], vec!["Tuesday", "Committee"]]
++    );
++    assert_eq!(registered.0.calls.load(Ordering::SeqCst), 2);
++}
++
++#[test]
++#[serial_test::serial]
++fn changed_traineddata_is_not_reused_even_when_backend_version_is_unchanged() {
++    let registered = backend(0, PROSE.repeat(4), None);
++    registered.0.physical_model_changes.store(true, Ordering::SeqCst);
++    let result = extract(ARABIC, &config(&registered)).unwrap();
++    assert_eq!(registered.0.version(), "1.0.0");
++    assert_eq!(
++        result.content.split_whitespace().collect::<Vec<_>>(),
++        PROSE
++            .replace("Tuesday", "Thursday")
++            .repeat(4)
++            .split_whitespace()
++            .collect::<Vec<_>>()
++    );
++    assert_eq!(registered.0.calls.load(Ordering::SeqCst), 2);
++}
+diff --git a/scripts/ci/rust/run-focused-pr-tests.sh b/scripts/ci/rust/run-focused-pr-tests.sh
+index 71ac6d190f..910f57e74c 100755
+--- a/scripts/ci/rust/run-focused-pr-tests.sh
++++ b/scripts/ci/rust/run-focused-pr-tests.sh
+@@ -63,6 +63,52 @@ run_type0_cases() {
+   fi
+ }
+ 
++run_ink_probe_cases() {
++  local before="$passed"
++  local test_name
++  for test_name in \
++    custom_backend_reads_each_encoded_input_and_keeps_words_and_confidence \
++    a_failed_probe_retains_native_text_and_does_not_reuse_a_failed_read \
++    custom_backend_reads_do_not_survive_an_extraction \
++    cancellation_after_the_probe_does_not_publish_its_accepted_read \
++    probe_and_production_configs_can_return_different_source_words \
++    a_changed_backend_model_is_read_again_after_the_accepted_probe \
++    production_keeps_the_table_payload_of_its_configured_read \
++    a_failed_custom_stage_and_its_fallback_run_on_each_encoded_input \
++    a_quality_retry_still_runs_and_keeps_the_confident_fallback \
++    custom_backend_keeps_the_table_payload_after_a_changed_encoding \
++    changed_traineddata_is_not_reused_even_when_backend_version_is_unchanged; do
++    run_exact "$test_name" --test pdf_ink_probe_reuse_2862
++  done
++  for test_name in \
++    final_read_takes_the_probe_read_once_for_a_contradicted_page \
++    finish_retains_only_contradicted_pages \
++    same_pixels_on_another_page_are_not_reused \
++    zero_retention_limit_reads_again_and_returns_each_document_intact \
++    identity_changes_miss_without_consuming_the_matching_read \
++    cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read \
++    cancellation_during_a_hit_returns_cancelled_without_ocr \
++    geometry_observer_bypasses_retained_reads \
++    failed_backend_read_is_not_retained \
++    backend_version_change_during_a_read_is_not_retained \
++    unkeyable_reads_are_never_retained \
++    model_identity_tracks_override_traineddata_and_osd \
++    stock_builtin_reuses_its_own_raw_read_once \
++    stock_builtin_does_not_reuse_a_different_decode_budget \
++    stock_builtin_does_not_reuse_a_different_encoded_working_size \
++    custom_backend_reads_changed_encoding_even_when_rgb_pixels_match \
++    model_change_alone_requires_a_fresh_backend_read \
++    changed_policy_preserves_fresh_source_words_and_table_payload; do
++    run_exact "extractors::pdf::ocr::read_reuse::tests::$test_name" --lib
++  done
++  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_raw_read_of_a_text_raster_matches_an_uncached_final_read' --lib
++  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_public_mixed_route_reads_the_wrong_script_page_once' --lib
++  if [ "$((passed - before))" -ne 31 ]; then
++    printf 'Expected 31 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
++    exit 1
++  fi
++}
++
+ run_api_cases() {
+   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
+   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
+@@ -72,8 +118,9 @@ run_api_cases() {
+ 
+ case "$suite" in
+ pdf-ocr)
+-  expected=10
++  expected=41
+   run_pdf_cases
++  run_ink_probe_cases
+   ;;
+ api-jobs)
+   expected=4

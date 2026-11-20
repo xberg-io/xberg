@@ -169,91 +169,31 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
     let live_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + sidecar_per_pixel) + fixed;
     let peak_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + 2 * sidecar_per_pixel) + fixed; // one transient snapshot copy
     assert!(
-        !png_working_bytes_fit(
-            side,
-            side,
-            Some(&names),
-            SpotPlaneUse::default(),
-            (old_charge + live_charge) / 2
-        ),
+        !png_working_bytes_fit(side, side, Some(&names), false, (old_charge + live_charge) / 2),
         "a limit between the one-plane and two-plane charge does not fit"
     );
-    assert!(png_working_bytes_fit(
-        side,
-        side,
-        Some(&names),
-        SpotPlaneUse::default(),
-        live_charge
-    ));
-    assert!(!png_working_bytes_fit(
-        side,
-        side,
-        Some(&names),
-        SpotPlaneUse::default(),
-        live_charge - 1
-    ));
+    assert!(png_working_bytes_fit(side, side, Some(&names), false, live_charge));
+    assert!(!png_working_bytes_fit(side, side, Some(&names), false, live_charge - 1));
     assert!(
-        !png_working_bytes_fit(
-            side,
-            side,
-            Some(&names),
-            SpotPlaneUse {
-                soft_mask: true,
-                ..SpotPlaneUse::default()
-            },
-            (live_charge + peak_charge) / 2
-        ),
+        !png_working_bytes_fit(side, side, Some(&names), true, (live_charge + peak_charge) / 2),
         "a limit between the live and peak charge does not fit: a soft mask can hold one more copy of every plate"
     );
-    assert!(png_working_bytes_fit(
-        side,
-        side,
-        Some(&names),
-        SpotPlaneUse {
-            soft_mask: true,
-            ..SpotPlaneUse::default()
-        },
-        peak_charge
-    ));
-    assert!(!png_working_bytes_fit(
-        side,
-        side,
-        Some(&names),
-        SpotPlaneUse {
-            soft_mask: true,
-            ..SpotPlaneUse::default()
-        },
-        peak_charge - 1
-    ));
+    assert!(png_working_bytes_fit(side, side, Some(&names), true, peak_charge));
+    assert!(!png_working_bytes_fit(side, side, Some(&names), true, peak_charge - 1));
     // A zero-ink sidecar (a CMYK page with transparency but no spot plate) must not charge a
     // transient copy either: the call site passes an empty transient use, so the charge stays at the CMYK-only
     // 16 bytes per pixel. The render-level pin lives with the gate parity tests.
     let zero_ink_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4) + fixed;
-    assert!(png_working_bytes_fit(
-        side,
-        side,
-        Some(&[]),
-        SpotPlaneUse::default(),
-        zero_ink_charge
-    ));
+    assert!(png_working_bytes_fit(side, side, Some(&[]), false, zero_ink_charge));
     assert!(!png_working_bytes_fit(
         side,
         side,
         Some(&[]),
-        SpotPlaneUse::default(),
+        false,
         zero_ink_charge - 1
     ));
     assert!(
-        !png_working_bytes_fit(
-            side,
-            side,
-            Some(&[]),
-            SpotPlaneUse {
-                soft_mask: true,
-                ..SpotPlaneUse::default()
-            },
-            zero_ink_charge
-        ),
+        !png_working_bytes_fit(side, side, Some(&[]), true, zero_ink_charge),
         "a charged transient copy would exceed the live CMYK budget"
     );
     let live = CmykSidecar::new(side, side, names).image_buffer_bytes() as usize;

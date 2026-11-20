@@ -204,6 +204,16 @@ pub(super) fn strip_table(table: &mut Table) -> usize {
     removed
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn unrecovered_page_glyph_warning(page: u32, lost: usize) -> Option<ProcessingWarning> {
+    (lost > 0).then(|| {
+        crate::core::diagnostics::warning(
+            "ocr",
+            format!("Page {page} retained native text; {lost} glyphs have no Unicode value and its OCR read did not recover them."),
+        )
+    })
+}
+
 /// The warning for a document that still lacks characters after extraction. It names the OCR
 /// setting only for a caller who has not configured OCR and has not switched it off.
 pub(super) fn lost_glyph_warning(lost: usize, config: &ExtractionConfig) -> Option<ProcessingWarning> {

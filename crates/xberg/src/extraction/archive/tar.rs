@@ -3,9 +3,10 @@
 //! Provides functions for extracting metadata and text content from TAR archives.
 //! Supports plain TAR as well as compressed variants (TAR.GZ, TAR.BZ2).
 
-use super::{ArchiveEntry, ArchiveMetadata, TEXT_EXTENSIONS};
+use super::{ArchiveEntry, ArchiveMetadata, DecompressedBudget, MemberContents};
 use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
+#[cfg(test)]
 use ahash::AHashMap;
 use std::io::{Cursor, Read};
 use tar::Archive as TarArchive;
@@ -55,7 +56,7 @@ pub(crate) fn extract_tar_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
         let is_dir = entry.header().entry_type().is_dir();
 
         if !is_dir {
-            total_size += size;
+            total_size = super::add_declared_size(total_size, size)?;
         }
 
         file_count += 1;
@@ -85,30 +86,37 @@ pub(crate) fn extract_tar_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
     })
 }
 
-/// Extract text content from files within a TAR archive.
-///
-/// Only extracts files with common text extensions: .txt, .md, .json, .xml, .html, .csv, .log, .yaml, .toml
-///
-/// # Arguments
-///
-/// * `bytes` - The TAR archive bytes (can be compressed with gzip or bzip2)
-///
-/// # Returns
-///
-/// Returns a `HashMap` mapping file paths to their text content.
-/// Binary files and files with non-text extensions are excluded.
-///
-/// # Errors
-///
-/// Returns an error if the TAR archive cannot be read or parsed.
-pub(crate) fn extract_tar_text_content(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, String>> {
+#[cfg(test)]
+pub(crate) fn extract_tar_text_content(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, String>> {
+    extract_tar_members(bytes, limits, budget, None, Some(limits.max_content_size as u64)).map(|members| members.text)
+}
+
+#[cfg(test)]
+pub(crate) fn extract_tar_file_bytes(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, Vec<u8>>> {
+    extract_tar_members(bytes, limits, budget, None, None).map(|members| members.bytes)
+}
+
+/// Read member bytes once, deriving text for eligible members when a text limit is supplied.
+pub(crate) fn extract_tar_members(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+    mut sparse_budget: Option<&mut DecompressedBudget<'_>>,
+    text_limit: Option<u64>,
+) -> Result<MemberContents> {
     let cursor = Cursor::new(bytes);
     let mut archive = TarArchive::new(cursor);
 
-    let estimated_text_files = bytes.len().saturating_div(1024 * 10).min(100);
-    let mut contents = AHashMap::with_capacity(estimated_text_files.max(2));
+    let mut members = MemberContents::new(text_limit);
     let mut file_count = 0usize;
-    let mut total_content_size = 0usize;
 
     let entries = archive
         .entries()
@@ -131,125 +139,87 @@ pub(crate) fn extract_tar_text_content(bytes: &[u8], limits: &SecurityLimits) ->
             .to_string_lossy()
             .to_string();
 
-        if !entry.header().entry_type().is_dir() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext))
-        {
-            // Unlike ZIP, tar-rs's `Entry` reader is itself bounded to the header's declared
-            // `size()` (TAR stores members uncompressed, contiguous, at exactly that length), so
-            // this is not a decompression-ratio bomb. The bug was that `entry.size()` was only
-            // used as a `Vec::with_capacity` *hint* (`.min(10 * 1024 * 1024)`) -- the subsequent
-            // `read_to_end` was never actually bounded by it, so a header declaring an
-            // enormous member (nothing stops an attacker writing one) is read into memory in
-            // full before any limit is checked. Bound the read at `max_content_size`: that is
-            // the aggregate budget this member's decoded text is checked against a few lines
-            // down, so no single member can legitimately need more. `+1` distinguishes "exactly
-            // at the limit" from "over" so a hostile member is rejected rather than silently
-            // truncated.
-            let cap = limits.max_content_size as u64;
-            let mut raw = Vec::new();
-            let mut limited = (&mut entry).take(cap.saturating_add(1));
-            if let Err(e) = limited.read_to_end(&mut raw) {
-                tracing::warn!(member = %path, error = %e, "skipping TAR member: read failed");
-                continue;
-            }
-            if raw.len() as u64 > cap {
-                // Reject rather than silently truncate or skip: the pre-existing code already
-                // surfaced a hard error once the *decoded* total crossed `max_content_size`
-                // (below), so capping the read must not become a quieter failure mode than the
-                // one it replaces.
-                return Err(XbergError::validation(format!(
-                    "TAR archive member '{}' exceeds max_content_size while reading (limit: {} bytes)",
-                    path, limits.max_content_size
-                )));
-            }
-            let content = super::decode_archive_text(&raw, &path);
-            total_content_size = total_content_size.saturating_add(content.len());
-            if total_content_size > limits.max_content_size {
-                return Err(XbergError::validation(format!(
-                    "TAR archive text content exceeds limit: {} bytes (max: {} bytes)",
-                    total_content_size, limits.max_content_size
-                )));
-            }
-            contents.insert(path, content);
-        }
-    }
-
-    Ok(contents)
-}
-
-/// Extract raw file bytes for all non-directory entries in a TAR archive.
-///
-/// Returns a `HashMap` mapping file paths to their raw byte content.
-/// Respects security limits for file count and total archive size.
-///
-/// # Arguments
-///
-/// * `bytes` - The TAR archive bytes
-/// * `limits` - Security limits for archive extraction
-///
-/// # Errors
-///
-/// Returns an error if the TAR archive cannot be read or if security limits are exceeded.
-pub(crate) fn extract_tar_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, Vec<u8>>> {
-    let cursor = Cursor::new(bytes);
-    let mut archive = TarArchive::new(cursor);
-
-    let mut file_bytes = AHashMap::new();
-    let mut file_count = 0usize;
-    let mut total_size = 0usize;
-
-    let entries = archive
-        .entries()
-        .map_err(|e| XbergError::parsing(format!("Failed to read TAR archive: {}", e)))?;
-
-    for entry_result in entries {
-        let mut entry = entry_result.map_err(|e| XbergError::parsing(format!("Failed to read TAR entry: {}", e)))?;
-
-        file_count += 1;
-        if file_count > limits.max_files_in_archive {
-            return Err(XbergError::validation(format!(
-                "TAR archive has too many files: {} (max: {})",
-                file_count, limits.max_files_in_archive
-            )));
-        }
-
         if entry.header().entry_type().is_dir() {
+            if let Err(e) = budget.read_member(&mut entry, &mut std::io::sink(), None, &path)? {
+                tracing::warn!(member = %path, error = %e, "skipping TAR member: read failed");
+            }
             continue;
         }
 
-        let path = entry
-            .path()
-            .map_err(|e| XbergError::parsing(format!("Failed to read TAR entry path: {}", e)))?
-            .to_string_lossy()
-            .to_string();
+        let cap = members.text_limit(&path);
+        if let Some(shared) = sparse_budget
+            .as_deref_mut()
+            .filter(|_| entry.header().entry_type().is_gnu_sparse())
+        {
+            let stored = sparse_stored_size(&mut entry)
+                .map_err(|error| XbergError::parsing(format!("Failed to read size of TAR member '{path}': {error}")))?;
+            charge_sparse_expansion(shared, stored, entry.size(), &path)?;
+        }
 
-        // See the comment in `extract_tar_text_content`: `entry.size()` was only ever used as a
-        // `Vec::with_capacity` hint, never as an actual bound on `read_to_end`, so a header
-        // declaring an oversized member is read into memory in full before any check runs. Cap
-        // it ourselves at `max_archive_size` -- the same budget `total_size` is checked against
-        // below. `+1` distinguishes "exactly at the limit" from "over".
-        let cap = limits.max_archive_size as u64;
         let mut content = Vec::new();
-        let mut limited = (&mut entry).take(cap.saturating_add(1));
-        if limited.read_to_end(&mut content).is_ok() {
-            if content.len() as u64 > cap {
-                // Reject rather than silently truncate: the pre-existing code already surfaced
-                // a hard error once the running `total_size` crossed `max_archive_size` (below),
-                // so capping the read must not become a quieter failure mode than that.
-                return Err(XbergError::validation(format!(
-                    "TAR archive member '{}' exceeds max_archive_size while reading (limit: {} bytes)",
-                    path, limits.max_archive_size
-                )));
+        match budget.read_member(&mut entry, &mut content, cap, &path)? {
+            Ok(()) => {
+                members.insert(path, content, "TAR")?;
             }
-            total_size = total_size.saturating_add(content.len());
-            if total_size > limits.max_archive_size {
-                return Err(XbergError::validation(format!(
-                    "TAR archive total extracted size exceeds limit: {} bytes (max: {} bytes)",
-                    total_size, limits.max_archive_size
-                )));
-            }
-            file_bytes.insert(path, content);
+            Err(error) => tracing::warn!(member = %path, %error, "skipping TAR member: read failed"),
         }
     }
 
-    Ok(file_bytes)
+    Ok(members)
+}
+
+// Match the TAR parser's local PAX size override before using the raw header size. ~keep
+fn sparse_stored_size<R: Read>(entry: &mut ::tar::Entry<'_, R>) -> std::io::Result<u64> {
+    if let Some(extensions) = entry.pax_extensions()? {
+        for extension in extensions {
+            let Ok(extension) = extension else { break };
+            if extension.key_bytes() == b"size" {
+                if let Some(size) = extension.value().ok().and_then(|value| value.parse().ok()) {
+                    return Ok(size);
+                }
+                break;
+            }
+        }
+    }
+    entry.header().entry_size()
+}
+
+fn charge_sparse_expansion(budget: &mut DecompressedBudget<'_>, stored: u64, expanded: u64, path: &str) -> Result<()> {
+    let additional = expanded
+        .checked_sub(stored)
+        .ok_or_else(|| XbergError::parsing(format!("Stored size exceeds expanded size for TAR member '{path}'")))?;
+    budget.charge(additional, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::extractors::security::ArchiveBudget;
+
+    #[test]
+    fn sparse_expansion_charges_only_bytes_absent_from_the_inflated_tar() {
+        let inflated_tar = 4096;
+        let stored = 1024;
+        let expanded = 8192;
+        let expected_charge = 7168;
+
+        for available in [expected_charge, expected_charge - 1] {
+            let shared = ArchiveBudget::new(&SecurityLimits {
+                max_archive_size: inflated_tar + available,
+                ..SecurityLimits::default()
+            });
+            shared.charge_decompressed(inflated_tar).unwrap();
+            let mut budget = DecompressedBudget::shared(&shared);
+            let result = charge_sparse_expansion(&mut budget, stored, expanded, "sparse.bin");
+
+            if available == expected_charge {
+                result.unwrap();
+                assert_eq!(shared.remaining_decompressed(), 0);
+            } else {
+                let error = result.unwrap_err();
+                assert!(matches!(error, XbergError::Validation { .. }));
+                assert_eq!(shared.remaining_decompressed(), available);
+            }
+        }
+    }
 }

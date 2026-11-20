@@ -64,9 +64,7 @@ and 26<sup>th</sup>, or seven, values. **The median is seven.**
 
 look at the "cumulative relative frequency" column, you find 0.52 and 0.80. When you have all the fours, fives,
 
-**th**
-
-sixes and sevens, you have 52% of the data. When you include all the 8s, you have 80% of the data. **The 75 percentile, then, must be an eight** . Another way to look at the problem is to find 75% of 50, which is 37.5, and
+sixes and sevens, you have 52% of the data. When you include all the 8s, you have 80% of the data. **The 75**<sup>**th**</sup> **percentile, then, must be an eight** . Another way to look at the problem is to find 75% of 50, which is 37.5, and
 
 round up to 38. The third quartile, *Q*~3~, is the 38<sup>th</sup> value, which is an eight. You can check this answer by counting the values. (There are 37 values below the third quartile and 12 values above.)
 

@@ -8,75 +8,80 @@
 use std::fs;
 use tempfile::tempdir;
 use xberg::ServerConfig;
+use xberg_child_test::{child_test_root, run_child_test};
 
-#[allow(unsafe_code)]
-fn cleanup_env_vars() {
-    unsafe {
-        std::env::remove_var("XBERG_HOST");
-        std::env::remove_var("XBERG_PORT");
-        std::env::remove_var("XBERG_CORS_ORIGINS");
-        std::env::remove_var("XBERG_MAX_REQUEST_BODY_BYTES");
-        std::env::remove_var("XBERG_MAX_MULTIPART_FIELD_BYTES");
-    }
+const CHILD_CASE: &str = "XBERG_SERVER_CONFIG_INTEGRATION_CHILD";
+
+fn run_env_case(test: &str, variables: &[(&str, &str)]) {
+    run_child_test(test, CHILD_CASE, test, |command| {
+        // Keep loader and toolchain settings while dropping inherited Xberg overrides. ~keep
+        command
+            .env_clear()
+            .envs(
+                std::env::vars_os()
+                    .filter(|(key, _)| !key.to_string_lossy().to_ascii_uppercase().starts_with("XBERG_")),
+            )
+            .env(CHILD_CASE, test)
+            .envs(variables.iter().copied());
+    });
 }
 
-#[allow(unsafe_code)]
-fn set_env(key: &str, value: &str) {
-    unsafe {
-        std::env::set_var(key, value);
-    }
+fn check_child_case(test: &str) -> bool {
+    let Some(case) = child_test_root(CHILD_CASE) else {
+        return false;
+    };
+    assert_eq!(case.as_os_str(), std::ffi::OsStr::new(test));
+    true
 }
 
-fn save_env(keys: &[&str]) -> Vec<(String, Option<String>)> {
-    keys.iter()
-        .map(|key| (key.to_string(), std::env::var(key).ok()))
-        .collect()
-}
+macro_rules! isolated_env_test {
+    (fn $case:ident [$($key:literal => $value:literal),+ $(,)?] $body:block) => {
+        #[test]
+        fn $case() {
+            run_env_case(concat!(stringify!($case), "::child"), &[$(($key, $value)),+]);
+        }
 
-#[allow(unsafe_code)]
-fn restore_env(saved: Vec<(String, Option<String>)>) {
-    unsafe {
-        for (key, value) in saved {
-            if let Some(v) = value {
-                std::env::set_var(&key, v);
-            } else {
-                std::env::remove_var(&key);
+        mod $case {
+            use super::*;
+
+            #[test]
+            #[ignore = "run in an isolated subprocess"]
+            fn child() {
+                if !check_child_case(concat!(stringify!($case), "::child")) {
+                    return;
+                }
+                $body
             }
         }
-    }
+    };
 }
 
-#[test]
-#[serial_test::serial]
-fn test_config_precedence_env_over_file() {
-    let saved = save_env(&["XBERG_HOST", "XBERG_PORT"]);
+isolated_env_test! {
+    fn test_config_precedence_env_over_file [
+        "XBERG_HOST" => "env-host",
+        "XBERG_PORT" => "8002",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 host = "file-host"
 port = 8001
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_HOST", "env-host");
-    set_env("XBERG_PORT", "8002");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        assert_eq!(config.host, "file-host");
+        assert_eq!(config.port, 8001);
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    assert_eq!(config.host, "file-host");
-    assert_eq!(config.port, 8001);
+        config.apply_env_overrides().expect("Operation failed");
 
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "env-host", "Env HOST should override file HOST");
-    assert_eq!(config.port, 8002, "Env PORT should override file PORT");
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "env-host", "Env HOST should override file HOST");
+        assert_eq!(config.port, 8002, "Env PORT should override file PORT");
+    }
 }
 
 #[test]
@@ -106,30 +111,25 @@ max_multipart_field_bytes = 75000000
     assert_eq!(config.max_multipart_field_bytes, 75_000_000);
 }
 
-#[test]
-#[serial_test::serial]
-fn test_env_only_configuration() {
-    let saved = save_env(&["XBERG_HOST", "XBERG_PORT", "XBERG_CORS_ORIGINS"]);
+isolated_env_test! {
+    fn test_env_only_configuration [
+        "XBERG_HOST" => "0.0.0.0",
+        "XBERG_PORT" => "3000",
+        "XBERG_CORS_ORIGINS" => "https://api.example.com, https://app.example.com",
+    ] {
+        let mut config = ServerConfig::default();
 
-    set_env("XBERG_HOST", "0.0.0.0");
-    set_env("XBERG_PORT", "3000");
-    set_env("XBERG_CORS_ORIGINS", "https://api.example.com, https://app.example.com");
+        assert_eq!(config.host, "127.0.0.1");
+        assert_eq!(config.port, 8000);
 
-    let mut config = ServerConfig::default();
+        config.apply_env_overrides().expect("Operation failed");
 
-    assert_eq!(config.host, "127.0.0.1");
-    assert_eq!(config.port, 8000);
-
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "0.0.0.0");
-    assert_eq!(config.port, 3000);
-    assert_eq!(config.cors_origins.len(), 2);
-    assert!(config.cors_origins.contains(&"https://api.example.com".to_string()));
-    assert!(config.cors_origins.contains(&"https://app.example.com".to_string()));
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.cors_origins.len(), 2);
+        assert!(config.cors_origins.contains(&"https://api.example.com".to_string()));
+        assert!(config.cors_origins.contains(&"https://app.example.com".to_string()));
+    }
 }
 
 #[test]
@@ -229,7 +229,7 @@ fn test_config_format_json() {
 }
 
 #[test]
-fn test_cors_configuration_allow_all() {
+fn test_cors_configuration_denies_by_default() {
     let dir = tempdir().expect("Operation failed");
     let config_path = dir.path().join("config.toml");
 
@@ -238,16 +238,16 @@ fn test_cors_configuration_allow_all() {
         r#"
 host = "127.0.0.1"
 port = 8000
-# Empty cors_origins means allow all
+# Empty cors_origins means deny cross-origin requests
 "#,
     )
     .expect("Operation failed");
 
     let config = ServerConfig::from_file(&config_path).expect("Operation failed");
 
-    assert!(config.cors_allows_all(), "Empty cors_origins should allow all");
-    assert!(config.is_origin_allowed("https://any.com"));
-    assert!(config.is_origin_allowed("http://localhost:3000"));
+    assert!(!config.cors_allows_all(), "Empty cors_origins should deny all");
+    assert!(!config.is_origin_allowed("https://any.com"));
+    assert!(!config.is_origin_allowed("http://localhost:3000"));
 }
 
 #[test]
@@ -273,174 +273,139 @@ cors_origins = ["https://app1.com", "https://app2.com"]
     assert!(!config.is_origin_allowed("https://app3.com"));
 }
 
-#[test]
-#[serial_test::serial]
-fn test_cors_precedence_env_over_file() {
-    let saved = save_env(&["XBERG_CORS_ORIGINS"]);
+isolated_env_test! {
+    fn test_cors_precedence_env_over_file [
+        "XBERG_CORS_ORIGINS" => "https://env1.com, https://env2.com",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 cors_origins = ["https://file.com"]
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_CORS_ORIGINS", "https://env1.com, https://env2.com");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        assert_eq!(config.cors_origins.len(), 1);
+        assert_eq!(config.cors_origins[0], "https://file.com");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    assert_eq!(config.cors_origins.len(), 1);
-    assert_eq!(config.cors_origins[0], "https://file.com");
+        config.apply_env_overrides().expect("Operation failed");
 
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.cors_origins.len(), 2);
-    assert!(config.cors_origins.contains(&"https://env1.com".to_string()));
-    assert!(config.cors_origins.contains(&"https://env2.com".to_string()));
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.cors_origins.len(), 2);
+        assert!(config.cors_origins.contains(&"https://env1.com".to_string()));
+        assert!(config.cors_origins.contains(&"https://env2.com".to_string()));
+    }
 }
 
-#[test]
-#[serial_test::serial]
-fn test_invalid_env_port() {
-    let saved = save_env(&["XBERG_PORT"]);
+isolated_env_test! {
+    fn test_invalid_env_port [
+        "XBERG_PORT" => "not_a_number",
+    ] {
+        let mut config = ServerConfig::default();
+        let result = config.apply_env_overrides();
 
-    set_env("XBERG_PORT", "not_a_number");
-
-    let mut config = ServerConfig::default();
-    let result = config.apply_env_overrides();
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("XBERG_PORT"));
-    assert!(err_msg.contains("valid u16"));
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("XBERG_PORT"));
+        assert!(err_msg.contains("valid u16"));
+    }
 }
 
-#[test]
-#[serial_test::serial]
-fn test_invalid_env_max_request_body_bytes() {
-    let saved = save_env(&["XBERG_MAX_REQUEST_BODY_BYTES"]);
+isolated_env_test! {
+    fn test_invalid_env_max_request_body_bytes [
+        "XBERG_MAX_REQUEST_BODY_BYTES" => "invalid_number",
+    ] {
+        let mut config = ServerConfig::default();
+        let result = config.apply_env_overrides();
 
-    set_env("XBERG_MAX_REQUEST_BODY_BYTES", "invalid_number");
-
-    let mut config = ServerConfig::default();
-    let result = config.apply_env_overrides();
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("XBERG_MAX_REQUEST_BODY_BYTES"));
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("XBERG_MAX_REQUEST_BODY_BYTES"));
+    }
 }
 
-#[test]
-#[serial_test::serial]
-fn test_partial_overrides_host_only() {
-    let saved = save_env(&["XBERG_HOST", "XBERG_PORT"]);
+isolated_env_test! {
+    fn test_partial_overrides_host_only [
+        "XBERG_HOST" => "env-host",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 host = "file-host"
 port = 8001
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_HOST", "env-host");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        config.apply_env_overrides().expect("Operation failed");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "env-host", "Host should be overridden by env");
-    assert_eq!(config.port, 8001, "Port should keep file value");
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "env-host", "Host should be overridden by env");
+        assert_eq!(config.port, 8001, "Port should keep file value");
+    }
 }
 
-#[test]
-#[serial_test::serial]
-fn test_partial_overrides_port_only() {
-    let saved = save_env(&["XBERG_HOST", "XBERG_PORT"]);
+isolated_env_test! {
+    fn test_partial_overrides_port_only [
+        "XBERG_PORT" => "9000",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 host = "file-host"
 port = 8001
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_PORT", "9000");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        config.apply_env_overrides().expect("Operation failed");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "file-host", "Host should keep file value");
-    assert_eq!(config.port, 9000, "Port should be overridden by env");
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "file-host", "Host should keep file value");
+        assert_eq!(config.port, 9000, "Port should be overridden by env");
+    }
 }
 
-#[test]
-#[serial_test::serial]
-fn test_complex_scenario_multiple_settings() {
-    let saved = save_env(&[
-        "XBERG_HOST",
-        "XBERG_PORT",
-        "XBERG_CORS_ORIGINS",
-        "XBERG_MAX_REQUEST_BODY_BYTES",
-    ]);
+isolated_env_test! {
+    fn test_complex_scenario_multiple_settings [
+        "XBERG_HOST" => "0.0.0.0",
+        "XBERG_PORT" => "3000",
+        "XBERG_CORS_ORIGINS" => "https://env.com",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 host = "127.0.0.1"
 port = 8000
 cors_origins = ["https://file.com"]
 max_request_body_bytes = 50000000
 max_multipart_field_bytes = 75000000
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_HOST", "0.0.0.0");
-    set_env("XBERG_PORT", "3000");
-    set_env("XBERG_CORS_ORIGINS", "https://env.com");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        config.apply_env_overrides().expect("Operation failed");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "0.0.0.0");
-    assert_eq!(config.port, 3000);
-    assert_eq!(config.cors_origins.len(), 1);
-    assert_eq!(config.cors_origins[0], "https://env.com");
-    assert_eq!(config.max_request_body_bytes, 50_000_000, "File value should persist");
-    assert_eq!(config.max_multipart_field_bytes, 75_000_000);
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.cors_origins.len(), 1);
+        assert_eq!(config.cors_origins[0], "https://env.com");
+        assert_eq!(config.max_request_body_bytes, 50_000_000, "File value should persist");
+        assert_eq!(config.max_multipart_field_bytes, 75_000_000);
+    }
 }
 
 #[test]
@@ -500,35 +465,31 @@ max_multipart_field_bytes = 75000000
     assert_eq!(config.max_multipart_field_bytes, config2.max_multipart_field_bytes);
 }
 
-#[test]
-#[serial_test::serial]
-fn test_empty_cors_to_specific_via_env() {
-    let saved = save_env(&["XBERG_CORS_ORIGINS"]);
+isolated_env_test! {
+    fn test_empty_cors_to_specific_via_env [
+        "XBERG_CORS_ORIGINS" => "https://restricted.com",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
+        fs::write(
+            &config_path,
+            r#"
 host = "127.0.0.1"
 port = 8000
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    assert!(config.cors_allows_all(), "File config allows all origins");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        assert!(!config.cors_allows_all(), "File config denies cross-origin by default");
 
-    set_env("XBERG_CORS_ORIGINS", "https://restricted.com");
-    config.apply_env_overrides().expect("Operation failed");
+        config.apply_env_overrides().expect("Operation failed");
 
-    assert!(!config.cors_allows_all(), "Should now restrict to specific origin");
-    assert!(config.is_origin_allowed("https://restricted.com"));
-    assert!(!config.is_origin_allowed("https://other.com"));
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert!(!config.cors_allows_all(), "Should now restrict to specific origin");
+        assert!(config.is_origin_allowed("https://restricted.com"));
+        assert!(!config.is_origin_allowed("https://other.com"));
+    }
 }
 
 #[test]
@@ -586,71 +547,80 @@ max_multipart_field_bytes: 200000000
 /// `core::server_config::validation`). This test intentionally asserts rejection, not
 /// acceptance.
 #[test]
-#[serial_test::serial]
 fn test_port_validation_bounds() {
-    let saved = save_env(&["XBERG_PORT"]);
-
-    set_env("XBERG_PORT", "0");
-    let mut config = ServerConfig::default();
-    let result = config.apply_env_overrides();
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        "Validation error: Port must be 1-65535, got 0. \
-         Set 'server.port' (or XBERG_PORT) to a free port such as 8000."
-    );
-
-    set_env("XBERG_PORT", "65535");
-    let mut config = ServerConfig::default();
-    config.apply_env_overrides().expect("Operation failed");
-    assert_eq!(config.port, 65535);
-
-    set_env("XBERG_PORT", "65536");
-    let mut config = ServerConfig::default();
-    let result = config.apply_env_overrides();
-    assert!(result.is_err());
-
-    cleanup_env_vars();
-    restore_env(saved);
+    run_env_case("port_validation::zero", &[("XBERG_PORT", "0")]);
+    run_env_case("port_validation::max", &[("XBERG_PORT", "65535")]);
+    run_env_case("port_validation::overflow", &[("XBERG_PORT", "65536")]);
 }
 
-#[test]
-#[serial_test::serial]
-fn test_multiple_env_overrides_simultaneous() {
-    let saved = save_env(&[
-        "XBERG_HOST",
-        "XBERG_PORT",
-        "XBERG_CORS_ORIGINS",
-        "XBERG_MAX_REQUEST_BODY_BYTES",
-        "XBERG_MAX_MULTIPART_FIELD_BYTES",
-    ]);
+mod port_validation {
+    use super::*;
 
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
+    #[test]
+    #[ignore = "run in an isolated subprocess"]
+    fn zero() {
+        if !check_child_case("port_validation::zero") {
+            return;
+        }
+        let mut config = ServerConfig::default();
+        let result = config.apply_env_overrides();
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Validation error: Port must be 1-65535, got 0. \
+         Set 'server.port' (or XBERG_PORT) to a free port such as 8000."
+        );
+    }
 
-    fs::write(
-        &config_path,
-        r#"
+    #[test]
+    #[ignore = "run in an isolated subprocess"]
+    fn max() {
+        if !check_child_case("port_validation::max") {
+            return;
+        }
+        let mut config = ServerConfig::default();
+        config.apply_env_overrides().expect("Operation failed");
+        assert_eq!(config.port, 65535);
+    }
+
+    #[test]
+    #[ignore = "run in an isolated subprocess"]
+    fn overflow() {
+        if !check_child_case("port_validation::overflow") {
+            return;
+        }
+        let mut config = ServerConfig::default();
+        let result = config.apply_env_overrides();
+        assert!(result.is_err());
+    }
+}
+
+isolated_env_test! {
+    fn test_multiple_env_overrides_simultaneous [
+        "XBERG_HOST" => "192.168.1.1",
+        "XBERG_PORT" => "5000",
+        "XBERG_CORS_ORIGINS" => "https://api.com, https://app.com",
+        "XBERG_MAX_REQUEST_BODY_BYTES" => "150000000",
+        "XBERG_MAX_MULTIPART_FIELD_BYTES" => "250000000",
+    ] {
+        let dir = tempdir().expect("Operation failed");
+        let config_path = dir.path().join("config.toml");
+
+        fs::write(
+            &config_path,
+            r#"
 host = "127.0.0.1"
 port = 8000
 "#,
-    )
-    .expect("Operation failed");
+        )
+        .expect("Operation failed");
 
-    set_env("XBERG_HOST", "192.168.1.1");
-    set_env("XBERG_PORT", "5000");
-    set_env("XBERG_CORS_ORIGINS", "https://api.com, https://app.com");
-    set_env("XBERG_MAX_REQUEST_BODY_BYTES", "150000000");
-    set_env("XBERG_MAX_MULTIPART_FIELD_BYTES", "250000000");
+        let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
+        config.apply_env_overrides().expect("Operation failed");
 
-    let mut config = ServerConfig::from_file(&config_path).expect("Operation failed");
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.host, "192.168.1.1");
-    assert_eq!(config.port, 5000);
-    assert_eq!(config.cors_origins.len(), 2);
-    assert_eq!(config.max_request_body_bytes, 150_000_000);
-    assert_eq!(config.max_multipart_field_bytes, 250_000_000);
-
-    cleanup_env_vars();
-    restore_env(saved);
+        assert_eq!(config.host, "192.168.1.1");
+        assert_eq!(config.port, 5000);
+        assert_eq!(config.cors_origins.len(), 2);
+        assert_eq!(config.max_request_body_bytes, 150_000_000);
+        assert_eq!(config.max_multipart_field_bytes, 250_000_000);
+    }
 }

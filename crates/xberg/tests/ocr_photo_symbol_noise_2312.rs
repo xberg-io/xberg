@@ -19,7 +19,7 @@ const PHOTO_ONLY_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/phot
 const MIXED_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose-then-photo.pdf");
 const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf");
 
-/// Characters of OCR output before the filter existed, measured on this tree's parent commit.
+/// Noise bytes measured before pruning, excluding the title.
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
 const PDF_PRUNED_LINES: usize = 204;
@@ -27,6 +27,8 @@ const PDF_PRUNED_LINES: usize = 204;
 /// Plain-text noise bytes remaining after pruning. The PR's Linux read retains 157 bytes.
 /// The band allows the platform variation observed before the trigram rule changed.
 const PDF_NOISE_AFTER_PLAIN_BAND: std::ops::RangeInclusive<usize> = 133..=181;
+/// Markdown escaping and reflow affect the byte count. Measured reads have 186 and 244 noise bytes.
+const PDF_NOISE_AFTER_MARKDOWN_BAND: std::ops::RangeInclusive<usize> = 180..=255;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
 Members agreed that the library needs a new roof before winter.\n\n\
@@ -55,8 +57,8 @@ async fn read(bytes: &[u8], mime: &str, output_format: OutputFormat) -> String {
     batch.results.remove(0).content
 }
 
-/// Characters other than the real title, which is the only text the photographs carry.
-fn noise_chars(content: &str) -> usize {
+/// Bytes other than the real title, which is the only text the photographs carry.
+fn noise_bytes(content: &str) -> usize {
     assert_eq!(content.matches(TITLE).count(), 1, "{content:?}");
     content.len() - TITLE.len()
 }
@@ -65,7 +67,7 @@ fn noise_chars(content: &str) -> usize {
 async fn photograph_png_keeps_at_most_a_quarter_of_its_symbol_noise() {
     for format in [OutputFormat::Plain, OutputFormat::Markdown] {
         let content = read(PHOTO_PNG, "image/png", format).await;
-        assert!(noise_chars(&content) * 4 <= PNG_NOISE_BEFORE, "{content:?}");
+        assert!(noise_bytes(&content) * 4 <= PNG_NOISE_BEFORE, "{content:?}");
     }
 }
 
@@ -74,13 +76,17 @@ async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
     for format in [OutputFormat::Plain, OutputFormat::Markdown] {
         let plain = format == OutputFormat::Plain;
         let content = read(PHOTO_PDF, "application/pdf", format).await;
-        assert!(noise_chars(&content) * 4 <= PDF_NOISE_BEFORE, "{content:?}");
-        if plain {
-            assert!(
-                PDF_NOISE_AFTER_PLAIN_BAND.contains(&noise_chars(&content)),
-                "{content:?}"
-            );
-        }
+        let noise = noise_bytes(&content);
+        assert!(noise * 4 <= PDF_NOISE_BEFORE, "{content:?}");
+        let band = if plain {
+            PDF_NOISE_AFTER_PLAIN_BAND
+        } else {
+            PDF_NOISE_AFTER_MARKDOWN_BAND
+        };
+        assert!(
+            band.contains(&noise),
+            "noise bytes {noise} outside {band:?}: {content:?}"
+        );
         assert!(content.trim_start().starts_with(TITLE), "{content:?}");
     }
 }
@@ -180,7 +186,7 @@ async fn the_flag_off_keeps_every_line_of_the_photograph() {
     });
     let document = document(PHOTO_PDF, "application/pdf", &config).await;
     assert!(
-        noise_chars(&document.content) * 10 >= PDF_NOISE_BEFORE * 9,
+        noise_bytes(&document.content) * 10 >= PDF_NOISE_BEFORE * 9,
         "{:?}",
         document.content
     );

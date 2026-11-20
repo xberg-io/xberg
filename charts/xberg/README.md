@@ -9,14 +9,14 @@ The chart is published as an OCI artifact to GHCR.
 ## Install
 
 ```bash
-helm install xberg oci://ghcr.io/xberg-io/charts/xberg --version 1.4.0
+helm install xberg oci://ghcr.io/xberg-io/charts/xberg --version 1.4.2
 ```
 
 Override values inline or with a file:
 
 ```bash
 helm install xberg oci://ghcr.io/xberg-io/charts/xberg \
-  --version 1.4.0 \
+  --version 1.4.2 \
   --set service.type=LoadBalancer \
   --set cache.size=5Gi
 ```
@@ -39,6 +39,9 @@ Values are validated against `values.schema.json`. Common keys:
 | `autoscaling.enabled`| `false`            | Enable a HorizontalPodAutoscaler.                        |
 | `xberg.logLevel`     | `info`             | Log level: trace, debug, info, warn, error.             |
 | `xberg.ocrLanguage`  | `eng`              | Default OCR language.                                    |
+| `xberg.apiTokenSecret.name` | `""`        | Existing Secret with the API bearer token (`XBERG_API_TOKEN`); required unless `allowUnauthenticated` is true. |
+| `xberg.apiTokenSecret.key`  | `token`     | Key in that Secret.                                      |
+| `xberg.allowUnauthenticated` | `false`    | Start without a token (`XBERG_ALLOW_UNAUTHENTICATED`).   |
 | `cache.enabled`      | `true`             | Persist downloaded models on a PVC (90 MB–1.2 GB each). |
 | `cache.size`         | `2Gi`              | Cache PVC size.                                          |
 

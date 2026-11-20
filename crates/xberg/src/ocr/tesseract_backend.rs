@@ -20,13 +20,13 @@ use std::sync::Arc;
 const USE_CACHE_BACKEND_OPTION: &str = "use_cache";
 
 /// Memo key for the available-language probe: `(probe languages, tessdata_path override,
-/// TESSDATA_PREFIX, XBERG_CACHE_DIR)`.
+/// TESSDATA_PREFIX, XBERG_CACHE_DIR, XBERG_TESSDATA_SYSTEM_PATHS)`.
 ///
 /// Every component is something tessdata resolution actually reads, so two calls differing in any
 /// one of them can resolve different directories and must not serve each other's answer. Keying on
 /// the override alone (GH#1857's fix) let two calls under different environments, or for different
 /// languages, collide. GH#1891. ~keep
-type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>);
+type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>, bool);
 
 #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) mod orientation_evidence {
@@ -250,7 +250,17 @@ impl TesseractBackend {
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
+        // Word ownership receipts are transient and are absent from persisted OCR results. ~keep
+        internal.use_cache &= !Self::capture_region_hocr_requested(config);
         internal
+    }
+
+    fn capture_region_hocr_requested(config: &OcrConfig) -> bool {
+        config.backend_options.as_ref().is_some_and(|options| {
+            ["source_region_reconciliation", "source_region_recovery"]
+                .into_iter()
+                .any(|key| options.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+        })
     }
 
     fn script_retry_threshold(config: &OcrConfig) -> Option<f64> {
@@ -306,8 +316,8 @@ impl TesseractBackend {
     /// Get cached available languages, lazily querying Tesseract if needed.
     ///
     /// `languages` are the languages the caller's config asks for, `override_path` is
-    /// `OcrConfig.tessdata_path` (or `None`). Both, plus the two environment values on
-    /// `tessdata_env`, take part in tessdata resolution, so all four make up the memo key -- see
+    /// `OcrConfig.tessdata_path` (or `None`). Both, plus the environment values on
+    /// `tessdata_env`, take part in tessdata resolution, so all of them make up the memo key -- see
     /// [`LanguagesMemoKey`]. Falls back to a hardcoded language list if dynamic querying fails.
     ///
     /// ~keep The key carries the languages the probe will actually resolve with, not the caller's
@@ -349,6 +359,7 @@ impl TesseractBackend {
             override_path.map(Path::to_path_buf),
             tessdata_env.tessdata_prefix.clone(),
             tessdata_env.cache_dir.clone(),
+            tessdata_env.system_paths,
         )
     }
 
@@ -566,17 +577,23 @@ impl TesseractBackend {
         } else {
             ImageOcrPolicy::Default
         };
-        self.process_image_with_policy(image_bytes, config, policy).await
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) async fn process_standalone_psm6_image(
+    pub(crate) async fn process_standalone_table_image(
         &self,
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows)
-            .await
+        let policy = if config.tesseract_config.as_ref().and_then(|config| config.psm)
+            == Some(crate::ocr::types::PSMMode::Auto as i32)
+        {
+            ImageOcrPolicy::StandaloneAutoTableRows
+        } else {
+            ImageOcrPolicy::StandaloneDotLeaderRows
+        };
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
@@ -584,8 +601,23 @@ impl TesseractBackend {
         &self,
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
+        implicit_psm: bool,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows)
+        let policy = if implicit_psm {
+            ImageOcrPolicy::ImplicitStandaloneSparseRows
+        } else {
+            ImageOcrPolicy::StandaloneSparseRows
+        };
+        self.process_image_with_policy(image_bytes, config, policy, false).await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn process_embedded_image_for_publication(
+        &self,
+        image_bytes: &[u8],
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(Arc::new(image_bytes.to_vec()), config, ImageOcrPolicy::Default, true)
             .await
     }
 
@@ -594,10 +626,12 @@ impl TesseractBackend {
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
         policy: ImageOcrPolicy,
+        defer_element_selection: bool,
     ) -> Result<ExtractedDocument> {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
         let retry_threshold = Self::script_retry_threshold(config);
+        let capture_region_hocr = Self::capture_region_hocr_requested(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -627,13 +661,15 @@ impl TesseractBackend {
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     MIXED_PDF_KHMER_RETRY.sync_scope(khmer_retry, || {
-                        processor.process_image_with_retry(
-                            image_bytes.as_slice(),
-                            &tess_config_clone,
-                            output_format,
-                            policy,
-                            retry_threshold,
-                        )
+                        super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || {
+                            processor.process_image_with_retry(
+                                image_bytes.as_slice(),
+                                &tess_config_clone,
+                                output_format,
+                                policy,
+                                retry_threshold,
+                            )
+                        })
                     })
                 }))
                 .unwrap_or_else(|_| {
@@ -676,7 +712,28 @@ impl TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
-        let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
+        #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        if tess_config.known_full_page_scan
+            && tess_config.psm == crate::ocr::types::PSMMode::SingleBlock as u8
+            && ocr_result.tables.is_empty()
+            && processing_warnings.is_empty()
+            && let Some(elements) = ocr_result.ocr_elements.as_deref()
+            && let Some(document) = ocr_result.internal_document.as_mut()
+            && let [element] = document.elements.as_mut_slice()
+            && matches!(element.kind, crate::types::internal::ElementKind::OcrText { .. })
+            && element.annotations.is_empty()
+            && crate::extraction::image_ocr::embedded_rows::proved_scan_rows(&element.text, elements).is_some()
+        {
+            element.attributes.get_or_insert_with(Default::default).insert(
+                crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(),
+                String::new(),
+            );
+        }
+        let ocr_elements = if defer_element_selection {
+            ocr_result.ocr_elements.take()
+        } else {
+            select_byte_read_elements(&mut ocr_result, config)
+        };
         let page_down = take_recognition_page_down(&mut ocr_result.metadata);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
 
@@ -717,6 +774,7 @@ impl TesseractBackend {
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
             raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
+            retained_hocr_read: ocr_result.retained_hocr_read,
             processing_warnings,
             ..Default::default()
         })
@@ -736,6 +794,7 @@ impl OcrBackend for TesseractBackend {
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
         let retry_threshold = Self::script_retry_threshold(config);
+        let capture_region_hocr = Self::capture_region_hocr_requested(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -760,7 +819,9 @@ impl OcrBackend for TesseractBackend {
                 return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
+                super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || {
+                    processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
+                })
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(
@@ -837,6 +898,7 @@ impl OcrBackend for TesseractBackend {
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
             raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
+            retained_hocr_read: ocr_result.retained_hocr_read,
             processing_warnings,
             ..Default::default()
         })
@@ -1267,6 +1329,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let requested = vec!["deu".to_string()];
 
@@ -1301,6 +1364,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
 
         assert_eq!(
@@ -1328,14 +1392,22 @@ mod tests {
         let env_a = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: None,
+            system_paths: true,
         };
         let env_b = TessdataEnv {
             tessdata_prefix: Some("/b/tessdata".to_string()),
             cache_dir: None,
+            system_paths: true,
         };
         let env_c = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: Some(std::path::PathBuf::from("/cache")),
+            system_paths: true,
+        };
+        let env_d = TessdataEnv {
+            tessdata_prefix: Some("/a/tessdata".to_string()),
+            cache_dir: None,
+            system_paths: false,
         };
 
         let baseline = TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_a);
@@ -1359,6 +1431,11 @@ mod tests {
             baseline,
             TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_c),
             "XBERG_CACHE_DIR must take part in the key: it contributes two search directories"
+        );
+        assert_ne!(
+            baseline,
+            TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_d),
+            "XBERG_TESSDATA_SYSTEM_PATHS must take part in the key: it removes the system directories"
         );
         assert_ne!(
             baseline,
@@ -1395,6 +1472,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1466,6 +1544,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1509,6 +1588,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), Some(&override_dir), &tessdata_env)
             .expect("the probe must resolve the configured tessdata directory");
@@ -1550,6 +1630,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
+            system_paths: true,
         };
         let backend = TesseractBackend::new();
 

@@ -123,7 +123,7 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
         native_key: "769 nativeonly".into(),
     });
     structured.tables = read.tables;
-    proof.trim_prepend(&mut first, &flat, &structured, 1);
+    proof.trim_prepend(&mut first, &flat, &structured, 1, Some((1.0, 1.0)));
     finish_mixed_layer_prepend(&mut flat, Some(&mut structured), &first);
     assert_eq!(structured.elements[0].text, "NativeOnly");
     assert_eq!(structured.elements[1].text, "Tail");
@@ -135,7 +135,11 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
         &ahash::AHashMap::from([(1, flat.clone())]),
         &ahash::AHashMap::from([(1, structured)]),
     );
-    for output in [flat, crate::rendering::render_plain(&merged)] {
+    for output in [
+        flat,
+        crate::rendering::render_plain(&merged),
+        crate::rendering::render_markdown(&merged),
+    ] {
         for token in ["769", "NativeOnly", "OcrOnly", "NativeAlternate"] {
             assert_eq!(count(&output, token), 1, "{token} in {output:?}");
         }

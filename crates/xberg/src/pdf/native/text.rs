@@ -10,7 +10,9 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
 use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
 use crate::pdf::structure::lines::is_cjk_char;
-use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
+#[cfg(feature = "html")]
+use crate::pdf::text::contains_html_markup;
+use crate::pdf::text::fix_pdf_control_chars;
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -328,6 +330,8 @@ fn extract_page_texts_until(
             break;
         }
         let page = extract_one_page_text(doc, page_idx, &excluded_layers, options)?;
+        #[cfg(test)]
+        hold_after_marked_page(&page.text, cancel_token, || stop(page_idx + 1));
         texts.push(page.text);
         if let Some(collected) = evidence.provenance_counts.as_mut() {
             collected.push(
@@ -341,6 +345,31 @@ fn extract_page_texts_until(
     }
 
     Ok((texts, evidence))
+}
+
+/// A page carrying this token holds the text loop after it until the loop is asked to stop, so a
+/// test sees the loop still running when the extraction time limit passes, at any build speed.
+#[cfg(test)]
+const HOLD_PAGE_LOOP_MARKER: &str = "HOLDLOOP3029";
+
+#[cfg(test)]
+fn hold_after_marked_page(
+    text: &str,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
+    stop_next: impl Fn() -> bool,
+) {
+    const FAILSAFE: std::time::Duration = std::time::Duration::from_secs(60);
+    const POLL: std::time::Duration = std::time::Duration::from_millis(5);
+    if !text.contains(HOLD_PAGE_LOOP_MARKER) {
+        return;
+    }
+    let started = std::time::Instant::now();
+    while !stop_next()
+        && !cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+        && started.elapsed() < FAILSAFE
+    {
+        std::thread::sleep(POLL);
+    }
 }
 
 /// Fast path: extract text without page tracking.
@@ -485,7 +514,7 @@ fn collect_widget_field_values(doc: &xberg_native_pdf::PdfDocument, page_index: 
         })
         .collect();
 
-    widgets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    widgets.sort_by(|a, b| b.0.total_cmp(&a.0));
     widgets
 }
 
@@ -586,7 +615,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
 
     let notes = numeric_notes(spans);
     let mut sorted: Vec<&xberg_native_pdf::layout::TextSpan> = spans.iter().collect();
-    sorted.sort_by(|a, b| b.bbox.y.partial_cmp(&a.bbox.y).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
 
     let mut groups: Vec<Vec<&xberg_native_pdf::layout::TextSpan>> = Vec::new();
     for span in sorted {
@@ -603,7 +632,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
 
     let mut result = String::new();
     for (gi, group) in groups.iter_mut().enumerate() {
-        group.sort_by(|a, b| a.bbox.x.partial_cmp(&b.bbox.x).unwrap_or(std::cmp::Ordering::Equal));
+        group.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
         if gi > 0 {
             result.push('\n');
         }
@@ -847,9 +876,7 @@ fn find_inline_fragment_anchor(
             let tolerance = candidate.font_size.max(span.font_size) * INLINE_FRAGMENT_GAP_RATIO;
             (gap >= -tolerance && gap <= tolerance).then_some((candidate_index, gap.abs()))
         })
-        .min_by(|(_, first_gap), (_, second_gap)| {
-            first_gap.partial_cmp(second_gap).unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .min_by(|(_, first_gap), (_, second_gap)| first_gap.total_cmp(second_gap))
         .map(|(candidate_index, _)| candidate_index)
 }
 
@@ -879,9 +906,7 @@ fn order_spans_with_inline_fragments<'a>(
             // re-inserted in reading order rather than page-x order.
             let (first_start, _) = upright_advance_extent(&spans[*first]);
             let (second_start, _) = upright_advance_extent(&spans[*second]);
-            first_start
-                .partial_cmp(&second_start)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            first_start.total_cmp(&second_start)
         });
     }
 
@@ -1046,7 +1071,7 @@ fn assemble_ordered_page_text<'a>(
     mut observe: impl FnMut(usize, usize),
 ) -> String {
     let mut heights: Vec<f32> = spans.iter().map(|span| span.bbox.height).collect();
-    heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    heights.sort_by(|a, b| a.total_cmp(b));
     let median_height = if heights.is_empty() {
         1.0
     } else {
@@ -1788,11 +1813,21 @@ fn detect_split_x(spans: &[xberg_native_pdf::layout::TextSpan], lines: &[SpanLin
     }
     midpoints.sort_by(f32::total_cmp);
     let mid = midpoints.len() / 2;
-    Some(if midpoints.len().is_multiple_of(2) {
+    let median = if midpoints.len().is_multiple_of(2) {
         (midpoints[mid - 1] + midpoints[mid]) / 2.0
     } else {
         midpoints[mid]
-    })
+    };
+    // A vote farther from the median than any split may be redirected is not evidence for
+    // that gutter: a running head whose label and page number are split by a zero-width
+    // ActualText separator votes 245pt from it (usgs-ofr20221090 p23) and made five lines
+    // a quorum. It still counts toward the median, which a single outlier barely moves. ~keep
+    let reach = page_width * MAX_REDIRECT_DISTANCE_FRACTION;
+    let agreeing = midpoints.iter().filter(|&&vote| (vote - median).abs() <= reach).count();
+    if agreeing < MIN_DENSE_COLUMN_SPLIT_LINES {
+        return sole_whitespace_gutter(spans, lines, page_width);
+    }
+    Some(median)
 }
 
 /// Move a split that still cuts through a word after snapping to the page's own
@@ -3296,15 +3331,16 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
         return Cow::Owned(crate::pdf::text::convert_html_page_text(&cleaned));
     }
 
-    #[cfg(not(feature = "html"))]
-    let _ = contains_html_markup(&cleaned);
-
     cleaned
 }
 
 #[cfg(test)]
 #[path = "text/span_carrier_tests.rs"]
 mod span_carrier_tests;
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "text/time_limit_tests.rs"]
+mod time_limit_tests;
 
 #[cfg(test)]
 mod tests {
@@ -4356,6 +4392,41 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// Five body lines vote for the gutter near 310 and a running head split around its page
+    /// number votes at 510, which made six. The far vote does not count toward the quorum, so
+    /// the page falls back to `sole_whitespace_gutter`, which finds no corridor at least
+    /// `min_gutter` wide (the sixth left line closes the gutter to 10pt) and declines.
+    #[test]
+    fn detect_split_x_does_not_count_a_far_running_head_vote_toward_the_quorum() {
+        let mut spans = Vec::new();
+        for (row, left_right) in [296.0, 298.0, 300.0, 302.0, 304.0].into_iter().enumerate() {
+            let y = 816.0 - row as f32 * 14.0;
+            spans.push(span_with_width(
+                "left column body text",
+                60.0,
+                y,
+                left_right - 60.0,
+                11.0,
+                11.0,
+            ));
+            spans.push(span_with_width("right column body text", 320.0, y, 190.0, 11.0, 11.0));
+        }
+        spans.push(span_with_width(
+            "a longer left column line",
+            60.0,
+            746.0,
+            250.0,
+            11.0,
+            11.0,
+        ));
+        spans.push(span_with_width("Running head", 400.0, 900.0, 100.0, 10.0, 10.0));
+        spans.push(span_with_width("13", 520.0, 900.0, 10.0, 10.0, 10.0));
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert_eq!(detect_split_x(&spans, &lines, 612.0), None);
     }
 
     const GH1484_PAGE_WIDTH: f32 = 595.0;

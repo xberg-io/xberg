@@ -4,7 +4,7 @@ target: wasm
 ---
 
 ```typescript title="WASM"
-import init, { extract } from "@xberg-io/xberg-wasm";
+import init, { WasmExtractInput, extract } from "@xberg-io/xberg-wasm";
 
 await init();
 
@@ -13,7 +13,7 @@ const file = fileInput.files?.[0];
 
 if (file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const result = await extract({ kind: "bytes", bytes, mimeType: file.type || "application/octet-stream" }, undefined);
+  const result = await extract(WasmExtractInput.fromBytes(bytes, file.type || "application/octet-stream"));
   console.log(`Metadata: ${JSON.stringify(result.results[0].metadata)}`);
 
   // Access common metadata fields

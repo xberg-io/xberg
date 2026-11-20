@@ -286,7 +286,9 @@ impl CachedFormSpans {
 
 /// Size-bounded object cache with FIFO eviction.
 ///
-/// Wraps a `HashMap<ObjectRef, Object>` with byte-size tracking. When an
+/// Wraps a `HashMap<ObjectRef, Arc<Object>>` with byte-size tracking. Entries
+/// are shared so a reader takes an `Arc` under the lock and deep-copies after
+/// releasing it. When an
 /// insertion would push total estimated size past `max_bytes`, the oldest
 /// entries are evicted first (FIFO order via a `VecDeque` of keys).
 ///
@@ -294,7 +296,7 @@ impl CachedFormSpans {
 /// insert-once-read-once — higher-level caches (font caches, xobject stream
 /// cache) serve repeated lookups, so recency is not a useful signal here.
 struct BoundedObjectCache {
-    map: HashMap<ObjectRef, Object>,
+    map: HashMap<ObjectRef, Arc<Object>>,
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
@@ -438,7 +440,11 @@ impl BoundedObjectCache {
     }
 
     fn get(&self, key: &ObjectRef) -> Option<&Object> {
-        self.map.get(key)
+        self.map.get(key).map(|value| &**value)
+    }
+
+    fn get_shared(&self, key: &ObjectRef) -> Option<Arc<Object>> {
+        self.map.get(key).map(Arc::clone)
     }
 
     fn insert(&mut self, key: ObjectRef, value: Object) {
@@ -477,7 +483,7 @@ impl BoundedObjectCache {
             }
         }
 
-        if self.map.insert(key, value).is_none() {
+        if self.map.insert(key, Arc::new(value)).is_none() {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;
@@ -754,6 +760,10 @@ pub struct PdfDocument {
     /// carries a donated cmap does not redo that mutation. ~keep
     #[cfg(test)]
     donation_apply_count: AtomicUsize,
+    /// Cache hits that `load_object` deep-copied for its owned result.
+    /// Test-only: proves the font-loading borrow path never clones. ~keep
+    #[cfg(test)]
+    cached_object_clone_count: AtomicUsize,
     /// Per-font identity cache keyed by the resolved semantic content consumed by
     /// `FontInfo::from_dict`. Skips expensive parsing when a structurally identical
     /// font was already parsed.
@@ -814,7 +824,7 @@ pub struct PdfDocument {
     /// Page object cache keyed by page index to avoid re-traversing the page tree.
     /// The page tree structure is static (§7.7.3.2), so pages can be safely cached.
     /// Mutex provides interior mutability for `&self` read-path methods.
-    page_cache: Mutex<HashMap<usize, Object>>,
+    page_cache: Mutex<HashMap<usize, Arc<Object>>>,
     /// Whether the bulk page tree walk has been attempted (successful or not).
     /// Prevents re-walking the tree on every cache miss for malformed PDFs.
     page_cache_populated: AtomicBool,
@@ -873,6 +883,8 @@ pub struct PdfDocument {
     /// the second from cache. Cleared by redaction (`erase_region` /
     /// `clear_erase_regions`), the only span-affecting mutation.
     page_spans_cache: Mutex<BoundedEntryCache<usize, std::sync::Arc<Vec<crate::layout::TextSpan>>>>,
+    /// Small-text density evidence for a single-page document.
+    small_painted_text: std::sync::OnceLock<bool>,
     /// Per-page lightweight search index (page text + span bounding boxes,
     /// no fonts/glyph widths) built lazily by `search()`/`search_page()` and
     /// reused across repeated calls on the same document. Unlike
@@ -1407,26 +1419,13 @@ impl PdfDocument {
     /// plus any new ones pushed since the last call. Use
     /// [`Self::take_structured_warnings`] to drain.
     ///
-    /// Merges the process-wide `GLOBAL_WARNING_SINK` (where
-    /// free-function log sites like `SPEC VIOLATION`,
-    /// operator-cap-exceeded, and Type0/Type3 font fallbacks push
-    /// their structured records) into the per-document sink on each
-    /// call. The drain attribution follows the "first caller wins"
-    /// rule documented at the global sink — process-wide scope means
-    /// the first document to call `structured_warnings` collects
-    /// the global tail that accumulated since the last drain.
-    ///
-    /// Renamed from `flatten_warnings` in to avoid colliding
-    /// with the pre-existing `DocumentEditor::flatten_warnings`
-    /// (which returns the form-flattening side-effect log, a
-    /// `&[String]` — different feature). Both the Rust and Python
-    /// (`PyDocument`) surfaces now agree on `structured_warnings`.
+    /// Warnings from other documents and standalone operations are excluded.
     pub fn structured_warnings(&self) -> Vec<crate::extractors::warnings::Warning> {
-        let global = crate::extractors::warnings::drain_global_warnings();
-        if !global.is_empty() {
-            self.warning_sink.extend(global);
-        }
         self.warning_sink.snapshot()
+    }
+
+    pub(crate) fn warning_scope(&self) -> crate::extractors::warnings::WarningScope {
+        self.warning_sink.enter()
     }
 
     /// Drain and return all accumulated structured warnings.
@@ -1901,16 +1900,19 @@ mod classify;
 mod columns;
 mod extract_api;
 mod fonts;
+mod image_placements;
 mod images;
 mod key_value_rows;
 mod objects;
 mod open;
 mod pages;
+mod pagination_separators;
 mod paths;
 mod picture_text;
 mod reading_order;
 mod rect_api;
 mod redaction;
+mod small_text_probe;
 mod span_postprocess;
 mod spans_text;
 mod tables;

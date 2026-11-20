@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use image::{ColorType, GrayImage, ImageDecoder, RgbImage};
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
 use crate::ocr::tesseract_backend::TesseractBackend;
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
@@ -146,13 +146,6 @@ fn processed_frame(document: &ExtractedDocument, psm: &str) -> Option<(u32, u32)
         dimension(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY)?,
         dimension(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY)?,
     ))
-}
-
-fn check_cancellation(cancel: Option<&CancellationToken>) -> Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        return Err(XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 fn decode_rgb(bytes: &[u8], frame: (u32, u32), budget: usize) -> Option<RgbImage> {
@@ -498,13 +491,13 @@ async fn recover(
     let Some(original) = primary.ocr_elements.as_deref() else {
         return Ok(None);
     };
-    check_cancellation(cancel)?;
+    check_cancelled(cancel)?;
     let budget = config.security_limits.clone().unwrap_or_default().max_content_size;
     #[cfg(feature = "tokio-runtime")]
     let masks = {
         let cancel = cancel.cloned();
         tokio::task::spawn_blocking(move || {
-            check_cancellation(cancel.as_ref())?;
+            check_cancelled(cancel.as_ref())?;
             Ok::<_, XbergError>(make_masks(&bytes, frame, budget))
         })
         .await
@@ -512,7 +505,7 @@ async fn recover(
     };
     #[cfg(not(feature = "tokio-runtime"))]
     let masks = make_masks(&bytes, frame, budget);
-    check_cancellation(cancel)?;
+    check_cancelled(cancel)?;
     let Some(Masks {
         frame,
         masks: [low, high],
@@ -522,13 +515,13 @@ async fn recover(
         return Ok(None);
     };
     let words = read_mask(backend, config, &low, available_ocr_budget).await;
-    check_cancellation(cancel)?;
+    check_cancelled(cancel)?;
     let Some(words) = words? else { return Ok(None) };
     if overlaps_primary(&words, frame, original) != Some(false) {
         return Ok(None);
     }
     let evidence = read_mask(backend, config, &high, available_ocr_budget).await;
-    check_cancellation(cancel)?;
+    check_cancelled(cancel)?;
     if evidence?.as_deref() != Some(words.as_slice()) {
         return Ok(None);
     }

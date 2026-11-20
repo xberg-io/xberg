@@ -52,6 +52,43 @@ pub(crate) fn read_test_fixture(relative: &str) -> Option<Vec<u8>> {
     }
 }
 
+/// Ascending order over floats in which every NaN (either sign) sorts below all other values.
+///
+/// `f32::total_cmp` places a positive NaN above `+inf`, so a descending sort or a `max_by` would
+/// rank a NaN score first and let it take a top-k slot from a finite result. Use this as the
+/// `max_by` comparator, or swap its arguments for a descending sort, so NaN always ranks last.
+// Callers are feature-gated (`reranker`, `late-interaction`, `keywords-yake`, ...), so a narrow
+// build compiles this with no users and `-D warnings` rejects it. ~keep
+#[allow(dead_code)]
+pub(crate) fn cmp_nan_lowest(a: impl Into<f64>, b: impl Into<f64>) -> std::cmp::Ordering {
+    let (a, b) = (a.into(), b.into());
+    match (a.is_nan(), b.is_nan()) {
+        (true, true) => std::cmp::Ordering::Equal,
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        (false, false) => a.total_cmp(&b),
+    }
+}
+
+/// Descending order over floats in which every NaN sorts after all other values.
+// ~keep: see `cmp_nan_lowest` for the dead-code reason.
+#[allow(dead_code)]
+pub(crate) fn cmp_desc_nan_last(a: impl Into<f64>, b: impl Into<f64>) -> std::cmp::Ordering {
+    cmp_nan_lowest(b, a)
+}
+
+/// Ascending order over floats in which every NaN sorts after all other values.
+// ~keep: see `cmp_nan_lowest` for the dead-code reason.
+#[allow(dead_code)]
+pub(crate) fn cmp_asc_nan_last(a: impl Into<f64>, b: impl Into<f64>) -> std::cmp::Ordering {
+    let (a, b): (f64, f64) = (a.into(), b.into());
+    if a.is_nan() || b.is_nan() {
+        a.is_nan().cmp(&b.is_nan())
+    } else {
+        a.total_cmp(&b)
+    }
+}
+
 /// Strip a leading Unicode byte-order mark (U+FEFF) if present.
 ///
 /// `encoding_rs` removes a BOM when it drives the encoding choice, but detected
@@ -359,5 +396,22 @@ mod decode_provenance_tests {
         assert_eq!(outcome.text, "");
         assert!(!outcome.fell_back);
         assert!(!outcome.replaced_characters);
+    }
+    #[test]
+    fn nan_comparators_rank_every_nan_last() {
+        let mut desc = [1.0_f32, f32::NAN, 3.0, -f32::NAN, 2.0];
+        desc.sort_by(|a, b| cmp_desc_nan_last(*a, *b));
+        assert_eq!(&desc[..3], &[3.0, 2.0, 1.0]);
+        assert!(desc[3].is_nan() && desc[4].is_nan());
+
+        let mut asc = [1.0_f64, f64::NAN, 3.0, -f64::NAN, 2.0];
+        asc.sort_by(|a, b| cmp_asc_nan_last(*a, *b));
+        assert_eq!(&asc[..3], &[1.0, 2.0, 3.0]);
+        assert!(asc[3].is_nan() && asc[4].is_nan());
+
+        let best = [f32::NAN, 0.5, -f32::NAN]
+            .into_iter()
+            .max_by(|a, b| cmp_nan_lowest(*a, *b));
+        assert_eq!(best, Some(0.5));
     }
 }

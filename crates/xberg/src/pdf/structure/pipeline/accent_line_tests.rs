@@ -23,6 +23,7 @@ fn seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 

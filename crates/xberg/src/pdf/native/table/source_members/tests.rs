@@ -19,6 +19,7 @@ fn glyph(text: &str, x: f32, y: f32, width: f32) -> SegmentData {
         baseline_y: y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -321,7 +322,9 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
         "1508aa9a0e12e8aad8bbc594a99ded16ce7517518e2689fc6002e59263c3c005"
     );
     let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
-    let tables = crate::pdf::native::table::extract_ruled_tables(&doc).unwrap().tables;
+    let tables = crate::pdf::native::table::extract_ruled_tables(&doc, &mut Default::default())
+        .unwrap()
+        .tables;
     assert_eq!(
         tables.len(),
         1,
@@ -469,4 +472,77 @@ fn recovered_line_certifies_complete_split_words_and_rejects_changed_boundaries(
     let mut tagged = exact;
     tagged[0].assigned_role = Some(2);
     assert!(projected(tagged).is_empty());
+}
+
+#[test]
+fn redistributed_spans_require_unique_complete_source_and_table_ownership() {
+    let (mut segments, mut source, table) = fixture();
+    source.members.clear();
+    let currency = glyph("¥", 445.0, 640.0, 2.0);
+    let value = glyph("10.83 ", 447.0, 640.0, 8.0);
+    let keys = [SegmentKey::from(&currency), SegmentKey::from(&value)];
+    source.redistributed.push(keys.to_vec());
+    segments.extend([currency, value]);
+    let projected = |segments, sources: &[&TableSources], tables: &[Table]| {
+        project(&[segments], sources, tables)
+            .into_values()
+            .flat_map(|runs| runs.redistributed)
+            .collect::<AHashSet<_>>()
+    };
+    assert_eq!(
+        projected(segments.clone(), &[&source], std::slice::from_ref(&table)),
+        keys.into_iter().collect()
+    );
+
+    let mut partial = segments.clone();
+    partial.pop();
+    assert!(projected(partial, &[&source], std::slice::from_ref(&table)).is_empty());
+
+    let mut respaced = segments.clone();
+    respaced.last_mut().unwrap().text = "10.83".into();
+    assert!(projected(respaced, &[&source], std::slice::from_ref(&table)).is_empty());
+
+    let (_, mut other, mut competing) = fixture();
+    competing.markdown.push(' ');
+    other.markdown.clone_from(&competing.markdown);
+    other.members.clear();
+    other.redistributed.clone_from(&source.redistributed);
+    assert!(projected(segments, &[&source, &other], &[table, competing]).is_empty());
+}
+
+#[test]
+fn ordinary_table_claims_conflict_with_redistribution_only_across_owners() {
+    let (segments, ordinary, table) = fixture();
+    let ordinary_keys = owned(segments.clone(), &ordinary, table.clone());
+    let shared = SegmentKey::from(&segments[3]);
+    let other = SegmentKey::from(&segments[0]);
+    assert!(ordinary_keys.contains(&shared));
+    assert!(!ordinary_keys.contains(&other));
+    let group = vec![shared, other];
+
+    let (_, mut redistributing, mut competing) = fixture();
+    competing.markdown.push(' ');
+    redistributing.markdown.clone_from(&competing.markdown);
+    redistributing.members.clear();
+    redistributing.redistributed.push(group.clone());
+    let projected = project(
+        std::slice::from_ref(&segments),
+        &[&redistributing, &ordinary],
+        &[competing, table.clone()],
+    );
+    assert!(projected.get(&0).is_none_or(|runs| runs.redistributed.is_empty()));
+    assert_eq!(
+        projected[&1]
+            .contained
+            .iter()
+            .flatten()
+            .cloned()
+            .collect::<AHashSet<_>>(),
+        ordinary_keys
+    );
+
+    let (_, mut same_owner, _) = fixture();
+    same_owner.redistributed.push(group.clone());
+    let projected = project(&[segments], &[&same_owner], &[table]);
+    assert_eq!(projected[&0].redistributed, group);
 }

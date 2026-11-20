@@ -39,12 +39,31 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
+#[path = "color_operators.rs"]
+mod color_operators;
+#[path = "path_operators.rs"]
+mod path_operators;
+const COLOR_OPERATOR_TRACE_TARGET: &str = module_path!();
+
 #[path = "image_budget.rs"]
 mod image_budget;
 #[path = "knockout.rs"]
 mod knockout;
 #[path = "knockout_resources.rs"]
 mod knockout_resources;
+#[path = "page_renderer_ops_color.rs"]
+mod page_renderer_ops_color;
+#[path = "page_renderer_ops_paint.rs"]
+mod page_renderer_ops_paint;
+#[path = "page_renderer_ops_scope.rs"]
+mod page_renderer_ops_scope;
+#[path = "page_renderer_ops_state.rs"]
+mod page_renderer_ops_state;
+#[path = "page_renderer_ops_text.rs"]
+mod page_renderer_ops_text;
+#[path = "page_renderer_ops_xobject.rs"]
+mod page_renderer_ops_xobject;
+use page_renderer_ops_state::{OpEnv, OpLoopState};
 #[path = "page_renderer_setup.rs"]
 mod page_renderer_setup;
 use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
@@ -57,12 +76,12 @@ use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
 #[path = "raster_budget.rs"]
 mod raster_budget;
+pub(super) use raster_budget::PngRenderBudget;
 #[cfg(test)]
 use raster_budget::png_working_bytes_fit;
 #[cfg(test)]
 pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
-pub(super) use raster_budget::{PngRenderBudget, SpotPlaneUse, spot_plane_use};
-use raster_budget::{encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
+use raster_budget::{declares_spot_soft_mask, encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -242,6 +261,8 @@ pub struct PageRenderer {
     suppressed_text_font: Option<String>,
     /// Leave every image XObject, image mask and inline image unpainted.
     images_suppressed: bool,
+    image_selection: Option<(ObjectRef, bool)>,
+    image_selection_matches: usize,
     /// Font cache (name -> FontInfo) for current context
     fonts: HashMap<String, Arc<FontInfo>>,
     /// Color space cache (name -> Object) for current context
@@ -525,6 +546,17 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        let _warnings = doc.warning_scope();
+        self.render_page_with_workspace_retries(page_num, doc, png_budget, raster_budget::MAX_WORKSPACE_DPI_RETRIES)
+    }
+
+    fn render_page_with_workspace_retries(
+        &mut self,
+        page_num: usize,
+        doc: &PdfDocument,
+        png_budget: Option<PngRenderBudget>,
+        mut retries_left: usize,
+    ) -> Result<(RenderedImage, u32)> {
         let mut dpi = self.options.dpi;
         let minimum = png_budget
             .as_ref()
@@ -533,9 +565,7 @@ impl PageRenderer {
         self.knockout_resources
             .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
 
-        // A retry can reveal a later reservation peak. Bound the number of renders and
-        // use the minimum on the final attempt if the observed peaks have not converged.
-        for _ in 0..raster_budget::MAX_WORKSPACE_DPI_RETRIES {
+        loop {
             let result = self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
             let Some((required, limit)) = self.knockout_resources.workspace_shortfall() else {
                 return result;
@@ -545,10 +575,15 @@ impl PageRenderer {
             }
             self.cmyk_sidecar = None;
             self.knockout_resources.reset_attempt();
+            // ~keep Each refused reservation may expose a later peak. When measured retries
+            // run out, try the floor once without resetting the page's paint count.
+            if retries_left == 0 {
+                dpi = minimum;
+                return self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
+            }
+            retries_left -= 1;
             dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
         }
-        dpi = minimum;
-        self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi)
     }
 
     fn render_page_at_dpi(
@@ -621,12 +656,9 @@ impl PageRenderer {
                 // Top-level mask snapshots can be outside a reservation scope. Keep their
                 // preflight allowance for ink pages. Group and paint workspace is checked
                 // by the live reservations before allocation, including during source replay.
-                let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
-                    spot_plane_use(doc, page_num, &resources)
-                } else {
-                    SpotPlaneUse::default()
-                };
-                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), transient, dimensions_at_dpi)?;
+                let soft_mask =
+                    spots.as_deref().is_some_and(|inks| !inks.is_empty()) && declares_spot_soft_mask(doc, &resources);
+                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), soft_mask, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
@@ -695,7 +727,7 @@ impl PageRenderer {
             .map_or(0, |sidecar| sidecar.cmyk().len() + sidecar.spot_state().len());
         self.knockout_resources.canvas(pixmap.data().len() + retained_sidecar);
 
-        let content_data = doc.get_page_content_data(page_num)?;
+        let content_data = doc.cached_page_content(page_num)?;
 
         let operators = match parse_content_stream(&content_data) {
             Ok(ops) => ops,
@@ -704,6 +736,7 @@ impl PageRenderer {
             }
         };
 
+        self.image_selection_matches = 0;
         let knockout = knockout::page_is_knockout(doc, page_num);
         if knockout {
             self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources, Some(0))?;
@@ -712,8 +745,18 @@ impl PageRenderer {
         }
         self.check_source_image_budget()?;
 
+        if self.image_selection.is_some() && self.image_selection_matches != 1 {
+            return Err(Error::Unsupported(
+                "image selection requires exactly one page placement".into(),
+            ));
+        }
         if self.options.render_annotations {
-            self.render_annotations(&mut pixmap, transform, doc, page_num)?;
+            // Annotation resources can reuse the selected page image. Paint appearances without
+            // the page-content selector in both composited views. ~keep
+            let selection = self.image_selection.take();
+            let annotations = self.render_annotations(&mut pixmap, transform, doc, page_num);
+            self.image_selection = selection;
+            annotations?;
         }
         self.check_source_image_budget()?;
 
@@ -1036,54 +1079,7 @@ impl PageRenderer {
         static EMPTY: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
         let empty_ref: &HashSet<String> = EMPTY.get_or_init(HashSet::new);
         let excluded_layers: &HashSet<String> = snapshot.as_deref().unwrap_or(empty_ref);
-        let mut gs_stack = GraphicsStateStack::new();
-
-        {
-            let gs = gs_stack.current_mut();
-            gs.fill_color_space = "DeviceGray".to_string();
-            gs.stroke_color_space = "DeviceGray".to_string();
-            gs.fill_color_rgb = (0.0, 0.0, 0.0);
-            gs.stroke_color_rgb = (0.0, 0.0, 0.0);
-        }
-
-        // Type 3 `d1` glyph description: seed the fill colour with the locked
-        // current colour so the stencil paints in it. Set the same fields the
-        // `rg` operator would (RGB, colour space, and components) so the
-        // colour-resolution pipeline reproduces it exactly. Colour operators
-        // inside the glyph are ignored below (ISO 32000-1:2008 §9.6.5.2). ~keep
-        if let Some((r, g, b)) = self.type3_fill_lock {
-            let gs = gs_stack.current_mut();
-            gs.fill_color_rgb = (r, g, b);
-            gs.fill_color_space = "DeviceRGB".to_string();
-            gs.fill_color_components.clear();
-            gs.fill_color_components.extend_from_slice(&[r, g, b]);
-        }
-
-        let mut in_text_object = false;
-        let mut current_path = PathBuilder::new();
-        let mut pending_clip: Option<(tiny_skia::Path, tiny_skia::FillRule)> = None;
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
-        // ~keep
-
-        // WS1.5b — text-clip accumulator (ISO 32000-1 §9.3.6 / Table 106,
-        // `Tr` modes 4–7). Text render modes ≥4 add the union of their glyph
-        // outlines to a "text clip path" that is intersected into the current
-        // clip at `ET`. We accumulate that union as opaque glyph coverage in a
-        // page-sized scratch pixmap's alpha channel (unioned across shows via
-        // SourceOver), then convert it to a `Mask` at `ET`. This stays
-        // allocation-free for the normal-text hot path: the scratch is created
-        // lazily only when a mode-≥4 show actually fires, and modes 0–3 never
-        // touch it. Complexity is inherently capped — coverage folds into a
-        // fixed-size buffer, so no unbounded path growth is possible. ~keep
-        let mut text_clip_accum: Option<Pixmap> = None;
-
-        // OCG layer exclusion tracking.
-        // `excluded_layer_depth` counts how many nested BDC/OC scopes we are
-        // inside that match an excluded layer. >0 means content is suppressed.
-        // `marked_content_depth` tracks total BDC/BMC nesting so EMC correctly
-        // decrements only when it pops an excluded-layer entry. ~keep
-        let mut excluded_layer_depth: u32 = 0;
-        let mut marked_content_is_excluded: Vec<bool> = Vec::new();
+        let gs_stack = self.seed_operator_graphics_state();
 
         // Per-`execute_operators` resolved ExtGState resource dictionary. PDF
         // content streams often invoke `gs<N>` thousands of times per page
@@ -1102,11 +1098,30 @@ impl PageRenderer {
         };
         let ext_g_states: Option<&std::collections::HashMap<String, Object>> =
             ext_g_state_resolved.as_ref().and_then(|o| o.as_dict());
-        // Cache parsed state per `dict_name` so the inner-dict resolve happens
-        // at most once per unique name in scope. ~keep
-        let mut ext_g_state_cache: std::collections::HashMap<String, ParsedExtGState> =
-            std::collections::HashMap::new();
+        let env = OpEnv {
+            base_transform,
+            doc,
+            page_num,
+            resources,
+        };
+        let mut st = OpLoopState::new(gs_stack, excluded_layers, ext_g_states);
         for op in operators {
+            if self.image_selection.is_some_and(|(_, include)| include) {
+                if knockout::is_path_paint(op) {
+                    apply_pending_clip(
+                        &mut st.pending_clip,
+                        &mut st.clip_stack,
+                        pixmap,
+                        base_transform,
+                        &st.gs_stack,
+                    );
+                    st.current_path = PathBuilder::new();
+                    continue;
+                }
+                if matches!(op, Operator::PaintShading { .. }) {
+                    continue;
+                }
+            }
             if is_paint_operator(op) && self.knockout_resources.active() {
                 let pixels = if knockout::is_path_paint(op) {
                     0
@@ -1118,7 +1133,7 @@ impl PageRenderer {
             if let Some(group) = knockout.as_deref_mut() {
                 group.before_operator(self, pixmap, op);
             }
-            let _raster_workspace = self.reserve_operator_workspace(pixmap, gs_stack.current(), op)?;
+            let _raster_workspace = self.reserve_operator_workspace(pixmap, st.gs_stack.current(), op)?;
             #[cfg(test)]
             if is_paint_operator(op) {
                 self.paint_operator_calls += 1;
@@ -1130,30 +1145,8 @@ impl PageRenderer {
                 continue;
             }
             match op {
-                Operator::SaveState => {
-                    gs_stack.save();
-                    // Clone current clip for the new graphics state level
-                    // This allows the current level to modify its clip without affecting parents
-                    // ~keep
-                    let current_clip = clip_stack.last().cloned().flatten();
-                    clip_stack.push(current_clip);
-                    tracing::trace!(
-                        "q (SaveState), depth={}, clip_stack depth={}",
-                        gs_stack.depth(),
-                        clip_stack.len()
-                    );
-                }
-                Operator::RestoreState => {
-                    gs_stack.restore();
-                    if clip_stack.len() > 1 {
-                        clip_stack.pop();
-                    }
-                    tracing::trace!(
-                        "Q (RestoreState), depth={}, clip_stack depth={}",
-                        gs_stack.depth(),
-                        clip_stack.len()
-                    );
-                }
+                Operator::SaveState => self.op_save_state(&mut st),
+                Operator::RestoreState => self.op_restore_state(&mut st),
                 Operator::Cm { a, b, c, d, e, f } => {
                     let matrix = Matrix {
                         a: *a,
@@ -1163,7 +1156,7 @@ impl PageRenderer {
                         e: *e,
                         f: *f,
                     };
-                    let current = gs_stack.current_mut();
+                    let current = st.gs_stack.current_mut();
                     // PDF spec ISO 32000-1:2008 §8.3.4: cm concatenates as M_cm × CTM ~keep
                     current.ctm = matrix.multiply(&current.ctm);
                     tracing::trace!(
@@ -1179,373 +1172,63 @@ impl PageRenderer {
                 }
 
                 Operator::SetFillRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (*r, *g, *b);
-                    gs.fill_color_space = "DeviceRGB".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*r, *g, *b]);
-                    // Device-family fill paint: per §11.7.3 the source
-                    // covers only the process channels, so any spot ink
-                    // identity recorded by a prior /Separation or
-                    // /DeviceN paint is no longer the active source.
-                    // The sidecar's per-paint spot mirror reads this
-                    // empty list as "no spot lane writes for this paint". ~keep
-                    gs.fill_spot_inks.clear();
-                    // ISO 32000-1 §8.6.3: the fill colour and colour
-                    // space are coupled — switching to /DeviceRGB
-                    // invalidates any prior /DeviceCMYK identity. Failing
-                    // to clear `fill_color_cmyk` here means the §11.7.4.3
-                    // overprint path would still see the prior paint's
-                    // CMYK quadruple as the "current source colour",
-                    // producing wrong B(c_b, c_s) = c_s values for the
-                    // new RGB paint's region. ~keep
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_fill_rgb(st.gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetStrokeRgb { r, g, b } => {
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (*r, *g, *b);
-                    gs.stroke_color_space = "DeviceRGB".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*r, *g, *b]);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeRgb: [{}, {}, {}]", r, g, b);
+                    color_operators::set_stroke_rgb(st.gs_stack.current_mut(), *r, *g, *b);
                 }
                 Operator::SetFillGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (g, g, g);
-                    gs.fill_color_space = "DeviceGray".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.push(g);
-                    gs.fill_spot_inks.clear();
-                    gs.fill_color_cmyk = None;
-                    tracing::trace!("SetFillGray: {}", g);
+                    color_operators::set_fill_gray(st.gs_stack.current_mut(), *gray);
                 }
                 Operator::SetStrokeGray { gray } => {
-                    let g = *gray;
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (g, g, g);
-                    gs.stroke_color_space = "DeviceGray".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.push(g);
-                    gs.stroke_spot_inks.clear();
-                    gs.stroke_color_cmyk = None;
-                    tracing::trace!("SetStrokeGray: {}", g);
+                    color_operators::set_stroke_gray(st.gs_stack.current_mut(), *gray);
                 }
                 Operator::SetFillCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_rgb = (r, g, b);
-                    gs.fill_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.fill_color_space = "DeviceCMYK".to_string();
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.fill_spot_inks.clear();
-                    tracing::trace!("SetFillCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_fill_cmyk(st.gs_stack.current_mut(), *c, *m, *y, *k);
                 }
                 Operator::SetStrokeCmyk { c, m, y, k } => {
-                    let (r, g, b) = cmyk_to_rgb(*c, *m, *y, *k);
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_rgb = (r, g, b);
-                    gs.stroke_color_cmyk = Some((*c, *m, *y, *k));
-                    gs.stroke_color_space = "DeviceCMYK".to_string();
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&[*c, *m, *y, *k]);
-                    gs.stroke_spot_inks.clear();
-                    tracing::trace!("SetStrokeCmyk: [{}, {}, {}, {}] -> {:?}", c, m, y, k, (r, g, b));
+                    color_operators::set_stroke_cmyk(st.gs_stack.current_mut(), *c, *m, *y, *k);
                 }
 
-                Operator::SetFillColorSpace { name } => {
-                    // ISO 32000-1 §8.6.8: the `cs` operator shall also
-                    // set the current colour to its initial value, which
-                    // depends on the colour space. For Separation /
-                    // DeviceN the initial tint is 1.0 per colorant
-                    // (§8.6.6.4 / §8.6.6.5); for DeviceCMYK the initial
-                    // colour is (0, 0, 0, 1); device-family RGB / Gray
-                    // start at all-zeros. Failing to reset the colour
-                    // here means a paint after `cs /CS_B` without an
-                    // intervening `scn` would carry the prior space's
-                    // identity and tint, including its spot ink list —
-                    // round 2 QA pinned that the spot mirror would then
-                    // write the prior /CS_A's spot lane. ~keep
-                    let resolved = self.color_spaces.get(name).cloned();
-                    // §10.7.3: the §8.6.8 initial-colour evaluation runs an
-                    // ICC retarget for DeviceN /Process /ICCBased; thread
-                    // the live gs intent through so a prior `/Perceptual ri`
-                    // / ExtGState /RI propagates into the retarget tag pick. ~keep
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                Operator::SetFillColorSpace { name } => color_operators::set_fill_color_space(
+                    st.gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.fill_color_space = name.clone();
-                    gs.fill_color_rgb = initial.rgb;
-                    gs.fill_color_cmyk = initial.cmyk;
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(&initial.components);
-                    gs.fill_spot_inks = initial.spot_inks;
-                    // Selecting a colour space clears any previously selected
-                    // fill pattern; a fresh scn must re-name it (§8.7.3). ~keep
-                    gs.fill_pattern_name = None;
-                    tracing::trace!("SetFillColorSpace: {}", name);
-                }
-                Operator::SetStrokeColorSpace { name } => {
-                    let resolved = self.color_spaces.get(name).cloned();
-                    let intent_for_initial =
-                        crate::color::RenderingIntent::from_pdf_name(&gs_stack.current().rendering_intent);
-                    let initial = sidecar_mod::initial_colour_for_space(
-                        name,
-                        resolved.as_ref(),
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
+                Operator::SetStrokeColorSpace { name } => color_operators::set_stroke_color_space(
+                    st.gs_stack.current_mut(),
+                    name,
+                    color_operators::ColorSpaceContext {
+                        spaces: &self.color_spaces,
                         doc,
-                        intent_for_initial,
-                        Some(&self.icc_transform_cache),
-                    );
-                    let gs = gs_stack.current_mut();
-                    gs.stroke_color_space = name.clone();
-                    gs.stroke_color_rgb = initial.rgb;
-                    gs.stroke_color_cmyk = initial.cmyk;
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(&initial.components);
-                    gs.stroke_spot_inks = initial.spot_inks;
-                }
-                Operator::SetFillColor { components } => {
-                    let gs = gs_stack.current_mut();
-                    let space_name = gs.fill_color_space.clone();
-                    let resolved_space = self.color_spaces.get(&space_name);
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(components);
-                    // ISO 32000-1 §8.6.3 + §11.7.4.3: `sc` mutates the
-                    // current fill colour for the active colour space.
-                    // Clear any stale CMYK identity left over from a
-                    // prior DeviceCMYK paint; the DeviceCMYK arm below
-                    // refills it. Without this clear, a SetFillColor on
-                    // a non-CMYK space leaves the prior CMYK quadruple
-                    // visible to the §11.7.4.3 overprint path and
-                    // corrupts the per-channel B(c_b, c_s) result. ~keep
-                    gs.fill_color_cmyk = None;
-
-                    match space_name.as_str() {
-                        "DeviceGray" | "G" if !components.is_empty() => {
-                            let g = components[0];
-                            gs.fill_color_rgb = (g, g, g);
-                        }
-                        "DeviceRGB" | "RGB" if components.len() >= 3 => {
-                            gs.fill_color_rgb = (components[0], components[1], components[2]);
-                        }
-                        "DeviceCMYK" | "CMYK" if components.len() >= 4 => {
-                            gs.fill_color_rgb = cmyk_to_rgb(components[0], components[1], components[2], components[3]);
-                            gs.fill_color_cmyk = Some((components[0], components[1], components[2], components[3]));
-                        }
-                        // Inline Separation/DeviceN evaluation used to live
-                        // here as a partial reimplementation of the colour-
-                        // resolver's tint-transform path. Wave 5 promoted
-                        // the pipeline to the single source of truth — the
-                        // pipeline runs the full Type 2 / 3 / 4 evaluator at
-                        // paint time and splices the resulting RGBA via
-                        // pipeline_resolve_paint_gs. The dispatcher just
-                        // records the components on gs.fill_color_components
-                        // above; the pipeline reads those when the paint op
-                        // fires. See `resolve_generic_fill_color`. ~keep
-                        _ => match resolve_generic_fill_color(resolved_space, doc, components) {
-                            FillColorSpaceResolution::Rgb(r, g, b) => gs.fill_color_rgb = (r, g, b),
-                            FillColorSpaceResolution::HandledNoChange => {}
-                            FillColorSpaceResolution::Unhandled => {
-                                if !components.is_empty() {
-                                    let g = components[0];
-                                    gs.fill_color_rgb = (g, g, g);
-                                }
-                            }
-                        },
-                    }
-                    // Per ISO 32000-1 §8.6.6.4 / §8.6.6.5: when the fill
-                    // colour space is /Separation or /DeviceN, record the
-                    // colorant names + tints for the sidecar's per-paint
-                    // spot lane mirror. Other spaces clear the slot so a
-                    // subsequent paint does not inherit stale spot data
-                    // from a prior /Separation set. ~keep
-                    gs.fill_spot_inks = resolved_space
-                        .map(|rs| crate::rendering::sidecar::extract_paint_spot_inks(rs, components, doc))
-                        .unwrap_or_default();
-                    tracing::trace!(
-                        "SetFillColor: {} {:?} -> {:?}",
-                        space_name,
-                        components,
-                        gs.fill_color_rgb
-                    );
-                }
-                Operator::SetStrokeColor { components } => {
-                    let gs = gs_stack.current_mut();
-                    let space_name = gs.stroke_color_space.clone();
-                    let resolved_space = self.color_spaces.get(&space_name);
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(components);
-                    gs.stroke_color_cmyk = None;
-
-                    match space_name.as_str() {
-                        "DeviceGray" | "G" if !components.is_empty() => {
-                            let g = components[0];
-                            gs.stroke_color_rgb = (g, g, g);
-                        }
-                        "DeviceRGB" | "RGB" if components.len() >= 3 => {
-                            gs.stroke_color_rgb = (components[0], components[1], components[2]);
-                        }
-                        "DeviceCMYK" | "CMYK" if components.len() >= 4 => {
-                            gs.stroke_color_rgb =
-                                cmyk_to_rgb(components[0], components[1], components[2], components[3]);
-                            gs.stroke_color_cmyk = Some((components[0], components[1], components[2], components[3]));
-                        }
-                        _ => match resolve_generic_stroke_color(resolved_space, doc, components) {
-                            Some((r, g, b)) => gs.stroke_color_rgb = (r, g, b),
-                            None => {
-                                if !components.is_empty() {
-                                    let g = components[0];
-                                    gs.stroke_color_rgb = (g, g, g);
-                                }
-                            }
-                        },
-                    }
-                    gs.stroke_spot_inks = resolved_space
-                        .map(|rs| crate::rendering::sidecar::extract_paint_spot_inks(rs, components, doc))
-                        .unwrap_or_default();
-                    tracing::trace!(
-                        "SetStrokeColor: {} {:?} -> {:?}",
-                        space_name,
-                        components,
-                        gs.stroke_color_rgb
-                    );
-                }
+                        transforms: &self.icc_transform_cache,
+                    },
+                ),
+                Operator::SetFillColor { components } => self.op_set_fill_color(&mut st, env, components),
+                Operator::SetStrokeColor { components } => self.op_set_stroke_color(&mut st, env, components),
                 Operator::SetFillColorN { components, name } => {
-                    let gs = gs_stack.current_mut();
-                    let space_name = gs.fill_color_space.clone();
-                    let resolved_space = self.color_spaces.get(&space_name);
-                    gs.fill_color_components.clear();
-                    gs.fill_color_components.extend_from_slice(components);
-                    gs.fill_color_cmyk = None;
-                    // §8.7.3: retain the pattern name for the Fill path when the
-                    // active fill space is /Pattern; clear it otherwise so a
-                    // later device-colour scn cannot paint a stale pattern. ~keep
-                    gs.fill_pattern_name = if space_name == "Pattern" {
-                        name.as_ref().map(|n| n.as_str().to_string())
-                    } else {
-                        None
-                    };
-
-                    match space_name.as_str() {
-                        "DeviceGray" | "G" if !components.is_empty() => {
-                            let g = components[0];
-                            gs.fill_color_rgb = (g, g, g);
-                        }
-                        "DeviceRGB" | "RGB" if components.len() >= 3 => {
-                            gs.fill_color_rgb = (components[0], components[1], components[2]);
-                        }
-                        "DeviceCMYK" | "CMYK" if components.len() >= 4 => {
-                            gs.fill_color_rgb = cmyk_to_rgb(components[0], components[1], components[2], components[3]);
-                            gs.fill_color_cmyk = Some((components[0], components[1], components[2], components[3]));
-                        }
-                        // Pipeline owns the colour for /Separation /
-                        // /DeviceN and /Indexed at paint time — the
-                        // dispatcher just records the components above. The
-                        // §11.7.4.3 CompatibleOverprint CMYK-identity
-                        // recovery for /Process-attributed /DeviceN is
-                        // handled inside `resolve_scn_color`. ~keep
-                        _ => match self.resolve_scn_color(resolved_space, doc, components, &gs.rendering_intent) {
-                            ScnColorSpaceResolution::Rgb(r, g, b) => gs.fill_color_rgb = (r, g, b),
-                            ScnColorSpaceResolution::RgbCmyk(rgb, cmyk) => {
-                                gs.fill_color_cmyk = Some(cmyk);
-                                gs.fill_color_rgb = rgb;
-                            }
-                            ScnColorSpaceResolution::HandledNoChange => {}
-                            ScnColorSpaceResolution::Unhandled => {
-                                if !components.is_empty() {
-                                    let g = components[0];
-                                    gs.fill_color_rgb = (g, g, g);
-                                }
-                            }
-                        },
-                    }
-                    gs.fill_spot_inks = resolved_space
-                        .map(|rs| crate::rendering::sidecar::extract_paint_spot_inks(rs, components, doc))
-                        .unwrap_or_default();
-                    tracing::trace!(
-                        "SetFillColorN: {} {:?} -> {:?}",
-                        space_name,
-                        components,
-                        gs.fill_color_rgb
-                    );
+                    self.op_set_fill_color_n(&mut st, env, components, name.as_deref().map(String::as_str))
                 }
-                Operator::SetStrokeColorN { components, .. } => {
-                    let gs = gs_stack.current_mut();
-                    let space_name = gs.stroke_color_space.clone();
-                    let resolved_space = self.color_spaces.get(&space_name);
-                    gs.stroke_color_components.clear();
-                    gs.stroke_color_components.extend_from_slice(components);
-                    gs.stroke_color_cmyk = None;
-                    match space_name.as_str() {
-                        "DeviceGray" | "G" if !components.is_empty() => {
-                            let g = components[0];
-                            gs.stroke_color_rgb = (g, g, g);
-                        }
-                        "DeviceRGB" | "RGB" if components.len() >= 3 => {
-                            gs.stroke_color_rgb = (components[0], components[1], components[2]);
-                        }
-                        "DeviceCMYK" | "CMYK" if components.len() >= 4 => {
-                            gs.stroke_color_rgb =
-                                cmyk_to_rgb(components[0], components[1], components[2], components[3]);
-                            gs.stroke_color_cmyk = Some((components[0], components[1], components[2], components[3]));
-                        }
-                        // Pipeline owns the colour at paint time — see the
-                        // matching comment in the SetFillColorN arm above.
-                        // The §11.7.4.3 CompatibleOverprint source-CMYK
-                        // reconstruction for /Process-attributed /DeviceN
-                        // runs the same way as the fill side via
-                        // `resolve_scn_color`. ~keep
-                        _ => match self.resolve_scn_color(resolved_space, doc, components, &gs.rendering_intent) {
-                            ScnColorSpaceResolution::Rgb(r, g, b) => gs.stroke_color_rgb = (r, g, b),
-                            ScnColorSpaceResolution::RgbCmyk(rgb, cmyk) => {
-                                gs.stroke_color_cmyk = Some(cmyk);
-                                gs.stroke_color_rgb = rgb;
-                            }
-                            ScnColorSpaceResolution::HandledNoChange => {}
-                            ScnColorSpaceResolution::Unhandled => {
-                                if !components.is_empty() {
-                                    let g = components[0];
-                                    gs.stroke_color_rgb = (g, g, g);
-                                }
-                            }
-                        },
-                    }
-                    gs.stroke_spot_inks = resolved_space
-                        .map(|rs| crate::rendering::sidecar::extract_paint_spot_inks(rs, components, doc))
-                        .unwrap_or_default();
-                    tracing::trace!(
-                        "SetStrokeColorN: {} {:?} -> {:?}",
-                        space_name,
-                        components,
-                        gs.stroke_color_rgb
-                    );
-                }
+                Operator::SetStrokeColorN { components, .. } => self.op_set_stroke_color_n(&mut st, env, components),
 
                 Operator::SetLineWidth { width } => {
-                    gs_stack.current_mut().line_width = *width;
+                    st.gs_stack.current_mut().line_width = *width;
                 }
                 Operator::SetLineCap { cap_style } => {
-                    gs_stack.current_mut().line_cap = *cap_style;
+                    st.gs_stack.current_mut().line_cap = *cap_style;
                 }
                 Operator::SetLineJoin { join_style } => {
-                    gs_stack.current_mut().line_join = *join_style;
+                    st.gs_stack.current_mut().line_join = *join_style;
                 }
                 Operator::SetMiterLimit { limit } => {
-                    gs_stack.current_mut().miter_limit = *limit;
+                    st.gs_stack.current_mut().miter_limit = *limit;
                 }
                 Operator::SetDash { array, phase } => {
-                    gs_stack.current_mut().dash_pattern = (array.clone(), *phase);
+                    st.gs_stack.current_mut().dash_pattern = (array.clone(), *phase);
                 }
                 Operator::SetRenderingIntent { intent } => {
                     // ISO 32000-1:2008 §10.7.3 `/RI` operator. Updates
@@ -1560,440 +1243,27 @@ impl PageRenderer {
                     // field would stay at its default forever; the
                     // CMYK transform cache would collapse every
                     // intent's paint into a single shared entry. ~keep
-                    gs_stack.current_mut().rendering_intent = intent.clone();
+                    st.gs_stack.current_mut().rendering_intent = intent.clone();
                 }
 
-                Operator::MoveTo { x, y } => {
-                    current_path.move_to(*x, *y);
-                }
-                Operator::LineTo { x, y } => {
-                    current_path.line_to(*x, *y);
-                }
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3);
-                }
-                Operator::CurveToV { x2, y2, x3, y3 } => {
-                    if let Some(last) = current_path.last_point() {
-                        current_path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
-                    }
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => {
-                    current_path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3);
-                }
-                Operator::Rectangle { x, y, width, height } => {
-                    // Normalize negative width/height per PDF spec:
-                    // re with negative dimensions means the rect extends in the opposite direction
-                    // ~keep
-                    let (nx, nw) = if *width < 0.0 {
-                        (x + width, -width)
-                    } else {
-                        (*x, *width)
-                    };
-                    let (ny, nh) = if *height < 0.0 {
-                        (y + height, -height)
-                    } else {
-                        (*y, *height)
-                    };
-                    if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
-                        current_path.push_rect(rect);
-                    }
-                }
-                Operator::ClosePath => {
-                    current_path.close();
+                Operator::MoveTo { .. }
+                | Operator::LineTo { .. }
+                | Operator::CurveTo { .. }
+                | Operator::CurveToV { .. }
+                | Operator::CurveToY { .. }
+                | Operator::Rectangle { .. }
+                | Operator::ClosePath => {
+                    let handled = path_operators::construct(&mut st.current_path, op);
+                    debug_assert!(handled, "only path construction operators are dispatched here");
                 }
 
-                Operator::Stroke | Operator::CloseStroke => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        // ISO 32000-1 §8.5.3.2 Table 60: `s` is exactly `h S`. ~keep
-                        if matches!(op, Operator::CloseStroke) {
-                            current_path.close();
-                        }
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
-                            // Stroke side mirrors the path-fill routing —
-                            // route through the pipeline so Type 4 Separation
-                            // strokes resolve correctly. Line width / cap /
-                            // join / dash come from the cloned `gs`
-                            // unchanged, so the stroke geometry is unaffected
-                            // by the colour splice. ~keep
-                            let spliced = self.pipeline_resolve_paint_gs(doc, &gs_clone, PipelinePaintKind::PathStroke);
-                            let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
-                            let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
-                            let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                            let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
-                            let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
-                            let cmyk_sidecar_snap = self.cmyk_sidecar_snapshot(pixmap, &gs_clone, false);
-                            let rgb_sidecar_snap = self.cmyk_sidecar_snapshot_for_rgb_paint(pixmap, &gs_clone, false);
-                            let cmyk_coverage = self.rasterise_stroke_coverage(&path, transform, &gs_clone, clip);
-                            self.path_rasterizer
-                                .stroke_path_clipped(pixmap, &path, transform, render_gs, clip);
-                            self.apply_sidecar_paint_modulators(
-                                pixmap,
-                                SidecarPaintModulatorSnapshots {
-                                    cmyk_compose: cmyk_compose_snap,
-                                    overprint: overprint_snap,
-                                    cmyk_sidecar: cmyk_sidecar_snap,
-                                    rgb_sidecar: rgb_sidecar_snap,
-                                    smask: smask_snap,
-                                },
-                                cmyk_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_clone,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                    base_transform,
-                                    fill_side: false,
-                                    knockout_coverage: None,
-                                },
-                            )?;
-                        }
-                    } else {
-                        let _ = current_path.finish();
-                    }
-                    current_path = PathBuilder::new();
-                }
-                Operator::Fill => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
-                            // Resolve the active fill colour through the
-                            // pipeline (PostScript Type 4 tint transforms,
-                            // ICCBased N=4, etc.) and splice the resulting
-                            // RGBA into a transient GraphicsState copy the
-                            // rasteriser consumes. ~keep
-                            let spliced = self.pipeline_resolve_paint_gs(doc, &gs_clone, PipelinePaintKind::PathFill);
-                            let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
-                            let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
-                            // §8.7.3: a Pattern-space fill routes to the
-                            // tiling-pattern rasteriser first. When it paints
-                            // the region the solid-colour paint below is
-                            // skipped; unsupported/shading patterns return
-                            // false and fall through to the solid fallback. ~keep
-                            if gs_clone.fill_color_space == "Pattern"
-                                && gs_clone.fill_pattern_name.is_some()
-                                && self.fill_with_tiling_pattern(
-                                    pixmap,
-                                    &path,
-                                    base_transform,
-                                    transform,
-                                    tiny_skia::FillRule::Winding,
-                                    clip,
-                                    &gs_clone,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?
-                            {
-                                // Painted by the tiling pattern. ~keep
-                            } else {
-                                // §11.4.7 + §11.7.4: snapshot before the
-                                // paint so the post-paint modulators can
-                                // blend the backdrop (snapshot) with the
-                                // painted result. ~keep
-                                let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                                let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
-                                let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
-                                let cmyk_sidecar_snap = self.cmyk_sidecar_snapshot(pixmap, &gs_clone, true);
-                                let rgb_sidecar_snap =
-                                    self.cmyk_sidecar_snapshot_for_rgb_paint(pixmap, &gs_clone, true);
-                                let cmyk_coverage =
-                                    self.rasterise_fill_coverage(&path, transform, tiny_skia::FillRule::Winding, clip);
-                                self.path_rasterizer.fill_path_clipped(
-                                    pixmap,
-                                    &path,
-                                    transform,
-                                    render_gs,
-                                    tiny_skia::FillRule::Winding,
-                                    clip,
-                                );
-                                self.apply_sidecar_paint_modulators(
-                                    pixmap,
-                                    SidecarPaintModulatorSnapshots {
-                                        cmyk_compose: cmyk_compose_snap,
-                                        overprint: overprint_snap,
-                                        cmyk_sidecar: cmyk_sidecar_snap,
-                                        rgb_sidecar: rgb_sidecar_snap,
-                                        smask: smask_snap,
-                                    },
-                                    cmyk_coverage.as_deref(),
-                                    PaintModulatorContext {
-                                        gs: &gs_clone,
-                                        doc,
-                                        page_num,
-                                        resources,
-                                        base_transform,
-                                        fill_side: true,
-                                        knockout_coverage: None,
-                                    },
-                                )?;
-                            }
-                        }
-                    } else {
-                        let _ = current_path.finish();
-                    }
-                    current_path = PathBuilder::new();
-                }
+                Operator::Stroke | Operator::CloseStroke => self.op_stroke(pixmap, &mut st, env, op)?,
+                Operator::Fill => self.op_fill(pixmap, &mut st, env, op)?,
                 Operator::FillStroke | Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        // ISO 32000-1 §8.5.3.1 Table 60: `b` and `b*` close
-                        // the path before fill+stroke. Neither parser
-                        // decomposes them, so the dispatcher must perform the
-                        // close itself or the final segment of an open subpath
-                        // will not be painted by the stroke. The same holds for
-                        // `s` via `Operator::CloseStroke`: only the byte-level
-                        // parser decomposes it, the object parser does not. ~keep
-                        if matches!(op, Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd) {
-                            current_path.close();
-                        }
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
-                            let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
-                            let fill_rule = if matches!(op, Operator::CloseFillStrokeEvenOdd) {
-                                tiny_skia::FillRule::EvenOdd
-                            } else {
-                                tiny_skia::FillRule::Winding
-                            };
-                            // Combos resolve fill and stroke independently
-                            // through the pipeline (two `PaintIntent`s per
-                            // operator). Each side falls back to the
-                            // GraphicsState's existing RGBA if its colour
-                            // can't be resolved, so a Type 4 Separation on
-                            // the fill side and a plain DeviceRGB on the
-                            // stroke side route correctly without
-                            // entangling the two.
-                            //
-                            // Single splice for both sides — the rasteriser
-                            // reads fill fields for the fill pass and stroke
-                            // fields for the stroke pass, so one clone with
-                            // both sides written is equivalent to two
-                            // single-side clones. ~keep
-                            let spliced =
-                                self.pipeline_resolve_paint_gs(doc, &gs_clone, PipelinePaintKind::PathFillStroke);
-                            let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
-
-                            // §8.7.3: Pattern-space fills route to the tiling
-                            // rasteriser first; on success the solid fill side
-                            // is skipped (the stroke side still runs below). ~keep
-                            let fill_by_pattern = gs_clone.fill_color_space == "Pattern"
-                                && gs_clone.fill_pattern_name.is_some()
-                                && self.fill_with_tiling_pattern(
-                                    pixmap,
-                                    &path,
-                                    base_transform,
-                                    transform,
-                                    fill_rule,
-                                    clip,
-                                    &gs_clone,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?;
-
-                            // Fill side: snapshot before paint, paint,
-                            // then run compose-first / overprint / SMask
-                            // correctors against the fill-side gs fields.
-                            // The §11.7.4 + §11.4.7 + §11.4 rules apply
-                            // to combos exactly as they do to plain `f`
-                            // — the only difference here is the stroke
-                            // pass also lays paint on top, so each side
-                            // gets its own snapshot/apply cycle. ~keep
-                            if !fill_by_pattern {
-                                let fill_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                                let fill_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
-                                let fill_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
-                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, true)?;
-                                let fill_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
-                                // §11.7.3 + §11.3.3 require per-pixel
-                                // coverage on every lane. The path-Fill
-                                // helper uses `rasterise_fill_coverage`;
-                                // the combo arm uses the same call so AA
-                                // edges receive fractional coverage and an
-                                // alternate-CS RGB collision with backdrop
-                                // does not mask the paint from the spot
-                                // mirror's diff branch. ~keep
-                                let fill_cmyk_coverage =
-                                    self.rasterise_fill_coverage(&path, transform, fill_rule, clip);
-                                self.path_rasterizer
-                                    .fill_path_clipped(pixmap, &path, transform, render_gs, fill_rule, clip);
-                                self.apply_paint_modulators(
-                                    pixmap,
-                                    PaintModulatorSnapshots {
-                                        process_path,
-                                        cmyk_compose: fill_cmyk_compose_snap,
-                                        overprint: fill_overprint_snap,
-                                        spot: fill_spot_snap,
-                                        smask: fill_smask_snap,
-                                    },
-                                    fill_cmyk_coverage.as_deref(),
-                                    PaintModulatorContext {
-                                        gs: &gs_clone,
-                                        doc,
-                                        page_num,
-                                        resources,
-                                        base_transform,
-                                        fill_side: true,
-                                        knockout_coverage: None,
-                                    },
-                                )?;
-                            }
-
-                            let stroke_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                            let stroke_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
-                            let stroke_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
-                            let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, false)?;
-                            let stroke_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, false);
-                            let stroke_cmyk_coverage =
-                                self.rasterise_stroke_coverage(&path, transform, &gs_clone, clip);
-                            self.path_rasterizer
-                                .stroke_path_clipped(pixmap, &path, transform, render_gs, clip);
-                            self.apply_paint_modulators(
-                                pixmap,
-                                PaintModulatorSnapshots {
-                                    process_path,
-                                    cmyk_compose: stroke_cmyk_compose_snap,
-                                    overprint: stroke_overprint_snap,
-                                    spot: stroke_spot_snap,
-                                    smask: stroke_smask_snap,
-                                },
-                                stroke_cmyk_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_clone,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                    base_transform,
-                                    fill_side: false,
-                                    knockout_coverage: None,
-                                },
-                            )?;
-                        }
-                    } else {
-                        let _ = current_path.finish();
-                    }
-                    current_path = PathBuilder::new();
+                    self.op_fill_stroke(pixmap, &mut st, env, op)?
                 }
                 Operator::FillEvenOdd | Operator::FillStrokeEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        if let Some(path) = current_path.finish() {
-                            let gs_clone = gs_stack.current().clone();
-                            let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
-                            // One unified resolve covers both fill and the
-                            // optional stroke pass — for plain `f*` the
-                            // helper produces a fill-only splice; for
-                            // `B*`/`b*` both sides are spliced into the
-                            // same clone. Either way, the rasteriser reads
-                            // the side it needs from `render_gs`. ~keep
-                            let kind = if matches!(op, Operator::FillStrokeEvenOdd) {
-                                PipelinePaintKind::PathFillStroke
-                            } else {
-                                PipelinePaintKind::PathFill
-                            };
-                            let spliced = self.pipeline_resolve_paint_gs(doc, &gs_clone, kind);
-                            let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
-
-                            let fill_by_pattern = gs_clone.fill_color_space == "Pattern"
-                                && gs_clone.fill_pattern_name.is_some()
-                                && self.fill_with_tiling_pattern(
-                                    pixmap,
-                                    &path,
-                                    base_transform,
-                                    transform,
-                                    tiny_skia::FillRule::EvenOdd,
-                                    clip,
-                                    &gs_clone,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?;
-
-                            if !fill_by_pattern {
-                                let fill_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                                let fill_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
-                                let fill_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
-                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, true)?;
-                                let fill_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
-                                let fill_cmyk_coverage =
-                                    self.rasterise_fill_coverage(&path, transform, tiny_skia::FillRule::EvenOdd, clip);
-                                self.path_rasterizer.fill_path_clipped(
-                                    pixmap,
-                                    &path,
-                                    transform,
-                                    render_gs,
-                                    tiny_skia::FillRule::EvenOdd,
-                                    clip,
-                                );
-                                self.apply_paint_modulators(
-                                    pixmap,
-                                    PaintModulatorSnapshots {
-                                        process_path,
-                                        cmyk_compose: fill_cmyk_compose_snap,
-                                        overprint: fill_overprint_snap,
-                                        spot: fill_spot_snap,
-                                        smask: fill_smask_snap,
-                                    },
-                                    fill_cmyk_coverage.as_deref(),
-                                    PaintModulatorContext {
-                                        gs: &gs_clone,
-                                        doc,
-                                        page_num,
-                                        resources,
-                                        base_transform,
-                                        fill_side: true,
-                                        knockout_coverage: None,
-                                    },
-                                )?;
-                            }
-
-                            if matches!(op, Operator::FillStrokeEvenOdd) {
-                                let stroke_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                                let stroke_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
-                                let stroke_cmyk_compose_snap =
-                                    self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
-                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, false)?;
-                                let stroke_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, false);
-                                let stroke_cmyk_coverage =
-                                    self.rasterise_stroke_coverage(&path, transform, &gs_clone, clip);
-                                self.path_rasterizer
-                                    .stroke_path_clipped(pixmap, &path, transform, render_gs, clip);
-                                self.apply_paint_modulators(
-                                    pixmap,
-                                    PaintModulatorSnapshots {
-                                        process_path,
-                                        cmyk_compose: stroke_cmyk_compose_snap,
-                                        overprint: stroke_overprint_snap,
-                                        spot: stroke_spot_snap,
-                                        smask: stroke_smask_snap,
-                                    },
-                                    stroke_cmyk_coverage.as_deref(),
-                                    PaintModulatorContext {
-                                        gs: &gs_clone,
-                                        doc,
-                                        page_num,
-                                        resources,
-                                        base_transform,
-                                        fill_side: false,
-                                        knockout_coverage: None,
-                                    },
-                                )?;
-                            }
-                        }
-                    } else {
-                        let _ = current_path.finish();
-                    }
-                    current_path = PathBuilder::new();
+                    self.op_fill_even_odd(pixmap, &mut st, env, op)?
                 }
 
                 // Clipping — suppressed inside an excluded OCG scope. Per PDF
@@ -2001,518 +1271,44 @@ impl PageRenderer {
                 // gating it, a `W n` issued inside an excluded BDC scope that
                 // is not bracketed by `q/Q` would silently restrict subsequent
                 // visible content. ~keep
-                Operator::ClipNonZero => {
-                    if excluded_layer_depth == 0 {
-                        if let Some(path) = current_path.clone().finish() {
-                            pending_clip = Some((path, tiny_skia::FillRule::Winding));
-                        }
-                    }
-                }
-                Operator::ClipEvenOdd => {
-                    if excluded_layer_depth == 0 {
-                        if let Some(path) = current_path.clone().finish() {
-                            pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
-                        }
-                    }
-                }
+                Operator::ClipNonZero => self.op_clip_non_zero(&mut st),
+                Operator::ClipEvenOdd => self.op_clip_even_odd(&mut st),
 
-                Operator::BeginText => {
-                    in_text_object = true;
-                    // Start each text object with a clean text-clip path
-                    // (§9.4.1: the text clip path is reset at BT and applied
-                    // at ET). Any leftover from a malformed/unterminated prior
-                    // block is discarded here. ~keep
-                    text_clip_accum = None;
-                    let gs = gs_stack.current_mut();
-                    gs.text_matrix = Matrix::identity();
-                    gs.text_line_matrix = Matrix::identity();
-                    tracing::trace!("BT (BeginText)");
-                }
-                Operator::EndText => {
-                    in_text_object = false;
-                    // WS1.5b — apply the accumulated text clip path (Tr 4–7).
-                    // If no clip-mode text was shown the accumulator is None and
-                    // ET behaves exactly as before. An all-transparent
-                    // accumulator (e.g. every glyph was whitespace or lacked an
-                    // outline) is treated as degenerate and leaves the clip
-                    // unchanged rather than collapsing it to empty. ~keep
-                    if let Some(scratch) = text_clip_accum.take() {
-                        let has_coverage = scratch.data().as_chunks::<4>().0.iter().any(|px| px[3] != 0);
-                        if has_coverage {
-                            let text_mask = tiny_skia::Mask::from_pixmap(scratch.as_ref(), tiny_skia::MaskType::Alpha);
-                            // Intersect (logical AND) the glyph silhouette with
-                            // the current scope's clip so subsequent content is
-                            // confined to the text shape *within* the existing
-                            // clip — never widened past it. ~keep
-                            if let Some(slot) = clip_stack.last_mut() {
-                                let existing = slot.take();
-                                *slot = Some(intersect_with_inherited(text_mask, existing.as_ref()));
-                            }
-                        }
-                    }
-                }
+                Operator::BeginText => self.op_begin_text(&mut st),
+                Operator::EndText => self.op_end_text(&mut st),
 
                 Operator::Tc { char_space } => {
-                    gs_stack.current_mut().char_space = *char_space;
+                    st.gs_stack.current_mut().char_space = *char_space;
                 }
                 Operator::Tw { word_space } => {
-                    gs_stack.current_mut().word_space = *word_space;
+                    st.gs_stack.current_mut().word_space = *word_space;
                 }
                 Operator::Tz { scale } => {
-                    gs_stack.current_mut().horizontal_scaling = *scale;
+                    st.gs_stack.current_mut().horizontal_scaling = *scale;
                 }
                 Operator::TL { leading } => {
-                    gs_stack.current_mut().leading = *leading;
+                    st.gs_stack.current_mut().leading = *leading;
                 }
                 Operator::Ts { rise } => {
-                    gs_stack.current_mut().text_rise = *rise;
+                    st.gs_stack.current_mut().text_rise = *rise;
                 }
                 Operator::Tr { render } => {
-                    gs_stack.current_mut().render_mode = *render;
+                    st.gs_stack.current_mut().render_mode = *render;
                 }
 
                 // Text showing — glyphs suppressed inside an excluded OCG layer,
                 // but the text matrix still advances so that subsequent visible
                 // text inside the same BT/ET paints at the correct X position. ~keep
-                Operator::Tj { text } => {
-                    if in_text_object {
-                        // Type 3 fonts have no outline program; each glyph is a
-                        // CharProcs content stream painted under FontMatrix ×
-                        // text-space × CTM (ISO 32000-1 §9.6.5). It is handled
-                        // here because it re-enters the content-stream renderer. ~keep
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
-                                self.render_type3_text(
-                                    pixmap,
-                                    text,
-                                    base_transform,
-                                    &gs_snap,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?
-                            } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
-                            };
-                            gs_stack.current_mut().advance_text_matrix(advance);
-                            continue;
-                        }
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
-                            let transform = combine_transforms(base_transform, &gs.ctm);
-                            // WS1.5b — modes 4–7 add this show's glyph
-                            // outlines to the text clip path (applied at ET).
-                            // Gated here so modes 0–3 pay nothing. ~keep
-                            if gs.render_mode >= 4 {
-                                self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
-                                    pixmap.width(),
-                                    pixmap.height(),
-                                    text,
-                                    transform,
-                                    gs,
-                                    resources,
-                                    doc,
-                                );
-                            }
-                            let contrast_samples = self
-                                .text_contrast_probe
-                                .as_mut()
-                                .and_then(|probe| probe.capture(pixmap, text, base_transform));
-                            let adv = self.render_text_with_modulators(
-                                pixmap,
-                                TextRun::String(text),
-                                GroupTextPaint {
-                                    gs,
-                                    doc,
-                                    resources,
-                                    clip,
-                                    transform,
-                                },
-                                page_num,
-                                base_transform,
-                            )?;
-                            if let Some((probe, samples)) = self.text_contrast_probe.as_mut().zip(contrast_samples) {
-                                probe.observe(pixmap, samples);
-                            }
-                            adv
-                        } else {
-                            self.text_rasterizer.measure_text(text, gs, &self.fonts)
-                        };
-
-                        // The rasterizer returns a scalar magnitude along the
-                        // active writing axis. advance_text_matrix routes it
-                        // to x (WMode 0) or y (WMode 1), keeping the axis
-                        // swap in exactly one place. ~keep
-                        gs_stack.current_mut().advance_text_matrix(advance);
-                    }
-                }
-                Operator::Quote { text } => {
-                    if in_text_object {
-                        // Quote (') is T* followed by Tj — always advance line ~keep
-                        let gs_mut = gs_stack.current_mut();
-                        let leading = gs_mut.leading;
-                        let translation = Matrix::translation(0.0, -leading);
-                        gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
-                        gs_mut.text_matrix = gs_mut.text_line_matrix;
-
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
-                                self.render_type3_text(
-                                    pixmap,
-                                    text,
-                                    base_transform,
-                                    &gs_snap,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?
-                            } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
-                            };
-                            gs_stack.current_mut().advance_text_matrix(advance);
-                            continue;
-                        }
-
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
-                            let transform = combine_transforms(base_transform, &gs.ctm);
-                            tracing::trace!(
-                                "' (Quote): rendering text at Tm=[{}, {}, {}, {}, {}, {}]",
-                                gs.text_matrix.a,
-                                gs.text_matrix.b,
-                                gs.text_matrix.c,
-                                gs.text_matrix.d,
-                                gs.text_matrix.e,
-                                gs.text_matrix.f
-                            );
-                            if gs.render_mode >= 4 {
-                                self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
-                                    pixmap.width(),
-                                    pixmap.height(),
-                                    text,
-                                    transform,
-                                    gs,
-                                    resources,
-                                    doc,
-                                );
-                            }
-                            // Same shape as `Tj`. `'` is `T* Tj` per
-                            // ISO 32000-1; the resolved colour depends only
-                            // on the prior colour-setting ops, so the resolve
-                            // happens here, not inside `T*`. ~keep
-                            self.render_text_with_modulators(
-                                pixmap,
-                                TextRun::String(text),
-                                GroupTextPaint {
-                                    gs,
-                                    doc,
-                                    resources,
-                                    clip,
-                                    transform,
-                                },
-                                page_num,
-                                base_transform,
-                            )?
-                        } else {
-                            self.text_rasterizer.measure_text(text, gs, &self.fonts)
-                        };
-
-                        gs_stack.current_mut().advance_text_matrix(advance);
-                    }
-                }
-                Operator::TJ { array } => {
-                    if in_text_object {
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
-                                self.render_type3_tj_array(
-                                    pixmap,
-                                    array,
-                                    base_transform,
-                                    &gs_snap,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?
-                            } else {
-                                self.text_rasterizer
-                                    .measure_tj_array(array, gs_stack.current(), &self.fonts)
-                            };
-                            gs_stack.current_mut().advance_text_matrix(advance);
-                            continue;
-                        }
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
-                            let transform = combine_transforms(base_transform, &gs.ctm);
-                            tracing::trace!(
-                                "TJ: rendering array at Tm=[{}, {}, {}, {}, {}, {}]",
-                                gs.text_matrix.a,
-                                gs.text_matrix.b,
-                                gs.text_matrix.c,
-                                gs.text_matrix.d,
-                                gs.text_matrix.e,
-                                gs.text_matrix.f
-                            );
-                            if gs.render_mode >= 4 {
-                                self.accumulate_text_clip_tj_array(
-                                    &mut text_clip_accum,
-                                    pixmap.width(),
-                                    pixmap.height(),
-                                    array,
-                                    transform,
-                                    gs,
-                                    resources,
-                                    doc,
-                                );
-                            }
-                            // Resolve once for the whole `TJ` array — the
-                            // numeric offsets inside `array` only adjust
-                            // positioning; they cannot alter the active
-                            // colour mid-string. The rasteriser threads the
-                            // override into the per-element `render_text`
-                            // calls so the colour propagates without an
-                            // operator-arm-side clone of `gs`. ~keep
-                            self.render_text_with_modulators(
-                                pixmap,
-                                TextRun::Array(array),
-                                GroupTextPaint {
-                                    gs,
-                                    doc,
-                                    resources,
-                                    clip,
-                                    transform,
-                                },
-                                page_num,
-                                base_transform,
-                            )?
-                        } else {
-                            self.text_rasterizer.measure_tj_array(array, gs, &self.fonts)
-                        };
-
-                        gs_stack.current_mut().advance_text_matrix(advance);
-                    }
-                }
+                Operator::Tj { text } => self.op_tj(pixmap, &mut st, env, text)?,
+                Operator::Quote { text } => self.op_quote(pixmap, &mut st, env, text)?,
+                Operator::TJ { array } => self.op_tj_array(pixmap, &mut st, env, array)?,
                 Operator::DoubleQuote {
                     word_space,
                     char_space,
                     text,
-                } => {
-                    if in_text_object {
-                        // Double Quote (") always updates state ~keep
-                        let gs_mut = gs_stack.current_mut();
-                        gs_mut.word_space = *word_space;
-                        gs_mut.char_space = *char_space;
+                } => self.op_double_quote(pixmap, &mut st, env, *word_space, *char_space, text)?,
 
-                        let leading = gs_mut.leading;
-                        let translation = Matrix::translation(0.0, -leading);
-                        gs_mut.text_line_matrix = translation.multiply(&gs_mut.text_line_matrix);
-                        gs_mut.text_matrix = gs_mut.text_line_matrix;
-
-                        if self.current_font_is_type3(gs_stack.current()) {
-                            let advance = if excluded_layer_depth == 0 {
-                                let gs_snap = gs_stack.current().clone();
-                                self.render_type3_text(
-                                    pixmap,
-                                    text,
-                                    base_transform,
-                                    &gs_snap,
-                                    doc,
-                                    page_num,
-                                    resources,
-                                )?
-                            } else {
-                                self.text_rasterizer.measure_text(text, gs_stack.current(), &self.fonts)
-                            };
-                            gs_stack.current_mut().advance_text_matrix(advance);
-                            continue;
-                        }
-
-                        let gs = gs_stack.current();
-                        let advance = if excluded_layer_depth == 0 {
-                            let clip = clip_stack.last().and_then(|c| c.as_ref());
-                            let transform = combine_transforms(base_transform, &gs.ctm);
-                            tracing::trace!(
-                                "\" (DoubleQuote): rendering text at Tm=[{}, {}, {}, {}, {}, {}]",
-                                gs.text_matrix.a,
-                                gs.text_matrix.b,
-                                gs.text_matrix.c,
-                                gs.text_matrix.d,
-                                gs.text_matrix.e,
-                                gs.text_matrix.f
-                            );
-                            if gs.render_mode >= 4 {
-                                self.accumulate_text_clip_tj(
-                                    &mut text_clip_accum,
-                                    pixmap.width(),
-                                    pixmap.height(),
-                                    text,
-                                    transform,
-                                    gs,
-                                    resources,
-                                    doc,
-                                );
-                            }
-                            // `"` is equivalent to setting Tw, Tc, then
-                            // `T* Tj`. Tw/Tc are state-only and don't
-                            // influence the resolved colour, so the resolve
-                            // happens immediately before painting just like
-                            // in `Tj` / `'`. ~keep
-                            self.render_text_with_modulators(
-                                pixmap,
-                                TextRun::String(text),
-                                GroupTextPaint {
-                                    gs,
-                                    doc,
-                                    resources,
-                                    clip,
-                                    transform,
-                                },
-                                page_num,
-                                base_transform,
-                            )?
-                        } else {
-                            self.text_rasterizer.measure_text(text, gs, &self.fonts)
-                        };
-
-                        gs_stack.current_mut().advance_text_matrix(advance);
-                    }
-                }
-
-                Operator::Do { name } => {
-                    if excluded_layer_depth == 0 {
-                        let gs_clone = gs_stack.current().clone();
-                        let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        tracing::trace!("Do: rendering XObject '{}'", name);
-                        // §11.4.7 + §11.7.4 + §11.4 cycle: the entire
-                        // XObject paint (Form or Image) sits inside the
-                        // snapshot bracket so a /SMask attached via
-                        // ExtGState modulates the cumulative
-                        // contribution. Image XObjects always behave as
-                        // fill-side paints; Form XObjects honour their
-                        // own internal ExtGState changes (the snapshot
-                        // captures the page-level state, the Form runs
-                        // recursively, and the apply blends the Form's
-                        // contribution against the captured backdrop).
-                        //
-                        // Per-subtype dispatch for the post-Do colour-
-                        // lane modulators: Image / ImageMask XObjects do
-                        // NOT execute their own paint operators — their
-                        // pixel data is painted using the outer
-                        // graphics state, so the post-Do CMYK compose,
-                        // overprint and spot-lane mirrors are how those
-                        // lanes learn about the contribution. Form
-                        // XObjects DO execute their own paint operators
-                        // (Fill / Stroke / FillStroke / Do / ShowText /
-                        // shading), each of which runs its own per-
-                        // paint sidecar mirror with the FORM's gs at
-                        // the time of the paint. Re-applying the outer
-                        // gs's CMYK / overprint / spot mirror after a
-                        // Form Do would composite the form's region
-                        // again with whatever colour the OUTER gs had,
-                        // double-counting (and, when the outer colour
-                        // differs from the form's, overwriting the
-                        // form's mirror writes — the QA-6 / QA-6-DIAG-2
-                        // failure mode where outer /K's iteration 2
-                        // /Inner Do lost the inner Form's spot
-                        // contribution). SMask attenuation always
-                        // applies — an outer /SMask gs in effect at the
-                        // Do attaches to the Do's entire region
-                        // regardless of how the inner produced its
-                        // pixels. ~keep
-                        let (is_form, group_boundary) = self.xobject_kind(name, resources, doc).unwrap_or_default();
-                        let _image_workspace = if is_form {
-                            None
-                        } else {
-                            self.reserve_raster_workspace(pixmap, &gs_clone, 6, knockout::SIDECAR_SNAPSHOT_COPIES)?
-                        };
-                        let _ordinary_form_mask = if is_form && !group_boundary && gs_clone.smask.is_some() {
-                            Some(self.knockout_resources.reserve(Some(0))?)
-                        } else {
-                            None
-                        };
-                        let smask_snap = if group_boundary {
-                            None
-                        } else {
-                            self.paint_mask_snapshots(pixmap, &gs_clone)?
-                        };
-                        let overprint_snap = if is_form {
-                            None
-                        } else {
-                            self.overprint_snapshot(pixmap, &gs_clone, true)
-                        };
-                        let cmyk_compose_snap = if is_form {
-                            None
-                        } else {
-                            self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true)
-                        };
-                        let spot_snap = if is_form {
-                            None
-                        } else {
-                            self.spot_paint_snapshot(pixmap, &gs_clone, true)
-                        };
-                        // §8.9.5 + §8.9.6.2 + §11.7.3: rasterise the
-                        // Image / ImageMask footprint + stencil-bit
-                        // coverage so the spot mirror has a geometry-
-                        // true per-pixel mask. Skipped for Form
-                        // XObjects (their per-paint mirror runs
-                        // inside the recursive content stream — the
-                        // post-Do mirror for Forms is already
-                        // suppressed by round 3's P0 fix). ~keep
-                        let image_coverage = (!is_form && (spot_snap.is_some() || self.knockout_shape.is_some()))
-                            .then(|| {
-                                self.rasterise_image_xobject_coverage(
-                                    name, transform, &gs_clone, resources, doc, clip, false,
-                                )
-                            })
-                            .flatten();
-                        let image_geometry = (self.knockout_shape.is_some() && !is_form)
-                            .then(|| {
-                                self.rasterise_image_xobject_coverage(
-                                    name, transform, &gs_clone, resources, doc, clip, true,
-                                )
-                            })
-                            .flatten();
-                        self.render_xobject(
-                            pixmap,
-                            name,
-                            transform,
-                            &gs_clone,
-                            resources,
-                            doc,
-                            page_num,
-                            clip,
-                            base_transform,
-                        )?;
-                        self.apply_paint_modulators(
-                            pixmap,
-                            PaintModulatorSnapshots {
-                                process_path: None,
-                                cmyk_compose: cmyk_compose_snap,
-                                overprint: overprint_snap,
-                                spot: spot_snap,
-                                smask: smask_snap,
-                            },
-                            image_coverage.as_deref(),
-                            PaintModulatorContext {
-                                gs: &gs_clone,
-                                doc,
-                                page_num,
-                                resources,
-                                base_transform,
-                                fill_side: true,
-                                knockout_coverage: image_geometry.as_deref(),
-                            },
-                        )?;
-                    }
-                }
+                Operator::Do { name } => self.op_do(pixmap, &mut st, env, name)?,
 
                 // Inline image (`BI ... ID <data> EI`) — §8.9.7. Unlike a
                 // `Do`-invoked image XObject, the pixel data sits directly in
@@ -2523,74 +1319,13 @@ impl PageRenderer {
                 // `extract_image_from_xobject` expects, wrap it in a
                 // synthetic `Object::Stream`, and paint it through the same
                 // `render_image`/`render_image_mask` used for `Do` images. ~keep
-                Operator::InlineImage { dict, data } => {
-                    if excluded_layer_depth == 0 {
-                        let gs_clone = gs_stack.current().clone();
-                        let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        let expanded = crate::extractors::images::expand_inline_image_dict((**dict).clone());
-                        let is_image_mask = expanded
-                            .get("ImageMask")
-                            .map(|o| matches!(o, Object::Boolean(true)))
-                            .unwrap_or(false);
-                        let synthetic = Object::Stream {
-                            dict: expanded,
-                            data: bytes::Bytes::from(data.clone()),
-                        };
-                        if self.knockout_shape.is_some() {
-                            self.collect_inline_image_shape(
-                                &synthetic,
-                                transform,
-                                &gs_clone,
-                                doc,
-                                clip,
-                                is_image_mask,
-                            )?;
-                        }
-                        if is_image_mask {
-                            if let Err(error) =
-                                self.render_image_mask(pixmap, &synthetic, None, transform, doc, clip, &gs_clone)
-                            {
-                                tracing::warn!(
-                                    error_code = error.telemetry_code(),
-                                    error_offset = ?error.telemetry_offset(),
-                                    "skipping unrenderable inline ImageMask"
-                                );
-                            }
-                        } else if let Err(error) =
-                            self.render_image(pixmap, &synthetic, None, transform, doc, clip, None, None, &gs_clone)
-                        {
-                            tracing::warn!(
-                                error_code = error.telemetry_code(),
-                                error_offset = ?error.telemetry_offset(),
-                                "skipping unrenderable inline image"
-                            );
-                        }
-                    }
-                }
+                Operator::InlineImage { dict, data } => self.op_inline_image(pixmap, &mut st, env, dict, data)?,
 
-                Operator::Td { tx, ty } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
-                        let translation = Matrix::translation(*tx, *ty);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("Td: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
-                    }
-                }
-                Operator::TD { tx, ty } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
-                        gs.leading = -(*ty);
-                        let translation = Matrix::translation(*tx, *ty);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("TD: [{}, {}], text_matrix now: {:?}", tx, ty, gs.text_matrix);
-                    }
-                }
+                Operator::Td { tx, ty } => self.op_td(&mut st, *tx, *ty),
+                Operator::TD { tx, ty } => self.op_td_set_leading(&mut st, *tx, *ty),
                 Operator::Tm { a, b, c, d, e, f } => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
+                    if st.in_text_object {
+                        let gs = st.gs_stack.current_mut();
                         gs.text_matrix = Matrix {
                             a: *a,
                             b: *b,
@@ -2612,156 +1347,27 @@ impl PageRenderer {
                         );
                     }
                 }
-                Operator::TStar => {
-                    if in_text_object {
-                        let gs = gs_stack.current_mut();
-                        let leading = gs.leading;
-                        let translation = Matrix::translation(0.0, -leading);
-                        gs.text_line_matrix = translation.multiply(&gs.text_line_matrix);
-                        gs.text_matrix = gs.text_line_matrix;
-                        tracing::trace!("T*: text_matrix now: {:?}", gs.text_matrix);
-                    }
-                }
-                Operator::Tf { font, size } => {
-                    // Cache the font's writing mode on the graphics state so
-                    // the rasterizer hot path can branch on a single
-                    // primitive read instead of dereferencing the FontInfo
-                    // through the cache for every glyph. ~keep
-                    let wmode = self.fonts.get(font).map(|f| f.wmode).unwrap_or(0);
-                    let gs = gs_stack.current_mut();
-                    gs.font_name = Some(font.clone());
-                    gs.font_size = *size;
-                    gs.text_wmode = wmode;
-                }
+                Operator::TStar => self.op_t_star(&mut st),
+                Operator::Tf { font, size } => self.op_tf(&mut st, font, *size),
 
-                Operator::SetExtGState { dict_name } => {
-                    // Fast path: resource dict is already resolved (see top of
-                    // this function), so the per-`gs` cost is one HashMap
-                    // lookup + one resolve of the small inner state dict. ~keep
-                    let entry = ext_g_state_cache.entry(dict_name.clone()).or_insert_with(|| {
-                        if let Some(states) = ext_g_states {
-                            if let Some(state_obj) = states.get(dict_name) {
-                                return parse_ext_g_state_inner(state_obj, doc).unwrap_or_default();
-                            }
-                        }
-                        ParsedExtGState::default()
-                    });
-                    entry.apply(gs_stack.current_mut());
-                }
+                Operator::SetExtGState { dict_name } => self.op_set_ext_g_state(&mut st, env, dict_name),
 
                 // EndPath (n operator): discard current path without painting,
                 // but apply any pending clip. Per PDF spec, W n is the standard
                 // way to set a clipping path without filling or stroking.
                 // Suppress the clip application inside an excluded OCG scope so
                 // the clip doesn't leak past EMC into visible content. ~keep
-                Operator::EndPath => {
-                    if excluded_layer_depth == 0 {
-                        apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
-                    } else {
-                        let _ = pending_clip.take();
-                    }
-                    current_path = PathBuilder::new();
-                }
+                Operator::EndPath => self.op_end_path(pixmap, &mut st, env),
 
-                Operator::PaintShading { name } => {
-                    if excluded_layer_depth == 0 {
-                        let mut gs_clone = gs_stack.current().clone();
-                        // §8.7.4 + §11.7.3: when the shading's
-                        // /ColorSpace is /Separation or non-process
-                        // /DeviceN, surface the ink-name list (paired
-                        // with the /Function /C0 endpoint tints) onto
-                        // `gs_clone.fill_spot_inks` so the spot mirror
-                        // sees a non-empty source ink set and fires.
-                        // Without this the shading paint silently
-                        // bypasses the spot mirror because the gating
-                        // (`spot_paint_active`) checks
-                        // `gs.fill_spot_inks`, which is otherwise
-                        // populated only by `cs`/`scn` colour-set
-                        // operators — none of which fire before `sh`. ~keep
-                        if !self.spot_paint_active(&gs_clone, true) && self.cmyk_sidecar.is_some() {
-                            if let Some(inks) = self.resolve_shading_spot_inks(name, resources, doc) {
-                                if !inks.is_empty() {
-                                    gs_clone.fill_spot_inks = inks;
-                                }
-                            }
-                        }
-                        let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                        let clip = clip_stack.last().and_then(|c| c.as_ref());
-                        // §11.4.7 + §11.7.4 + §11.4 cycle: shading is
-                        // a fill-side paint, so the snapshot/apply
-                        // cadence mirrors the path-Fill arm. The
-                        // overprint and compose-first paths short-
-                        // circuit when the active fill colour is not
-                        // CMYK (the shading paint's per-pixel colour
-                        // comes from the gradient interpolator, not
-                        // `gs.fill_color_cmyk`), so they only fire when
-                        // the page set a CMYK fill before invoking
-                        // `sh`. ~keep
-                        let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
-                        let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
-                        let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
-                        let spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
-                        // §8.7.4 + §11.7.3: rasterise the shading
-                        // geometry (intersected with the active clip)
-                        // so the spot mirror sees the geometry-true
-                        // per-pixel coverage of the gradient. ~keep
-                        let shading_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
-                            .then(|| self.rasterise_shading_coverage(name, transform, &gs_clone, resources, doc, clip))
-                            .flatten();
-                        self.render_shading(pixmap, name, transform, &gs_clone, resources, doc, clip)?;
-                        self.apply_paint_modulators(
-                            pixmap,
-                            PaintModulatorSnapshots {
-                                process_path: None,
-                                cmyk_compose: cmyk_compose_snap,
-                                overprint: overprint_snap,
-                                spot: spot_snap,
-                                smask: smask_snap,
-                            },
-                            shading_coverage.as_deref(),
-                            PaintModulatorContext {
-                                gs: &gs_clone,
-                                doc,
-                                page_num,
-                                resources,
-                                base_transform,
-                                fill_side: true,
-                                knockout_coverage: None,
-                            },
-                        )?;
-                    }
-                }
+                Operator::PaintShading { name } => self.op_paint_shading(pixmap, &mut st, env, name)?,
 
                 Operator::BeginMarkedContent { .. } => {
-                    marked_content_is_excluded.push(false);
+                    st.marked_content_is_excluded.push(false);
                 }
                 Operator::BeginMarkedContentDict { tag, properties } => {
-                    let mut is_excluded = false;
-                    // Tag "OC" scopes can hide content even with empty excluded_layers
-                    // when the OCMD uses /VE /Not or /P /AllOff/AnyOff (the
-                    // expression evaluates with all OCGs on by default). We can
-                    // only short-circuit cheaply for simple OCG refs, which the
-                    // optional_content module handles internally. ~keep
-                    if tag == "OC" {
-                        is_excluded = crate::optional_content::resolve_and_check_ocg_excluded(
-                            properties,
-                            Some(resources),
-                            Some(doc),
-                            excluded_layers,
-                        );
-                    }
-                    if is_excluded {
-                        excluded_layer_depth += 1;
-                    }
-                    marked_content_is_excluded.push(is_excluded);
+                    self.op_begin_marked_content_dict(&mut st, env, tag, properties)
                 }
-                Operator::EndMarkedContent => {
-                    if let Some(was_excluded) = marked_content_is_excluded.pop() {
-                        if was_excluded && excluded_layer_depth > 0 {
-                            excluded_layer_depth -= 1;
-                        }
-                    }
-                }
+                Operator::EndMarkedContent => self.op_end_marked_content(&mut st),
 
                 _ => {}
             }
@@ -3640,6 +2246,18 @@ impl PageRenderer {
         Ok(())
     }
 
+    fn skip_image(&mut self, reference: Option<ObjectRef>) -> bool {
+        if self.images_suppressed {
+            return true;
+        }
+        let Some((selected, include)) = self.image_selection else {
+            return false;
+        };
+        let matches = reference == Some(selected);
+        self.image_selection_matches += usize::from(matches);
+        matches != include
+    }
+
     /// Render an image XObject.
     fn render_image(
         &mut self,
@@ -3655,7 +2273,7 @@ impl PageRenderer {
     ) -> Result<()> {
         use crate::extractors::images::{ImageData, extract_image_from_xobject};
 
-        if self.images_suppressed {
+        if self.skip_image(obj_ref) {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
@@ -4176,6 +2794,9 @@ impl PageRenderer {
         let actual = u32::try_from(integer)
             .map_err(|_| Error::Image(format!("CCITT ImageMask /DecodeParms /{key} must be positive")))?;
         if actual == 0 {
+            if key == "Rows" {
+                return Ok(());
+            }
             return Err(Error::Image(format!(
                 "CCITT ImageMask /DecodeParms /{key} must be positive"
             )));
@@ -4269,7 +2890,7 @@ impl PageRenderer {
         clip_mask: Option<&tiny_skia::Mask>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        if self.images_suppressed {
+        if self.skip_image(obj_ref) {
             return Ok(());
         }
         let dict = xobject
@@ -9567,7 +8188,7 @@ mod tests {
         PdfDocument::from_bytes(pdf).expect("open minimal PDF")
     }
 
-    fn minimal_pdf_doc() -> PdfDocument {
+    pub(super) fn minimal_pdf_doc() -> PdfDocument {
         pdf_doc_with_extra_object(None)
     }
 
@@ -9755,6 +8376,15 @@ mod tests {
     }
 
     #[test]
+    fn ccitt_image_mask_uses_image_height_for_zero_rows() {
+        let dict = ccitt_mask_dict(8, 3, 8, 0);
+        let params = PageRenderer::image_mask_ccitt_params(&dict, 8, 3, &minimal_pdf_doc())
+            .unwrap()
+            .unwrap();
+        assert_eq!(params.rows, Some(3));
+    }
+
+    #[test]
     fn ccitt_image_mask_rejects_dimension_mismatches() {
         let columns = ccitt_mask_dict(8, 1, 7, 1);
         let doc = minimal_pdf_doc();
@@ -9937,35 +8567,6 @@ mod tests {
         let (r, g, b) = cmyk_to_rgb(1.0, 0.0, 0.0, 0.0);
         let q = |v: f32| (v * 255.0).round() as u8;
         assert_eq!([q(r), q(g), q(b)], [0x00, 0xAD, 0xEF]);
-    }
-
-    #[test]
-    fn test_negative_rect_normalization() {
-        // Negative height: re 100 200 50 -30 → should normalize to (100, 170, 50, 30) ~keep
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = 50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 100.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_negative_rect_both_negative() {
-        let x: f32 = 100.0;
-        let y: f32 = 200.0;
-        let w: f32 = -50.0;
-        let h: f32 = -30.0;
-        let (nx, nw) = if w < 0.0 { (x + w, -w) } else { (x, w) };
-        let (ny, nh) = if h < 0.0 { (y + h, -h) } else { (y, h) };
-        assert!((nx - 50.0).abs() < 0.001);
-        assert!((ny - 170.0).abs() < 0.001);
-        assert!((nw - 50.0).abs() < 0.001);
-        assert!((nh - 30.0).abs() < 0.001);
     }
 
     /// The crux of the ET application: the accumulated glyph silhouette is
@@ -10754,6 +9355,10 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "path_operators_tests.rs"]
+mod path_operators_tests;
 
 #[cfg(test)]
 #[path = "sampled_function_tests.rs"]

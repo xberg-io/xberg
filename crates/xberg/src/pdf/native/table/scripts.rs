@@ -9,7 +9,7 @@ use xberg_native_pdf::structure::table_extractor::{Table, TableCell};
 
 #[derive(Default)]
 pub(super) struct PageSpans {
-    spans: Vec<TextSpan>,
+    pub(super) spans: Vec<TextSpan>,
     margin: f32,
 }
 

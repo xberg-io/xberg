@@ -86,7 +86,7 @@ fn push_operator_cap_warning() {
     let cap = effective_max_operators();
     let msg = format!("Content stream exceeded {cap} operators, truncating");
     tracing::warn!(count = cap, "content stream exceeded operator cap; truncating");
-    crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+    crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
         category: crate::extractors::warnings::WarningCategory::OperatorCapExceeded,
         page: None,
         message: msg,
@@ -156,6 +156,23 @@ pub fn parse_content_stream(data: &[u8]) -> Result<Vec<Operator>> {
 pub fn visit_complete_content_stream(
     data: &[u8],
     operator_limit: usize,
+    visit: impl FnMut(Operator) -> bool,
+) -> Result<bool> {
+    visit_content_stream(data, operator_limit, false, visit)
+}
+
+pub(crate) fn visit_strict_content_stream(
+    data: &[u8],
+    operator_limit: usize,
+    visit: impl FnMut(Operator) -> bool,
+) -> Result<bool> {
+    visit_content_stream(data, operator_limit, true, visit)
+}
+
+fn visit_content_stream(
+    data: &[u8],
+    operator_limit: usize,
+    strict: bool,
     mut visit: impl FnMut(Operator) -> bool,
 ) -> Result<bool> {
     let mut input = data;
@@ -173,7 +190,7 @@ pub fn visit_complete_content_stream(
         if remaining == 0 {
             return Err(invalid());
         }
-        let (next, op) = parse_operator_with_operands(rest).map_err(|_| invalid())?;
+        let (next, op) = parse_operator(rest, strict).map_err(|_| invalid())?;
         if next.len() >= rest.len() {
             return Err(invalid());
         }
@@ -201,8 +218,18 @@ pub fn visit_complete_content_stream(
 /// `Object::Real` for each numeric operand. Common operators like `m`, `l`, `c`,
 /// `re`, `cm`, `rg` are parsed entirely from raw bytes.
 pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
+    Ok(scan_path_operators(data, None).0)
+}
+
+pub(crate) fn parse_complete_form_path_operators(data: &[u8], operator_limit: usize) -> Option<Vec<Operator>> {
+    let (operators, complete) = scan_path_operators(data, Some(operator_limit));
+    complete.then_some(operators)
+}
+
+fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Operator>, bool) {
+    let max_operators = effective_max_operators().min(operator_limit.unwrap_or(usize::MAX));
     let estimated_capacity = data.len() / 20;
-    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000));
+    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000).min(max_operators));
     let len = data.len();
     let mut i: usize = 0;
     let mut operand_start: usize = 0;
@@ -215,9 +242,17 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
         if i >= len {
             break;
         }
-        if operators.len() >= effective_max_operators() {
-            push_operator_cap_warning();
-            break;
+        if operator_limit.is_some() && data[i] == b'%' {
+            while i < len && data[i] != b'\n' && data[i] != b'\r' {
+                i += 1;
+            }
+            continue;
+        }
+        if operator_limit.is_none() && operators.len() >= max_operators {
+            if max_operators == effective_max_operators() {
+                push_operator_cap_warning();
+            }
+            return (operators, false);
         }
 
         match BYTE_CLASS[data[i] as usize] {
@@ -225,6 +260,13 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                 let first_byte = data[i];
                 let second_is_non_alpha = i + 1 >= len || BYTE_CLASS[data[i + 1] as usize] != SCAN_ALPHA;
 
+                if second_is_non_alpha
+                    && first_byte == b's'
+                    && operator_limit.is_some()
+                    && max_operators - operators.len() < 2
+                {
+                    return (operators, false);
+                }
                 if second_is_non_alpha {
                     let operands = &data[operand_start..i];
                     let op = match first_byte {
@@ -285,6 +327,9 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                         }
                         _ => None,
                     };
+                    if op.is_some() && operators.len() >= max_operators {
+                        return (operators, false);
+                    }
                     if let Some(op) = op {
                         operators.push(op);
                         i += 1;
@@ -316,7 +361,7 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                             i = len - rest.len();
                             operand_start = i;
                         }
-                        None => break,
+                        None => return (operators, false),
                     }
                     continue;
                 }
@@ -364,6 +409,9 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                     _ => None,
                 };
 
+                if operators.len() >= max_operators {
+                    return (operators, false);
+                }
                 if let Some(op) = fast_op {
                     operators.push(op);
                     operand_start = i;
@@ -429,13 +477,13 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                         bytes = len - i,
                         "content stream had too many consecutive parse errors; bailing out"
                     );
-                    break;
+                    return (operators, false);
                 }
             }
         }
     }
 
-    Ok(operators)
+    (operators, true)
 }
 
 /// Skips a `[...]`-delimited array in the paths-only fast scanner, honoring
@@ -2179,6 +2227,12 @@ pub fn parse_content_stream_images_only(data: &[u8]) -> Result<Vec<Operator>> {
 fn scan_to_et(data: &[u8]) -> Option<&[u8]> {
     let mut i = 0;
     while i + 1 < data.len() {
+        if data[i] == b'%' {
+            while i < data.len() && !matches!(data[i], b'\r' | b'\n') {
+                i += 1;
+            }
+            continue;
+        }
         if data[i] == b'E' && data[i + 1] == b'T' {
             let before_ok = i == 0 || data[i - 1].is_ascii_whitespace() || data[i - 1] == b')' || data[i - 1] == b'>';
             let after_ok = i + 2 >= data.len() || data[i + 2].is_ascii_whitespace() || data[i + 2] == b'%';
@@ -2238,6 +2292,10 @@ fn skip_hex_string_for_et_scan(data: &[u8], start: usize) -> usize {
 /// allocation for the common case (most PDF operators have 0-6 operands).
 /// Only spills to the heap for rare operators with more than 6 operands.
 fn parse_operator_with_operands(input: &[u8]) -> IResult<&[u8], Operator> {
+    parse_operator(input, false)
+}
+
+fn parse_operator(input: &[u8], strict: bool) -> IResult<&[u8], Operator> {
     let mut operands: SmallVec<[Object; 6]> = SmallVec::new();
     let mut remaining = input;
 
@@ -2255,6 +2313,13 @@ fn parse_operator_with_operands(input: &[u8]) -> IResult<&[u8], Operator> {
         if is_operator_start(remaining[0]) {
             let (rest, op_name) = parse_operator_name(remaining)?;
 
+            if strict && !strict_operands(op_name, &operands) {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    remaining,
+                    nom::error::ErrorKind::Verify,
+                )));
+            }
+
             if op_name == "BI" {
                 // Parse inline image: BI <dict entries> ID <binary data> EI ~keep
                 return parse_inline_image(rest);
@@ -2264,10 +2329,59 @@ fn parse_operator_with_operands(input: &[u8]) -> IResult<&[u8], Operator> {
             return Ok((rest, op));
         }
 
-        let (inp, obj) = parse_object(remaining)?;
+        let (inp, obj) = if strict {
+            crate::parser::parse_strict_object(remaining)?
+        } else {
+            parse_object(remaining)?
+        };
         operands.push(obj);
         remaining = inp;
     }
+}
+
+// Strict visitors decide whether supported graphics operators invalidate their evidence.
+fn strict_operands(name: &str, operands: &[Object]) -> bool {
+    let signature = match name {
+        "q" | "Q" | "BT" | "ET" | "T*" | "EMC" | "h" | "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => {
+            ""
+        }
+        "W" | "W*" => "",
+        "Tf" => "an",
+        "Tr" => "r",
+        "Tj" | "'" => "s",
+        "TJ" => "t",
+        "\"" => "nns",
+        "Td" | "TD" | "m" | "l" => "nn",
+        "Tm" | "cm" | "c" => "nnnnnn",
+        "v" | "y" | "re" | "k" | "K" => "nnnn",
+        "rg" | "RG" => "nnn",
+        "Tc" | "Tw" | "Tz" | "TL" | "Ts" | "w" | "M" | "i" | "g" | "G" => "n",
+        "j" | "J" => "i",
+        "d" => "dn",
+        "gs" | "Do" | "BMC" | "ri" => "a",
+        "BDC" => "ap",
+        _ => return false,
+    };
+    operands.len() == signature.len()
+        && signature.bytes().zip(operands).all(|(kind, object)| match kind {
+            b'n' => probe_number(object),
+            b'i' => matches!(object.as_integer(), Some(0..=2)),
+            b'r' => matches!(object.as_integer(), Some(0..=7)),
+            b'a' => object.as_name().is_some(),
+            b's' => matches!(object, Object::String(_)),
+            b'p' => matches!(object, Object::Name(_) | Object::Dictionary(_)),
+            b'd' => object.as_array().is_some_and(|values| values.iter().all(probe_number)),
+            b't' => object.as_array().is_some_and(|values| {
+                values
+                    .iter()
+                    .all(|value| matches!(value, Object::String(_)) || probe_number(value))
+            }),
+            _ => false,
+        })
+}
+
+fn probe_number(object: &Object) -> bool {
+    object.as_integer().is_some() || object.as_real().is_some_and(|value| (value as f32).is_finite())
 }
 
 /// Check if a byte could start an operator name.

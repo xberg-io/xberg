@@ -23,6 +23,7 @@ use crate::{ExtractionConfig, core::ServerConfig, service::ExtractionServiceBuil
 #[cfg(feature = "prometheus")]
 use super::handlers::metrics_handler;
 use super::{
+    auth::ApiAuth,
     handlers::{
         cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, cancel_job_handler,
         detect_handler, extract_async_handler, extract_handler, formats_handler, health_handler, info_handler,
@@ -123,13 +124,32 @@ pub fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits
     create_router_with_limits_and_server_config(config, limits, ServerConfig::default())
 }
 
+/// Create the API router with explicit size limits and authentication settings.
+///
+/// Unlike [`create_router_with_limits`], this never reads `XBERG_API_TOKEN` from the process
+/// environment, so embedders and tests get the same behaviour regardless of it.
+#[cfg_attr(alef, alef(skip))]
+pub fn create_router_with_auth(config: ExtractionConfig, limits: ApiSizeLimits, auth: ApiAuth) -> Router {
+    build_router(
+        config,
+        limits,
+        ServerConfig::default(),
+        resolve_max_concurrent_requests(),
+        auth,
+    )
+}
+
 /// Build the [`ApiState`] shared by every route, including a fresh extraction service and
 /// (behind `feature = "api"`) a fresh job store.
 ///
 /// Extracted from [`create_router_with_limits_and_server_config`] so the wiring from
 /// `server_config` into `ApiState` — in particular `job_timeout_secs` — is unit-testable
 /// without building a full router.
-fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig) -> ApiState {
+///
+/// Async jobs extract under their own limit of `max_concurrent_requests` slots (`0` leaves it
+/// unbounded, like the request limit). It is separate from the request limiter so a queued job
+/// never blocks a submission or a synchronous request.
+fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig, max_concurrent_requests: usize) -> ApiState {
     // Fallback for embedders that only ever use this built-in router: install the
     // Prometheus-backed meter provider before the extraction service (and therefore the
     // `telemetry::metrics::get_metrics()` `OnceLock`) is built below. Callers who construct
@@ -151,7 +171,9 @@ fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig) -> Ap
         default_config: Arc::new(config),
         extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
         #[cfg(feature = "api")]
-        job_store: Arc::new(super::jobs::JobStore::new()),
+        job_store: Arc::new(super::jobs::JobStore::with_execution_slots(
+            (max_concurrent_requests > 0).then(|| Arc::new(tokio::sync::Semaphore::new(max_concurrent_requests))),
+        )),
         #[cfg(feature = "api")]
         job_timeout_secs: server_config.job_timeout_secs,
         #[cfg(feature = "prometheus")]
@@ -159,16 +181,14 @@ fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig) -> Ap
     }
 }
 
-/// Build the CORS layer for `server_config`, warning when the resulting policy is permissive.
-///
-/// An explicitly configured origin list that parses to nothing falls back to the permissive
-/// policy rather than locking the server out of every browser client. ~keep
+/// Build the CORS layer for `server_config`. Cross-origin access is denied unless
+/// `cors_origins` lists origins explicitly; the entry `*` opts in to every origin. ~keep
 fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
     if server_config.cors_allows_all() {
         tracing::warn!(
-            "CORS configured to allow all origins (default). This permits CSRF attacks. \
-             For production, set XBERG_CORS_ORIGINS environment variable to comma-separated \
-             list of allowed origins (e.g., 'https://app.example.com,https://api.example.com')"
+            "CORS configured to allow all origins ('*'). Any website can call this API from a \
+             browser; without XBERG_API_TOKEN that is a CSRF risk. Prefer listing origins in \
+             XBERG_CORS_ORIGINS (e.g., 'https://app.example.com,https://api.example.com')"
         );
         return CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
     }
@@ -179,19 +199,16 @@ fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
         .filter_map(|s| s.trim().parse::<axum::http::HeaderValue>().ok())
         .collect();
 
-    if !origins.is_empty() {
-        tracing::info!("CORS configured with {} explicit allowed origin(s)", origins.len());
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(origins))
-            .allow_methods(Any)
-            .allow_headers(Any)
-    } else {
-        tracing::warn!(
-            "CORS origins configured but empty/invalid - falling back to permissive CORS. \
-             This allows CSRF attacks. Set explicit origins for production."
-        );
-        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+    if origins.is_empty() {
+        tracing::info!("CORS denied for all cross-origin requests (set XBERG_CORS_ORIGINS to allow origins)");
+        return CorsLayer::new();
     }
+
+    tracing::info!("CORS configured with {} explicit allowed origin(s)", origins.len());
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
 
 /// Cap how many extraction requests process concurrently so a burst of large
@@ -251,7 +268,13 @@ pub(crate) fn create_router_with_limits_and_server_config(
     limits: ApiSizeLimits,
     server_config: ServerConfig,
 ) -> Router {
-    build_router(config, limits, server_config, resolve_max_concurrent_requests())
+    build_router(
+        config,
+        limits,
+        server_config,
+        resolve_max_concurrent_requests(),
+        ApiAuth::from_env(),
+    )
 }
 
 fn build_router(
@@ -259,8 +282,9 @@ fn build_router(
     limits: ApiSizeLimits,
     server_config: ServerConfig,
     max_concurrent_requests: usize,
+    auth: ApiAuth,
 ) -> Router {
-    let state = build_api_state(config, &server_config);
+    let state = build_api_state(config, &server_config, max_concurrent_requests);
 
     let cors_layer = build_cors_layer(&server_config);
 
@@ -270,34 +294,39 @@ fn build_router(
             .route("/extract-async", post(extract_async_handler))
             .route("/detect", post(detect_handler))
             .route("/process", put(openweb_external_handler))
-            .route("/v1/convert/file", post(openweb_docling_handler)),
+            .route("/v1/convert/file", post(openweb_docling_handler))
+            .route("/cache/clear", delete(cache_clear_handler))
+            .route("/cache/warm", post(cache_warm_handler)),
         max_concurrent_requests,
     );
 
-    let mut router = Router::new()
+    let mut protected = Router::new()
         .merge(limited_routes)
         .route("/jobs/{job_id}", get(job_status_handler).delete(cancel_job_handler))
         .route("/formats", get(formats_handler))
-        .route("/health", get(health_handler))
         .route("/info", get(info_handler))
         .route("/version", get(version_handler))
         .route("/cache/stats", get(cache_stats_handler))
-        .route("/cache/clear", delete(cache_clear_handler))
-        .route("/cache/manifest", get(cache_manifest_handler))
-        .route("/cache/warm", post(cache_warm_handler))
-        .fallback(not_found_handler);
+        .route("/cache/manifest", get(cache_manifest_handler));
 
     #[cfg(feature = "api")]
     {
-        router = router.route("/openapi.json", get(openapi_schema_handler));
+        protected = protected.route("/openapi.json", get(openapi_schema_handler));
     }
 
     #[cfg(feature = "prometheus")]
     {
-        router = router.route("/metrics", get(metrics_handler));
+        protected = protected.route("/metrics", get(metrics_handler));
     }
 
-    let router = router
+    // The auth layer is added after the concurrency limit so it runs first: a rejected
+    // request never occupies an extraction slot. `/health` stays outside it for probes.
+    protected = auth.protect(protected);
+
+    let router = Router::new()
+        .route("/health", get(health_handler))
+        .merge(protected)
+        .fallback(not_found_handler)
         .layer(DefaultBodyLimit::max(limits.max_request_body_bytes))
         .layer(RequestBodyLimitLayer::new(limits.max_request_body_bytes))
         .layer(cors_layer)
@@ -347,6 +376,7 @@ mod tests {
             ApiSizeLimits::default(),
             ServerConfig::default(),
             1,
+            ApiAuth::default(),
         );
 
         let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
@@ -389,6 +419,345 @@ mod tests {
         holder.abort();
     }
 
+    mod access_control {
+        use super::*;
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode, header},
+        };
+        use std::{convert::Infallible, time::Duration};
+        use tower::ServiceExt;
+
+        const TOKEN: &str = "s3cret-token";
+
+        fn router(cors_origins: &[&str], token: Option<&str>) -> Router {
+            build_router(
+                ExtractionConfig::default(),
+                ApiSizeLimits::default(),
+                ServerConfig {
+                    cors_origins: cors_origins.iter().map(ToString::to_string).collect(),
+                    ..ServerConfig::default()
+                },
+                1,
+                ApiAuth::new(token, false),
+            )
+        }
+
+        async fn status(router: &Router, method: &str, uri: &str, authorization: Option<&str>) -> StatusCode {
+            let mut request = Request::builder().method(method).uri(uri);
+            if let Some(value) = authorization {
+                request = request.header(header::AUTHORIZATION, value);
+            }
+            router
+                .clone()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+                .status()
+        }
+
+        #[tokio::test]
+        async fn rejects_missing_and_wrong_tokens_with_a_challenge() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in [
+                None,
+                Some("Bearer wrong"),
+                Some("Bearer s3cret-toke"),
+                Some("Bearer s3cret-token-extra"),
+                Some("Basic s3cret-token"),
+                Some(TOKEN),
+            ] {
+                assert_eq!(
+                    status(&router, "GET", "/info", authorization).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{authorization:?}"
+                );
+            }
+
+            let response = router
+                .clone()
+                .oneshot(Request::builder().uri("/info").body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.headers()[header::WWW_AUTHENTICATE], "Bearer");
+        }
+
+        #[tokio::test]
+        async fn accepts_the_right_token_case_insensitive_scheme() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in ["Bearer s3cret-token", "bearer s3cret-token"] {
+                assert_eq!(
+                    status(&router, "GET", "/info", Some(authorization)).await,
+                    StatusCode::OK
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn health_stays_open_when_a_token_is_set() {
+            let router = router(&[], Some(TOKEN));
+            assert_eq!(status(&router, "GET", "/health", None).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn without_a_token_every_route_is_open() {
+            let router = router(&[], None);
+            assert_eq!(status(&router, "GET", "/info", None).await, StatusCode::OK);
+            assert_eq!(status(&router, "GET", "/health", None).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn cache_routes_require_the_token() {
+            let router = router(&[], Some(TOKEN));
+            for (method, uri) in [
+                ("DELETE", "/cache/clear"),
+                ("POST", "/cache/warm"),
+                ("GET", "/cache/stats"),
+                ("GET", "/cache/manifest"),
+            ] {
+                assert_eq!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+                assert_eq!(
+                    status(&router, method, uri, Some("Bearer wrong")).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+            }
+            assert_eq!(
+                status(&router, "GET", "/cache/stats", Some("Bearer s3cret-token")).await,
+                StatusCode::OK
+            );
+        }
+
+        #[tokio::test]
+        async fn cache_mutations_queue_behind_the_concurrency_limit() {
+            let router = router(&[], None);
+            let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
+            let holder = tokio::spawn(
+                router.clone().oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header("content-type", "multipart/form-data; boundary=x")
+                        .body(stalled_body)
+                        .unwrap(),
+                ),
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            for (method, uri) in [("DELETE", "/cache/clear"), ("POST", "/cache/warm")] {
+                let queued = tokio::time::timeout(
+                    Duration::from_millis(300),
+                    router
+                        .clone()
+                        .oneshot(Request::builder().method(method).uri(uri).body(Body::empty()).unwrap()),
+                )
+                .await;
+                assert!(queued.is_err(), "{method} {uri} must wait for a free slot");
+            }
+            holder.abort();
+        }
+
+        #[tokio::test]
+        async fn extract_openapi_and_metrics_require_the_token() {
+            let router = router(&[], Some(TOKEN));
+            let mut routes = vec![("POST", "/extract"), ("GET", "/openapi.json")];
+            if cfg!(feature = "prometheus") {
+                routes.push(("GET", "/metrics"));
+            }
+            for (method, uri) in routes {
+                assert_eq!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method} {uri}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn alternate_methods_and_paths_never_bypass_auth() {
+            let router = router(&[], Some(TOKEN));
+            for (method, uri) in [
+                ("HEAD", "/info"),
+                ("GET", "/info/"),
+                ("GET", "//info"),
+                ("GET", "/%69nfo"),
+            ] {
+                assert_ne!(
+                    status(&router, method, uri, None).await,
+                    StatusCode::OK,
+                    "{method} {uri}"
+                );
+            }
+        }
+
+        // tower-http's CORS layer answers every OPTIONS request itself, before auth runs, with an
+        // empty body; that is by design and exposes no route data.
+        #[tokio::test]
+        async fn options_requests_never_return_protected_content() {
+            let router = router(&[], Some(TOKEN));
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("OPTIONS")
+                        .uri("/info")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            assert!(body.is_empty(), "{body:?}");
+        }
+
+        #[tokio::test]
+        async fn malformed_authorization_headers_are_rejected() {
+            let router = router(&[], Some(TOKEN));
+            for authorization in ["Bearer  s3cret-token", "Bearer ", "Bearer"] {
+                assert_eq!(
+                    status(&router, "GET", "/info", Some(authorization)).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{authorization:?}"
+                );
+            }
+
+            for headers in [
+                ["Bearer s3cret-token", "Bearer wrong"],
+                ["Bearer wrong", "Bearer s3cret-token"],
+            ] {
+                let response = router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri("/info")
+                            .header(header::AUTHORIZATION, headers[0])
+                            .header(header::AUTHORIZATION, headers[1])
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{headers:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn unauthenticated_requests_do_not_wait_for_a_slot() {
+            let router = router(&[], Some(TOKEN));
+            let stalled_body = Body::from_stream(futures::stream::pending::<Result<Vec<u8>, Infallible>>());
+            let holder = tokio::spawn(
+                router.clone().oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+                        .header("content-type", "multipart/form-data; boundary=x")
+                        .body(stalled_body)
+                        .unwrap(),
+                ),
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let rejected = tokio::time::timeout(Duration::from_secs(2), status(&router, "POST", "/extract", None))
+                .await
+                .expect("an unauthenticated request must not queue behind the held slot");
+            assert_eq!(rejected, StatusCode::UNAUTHORIZED);
+            holder.abort();
+        }
+
+        #[tokio::test]
+        async fn preflight_to_a_protected_route_is_answered_before_auth() {
+            let router = router(&["https://app.example.com"], Some(TOKEN));
+
+            let response = preflight(&router, "https://app.example.com").await;
+            assert!(response.status().is_success(), "{}", response.status());
+            assert_eq!(
+                response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+                "https://app.example.com"
+            );
+
+            let real = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract")
+                        .header(header::ORIGIN, "https://app.example.com")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(real.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn simple_cross_origin_request_gets_no_cors_headers_by_default() {
+            let router = router(&[], None);
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/info")
+                        .header(header::ORIGIN, "https://evil.example")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(!response.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
+        }
+
+        async fn preflight(router: &Router, origin: &str) -> axum::response::Response {
+            router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("OPTIONS")
+                        .uri("/extract")
+                        .header(header::ORIGIN, origin)
+                        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+        }
+
+        #[tokio::test]
+        async fn cors_is_denied_by_default() {
+            let router = router(&[], Some(TOKEN));
+            let response = preflight(&router, "https://evil.example").await;
+            assert!(!response.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
+        }
+
+        #[tokio::test]
+        async fn cors_allows_only_listed_origins() {
+            let router = router(&["https://app.example.com"], Some(TOKEN));
+
+            let allowed = preflight(&router, "https://app.example.com").await;
+            assert_eq!(
+                allowed.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+                "https://app.example.com"
+            );
+
+            let denied = preflight(&router, "https://evil.example").await;
+            assert!(!denied.headers().contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN));
+        }
+
+        #[tokio::test]
+        async fn cors_wildcard_is_an_explicit_opt_in() {
+            let router = router(&["*"], Some(TOKEN));
+            let response = preflight(&router, "https://anything.example").await;
+            assert_eq!(response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
+        }
+    }
+
     #[test]
     fn test_create_router() {
         let config = ExtractionConfig::default();
@@ -425,8 +794,27 @@ mod tests {
             job_timeout_secs: 42,
             ..ServerConfig::default()
         };
-        let state = build_api_state(ExtractionConfig::default(), &server_config);
+        let state = build_api_state(ExtractionConfig::default(), &server_config, 0);
         assert_eq!(state.job_timeout_secs, 42);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn build_api_state_sizes_job_execution_slots_from_the_request_limit() {
+        use std::time::Duration;
+
+        let state = build_api_state(ExtractionConfig::default(), &ServerConfig::default(), 2);
+        let store = &state.job_store;
+        let job_ids: Vec<String> = (0..3).map(|_| store.create_job().expect("slot available")).collect();
+
+        let first = store.acquire_execution_slot(&job_ids[0]).await.expect("first slot");
+        let _second = store.acquire_execution_slot(&job_ids[1]).await.expect("second slot");
+        let third = tokio::time::timeout(Duration::from_millis(200), store.acquire_execution_slot(&job_ids[2])).await;
+        assert!(third.is_err(), "a third job must wait while two jobs run");
+
+        drop(first);
+        let third = tokio::time::timeout(Duration::from_secs(2), store.acquire_execution_slot(&job_ids[2])).await;
+        assert!(third.expect("the third job takes the freed slot").is_some());
     }
 
     #[test]
@@ -440,38 +828,53 @@ mod tests {
         let _router = create_router_with_limits_and_server_config(extraction_config, limits, server_config);
     }
 
+    const MAX_CONCURRENCY_CASE: &str = "XBERG_API_MAX_CONCURRENCY_TEST_CASE";
+    const MAX_CONCURRENCY_CHILD: &str = "api::router::tests::resolve_max_concurrent_requests_child";
+
     #[test]
-    #[allow(unsafe_code)]
     fn resolve_max_concurrent_requests_honors_env_and_defaults() {
-        let original = std::env::var(MAX_CONCURRENT_REQUESTS_ENV).ok();
-
-        unsafe {
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "7");
-            assert_eq!(resolve_max_concurrent_requests(), 7, "explicit value must be honored");
-
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "0");
-            assert_eq!(resolve_max_concurrent_requests(), 0, "0 must disable the limit");
-
-            std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, "not-a-number");
-            let fallback = resolve_max_concurrent_requests();
-            assert!(
-                (4..=32).contains(&fallback),
-                "invalid value must fall back to the bounded default"
-            );
-
-            std::env::remove_var(MAX_CONCURRENT_REQUESTS_ENV);
-            let default = resolve_max_concurrent_requests();
-            assert!(
-                (4..=32).contains(&default),
-                "unset default must be bounded (not unlimited), got {default}"
-            );
+        for (case, value) in [
+            ("explicit", Some("7")),
+            ("disabled", Some("0")),
+            ("invalid", Some("not-a-number")),
+            ("unset", None),
+        ] {
+            crate::utils::test_support::run_child_test(MAX_CONCURRENCY_CHILD, MAX_CONCURRENCY_CASE, case, |command| {
+                match value {
+                    Some(value) => command.env(MAX_CONCURRENT_REQUESTS_ENV, value),
+                    None => command.env_remove(MAX_CONCURRENT_REQUESTS_ENV),
+                };
+            });
         }
+    }
 
-        unsafe {
-            match original {
-                Some(value) => std::env::set_var(MAX_CONCURRENT_REQUESTS_ENV, value),
-                None => std::env::remove_var(MAX_CONCURRENT_REQUESTS_ENV),
-            }
+    #[test]
+    #[ignore = "run in an isolated subprocess by the max-concurrency test"]
+    fn resolve_max_concurrent_requests_child() {
+        let Some(case) = crate::utils::test_support::child_test_root(MAX_CONCURRENCY_CASE) else {
+            return;
+        };
+        let (value, expected) = match case.to_str() {
+            Some("explicit") => (Some("7"), Some(7)),
+            Some("disabled") => (Some("0"), Some(0)),
+            Some("invalid") => (Some("not-a-number"), None),
+            Some("unset") => (None, None),
+            _ => panic!("unknown max-concurrency test case"),
+        };
+        let actual_env = std::env::var_os(MAX_CONCURRENT_REQUESTS_ENV);
+        assert!(
+            actual_env.as_deref() == value.map(std::ffi::OsStr::new),
+            "wrong input for {case:?}"
+        );
+
+        let actual = resolve_max_concurrent_requests();
+        if let Some(expected) = expected {
+            assert_eq!(actual, expected, "wrong limit for {case:?}");
+        } else {
+            assert!(
+                (4..=32).contains(&actual),
+                "fallback for {case:?} must be bounded, got {actual}"
+            );
         }
     }
 }

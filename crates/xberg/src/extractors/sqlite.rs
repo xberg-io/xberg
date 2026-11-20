@@ -8,7 +8,7 @@ use rusqlite::config::DbConfig;
 use rusqlite::types::ValueRef;
 use rusqlite::{Connection, MAIN_DB};
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::{GEOPACKAGE_MIME_TYPE, SQLITE_MIME_TYPE};
 use crate::error::XbergError;
@@ -445,13 +445,6 @@ fn build_document(tables: Vec<ExtractedTable>, geopackage: bool) -> InternalDocu
         builder.push_table(extracted.table, None, None);
     }
     builder.build()
-}
-
-fn check_cancelled(cancel_token: Option<&CancellationToken>) -> Result<()> {
-    if cancel_token.is_some_and(CancellationToken::is_cancelled) {
-        return Err(XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 fn sqlite_error(action: &str, error: rusqlite::Error, cancel_token: Option<&CancellationToken>) -> XbergError {

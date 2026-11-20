@@ -3,26 +3,14 @@ use super::{
     render_selected_pages_for_ocr, rotated_landscape_pdf,
 };
 
-fn run_on_ocr_test_stack<F: std::future::Future<Output = ()>>(test: impl FnOnce() -> F + Send + 'static) {
-    const OCR_TEST_STACK_BYTES: usize = 8 * 1024 * 1024;
-    std::thread::Builder::new()
-        .stack_size(OCR_TEST_STACK_BYTES)
-        .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("build layout OCR test runtime")
-                .block_on(test())
-        })
-        .expect("spawn layout OCR test thread")
-        .join()
-        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-}
+use crate::extractors::pdf::ocr::run_on_ocr_test_stack;
+
+const OCR_TEST_STACK_BYTES: usize = 8 * 1024 * 1024;
 
 #[test]
 #[serial_test::serial]
 fn images_driven_ocr_uses_the_certified_page_frame_and_keeps_the_rotation_hint() {
-    run_on_ocr_test_stack(check_images_driven_ocr_page_frame);
+    run_on_ocr_test_stack(OCR_TEST_STACK_BYTES, check_images_driven_ocr_page_frame);
 }
 
 async fn check_images_driven_ocr_page_frame() {
@@ -159,7 +147,7 @@ async fn check_images_driven_ocr_page_frame() {
 
 #[cfg(feature = "layout-detection")]
 mod handoff {
-    use super::{ExtractionConfig, rotated_landscape_pdf, run_on_ocr_test_stack};
+    use super::{ExtractionConfig, OCR_TEST_STACK_BYTES, rotated_landscape_pdf, run_on_ocr_test_stack};
     use crate::core::config::layout::TableModel;
     use crate::core::config::{LayoutDetectionConfig, OcrConfig, OutputFormat};
     use crate::core::layout_pages::LayoutPageSelection;
@@ -275,7 +263,7 @@ mod handoff {
     #[test]
     #[serial_test::serial]
     fn layout_handoff_places_the_table_between_prose_and_suppresses_its_duplicate_text() {
-        run_on_ocr_test_stack(check_layout_handoff);
+        run_on_ocr_test_stack(OCR_TEST_STACK_BYTES, check_layout_handoff);
     }
 
     async fn check_layout_handoff() {
@@ -345,7 +333,7 @@ mod handoff {
     #[test]
     #[serial_test::serial]
     fn layout_handoff_places_public_ocr_prose_in_bottom_left_page_points() {
-        run_on_ocr_test_stack(check_public_ocr_prose_frame);
+        run_on_ocr_test_stack(OCR_TEST_STACK_BYTES, check_public_ocr_prose_frame);
     }
 
     async fn check_public_ocr_prose_frame() {

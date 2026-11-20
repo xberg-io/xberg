@@ -406,6 +406,61 @@ fn regression_page_keeps_both_letters_of_every_fi_ligature_word() {
 }
 
 #[test]
+fn regression_page_keeps_detection_metrics_in_separate_cells() {
+    let fixture = "arxiv-2403.02163v1-p9.pdf";
+    let page = get_test_documents_dir().join("pdf/regression_pages").join(fixture);
+    let manifest = include_str!("fixtures/pdf/regression_pages.sha256");
+    let digest = manifest
+        .lines()
+        .find_map(|line| line.split_once("  ").filter(|(_, name)| *name == fixture))
+        .expect("pinned regression page")
+        .0;
+    assert_eq!(sha256_hex(&page), digest);
+    let (_, content) = extract_all(&[page]).pop().expect("one extracted page");
+    let content = content.expect("native Markdown for verified detection metrics page");
+    let expected = "| all | all | 1794907 | 0.216 | 0.338 | 0.245 | 0.054 | 0.505 |";
+    assert_eq!(content.lines().filter(|line| *line == expected).count(), 1, "{content}");
+    assert!(!content.contains("216.0 338.0 245.0 054.0 505"), "{content}");
+}
+
+#[test]
+fn regression_page_keeps_actuarial_rates_with_service_and_year() {
+    let fixture = "fr-2025-20251-partb-rates-p8.pdf";
+    let page = get_test_documents_dir().join("pdf/regression_pages").join(fixture);
+    let digest = include_str!("fixtures/pdf/regression_pages.sha256")
+        .lines()
+        .find_map(|line| line.split_once("  ").filter(|(_, name)| *name == fixture))
+        .expect("pinned regression page")
+        .0;
+    assert_eq!(sha256_hex(&page), digest);
+    let (_, content) = extract_all(&[page]).pop().expect("one extracted page");
+    let content = content.expect("native Markdown for verified actuarial tables");
+    let mut counts = Vec::new();
+    for (label, values) in [
+        ("Practitioner lab", ["4.56", "4.79", "4.88", "5.00"]),
+        ("Other practitioner services", ["11.38", "10.48", "11.00", "10.83"]),
+    ] {
+        let rows = content.lines().filter(|line| {
+            let Some(row) = line.strip_prefix('|').and_then(|line| line.strip_suffix('|')) else {
+                return false;
+            };
+            let cells: Vec<_> = row.split('|').map(str::trim).collect();
+            cells.len() == 5 && cells[0].starts_with(label) && cells[1..] == values
+        });
+        let loose_values = values.join(" ");
+        counts.push((
+            label,
+            rows.count(),
+            content.lines().filter(|line| line.trim() == loose_values).count(),
+        ));
+    }
+    assert_eq!(
+        counts,
+        [("Practitioner lab", 1, 0), ("Other practitioner services", 1, 0)]
+    );
+}
+
+#[test]
 fn regression_page_keeps_negative_exponent_with_its_prose_base() {
     assert_regression_page_has_script("plos-journal.pcbi.1012696-p8.pdf", "5.0 × 10<sup>−4</sup>.");
 }

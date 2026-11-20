@@ -13,21 +13,10 @@
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 #![cfg(feature = "office")]
 
-use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 
 mod helpers;
-use helpers::extract_bytes_document;
-
-/// Helper to resolve workspace root and construct test file paths
-fn get_test_opml_path(filename: &str) -> PathBuf {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Operation failed")
-        .parent()
-        .expect("Operation failed");
-    workspace_root.join(format!("test_documents/opml/{}", filename))
-}
+use helpers::{extract_bytes_document, get_test_file_path, skip_if_missing};
 
 /// Helper to validate that content contains expected text (case-insensitive)
 fn assert_contains_ci(content: &str, needle: &str, description: &str) {
@@ -61,11 +50,11 @@ fn assert_not_contains_ci(content: &str, needle: &str, description: &str) {
 /// - Hierarchy structure is preserved with proper nesting
 #[tokio::test]
 async fn test_opml_rss_feeds_extraction() {
-    let test_file = get_test_opml_path("feeds.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/feeds.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -115,11 +104,11 @@ async fn test_opml_rss_feeds_extraction() {
 /// - Complex hierarchy is preserved
 #[tokio::test]
 async fn test_opml_podcast_directory_extraction() {
-    let test_file = get_test_opml_path("podcasts.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/podcasts.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -170,11 +159,11 @@ async fn test_opml_podcast_directory_extraction() {
 /// - Content structure matches expected outline format
 #[tokio::test]
 async fn test_opml_outline_hierarchy_extraction() {
-    let test_file = get_test_opml_path("outline.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/outline.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -244,11 +233,11 @@ async fn test_opml_outline_hierarchy_extraction() {
 /// - Missing optional fields are handled gracefully
 #[tokio::test]
 async fn test_opml_metadata_extraction_complete() {
-    let test_file = get_test_opml_path("feeds.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/feeds.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -299,11 +288,11 @@ async fn test_opml_metadata_extraction_complete() {
 /// - Extraction matches Pandoc baseline (no URLs in main content)
 #[tokio::test]
 async fn test_opml_feed_url_extraction() {
-    let test_file = get_test_opml_path("feeds.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/feeds.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -331,11 +320,11 @@ async fn test_opml_feed_url_extraction() {
 /// - Result structure is valid
 #[tokio::test]
 async fn test_opml_mime_type_handling() {
-    let test_file = get_test_opml_path("feeds.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/feeds.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
 
@@ -372,11 +361,11 @@ async fn test_opml_mime_type_handling() {
 /// - Content is human-readable after extraction
 #[tokio::test]
 async fn test_opml_special_characters_handling() {
-    let test_file = get_test_opml_path("podcasts.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/podcasts.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -405,11 +394,11 @@ async fn test_opml_special_characters_handling() {
 /// - Notes & Resources section is captured
 #[tokio::test]
 async fn test_opml_deep_nesting_hierarchy() {
-    let test_file = get_test_opml_path("outline.opml");
-    if !test_file.exists() {
-        println!("Skipping test: Test file not found at {:?}", test_file);
+    let fixture = "opml/outline.opml";
+    if skip_if_missing(fixture) {
         return;
     }
+    let test_file = get_test_file_path(fixture);
 
     let content = std::fs::read(&test_file).expect("Should read OPML file");
     let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -450,14 +439,13 @@ async fn test_opml_deep_nesting_hierarchy() {
 /// - Consistent extraction behavior
 #[tokio::test]
 async fn test_opml_content_quality_all_files() {
-    let opml_files = vec!["feeds.opml", "podcasts.opml", "outline.opml"];
+    let opml_files = vec!["opml/feeds.opml", "opml/podcasts.opml", "opml/outline.opml"];
 
     for opml_file in opml_files {
-        let test_file = get_test_opml_path(opml_file);
-        if !test_file.exists() {
-            println!("Skipping file: {:?}", test_file);
+        if skip_if_missing(opml_file) {
             continue;
         }
+        let test_file = get_test_file_path(opml_file);
 
         let content = std::fs::read(&test_file).expect("Should read OPML file");
         let result = extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default())
@@ -530,7 +518,7 @@ async fn test_opml_extractor_registration() {
 /// but provides useful information about extraction behavior.
 #[tokio::test]
 async fn test_opml_extraction_statistics() {
-    let opml_files = vec!["feeds.opml", "podcasts.opml", "outline.opml"];
+    let opml_files = vec!["opml/feeds.opml", "opml/podcasts.opml", "opml/outline.opml"];
 
     println!("\n╔════════════════════════════════════════════════════════════╗");
     println!("║        OPML Extraction Statistics Report                   ║");
@@ -541,11 +529,10 @@ async fn test_opml_extraction_statistics() {
     let mut total_metadata_fields = 0;
 
     for opml_file in opml_files {
-        let test_file = get_test_opml_path(opml_file);
-        if !test_file.exists() {
-            println!("⚠ SKIP: {} (not found)", opml_file);
+        if skip_if_missing(opml_file) {
             continue;
         }
+        let test_file = get_test_file_path(opml_file);
 
         match std::fs::read(&test_file) {
             Ok(content) => match extract_bytes_document(&content, "text/x-opml", &ExtractionConfig::default()).await {

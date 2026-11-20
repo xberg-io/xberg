@@ -50,6 +50,8 @@ pub mod types;
 pub use article_threads::{ArticleThread, Bead, parse_article_threads};
 pub use converter::StructureConverter;
 pub(crate) use parser::checked_mcid;
+#[cfg(test)]
+pub(crate) use parser::with_structure_parse_cutoff;
 pub use parser::{parse_structure_tree, parse_structure_tree_with_budget};
 pub use spatial_table_detector::{DetectedTable, SpatialTableDetector, TableDetectionConfig, detect_tables_from_spans};
 pub use table_extractor::{

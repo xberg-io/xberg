@@ -166,7 +166,8 @@ pub(crate) fn effective_pdf_render_dpi(
 /// full-page raster renders at that raster's own density, bounded by
 /// [`SCAN_PAGE_MAX_RENDER_DPI`], instead of the [`DEFAULT_PDF_RENDER_DPI`] default: a 196 dpi
 /// scan rendered at 150 and then upscaled to 300 by the OCR preprocessor lost table values
-/// that OCR of the same page as an image read (#1786). Every other page keeps the default.
+/// that OCR of the same page as an image read (#1786). Compact single-page documents with
+/// sustained small text may render above the default to retain word boundaries (#2711).
 #[cfg(feature = "pdf")]
 pub(crate) fn planned_pdf_ocr_render_dpi(
     doc: &xberg_native_pdf::PdfDocument,
@@ -194,9 +195,18 @@ pub(crate) fn planned_pdf_ocr_render_dpi_with_preprocessing(
     } else {
         let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
         if images_config.is_none() {
-            preprocessing_dpi
-                .unwrap_or(DEFAULT_PDF_RENDER_DPI)
-                .max(DEFAULT_PDF_RENDER_DPI)
+            preprocessing_dpi.map_or_else(
+                || {
+                    small_text_render_dpi(
+                        doc,
+                        page_idx,
+                        page_width_pt,
+                        page_height_pt,
+                        security_limits.max_content_size,
+                    )
+                },
+                |target| target.max(DEFAULT_PDF_RENDER_DPI),
+            )
         } else {
             effective_pdf_render_dpi(images_config, f64::from(page_width_pt), f64::from(page_height_pt))
         }
@@ -209,6 +219,36 @@ pub(crate) fn planned_pdf_ocr_render_dpi_with_preprocessing(
         security_limits.max_content_size,
     );
     (requested_dpi, capped_dpi)
+}
+
+#[cfg(feature = "pdf")]
+fn small_text_render_dpi(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    width: f32,
+    height: f32,
+    byte_limit: usize,
+) -> i32 {
+    const SMALL_TEXT_DPI: i32 = 300;
+    const MAX_PROMOTED_PIXELS: f64 = 9_000_000.0;
+    // Include Letter and A4 within the single-page working set. Mixed-page batches are
+    // sized at the default DPI. An unaffordable promotion leaves the original route intact. ~keep
+    let scale = f64::from(SMALL_TEXT_DPI) / PDF_POINTS_PER_INCH;
+    if page_idx != 0
+        || !width.is_finite()
+        || !height.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+        || (f64::from(width) * scale).ceil() * (f64::from(height) * scale).ceil() > MAX_PROMOTED_PIXELS
+        || cap_pdf_ocr_render_dpi(SMALL_TEXT_DPI, f64::from(width), f64::from(height), byte_limit) != SMALL_TEXT_DPI
+    {
+        return DEFAULT_PDF_RENDER_DPI;
+    }
+    if doc.has_small_painted_text_for_ocr() {
+        SMALL_TEXT_DPI
+    } else {
+        DEFAULT_PDF_RENDER_DPI
+    }
 }
 
 #[cfg(feature = "pdf")]

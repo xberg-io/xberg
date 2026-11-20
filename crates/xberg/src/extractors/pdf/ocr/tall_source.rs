@@ -19,7 +19,11 @@ use xberg_native_pdf::object::Object;
 
 pub(super) mod augmentation;
 mod policy;
-pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports, unsupported_reason};
+// The pipeline budget-retry test reads the config-only verdict; that module is excluded
+// under `paddle_ocr`, which is when this re-export has no user. ~keep
+#[cfg(all(test, not(paddle_ocr)))]
+pub(super) use policy::unsupported_reason;
+pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports_for, unsupported_reason_for};
 #[cfg(test)]
 #[path = "tall_source/geometry_tests.rs"]
 mod geometry_tests;
@@ -30,14 +34,23 @@ mod indexed;
 mod neutral_rgb_tests;
 mod ordered;
 mod read_geometry;
+mod region_probe;
+mod region_reconciliation;
+#[cfg(test)]
+pub(super) mod region_replay;
+mod row_reread;
 mod samples;
+mod standalone;
+pub(crate) use standalone::try_replace_standalone;
 #[cfg(test)]
 #[path = "tall_source/strip_certificate_tests.rs"]
 mod strip_certificate_tests;
 #[cfg(test)]
 mod strip_fixture;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
-use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
+use samples::{
+    GrayPacking, decode_source_gray, flate_packing, retained_gray_bytes, source_density_allowed, source_frame,
+};
 
 const MAX_TILE_SIDE: u32 = 4096;
 const MIN_STANDARD_SOURCE_DPI: f64 = 150.0;
@@ -61,6 +74,7 @@ struct Source {
     samples: Vec<u8>,
     retained_bytes: usize,
     certify_rows: bool,
+    reread_split_row: bool,
 }
 
 struct StripPlan {
@@ -69,6 +83,7 @@ struct StripPlan {
     ink_rows: Vec<Range<u32>>,
 }
 
+#[derive(Clone, Copy)]
 struct Attempt<'a> {
     document: &'a PdfDocument,
     page: usize,
@@ -119,38 +134,251 @@ pub(super) async fn try_replace(
     (_, png, width, height): &super::rendering::EncodedPage,
 ) -> crate::Result<bool> {
     let source = (document, page);
+    let raster = (*width, *height);
     if !original.tables.is_empty() || !original.formulas.is_empty() {
-        note_unrecovered(original, ocr, source, *height, Unrecovered::TablesOrFormulas);
+        note_unrecovered(original, ocr, source, raster, Unrecovered::TablesOrFormulas);
         return Ok(false);
     }
-    let Some(quality) = RecognitionQuality::from_result(original) else {
+    let (Some(quality), Some(read_width)) = (
+        RecognitionQuality::from_result(original),
+        read_geometry::select_read_width(original, raster),
+    ) else {
+        note_unrecovered(original, ocr, source, raster, Unrecovered::InsufficientReadEvidence);
         return Ok(false);
     };
     let mut attempt = Attempt::new(document, page, Some((*width, *height, png.len())), config, ocr);
-    let Some(read_width) = read_geometry::select_read_width(original, (*width, *height)) else {
-        return Ok(false);
-    };
     attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
-    let why = match recover(attempt, backend, ocr).await? {
+    let mut source_refusal = None;
+    let recovered = recover(attempt, backend, ocr, &mut source_refusal).await?;
+    let why = match recovered {
         Some((recovered, strips))
-            if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
+            if should_replace_with_source_evidence(
+                &original.content,
+                quality,
+                &recovered,
+                &thresholds,
+                dictionary_ratio_is_diagnostic(ocr),
+            ) =>
         {
-            read_geometry::record_original_frame(original, (*width, *height), page);
+            read_geometry::record_original_frame(original, raster, page);
             apply_recovery(original, recovered, page, strips);
             note_flat_structure(original, config, page);
             return Ok(true);
         }
         Some(_) => Unrecovered::Rejected,
-        None => Unrecovered::Uncertified,
+        None if indexed::is_indexed_rgb_scan(&attempt) => Unrecovered::IndexedRgb,
+        None => source_refusal.unwrap_or(Unrecovered::Uncertified),
     };
-    note_unrecovered(original, ocr, source, *height, why);
+    note_unrecovered(original, ocr, source, raster, why);
     Ok(false)
+}
+
+pub(in crate::extractors::pdf) fn with_document_region_ocr_budget(
+    config: &ExtractionConfig,
+) -> Cow<'_, ExtractionConfig> {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return Cow::Borrowed(config);
+    };
+    let enabled = |options: Option<&serde_json::Value>| {
+        options
+            .and_then(|options| options.get("source_region_recovery"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    };
+    let stage_enabled = ocr.pipeline.as_ref().is_some_and(|pipeline| {
+        pipeline
+            .stages
+            .iter()
+            .any(|stage| enabled(stage.backend_options.as_ref()))
+    });
+    if !enabled(ocr.backend_options.as_ref()) && !stage_enabled {
+        return Cow::Borrowed(config);
+    }
+    let requested = ocr
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get("source_region_max_calls"))
+        .map_or(MAX_STRIPS, |value| {
+            value
+                .as_u64()
+                .and_then(|limit| usize::try_from(limit).ok())
+                .unwrap_or(0)
+        });
+    let limit = requested
+        .min(MAX_STRIPS)
+        .min(
+            config
+                .security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        )
+        .min(
+            ocr.security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        );
+    let mut scoped = config.clone();
+    scoped.pdf_region_ocr_calls = Some(Arc::new(std::sync::atomic::AtomicUsize::new(limit)));
+    Cow::Owned(scoped)
+}
+
+pub(super) async fn probe_anchored_occurrences(
+    selected: &mut ExtractedDocument,
+    backend: &Arc<dyn OcrBackend>,
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+    (pdf, page): (&PdfDocument, usize),
+    (_, png, width, height): &super::rendering::EncodedPage,
+) -> crate::Result<()> {
+    if ocr
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get("source_region_recovery"))
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return Ok(());
+    }
+    let Some(budget) = config.pdf_region_ocr_calls.as_deref() else {
+        return Ok(());
+    };
+    let Some(read) = selected.retained_hocr_read.as_ref() else {
+        return Ok(());
+    };
+    use crate::core::config::OutputFormat;
+    let heading_only = match config.output_format {
+        OutputFormat::Plain => false,
+        OutputFormat::Markdown | OutputFormat::Html | OutputFormat::Djot | OutputFormat::DocTags => true,
+        _ => return Ok(()),
+    };
+    if selected.raw_ocr_source_frame.is_some()
+        || !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .is_builtin_tesseract(backend)
+        || !ocr
+            .tesseract_config
+            .as_ref()
+            .and_then(|tess| tess.preprocessing.as_ref())
+            .is_some_and(|p| !p.deskew)
+        || super::document::resolved_ocr_correction_degrees(&selected.metadata).is_some_and(|angle| angle != 0)
+        || !read_geometry::scale_only(
+            (*width, *height),
+            read.dimensions,
+            selected.metadata.image_preprocessing.as_ref(),
+        )
+    {
+        tracing::trace!("anchored OCR discovery declined selected raster geometry");
+        return Ok(());
+    }
+    let attempt = Attempt::new(pdf, page, Some((*width, *height, png.len())), config, ocr);
+    let (source, collapsed_only) = if let Some(source) = indexed::IndexedSource::load(&attempt) {
+        (source, false)
+    } else {
+        if !selected.tables.is_empty() || !selected.formulas.is_empty() || read.dimensions.0 >= *width {
+            return Ok(());
+        }
+        // The checked scale-only hOCR frame determines lost detail. The render still owns its allocation. ~keep
+        let Some(source) = indexed::IndexedSource::load_with_selected_width(&attempt, Some(read.dimensions.0)) else {
+            return Ok(());
+        };
+        (source, true)
+    };
+    let edits = if collapsed_only {
+        region_probe::scan_collapsed_line(&attempt, &source, (backend, ocr), read, budget)
+            .await?
+            .map(|edit| vec![edit])
+    } else {
+        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget), heading_only)
+            .await?
+    };
+    if heading_only {
+        tracing::trace!(
+            edits = edits.as_ref().map_or(0, Vec::len),
+            public_structure = selected.document.is_some(),
+            private_structure = selected.ocr_internal_document.is_some(),
+            "structured OCR selected heading receipt"
+        );
+    }
+    if !collapsed_only
+        && !heading_only
+        && edits.is_none()
+        && let Some(insertion) =
+            region_probe::scan_owned_gap(&attempt, &source, backend, ocr, selected, read, budget).await?
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+    {
+        let id = insertion.anchors[1][0];
+        let mut matches = doc
+            .elements
+            .iter_mut()
+            .flat_map(|element| &mut element.ocr_source_spans)
+            .filter(|span| span.occurrence == id);
+        if let Some(owner) = matches.next()
+            && matches.next().is_none()
+        {
+            owner.insertion = Some(insertion);
+        }
+    }
+    if !heading_only
+        && let Some([first, last]) = edits.as_deref()
+        && selected.tables.is_empty()
+        && selected.formulas.is_empty()
+        && let Some(order) = region_probe::page_panel_order(&source, read, [first.0, last.0])
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+    {
+        let mut matches = doc
+            .elements
+            .iter_mut()
+            .flat_map(|element| &mut element.ocr_source_spans)
+            .filter(|span| span.occurrence == order.panel[2]);
+        if let Some(owner) = matches.next()
+            && matches.next().is_none()
+        {
+            owner.panel_order = Some(order);
+        }
+    }
+    if let Some(edits) = edits
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+        && edits.iter().all(|(id, _, _)| {
+            doc.elements
+                .iter()
+                .flat_map(|element| &element.ocr_source_spans)
+                .filter(|span| span.occurrence == *id)
+                .count()
+                == 1
+        })
+    {
+        let edit_count = edits.len();
+        for (id, expected, replacement) in edits {
+            if let Some(owner) = doc
+                .elements
+                .iter_mut()
+                .flat_map(|element| &mut element.ocr_source_spans)
+                .find(|span| span.occurrence == id)
+            {
+                owner.replacement = Some((expected, replacement, edit_count));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 fn should_replace(original_text: &str, quality: RecognitionQuality, recovered: &TextAccumulator) -> bool {
-    should_replace_with_source_evidence(original_text, quality, recovered, &Default::default())
+    should_replace_with_source_evidence(original_text, quality, recovered, &Default::default(), true)
+}
+
+/// Whether the dictionary-invalid ratio can judge this read at all.
+///
+/// The ratio looks words up in the DAWG of the loaded language. That separates a clean read
+/// from garbage only when every requested language is English: a correct German read scores as
+/// mostly invalid against a German word list that carries the same English tag nouns, while the
+/// garbled downscaled read scores better because its short tokens are skipped. Comparing the two
+/// ratios then rejects the better read. ~keep
+fn dictionary_ratio_is_diagnostic(ocr: &OcrConfig) -> bool {
+    ocr.effective_tesseract_language()
+        .iter()
+        .all(|language| language == "eng")
 }
 
 fn should_replace_with_source_evidence(
@@ -158,12 +386,14 @@ fn should_replace_with_source_evidence(
     quality: RecognitionQuality,
     recovered: &TextAccumulator,
     thresholds: &crate::core::config::OcrQualityThresholds,
+    dictionary_diagnostic: bool,
 ) -> bool {
     recovered.psm == Some(quality.psm)
         && recovered.words > quality.words
         && recovered.text.split_whitespace().count() > original_text.split_whitespace().count()
         && recovered.confidence_sum > quality.mean_confidence * f64::from(recovered.words)
-        && (recovered.worst_dictionary_invalid <= quality.dictionary_invalid
+        && (!dictionary_diagnostic
+            || recovered.worst_dictionary_invalid <= quality.dictionary_invalid
             || recovered_bilevel_lines_are_clean(original_text, &quality, recovered, thresholds))
         && u64::from(recovered.low_confidence_words) * u64::from(quality.words)
             <= u64::from(quality.low_confidence_words) * u64::from(recovered.words)
@@ -235,6 +465,7 @@ async fn recover(
     attempt: Attempt<'_>,
     backend: &Arc<dyn OcrBackend>,
     config: &OcrConfig,
+    source_refusal: &mut Option<Unrecovered>,
 ) -> crate::Result<Option<(TextAccumulator, usize)>> {
     let cancelled = || attempt.cancel.is_some_and(CancellationToken::is_cancelled);
     if cancelled() {
@@ -252,7 +483,7 @@ async fn recover(
     if cancelled() {
         return Err(crate::XbergError::Cancelled);
     }
-    let Some(StripPlan { source, rows, ink_rows }) = prepare(&attempt, cancelled) else {
+    let Some(StripPlan { source, rows, ink_rows }) = prepare(&attempt, cancelled, source_refusal) else {
         return if cancelled() {
             Err(crate::XbergError::Cancelled)
         } else {
@@ -266,10 +497,15 @@ async fn recover(
         ..Default::default()
     });
     if let Some(tesseract) = config.tesseract_config.as_mut() {
-        tesseract.preprocessing = Some(crate::types::ImagePreprocessingConfig {
+        let mut preprocessing = crate::types::ImagePreprocessingConfig {
             target_dpi: source.dpi.round() as i32,
             ..Default::default()
-        });
+        };
+        if source.reread_split_row {
+            preprocessing.deskew = false;
+            preprocessing.binarization_method = "none".to_owned();
+        }
+        tesseract.preprocessing = Some(preprocessing);
     }
     if let Some(options) = config.backend_options.as_mut() {
         options["use_cache"] = serde_json::Value::Bool(false);
@@ -280,6 +516,7 @@ async fn recover(
         ..Default::default()
     };
     let strip_count = rows.len();
+    let mut may_reread = source.reread_split_row && strip_count + row_reread::EXTRA_CALLS <= attempt.max_strips;
     for rows in rows {
         if cancelled() {
             return Err(crate::XbergError::Cancelled);
@@ -296,7 +533,18 @@ async fn recover(
         };
         let certified = certified_strip_lines(&result, source.width, &rows, &ink_rows);
         if source.dpi < MIN_STANDARD_SOURCE_DPI && !certified {
-            return Ok(None);
+            if !std::mem::take(&mut may_reread) {
+                return Ok(None);
+            }
+            let Some(replacement) =
+                row_reread::reread(&source, &rows, &ink_rows, &result, (backend, &config), cancelled).await?
+            else {
+                return Ok(None);
+            };
+            if !replacement.into_iter().all(|part| output.add(part)) {
+                return Ok(None);
+            }
+            continue;
         }
         output.complete_source_rows &= certified;
         if !output.add(result) {
@@ -375,7 +623,11 @@ async fn wait_for_cancel(cancel: Option<&CancellationToken>) {
     }
 }
 
-fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripPlan> {
+fn prepare(
+    attempt: &Attempt<'_>,
+    cancelled: impl Fn() -> bool,
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<StripPlan> {
     if attempt.max_strips < 2 {
         return None;
     }
@@ -391,7 +643,13 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
         .byte_limit
         .checked_sub(normal_bytes)?
         .checked_sub(FIXED_WORK_BYTES)?;
-    let source = certify(attempt.document, attempt.page, attempt.read_width, available)?;
+    let source = certify(
+        attempt.document,
+        attempt.page,
+        attempt.read_width,
+        available,
+        source_refusal,
+    )?;
     let max_tile_pixels = available.checked_sub(source.retained_bytes)? / TILE_BYTES_PER_PIXEL;
     let mut bands = source.blank_bands(&cancelled, if source.certify_rows { 1 } else { MIN_BLANK_ROWS })?;
     let ink_rows = if source.certify_rows
@@ -434,7 +692,13 @@ fn prepare(attempt: &Attempt<'_>, cancelled: impl Fn() -> bool) -> Option<StripP
     })
 }
 
-fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_limit: usize) -> Option<Source> {
+fn certify(
+    doc: &PdfDocument,
+    page: usize,
+    rendered_width: Option<u32>,
+    byte_limit: usize,
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<Source> {
     let (frame, content) = page_frame_and_contents(doc, page)?;
     let Object::Stream { dict, data } = content else {
         return None;
@@ -480,12 +744,15 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         {
             None
         }
-        (Some(_), "FlateDecode") => Some(flate_packing(&dict, width)?),
+        (Some(_), "FlateDecode") => Some(flate_packing_or_refusal(
+            &dict,
+            (width, height, dpi),
+            (data.len(), byte_limit),
+            source_refusal,
+        )?),
         _ => return None,
     };
-    if !source_density_allowed(dpi, packing) {
-        return None;
-    }
+    source_density_or_refusal(packing, (width, height, dpi), (data.len(), byte_limit), source_refusal)?;
     let (samples, retained_bytes) = if let Some(packing) = packing {
         decode_source_gray(&data, width as usize, height as usize, packing, byte_limit)?
     } else {
@@ -500,7 +767,62 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         samples,
         retained_bytes,
         certify_rows: dpi < MIN_STANDARD_SOURCE_DPI || packing.is_none_or(GrayPacking::requires_line_certificate),
+        reread_split_row: dpi < MIN_STANDARD_SOURCE_DPI && packing == Some(GrayPacking::NeutralRgb),
     })
+}
+
+fn source_density_or_refusal(
+    packing: Option<GrayPacking>,
+    (width, height, dpi): (u32, u32, f64),
+    (compressed_len, byte_limit): (usize, usize),
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<()> {
+    if source_density_allowed(dpi, packing) {
+        return Some(());
+    }
+    let (width, height) = (width as usize, height as usize);
+    if packing == Some(GrayPacking::Bilevel)
+        && dpi < MIN_STANDARD_SOURCE_DPI
+        && packed_gray_peak_bytes(compressed_len, width, height, width.div_ceil(8))
+            .is_some_and(|peak| peak <= byte_limit)
+    {
+        *source_refusal = Some(Unrecovered::BilevelBelowDensity(dpi));
+    }
+    None
+}
+
+fn flate_packing_or_refusal(
+    dict: &std::collections::HashMap<String, Object>,
+    frame: (u32, u32, f64),
+    (compressed_len, byte_limit): (usize, usize),
+    source_refusal: &mut Option<Unrecovered>,
+) -> Option<GrayPacking> {
+    let Some(packing) = flate_packing(dict, frame.0) else {
+        *source_refusal = flate_refusal(dict, frame, compressed_len, byte_limit);
+        return None;
+    };
+    Some(packing)
+}
+
+fn flate_refusal(
+    dict: &std::collections::HashMap<String, Object>,
+    (width, height, dpi): (u32, u32, f64),
+    compressed_len: usize,
+    byte_limit: usize,
+) -> Option<Unrecovered> {
+    let (width, height) = (width as usize, height as usize);
+    let peak_bytes = packed_gray_peak_bytes(compressed_len, width, height, width.div_ceil(2))?;
+    (dict.get("ColorSpace").and_then(Object::as_name) == Some("DeviceGray")
+        && dict.get("BitsPerComponent").and_then(Object::as_integer) == Some(4)
+        && !dict.contains_key("DecodeParms")
+        && source_density_allowed(dpi, Some(GrayPacking::Byte))
+        && peak_bytes <= byte_limit)
+        .then_some(Unrecovered::FourBitGrayFlate)
+}
+
+fn packed_gray_peak_bytes(compressed: usize, width: usize, height: usize, stride: usize) -> Option<usize> {
+    let packed = stride.checked_mul(height)?;
+    retained_gray_bytes(compressed, width.checked_mul(height)?)?.checked_add(packed)
 }
 
 pub(super) fn image_name(paint: &[u8], frame: Rect) -> Option<String> {
@@ -634,12 +956,38 @@ struct RecognitionQuality {
 impl RecognitionQuality {
     fn from_result(result: &ExtractedDocument) -> Option<Self> {
         let metadata = &result.metadata.additional;
-        let words = super::word_count_of(metadata).filter(|&words| words > 0)?;
-        let crate::types::FormatMetadata::Ocr(format) = result.metadata.format.as_ref()? else {
-            return None;
+        let words = super::word_count_of(metadata)?;
+        // A standalone picture keeps an `Image` format record and reports the OCR PSM in
+        // its additional metadata; a PDF page carries it in `FormatMetadata::Ocr`. ~keep
+        let additional_psm = || {
+            metadata.get("psm").and_then(|value| {
+                value
+                    .as_str()
+                    .and_then(|text| text.parse().ok())
+                    .or_else(|| value.as_i64().and_then(|number| i32::try_from(number).ok()))
+            })
         };
+        let psm = match result.metadata.format.as_ref() {
+            Some(crate::types::FormatMetadata::Ocr(format)) => format.psm,
+            // A standalone picture records its format after the OCR read and keeps the
+            // PSM in additional metadata. ~keep
+            Some(crate::types::FormatMetadata::Image(_)) | None => additional_psm()?,
+            _ => return None,
+        };
+        // A page read may return no words at all. The strips still need its PSM, and an
+        // empty baseline cannot be beaten on confidence, dictionary or low-confidence
+        // ratios, so only a clean strip read can replace it. ~keep
+        if words == 0 {
+            return Some(Self {
+                psm,
+                words: 0,
+                mean_confidence: 0.0,
+                low_confidence_words: 0,
+                dictionary_invalid: 1.0,
+            });
+        }
         Some(Self {
-            psm: format.psm,
+            psm,
             words,
             mean_confidence: super::mean_text_conf_of(metadata).filter(|mean| (0.0..=100.0).contains(mean))?,
             low_confidence_words: metadata
@@ -986,7 +1334,204 @@ mod tests {
     fn non_indexed_image_certificate_keeps_scalar_filters_while_content_probes_accept_singletons() {
         for (content, image, admitted) in [(false, false, true), (true, false, true), (true, true, false)] {
             let document = source_with_filter_spellings(content, image);
-            assert_eq!(certify(&document, 0, Some(1100), 100 * 1024 * 1024).is_some(), admitted);
+            assert_eq!(
+                certify(&document, 0, Some(1100), 100 * 1024 * 1024, &mut None).is_some(),
+                admitted
+            );
+        }
+    }
+
+    fn four_bit_gray_source(extra_paint: bool) -> PdfDocument {
+        let mut pdf = lopdf::Document::load_mem(TALL_FIXTURE).expect("ordinary grayscale text fixture");
+        let image = pdf.get_object_mut((5, 0)).unwrap().as_stream_mut().unwrap();
+        let width = image.dict.get(b"Width").unwrap().as_i64().unwrap() as usize;
+        let height = image.dict.get(b"Height").unwrap().as_i64().unwrap() as usize;
+        assert_eq!((width, height), (1275, 9000));
+        let samples = image.get_plain_content_with_limit(width * height).unwrap();
+        assert_eq!(samples.len(), width * height);
+        let mut packed = Vec::with_capacity(width.div_ceil(2) * height);
+        for row in samples.chunks_exact(width) {
+            packed.extend(
+                row.chunks(2)
+                    .map(|pair| (pair[0] & 0xf0) | (pair.get(1).copied().unwrap_or(255) >> 4)),
+            );
+        }
+        assert_eq!(packed.len(), width.div_ceil(2) * height);
+        image.set_plain_content(packed);
+        image.dict.set("BitsPerComponent", 4i64);
+        image.compress().expect("compress the valid four-bit scan");
+        assert_eq!(image.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+
+        if extra_paint {
+            let content = pdf.get_object_mut((4, 0)).unwrap().as_stream_mut().unwrap();
+            let mut paint = content.decompressed_content().unwrap();
+            paint.extend_from_slice(b"\n0 0 2 2 re f\n");
+            content.set_plain_content(paint);
+        }
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).expect("read valid synthetic PDF")
+    }
+
+    #[test]
+    fn existing_bilevel_scans_reach_the_source_density_gate() {
+        let low = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-120.pdf");
+        let standard = include_bytes!("../../../../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
+        const BUDGET: usize = 32 * 1024 * 1024;
+        const READ_WIDTH: Option<u32> = Some(435);
+        for (bytes, expected_dpi, allowed) in [(low.as_slice(), 120.0, false), (standard.as_slice(), 150.0, true)] {
+            let document = PdfDocument::from_bytes(bytes.to_vec()).expect("open tagged bilevel scan");
+            let (frame, Object::Stream { dict, data }) =
+                page_frame_and_contents(&document, 0).expect("single page content")
+            else {
+                panic!("expected the page's content stream");
+            };
+            assert!(!dict.contains_key("DecodeParms"));
+            let filters = stream_filters(dict.get("Filter")).expect("page stream filter");
+            let paint = decode_probe_stream(&data, filters, 4096, BUDGET).expect("certified page paint");
+            let name = image_name(&paint, frame).expect("full-page scan paint");
+            let resources = document.get_page_resources(0).unwrap();
+            let xobjects = document
+                .resolve_object(&resources.as_dict().unwrap()["XObject"])
+                .unwrap();
+            let image = document.resolve_object(&xobjects.as_dict().unwrap()[&name]).unwrap();
+            let Object::Stream { dict, data } = image else {
+                panic!("expected the painted image stream");
+            };
+            assert_eq!(dict.get("Filter").and_then(Object::as_name), Some("FlateDecode"));
+            let (width, height, dpi) = source_frame(&dict, frame, READ_WIDTH).expect("eligible source frame");
+            assert!((dpi - expected_dpi).abs() < 0.01);
+            assert!(flate_packing(&dict, width) == Some(GrayPacking::Bilevel));
+            let expanded = width as usize * height as usize;
+            let packed = (width as usize).div_ceil(8) * height as usize;
+            let peak = retained_gray_bytes(data.len(), expanded).unwrap() + packed;
+            assert!(peak < BUDGET);
+            assert_eq!(source_density_allowed(dpi, Some(GrayPacking::Bilevel)), allowed);
+            let mut refusal = None;
+            let accepted = certify(&document, 0, READ_WIDTH, BUDGET, &mut refusal).is_some();
+            assert_eq!(accepted, allowed);
+            if allowed {
+                assert!(refusal.is_none());
+            } else {
+                assert!(matches!(refusal, Some(Unrecovered::BilevelBelowDensity(dpi)) if dpi == expected_dpi));
+                for (budget, specific) in [(peak - 1, false), (peak, true)] {
+                    let mut refusal = None;
+                    assert!(certify(&document, 0, READ_WIDTH, budget, &mut refusal).is_none());
+                    assert_eq!(matches!(refusal, Some(Unrecovered::BilevelBelowDensity(_))), specific);
+                    if !specific {
+                        assert!(refusal.is_none());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bilevel_above_maximum_density_is_not_reported_as_below_minimum() {
+        let mut refusal = None;
+        let accepted = source_density_or_refusal(
+            Some(GrayPacking::Bilevel),
+            (1275, 12000, 300.01),
+            (1, 32 * 1024 * 1024),
+            &mut refusal,
+        );
+        assert!(accepted.is_none());
+        assert!(refusal.is_none());
+    }
+
+    const SMALL_GRAY_SCAN: (u32, u32) = (257, 4100);
+
+    fn four_bit_gray_refusal_requires_the_full_memory_budget() {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let packed = width.div_ceil(2) as usize * height as usize;
+        let compressed = strip_fixture::flate(&vec![0xff; packed]);
+        let document = strip_fixture::scan_flate_pdf_at(
+            SMALL_GRAY_SCAN,
+            "/ColorSpace /DeviceGray /BitsPerComponent 4",
+            &compressed,
+            144.0,
+        );
+        let peak = compressed.len() + width as usize * height as usize + 1 + packed;
+        for (budget, specific) in [(peak - 1, false), (peak, true)] {
+            let mut refusal = None;
+            assert!(certify(&document, 0, Some(128), budget, &mut refusal).is_none());
+            assert_eq!(matches!(refusal, Some(Unrecovered::FourBitGrayFlate)), specific);
+            if !specific {
+                assert!(refusal.is_none());
+            }
+        }
+    }
+
+    async fn supported_blank_gray_flate_keeps_generic_warning(
+        backend: &Arc<dyn OcrBackend>,
+        config: &ExtractionConfig,
+        ocr: &OcrConfig,
+    ) {
+        let (width, height) = SMALL_GRAY_SCAN;
+        let compressed = strip_fixture::flate(&vec![255; width as usize * height as usize]);
+        let document = strip_fixture::scan_flate_pdf_at(SMALL_GRAY_SCAN, strip_fixture::GRAY, &compressed, 144.0);
+        let mut refusal = None;
+        assert!(certify(&document, 0, Some(128), 2 * 1024 * 1024, &mut refusal).is_some());
+        assert!(refusal.is_none());
+        let raster = (0, Arc::new(Vec::new()), 128, 2050);
+        let mut original = recognized("The clean original", 1.0, 0.0, 3);
+        assert!(
+            !try_replace(&mut original, backend, config, ocr, (&document, 0), &raster)
+                .await
+                .unwrap()
+        );
+        assert_eq!(original.content, "The clean original");
+        assert_eq!(original.processing_warnings.len(), 1);
+        assert_eq!(
+            original.processing_warnings[0].message,
+            "Page 1 was read from a render downscaled to 72 DPI and its source-image strips were not used: \
+             the page is not one scan image in a supported encoding and density within the memory limit, \
+             or a strip did not read as its source lines. The text may be incomplete."
+        );
+    }
+
+    #[tokio::test]
+    async fn tall_scan_reports_four_bit_gray_only_after_source_certification() {
+        crate::plugins::ensure_ocr_backends_initialized();
+        let backend = crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .get("tesseract")
+            .unwrap();
+        let config = ExtractionConfig::default();
+        let ocr = OcrConfig::default();
+        four_bit_gray_refusal_requires_the_full_memory_budget();
+        supported_blank_gray_flate_keeps_generic_warning(&backend, &config, &ocr).await;
+        let raster = (0, Arc::new(Vec::new()), 850, 6000);
+        let reason = "the painted scan uses 4-bit DeviceGray with Flate, which source-image strips do not support";
+
+        for (extra_paint, confidence, specific_warning, total_warnings) in
+            [(false, 1.0, 1, 1), (true, 1.0, 0, 1), (false, 99.0, 0, 0)]
+        {
+            let document = four_bit_gray_source(extra_paint);
+            let mut original = recognized("The clean original", confidence, 0.0, 3);
+            assert!(
+                !try_replace(&mut original, &backend, &config, &ocr, (&document, 0), &raster)
+                    .await
+                    .unwrap()
+            );
+            assert_eq!(original.content, "The clean original");
+            assert_eq!(original.processing_warnings.len(), total_warnings);
+            assert_eq!(
+                original
+                    .processing_warnings
+                    .iter()
+                    .filter(|warning| warning.message.contains(reason))
+                    .count(),
+                specific_warning
+            );
+            if specific_warning == 1 {
+                assert_eq!(
+                    original.processing_warnings[0].message,
+                    format!(
+                        "Page 1 was read from a render downscaled to 100 DPI and its source-image strips were not used: {reason}. The text may be incomplete."
+                    )
+                );
+            }
         }
     }
 
@@ -1004,7 +1549,7 @@ mod tests {
         };
         let StripPlan {
             source, rows: strips, ..
-        } = prepare(&attempt, || false).expect("admitted bounded strips");
+        } = prepare(&attempt, || false, &mut None).expect("admitted bounded strips");
         assert_eq!(source.height, 9000);
         assert_eq!(strips.first().unwrap().start, 0);
         assert_eq!(strips.last().unwrap().end, 8812);
@@ -1017,7 +1562,7 @@ mod tests {
             + strips.iter().map(|rows| rows.len()).max().unwrap() * source.width as usize * TILE_BYTES_PER_PIXEL;
         assert!(peak <= attempt.byte_limit);
         attempt.byte_limit = 32 * 1024 * 1024;
-        assert!(prepare(&attempt, || false).is_none());
+        assert!(prepare(&attempt, || false, &mut None).is_none());
     }
 
     #[tokio::test]
@@ -1044,8 +1589,9 @@ mod tests {
             tokio::task::yield_now().await;
             token.cancel();
         };
+        let mut source_refusal = None;
         let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            tokio::join!(recover(attempt, &backend, &config), cancel)
+            tokio::join!(recover(attempt, &backend, &config, &mut source_refusal), cancel)
         })
         .await
         .expect("waiting caller observes cancellation");

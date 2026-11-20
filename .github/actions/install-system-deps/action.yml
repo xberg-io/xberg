@@ -62,50 +62,22 @@ runs:
           tesseract-linux-${{ runner.arch }}-v5-
           tesseract-linux-${{ runner.arch }}-
 
+    - name: Identify Linux distribution for libheif cache
+      if: runner.os == 'Linux'
+      id: libheif-linux-distro
+      shell: bash
+      run: |
+        set -euo pipefail
+        source /etc/os-release
+        printf 'distro=%s-%s\n' "$ID" "${VERSION_ID:-rolling}" >>"$GITHUB_OUTPUT"
+
     - name: Restore libheif cache (Linux)
       if: runner.os == 'Linux'
       id: cache-libheif-linux
       uses: actions/cache@v6
       with:
-        path: |
-          /tmp/libheif-cache/usr/local/lib/libheif*
-          /tmp/libheif-cache/usr/local/lib/pkgconfig/libheif.pc
-          /tmp/libheif-cache/usr/local/include/libheif/
-          /tmp/libheif-cache/usr/local/share/libheif/
-        key: libheif-linux-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v5
-        restore-keys: |
-          libheif-linux-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v5
-
-    - name: Restore cached libheif to /usr/local (Linux)
-      if: runner.os == 'Linux' && steps.cache-libheif-linux.outputs.cache-hit == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-        cache_root=/tmp/libheif-cache/usr/local
-        echo "Restoring cached libheif from ${cache_root} to /usr/local..."
-        # Every downstream cargo build resolves libheif through the .pc file this step drops in
-        # /usr/local/lib/pkgconfig, so a failed copy here is not recoverable -- it must abort the
-        # job. The previous `2>/dev/null || true` made a failure indistinguishable from success:
-        # /usr/local/lib/pkgconfig does not exist on a fresh runner, so the .pc copy silently
-        # failed on every cache hit and install-linux.sh rebuilt libheif from source anyway. ~keep
-        for required in \
-          "${cache_root}/lib/pkgconfig/libheif.pc" \
-          "${cache_root}/include/libheif"; do
-          if [ ! -e "${required}" ]; then
-            echo "::error::libheif cache reported a hit but ${required} is missing; the cache entry is incomplete"
-            exit 1
-          fi
-        done
-        sudo mkdir -p /usr/local/lib/pkgconfig /usr/local/include /usr/local/share
-        sudo cp -a "${cache_root}"/lib/libheif* /usr/local/lib/
-        sudo cp -a "${cache_root}/lib/pkgconfig/libheif.pc" /usr/local/lib/pkgconfig/
-        sudo cp -a "${cache_root}/include/libheif" /usr/local/include/
-        # libheif 1.19.x installs no share/libheif; newer releases do. Genuinely optional. ~keep
-        if [ -d "${cache_root}/share/libheif" ]; then
-          sudo cp -a "${cache_root}/share/libheif" /usr/local/share/
-        fi
-        sudo ldconfig
-        echo "✓ Restored cached libheif"
+        path: /tmp/libheif-cache
+        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v7
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
@@ -113,6 +85,21 @@ runs:
       env:
         LIBHEIF_VERSION: ${{ inputs.libheif-version }}
       run: scripts/ci/install-system-deps/install-linux.sh
+
+    - name: Identify MSVC toolset for Windows native caches
+      if: runner.os == 'Windows'
+      id: msvc-toolset
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $install = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($LASTEXITCODE -ne 0 -or -not $install) { throw 'vswhere found no Visual Studio with the MSVC x64 tools' }
+        $versionFile = Join-Path $install 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+        $version = (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim()
+        if ($version -notmatch '^(\d+\.\d+)\.') { throw "Unrecognized MSVC toolset version '$version'" }
+        if (-not $env:ImageOS) { throw 'ImageOS is not set; cannot identify the runner image' }
+        "id=$($env:ImageOS)-msvc$($Matches[1])" | Add-Content -Path $env:GITHUB_OUTPUT
 
     - name: Cache Tesseract (Windows)
       if: runner.os == 'Windows'
@@ -122,9 +109,9 @@ runs:
         path: |
           C:\Program Files\Tesseract-OCR
           C:\ProgramData\chocolatey\lib\tesseract
-        key: tesseract-windows-${{ runner.arch }}-v5.5.4-source-7e548e6-data-v2
+        key: tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-v2
         restore-keys: |
-          tesseract-windows-${{ runner.arch }}-v5.5.4-source-7e548e6-data-
+          tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-
 
     - name: Cache LLVM (Windows)
       if: runner.os == 'Windows'
@@ -152,9 +139,9 @@ runs:
       uses: actions/cache@v6
       with:
         path: C:\xberg-vcpkg-5363acb7
-        key: libheif-windows-${{ runner.arch }}-v1.23.7-vcpkg-5363acb7-v5
+        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5
         restore-keys: |
-          libheif-windows-${{ runner.arch }}-v1.23.7-vcpkg-5363acb7-v5-
+          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5-
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'

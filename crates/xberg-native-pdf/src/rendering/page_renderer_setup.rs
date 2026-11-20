@@ -15,6 +15,8 @@ impl PageRenderer {
             text_ink_suppressed: false,
             suppressed_text_font: None,
             images_suppressed: false,
+            image_selection: None,
+            image_selection_matches: 0,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
             excluded_layers_snapshot: None,
@@ -146,6 +148,11 @@ impl PageRenderer {
 
     pub(in crate::rendering) fn without_font_ink(mut self, font: &str) -> Self {
         self.suppressed_text_font = Some(font.to_owned());
+        self
+    }
+
+    pub(in crate::rendering) fn select_image(mut self, image: ObjectRef, include: bool) -> Self {
+        self.image_selection = Some((image, include));
         self
     }
 

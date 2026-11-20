@@ -226,17 +226,21 @@ fn extract_outline_attributes(node: Node) -> AHashMap<String, String> {
 #[cfg(feature = "office")]
 fn convert_inline_html(text: &str) -> String {
     use regex::Regex;
+    use std::sync::LazyLock;
+
+    static STRONG_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"<(?:strong|b)>(.*?)</(?:strong|b)>").expect("valid regex"));
+    static EM_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<(?:em|i)>(.*?)</(?:em|i)>").expect("valid regex"));
+    static LINK_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"<a\s+href="([^"]*)"[^>]*>(.*?)</a>"#).expect("valid regex"));
 
     let mut result = text.to_string();
 
-    let strong_re = Regex::new(r"<(?:strong|b)>(.*?)</(?:strong|b)>").expect("valid regex");
-    result = strong_re.replace_all(&result, "**$1**").into_owned();
+    result = STRONG_RE.replace_all(&result, "**$1**").into_owned();
 
-    let em_re = Regex::new(r"<(?:em|i)>(.*?)</(?:em|i)>").expect("valid regex");
-    result = em_re.replace_all(&result, "*$1*").into_owned();
+    result = EM_RE.replace_all(&result, "*$1*").into_owned();
 
-    let link_re = Regex::new(r#"<a\s+href="([^"]*)"[^>]*>(.*?)</a>"#).expect("valid regex");
-    result = link_re.replace_all(&result, "[$2]($1)").into_owned();
+    result = LINK_RE.replace_all(&result, "[$2]($1)").into_owned();
 
     result = result.replace(r"\<", "<").replace(r"\>", ">");
 

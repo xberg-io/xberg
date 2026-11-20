@@ -1381,12 +1381,13 @@ fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> 
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn sparse_table_page_text(
+fn tesseract_table_page_text(
     raw: &str,
     doc: &InternalDocument,
     source: &InternalDocument,
     output_format: &crate::core::config::OutputFormat,
     mime_type: &str,
+    psm: i32,
 ) -> Option<String> {
     use crate::core::config::OutputFormat;
     use crate::types::internal::ElementKind;
@@ -1401,7 +1402,7 @@ fn sparse_table_page_text(
         || !doc.images.is_empty()
         || !matches!(element.kind, ElementKind::Table { table_index: 0 })
         // Markdown is absent on purpose: its page text is the pipe table itself (when should_adopt_table_rebuild accepts the rebuild), so there is no row transcript to keep. ~keep
-        || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot)
+        || !matches!(output_format, OutputFormat::Plain | OutputFormat::Djot | OutputFormat::Html)
         || mime_type.to_lowercase().contains("tiff")
         || doc
             .metadata
@@ -1409,7 +1410,7 @@ fn sparse_table_page_text(
             .get("psm")
             .and_then(serde_json::Value::as_str)
             .and_then(|psm| psm.parse().ok())
-            != Some(WHOLE_IMAGE_TESSERACT_PSM)
+            != Some(psm)
     {
         return None;
     }
@@ -1418,6 +1419,30 @@ fn sparse_table_page_text(
     }
     let (before, after) = sparse_table_surrounding_text(source, table.bounding_box.as_ref()?)?;
     render_covered_table_page_text(raw, &table.cells, &before, &after)
+}
+
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn paddle_table_page_text(
+    raw: &str,
+    doc: &InternalDocument,
+    output_format: &crate::core::config::OutputFormat,
+    mime_type: &str,
+) -> Option<String> {
+    use crate::types::internal::ElementKind;
+
+    let ([image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+        return None;
+    };
+    if *output_format != crate::core::config::OutputFormat::Plain
+        || mime_type.to_lowercase().contains("tiff")
+        || !matches!(image.kind, ElementKind::Image { image_index: 0 })
+        || !image.text.is_empty()
+        || !doc.images.is_empty()
+        || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+    {
+        return None;
+    }
+    render_covered_table_page_text(raw, &table.cells, &[], &[])
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2543,6 +2568,9 @@ async fn select_rtl_retry_result(
 mod image_ocr_budget;
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "image_color_threshold.rs"]
+mod image_color_threshold;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2570,9 +2598,26 @@ pub(crate) struct SparseRetryPolicy {
 #[derive(Default)]
 struct StandaloneTesseract<'a> {
     sparse_retry: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
-    dot_leader_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
+    table_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
     #[cfg(feature = "pdf")]
     sparse_rows: bool,
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn standalone_table_psm(
+    ocr: &crate::core::config::OcrConfig,
+    output: &crate::core::config::OutputFormat,
+) -> Option<crate::ocr::types::PSMMode> {
+    use crate::core::config::OutputFormat;
+    use crate::ocr::types::PSMMode;
+
+    match ocr.tesseract_config.as_ref()?.psm? {
+        mode if mode == PSMMode::SingleBlock as i32 => Some(PSMMode::SingleBlock),
+        mode if mode == PSMMode::Auto as i32 && matches!(output, OutputFormat::Plain | OutputFormat::Html) => {
+            Some(PSMMode::Auto)
+        }
+        _ => None,
+    }
 }
 
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
@@ -2590,6 +2635,7 @@ fn allows_standalone_sparse_rows(
         crate::core::config::OutputFormat::Plain
             | crate::core::config::OutputFormat::Markdown
             | crate::core::config::OutputFormat::Djot
+            | crate::core::config::OutputFormat::Html
     ) && !config.include_document_structure
         && !["image/tiff", "image/x-tiff"]
             .iter()
@@ -2649,15 +2695,20 @@ async fn process_whole_image_ocr(
     };
     let primary_bytes = std::sync::Arc::clone(&image_bytes);
     #[cfg(feature = "ocr")]
-    let primary = match standalone.dot_leader_rows {
+    let primary = match standalone.table_rows {
         Some(tesseract) => {
-            Box::pin(tesseract.process_standalone_psm6_image(primary_bytes, effective_config.as_ref())).await?
+            Box::pin(tesseract.process_standalone_table_image(primary_bytes, effective_config.as_ref())).await?
         }
         #[cfg(feature = "pdf")]
         None if standalone.sparse_rows
             && let Some(tesseract) = standalone.sparse_retry =>
         {
-            Box::pin(tesseract.process_standalone_sparse_image(primary_bytes, effective_config.as_ref())).await?
+            Box::pin(tesseract.process_standalone_sparse_image(
+                primary_bytes,
+                effective_config.as_ref(),
+                is_implicit_horizontal_tesseract(original_config),
+            ))
+            .await?
         }
         None => {
             backend
@@ -3095,6 +3146,37 @@ fn single_block_table_config(
     Some(second)
 }
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"),
+    not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn note_tall_standalone_ocr_clamp(doc: &mut InternalDocument) {
+    const MIN_TALL_ASPECT: usize = 4;
+    let Some(preprocessing) = doc.metadata.image_preprocessing.as_ref() else {
+        return;
+    };
+    let source = &preprocessing.original_dimensions;
+    let Some(processed) = preprocessing.new_dimensions.as_ref() else {
+        return;
+    };
+    if preprocessing.dimension_clamped
+        && source.height >= source.width.saturating_mul(MIN_TALL_ASPECT)
+        && processed.height < source.height
+    {
+        crate::core::diagnostics::push_warning(
+            &mut doc.processing_warnings,
+            "ocr",
+            format!(
+                concat!(
+                    "Standalone image OCR reduced {} × {} pixels to {} × {} pixels. ",
+                    "Source-image strip recovery requires PDF input. The text may be incomplete.",
+                ),
+                source.width, source.height, processed.width, processed.height,
+            ),
+        );
+    }
+}
+
 #[cfg_attr(alef, alef(skip))]
 /// Image extractor for various image formats.
 ///
@@ -3104,6 +3186,26 @@ fn single_block_table_config(
 /// When layout detection is also enabled, uses per-region OCR with
 /// markdown formatting based on detected layout classes.
 pub struct ImageExtractor;
+
+/// Reads a clamped tall picture's OCR text again from disjoint source strips.
+///
+/// The picture path shares the PDF route's strip plan and acceptance rule, so only the
+/// certificate differs. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+async fn recover_tall_strips(
+    mut ocr_result: crate::types::ExtractedDocument,
+    content: &[u8],
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    config: &ExtractionConfig,
+    ocr_config: &crate::core::config::OcrConfig,
+    recover_tall: bool,
+) -> Result<crate::types::ExtractedDocument> {
+    if recover_tall {
+        crate::extractors::pdf::ocr::try_replace_standalone(&mut ocr_result, content, backend, config, ocr_config)
+            .await?;
+    }
+    Ok(ocr_result)
+}
 
 impl ImageExtractor {
     /// Create a new image extractor.
@@ -3134,8 +3236,13 @@ impl ImageExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let first = self.extract_with_ocr_pass(content, mime_type, config).await?;
-        self.reread_standalone_table(content, mime_type, config, first).await
+        let first = self.extract_with_ocr_pass(content, mime_type, config, true).await?;
+        #[allow(unused_mut)]
+        let mut result = self.reread_standalone_table(content, mime_type, config, first).await?;
+        // The strip route records its own success or skip from the same preprocessing frame. ~keep
+        #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+        note_tall_standalone_ocr_clamp(&mut result);
+        Ok(result)
     }
 
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
@@ -3163,7 +3270,10 @@ impl ImageExtractor {
             return Ok(first);
         };
         tracing::debug!("standalone table re-read: reading the picture again as one block");
-        match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
+        match self
+            .extract_with_ocr_pass(content, mime_type, &single_block, false)
+            .await
+        {
             Ok(mut second) => match image_table_reread::second_read_is_usable(&first, &second) {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
@@ -3191,8 +3301,11 @@ impl ImageExtractor {
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
+        recover_tall: bool,
     ) -> Result<InternalDocument> {
         use crate::plugins::registry::get_ocr_backend_registry;
+        #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
+        let _ = recover_tall;
 
         let default_ocr_config;
         let ocr_config = match config.ocr.as_ref() {
@@ -3220,23 +3333,33 @@ impl ImageExtractor {
         }
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        let (standalone_tesseract, psm6_tesseract);
+        let (standalone_tesseract, table_tesseract, psm6_tesseract);
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let builtin_paddle;
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
             let backend = registry.get(&ocr_config.backend)?;
+            #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            {
+                builtin_paddle = backend.name() == "paddle-ocr" && registry.has_builtin_paddle();
+            }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
-                let explicit_psm6 = ocr_config
-                    .tesseract_config
-                    .as_ref()
-                    .is_some_and(|config| config.psm == Some(crate::ocr::types::PSMMode::SingleBlock as i32));
+                let table_mode = standalone_table_psm(ocr_config, &config.output_format);
                 let sparse_retry = is_implicit_horizontal_tesseract(ocr_config);
-                let builtin = (explicit_psm6 || sparse_retry)
+                let explicit_sparse_rows = !has_vertical_tesseract_language(ocr_config)
+                    && ocr_config.tesseract_config.as_ref().and_then(|ocr| ocr.psm) == Some(WHOLE_IMAGE_TESSERACT_PSM)
+                    && matches!(config.output_format, crate::core::config::OutputFormat::Plain);
+                let builtin = (table_mode.is_some() || sparse_retry || explicit_sparse_rows)
                     .then(|| registry.builtin_tesseract_for(&backend))
                     .flatten();
-                (standalone_tesseract, psm6_tesseract) = if explicit_psm6 {
+                psm6_tesseract = matches!(
+                    (&builtin, table_mode),
+                    (Some(_), Some(crate::ocr::types::PSMMode::SingleBlock))
+                );
+                (standalone_tesseract, table_tesseract) = if table_mode.is_some() {
                     (None, builtin)
                 } else {
                     (builtin, None)
@@ -3283,7 +3406,12 @@ impl ImageExtractor {
         let include_words = false;
         enable_image_ocr_elements(&mut ocr_config_with_format, include_words);
         #[cfg(not(target_arch = "wasm32"))]
-        if is_implicit_horizontal_tesseract(ocr_config) {
+        let include_tesseract_elements = is_implicit_horizontal_tesseract(ocr_config);
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let include_tesseract_elements = include_tesseract_elements
+            || (config.output_format == crate::core::config::OutputFormat::Markdown && psm6_tesseract);
+        #[cfg(not(target_arch = "wasm32"))]
+        if include_tesseract_elements {
             enable_image_ocr_elements(&mut ocr_config_with_format, true);
         }
 
@@ -3319,7 +3447,7 @@ impl ImageExtractor {
         #[cfg(not(target_arch = "wasm32"))]
         let ocr_result = process_whole_image_ocr(
             &backend,
-            ocr_bytes,
+            std::sync::Arc::clone(&ocr_bytes),
             (ocr_config, &ocr_config_with_format),
             SparseRetryPolicy {
                 whole_page_raster: true,
@@ -3334,10 +3462,20 @@ impl ImageExtractor {
                         .as_ref()
                         .is_none_or(|config| config.preprocessing.is_none())
                 }),
-                dot_leader_rows: psm6_tesseract.as_deref(),
+                table_rows: table_tesseract.as_deref(),
                 #[cfg(feature = "pdf")]
                 sparse_rows: allows_standalone_sparse_rows(config, ocr_config, mime_type),
             },
+        )
+        .await?;
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let ocr_result = image_color_threshold::retry(
+            standalone_tesseract.as_deref(),
+            ocr_bytes,
+            mime_type,
+            (ocr_config, &ocr_config_with_format),
+            config.cancel_token.as_ref(),
+            ocr_result,
         )
         .await?;
         #[cfg(target_arch = "wasm32")]
@@ -3358,6 +3496,8 @@ impl ImageExtractor {
             }
             ocr_result
         };
+        #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+        let ocr_result = recover_tall_strips(ocr_result, content, &backend, config, ocr_config, recover_tall).await?;
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let photo_title = Box::pin(image_photo_title::recover_if_eligible(
@@ -3493,6 +3633,17 @@ impl ImageExtractor {
 
             doc.prebuilt_ocr_elements = ocr_elements;
 
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            if config.output_format == crate::core::config::OutputFormat::Markdown
+                && psm6_tesseract
+                && !has_public_ocr_structure
+                && ocr_tables.is_empty()
+                && ocr_extraction_result.page_contents.is_none()
+                && image_table_reread::shows_column_structure(&doc)
+            {
+                mark_leader_rows(&mut doc);
+            }
+
             let page_tables: Vec<std::sync::Arc<crate::types::Table>> = ocr_tables
                 .into_iter()
                 .map(|table| {
@@ -3515,10 +3666,29 @@ impl ImageExtractor {
             } else {
                 let raw = ocr_extraction_result.content.trim();
                 #[cfg(not(target_arch = "wasm32"))]
-                let table_text = ocr_internal_document
-                    .as_ref()
-                    .filter(|_| standalone_tesseract.is_some() && !has_public_ocr_structure)
-                    .and_then(|source| sparse_table_page_text(raw, &doc, source, &config.output_format, mime_type));
+                let table_text = if has_public_ocr_structure {
+                    None
+                } else {
+                    let page_psm = if standalone_tesseract.is_some() {
+                        Some(WHOLE_IMAGE_TESSERACT_PSM)
+                    } else if table_tesseract.is_some()
+                        && !psm6_tesseract
+                        && config.output_format == crate::core::config::OutputFormat::Plain
+                    {
+                        Some(crate::ocr::types::PSMMode::Auto as i32)
+                    } else {
+                        None
+                    };
+                    page_psm.zip(ocr_internal_document.as_ref()).and_then(|(psm, source)| {
+                        tesseract_table_page_text(raw, &doc, source, &config.output_format, mime_type, psm)
+                    })
+                };
+                #[cfg(all(paddle_ocr, feature = "pdf", not(target_arch = "wasm32")))]
+                let table_text = if builtin_paddle && !has_public_ocr_structure {
+                    table_text.or_else(|| paddle_table_page_text(raw, &doc, &config.output_format, mime_type))
+                } else {
+                    table_text
+                };
                 #[cfg(target_arch = "wasm32")]
                 let table_text: Option<String> = None;
                 if !raw.is_empty() {
@@ -3980,6 +4150,7 @@ fn push_image_placeholder(builder: &mut InternalDocumentBuilder) {
         attributes: None,
         anchor: None,
         ocr_geometry: None,
+        ocr_source_spans: Vec::new(),
         ocr_confidence: None,
         ocr_rotation: None,
     });
@@ -4084,14 +4255,10 @@ fn build_image_internal_document(
 /// Plain keeps the element's line breaks (#2503).
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn mark_leader_rows(doc: &mut InternalDocument) {
-    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+    use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
 
-    for element in doc
-        .elements
-        .iter_mut()
-        .filter(|element| element.kind == ElementKind::Paragraph && element.text.contains('\n'))
-    {
-        element
+    for index in image_table_reread::row_backed_paragraphs(doc) {
+        doc.elements[index]
             .attributes
             .get_or_insert_with(Default::default)
             .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
@@ -4475,14 +4642,14 @@ mod tests {
 
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     #[test]
-    fn standalone_sparse_rows_are_admitted_for_plain_markdown_and_djot_only() {
+    fn standalone_sparse_rows_are_admitted_for_plain_markdown_djot_and_html_only() {
         use crate::core::config::OutputFormat;
         let ocr = crate::core::config::OcrConfig::default();
         for (output_format, admitted) in [
             (OutputFormat::Plain, true),
             (OutputFormat::Markdown, true),
             (OutputFormat::Djot, true),
-            (OutputFormat::Html, false),
+            (OutputFormat::Html, true),
             (OutputFormat::Json, false),
             (OutputFormat::DocTags, false),
             (OutputFormat::Custom("custom".into()), false),

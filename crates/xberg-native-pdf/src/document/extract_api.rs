@@ -126,6 +126,27 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         skip_nonpainting_text: bool,
     ) -> Result<Vec<crate::layout::TextSpan>> {
+        self.extract_spans_with_cmsy_capture(
+            page_index,
+            config,
+            excluded_layers,
+            excluded_inks,
+            script_geometry,
+            skip_nonpainting_text,
+            None,
+        )
+    }
+
+    fn extract_spans_with_cmsy_capture(
+        &self,
+        page_index: usize,
+        config: crate::extractors::TextExtractionConfig,
+        excluded_layers: HashSet<String>,
+        excluded_inks: HashSet<String>,
+        script_geometry: ScriptGeometry,
+        skip_nonpainting_text: bool,
+        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<Vec<crate::layout::TextSpan>> {
         if self.is_encrypted_unreadable() {
             tracing::warn!(target: LOG_TARGET, "PDF is encrypted and could not be decrypted; returning no spans");
             return Ok(Vec::new());
@@ -151,7 +172,7 @@ impl PdfDocument {
             return Ok(Vec::new());
         }
 
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -205,7 +226,13 @@ impl PdfDocument {
             }
         }
 
+        if cmsy.is_some() {
+            extractor.cmsy_witnesses = Some(Vec::new());
+        }
         let spans = extractor.extract_text_spans(&content_data)?;
+        if let Some(output) = cmsy {
+            *output = extractor.cmsy_witnesses.take().unwrap_or_default();
+        }
         // Drain MCIDs whose in-stream /ActualText was applied during
         // extraction and stash on the document so the struct-tree-
         // scope applier honours MC-scope-wins precedence (§14.9.4).
@@ -247,6 +274,16 @@ impl PdfDocument {
         let spans = self.postprocess_spans(page_index, spans)?;
         let text = self.assemble_text_from_spans(page_index, spans.clone(), &Default::default())?;
         Ok((Self::apply_mixed_rtl_line_pass(text), spans))
+    }
+
+    /// Reuse a conservative small-text density probe across planning and rendering.
+    #[doc(hidden)]
+    pub fn has_small_painted_text_for_ocr(&self) -> bool {
+        self.small_painted_text_evidence(|| self.probe_small_painted_text())
+    }
+
+    fn small_painted_text_evidence(&self, probe: impl FnOnce() -> bool) -> bool {
+        *self.small_painted_text.get_or_init(probe)
     }
 
     /// Extract text from a page, excluding content from specified layers and inks.
@@ -745,13 +782,25 @@ impl PdfDocument {
         page_index: usize,
         reading_order: ReadingOrder,
     ) -> Result<crate::layout::PageText> {
-        let spans = self.extract_spans_impl(
+        self.extract_page_text_with_cmsy_capture(page_index, reading_order, None)
+    }
+
+    /// Extract native page text and optionally capture source glyph witnesses from the same pass.
+    #[doc(hidden)]
+    pub fn extract_page_text_with_cmsy_capture(
+        &self,
+        page_index: usize,
+        reading_order: ReadingOrder,
+        witnesses: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<crate::layout::PageText> {
+        let spans = self.extract_spans_with_cmsy_capture(
             page_index,
             crate::extractors::TextExtractionConfig::default(),
             HashSet::new(),
             HashSet::new(),
             ScriptGeometry::Preserve,
             false,
+            witnesses,
         )?;
         let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();
@@ -817,7 +866,7 @@ impl PdfDocument {
         }
 
         // Get content stream data — skip page on decode failure (Annex I) ~keep
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -1027,8 +1076,9 @@ impl PdfDocument {
     /// spaces but the separation renderer does not paint into them, so
     /// surfacing their inks here would create plates that stay empty.
     pub fn get_page_inks_deep(&self, page_index: usize) -> Result<Vec<String>> {
+        let _warnings = self.warning_scope();
         let resources = self.page_resources_for_inks(page_index)?;
-        let content_data = self.get_page_content_data(page_index)?;
+        let content_data = self.cached_page_content(page_index)?;
         let operators = crate::content::parser::parse_content_stream(&content_data)?;
 
         let mut ink_names: Vec<String> = Vec::new();
@@ -1280,7 +1330,7 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -2130,7 +2180,7 @@ impl PdfDocument {
     /// only ever reads the bytes, and a single `extract_words` page touches
     /// this twice (once for spans, once for chars), so handing back the `Arc`
     /// avoids copying the decompressed stream on every call.
-    pub(super) fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
+    pub(crate) fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
         {
             let mut cache = self.page_content_cache.lock_or_recover();
             if let Some(data) = cache.get(&page_index) {
@@ -2245,6 +2295,25 @@ impl PdfDocument {
             .insert(page_index, std::sync::Arc::clone(&content_data));
 
         Ok(content_data)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn small_painted_text_probe_reuses_positive_and_negative_evidence() {
+    for expected in [true, false] {
+        let doc = PdfDocument::from_bytes(super::tests::common::build_minimal_pdf(b"")).unwrap();
+        let calls = std::cell::Cell::new(0);
+        for _ in 0..2 {
+            assert_eq!(
+                doc.small_painted_text_evidence(|| {
+                    calls.set(calls.get() + 1);
+                    expected
+                }),
+                expected
+            );
+        }
+        assert_eq!(calls.get(), 1);
     }
 }
 

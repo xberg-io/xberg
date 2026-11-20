@@ -317,7 +317,11 @@ fn test_zip_text_content_names_offending_member_when_it_exceeds_content_cap() {
         ..SecurityLimits::default()
     };
 
-    let result = extract_zip_text_content(&bytes, &limits);
+    let result = extract_zip_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    );
 
     let error = result.expect_err("a member whose decompressed size dwarfs max_content_size must be rejected");
     let message = error.to_string();
@@ -352,7 +356,11 @@ fn test_zip_file_bytes_names_offending_member_when_it_exceeds_archive_cap() {
         ..SecurityLimits::default()
     };
 
-    let result = extract_zip_file_bytes(&bytes, &limits);
+    let result = extract_zip_file_bytes(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    );
 
     let error = result.expect_err("a member whose decompressed size dwarfs max_archive_size must be rejected");
     let message = error.to_string();
@@ -392,7 +400,11 @@ fn test_tar_text_content_names_offending_member_when_it_exceeds_content_cap() {
         ..SecurityLimits::default()
     };
 
-    let result = extract_tar_text_content(&bytes, &limits);
+    let result = extract_tar_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    );
 
     let error = result.expect_err("a member whose declared size dwarfs max_content_size must be rejected");
     let message = error.to_string();
@@ -428,7 +440,11 @@ fn test_tar_file_bytes_names_offending_member_when_it_exceeds_archive_cap() {
         ..SecurityLimits::default()
     };
 
-    let result = extract_tar_file_bytes(&bytes, &limits);
+    let result = extract_tar_file_bytes(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    );
 
     let error = result.expect_err("a member whose declared size dwarfs max_archive_size must be rejected");
     let message = error.to_string();
@@ -460,4 +476,34 @@ fn decode_archive_text_emits_no_warning_for_valid_utf8() {
         "valid UTF-8 must not emit a decode warning, got {:?}",
         capture.events.lock().unwrap()
     );
+}
+
+#[test]
+fn gzip_budget_includes_binary_output() {
+    let mut encoder = flate2::GzBuilder::new()
+        .filename("data.bin")
+        .write(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&[0xff, 0xfe, 0xfd]).unwrap();
+    let bytes = encoder.finish().unwrap();
+
+    let mut limits = default_limits();
+    limits.max_archive_size = 3;
+    let (metadata, text, raw) = extract_gzip_with_bytes(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap();
+    assert_eq!(metadata.total_size, 3);
+    assert!(text.is_empty());
+    assert_eq!(raw["data.bin"], [0xff, 0xfe, 0xfd]);
+
+    limits.max_archive_size = 2;
+    let error = extract_gzip_with_bytes(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("data.bin"));
 }

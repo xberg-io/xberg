@@ -4,20 +4,20 @@ target: wasm
 ---
 
 ```typescript title="WASM"
-import init, { extract } from "@xberg-io/xberg-wasm";
+import init, { WasmChunkingConfig, WasmExtractInput, WasmExtractionConfig, extract } from "@xberg-io/xberg-wasm";
 
 await init();
 
-const config = {
-  chunking: {
-    max_characters: 1000,
-    overlap: 100,
-  },
-};
+const chunking = WasmChunkingConfig.default();
+chunking.maxCharacters = 1000;
+chunking.overlap = 100;
+
+const config = WasmExtractionConfig.default();
+config.chunking = chunking;
 
 const buffer = await fetch("document.pdf").then((response) => response.arrayBuffer());
 const bytes = new Uint8Array(buffer);
-const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
+const result = await extract(WasmExtractInput.fromBytes(bytes, "application/pdf"), config);
 
 result.results[0].chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);
@@ -26,22 +26,21 @@ result.results[0].chunks?.forEach((chunk, idx) => {
 ```
 
 ```typescript title="WASM - Markdown with Heading Context"
-import init, { extract } from "@xberg-io/xberg-wasm";
+import init, { WasmChunkerType, WasmChunkingConfig, WasmExtractInput, WasmExtractionConfig, extract } from "@xberg-io/xberg-wasm";
 
 await init();
 
-const config = {
-  chunking: {
-    chunker_type: "markdown",
-    max_characters: 2000,
-    // Note: Token-based sizing is not available in WASM builds.
-    // Use character-based sizing instead.
-  },
-};
+const chunking = WasmChunkingConfig.default();
+chunking.chunkerType = WasmChunkerType.Markdown;
+// WASM uses character-based sizing.
+chunking.maxCharacters = 2000;
+
+const config = WasmExtractionConfig.default();
+config.chunking = chunking;
 
 const buffer = await fetch("document.md").then((response) => response.arrayBuffer());
 const bytes = new Uint8Array(buffer);
-const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
+const result = await extract(WasmExtractInput.fromBytes(bytes, "text/markdown"), config);
 
 result.results[0].chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);

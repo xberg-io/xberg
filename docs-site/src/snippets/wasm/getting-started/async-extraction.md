@@ -4,13 +4,13 @@ target: wasm
 ---
 
 ```typescript title="Wasm"
-import init, { extract } from "@xberg-io/xberg-wasm";
+import init, { WasmExtractInput, extract } from "@xberg-io/xberg-wasm";
 
 async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
   await init();
 
   const results = await Promise.all(
-    files.map((bytes, index) => extract({ kind: "bytes", bytes, mimeType: mimeTypes[index] }, undefined)),
+    files.map((bytes, index) => extract(WasmExtractInput.fromBytes(bytes, mimeTypes[index]))),
   );
 
   return results.map((r) => ({

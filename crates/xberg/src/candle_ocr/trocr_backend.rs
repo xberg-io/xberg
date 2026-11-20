@@ -14,9 +14,12 @@ use crate::candle_ocr::config::{
 };
 use crate::core::config::OcrConfig;
 use crate::engine_cache::EngineCache;
+use crate::extraction::image_decode::{ImageDecodeBudget, PreparedCandleImageDecode};
+use crate::extractors::security::SecurityLimits;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractedDocument;
 use xberg_candle_ocr::DevicePreference;
+use xberg_candle_ocr::models::image_processor::ImageProcessor;
 use xberg_candle_ocr::models::{TrocrEngine, TrocrVariant};
 
 /// Parse and check the TrOCR `backend_options`.
@@ -54,7 +57,7 @@ type EngineKey = (u8, DevicePreference, PathBuf, String);
 /// fixture (200px) used in `xberg-candle-ocr`'s own integration test.
 const MAX_LINE_CROP_HEIGHT_PX: u32 = 300;
 
-/// Reject an `image_bytes` payload that looks like a full page rather than a single
+/// Reject image dimensions that look like a full page rather than a single
 /// cropped text line, before it is handed to a model trained only on the latter.
 ///
 /// TrOCR's [`ImageProcessor`](xberg_candle_ocr::models::image_processor::ImageProcessor)
@@ -64,13 +67,7 @@ const MAX_LINE_CROP_HEIGHT_PX: u32 = 300;
 /// decodes whatever line-shaped pattern the squashed page most resembles). Returning
 /// `Ok` with hallucinated content is worse than failing loudly here: a caller checking
 /// only the exit code has no way to tell the two apart otherwise.
-fn reject_whole_page_input(image_bytes: &[u8]) -> Result<()> {
-    let (width, height) =
-        xberg_candle_ocr::models::image_processor::dimensions(image_bytes).map_err(|e| crate::XbergError::Ocr {
-            message: format!("TrOCR: failed to read image dimensions: {e}"),
-            source: Some(Box::new(e)),
-        })?;
-
+fn reject_whole_page_input((width, height): (u32, u32)) -> Result<()> {
     if height > MAX_LINE_CROP_HEIGHT_PX {
         return Err(crate::XbergError::Validation {
             message: format!(
@@ -88,6 +85,14 @@ fn reject_whole_page_input(image_bytes: &[u8]) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn admit_trocr_preprocessing(decode: &PreparedCandleImageDecode<'_>, limits: &SecurityLimits) -> Result<()> {
+    reject_whole_page_input(decode.dimensions())?;
+    let processor = ImageProcessor::default();
+    decode.validate_preprocessing_peak(limits, |width, height, bpp| {
+        processor.resize_working_bytes(width, height, bpp)
+    })
 }
 
 /// Process-wide engine cache keyed by `(variant_discriminant, device_preference, cache_dir, revision)`.
@@ -164,6 +169,8 @@ fn get_or_init_engine(
 #[cfg_attr(alef, alef(skip))]
 pub struct TrocrBackend {
     variant: TrocrVariant,
+    #[cfg(test)]
+    stop_before_model: bool,
 }
 
 struct TrocrOptions {
@@ -176,7 +183,11 @@ struct TrocrOptions {
 impl TrocrBackend {
     /// Create a new TrOCR backend with the specified variant.
     pub fn new(variant: TrocrVariant) -> Self {
-        Self { variant }
+        Self {
+            variant,
+            #[cfg(test)]
+            stop_before_model: false,
+        }
     }
 
     /// Create a TrOCR backend with the default variant (base-printed).
@@ -238,6 +249,17 @@ impl OcrBackend for TrocrBackend {
     /// in `self.variant`. Inference runs inside `tokio::task::spawn_blocking` so the
     /// async runtime is never blocked.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
+        let limits = config.security_limits.clone().unwrap_or_default();
+        ImageDecodeBudget::from_security_limits(&limits).validate(
+            1,
+            1,
+            u64::try_from(image_bytes.len()).unwrap_or(u64::MAX),
+        )?;
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
+
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        let limits = config.security_limits.clone().unwrap_or_default();
         let options = Self::parse_options(config)?;
         let variant = options.variant.unwrap_or(self.variant);
         let cache_dir = options.cache_dir.unwrap_or_else(hf_hub::resolve_cache_dir);
@@ -250,21 +272,36 @@ impl OcrBackend for TrocrBackend {
             });
         }
 
-        reject_whole_page_input(image_bytes)?;
-
-        let image_bytes_owned = image_bytes.to_vec();
-
-        let content = tokio::task::spawn_blocking(move || {
+        let decode_error = |error| match error {
+            error @ crate::XbergError::Validation { .. } => error,
+            error => crate::XbergError::Ocr {
+                message: format!("TrOCR image decode failed: {error}"),
+                source: Some(Box::new(error)),
+            },
+        };
+        #[cfg(test)]
+        let stop_before_model = self.stop_before_model;
+        let (content, image_bytes) = tokio::task::spawn_blocking(move || {
+            let decode = PreparedCandleImageDecode::new(&image_bytes, &limits, false).map_err(decode_error)?;
+            admit_trocr_preprocessing(&decode, &limits)?;
+            let img = decode.decode().map_err(decode_error)?;
+            #[cfg(test)]
+            if stop_before_model {
+                return Err(crate::XbergError::Ocr {
+                    message: "TrOCR reached model initialization".to_owned(),
+                    source: None,
+                });
+            }
             let engine = get_or_init_engine(variant, options.device, cache_dir, revision)?;
 
             let output = engine
-                .process_image(&image_bytes_owned)
+                .process_decoded_image_with_budget(&img, u64::try_from(limits.max_content_size).unwrap_or(u64::MAX))
                 .map_err(|e| crate::XbergError::Ocr {
-                    message: format!("TrOCR inference failed: {}", e),
+                    message: format!("TrOCR inference failed: {e}"),
                     source: Some(Box::new(e)),
                 })?;
 
-            Ok::<String, crate::XbergError>(output.content)
+            Ok::<_, crate::XbergError>((output.content, image_bytes))
         })
         .await
         .map_err(|e| crate::XbergError::Ocr {
@@ -275,7 +312,7 @@ impl OcrBackend for TrocrBackend {
         Ok(super::ocr_result::build_ocr_document(
             content,
             Vec::new(),
-            image_bytes,
+            &image_bytes,
             config,
             super::ocr_result::OcrDocumentContext {
                 mime_type: Cow::Borrowed("text/plain"),
@@ -287,8 +324,9 @@ impl OcrBackend for TrocrBackend {
     }
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
-        let bytes = crate::core::io::read_file_async(path).await?;
-        self.process_image(&bytes, config).await
+        let limits = config.security_limits.clone().unwrap_or_default();
+        let bytes = super::read_image_file(path, &limits).await?;
+        self.process_image_owned(Arc::new(bytes), config).await
     }
 
     fn supports_language(&self, lang: &str) -> bool {
@@ -415,6 +453,95 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn configured_resize_budget_rejects_png_before_model_initialization() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(64, 16)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let backend = TrocrBackend {
+            stop_before_model: true,
+            ..TrocrBackend::default_variant()
+        };
+        let mut config = OcrConfig {
+            security_limits: Some(SecurityLimits {
+                max_content_size: 1 << 20,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = backend.process_image(png.get_ref(), &config).await.unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+                if message.contains("64x16") && message.contains("security_limits.max_content_size")),
+            "a small valid line must fail the configured resize budget: {error}"
+        );
+
+        config.security_limits.as_mut().unwrap().max_content_size = 16 << 20;
+        let error = backend.process_image(png.get_ref(), &config).await.unwrap_err();
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, source: None }
+                if message == "TrOCR reached model initialization"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn configured_raster_budget_is_checked_before_truncated_pixels() {
+        let bmp = crate::extraction::image_decode::bmp_with_declared_dimensions(32, 32);
+        let backend = TrocrBackend::new(TrocrVariant::BasePrinted);
+        let limit = 1024;
+        assert!(bmp.len() < limit);
+        let config = OcrConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: limit,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = backend
+            .process_image(&bmp, &config)
+            .await
+            .expect_err("decoded raster exceeds the budget");
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("security_limits.max_content_size")),
+            "{error}"
+        );
+
+        let error = backend
+            .process_image(&bmp, &OcrConfig::default())
+            .await
+            .expect_err("the admitted raster has truncated pixels");
+        assert!(
+            matches!(&error, crate::XbergError::Ocr { message, source: Some(_) }
+            if message.starts_with("TrOCR image decode failed:")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn configured_encoded_budget_rejects_a_file_before_decoding() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(temp.path(), [0; 64]).unwrap();
+        let config = OcrConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 32,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let error = TrocrBackend::new(TrocrVariant::BasePrinted)
+            .process_image_file(temp.path(), &config)
+            .await
+            .expect_err("encoded file exceeds the budget");
+        assert!(
+            matches!(&error, crate::XbergError::Validation { message, .. }
+            if message.contains("encoded image file exceeds security_limits.max_content_size")),
+            "{error}"
+        );
+    }
+
     fn fixture_bytes(name: &str) -> Vec<u8> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../test_documents/images/{name}"));
         std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()))
@@ -433,7 +560,8 @@ mod tests {
     #[test]
     fn test_reject_whole_page_input_rejects_full_page_raster() {
         let bytes = fixture_bytes("ocr_test_original.png");
-        let result = reject_whole_page_input(&bytes);
+        let dimensions = xberg_candle_ocr::models::image_processor::dimensions(&bytes).unwrap();
+        let result = reject_whole_page_input(dimensions);
         assert!(
             result.is_err(),
             "a 595x842 full-page raster must be rejected as line-level TrOCR input, got Ok"
@@ -449,7 +577,8 @@ mod tests {
     #[test]
     fn test_reject_whole_page_input_accepts_line_crop() {
         let bytes = fixture_bytes("test_hello_world.png");
-        let result = reject_whole_page_input(&bytes);
+        let dimensions = xberg_candle_ocr::models::image_processor::dimensions(&bytes).unwrap();
+        let result = reject_whole_page_input(dimensions);
         assert!(
             result.is_ok(),
             "an 800x200 single-line crop must be accepted, got {:?}",

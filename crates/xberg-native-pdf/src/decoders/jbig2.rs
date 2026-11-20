@@ -37,10 +37,8 @@ use crate::error::Result;
 pub struct Jbig2Decoder;
 
 impl StreamDecoder for Jbig2Decoder {
-    // `max_output_bytes` (GH#1764) is ignored: this is a pass-through, so output
-    // never exceeds input length. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
-        tracing::debug!(filter = "JBIG2Decode", bytes = input.len(), "pass-through");
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        super::check_output_cap(self.name(), input.len(), max_output_bytes)?;
         Ok(input.to_vec())
     }
 

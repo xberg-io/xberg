@@ -3,7 +3,7 @@ title: "Kubernetes Deployment"
 description: "Deploy the Xberg extraction server on Kubernetes with the official Helm chart."
 ---
 
-Deploy the Xberg REST API server (`xberg serve`) on Kubernetes with the official Helm chart. The chart is a single-service deployment — one stateless workload plus an optional cache, ingress, and autoscaler. For a distributed, governed platform with team support, see [Xberg Enterprise](https://xberg.io).
+Deploy the Xberg REST API server (`xberg serve`) on Kubernetes with the official Helm chart. The chart is a single-service deployment — one stateless workload plus an optional cache, ingress, and autoscaler. For a distributed, governed platform with team support, see [Xberg Enterprise](https://pro.xberg.io/start/pro-helm/).
 
 ## Install
 

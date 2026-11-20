@@ -68,6 +68,7 @@ impl Default for ExtractionServiceBuilder {
 
 impl ExtractionServiceBuilder {
     /// Create a new builder with no layers configured.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             timeout: None,
@@ -79,6 +80,7 @@ impl ExtractionServiceBuilder {
     }
 
     /// Add a per-request timeout.
+    #[must_use]
     pub fn with_timeout(mut self, duration: Duration) -> Self {
         self.timeout = Some(duration);
         self
@@ -87,12 +89,14 @@ impl ExtractionServiceBuilder {
     /// Limit concurrent in-flight extractions.
     ///
     /// A zero limit is rejected by [`Self::build`].
+    #[must_use]
     pub fn with_concurrency_limit(mut self, max: usize) -> Self {
         self.concurrency_limit = Some(max);
         self
     }
 
     /// Add a tracing span to each extraction request.
+    #[must_use]
     pub fn with_tracing(mut self) -> Self {
         self.tracing = true;
         self
@@ -100,6 +104,7 @@ impl ExtractionServiceBuilder {
 
     /// Add metrics recording to each extraction request.
     #[cfg(feature = "otel")]
+    #[must_use]
     pub fn with_metrics(mut self) -> Self {
         self.metrics = true;
         self

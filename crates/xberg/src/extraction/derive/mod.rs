@@ -30,6 +30,15 @@ pub(crate) use formulas::strip_math_delimiters;
 pub(crate) use ocr_document::adopt_public_ocr_document;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) use ocr_document::is_invalid_public_ocr_document;
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use pages::FINAL_OCR_REPLAY;
 pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]
 use pages::build_pages;
@@ -601,21 +610,45 @@ fn raw_block_node_content(elem: &mut InternalElement) -> NodeContent {
     }
 }
 
-/// Convert an internal `Table` to a `TableGrid`.
+/// Check that retained geometry still describes the dense table after table repair.
 pub(crate) fn native_grid_matches_table(table: &Table, grid: &TableGrid) -> bool {
-    // ~keep: Later table repair may replace the dense cells. Only reuse native geometry
-    // while its dimensions and text still describe that same table.
-    grid.rows as usize == table.cells.len()
-        && table.cells.iter().all(|row| row.len() == grid.cols as usize)
-        && grid.cells.iter().all(|cell| {
-            table
-                .cells
-                .get(cell.row as usize)
-                .and_then(|row| row.get(cell.col as usize))
-                == Some(&cell.content)
-        })
-        && grid.cells.iter().filter(|cell| !cell.content.is_empty()).count()
-            == table.cells.iter().flatten().filter(|cell| !cell.is_empty()).count()
+    validated_table_grid_occupancy(table, grid).is_some()
+}
+
+pub(crate) fn validated_table_grid_occupancy(table: &Table, grid: &TableGrid) -> Option<Vec<Vec<bool>>> {
+    if grid.rows == 0
+        || grid.cols == 0
+        || grid.rows as usize != table.cells.len()
+        || table.cells.iter().any(|row| row.len() != grid.cols as usize)
+    {
+        return None;
+    }
+
+    let mut occupied = vec![vec![false; grid.cols as usize]; grid.rows as usize];
+    let mut nonempty_anchors = 0;
+    for cell in &grid.cells {
+        let row_end = cell.row.checked_add(cell.row_span)?;
+        let col_end = cell.col.checked_add(cell.col_span)?;
+        if cell.row_span == 0 || cell.col_span == 0 || row_end > grid.rows || col_end > grid.cols {
+            return None;
+        }
+        if table.cells[cell.row as usize][cell.col as usize] != cell.content {
+            return None;
+        }
+        nonempty_anchors += usize::from(!cell.content.is_empty());
+        for row in cell.row..row_end {
+            for col in cell.col..col_end {
+                let slot = &mut occupied[row as usize][col as usize];
+                let covered_text =
+                    (row != cell.row || col != cell.col) && !table.cells[row as usize][col as usize].is_empty();
+                if *slot || covered_text {
+                    return None;
+                }
+                *slot = true;
+            }
+        }
+    }
+    (nonempty_anchors == table.cells.iter().flatten().filter(|text| !text.is_empty()).count()).then_some(occupied)
 }
 
 fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
@@ -925,6 +958,17 @@ fn derive(
         include_document_structure,
         "derivation pipeline starting"
     );
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if matches!(
+        output_format,
+        crate::core::config::OutputFormat::Markdown
+            | crate::core::config::OutputFormat::Html
+            | crate::core::config::OutputFormat::Djot
+            | crate::core::config::OutputFormat::DocTags
+    ) && !observer.captures_pages()
+    {
+        pages::adopt_canonical_ocr_headings(&mut doc);
+    }
     resolve_relationships(&mut doc);
 
     let (content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
@@ -944,7 +988,25 @@ fn derive(
         spans.as_ref(),
         observer,
     );
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref())
+        && content_is_plain
+    {
+        pages::trace_final_ocr_occurrences(&doc, (&content, spans), pages);
+    }
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    let (mut content, mut pages) = (content, pages);
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref_mut())
+        && content_is_plain
+        && !include_document_structure
+        && !observer.captures_pages()
+        && ocr_elements.as_ref().is_none_or(Vec::is_empty)
+        && output_format == crate::core::config::OutputFormat::Plain
+    {
+        let _ = pages::adopt_final_ocr_replacement(&mut doc, &mut content, spans, pages);
+    }
 
     let formulas = derive_formulas(&mut doc);
 

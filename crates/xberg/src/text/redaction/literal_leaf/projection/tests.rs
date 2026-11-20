@@ -83,11 +83,11 @@ fn code_trim_never_removes_preceding_unicode_or_prior_origins() {
     );
     let crlf_source = "é `α\r\nβ` z";
     let crlf = parsed(crlf_source);
-    assert_eq!(crlf.leaf.text, "é α\r β z");
+    assert_eq!(crlf.leaf.text, "é α β z");
     let crlf_match = crlf
         .map(
-            3..9,
-            "α\r β",
+            3..8,
+            "α β",
             limits(crlf_source, crlf_source.len() + 2),
             &mut Work::default(),
         )

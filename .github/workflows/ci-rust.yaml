@@ -24,10 +24,13 @@ on:
       - "mise-tasks/nli/**"
       - "tools/benchmark-harness/nli_qualification/**"
       - "scripts/ci/rust/**"
+      # crate-packages reads the crates.io publish list from the publish-crates step. ~keep
+      - ".github/workflows/publish.yaml"
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
       - ".github/actions/setup-paddle-ocr-models/**"
       - ".github/actions/qualify-ocr-paddle-sideways/**"
+      - ".github/actions/qualify-ocr-orientation/**"
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
@@ -225,6 +228,7 @@ jobs:
           # ~keep The pass count above anchors at `^test result:`; mise's prefix output mode would
           # prepend `[rust:test:ci] ` to every line and turn the sum into 0.
           MISE_TASK_OUTPUT: interleave
+          XBERG_REQUIRE_TEST_FIXTURES: "1"
           # ~keep Optimize macOS tests to shrink __eh_frame below the compact-unwind table's 16 MB offset limit.
           CARGO_PROFILE_TEST_OPT_LEVEL: "${{ runner.os == 'macOS' && '1' || '0' }}"
           LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH || '' }}
@@ -333,6 +337,12 @@ jobs:
 
       - name: Check no-default-features
         run: cargo check --locked -p xberg --no-default-features
+        shell: bash
+
+      # `cargo publish` verifies the crate at default features under -D warnings, so an item
+      # only the full feature set uses must fail here before a release does. ~keep
+      - name: Clippy default features
+        run: cargo clippy --locked -p xberg --lib -- -D warnings
         shell: bash
 
       - name: Check ocr-wasm backend
@@ -629,9 +639,9 @@ jobs:
         with:
           dest-dir: crates/xberg-ffi
 
-      - name: cargo check -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
+      - name: cargo clippy -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
         if: matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'
-        run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
+        run: cargo clippy --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets -- -D warnings
         shell: bash
 
       - name: Install mise
@@ -681,6 +691,40 @@ jobs:
 
       - name: Chunking scaling bench smoke
         run: cargo bench --locked -p xberg --no-default-features --features chunking --bench chunking_scaling -- --test
+        shell: bash
+
+  # v1.4.1's crates.io publish stopped halfway: `cargo publish` compiles each packaged crate
+  # standalone at default features, where Cargo 1.100's `unused_dependencies` lint fired on
+  # dependencies only optional features use, and `build.warnings = deny` failed it. Workspace
+  # builds unify features across members and never see that, so this leg packages and verifies
+  # the publish-crates list the same way, before a tag does. ~keep
+  crate-packages:
+    name: Crate package verification
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-crate-packages
+          use-sccache: "true"
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Install mise
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: python
+
+      - name: Package and verify published crates
+        run: mise run rust:check:packages
         shell: bash
 
   # #741 continued: `wasm-target` is only ever compiled by publish.yaml's `wasm-bindings`
@@ -822,6 +866,34 @@ jobs:
           fi
         shell: bash
 
+  ort-discovery:
+    name: Dynamic ONNX Runtime discovery
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-ort-discovery
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+
+      - name: Setup mise
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+
+      - name: Test staged runtime through the production routes
+        run: mise run rust:test:ort-discovery
+        shell: bash
+
   # #702: `PdfBackend::Pdfium` (crates/xberg/src/extractors/pdf/pdfium_engine.rs) had zero
   # executed CI coverage. Its regression test,
   # `pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available`, is gated
@@ -832,7 +904,7 @@ jobs:
   # `libpdfium`, which is true on every runner today because nothing provisions the library.
   # This job closes both gaps: it builds the crate with `pdf,pdf-pdfium` explicitly and
   # provisions a real pdfium runtime via the existing `download-pdfium` composite action
-  # (rather than a third bespoke download script), then runs only that one test.
+  # before running the concurrent and pre-cancelled extraction tests.
   #
   # Version pin: 7678, the release the checked-in bindings were generated against
   # (crates/xberg-pdfium-render/src/lib.rs includes bindgen/pdfium_7678.rs, the only binding set
@@ -885,16 +957,19 @@ jobs:
         with:
           pdfium-version: "7678"
 
-      - name: Run pdfium engine test (real library required, not skip-on-absence)
+      - name: Run Pdfium engine tests (real library required)
         run: |
           set -euo pipefail
-          cargo test --locked -p xberg --features "pdf,pdf-pdfium" --lib \
+          for test_name in \
             extractors::pdf::tests::pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available \
-            -- --exact --nocapture 2>&1 | tee /tmp/pdfium-engine-test.log
-          if ! grep -qE '^test result: ok\. 1 passed' /tmp/pdfium-engine-test.log; then
-            echo "::error::pdfium_engine_serializes_concurrent_extractions_when_the_library_is_available did not run -- this is the sole CI execution of PdfBackend::Pdfium; a renamed/moved/re-gated test would silently go green here" >&2
-            exit 1
-          fi
+            extractors::pdf::pdfium_engine::tests::should_stop_pdfium_extraction_before_opening_the_document_when_cancelled; do
+            cargo test --locked -p xberg --features "pdf,pdf-pdfium" --lib \
+              -- --exact "$test_name" --nocapture 2>&1 | tee /tmp/pdfium-engine-test.log
+            if ! grep -qE '^test result: ok\. 1 passed; 0 failed; 0 ignored;' /tmp/pdfium-engine-test.log; then
+              echo "::error::Expected exactly one passed Pdfium test: $test_name" >&2
+              exit 1
+            fi
+          done
         shell: bash
         env:
           PDFIUM_DYNAMIC_LIB_PATH: ${{ env.XBERG_PDFIUM_PREBUILT }}/lib

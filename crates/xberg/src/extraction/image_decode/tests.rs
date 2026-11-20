@@ -538,7 +538,11 @@ fn direct_decoder_calls(source: &str) -> Vec<DecoderCall> {
 
 #[test]
 fn direct_image_decode_api_calls_are_audited() {
-    let test_only_sources = ["paddle_ocr/tract_parity.rs"];
+    let test_only_sources = [
+        "extraction/doc/test_images.rs",
+        "paddle_ocr/ruled_punctuation/interior_span_replay.rs",
+        "paddle_ocr/tract_parity.rs",
+    ];
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     rust_sources(&source_root, &mut files);
@@ -591,7 +595,9 @@ fn decoder_audit_violations(relative: &str, source: &str) -> Vec<String> {
 
 fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<&'static str> {
     match (relative, function, path) {
-        ("extraction/image_decode.rs", "probe_standard_image", _) => Some("method::validate"),
+        ("extraction/image_decode.rs", "probe_standard_image", _)
+        | ("extraction/image_decode.rs", "probe_standard_image_with_decoder_budget", _) => Some("method::validate"),
+        ("extraction/image_decode.rs", "decode", _) => Some("image_decode_limits"),
         ("extraction/image_decode.rs", "decode_standard_image", _)
         | ("extraction/image_decode.rs", "decode_standard_rgb8", _)
         | ("extraction/image_decode.rs", "decode_standard_luma8_with_security_limits", _) => {

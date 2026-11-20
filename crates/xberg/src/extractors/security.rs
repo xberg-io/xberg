@@ -752,6 +752,75 @@ impl SecurityBudget {
     }
 }
 
+/// Work budget shared by every nesting level of one archive extraction.
+///
+/// `security_limits` is checked per container, and each archive extractor hands its
+/// children a clone of its config, so without a shared budget every nested archive got the
+/// full `max_archive_size` again and the total work multiplied with depth and fan-out. The
+/// outermost archive extractor installs one budget, sized from its limits, in
+/// `ExtractionConfig::archive_budget`; every nested extraction charges the same counters.
+///
+/// Internal state, not configuration: never serialized and not part of the bindings.
+#[doc(hidden)]
+#[cfg_attr(alef, alef(skip))]
+#[cfg_attr(not(feature = "archives"), allow(dead_code))]
+#[derive(Debug)]
+pub struct ArchiveBudget {
+    max_decompressed: usize,
+    decompressed: std::sync::atomic::AtomicUsize,
+    max_child_output: usize,
+    child_output: std::sync::atomic::AtomicUsize,
+}
+
+#[cfg(feature = "archives")]
+impl ArchiveBudget {
+    /// A budget for one extraction: `max_archive_size` decompressed bytes and
+    /// `max_content_size` bytes of nested child output across all nesting levels.
+    pub(crate) fn new(limits: &SecurityLimits) -> Self {
+        Self {
+            max_decompressed: limits.max_archive_size,
+            decompressed: std::sync::atomic::AtomicUsize::new(0),
+            max_child_output: limits.max_content_size,
+            child_output: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// Decompressed bytes still available to the rest of the extraction.
+    pub(crate) fn remaining_decompressed(&self) -> usize {
+        self.max_decompressed
+            .saturating_sub(self.decompressed.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// Charge `bytes` of decompressed archive content. Nothing is charged on failure.
+    pub(crate) fn charge_decompressed(&self, bytes: usize) -> Result<(), SecurityError> {
+        charge(&self.decompressed, bytes, self.max_decompressed).map_err(|size| SecurityError::ArchiveTooLarge {
+            size: size as u64,
+            max: self.max_decompressed,
+        })
+    }
+
+    /// Charge `bytes` of extracted child output. Nothing is charged on failure.
+    pub(crate) fn charge_child_output(&self, bytes: usize) -> Result<(), SecurityError> {
+        charge(&self.child_output, bytes, self.max_child_output).map_err(|size| SecurityError::ContentTooLarge {
+            size,
+            max: self.max_child_output,
+        })
+    }
+}
+
+/// Add `bytes` to `counter` unless the sum would exceed `max`; on failure return the sum
+/// that was refused.
+#[cfg(feature = "archives")]
+fn charge(counter: &std::sync::atomic::AtomicUsize, bytes: usize, max: usize) -> Result<(), usize> {
+    use std::sync::atomic::Ordering;
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
+            Some(used.saturating_add(bytes)).filter(|total| *total <= max)
+        })
+        .map(|_| ())
+        .map_err(|used| used.saturating_add(bytes))
+}
+
 /// Error returned by [`resolve_container_entry`] when a container-relative entry name
 /// cannot be safely resolved.
 ///

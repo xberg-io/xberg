@@ -7,7 +7,9 @@ use crate::pdf::hierarchy::SegmentData;
 pub(crate) struct PdfLine {
     pub segments: Vec<SegmentData>,
     pub native_scripts: Vec<crate::pdf::native::hierarchy::script_evidence::ScriptOwner>,
-    pub baseline_y: f32,
+    /// The source baseline, including a measured zero. Text without a position has no baseline.
+    /// Layout hint matching treats segments on a line without a baseline as placeholders.
+    pub baseline_y: Option<f32>,
     #[allow(dead_code)]
     pub dominant_font_size: f32,
     #[allow(dead_code)]
@@ -16,6 +18,11 @@ pub(crate) struct PdfLine {
 }
 
 impl PdfLine {
+    /// Keep the origin fallback for heuristics that historically gave unpositioned lines a coordinate.
+    pub(crate) fn baseline_or_zero(&self) -> f32 {
+        self.baseline_y.unwrap_or(0.0)
+    }
+
     pub(crate) fn valid_native_scripts(&self) -> Vec<&crate::pdf::native::hierarchy::script_evidence::ScriptOwner> {
         self.native_scripts
             .iter()
@@ -46,6 +53,7 @@ pub(crate) struct PdfParagraph {
     /// path is carried through document-level classification and consumed only
     /// during final assembly, where it becomes invisible `Group` containers.
     pub layout_region_path: Option<LayoutRegionPath>,
+    pub ocr_source_spans: Vec<crate::types::internal::OcrSourceSpan>,
     /// Index of the parent element this caption is associated with (tables/pictures).
     pub caption_for: Option<usize>,
     /// Block-level bounding box from structure tree extraction.

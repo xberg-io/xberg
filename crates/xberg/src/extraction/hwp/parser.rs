@@ -209,13 +209,25 @@ fn parse_eqedit_script(data: &[u8]) -> Option<String> {
 /// behavior). Any record the byte stream fails to decode stops parsing and appends a
 /// human-readable entry to `warnings` naming how much was abandoned, rather than
 /// failing silently (#236).
+///
+/// A compressed section may inflate to at most `section_limit` bytes and at most
+/// `*decompressed_budget` (the bytes still allowed across all sections); the budget is
+/// reduced by what this section inflated to.
 pub(crate) fn parse_body_text(
     data: Vec<u8>,
     is_compressed: bool,
     stream_name: &str,
     warnings: &mut Vec<String>,
+    section_limit: usize,
+    decompressed_budget: &mut usize,
 ) -> Result<Vec<Section>> {
-    let data = if is_compressed { decompress_stream(&data)? } else { data };
+    let data = if is_compressed {
+        let out = decompress_stream(&data, section_limit.min(*decompressed_budget))?;
+        *decompressed_budget -= out.len();
+        out
+    } else {
+        data
+    };
 
     let mut reader = StreamReader::new(data);
     let mut records: Vec<Record> = Vec::new();
@@ -504,7 +516,11 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).expect("read file");
-        let _doc = crate::extraction::hwp::extract_hwp_document(&bytes).expect("HWP extraction should succeed");
+        let _doc = crate::extraction::hwp::extract_hwp_document(
+            &bytes,
+            &crate::extractors::security::SecurityLimits::default(),
+        )
+        .expect("HWP extraction should succeed");
     }
 
     #[test]
@@ -541,7 +557,10 @@ mod tests {
         stream.extend_from_slice(&bad_header);
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).expect("parse must not error");
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .expect("parse must not error");
 
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("Section0"));
@@ -557,7 +576,10 @@ mod tests {
         stream.extend(make_record(TAG_PARA_TEXT, 1, &utf16le("Hello, HWP")));
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).unwrap();
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .unwrap();
 
         assert!(warnings.is_empty());
         assert_eq!(sections.len(), 1);
@@ -589,7 +611,10 @@ mod tests {
         stream.extend(make_record(TAG_EQEDIT, 1, &eqedit_data));
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).unwrap();
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .unwrap();
 
         assert!(warnings.is_empty());
         let text = sections[0].paragraphs[0].text.as_ref().unwrap();
@@ -630,7 +655,10 @@ mod tests {
         stream.extend(make_record(TAG_PARA_TEXT, 1, &utf16le("After table")));
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).unwrap();
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .unwrap();
 
         assert!(warnings.is_empty());
         assert_eq!(sections[0].tables.len(), 1);
@@ -707,7 +735,10 @@ mod tests {
         stream.extend(make_record(TAG_PARA_TEXT, 1, &utf16le("After table")));
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).expect("parse must not error");
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .expect("parse must not error");
 
         assert!(sections[0].tables.is_empty(), "the oversized table must be dropped");
         let paragraph_texts: Vec<&str> = sections[0]
@@ -788,7 +819,10 @@ mod tests {
         }
 
         let mut warnings = Vec::new();
-        let sections = parse_body_text(stream, false, "Section0", &mut warnings).unwrap();
+        let sections = parse_body_text(stream, false, "Section0", &mut warnings, usize::MAX, &mut {
+            usize::MAX
+        })
+        .unwrap();
 
         assert!(warnings.is_empty());
         assert_eq!(sections[0].tables.len(), 1);

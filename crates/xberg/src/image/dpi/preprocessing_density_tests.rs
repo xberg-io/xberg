@@ -2,6 +2,8 @@ use super::*;
 use crate::extractors::security::SecurityLimits;
 use xberg_native_pdf::PdfDocument;
 
+use crate::ocr_pixel_phase_fixture as fixture;
+
 fn page() -> PdfDocument {
     PdfDocument::from_bytes(crate::pdf::render::build_minimal_pdf_with_mediabox(432.0, 216.0)).unwrap()
 }
@@ -24,6 +26,122 @@ fn configured_preprocessing_raises_only_the_unconfigured_render_target() {
         planned_pdf_ocr_render_dpi_with_preprocessing(&pdf, 0, Some(&images), &limits, Some(300)),
         (150, 150)
     );
+}
+
+#[test]
+fn small_text_promotion_preserves_explicit_targets_and_render_budget() {
+    let pdf = PdfDocument::from_bytes(fixture::pdf(7, 0)).unwrap();
+    let limits = SecurityLimits::default();
+    assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (300, 300));
+    assert_eq!(
+        planned_pdf_ocr_render_dpi_with_preprocessing(&pdf, 0, None, &limits, Some(200)),
+        (200, 200)
+    );
+    let limits = SecurityLimits {
+        max_content_size: 4 * 1024 * 1024,
+        ..limits
+    };
+    let (requested, planned) = planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits);
+    assert_eq!(requested, 150);
+    assert!(planned > 0 && planned < 150);
+    let area = 18 * u64::try_from(planned).unwrap().pow(2);
+    assert!(area * 11 + OCR_PNG_ENCODE_FIXED_BYTES <= limits.max_content_size as u64);
+}
+
+#[test]
+fn sparse_or_large_small_text_pages_keep_default_density() {
+    let dense = PdfDocument::from_bytes(fixture::pdf(7, 0)).unwrap();
+    assert_eq!(
+        small_text_render_dpi(&dense, 0, 1000.0, 1000.0, usize::MAX),
+        DEFAULT_PDF_RENDER_DPI
+    );
+    let sparse =
+        PdfDocument::from_bytes(fixture::content_pdf("BT /F1 7 Tf 36 180 Td (Page one) Tj ET".into())).unwrap();
+    assert_eq!(
+        planned_pdf_ocr_render_dpi(&sparse, 0, None, &SecurityLimits::default()),
+        (150, 150)
+    );
+}
+
+#[test]
+fn letter_and_a4_promote_small_text_only_on_single_pages() {
+    let limits = SecurityLimits::default();
+    for (name, bytes, _) in fixture::density_controls() {
+        let pdf = PdfDocument::from_bytes(bytes).unwrap();
+        let expected = match name {
+            "letter-small" | "a4-small" => 300,
+            _ => 150,
+        };
+        for index in 0..pdf.page_count().unwrap() {
+            assert_eq!(
+                planned_pdf_ocr_render_dpi(&pdf, index, None, &limits),
+                (expected, expected),
+                "{name}, page {index}"
+            );
+        }
+    }
+}
+
+#[test]
+fn invisible_small_text_does_not_promote_visible_ordinary_text() {
+    let limits = SecurityLimits::default();
+    for (mode, expected) in [(0, 300), (3, 150), (7, 150)] {
+        let content = format!(
+            "BT /F1 12 Tf 36 500 Td (Visible ordinary text) Tj ET BT /F1 7 Tf {mode} Tr 36 450 Td ({}) Tj ET",
+            fixture::LINES[0]
+        );
+        let pdf = PdfDocument::from_bytes(fixture::content_pdf_with_pages(content, 612.0, 792.0, false)).unwrap();
+        let layer = pdf.extract_text(0).unwrap();
+        assert!(
+            layer.contains(fixture::LINES[0]),
+            "small text must exist in the layer: {layer}"
+        );
+        assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (expected, expected));
+    }
+}
+
+#[test]
+fn zero_alpha_fill_does_not_promote_visible_ordinary_text() {
+    let limits = SecurityLimits::default();
+    let content = format!(
+        "BT /F1 12 Tf 36 500 Td (Visible ordinary text) Tj ET q /NoInk gs BT /F1 7 Tf 0 Tr 36 450 Td ({}) Tj ET Q",
+        fixture::LINES[0]
+    );
+    let bytes = fixture::content_pdf_with_resources(content, "/ExtGState << /NoInk << /Type /ExtGState /ca 0 >> >>");
+    let pdf = PdfDocument::from_bytes(bytes).unwrap();
+    let layer = pdf.extract_text(0).unwrap();
+    assert!(
+        layer.contains(fixture::LINES[0]),
+        "small text must exist in the layer: {layer}"
+    );
+    assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (150, 150));
+}
+
+#[test]
+fn logo_opaque_graphics_state_and_restored_alpha_allow_small_text() {
+    let limits = SecurityLimits::default();
+    let text = format!("BT /F1 7 Tf 0 Tr 36 450 Td ({}) Tj ET", fixture::LINES[0]);
+    let states = "/ExtGState << /Opaque << /ca 1 >> /NoInk << /ca 0 >> >>";
+    for bytes in [
+        fixture::content_pdf_with_logo(format!("q 8 0 0 8 36 500 cm /Logo Do Q {text}")),
+        fixture::content_pdf_with_resources(format!("/Opaque gs {text}"), states),
+        fixture::content_pdf_with_resources(format!("q /NoInk gs {text} Q {text}"), states),
+    ] {
+        let pdf = PdfDocument::from_bytes(bytes).unwrap();
+        assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (300, 300));
+        assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (300, 300));
+    }
+}
+
+#[test]
+fn later_partial_image_covering_small_text_keeps_default_density() {
+    let text = format!("BT /F1 7 Tf 36 450 Td ({}) Tj ET", fixture::LINES[0]);
+    let cover = "q 500 0 0 40 20 430 cm /Logo Do Q";
+    for (content, expected) in [(format!("{cover} {text}"), 300), (format!("{text} {cover}"), 150)] {
+        let pdf = PdfDocument::from_bytes(fixture::content_pdf_with_logo(content)).unwrap();
+        let limits = SecurityLimits::default();
+        assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (expected, expected));
+    }
 }
 
 #[test]

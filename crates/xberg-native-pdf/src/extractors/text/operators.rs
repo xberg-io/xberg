@@ -227,6 +227,7 @@ impl<'doc> TextExtractor<'doc> {
                 // advance only) cases. ~keep
                 let (current_at, already_emitted) = self.peek_current_actual_text();
                 if let Some(actual_text) = current_at {
+                    let measure_replacement = !actual_text.trim().is_empty();
                     if already_emitted {
                         // Subsequent show-text inside the same MC scope:
                         // glyphs are already covered by the one replacement
@@ -234,7 +235,7 @@ impl<'doc> TextExtractor<'doc> {
                         // any later, OUTER-scope show-text lands correctly,
                         // but emit nothing. ~keep
                         let w = self.advance_position_for_string(&text, true)?;
-                        if let Some(ref mut buffer) = self.tj_span_buffer {
+                        if measure_replacement && let Some(ref mut buffer) = self.tj_span_buffer {
                             buffer.add_width(w);
                         }
                     } else {
@@ -262,7 +263,7 @@ impl<'doc> TextExtractor<'doc> {
                         }
                         // Advance position for the original text (to maintain layout) ~keep
                         let w = self.advance_position_for_string(&text, true)?;
-                        if let Some(ref mut buffer) = self.tj_span_buffer {
+                        if measure_replacement && let Some(ref mut buffer) = self.tj_span_buffer {
                             buffer.add_width(w);
                         }
                     }
@@ -303,6 +304,9 @@ impl<'doc> TextExtractor<'doc> {
                 if let Some(actual_text) = current_at {
                     // The replacement span, built before the array advances so that the width of the
                     // glyphs it replaces lands on it and the gap after it is measured from its end. ~keep
+                    // A whitespace replacement is a separator. Advance the pen without
+                    // turning the covered glyphs into a wide separator span. ~keep
+                    let measure_replacement = !actual_text.trim().is_empty();
                     let mut replacement = None;
                     if !already_emitted {
                         tracing::trace!(target: LOG_TARGET,
@@ -331,7 +335,9 @@ impl<'doc> TextExtractor<'doc> {
                             TextElement::String(s) => {
                                 let repair_zero_widths = !Self::has_following_tj_displacement(&array, index);
                                 let w = self.advance_position_for_string(s, repair_zero_widths)?;
-                                if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
+                                if measure_replacement
+                                    && let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut())
+                                {
                                     buffer.add_width(w);
                                 }
                             }
@@ -344,7 +350,9 @@ impl<'doc> TextExtractor<'doc> {
                                     1.0
                                 };
                                 let advance = -offset / 1000.0 * state.font_size * scale;
-                                if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
+                                if measure_replacement
+                                    && let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut())
+                                {
                                     buffer.add_width(advance);
                                 }
                             }

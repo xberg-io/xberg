@@ -4,7 +4,7 @@
 //! as 5 ASCII characters in the range '!' to 'u'.
 //! Special case: 'z' represents 4 zero bytes (00000000).
 
-use crate::decoders::StreamDecoder;
+use crate::decoders::{StreamDecoder, check_output_cap};
 use crate::error::{Error, Result};
 
 /// ASCII85Decode filter implementation.
@@ -13,9 +13,7 @@ use crate::error::{Error, Result};
 pub struct Ascii85Decoder;
 
 impl StreamDecoder for Ascii85Decoder {
-    // `max_output_bytes` (GH#1764) is ignored: ASCII85 output is at most 4/5 of input
-    // length, so it can never exceed the cap that already bounded the input. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
         let mut output = Vec::new();
         let mut acc: u32 = 0;
         let mut count = 0;
@@ -29,6 +27,7 @@ impl StreamDecoder for Ascii85Decoder {
                             "ASCII85Decode: 'z' must not appear in the middle of a group".to_string(),
                         ));
                     }
+                    check_output_cap(self.name(), output.len() + 4, max_output_bytes)?;
                     output.extend_from_slice(&[0, 0, 0, 0]);
                 }
                 b'!'..=b'u' => {
@@ -39,6 +38,7 @@ impl StreamDecoder for Ascii85Decoder {
                     count += 1;
 
                     if count == 5 {
+                        check_output_cap(self.name(), output.len() + 4, max_output_bytes)?;
                         output.extend_from_slice(&acc.to_be_bytes());
                         acc = 0;
                         count = 0;
@@ -71,6 +71,7 @@ impl StreamDecoder for Ascii85Decoder {
 
             // Output count-1 bytes (first N-1 bytes are valid) ~keep
             let bytes = acc.to_be_bytes();
+            check_output_cap(self.name(), output.len() + count - 1, max_output_bytes)?;
             output.extend_from_slice(&bytes[..count - 1]);
         }
 

@@ -244,14 +244,28 @@ fn assert_plain_page_ranges(result: &ExtractedDocument) {
         .as_ref()
         .expect("recovered Plain pages retain byte ranges");
     assert_eq!(boundaries.len(), pages.len());
-    for (boundary, page) in boundaries.iter().zip(pages) {
+    let mut offset = 0;
+    for (index, (boundary, page)) in boundaries.iter().zip(pages).enumerate() {
+        if index > 0 {
+            let separator = result
+                .content
+                .get(offset..boundary.byte_start)
+                .expect("ordered byte ranges");
+            assert!(!separator.is_empty() && separator.bytes().all(|byte| byte == b'\n'));
+            offset = boundary.byte_start;
+        }
+        assert_eq!(page.page_number as usize, index + 1);
         assert_eq!(boundary.page_number, page.page_number);
+        assert_eq!(boundary.byte_start, offset);
+        offset += page.content.len();
+        assert_eq!(boundary.byte_end, offset);
         assert_eq!(
             result.content.get(boundary.byte_start..boundary.byte_end),
             Some(page.content.as_str()),
             "each Plain page must be the exact document slice"
         );
     }
+    assert_eq!(offset, result.content.len());
 }
 
 fn provisioned_config() -> (tempfile::TempDir, ExtractionConfig) {
@@ -274,8 +288,7 @@ fn provision_khmer(directory: &std::path::Path) {
 #[test]
 fn english_only_keeps_the_unverified_ocr_read() {
     let (models, mut config) = config();
-    // The implicit per-page pipeline defers structure and is ineligible for numeric recovery.
-    // A bounded single-page render instead takes the accepted direct Tesseract route. ~keep
+    // A bounded single-page render takes the accepted direct Tesseract route. ~keep
     config.security_limits = Some(xberg::SecurityLimits {
         max_content_size: 20 * 1024 * 1024,
         ..Default::default()
@@ -314,12 +327,12 @@ fn english_only_keeps_the_unverified_ocr_read() {
     assert_eq!(no_claim.pages.as_ref().unwrap()[0].content, page.content);
     assert_eq!(missing_model_warnings(&no_claim), 0, "no native script evidence");
     // The single-page fast path cannot own a two-page document. ~keep
-    assert_two_page_numbers(&config, 0, if cfg!(paddle_ocr) { 0 } else { 2 });
+    assert_two_page_numbers(&config, 0, 2);
 }
 
 #[cfg(paddle_ocr)]
 #[test]
-fn implicit_per_page_route_does_not_warn_about_missing_auxiliary_model() {
+fn implicit_per_page_route_warns_about_missing_auxiliary_model() {
     let (models, config) = config();
     assert!(!models.path().join("khm.traineddata").exists());
     let result = extract(MATCHING, &config);
@@ -327,7 +340,11 @@ fn implicit_per_page_route_does_not_warn_about_missing_auxiliary_model() {
     let page = &result.pages.as_ref().unwrap()[0];
     let preprocessing = page.image_preprocessing.as_ref().unwrap();
     assert_eq!(preprocessing.final_dpi, preprocessing.target_dpi);
-    assert_eq!(missing_model_warnings(&result), 0, "deferred structure is ineligible");
+    assert_eq!(
+        missing_model_warnings(&result),
+        1,
+        "the selected Tesseract read has a native claim"
+    );
     for text in [&result.content, &page.content] {
         assert_eq!(text.matches('០').count(), 0);
     }
@@ -458,7 +475,9 @@ fn provisioned_recognition_still_refuses_false_native_digits() {
     let (models, config) = provisioned_config();
     assert_crop_recognizer_reads_zero(models.path(), MISLEADING);
     assert_verified_positive(&config);
-    for input in [MISLEADING.to_vec(), wrong_unicode()] {
+    let no_claim = without_native_claim();
+    assert_eq!(rendered(MATCHING), rendered(&no_claim), "remove only the native claim");
+    for input in [MISLEADING.to_vec(), wrong_unicode(), no_claim] {
         let result = extract(&input, &config);
         assert_ocr_retains_prose(&result);
         for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {

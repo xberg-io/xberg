@@ -196,7 +196,8 @@ fn raster_proves_dots(raster: &Pix, word: &HocrWord, label_height: u32, budget: 
     if left.checked_add(w)? > raster.width() || top.checked_add(h)? > raster.height() {
         return None;
     }
-    let pixels = raster.clip_rectangle(left, top, w, h).ok()?.grayscale_bytes().ok()?;
+    // The proof raster is binary, and a set bit marks ink. ~keep
+    let pixels = raster.clip_rectangle(left, top, w, h).ok()?.binary_bytes().ok()?;
     (pixels.len() == area && regular_dot_runs(&pixels, width, label_height as usize)).then_some(())
 }
 

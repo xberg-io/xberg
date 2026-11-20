@@ -61,7 +61,7 @@ fn read_runs(markdown: &str) -> Vec<(usize, Vec<String>)> {
     root.children()
         .filter_map(|node| {
             let data = node.data.borrow();
-            let NodeValue::List(list) = data.value else {
+            let NodeValue::List(list) = &data.value else {
                 return None;
             };
             assert_eq!(list.list_type, ListType::Ordered);

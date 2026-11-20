@@ -668,25 +668,31 @@ mod tests {
             // `with_registration_update` refuses the mutation, without running the closure, while
             // any snapshot lease is live, and that counter is process-global: a concurrent
             // non-`#[serial]` extraction in this binary holds one. The refusal is documented as
-            // retryable; the initializing thread stays parked until `update_started` fires, so
-            // refused attempts cannot perturb the retry count asserted below. ~keep
-            loop {
-                let started = update_started_sender.clone();
-                let release = &update_release_receiver;
-                let outcome = with_post_processor_suppressed("unregistered-test-processor", move || {
-                    started.send(()).unwrap();
-                    release.recv().unwrap();
+            // retryable and the shared helper bounds the tries; the initializing thread stays
+            // parked until `update_started` fires, so refused attempts cannot perturb the retry
+            // count asserted below. ~keep
+            crate::plugins::registry::test_support::retry_registry_clear(|| {
+                with_post_processor_suppressed("unregistered-test-processor", || {
+                    update_started_sender.send(()).unwrap();
+                    update_release_receiver.recv().unwrap();
                     Ok::<(), crate::XbergError>(())
-                });
-                match outcome {
-                    Err(crate::XbergError::Other(message)) if message.contains("retry the lifecycle mutation") => {
-                        std::thread::sleep(Duration::from_millis(5));
-                    }
-                    other => return other,
-                }
-            }
+                })
+            })
         });
-        update_started_receiver.recv().unwrap();
+        let update_started_deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            match update_started_receiver.recv_timeout(Duration::from_millis(10)) {
+                Ok(()) => break,
+                Err(_) if update_thread.is_finished() => {
+                    let outcome = update_thread.join().expect("the update thread must not panic");
+                    panic!("the registry update was refused until the retry limit and never started: {outcome:?}");
+                }
+                Err(_) => assert!(
+                    std::time::Instant::now() < update_started_deadline,
+                    "the registry update never reported that it started"
+                ),
+            }
+        }
         resume_sender.send(()).unwrap();
 
         // The initializer reports its single retry and then blocks on the registration lock. A fixed

@@ -555,6 +555,18 @@ mod tests {
     }
 
     #[test]
+    fn table_boxes_must_have_positive_vertical_separation() {
+        let (mut candidate, _) = two_table_candidate();
+        let boxes = |candidate: &ExtractedDocument| {
+            canonical_table_boxes([&candidate.tables[0], &candidate.tables[1]], (200, 400))
+                .map(|[first, second]| (first.y1, second.y0))
+        };
+        assert_eq!(boxes(&candidate), Some((160.0, 220.0)));
+        candidate.tables[1].bounding_box.as_mut().unwrap().y0 = 160.0;
+        assert_eq!(boxes(&candidate), None);
+    }
+
+    #[test]
     fn refuses_overlapping_tables_unowned_candidate_words_and_exhausted_budget() {
         let (candidate, primary) = two_table_candidate();
         let prove = |candidate: &ExtractedDocument, limits: &SecurityLimits| {
@@ -588,6 +600,38 @@ mod tests {
         };
         assert_eq!(prove(&candidate, &tight), None);
     }
+
+    #[test]
+    fn implicit_retry_uses_the_callers_two_table_work_limit() {
+        use crate::extractors::pdf::ocr::orientation_retry::OrientationRetry;
+        use crate::plugins::ConfidenceSemantics;
+        let (candidate, primary) = two_table_candidate();
+        let select = |config: &crate::core::config::OcrConfig| {
+            OrientationRetry::new(&Default::default(), Default::default())
+                .select_implicit(
+                    Ok(candidate.clone()),
+                    primary.clone(),
+                    config,
+                    ConfidenceSemantics::Legibility { scale_max: 100.0 },
+                    0.5,
+                )
+                .unwrap()
+        };
+        let accepted = select(&Default::default());
+        assert_eq!(accepted.content, candidate.content);
+        assert_eq!(accepted.tables.len(), 2);
+        let tight = crate::core::config::OcrConfig {
+            security_limits: Some(SecurityLimits {
+                max_iterations: 1,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let refused = select(&tight);
+        assert_eq!(refused.content, primary.content);
+        assert_eq!(refused.tables.len(), 0);
+    }
+
     #[test]
     fn selector_keeps_primary_with_unproved_counts_rich_content_or_boundary_crossing() {
         use crate::extractors::pdf::ocr::orientation_retry::OrientationRetry;
@@ -845,8 +889,9 @@ mod tests {
         let boxes = canonical_table_boxes([&candidate.tables[0], &candidate.tables[1]], dims).unwrap();
         let (_, bands) = partition_words(read, boxes, dims).unwrap();
         let prose_words = bands.iter().flatten().copied().collect::<Vec<_>>();
-        let work = prose_work(&prose_words, primary_words);
-        assert!(work > 0, "the mixed read must carry prose words for the budget to bind");
+        assert_eq!(prose_words.len(), 6);
+        let work = 220;
+        assert_eq!(prose_work(&prose_words, primary_words), work);
         let limits = SecurityLimits::default();
         let remaining = remaining_work(
             [&candidate.tables[0], &candidate.tables[1]],

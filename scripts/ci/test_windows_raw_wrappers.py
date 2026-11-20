@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -16,6 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
+import elixir_nif_assets
 import windows_wheel_closure as closure
 from test_windows_wheel_closure import ROOT, expected_error, pe, windows_wheel_steps
 
@@ -91,7 +93,7 @@ class RawWrapperTests(unittest.TestCase):
             "php.zip": ("xberg.dll", ""),
             "cli.zip": ("xberg.exe", "xberg-cli-x86_64-pc-windows-msvc/"),
             "ffi.tar.gz": ("xberg_ffi.dll", "xberg-ffi-windows-x86_64/lib/"),
-            "elixir.tar.gz": ("libxberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
+            "elixir.tar.gz": ("xberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
         }
         for filename, (native, prefix) in layouts.items():
             with self.subTest(filename=filename):
@@ -180,11 +182,11 @@ class RawWrapperTests(unittest.TestCase):
         assert "notice does not match shipped DLLs" in result.stderr
 
     def test_ort_source_cannot_supply_crt_when_licensed_source_is_missing(self) -> None:
-        artifact = self.archive("elixir.tar.gz", {"libxberg_nif-test.dll": pe(["onnxruntime.dll"])})
+        artifact = self.archive("elixir.tar.gz", {"xberg_nif-test.dll": pe(["onnxruntime.dll"])})
         before = artifact.read_bytes()
         (self.crt / "msvcp140_1.dll").unlink()
         (self.ort / "msvcp140_1.dll").write_bytes(self.msvcp)
-        result = self.stage(artifact, "libxberg_nif-*.dll")
+        result = self.stage(artifact, "xberg_nif-*.dll")
         assert result.returncode != 0, result.stdout
         assert "msvcp140_1.dll" in result.stderr
         assert artifact.read_bytes() == before
@@ -324,19 +326,97 @@ def assert_raw_workflow(source: str, job: str, root: str, archive_argument: str)
     assert f'-NativeGlob "{root}" -ArtifactKind raw -RequireCrtNotices' in step
 
 
+RAW_RUNNER_SELECTORS = {
+    "php-extension": "matrix.platform.os",
+    "cli-binaries": "matrix.os",
+    "c-ffi-libraries": "matrix.os",
+    "elixir-natives": "matrix.os",
+}
+
+
+def raw_job_block(source: str, job: str) -> str:
+    match = re.search(rf"(?ms)^  {re.escape(job)}:\n.*?(?=^  [\w-]+:|\Z)", source)
+    assert match is not None, f"missing release job: {job}"
+    return match[0]
+
+
+def assert_raw_runners(source: str) -> None:
+    jobs = re.findall(r"(?m)^  ([a-z][\w-]+):$", source.split("\njobs:\n", 1)[1])
+    consumers = {job for job in jobs if "-ArtifactKind raw" in raw_job_block(source, job)}
+    assert consumers == RAW_RUNNER_SELECTORS.keys(), f"raw closure consumer inventory changed: {consumers}"
+    for job, selector in RAW_RUNNER_SELECTORS.items():
+        block = raw_job_block(source, job)
+        matrix = block.split("    steps:", 1)[0]
+        runs_on = re.findall(r"(?m)^    runs-on:[ \t]*(.*)$", matrix)
+        expected = "${{ " + selector + " }}"
+        assert runs_on == [expected], f"{job} must select its runner with {selector}: {runs_on}"
+        runners = set(re.findall(r"(?<![\w-])windows-(?:latest|[0-9][a-z0-9-]*)(?![\w-])", matrix))
+        assert runners == {"windows-2022"}, f"{job} must use windows-2022 for raw CRT staging: {runners}"
+    assert "ImageOS=win25" not in raw_job_block(source, "elixir-natives"), "Elixir must use the runner's ImageOS"
+
+
 class RawWorkflowTests(unittest.TestCase):
     source = (ROOT / ".github/workflows/publish.yaml").read_text(encoding="utf-8")
+
+    def test_elixir_release_names_match_archive_member_and_checksum_keys(self) -> None:
+        windows = "xberg_nif-v1.4.0-nif-2.16-x86_64-pc-windows-msvc.dll"
+        unix = "libxberg_nif-v1.4.0-nif-2.16-aarch64-unknown-linux-musl.so.tar.gz"
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            original = directory / f"lib{windows}.tar.gz"
+            payload = pe(["onnxruntime.dll"])
+            with tarfile.open(original, "w:gz") as archive:
+                entry = tarfile.TarInfo(f"lib{windows}")
+                entry.size = len(payload)
+                archive.addfile(entry, io.BytesIO(payload))
+
+            elixir_nif_assets.normalize_windows(original, windows)
+
+            final = directory / f"{windows}.tar.gz"
+            assert not original.exists()
+            with tarfile.open(final) as archive:
+                assert archive.getnames() == [windows]
+                assert archive.extractfile(windows).read() == payload
+
+            unix_archive = directory / unix
+            unix_archive.write_bytes(b"musl archive")
+            checksum = directory / "checksum-Elixir.Xberg.Native.exs"
+            elixir_nif_assets.write_checksums(checksum, [final, unix_archive])
+            for archive in (final, unix_archive):
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                assert f'"{archive.name}" => "sha256:{digest}"' in checksum.read_text()
+            assert original.name not in checksum.read_text()
 
     def test_publish_checks_each_exact_final_windows_archive(self) -> None:
         cases = [
             ("php-extension", "xberg.dll", "-Artifact $archive.FullName"),
             ("cli-binaries", "xberg.exe", '-Artifact "${STAGE}.zip"'),
             ("c-ffi-libraries", "xberg_ffi.dll", '-Artifact "dist/c-ffi/xberg-ffi-${{ matrix.platform }}.tar.gz"'),
-            ("elixir-natives", "libxberg_nif-*.dll", "-Artifact $archive.FullName"),
+            ("elixir-natives", "xberg_nif-*.dll", "-Artifact $archive.FullName"),
         ]
         for job, root, artifact in cases:
             with self.subTest(job=job):
                 assert_raw_workflow(self.source, job, root, artifact)
+
+    def test_all_raw_closure_jobs_use_the_vs2022_runner(self) -> None:
+        assert_raw_runners(self.source)
+
+    def test_runner_guard_rejects_drift_in_each_raw_consumer(self) -> None:
+        for job in RAW_RUNNER_SELECTORS:
+            with self.subTest(job=job):
+                block = raw_job_block(self.source, job)
+                mutated = self.source.replace(block, block.replace("windows-2022", "windows-latest"), 1)
+                with expected_error(AssertionError, f"{job} must use windows-2022"):
+                    assert_raw_runners(mutated)
+
+    def test_runner_guard_rejects_a_cli_target_as_the_runner(self) -> None:
+        block = raw_job_block(self.source, "cli-binaries")
+        selector = "    runs-on: ${{ matrix.os }}"
+        assert block.count(selector) == 1
+        wrong_runner = block.replace(selector, "    runs-on: ${{ matrix.target }}")
+        mutated = self.source.replace(block, wrong_runner, 1)
+        with expected_error(AssertionError, "cli-binaries must select its runner with matrix.os"):
+            assert_raw_runners(mutated)
 
     def test_workflow_guard_rejects_audit_of_cli_staging_tree(self) -> None:
         archive = '-Artifact "${STAGE}.zip"'
@@ -346,7 +426,7 @@ class RawWorkflowTests(unittest.TestCase):
             assert_raw_workflow(mutated, "cli-binaries", "xberg.exe", archive)
 
 
-MINIMUM_CLOSURE_TESTS = 96
+MINIMUM_CLOSURE_TESTS = 99
 
 
 def main() -> int:

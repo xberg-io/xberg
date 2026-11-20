@@ -1,5 +1,0 @@
-[advisories]
-# rust_decimal 1.42.1 declares rkyv 0.7 as an optional compatibility feature, so Cargo resolves it. ~keep
-# It remains in lockfiles even though no Xberg feature activates it. ~keep
-# cargo-deny still checks the effective feature graph without this exception. ~keep
-ignore = ["RUSTSEC-2026-0235"]

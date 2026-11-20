@@ -44,6 +44,57 @@ fn proof_clone(object: &Object, max_bytes: usize) -> Option<(Object, usize)> {
     Some((object.clone(), max_bytes - remaining))
 }
 
+fn proof_object_body(input: &[u8], reference: ObjectRef) -> Option<&[u8]> {
+    use crate::lexer::{Token, token};
+
+    let (input, Token::Integer(id)) = token(input).ok()? else {
+        return None;
+    };
+    let (input, Token::Integer(generation)) = token(input).ok()? else {
+        return None;
+    };
+    let (input, Token::ObjStart) = token(input).ok()? else {
+        return None;
+    };
+    (id == i64::from(reference.id) && generation == i64::from(reference.generation) && keyword_boundary(input))
+        .then_some(input)
+}
+
+fn stream_length(dict: &HashMap<String, Object>) -> Option<usize> {
+    usize::try_from(dict.get("Length")?.as_integer()?).ok()
+}
+
+fn stream_end(input: &[u8]) -> Option<&[u8]> {
+    use crate::lexer::{Token, token};
+
+    let (tail, Token::StreamEnd) = token(input).ok()? else {
+        return None;
+    };
+    keyword_boundary(tail).then_some(tail)
+}
+
+fn keyword_boundary(input: &[u8]) -> bool {
+    input
+        .first()
+        .is_some_and(|byte| matches!(byte, 0 | 9 | 10 | 12 | 13 | 32 | b'<' | b'[' | b'%'))
+}
+
+/// A read-only view holds a cache hit without deep-copying it. A miss keeps
+/// the existing owned parse result and does not allocate a second shared object.
+pub(super) enum LoadedObject {
+    Cached(Arc<Object>),
+    Owned(Object),
+}
+
+impl AsRef<Object> for LoadedObject {
+    fn as_ref(&self) -> &Object {
+        match self {
+            Self::Cached(object) => object.as_ref(),
+            Self::Owned(object) => object,
+        }
+    }
+}
+
 impl PdfDocument {
     /// Resolve an object whose copy or ordinary uncompressed read fits a proof work budget.
     /// Returns `None` for opaque recovery paths or work without a certified bound.
@@ -72,20 +123,7 @@ impl PdfDocument {
     }
 
     fn proof_object_span(&self, reference: ObjectRef, max_bytes: usize) -> Option<(u64, usize)> {
-        if self.is_encrypted() || self.xref_reconstructed {
-            return None;
-        }
-        let entry = self.xref.get(reference.id)?;
-        if !entry.in_use
-            || entry.entry_type != crate::xref::XRefEntryType::Uncompressed
-            || entry.generation != reference.generation
-        {
-            return None;
-        }
-        let tail = self
-            .source_bytes
-            .as_slice()
-            .get(usize::try_from(entry.offset).ok()?..)?;
+        let (offset, tail) = self.proof_object_source(reference)?;
         let input = &tail[..tail
             .len()
             .min(MAX_PROOF_OBJECT_INPUT)
@@ -103,7 +141,93 @@ impl PdfDocument {
         let marker = find_substring(body, b"endobj")?;
         let last_line = body[marker..].iter().position(|&byte| byte == b'\n')?;
         let extent = header_end + marker + last_line + 2;
-        Some((entry.offset, extent * PROOF_OBJECT_PARSE_FACTOR))
+        Some((offset, extent * PROOF_OBJECT_PARSE_FACTOR))
+    }
+
+    fn proof_object_source(&self, reference: ObjectRef) -> Option<(u64, &[u8])> {
+        if self.is_encrypted() || self.xref_reconstructed {
+            return None;
+        }
+        let entry = self.xref.get(reference.id)?;
+        if !entry.in_use
+            || entry.entry_type != crate::xref::XRefEntryType::Uncompressed
+            || entry.generation != reference.generation
+        {
+            return None;
+        }
+        let tail = self
+            .source_bytes
+            .as_slice()
+            .get(usize::try_from(entry.offset).ok()?..)?;
+        Some((entry.offset, tail))
+    }
+
+    pub(super) fn resolve_density_object(&self, object: &Object, remaining: &mut usize) -> Option<Object> {
+        use crate::lexer::{Token, token};
+        use crate::parser::{parse_stream_header, parse_strict_object};
+
+        let (object, charge) = if let Some(reference) = object.as_reference() {
+            let (_, source) = self.proof_object_source(reference)?;
+            let limit = source
+                .len()
+                .min(MAX_PROOF_OBJECT_INPUT)
+                .min(*remaining / PROOF_OBJECT_PARSE_FACTOR);
+            let body = proof_object_body(&source[..limit], reference)?;
+            let (tail, object) = parse_strict_object(body).ok()?;
+            let (tail, object) =
+                if matches!(object, Object::Dictionary(_)) && matches!(token(tail), Ok((_, Token::StreamStart))) {
+                    let (payload, dict) = parse_stream_header(body)?;
+                    let length = stream_length(&dict)?;
+                    let data = payload.get(..length)?;
+                    let tail = stream_end(payload.get(length..)?)?;
+                    (
+                        tail,
+                        Object::Stream {
+                            dict,
+                            data: bytes::Bytes::copy_from_slice(data),
+                        },
+                    )
+                } else {
+                    (tail, object)
+                };
+            let (tail, Token::ObjEnd) = token(tail).ok()? else {
+                return None;
+            };
+            if !keyword_boundary(tail) {
+                return None;
+            }
+            (object, (limit - tail.len() + 1) * PROOF_OBJECT_PARSE_FACTOR)
+        } else {
+            proof_clone(object, *remaining)?
+        };
+        *remaining = remaining.checked_sub(charge)?;
+        Some(object)
+    }
+
+    pub(super) fn prove_image_stream(&self, reference: ObjectRef, remaining: &mut usize) -> Option<()> {
+        use crate::lexer::{Token, token};
+
+        const MAX_HEADER: usize = 1024;
+        const MAX_TRAILER: usize = 32;
+        let (_, source) = self.proof_object_source(reference)?;
+        let limit = source.len().min(MAX_HEADER).min(*remaining / PROOF_OBJECT_PARSE_FACTOR);
+        let body = proof_object_body(&source[..limit], reference)?;
+        let (payload, dictionary) = crate::parser::parse_stream_header(body)?;
+        if dictionary.get("Subtype")?.as_name()? != "Image" {
+            return None;
+        }
+        let payload_start = limit - payload.len();
+        let suffix = source.get(payload_start.checked_add(stream_length(&dictionary)?)?..)?;
+        let suffix = &suffix[..suffix.len().min(MAX_TRAILER)];
+        let (tail, Token::ObjEnd) = token(stream_end(suffix)?).ok()? else {
+            return None;
+        };
+        if !keyword_boundary(tail) {
+            return None;
+        }
+        *remaining =
+            remaining.checked_sub((payload_start + suffix.len() - tail.len() + 1) * PROOF_OBJECT_PARSE_FACTOR)?;
+        Some(())
     }
 
     /// Get the PDF version.
@@ -376,6 +500,7 @@ impl PdfDocument {
     /// Runs at most once per document — guarded by `objstm_recovery_done`.
     /// Cost is amortised across every recovered object.
     pub(super) fn recover_from_object_streams(&self) {
+        let _warnings = self.warning_scope();
         use crate::objstm::parse_object_stream_with_decryption_outcome;
 
         {
@@ -526,6 +651,22 @@ impl PdfDocument {
     /// # Ok::<(), xberg_native_pdf::error::Error>(())
     /// ```
     pub fn load_object(&self, obj_ref: ObjectRef) -> Result<Object> {
+        self.load_object_for_read(obj_ref).map(|loaded| match loaded {
+            LoadedObject::Cached(object) => {
+                #[cfg(test)]
+                self.cached_object_clone_count.fetch_add(1, Ordering::Relaxed);
+                Object::clone(&object)
+            }
+            LoadedObject::Owned(object) => object,
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn cached_object_clone_count(&self) -> usize {
+        self.cached_object_clone_count.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn load_object_for_read(&self, obj_ref: ObjectRef) -> Result<LoadedObject> {
         tracing::trace!(target: LOG_TARGET,
             object_id = obj_ref.id,
             generation = obj_ref.generation,
@@ -559,9 +700,9 @@ impl PdfDocument {
         }
 
         // Check cache first (warm path: fully parallel, no serialization). ~keep
-        let cached_opt = self.object_cache.lock_or_recover().get(&obj_ref).cloned();
+        let cached_opt = self.object_cache.lock_or_recover().get_shared(&obj_ref);
         if let Some(cached) = cached_opt {
-            return Ok(cached);
+            return Ok(LoadedObject::Cached(cached));
         }
 
         let entry = match self.xref.get(obj_ref.id) {
@@ -603,7 +744,7 @@ impl PdfDocument {
                             s.borrow_mut().remove(&obj_ref);
                         });
 
-                        return result;
+                        return result.map(LoadedObject::Owned);
                     }
                     Err(_) => {
                         // PDF Spec §7.3.10: missing object reference "shall be treated as null"
@@ -650,7 +791,7 @@ impl PdfDocument {
                             });
                         }
                         self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-                        return Ok(Object::Null);
+                        return Ok(LoadedObject::Owned(Object::Null));
                     }
                 }
             }
@@ -699,7 +840,7 @@ impl PdfDocument {
                 RESOLVING_STACK.with(|s| {
                     s.borrow_mut().remove(&obj_ref);
                 });
-                return result;
+                return result.map(LoadedObject::Owned);
             }
 
             // Recovery path 2 — the object may be compressed inside a
@@ -707,11 +848,12 @@ impl PdfDocument {
             // mis-flag every compressed object's xref slot as free, so
             // sweep the object streams once and recheck the cache. ~keep
             self.recover_from_object_streams();
-            if let Some(obj) = self.object_cache.lock_or_recover().get(&obj_ref).cloned()
-                && !matches!(obj, Object::Null)
+            let recovered = self.object_cache.lock_or_recover().get_shared(&obj_ref);
+            if let Some(obj) = recovered
+                && !matches!(*obj, Object::Null)
             {
                 tracing::warn!(target: LOG_TARGET, "Object {} recovered from object-stream sweep", obj_ref.id);
-                return Ok(obj);
+                return Ok(LoadedObject::Cached(obj));
             }
 
             // PDF Spec §7.3.10: free object treated as null ~keep
@@ -721,7 +863,7 @@ impl PdfDocument {
                 obj_ref.generation
             );
             self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-            return Ok(Object::Null);
+            return Ok(LoadedObject::Owned(Object::Null));
         }
 
         RESOLVING_STACK.with(|s| {
@@ -762,7 +904,7 @@ impl PdfDocument {
             s.borrow_mut().remove(&obj_ref);
         });
 
-        result
+        result.map(LoadedObject::Owned)
     }
 
     /// Resolve references within an object recursively.
@@ -871,7 +1013,7 @@ impl PdfDocument {
             }
         }
 
-        let cached_opt = self.object_cache.lock_or_recover().get(&obj_ref).cloned();
+        let cached_opt = self.object_cache.lock_or_recover().get_shared(&obj_ref);
         if let Some(cached) = cached_opt {
             let is_form = cached
                 .as_dict()
@@ -1290,6 +1432,7 @@ impl PdfDocument {
             data.len()
         );
 
+        let _warnings = self.warning_scope();
         let mut obj = match parse_object(&data) {
             Ok((_, parsed_obj)) => parsed_obj,
             Err(e) => {
@@ -1386,6 +1529,7 @@ impl PdfDocument {
         if let Some(cached) = self.object_stream_cache.lock_or_recover().get(&stream_ref).cloned() {
             return Ok(Some((cached, false)));
         }
+        let _warnings = self.warning_scope();
         let Some(stream_entry) = self.xref.get(stream_obj_num) else {
             tracing::warn!(
                 target: crate::LOG_TARGET_ROOT,

@@ -1,6 +1,6 @@
 //! Mutable model dependencies of OSD recognition, script retry and optional PDF recovery.
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
 
 #[derive(Clone, Default)]
@@ -90,20 +90,16 @@ async fn fingerprint_with_reader(
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
             check_cancelled(worker_cancel.as_ref())?;
-            // With a complete retry set, the inner OCR cache owns model identity. Recheck this
-            // before an outer write as well, since extraction can make a model set available. ~keep
-            if script_retry_requires_bypass(&dependencies, worker_cancel.as_ref())? {
+            // Retry models can appear or change during extraction; check again before an outer write. ~keep
+            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())? else {
                 return Ok(None);
-            }
+            };
             let mut context = if has_orientation_models {
                 read_models(&dependencies, worker_cancel.as_ref())?
             } else {
                 String::new()
             };
-            if has_script_retry {
-                // ~keep Legacy outer entries may contain a retry result even after its models are removed.
-                context.push_str(":script-retry-outer-v1");
-            }
+            context.push_str(&retry_context);
             Ok(Some(context))
         }))
         .await;
@@ -126,45 +122,47 @@ async fn fingerprint_with_reader(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn script_retry_requires_bypass(
+fn script_retry_cache_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
-) -> crate::Result<bool> {
+) -> crate::Result<Option<String>> {
     use crate::ocr::processor::{script_retry, validation::TessdataEnv};
 
     let env = TessdataEnv::from_process();
     let mut checked = std::collections::HashSet::new();
+    let mut vertical = blake3::Hasher::new();
     for model in dependencies
         .iter()
         .filter_map(|dependency| dependency.script_retry.as_ref())
     {
         check_cancelled(cancel)?;
-        if checked.insert(model)
-            && (checked.len() > MAX_MODEL_SELECTIONS
-                || script_retry::requires_outer_cache_bypass(
-                    &model.languages.join("+"),
-                    model.directory.as_deref(),
-                    &env,
-                )
-                || (model.mixed_pdf_khmer
-                    && script_retry::requires_khmer_outer_cache_bypass(
-                        &model.languages.join("+"),
-                        model.directory.as_deref(),
-                        &env,
-                    )))
+        if !checked.insert(model) {
+            continue;
+        }
+        let languages = model.languages.join("+");
+        let directory = model.directory.as_deref();
+        if checked.len() > MAX_MODEL_SELECTIONS
+            || script_retry::requires_outer_cache_bypass(&languages, directory, &env)
+            || (model.mixed_pdf_khmer && script_retry::requires_khmer_outer_cache_bypass(&languages, directory, &env))
         {
-            return Ok(true);
+            return Ok(None);
+        }
+        let revision = if model.vertical_japanese_retry {
+            script_retry::outer_vertical_model_fingerprint(&languages, directory, &env)?
+        } else {
+            None
+        };
+        if let Some(revision) = revision {
+            vertical.update(&[1]);
+            vertical.update(revision.as_bytes());
+        } else {
+            vertical.update(&[0]);
         }
     }
-    Ok(false)
-}
-
-fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        Err(crate::XbergError::Cancelled)
-    } else {
-        Ok(())
+    if checked.is_empty() {
+        return Ok(Some(String::new()));
     }
+    Ok(Some(format!(":script-retry-outer-v2:{}", vertical.finalize().to_hex())))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -173,6 +171,7 @@ struct ModelSelection {
     languages: Vec<String>,
     directory: Option<std::path::PathBuf>,
     mixed_pdf_khmer: bool,
+    vertical_japanese_retry: bool,
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -228,6 +227,11 @@ impl ModelSelection {
             languages,
             directory: ocr.tessdata_path.clone(),
             mixed_pdf_khmer,
+            vertical_japanese_retry: ocr
+                .tesseract_config
+                .as_ref()
+                .and_then(|tesseract| tesseract.psm)
+                .is_none_or(|psm| matches!(psm, 3 | 11)),
         })
     }
 
@@ -267,6 +271,7 @@ impl ModelSelection {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
             mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
         })
     }
 }
@@ -287,7 +292,7 @@ fn fingerprint_models_using(
 ) -> crate::Result<String> {
     let mut hash = blake3::Hasher::new();
     let mut snapshots = std::collections::HashMap::new();
-    hash.update(b"recognition-osd-cache-context-v3");
+    hash.update(b"recognition-osd-cache-context-v4");
     for (index, dependency) in dependencies.iter().enumerate() {
         check_cancelled(cancel)?;
         for model in dependency.model.iter().chain(&dependency.stage_models) {
@@ -346,10 +351,23 @@ fn model_fingerprint_with_reader(
         *revision
     } else {
         let revision = read_revision(&directory)?;
-        revisions.insert(directory, revision);
+        revisions.insert(directory.clone(), revision);
         revision
     };
     hash.update(revision.as_bytes());
+    for language in &model.languages {
+        let language = language.trim();
+        let model_path = directory.join(format!("{language}.traineddata"));
+        let digest = crate::cache::blake3_hash_file(&model_path).map_err(|error| {
+            crate::XbergError::cache(format!(
+                "Cannot fingerprint primary model '{}': {error}",
+                model_path.display()
+            ))
+        })?;
+        hash.update(&(language.len() as u64).to_le_bytes());
+        hash.update(language.as_bytes());
+        hash.update(digest.as_bytes());
+    }
     Ok(hash.finalize())
 }
 
@@ -395,6 +413,7 @@ impl CacheDependency {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
                 mixed_pdf_khmer: false,
+                vertical_japanese_retry: false,
             };
             if !self.stage_models.contains(&model) {
                 self.stage_models.push(model);

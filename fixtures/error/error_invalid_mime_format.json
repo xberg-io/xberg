@@ -7,12 +7,6 @@
     "title": "Error when extracting with invalid MIME type format",
     "description": "Error when extracting with invalid MIME type format",
     "presentation": {
-      "files": [
-        {
-          "field": "/bytes",
-          "path": "text/plain.txt"
-        }
-      ],
       "operations": [
         {
           "op": "show",
@@ -76,7 +70,8 @@
   },
   "assertions": [
     {
-      "type": "error"
+      "type": "error",
+      "value": "Unsupported format:"
     }
   ],
   "config": {}

@@ -1,0 +1,69 @@
+name: CI PDF Path Memory (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify-pdf-path-memory:
+        description: "Run the Windows .NET PDF path-memory comparison (#3117)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pdf-path-memory-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pdf-path-memory-windows:
+    name: PDF path memory (Windows .NET, ${{ matrix.label }})
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' &&
+          github.event_name == 'workflow_dispatch' && inputs.verify-pdf-path-memory }}
+    runs-on: windows-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: baseline
+            revision: f449dd7e6248dcb637da4a04f1f43f474a99a64d
+          - label: fixed
+            revision: 703e31749571fbb37c3ec2608b703023a967eecd
+    env:
+      SOURCE_SHA: ${{ matrix.revision }}
+      SAMPLE_LABEL: ${{ matrix.label }}
+      WORKFLOW_SHA: ${{ github.workflow_sha }}
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify workflow revision
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -cne $env:WORKFLOW_SHA) { throw "Unexpected workflow SHA" }
+          git merge-base --is-ancestor $env:SOURCE_SHA HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Pinned source is outside dispatched main history" }
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          target: x86_64-pc-windows-msvc
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: ./.github/actions/setup-onnx-runtime
+      - uses: ./.github/actions/install-system-deps
+      - name: Build and measure pinned source
+        shell: pwsh
+        run: ./scripts/ci/verify-3117/measure.ps1
+      - name: Archive evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdf-path-memory-windows-${{ matrix.label }}
+          path: ${{ runner.temp }}/xberg-3117
+          if-no-files-found: warn
+          retention-days: 14

@@ -61,7 +61,8 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 /// 2. `TESSDATA_PREFIX` environment variable
 /// 3. `XBERG_CACHE_DIR/tessdata`
 /// 4. `crate::cache_dir::resolve_cache_base().join("tessdata")`
-/// 5. System fallback paths (macOS, Linux, Windows)
+/// 5. System fallback paths (macOS, Linux, Windows), unless `XBERG_TESSDATA_SYSTEM_PATHS`
+///    is `0` or `false`
 /// 6. If languages are still missing, materialize bundled `eng` bytes and
 ///    download any others from the GitHub `tessdata_fast` repo into the cache
 ///
@@ -86,19 +87,26 @@ pub(crate) struct TessdataEnv {
     pub(crate) tessdata_prefix: Option<String>,
     /// The `XBERG_CACHE_DIR` value.
     pub(crate) cache_dir: Option<PathBuf>,
+    /// Whether the system tessdata locations are searched: false when
+    /// `XBERG_TESSDATA_SYSTEM_PATHS` is `0` or `false`, true otherwise.
+    pub(crate) system_paths: bool,
 }
 
 impl TessdataEnv {
-    /// Read both values from the process environment.
+    /// Read the values from the process environment.
     pub(crate) fn from_process() -> Self {
         Self::from_lookup(|name| env::var(name).ok())
     }
 
-    /// Read both values through `lookup`, which maps a variable name to its value.
+    /// Read the values through `lookup`, which maps a variable name to its value.
     pub(crate) fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Self {
         Self {
             tessdata_prefix: lookup("TESSDATA_PREFIX"),
             cache_dir: lookup("XBERG_CACHE_DIR").map(PathBuf::from),
+            system_paths: !lookup("XBERG_TESSDATA_SYSTEM_PATHS").is_some_and(|value| {
+                let value = value.trim();
+                value == "0" || value.eq_ignore_ascii_case("false")
+            }),
         }
     }
 }
@@ -167,7 +175,8 @@ pub(crate) fn first_directory_holding(directories: &[String], languages: &[Strin
 
 /// Candidate tessdata directories in the resolver's priority order:
 /// `override_path` (`OcrConfig.tessdata_path`), `TESSDATA_PREFIX`,
-/// `XBERG_CACHE_DIR/tessdata`, the xberg cache base, then system paths.
+/// `XBERG_CACHE_DIR/tessdata`, the xberg cache base, then system paths unless
+/// [`TessdataEnv::system_paths`] is false.
 ///
 /// Shared by [`resolve_tessdata_path_in`] and doctor's check-only probe so both
 /// report on the same search chain.
@@ -198,8 +207,8 @@ pub(crate) fn tessdata_search_dirs(override_path: Option<&Path>, tessdata_env: &
             .into_owned(),
     );
 
-    for path in SYSTEM_TESSDATA_PATHS {
-        dirs.push((*path).to_string());
+    if tessdata_env.system_paths {
+        dirs.extend(SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()));
     }
 
     dirs
@@ -493,6 +502,7 @@ mod tests {
         let tessdata_env = TessdataEnv {
             tessdata_prefix: Some("/given/prefix".to_string()),
             cache_dir: Some(PathBuf::from("/given/cache")),
+            system_paths: true,
         };
 
         let dirs = tessdata_search_dirs(Some(Path::new("/given/override")), &tessdata_env);
@@ -523,7 +533,11 @@ mod tests {
             }
         });
 
-        assert_eq!(requested.into_inner(), ["TESSDATA_PREFIX", "XBERG_CACHE_DIR"]);
+        assert_eq!(
+            requested.into_inner(),
+            ["TESSDATA_PREFIX", "XBERG_CACHE_DIR", "XBERG_TESSDATA_SYSTEM_PATHS"]
+        );
+        assert!(tessdata_env.system_paths);
         let cache_tessdata = PathBuf::from("/looked/up/cache")
             .join("tessdata")
             .to_string_lossy()
@@ -533,6 +547,56 @@ mod tests {
             dirs[..3],
             ["/looked/up/prefix".to_string(), cache_tessdata.clone(), cache_tessdata]
         );
+    }
+
+    #[test]
+    fn test_tessdata_search_dirs_ends_with_system_paths_when_the_switch_is_unset() {
+        let tessdata_env = TessdataEnv::from_lookup(|_| None);
+
+        let dirs = tessdata_search_dirs(None, &tessdata_env);
+
+        let system: Vec<String> = SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()).collect();
+        assert!(dirs.ends_with(&system), "{dirs:?}");
+    }
+
+    #[test]
+    fn test_tessdata_search_dirs_omits_system_paths_when_the_switch_is_off() {
+        let tessdata_env = TessdataEnv {
+            tessdata_prefix: Some("/given/prefix".to_string()),
+            cache_dir: Some(PathBuf::from("/given/cache")),
+            system_paths: false,
+        };
+
+        let dirs = tessdata_search_dirs(Some(Path::new("/given/override")), &tessdata_env);
+
+        let cache_tessdata = PathBuf::from("/given/cache")
+            .join("tessdata")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            dirs,
+            [
+                "/given/override".to_string(),
+                "/given/prefix".to_string(),
+                cache_tessdata.clone(),
+                cache_tessdata,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tessdata_env_parses_the_system_paths_switch() {
+        let parse = |value: &'static str| {
+            TessdataEnv::from_lookup(|name| (name == "XBERG_TESSDATA_SYSTEM_PATHS").then(|| value.to_string()))
+                .system_paths
+        };
+
+        assert!(!parse("0"));
+        assert!(!parse("false"));
+        assert!(!parse("FALSE"));
+        assert!(parse("1"));
+        assert!(parse("true"));
+        assert!(parse(""));
     }
 
     #[cfg(feature = "bundle-tessdata-eng")]

@@ -20,7 +20,7 @@ use crate::core::config::html_output::{HtmlOutputConfig, HtmlTheme};
 use crate::plugins::{InternalRenderer, Plugin};
 use crate::rendering::common::{
     NestingKind, RenderState, annotated_math, is_body_element, render_annotated_text_with_plain,
-    render_nested_annotated_text, valid_math_annotation,
+    render_nested_annotated_text, safe_link_url, valid_math_annotation,
 };
 use crate::types::document_structure::{AnnotationKind, ContentLayer};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
@@ -641,9 +641,10 @@ fn wrap_inline(span: &str, kind: &AnnotationKind, p: &str) -> String {
         AnnotationKind::Bold => format!("<strong>{span}</strong>"),
         AnnotationKind::Italic => format!("<em>{span}</em>"),
         AnnotationKind::Strikethrough => format!("<del>{span}</del>"),
-        AnnotationKind::Link { url, .. } => {
-            format!(r#"<a class="{p}link" href="{}">{span}</a>"#, esc(url))
-        }
+        AnnotationKind::Link { url, .. } => match safe_link_url(url) {
+            Some(url) => format!(r#"<a class="{p}link" href="{}">{span}</a>"#, esc(url)),
+            None => span.to_string(),
+        },
         _ => span.to_string(),
     }
 }

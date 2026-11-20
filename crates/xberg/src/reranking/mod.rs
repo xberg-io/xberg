@@ -677,8 +677,9 @@ fn build_results_for_head(
 /// sorts only that k-slice (`O(k log k)`), instead of fully sorting all `n`
 /// results (`O(n log n)`) before truncating. The returned order is identical
 /// to a full sort followed by `truncate(k)` — same descending-by-score
-/// ordering, same tie-breaking (`partial_cmp` with `Equal` fallback) applied
-/// consistently by both the partition and the final sort.
+/// ordering, same tie-breaking applied consistently by both the partition and
+/// the final sort. A NaN score ranks after every finite score, so it can never
+/// take a top-k slot from a finite result.
 #[cfg(any(feature = "reranker", test))]
 fn build_results_from_scores(
     documents: &[String],
@@ -697,8 +698,7 @@ fn build_results_from_scores(
         })
         .collect();
 
-    let cmp_desc =
-        |a: &RerankedDocument, b: &RerankedDocument| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal);
+    let cmp_desc = |a: &RerankedDocument, b: &RerankedDocument| crate::utils::cmp_desc_nan_last(a.score, b.score);
 
     match top_k {
         Some(k) if k < results.len() => {
@@ -1150,6 +1150,34 @@ mod tests {
 
         assert_eq!(results.len(), 2, "top_k=2 should truncate to 2 results");
         assert!(results[0].score >= results[1].score);
+    }
+
+    #[test]
+    fn nan_scores_rank_after_every_finite_score() {
+        let documents: Vec<String> = ["a", "b", "c", "d", "e"].iter().map(|s| s.to_string()).collect();
+        let logits = vec![1.0_f32, f32::NAN, 3.0_f32, 0.5_f32, -f32::NAN];
+
+        let all = build_results(&documents, logits.clone(), None);
+        let order: Vec<usize> = all.iter().map(|r| r.index).collect();
+        assert_eq!(&order[..3], &[2, 0, 3], "finite scores must come first, descending");
+        assert!(
+            all[3].score.is_nan() && all[4].score.is_nan(),
+            "NaN scores must rank last"
+        );
+
+        for k in 1..=3 {
+            let top = build_results(&documents, logits.clone(), Some(k));
+            let order: Vec<usize> = top.iter().map(|r| r.index).collect();
+            assert_eq!(order, [2, 0, 3][..k], "top_k={k} must be the best finite scores");
+            assert!(top.iter().all(|r| !r.score.is_nan()), "top_k={k} must contain no NaN");
+        }
+
+        let wide = build_results(&documents, logits, Some(4));
+        assert_eq!(wide.len(), 4);
+        assert!(
+            wide[3].score.is_nan(),
+            "a NaN only fills a slot once finite scores run out"
+        );
     }
 
     #[test]

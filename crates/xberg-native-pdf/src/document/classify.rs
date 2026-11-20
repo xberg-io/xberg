@@ -130,9 +130,10 @@ impl PdfDocument {
     }
 
     fn compute_invisible_text_ratio(&self, page: usize) -> f32 {
+        let _warnings = self.warning_scope();
         let mut invisible = 0usize;
         let mut glyph_bytes = 0usize;
-        if let Ok(data) = self.get_page_content_data(page)
+        if let Ok(data) = self.cached_page_content(page)
             && let Ok(ops) = crate::content::parse_content_stream(&data)
         {
             let mut rm: u8 = 0;

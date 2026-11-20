@@ -15,6 +15,7 @@ fn segment(text: &str) -> SegmentData {
         baseline_y: 0.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -22,7 +23,7 @@ fn paragraph(authoritative: &str, located: &str) -> PdfParagraph {
     let line = PdfLine {
         segments: vec![segment(located)],
         native_scripts: Vec::new(),
-        baseline_y: 0.0,
+        baseline_y: Some(0.0),
         dominant_font_size: 20.0,
         is_bold: false,
         is_monospace: false,
@@ -40,6 +41,7 @@ fn paragraph(authoritative: &str, located: &str) -> PdfParagraph {
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
     }
@@ -191,7 +193,7 @@ fn heading_control_paragraphs() -> Vec<PdfParagraph> {
             value.dominant_font_size = font_size;
             value.lines[0].dominant_font_size = font_size;
             let baseline = 500.0 - index as f32 * 40.0;
-            value.lines[0].baseline_y = baseline;
+            value.lines[0].baseline_y = Some(baseline);
             let segment = &mut value.lines[0].segments[0];
             segment.y = baseline;
             segment.baseline_y = baseline;
@@ -652,7 +654,7 @@ fn should_preserve_multiline_authoritative_ocr_text_when_inserting_a_number() {
     right.width = 30.0;
     value.lines[0].segments.push(right);
     let mut second = value.lines[0].clone();
-    second.baseline_y = -40.0;
+    second.baseline_y = Some(-40.0);
     second.segments[0].text = "second".into();
     for segment in &mut second.segments {
         segment.y = -40.0;

@@ -63,8 +63,7 @@ const BOS_TOKEN: i64 = 1;
 const EOS_TOKEN: i64 = 2;
 const FIRST_CONTENT_TOKEN: i64 = 4;
 const MAX_SEQ_LEN: usize = 512;
-/// Break the decode when this many consecutive identical tokens appear:
-/// the model has degenerated and further steps only repeat.
+/// Reject the decode after this many consecutive identical tokens.
 const REPETITION_CUTOFF: usize = 8;
 
 /// Grayscale normalization from the upstream preprocessing, applied after
@@ -237,19 +236,12 @@ pub fn ensure_models() -> Result<FormulaModelPaths, String> {
     ensure_models_in(None)
 }
 
-/// Pool state: the loaded recognizer plus the acceleration it was built with,
-/// so a changed acceleration config rebuilds the sessions, like the layout
-/// engine's `matches_config`.
-struct PooledRecognizer {
-    recognizer: FormulaRecognizer,
-    acceleration: Option<AccelerationConfig>,
-}
-
-/// Process-wide recognizer pool and the failure cooldown timestamp. Lock
-/// poisoning recovers via `into_inner`: the recognizer holds no cross-call
-/// state, so a panic mid-recognition leaves nothing inconsistent behind.
-static RECOGNIZER: std::sync::Mutex<Option<PooledRecognizer>> = std::sync::Mutex::new(None);
+/// Failure cooldown shared with the pool: after one initialization failure,
+/// later calls fail fast for this long instead of re-paying the download
+/// deadline per region.
 static LAST_INIT_FAILURE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+use pool::acquire_recognizer;
 
 /// Answers every crop in place of the model while set, so tests can drive the PDF routes
 /// without the model weights.
@@ -263,8 +255,9 @@ pub(crate) type StubRecognizer = fn(&RgbImage) -> Option<String>;
 /// download included) or rebuilding it as needed. Errors are strings so
 /// callers can degrade to plain OCR text with a warning.
 ///
-/// The pool lock is held for the whole recognition; callers on an async
-/// runtime must wrap this in `spawn_blocking`.
+/// The recognizer is borrowed out of the process-wide pool for the decode, so
+/// the pool lock never spans inference. Callers on an async runtime must still
+/// wrap this in `spawn_blocking`.
 pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>) -> Result<Option<String>, String> {
     #[cfg(test)]
     if let Some(stub) = *STUB_RECOGNIZER
@@ -284,45 +277,18 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
         }
     }
 
-    let mut pool = RECOGNIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let rebuild = match pool.as_ref() {
-        None => true,
-        Some(pooled) => pooled.acceleration.as_ref() != accel,
-    };
-    if rebuild {
-        let init = ensure_models().and_then(|paths| {
-            FormulaRecognizer::load(&paths, accel).map_err(|e| format!("formula model load failed: {e}"))
-        });
-        match init {
-            Ok(recognizer) => {
-                *pool = Some(PooledRecognizer {
-                    recognizer,
-                    acceleration: accel.cloned(),
-                });
-                *LAST_INIT_FAILURE
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-            }
-            Err(e) => {
-                *LAST_INIT_FAILURE
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::time::Instant::now());
-                return Err(e);
-            }
-        }
-    }
-    let pooled = pool.as_mut().expect("initialized above");
-    pooled
-        .recognizer
+    let mut lease = acquire_recognizer(accel)?;
+    lease
+        .recognizer()
         .recognize(crop)
         .map_err(|e| format!("formula recognition failed: {e}"))
 }
 
-/// Recognize a crop off the async executor: the recognizer holds a
-/// process-wide lock for the whole multi-step decode, so it must not park a
-/// runtime worker. The inline arm is unreachable today (the feature implies
-/// `tokio-runtime` and cannot be enabled on wasm32); it exists so the
-/// function stays total if either implication ever changes.
+/// Recognize a crop off the async executor. Wait for the shared formula worker
+/// before entering the blocking pool so queued crops leave workers free for other
+/// tasks. Admitted work can wait for its runtime's blocking pool while its
+/// caller is live. The inline arm is unreachable today (the feature implies `tokio-runtime`
+/// and cannot be enabled on wasm32).
 ///
 /// Both callers are themselves feature-gated entry points -- the PDF layout route
 /// (`extractors::pdf`, so `pdf`) and the image route (`any(ocr, ocr-wasm)`). With
@@ -336,15 +302,62 @@ pub(crate) async fn recognize_crop_blocking(
 ) -> Result<Option<String>, String> {
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
-        tokio::task::spawn_blocking(move || recognize_crop(&crop, accel.as_ref()))
-            .await
-            .map_err(|e| format!("formula recognition task failed: {e}"))?
+        use std::sync::{Arc, LazyLock};
+        use tokio::sync::Semaphore;
+        // One permit matches the single recognizer slot in RECOGNIZERS. ~keep
+        static SLOT: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(1)));
+
+        run_with_formula_slot(Arc::clone(&SLOT), move || recognize_crop(&crop, accel.as_ref())).await?
     }
     #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
     {
         recognize_crop(&crop, accel.as_ref())
     }
 }
+
+#[cfg(all(
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32"),
+    any(test, feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
+async fn run_with_formula_slot<T: Send + 'static>(
+    slot: std::sync::Arc<tokio::sync::Semaphore>,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    use std::sync::{Arc, Mutex, PoisonError};
+    use tokio::sync::OwnedSemaphorePermit;
+
+    type Admission<W> = Arc<Mutex<Option<(OwnedSemaphorePermit, W)>>>;
+    struct Pending<W>(Admission<W>);
+
+    impl<W> Drop for Pending<W> {
+        fn drop(&mut self) {
+            let withdrawn = self.0.lock().unwrap_or_else(PoisonError::into_inner).take();
+            drop(withdrawn);
+        }
+    }
+
+    let permit = slot
+        .acquire_owned()
+        .await
+        .map_err(|e| format!("formula recognition admission failed: {e}"))?;
+    let admission = Arc::new(Mutex::new(Some((permit, work))));
+    let _pending = Pending(Arc::clone(&admission));
+    tokio::task::spawn_blocking(move || {
+        // Once claimed, the actual decode holds the permit until completion. ~keep
+        let claimed = admission.lock().unwrap_or_else(PoisonError::into_inner).take();
+        let (_permit, work) = claimed?;
+        Some(work())
+    })
+    .await
+    .map_err(|e| format!("formula recognition task failed: {e}"))?
+    .ok_or_else(|| "formula recognition admission was withdrawn".to_string())
+}
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod worker_tests;
+
+mod pool;
 
 /// Test-only public entry: the integration test exercises the full
 /// download-load-recognize pipeline through this.
@@ -388,7 +401,7 @@ impl FormulaRecognizer {
     /// Recognize the LaTeX for one formula region crop.
     ///
     /// Returns `Ok(None)` when the crop carries no ink or the model produces
-    /// no tokens.
+    /// no complete formula.
     pub(crate) fn recognize(&mut self, crop: &RgbImage) -> Result<Option<String>, LayoutError> {
         let Some(gray) = preprocess_gray(crop) else {
             return Ok(None);
@@ -451,11 +464,7 @@ impl FormulaRecognizer {
     /// Greedy decode without KV cache: each step feeds the full prefix. The
     /// encoder context is passed as a zero-copy view each step.
     fn greedy_decode(&mut self, context: &ndarray::Array3<f32>) -> Result<Vec<i64>, LayoutError> {
-        let mut out: Vec<i64> = vec![BOS_TOKEN];
-        let mut repeats = 1usize;
-
-        for _ in 0..MAX_SEQ_LEN {
-            let window = &out[out.len().saturating_sub(MAX_SEQ_LEN)..];
+        decode_tokens(|window| {
             let len = window.len();
             let x = Array2::from_shape_vec((1, len), window.to_vec())
                 .map_err(|e| LayoutError::InvalidOutput(format!("decoder input build failed: {e}")))?;
@@ -469,22 +478,31 @@ impl FormulaRecognizer {
                 .run(inputs!["x" => x_t, "mask" => mask_t, "context" => ctx_t])
                 .map_err(LayoutError::Ort)?;
             let (shape, data) = outputs[0].try_extract_tensor::<f32>().map_err(LayoutError::Ort)?;
-            let next = argmax_last_row(shape, data)? as i64;
-            if next == EOS_TOKEN {
-                break;
-            }
-            repeats = if Some(&next) == out.last() { repeats + 1 } else { 1 };
-            out.push(next);
-            if repeats >= REPETITION_CUTOFF {
-                // Degenerated output: drop the repeated tail and stop.
-                let keep = out.len() - repeats;
-                out.truncate(keep);
-                break;
-            }
-        }
-
-        Ok(out.into_iter().skip(1).filter(|&t| t >= FIRST_CONTENT_TOKEN).collect())
+            Ok(argmax_last_row(shape, data)? as i64)
+        })
     }
+}
+
+fn decode_tokens(mut next_token: impl FnMut(&[i64]) -> Result<i64, LayoutError>) -> Result<Vec<i64>, LayoutError> {
+    let mut out = vec![BOS_TOKEN];
+    let mut repeats = 1;
+
+    for _ in 0..MAX_SEQ_LEN {
+        let window = &out[out.len().saturating_sub(MAX_SEQ_LEN)..];
+        let next = next_token(window)?;
+        if next == EOS_TOKEN {
+            return Ok(out.into_iter().skip(1).filter(|&t| t >= FIRST_CONTENT_TOKEN).collect());
+        }
+        repeats = if Some(&next) == out.last() { repeats + 1 } else { 1 };
+        if repeats >= REPETITION_CUTOFF {
+            tracing::debug!("formula decoder hit repetition cutoff; discarding unfinished prediction");
+            return Ok(Vec::new());
+        }
+        out.push(next);
+    }
+
+    tracing::debug!("formula decoder hit token limit; discarding unfinished prediction");
+    Ok(Vec::new())
 }
 
 /// A contrast-normalized, polarity-corrected, ink-cropped grayscale copy of
@@ -717,6 +735,44 @@ mod tests {
     fn argmax_on_empty_output_errors_instead_of_panicking() {
         assert!(argmax_last_row(&[0], &[]).is_err());
         assert!(argmax_last_row(&[1, 4], &[0.0]).is_err());
+    }
+
+    #[test]
+    fn formula_decode_rejects_prefix_at_token_limit() {
+        let mut calls = 0;
+        let tokens = decode_tokens(|_| {
+            calls += 1;
+            Ok(FIRST_CONTENT_TOKEN + (calls % 2) as i64)
+        })
+        .unwrap();
+        assert_eq!(calls, MAX_SEQ_LEN);
+        assert!(
+            tokens.is_empty(),
+            "an unfinished equation must not replace extracted text"
+        );
+    }
+
+    #[test]
+    fn formula_decode_rejects_prefix_before_runaway_repetition() {
+        let mut calls = 0;
+        let tokens = decode_tokens(|_| {
+            calls += 1;
+            Ok(FIRST_CONTENT_TOKEN + i64::from(calls > 1))
+        })
+        .unwrap();
+        assert_eq!(calls, 1 + REPETITION_CUTOFF);
+        assert!(
+            tokens.is_empty(),
+            "a degenerate equation must not replace extracted text"
+        );
+    }
+
+    #[test]
+    fn formula_decode_keeps_completed_equation() {
+        let expected = [FIRST_CONTENT_TOKEN, FIRST_CONTENT_TOKEN + 1];
+        let mut next = expected.into_iter().chain([EOS_TOKEN]);
+        let tokens = decode_tokens(|_| Ok(next.next().expect("decode must stop at EOS"))).unwrap();
+        assert_eq!(tokens, expected);
     }
 
     #[test]

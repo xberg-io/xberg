@@ -41,7 +41,7 @@ fn should_restore_codepage_and_font_scopes_around_skipped_destinations() {
             r"{\fonttbl{\f0\fcharset0 Latin;}{\f1\fcharset128 Japanese;}}",
             r"{\*\unknown hidden}{\b \'e9{\f1 \'82\'a0}\'e9}Z}"
         )),
-        vec![(0, 8, true, false, false, false, 0),]
+        vec![(0, 7, true, false, false, false, 0),]
     );
 }
 
@@ -53,14 +53,14 @@ fn should_capture_field_result_offsets_and_header_footer_text() {
     ));
     assert_eq!(formatting.header_text.as_deref(), Some("Hé"));
     assert_eq!(formatting.footer_text.as_deref(), Some("F"));
-    assert_eq!(formatting.hyperlinks, vec![(6, 10, "https://example.test".into())]);
+    assert_eq!(formatting.hyperlinks, vec![(5, 9, "https://example.test".into())]);
     assert_eq!(
         formatting
             .spans
             .iter()
             .map(|span| (span.start, span.end, span.bold))
             .collect::<Vec<_>>(),
-        vec![(0, 6, false), (6, 10, true)]
+        vec![(0, 5, false), (5, 9, true)]
     );
 }
 
@@ -116,4 +116,26 @@ fn should_clip_annotations_and_preserve_attribute_and_link_order() {
         ]
     );
     assert_eq!(spans_to_annotations(4, 8, &formatting).len(), 0);
+}
+
+#[test]
+fn should_not_count_deleted_text_in_span_offsets() {
+    assert_eq!(
+        spans(r"{\rtf1 A{\deleted XX}{\b B}}"),
+        vec![
+            (0, 1, false, false, false, false, 0),
+            (1, 2, true, false, false, false, 0),
+        ]
+    );
+}
+
+#[test]
+fn should_keep_spans_aligned_after_deleted_paragraph_break() {
+    assert_eq!(
+        spans(r"{\rtf1 A{\deleted X\par Y}{\b B}}"),
+        vec![
+            (0, 1, false, false, false, false, 0),
+            (1, 2, true, false, false, false, 0),
+        ]
+    );
 }

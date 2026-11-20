@@ -72,12 +72,13 @@ fn source_pages(bytes: &[u8]) -> Vec<RunPageParagraphs> {
             let line = PdfLine {
                 segments,
                 native_scripts: vec![],
-                baseline_y: 100.,
+                baseline_y: Some(100.),
                 dominant_font_size: 10.,
                 is_bold: false,
                 is_monospace: false,
             };
             RunPageParagraphs {
+                preserve_ordered_layout: false,
                 paragraphs: vec![PdfParagraph {
                     text: String::new(),
                     lines: vec![line],
@@ -90,6 +91,7 @@ fn source_pages(bytes: &[u8]) -> Vec<RunPageParagraphs> {
                     is_page_furniture: false,
                     layout_class: None,
                     layout_region_path: None,
+                    ocr_source_spans: Vec::new(),
                     caption_for: None,
                     block_bbox: None,
                     word_count: SOURCE[index].split_whitespace().count(),

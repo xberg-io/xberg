@@ -61,17 +61,18 @@ pub(super) fn derive_pages(
     // elements as `render_plain` does and locate that instead (#2825).
     if !reconciled
         && has_page_boundaries(&doc.metadata)
-        && let Some((rerendered, diverging)) = rerender_pages_plain(pages.as_deref(), doc, content)
-        && reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &diverging)
+        && let Some((rerendered, unlocated)) = rerender_pages_plain(pages.as_deref(), doc, content)
+        && let Some(omitted) =
+            reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &unlocated, adopted_ocr)
     {
         pages = Some(rerendered);
         reconciled = true;
-        if !diverging.is_empty() {
+        if !omitted.is_empty() {
             crate::core::diagnostics::push_warning(
                 &mut doc.processing_warnings,
                 "page_boundaries",
                 format!(
-                    "Page byte ranges of pages {diverging:?} were measured on a different rendering of the text \
+                    "Page byte ranges of pages {omitted:?} were measured on a different rendering of the text \
                      and could not be mapped onto the returned content, so they were omitted"
                 ),
             );
@@ -130,6 +131,752 @@ fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rende
         }
     }
     ranges
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(crate) fn project_final_ocr_occurrence(
+    doc: &InternalDocument,
+    (text, spans): (&str, &crate::rendering::ElementSpans),
+    page: &PageContent,
+    owner: &crate::types::internal::InternalElementId,
+    local: std::ops::Range<usize>,
+) -> Option<[std::ops::Range<usize>; 2]> {
+    let membership = compute_page_membership(doc);
+    let mut owners = membership
+        .get(&page.page_number)?
+        .iter()
+        .copied()
+        .filter(|&index| doc.elements[index].id == *owner);
+    let index = owners.next()?;
+    if owners.next().is_some() || local.is_empty() {
+        return None;
+    }
+    let (start, end) = spans.by_element.get(index).copied().flatten()?;
+    let body_end = end.min(spans.body_end);
+    let element = &doc.elements[index].text;
+    if text.get(start..body_end)?.trim_end() != element {
+        return None;
+    }
+    let document_range = start.checked_add(local.start)?..start.checked_add(local.end)?;
+    let token = element.get(local)?;
+    let ranges = plain_page_ranges(doc, text, spans);
+    let (page_start, page_end) = ranges.get(&page.page_number).copied().flatten()?;
+    if text.get(page_start..page_end)? != page.content
+        || document_range.start < page_start
+        || document_range.end > page_end
+    {
+        return None;
+    }
+    let page_range = document_range.start - page_start..document_range.end - page_start;
+    (text.get(document_range.clone())? == token && page.content.get(page_range.clone())? == token)
+        .then_some([document_range, page_range])
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn adopt_canonical_ocr_headings(doc: &mut InternalDocument) {
+    tracing::trace!(
+        source_format = %doc.source_format,
+        preformatted = doc.pre_rendered_content.is_some(),
+        prebuilt_ocr = doc.prebuilt_ocr_elements.as_ref().map_or(0, Vec::len),
+        pending = doc.elements.iter().flat_map(|element| &element.ocr_source_spans)
+            .filter(|span| span.replacement.is_some()).count(),
+        "canonical OCR heading admission"
+    );
+    if doc.source_format != "pdf" || doc.pre_rendered_content.is_some() || doc.prebuilt_ocr_elements.is_some() {
+        return;
+    }
+    for index in 0..doc.elements.len() {
+        let pending = doc.elements[index]
+            .ocr_source_spans
+            .iter()
+            .filter(|span| span.replacement.is_some())
+            .count();
+        if pending > 0 {
+            tracing::trace!(pending, spans = doc.elements[index].ocr_source_spans.len(),
+                kind = ?doc.elements[index].kind, anchor = doc.elements[index].anchor.is_some(),
+                inline_annotations = doc.elements[index].annotations.len(), "canonical OCR heading owner");
+        }
+        let Some(replacement) = canonical_heading_text(doc, index) else {
+            continue;
+        };
+        let element = &mut doc.elements[index];
+        element.text = replacement;
+        element.ocr_source_spans.clear();
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn canonical_heading_text(doc: &InternalDocument, index: usize) -> Option<String> {
+    let element = &doc.elements[index];
+    if !matches!(element.kind, ElementKind::Paragraph | ElementKind::Heading { .. })
+        || !element.annotations.is_empty()
+        || element.anchor.is_some()
+        || element.page.is_none()
+    {
+        return None;
+    }
+    let pending = element.ocr_source_spans.as_slice();
+    if let [span] = pending {
+        let (expected, replacement, 1) = span.replacement.as_ref()? else {
+            return None;
+        };
+        let end = span.destination.checked_add(span.source.len())?;
+        let page_spans = || {
+            doc.elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+        };
+        if expected.is_empty()
+            || !expected.bytes().all(|byte| byte.is_ascii_punctuation())
+            || replacement.split_whitespace().count() < 2
+            || element.text.get(span.destination..end)? != expected
+            || page_spans().filter(|other| other.replacement.is_some()).count() != 1
+            || page_spans()
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count()
+                != 1
+        {
+            return None;
+        }
+        let mut text = element.text.clone();
+        text.replace_range(span.destination..end, replacement);
+        return Some(text);
+    }
+    let [first, last] = pending else {
+        return None;
+    };
+    let (first_expected, first_new, 2) = first.replacement.as_ref()? else {
+        return None;
+    };
+    let (last_expected, last_new, 2) = last.replacement.as_ref()? else {
+        return None;
+    };
+    if first.owner != last.owner
+        || first.destination.checked_add(first_expected.len())?.checked_add(1)? != last.destination
+        || element.text.get(first.destination..last.destination - 1)? != first_expected
+        || element.text.get(last.destination - 1..last.destination)? != " "
+        || element
+            .text
+            .get(last.destination..last.destination.checked_add(last_expected.len())?)?
+            != last_expected
+        || doc
+            .elements
+            .iter()
+            .filter(|other| other.page == element.page)
+            .flat_map(|other| &other.ocr_source_spans)
+            .filter(|span| span.replacement.is_some())
+            .count()
+            != 2
+        || [first, last].into_iter().any(|target| {
+            doc.elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|span| span.occurrence == target.occurrence && span.owner == target.owner)
+                .count()
+                != 1
+        })
+    {
+        return None;
+    }
+    let mut text = element.text.clone();
+    text.replace_range(
+        first.destination..last.destination + last_expected.len(),
+        &format!("{first_new} {last_new}"),
+    );
+    Some(text)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+type FinalOcrEdit<'a> = (std::ops::Range<usize>, std::ops::Range<usize>, usize, &'a str);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_ocr_replacement<'a>(
+    doc: &'a InternalDocument,
+    text: &str,
+    spans: &crate::rendering::ElementSpans,
+    page: &PageContent,
+) -> Option<Vec<FinalOcrEdit<'a>>> {
+    let pending: Vec<_> = doc
+        .elements
+        .iter()
+        .filter(|element| element.page == Some(page.page_number))
+        .flat_map(|element| {
+            element
+                .ocr_source_spans
+                .iter()
+                .filter(|span| span.replacement.is_some())
+                .map(move |span| (element, span))
+        })
+        .collect();
+    if !(1..=64).contains(&pending.len()) {
+        return None;
+    }
+    let mut edits = Vec::new();
+    for (element, span) in &pending {
+        let (expected, replacement, count) = span.replacement.as_ref()?;
+        if *count != pending.len()
+            || doc
+                .elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count()
+                != 1
+        {
+            return None;
+        }
+        let end = span.destination.checked_add(span.source.len())?;
+        let [document_bytes, page_bytes] =
+            project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)?;
+        if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
+            return None;
+        }
+        edits.push((
+            &span.owner,
+            (document_bytes, page_bytes, expected.len(), replacement.as_str()),
+        ));
+    }
+    edits.sort_by_key(|(_, (bytes, _, _, _))| bytes.start);
+    if edits
+        .windows(2)
+        .any(|pair| pair[0].1.0.end > pair[1].1.0.start || pair[0].1.1.end > pair[1].1.1.start)
+    {
+        return None;
+    }
+    if edits.len() <= 2 {
+        return Some(edits.into_iter().map(|(_, edit)| edit).collect());
+    }
+    let mut groups = Vec::new();
+    let mut seen = Vec::new();
+    for group in edits.chunk_by(|a, b| a.0 == b.0) {
+        let owner = group.first()?.0;
+        if seen.contains(&owner) {
+            return None;
+        }
+        seen.push(owner);
+        groups.push(join_final_line(group, text, &page.content)?);
+    }
+    tracing::trace!(
+        page = page.page_number,
+        groups = groups.len(),
+        owners = edits.len(),
+        "full line OCR projected final owners"
+    );
+    Some(groups)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn join_final_line<'a>(
+    group: &[(&crate::types::internal::InternalElementId, FinalOcrEdit<'a>)],
+    document: &str,
+    page: &str,
+) -> Option<FinalOcrEdit<'a>> {
+    let (_, (first_document, first_page, _, replacement)) = group.first()?;
+    let (_, (last_document, last_page, ..)) = group.last()?;
+    if group.len() < 3
+        || replacement.is_empty()
+        || group[1..].iter().any(|(_, edit)| !edit.3.is_empty())
+        || group.windows(2).any(|pair| {
+            document.get(pair[0].1.0.end..pair[1].1.0.start) != Some(" ")
+                || page.get(pair[0].1.1.end..pair[1].1.1.start) != Some(" ")
+        })
+    {
+        return None;
+    }
+    let document = first_document.start..last_document.end;
+    let page = first_page.start..last_page.end;
+    let length = document.len();
+    Some((document, page, length, *replacement))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_ocr_insertion<'a>(
+    doc: &'a InternalDocument,
+    text: &str,
+    spans: &crate::rendering::ElementSpans,
+    page: &PageContent,
+) -> Option<FinalOcrEdit<'a>> {
+    let owners = || {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page.page_number))
+            .flat_map(|element| element.ocr_source_spans.iter().map(move |span| (element, span)))
+    };
+    let mut pending = owners().filter_map(|(_, span)| span.insertion.as_ref());
+    let insertion = pending.next()?;
+    if pending.next().is_some() || owners().any(|(_, span)| span.replacement.is_some()) {
+        return None;
+    }
+    let anchor = |[first, last]: [usize; 2]| {
+        let lookup = |id| {
+            let mut matching = owners().filter(|(_, span)| span.occurrence == id);
+            let owner = matching.next()?;
+            matching.next().is_none().then_some(owner)
+        };
+        let (element, first) = lookup(first)?;
+        let (last_element, last) = lookup(last)?;
+        if first.owner != last.owner || element.id != last_element.id || first.destination != 0 {
+            return None;
+        }
+        let first_end = first.source.len();
+        let end = last.destination.checked_add(last.source.len())?;
+        if end != element.text.len() || element.text.get(first_end..last.destination)? != " " {
+            return None;
+        }
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, 0..end)
+    };
+    let [before, after] = insertion.anchors;
+    let [left_doc, left_page] = anchor(before)?;
+    let [right_doc, right_page] = anchor(after)?;
+    if text.get(left_doc.end..right_doc.start)? != "\n\n"
+        || page.content.get(left_page.end..right_page.start)? != "\n\n"
+    {
+        return None;
+    }
+    Some((
+        right_doc.start..right_doc.start,
+        right_page.start..right_page.start,
+        0,
+        &insertion.text,
+    ))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+type PanelOrder = (std::ops::Range<usize>, usize, std::ops::Range<usize>, usize, String);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_panel_order(
+    doc: &InternalDocument,
+    text: &str,
+    spans: &crate::rendering::ElementSpans,
+    page: &PageContent,
+    page_index: usize,
+    verified_edits: &[FinalOcrEdit<'_>],
+) -> Option<PanelOrder> {
+    let owners = || {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page.page_number))
+            .flat_map(|element| element.ocr_source_spans.iter().map(move |span| (element, span)))
+    };
+    let mut orders = owners().filter_map(|(_, span)| span.panel_order.as_ref());
+    let order = orders.next()?;
+    if orders.next().is_some() || !page.tables.is_empty() || verified_edits.len() != 2 {
+        return None;
+    }
+    let project = |id, complete| {
+        let mut matches = owners().filter(|(_, span)| span.occurrence == id);
+        let (element, span) = matches.next()?;
+        if matches.next().is_some()
+            || !element.annotations.is_empty()
+            || (complete && (span.destination != 0 || span.source.len() != element.text.len()))
+        {
+            return None;
+        }
+        let end = span.destination.checked_add(span.source.len())?;
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)
+    };
+    let mapped = order
+        .panel
+        .iter()
+        .map(|&id| project(id, true))
+        .collect::<Option<Vec<_>>>()?;
+    for id in order.heading {
+        let [doc_range, page_range] = project(id, false)?;
+        if doc_range.end > mapped[0][0].start
+            || page_range.end > mapped[0][1].start
+            || !verified_edits
+                .iter()
+                .any(|edit| edit.0 == doc_range && edit.1 == page_range)
+        {
+            return None;
+        }
+    }
+    if mapped.windows(2).any(|pair| {
+        text.get(pair[0][0].end..pair[1][0].start) != Some("\n\n")
+            || page.content.get(pair[0][1].end..pair[1][1].start) != Some("\n\n")
+    }) {
+        return None;
+    }
+    let [_, _, left, right, _] = mapped.as_slice() else {
+        return None;
+    };
+    let document = left[0].start..right[0].end;
+    let page_bytes = left[1].start..right[1].end;
+    let replacement = format!("{}\n\n{}", text.get(right[0].clone())?, text.get(left[0].clone())?);
+    Some((document.clone(), page_index, page_bytes, document.len(), replacement))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn adopt_final_ocr_replacement(
+    doc: &mut InternalDocument,
+    text: &mut String,
+    spans: &crate::rendering::ElementSpans,
+    pages: &mut [PageContent],
+) -> Option<()> {
+    if doc.source_format != "pdf"
+        || !doc.elements.iter().any(|element| {
+            element
+                .ocr_source_spans
+                .iter()
+                .any(|span| span.replacement.is_some() || span.insertion.is_some() || span.panel_order.is_some())
+        })
+    {
+        return None;
+    }
+    let mut all = Vec::new();
+    for (page_index, page) in pages.iter().enumerate() {
+        let edits = plan_page_ocr_replacement(doc, text, spans, page).unwrap_or_default();
+        let insertion = plan_page_ocr_insertion(doc, text, spans, page);
+        let order = plan_page_panel_order(doc, text, spans, page, page_index, &edits);
+        all.extend(
+            edits
+                .into_iter()
+                .chain(insertion)
+                .map(|(document, page, expected, replacement)| {
+                    (document, page_index, page, expected, replacement.to_owned())
+                }),
+        );
+        all.extend(order);
+    }
+    if all.is_empty() {
+        return None;
+    }
+    all.sort_by_key(|(bytes, ..)| bytes.start);
+    if all
+        .windows(2)
+        .any(|pair| pair[0].0.end > pair[1].0.start || (pair[0].1 == pair[1].1 && pair[0].2.end > pair[1].2.start))
+    {
+        return None;
+    }
+    if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
+        let mut adjusted = boundaries.clone();
+        for (original, new) in boundaries.iter().zip(&mut adjusted) {
+            if original.byte_start >= original.byte_end || original.byte_end > text.len() {
+                return None;
+            }
+            for (range, page_index, _, expected, replacement) in &all {
+                let shift = |offset: usize| offset.checked_sub(*expected)?.checked_add(replacement.len());
+                if range.end <= original.byte_start {
+                    new.byte_start = shift(new.byte_start)?;
+                    new.byte_end = shift(new.byte_end)?;
+                } else if range.start < original.byte_end {
+                    if range.start < original.byte_start
+                        || range.end > original.byte_end
+                        || pages[*page_index].page_number != original.page_number
+                    {
+                        return None;
+                    }
+                    new.byte_end = shift(new.byte_end)?;
+                }
+            }
+        }
+        *boundaries = adjusted;
+    }
+    for (document_bytes, page_index, page_bytes, _, replacement) in all.into_iter().rev() {
+        text.replace_range(document_bytes, &replacement);
+        pages[page_index].content.replace_range(page_bytes, &replacement);
+    }
+    Some(())
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+type FinalOcrOccurrence = (u32, usize, std::ops::Range<usize>, std::ops::Range<usize>);
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+pub(crate) static FINAL_OCR_REPLAY: parking_lot::Mutex<Option<Vec<FinalOcrOccurrence>>> = parking_lot::Mutex::new(None);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn trace_final_ocr_occurrences(
+    doc: &InternalDocument,
+    rendered: (&str, &crate::rendering::ElementSpans),
+    pages: &[PageContent],
+) {
+    #[cfg(test)]
+    let replay_enabled = FINAL_OCR_REPLAY.lock().is_some();
+    #[cfg(not(test))]
+    let replay_enabled = false;
+    if !replay_enabled && !tracing::enabled!(tracing::Level::TRACE) {
+        return;
+    }
+    let mut projected = Vec::new();
+    for element in &doc.elements {
+        let Some(page) = pages.iter().find(|page| element.page == Some(page.page_number)) else {
+            continue;
+        };
+        for span in &element.ocr_source_spans {
+            let Some(end) = span.destination.checked_add(span.source.len()) else {
+                continue;
+            };
+            let owners = doc
+                .elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count();
+            if owners == 1
+                && let Some([document, page_bytes]) =
+                    project_final_ocr_occurrence(doc, rendered, page, &element.id, span.destination..end)
+            {
+                projected.push((page.page_number, span.occurrence, document, page_bytes));
+            }
+        }
+    }
+    #[cfg(test)]
+    if let Some(replay) = FINAL_OCR_REPLAY.lock().as_mut() {
+        replay.extend(projected.iter().cloned());
+    }
+    if !projected.is_empty() {
+        tracing::trace!(?projected, "final PDF OCR occurrence ranges");
+    }
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn final_occurrence_projection_rejects_missing_and_ambiguous_owners() {
+    let mut doc = InternalDocument::new("pdf");
+    let paragraph = |text: &str, index| {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_index(index);
+        element.page = Some(1);
+        element
+    };
+    let first = paragraph("wi", 0);
+    let target = paragraph("wi", 1);
+    let owner = target.id.clone();
+    doc.elements.extend([first, target]);
+    let project = |doc: &InternalDocument| {
+        let rendered = crate::rendering::render_plain_with_spans(doc);
+        let page = serde_json::from_value(serde_json::json!({
+            "page_number": 1, "content": rendered.text
+        }))
+        .unwrap();
+        project_final_ocr_occurrence(doc, (&rendered.text, &rendered.spans), &page, &owner, 0..2)
+    };
+    assert_eq!(project(&doc), Some([4..6, 4..6]));
+    doc.elements[1].id = doc.elements[0].id.clone();
+    assert!(project(&doc).is_none());
+    doc.elements[0].id = owner.clone();
+    doc.elements[1].id = owner.clone();
+    assert!(project(&doc).is_none());
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn ocr_edit_on_nonfinal_page_shifts_later_document_boundaries() {
+    use crate::types::internal::OcrSourceSpan;
+    let mut doc = InternalDocument::new("pdf");
+    let mut first = InternalElement::text(ElementKind::Paragraph, "wi", 0).with_index(0);
+    first.page = Some(1);
+    first.ocr_source_spans.push(OcrSourceSpan {
+        owner: first.id.clone(),
+        occurrence: 7,
+        source: 0..2,
+        destination: 0,
+        insertion: None,
+        panel_order: None,
+        replacement: Some(("wi".to_owned(), "View".to_owned(), 1)),
+    });
+    let mut second = InternalElement::text(ElementKind::Paragraph, "keep", 0).with_index(1);
+    second.page = Some(2);
+    doc.elements.extend([first, second]);
+    doc.metadata.pages = Some(
+        serde_json::from_value(serde_json::json!({
+            "total_count": 2, "unit_type": "page",
+            "boundaries": [
+                {"page_number": 1,"byte_start": 0,"byte_end": 2},
+                {"page_number": 2,"byte_start": 4,"byte_end": 8}
+            ]
+        }))
+        .unwrap(),
+    );
+    let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+        {"page_number": 1, "content": "wi"},
+        {"page_number": 2, "content": "keep"}
+    ]))
+    .unwrap();
+    let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+    assert_eq!(rendered.text, "wi\n\nkeep");
+    adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages).unwrap();
+    assert_eq!(rendered.text, "View\n\nkeep");
+    assert_eq!((&*pages[0].content, &*pages[1].content), ("View", "keep"));
+    let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+    assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, 4));
+    assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (6, 10));
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn full_ocr_line_groups_publish_together_or_keep_both_originals() {
+    use crate::types::internal::OcrSourceSpan;
+    let mut doc = InternalDocument::new("pdf");
+    for (index, line) in ["clean phrase", "bad bad line", "bad bad line"].into_iter().enumerate() {
+        let mut element = InternalElement::text(ElementKind::Paragraph, line, 0).with_index(index as u32);
+        element.page = Some(1);
+        if index > 0 {
+            for (word, range) in [0..3, 4..7, 8..12].into_iter().enumerate() {
+                element.ocr_source_spans.push(OcrSourceSpan {
+                    owner: element.id.clone(),
+                    occurrence: index * 3 + word,
+                    destination: range.start,
+                    insertion: None,
+                    panel_order: None,
+                    replacement: Some((
+                        line[range.clone()].to_owned(),
+                        if word == 0 {
+                            "clean phrase".to_owned()
+                        } else {
+                            String::new()
+                        },
+                        6,
+                    )),
+                    source: range,
+                });
+            }
+        }
+        doc.elements.push(element);
+    }
+    let assert_publication = |mut doc: InternalDocument, accepted| {
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let before = rendered.text.clone();
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": before}
+        ]))
+        .unwrap();
+        let adopted = adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages);
+        assert_eq!(adopted.is_some(), accepted);
+        let expected = if accepted {
+            "clean phrase\n\nclean phrase\n\nclean phrase"
+        } else {
+            &before
+        };
+        assert_eq!(rendered.text, expected);
+        assert_eq!(pages[0].content, expected);
+    };
+    assert_publication(doc.clone(), true);
+
+    let mut overlap = doc.clone();
+    overlap.elements[2].ocr_source_spans[1].destination = 0;
+    assert_publication(overlap, false);
+
+    let mut mismatch = doc.clone();
+    mismatch.elements[2].ocr_source_spans[1].owner = doc.elements[1].id.clone();
+    assert_publication(mismatch, false);
+
+    doc.elements[2].ocr_source_spans.clear();
+    assert_publication(doc, false);
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn ocr_gap_insertion_requires_complete_unique_anchors_in_both_views() {
+    use crate::types::internal::{OcrGapInsertion, OcrSourceSpan};
+    let mut doc = InternalDocument::new("pdf");
+    for (index, line) in ["@ Hero", "@ Intro"].into_iter().enumerate() {
+        let mut element = InternalElement::text(ElementKind::Paragraph, line, 0).with_index(index as u32);
+        element.page = Some(1);
+        for (word, bytes) in [0..1, 2..line.len()].into_iter().enumerate() {
+            element.ocr_source_spans.push(OcrSourceSpan {
+                owner: element.id.clone(),
+                occurrence: index * 2 + word,
+                destination: bytes.start,
+                source: bytes,
+                insertion: None,
+                panel_order: None,
+                replacement: None,
+            });
+        }
+        doc.elements.push(element);
+    }
+    doc.elements[1].ocr_source_spans[0].insertion = Some(OcrGapInsertion {
+        anchors: [[0, 1], [2, 3]],
+        text: "1920x840\n\n".to_owned(),
+    });
+    let verify = |mut doc: InternalDocument, page_override: Option<&str>, expected: bool| {
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let original = rendered.text.clone();
+        let original_page = page_override.unwrap_or(&original);
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": original_page}
+        ]))
+        .unwrap();
+        let applied = adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages);
+        assert_eq!(applied.is_some(), expected);
+        if expected {
+            assert_eq!(rendered.text, "@ Hero\n\n1920x840\n\n@ Intro");
+            assert_eq!(pages[0].content, rendered.text);
+        } else {
+            assert_eq!(rendered.text, original);
+            assert_eq!(pages[0].content, original_page);
+        }
+    };
+    verify(doc.clone(), None, true);
+    verify(doc.clone(), Some("@ Hero\n\ncompeting\n\n@ Intro"), false);
+    let mut competing = doc.clone();
+    let mut element = InternalElement::text(ElementKind::Paragraph, "competing", 0).with_index(2);
+    element.page = Some(1);
+    competing.elements.insert(1, element);
+    verify(competing, None, false);
+    let mut duplicate = doc.clone();
+    let span = duplicate.elements[0].ocr_source_spans[1].clone();
+    duplicate.elements[0].ocr_source_spans.push(span);
+    verify(duplicate, None, false);
+    doc.elements[0].ocr_source_spans.pop();
+    verify(doc, None, false);
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn panel_reorder_requires_recovery_of_its_own_heading() {
+    use crate::types::internal::{OcrPanelOrder, OcrSourceSpan};
+    let mut doc = InternalDocument::new("pdf");
+    for (index, text) in ["Near Head", "Far Head", "A", "B", "Left", "C", "Size"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_index(index as u32);
+        element.page = Some(1);
+        let ranges: Vec<_> = if let Some(space) = text.find(' ') {
+            vec![0..space, space + 1..text.len()]
+        } else {
+            std::iter::once(0..text.len()).collect()
+        };
+        for (word, range) in ranges.into_iter().enumerate() {
+            element.ocr_source_spans.push(OcrSourceSpan {
+                owner: element.id.clone(),
+                occurrence: index * 2 + word,
+                destination: range.start,
+                source: range,
+                replacement: None,
+                insertion: None,
+                panel_order: (index == 4).then_some(OcrPanelOrder {
+                    heading: [0, 1],
+                    panel: [4, 6, 8, 10, 12],
+                }),
+            });
+        }
+        doc.elements.push(element);
+    }
+    let verify = |mut doc: InternalDocument, heading: usize, should_reorder| {
+        let element = &mut doc.elements[heading];
+        for span in &mut element.ocr_source_spans {
+            span.replacement = Some((element.text[span.source.clone()].to_owned(), "New".to_owned(), 2));
+        }
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": rendered.text}
+        ]))
+        .unwrap();
+        adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages).unwrap();
+        assert!(rendered.text.contains("New New"));
+        assert_eq!(rendered.text.contains("B\n\nC\n\nLeft"), should_reorder);
+        assert_eq!(rendered.text, pages[0].content);
+    };
+    verify(doc.clone(), 0, true);
+    verify(doc, 1, false);
 }
 
 /// Give each page that has elements its part of the plain `content`. A page with no
@@ -261,8 +1008,8 @@ pub(crate) fn reconcile_page_boundaries(
 /// Remove `metadata.pages.boundaries` when they cannot index `content`.
 ///
 /// The offsets were measured on another rendering of the document, so a range that falls
-/// outside `content` or inside a UTF-8 sequence is provably stale. Returns `true` when
-/// the boundaries were dropped.
+/// outside `content`, inside a UTF-8 sequence, or overlapping another page is unusable.
+/// Returns `true` when the boundaries were dropped.
 pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadata, content: &str) -> bool {
     let Some(structure) = metadata.pages.as_mut() else {
         return false;
@@ -270,7 +1017,8 @@ pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadat
     let usable = structure.boundaries.as_ref().is_none_or(|boundaries| {
         boundaries
             .iter()
-            .all(|b| b.byte_start <= b.byte_end && content.get(b.byte_start..b.byte_end).is_some())
+            .all(|b| content.get(b.byte_start..b.byte_end).is_some())
+            && overlapping_page_ranges(boundaries, 0).is_empty()
     });
     if usable {
         return false;
@@ -595,9 +1343,9 @@ fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
 
 /// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
 /// own elements by `render_plain`; a page whose text is found keeps it. Returns the pages and
-/// the numbers of those that still diverge from `content`: a page that is not OCR text (see
+/// the numbers of those still unlocated in page order: a page that is not OCR text (see
 /// `is_ocr_page_text`) keeps its text, and so does an OCR page whose re-rendering is empty or
-/// not found. `None` when no page has elements.
+/// not found.
 ///
 /// The search here selects page representations. Boundary reconciliation separately checks
 /// whether their positions are unique.
@@ -610,7 +1358,7 @@ fn rerender_pages_plain(
     let elements_by_page = compute_page_membership(doc);
     let mut search_offset = 0;
     let mut out = Vec::with_capacity(pages.len());
-    let mut diverging = Vec::new();
+    let mut unlocated = Vec::new();
     for page in pages {
         let mut page = page.clone();
         let found = |text: &str, from: usize| content.get(from..).and_then(|rest| rest.find(text)).map(|i| from + i);
@@ -634,49 +1382,131 @@ fn rerender_pages_plain(
                         search_offset = start + rendered.len();
                         page.content = rendered;
                     }
-                    None => diverging.push(page.page_number),
+                    None => unlocated.push(page.page_number),
                 }
             }
         }
         out.push(page);
     }
-    Some((out, diverging))
+    Some((out, unlocated))
 }
 
-/// Re-point the boundaries of the pages not in `diverging` at `content`.
-/// If recovery fails after finding a diverging page, discard the unverified ranges.
+/// Reconcile the ordered matches first, then check the original ranges of the remaining pages.
 fn reconcile_located_page_boundaries(
     metadata: &mut crate::types::Metadata,
     content: &str,
     pages: &[PageContent],
-    diverging: &[u32],
-) -> bool {
-    let Some(structure) = metadata.pages.as_mut() else {
-        return false;
-    };
-    let Some(original) = structure.boundaries.take() else {
-        return false;
-    };
-    structure.boundaries = Some(
-        original
-            .iter()
-            .filter(|boundary| !diverging.contains(&boundary.page_number))
-            .cloned()
-            .collect(),
-    );
-    let located: Vec<PageContent> = pages
+    unlocated: &[u32],
+    adopted_ocr: bool,
+) -> Option<Vec<u32>> {
+    let structure = metadata.pages.as_mut()?;
+    let original = structure.boundaries.take()?;
+    let page_positions: std::collections::BTreeMap<_, _> = pages
         .iter()
-        .filter(|page| !diverging.contains(&page.page_number))
-        .cloned()
+        .enumerate()
+        .map(|(index, page)| (page.page_number, index))
         .collect();
-    let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
-    if !reconciled
-        && let Some(structure) = metadata.pages.as_mut()
-        && structure.boundaries.is_some()
-    {
-        structure.boundaries = diverging.is_empty().then_some(original);
+    let mut seen = std::collections::BTreeSet::new();
+    let duplicates: std::collections::BTreeSet<_> = original
+        .iter()
+        .map(|boundary| boundary.page_number)
+        .filter(|&number| !seen.insert(number))
+        .collect();
+    let mut ordered = Vec::new();
+    let mut remaining = Vec::new();
+    let mut omitted = Vec::new();
+    for boundary in original {
+        if duplicates.contains(&boundary.page_number) {
+            omitted.push(boundary.page_number);
+            continue;
+        }
+        match page_positions.get(&boundary.page_number) {
+            Some(&index) if !unlocated.contains(&boundary.page_number) => ordered.push((index, boundary)),
+            Some(&index) => remaining.push((index, boundary)),
+            None => omitted.push(boundary.page_number),
+        }
     }
-    reconciled
+    ordered.sort_by_key(|&(index, _)| index);
+    let (located, ordered): (Vec<_>, Vec<_>) = ordered
+        .into_iter()
+        .map(|(index, boundary)| (pages[index].clone(), boundary))
+        .unzip();
+    structure.boundaries = Some(ordered);
+    let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
+    let structure = metadata.pages.as_mut()?;
+    let mut boundaries = structure.boundaries.take().unwrap_or_else(|| {
+        omitted.extend(located.iter().map(|page| page.page_number));
+        Vec::new()
+    });
+    boundaries.retain(|boundary| {
+        let usable = content.get(boundary.byte_start..boundary.byte_end).is_some();
+        if !usable {
+            omitted.push(boundary.page_number);
+        }
+        usable
+    });
+    let reconciled_count = if reconciled { boundaries.len() } else { 0 };
+    for (index, boundary) in remaining {
+        if !adopted_ocr && usable_unlocated_boundary(content, &boundary, &pages[index].content) {
+            boundaries.push(boundary);
+        } else {
+            omitted.push(boundary.page_number);
+        }
+    }
+    let overlapping = overlapping_page_ranges(&boundaries, reconciled_count);
+    let mut index = 0;
+    boundaries.retain(|boundary| {
+        let keep = !overlapping.contains(&index);
+        index += 1;
+        if !keep {
+            omitted.push(boundary.page_number);
+        }
+        keep
+    });
+    boundaries.sort_by_key(|boundary| boundary.page_number);
+    structure.boundaries = (!boundaries.is_empty()).then_some(boundaries);
+    omitted.sort_unstable();
+    omitted.dedup();
+    Some(omitted)
+}
+
+/// Find conflicting retained ranges by byte position. Reconciled ranges are already disjoint.
+fn overlapping_page_ranges(
+    boundaries: &[crate::types::PageBoundary],
+    reconciled_count: usize,
+) -> std::collections::BTreeSet<usize> {
+    let mut by_start: Vec<_> = boundaries
+        .iter()
+        .enumerate()
+        .filter(|(_, boundary)| boundary.byte_start < boundary.byte_end)
+        .collect();
+    by_start.sort_unstable_by_key(|(_, boundary)| boundary.byte_start);
+    let mut conflicts = std::collections::BTreeSet::new();
+    let mut furthest: Option<(usize, usize)> = None;
+    for (index, boundary) in by_start {
+        if let Some((prior, end)) = furthest.filter(|&(_, end)| boundary.byte_start < end) {
+            if prior >= reconciled_count {
+                conflicts.insert(prior);
+            }
+            if index >= reconciled_count {
+                conflicts.insert(index);
+            }
+            if boundary.byte_end <= end {
+                continue;
+            }
+        }
+        furthest = Some((index, boundary.byte_end));
+    }
+    conflicts
+}
+
+fn usable_unlocated_boundary(content: &str, boundary: &crate::types::PageBoundary, page_text: &str) -> bool {
+    let Some(slice) = content.get(boundary.byte_start..boundary.byte_end) else {
+        return false;
+    };
+    content.find(page_text).is_none_or(|start| {
+        start == boundary.byte_start && slice == page_text && content.rfind(page_text) == Some(start)
+    })
 }
 
 /// Re-render one page's `content` from just the elements (and the tables/images they
@@ -870,6 +1700,15 @@ mod plain_page_rerender_tests {
             .unwrap_or_default()
     }
 
+    fn boundary_ranges(doc: &InternalDocument) -> Vec<(u32, usize, usize)> {
+        doc.metadata
+            .pages
+            .as_ref()
+            .and_then(|s| s.boundaries.as_ref())
+            .map(|b| b.iter().map(|b| (b.page_number, b.byte_start, b.byte_end)).collect())
+            .unwrap_or_default()
+    }
+
     fn derive(doc: &mut InternalDocument, content: &str) -> Vec<PageContent> {
         derive_pages(doc, content, &OutputFormat::Plain, true, None, &mut ()).expect("pages")
     }
@@ -888,6 +1727,31 @@ mod plain_page_rerender_tests {
         assert_eq!(boundaries.len(), pages.len());
         for (page, b) in pages.iter().zip(boundaries) {
             assert_eq!(content.get(b.byte_start..b.byte_end), Some(page.content.as_str()));
+        }
+    }
+
+    #[test]
+    fn recovered_khmer_digits_have_exact_plain_byte_ranges() {
+        for count in 1..=2 {
+            let mut pages = vec![page(1, "VOU ០")];
+            let mut tagged = vec![(1, "VOU០")];
+            if count == 2 {
+                pages.push(page(2, "Total ១២"));
+                tagged.push((2, "Total១២"));
+            }
+            let mut doc = doc_with(pages, &tagged);
+            let (content, pages) = derive_plain(&mut doc);
+            let expected = if count == 1 { "VOU០" } else { "VOU០\n\nTotal១២" };
+            assert_eq!(content, expected);
+            assert_eq!(pages.len(), count);
+            assert!(!warned(&doc), "{:?}", doc.processing_warnings);
+            assert_ranges(&doc, &content, &pages);
+            let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+            let actual: Vec<_> = boundaries
+                .iter()
+                .map(|b| (b.page_number, b.byte_start, b.byte_end))
+                .collect();
+            assert_eq!(actual, [(1, 0, 6), (2, 8, 19)][..count]);
         }
     }
 
@@ -1151,9 +2015,203 @@ mod plain_page_rerender_tests {
         let content = "two\n\none";
         let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
         set_boundaries(&mut doc, &[(1, 5, 8), (2, 0, 3)]);
+        let pages = derive(&mut doc, content);
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        assert_ranges(&doc, content, &pages);
+    }
+
+    #[test]
+    fn a_located_page_is_reconciled_alongside_an_unmatched_page_with_a_usable_range() {
+        let content = "one\n\ntwo";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| two |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 5, 8)]);
         derive(&mut doc, content);
         assert!(!warned(&doc));
         assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+        assert_eq!(
+            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
+            Some("one")
+        );
+        assert_eq!(
+            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
+            Some("two")
+        );
+    }
+
+    #[test]
+    fn a_page_range_is_repaired_when_another_page_has_no_boundary() {
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "missing")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999)]);
+        let pages = derive(&mut doc, "one");
+        assert_eq!(pages[1].content, "missing");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, "one", &pages[..1]);
+        assert!(!warned(&doc));
+    }
+
+    #[test]
+    fn an_exact_out_of_order_range_survives_an_ambiguous_ordered_match() {
+        let content = "two\n\none\n\none";
+        for ranges in [[(1, 5, 8), (2, 0, 3)], [(2, 0, 3), (1, 5, 8)]] {
+            let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+            set_boundaries(&mut doc, &ranges);
+            let pages = derive(&mut doc, content);
+            assert_eq!(boundary_pages(&doc), vec![2], "input ranges: {ranges:?}");
+            assert_ranges(&doc, content, &pages[1..]);
+            let warnings: Vec<&str> = doc
+                .processing_warnings
+                .iter()
+                .filter(|warning| warning.source == "page_boundaries")
+                .map(|warning| warning.message.as_ref())
+                .collect();
+            assert_eq!(
+                warnings,
+                [
+                    "Page byte ranges of pages [1] were measured on a different rendering of the text \
+                  and could not be mapped onto the returned content, so they were omitted"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_boundaries_cannot_make_repeated_page_text_unambiguous() {
+        let mut doc = doc_with(vec![page(1, "one")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (1, 5, 8)]);
+        let pages = derive(&mut doc, "one\n\none");
+        assert_eq!(pages[0].content, "one");
+        assert!(!has_page_boundaries(&doc.metadata));
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn an_adopted_ocr_document_takes_its_page_ranges_from_its_own_pages_not_from_renderer_spans() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
+        doc.metadata.additional.insert(
+            super::super::ADOPTED_OCR_DOCUMENT_KEY.into(),
+            serde_json::Value::Bool(true),
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "one");
+        assert_eq!(pages[1].content, "two\nnote");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_eq!(boundary_ranges(&doc), [(1, 0, 3)]);
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            [
+                "Page byte ranges of pages [2] were measured on a different rendering of the text \
+                 and could not be mapped onto the returned content, so they were omitted"
+            ]
+        );
+        assert!(
+            !doc.metadata
+                .additional
+                .contains_key(super::super::ADOPTED_OCR_DOCUMENT_KEY),
+            "the internal marker must not reach the result metadata"
+        );
+    }
+
+    #[test]
+    fn a_native_document_takes_its_page_ranges_from_renderer_spans() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
+        let (content, _) = derive_plain(&mut doc);
+        assert_eq!(content, "one");
+        assert_eq!(boundary_ranges(&doc), [(1, 0, 3)]);
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            ["Pages [2] have no text of their own in the returned content, so their page byte ranges were omitted"]
+        );
+    }
+
+    #[test]
+    fn a_range_that_cannot_be_verified_beside_a_diverging_page_is_omitted_with_a_warning() {
+        let content = "one\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| x |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, 8)]);
+        derive(&mut doc, content);
+        let boundaries = doc.metadata.pages.as_ref().and_then(|s| s.boundaries.as_ref()).unwrap();
+        let ranges: Vec<_> = boundaries
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(
+            ranges,
+            [(2, 5, 8)],
+            "page 1 repeats in the content, so its range is unverified"
+        );
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            [
+                "Page byte ranges of pages [1] were measured on a different rendering of the text \
+                 and could not be mapped onto the returned content, so they were omitted"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_retained_range_cannot_reuse_the_span_of_a_reconciled_page() {
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "one")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 0, 3)]);
+        let pages = derive(&mut doc, "one");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, "one", &pages[..1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn overlapping_stale_ranges_are_omitted_even_when_their_endpoints_are_valid() {
+        let content = "one two three";
+        let mut doc = doc_with(
+            vec![page(1, "one"), page(2, "| two three |"), page(3, "| three |")],
+            &[],
+        );
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 4, 13), (3, 8, 13)]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn retained_ranges_with_endpoints_inside_multibyte_characters_are_omitted() {
+        let content = "one é";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| é |"), page(3, "| e |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 5, 6), (3, 4, 5)]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn an_out_of_order_page_with_multiple_placements_loses_its_range() {
+        let content = "two\n\ntwo\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+        set_boundaries(&mut doc, &[(1, 10, 13), (2, 0, 3)]);
+        let pages = derive(&mut doc, content);
+        assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
     }
 
     /// A DOCX document with a note reference on each of its two pages, and page ranges measured on

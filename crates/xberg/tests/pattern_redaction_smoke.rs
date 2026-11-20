@@ -214,6 +214,58 @@ fn redacts_user_supplied_literal_term_case_insensitive() {
     );
 }
 
+#[tokio::test]
+async fn large_literal_sets_keep_overlap_priority_and_unicode_matches_in_metadata() {
+    use xberg::core::config::redaction::{RedactionPattern, RedactionTerm};
+
+    let mut terms = vec![
+        RedactionTerm::labeled("earlier", "xabc"),
+        RedactionTerm::labeled("later", "abcde"),
+        RedactionTerm::labeled("code", "kilo"),
+        RedactionTerm::labeled("language", "c++"),
+    ];
+    terms.extend((0..16).map(|index| RedactionTerm::literal(format!("Project-{index:04}"))));
+    let config = RedactionConfig {
+        categories: [PiiCategory::Custom("requested".into())].into_iter().collect(),
+        custom_terms: terms,
+        custom_patterns: vec![RedactionPattern::labeled("pattern", "kilo")],
+        ..Default::default()
+    };
+    let mut doc = ExtractedDocument::default();
+    doc.content = "xabcde KILO C++".into();
+    doc.metadata.title = Some("Kilo".into());
+
+    let mut regex_control = doc.clone();
+    let mut regex_config = config.clone();
+    regex_config.custom_terms.push(RedactionTerm::literal("çontrol-only"));
+    xberg::text::redaction::redact(&mut regex_control, &regex_config)
+        .await
+        .expect("Unicode term keeps the regex path");
+    xberg::text::redaction::redact(&mut doc, &config)
+        .await
+        .expect("literal redaction");
+    assert_eq!(doc.content, "[REDACTED]de [REDACTED] [REDACTED]");
+    assert_eq!(doc.metadata.title.as_deref(), Some("[REDACTED]"));
+    assert_eq!(doc.content, regex_control.content);
+    assert_eq!(doc.metadata.title, regex_control.metadata.title);
+    assert_eq!(doc.redaction_report, regex_control.redaction_report);
+    let report = doc.redaction_report.expect("redaction report");
+    let spans = report
+        .findings
+        .iter()
+        .map(|finding| (finding.start, finding.end, finding.category.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        spans,
+        [
+            (0, 4, PiiCategory::Custom("earlier".into())),
+            (7, 11, PiiCategory::Custom("code".into())),
+            (12, 15, PiiCategory::Custom("language".into())),
+            (0, 6, PiiCategory::Custom("code".into())),
+        ],
+    );
+}
+
 #[test]
 fn case_sensitive_literal_term_only_matches_exact() {
     use xberg::core::config::redaction::RedactionTerm;

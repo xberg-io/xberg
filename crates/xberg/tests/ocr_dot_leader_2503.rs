@@ -23,13 +23,72 @@ fn psm6_preserves_rows_with_dots_already_in_their_label_cell() {
     );
 }
 
-fn assert_source_rows_once(bytes: &[u8], expected: &str, known_joined_pool_repairs: bool) {
-    let config = ExtractionConfig {
+#[test]
+fn psm3_publishes_each_source_row_once_with_its_detected_leaders() {
+    const BYTES: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
+    const EXPECTED: &str = include_str!("fixtures/ocr_dot_leader_2503/20.tsv");
+    const LEADER_ROWS: [&str; 2] = [
+        "Signal timing .......... 64 389,542 143.92",
+        "Field lights ............ 90 752,441 799.07",
+    ];
+
+    let mut config = source_row_config(3);
+    let plain = helpers::extract_bytes_document_blocking(BYTES, "image/png", &config).unwrap();
+    let [page] = plain.pages.as_deref().expect("requested page output") else {
+        panic!("expected one page");
+    };
+    assert_eq!(plain.metadata.additional["psm"], "3");
+    assert_eq!(EXPECTED.lines().count(), 12);
+    assert_rows_once(&plain.content, EXPECTED, "document", false);
+    assert_rows_once(&page.content, EXPECTED, "page", false);
+    assert_leaders_once(&plain.content, &LEADER_ROWS);
+    assert_leaders_once(&page.content, &LEADER_ROWS);
+
+    config.output_format = OutputFormat::Html;
+    let html = helpers::extract_bytes_document_blocking(BYTES, "image/png", &config).unwrap();
+    assert_eq!(html.content.matches("<tr>").count(), 13);
+    let [page] = html.pages.as_deref().expect("requested HTML page output") else {
+        panic!("expected one HTML page");
+    };
+    assert_rows_once(&page.content, EXPECTED, "HTML page", false);
+    assert_leaders_once(&page.content, &LEADER_ROWS);
+    let [table] = html.tables.as_slice() else {
+        panic!("expected one table");
+    };
+    let [page_table] = page.tables.as_slice() else {
+        panic!("expected one HTML page table");
+    };
+    assert_eq!(page_table.cells, table.cells);
+    for (amount, leader) in [("389,542", ".........."), ("752,441", "............")] {
+        assert_eq!(html.content.matches(amount).count(), 1, "HTML duplicated {amount}");
+        assert!(
+            table
+                .cells
+                .iter()
+                .any(|row| row.iter().any(|cell| cell == amount) && row.iter().any(|cell| cell.ends_with(leader))),
+            "HTML table lost the detected leader for {amount}"
+        );
+    }
+}
+
+fn assert_leaders_once(content: &str, rows: &[&str]) {
+    for row in rows {
+        let matching = content.lines().filter(|line| {
+            line.split(|c: char| c == '|' || c.is_whitespace())
+                .filter(|word| !word.is_empty())
+                .eq(row.split_whitespace())
+        });
+        assert_eq!(matching.count(), 1, "leader row {row:?}");
+    }
+}
+
+fn source_row_config(psm: i32) -> ExtractionConfig {
+    ExtractionConfig {
         use_cache: false,
         output_format: OutputFormat::Plain,
         ocr: Some(OcrConfig {
             tesseract_config: Some(TesseractConfig {
-                psm: Some(6),
+                psm: Some(psm),
                 ..Default::default()
             }),
             ..Default::default()
@@ -39,7 +98,11 @@ fn assert_source_rows_once(bytes: &[u8], expected: &str, known_joined_pool_repai
             ..Default::default()
         }),
         ..Default::default()
-    };
+    }
+}
+
+fn assert_source_rows_once(bytes: &[u8], expected: &str, known_joined_pool_repairs: bool) {
+    let config = source_row_config(6);
     let result = helpers::extract_bytes_document_blocking(bytes, "image/png", &config).unwrap();
     assert_eq!(result.tables.len(), 1);
     assert_eq!(result.tables[0].cells.len(), 13);
@@ -47,15 +110,18 @@ fn assert_source_rows_once(bytes: &[u8], expected: &str, known_joined_pool_repai
         panic!("expected one page");
     };
     assert_eq!(expected.lines().count(), 12);
+    assert_rows_once(&result.content, expected, "document", known_joined_pool_repairs);
+    assert_rows_once(&page.content, expected, "page", known_joined_pool_repairs);
+}
+
+fn assert_rows_once(content: &str, expected: &str, view: &str, known_joined_pool_repairs: bool) {
     for row in expected.lines() {
         let fields: Vec<_> = row.split('\t').collect();
-        for (view, content) in [("document", &result.content), ("page", &page.content)] {
-            let matches = content
-                .lines()
-                .filter(|line| source_row_matches(line, &fields, known_joined_pool_repairs))
-                .count();
-            assert_eq!(matches, 1, "{view} should emit {row:?} once");
-        }
+        let matches = content
+            .lines()
+            .filter(|line| source_row_matches(line, &fields, known_joined_pool_repairs))
+            .count();
+        assert_eq!(matches, 1, "{view} should emit {row:?} once");
     }
 }
 

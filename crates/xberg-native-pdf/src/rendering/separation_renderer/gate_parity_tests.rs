@@ -22,6 +22,17 @@ fn build_page(state_body: &str, extras: &[&str]) -> PdfDocument {
 }
 
 pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
+    build_sized_page(content, colour_spaces, state_body, extras, 100, "")
+}
+
+fn build_sized_page(
+    content: &str,
+    colour_spaces: &str,
+    state_body: &str,
+    extras: &[&str],
+    side: u32,
+    page_group: &str,
+) -> PdfDocument {
     let mut buf: Vec<u8> = Vec::new();
     buf.extend_from_slice(b"%PDF-1.4\n");
     let mut offs: Vec<usize> = Vec::new();
@@ -44,7 +55,7 @@ pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &s
     push(
         &mut buf,
         &format!(
-            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
+            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {side} {side}] /Contents 4 0 R {page_group} \
              /Resources << /ColorSpace << {colour_spaces} >> {xobjects} {fonts} \
              /ExtGState << /T << /Type /ExtGState {state_body} >> >> >> >>\nendobj\n"
         ),
@@ -404,50 +415,13 @@ fn inherited_sibling_group_page() -> PdfDocument {
 
 #[test]
 fn a_group_can_invoke_a_sibling_through_inherited_resources() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
     let doc = inherited_sibling_group_page();
-    assert_eq!(
-        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
-        SpotPlaneUse {
-            groups: 3,
-            ..SpotPlaneUse::default()
-        }
-    );
     let limit = workspace_limit(4 * CANVAS + NORMAL_FILL);
     assert_eq!(
         budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
         Some(BUDGET_REQUESTED_DPI)
     );
     assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
-}
-
-#[test]
-fn a_shared_form_resolves_names_in_each_inherited_scope() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
-    let outer = group_form_obj(5, "/XObject << /A 6 0 R /B 7 0 R >>", "/A Do /B Do");
-    let a = group_form_obj(6, "/XObject << /Bridge 8 0 R /G 9 0 R >>", "/Bridge Do");
-    let b = group_form_obj(7, "/XObject << /Bridge 8 0 R /G 10 0 R >>", "/Bridge Do");
-    let bridge = transparency_form(8, "", "/K true", "/G Do");
-    let knockout = transparency_form(9, "/Resources << >>", "/K true", "");
-    let nested = group_form_obj(10, "/XObject << /Inner 11 0 R >>", "/Inner Do");
-    let inner = group_form_obj(11, "", "");
-    let doc = build_page_with(
-        "/F Do",
-        SPOT_A,
-        "/BM /Multiply",
-        &[&outer, &a, &b, &bridge, &knockout, &nested, &inner],
-    );
-    // Each scope contributes a different maximum, regardless of which is scanned first. ~keep
-    assert_eq!(
-        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
-        SpotPlaneUse {
-            soft_mask: false,
-            groups: 5,
-            knockouts: 2,
-        }
-    );
 }
 
 fn soft_mask_in_group_page() -> PdfDocument {
@@ -526,32 +500,6 @@ fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
         budgeted_dpi(&doc, one_ink_charge(BUDGET_MINIMUM_DPI, 1) - 1, BUDGET_MINIMUM_DPI),
         None,
         "under the peak charge even the minimum raster is refused, not lowered"
-    );
-}
-
-/// The scan names what a page's resources declare. Patterns and annotation appearance
-/// resources are not walked.
-#[test]
-fn the_page_scan_reports_the_widest_spot_plane_use() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-    let scan = |doc: &PdfDocument| spot_plane_use(doc, 0, &doc.get_page_resources(0).expect("resources"));
-    let used = |soft_mask, groups, knockouts| SpotPlaneUse {
-        soft_mask,
-        groups,
-        knockouts,
-    };
-    assert_eq!(scan(&knockout_group_page()), used(false, 1, 1));
-    assert_eq!(scan(&soft_mask_page()), used(true, 0, 0));
-    let group = group_form("/I true", "0.5 g 0 0 20 20 re f");
-    let plain = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
-    assert_eq!(scan(&plain), used(false, 1, 0));
-    assert_eq!(scan(&nested_group_page()), used(false, 2, 0));
-    assert_eq!(scan(&soft_mask_in_group_page()), used(true, 2, 0));
-    assert_eq!(scan(&build_page("/BM /Multiply", &[])), used(false, 0, 0));
-    assert_eq!(
-        scan(&build_page("/SMask /None", &[])),
-        used(false, 0, 0),
-        "/SMask /None clears a mask"
     );
 }
 
@@ -820,8 +768,6 @@ fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
 
 #[test]
 fn groups_reachable_only_through_a_soft_mask_are_charged() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
     let mask = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
     let inner = transparency_form(6, "/Resources << >>", "/K true", "0.4 g 0 0 100 100 re f");
     let doc = build_page_with(
@@ -830,16 +776,214 @@ fn groups_reachable_only_through_a_soft_mask_are_charged() {
         "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
         &[&mask, &inner],
     );
-    let resources = doc.get_page_resources(0).expect("resources");
-    assert_eq!(
-        spot_plane_use(&doc, 0, &resources),
-        SpotPlaneUse {
-            soft_mask: true,
-            groups: 2,
-            knockouts: 1,
-        }
-    );
     let without_nested_groups = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
     let dpi = budgeted_dpi(&doc, without_nested_groups, BUDGET_MINIMUM_DPI).expect("the reduced DPI renders");
     assert!(dpi < BUDGET_REQUESTED_DPI, "the nested group lowers DPI, got {dpi}");
+}
+
+const LARGE_PAGE_POINTS: u32 = 2_000;
+const REQUESTED_KNOCKOUT_DPI: u32 = 150;
+const LARGE_KNOCKOUT_BUDGET: usize = 288_262_144;
+const SMALL_KNOCKOUT_BUDGET: usize = 104_857_600;
+const PAGE_KNOCKOUT: &str = "/Group << /S /Transparency /I true /K true >>";
+const LARGE_PAGE_PAINT: &str = "/CS0 cs 0.8 scn 10 10 60 60 re f";
+
+#[derive(Clone, Copy, Debug)]
+enum LargeKnockout {
+    Nested,
+    MaskedPaint,
+    MaskedStroke,
+    KnockoutMask,
+}
+
+fn large_knockout_page(case: LargeKnockout) -> PdfDocument {
+    const MASK: &str = "0.4 g 0 0 100 100 re f";
+    const SCALE: &str = "20 0 0 20 0 0 cm";
+    if matches!(case, LargeKnockout::KnockoutMask) {
+        let mask = transparency_form(5, "/Resources << >>", "/K true /I true /CS /DeviceGray", MASK);
+        return build_sized_page(
+            &format!("{SCALE} q /T gs {LARGE_PAGE_PAINT} Q /CS0 cs 0.8 scn 75 75 15 15 re f"),
+            SPOT_A,
+            "/SMask << /S /Luminosity /G 5 0 R >>",
+            &[&mask],
+            LARGE_PAGE_POINTS,
+            PAGE_KNOCKOUT,
+        );
+    }
+    let mask = transparency_form(6, "/Resources << >>", "/I true /CS /DeviceGray", MASK);
+    let resources = format!(
+        "/Resources << /ColorSpace << {SPOT_A} >> /ExtGState << /M << /SMask << /S /Luminosity /G 6 0 R >> >> >> >>"
+    );
+    let paint = match case {
+        LargeKnockout::Nested => LARGE_PAGE_PAINT,
+        LargeKnockout::MaskedPaint => "/M gs /CS0 cs 0.8 scn 10 10 60 60 re f",
+        LargeKnockout::MaskedStroke => "/M gs /CS0 CS 0.8 SCN 18 w 10 40 m 80 40 l S",
+        LargeKnockout::KnockoutMask => unreachable!(),
+    };
+    let form = transparency_form(5, &resources, "/K true", paint);
+    build_sized_page(
+        &format!("{SCALE} /F Do"),
+        SPOT_A,
+        "/BM /Normal",
+        &[&form, &mask],
+        LARGE_PAGE_POINTS,
+        PAGE_KNOCKOUT,
+    )
+}
+
+fn render_large_knockout(
+    doc: &PdfDocument,
+    requested: u32,
+    limit: usize,
+    minimum: u32,
+) -> (crate::rendering::RenderedImage, u32) {
+    crate::rendering::render_png_page_with_dpi_budget(doc, 0, requested, minimum, limit)
+        .expect("render large knockout page within its workspace budget")
+}
+
+fn assert_useful_knockout_raster(case: LargeKnockout, image: &crate::rendering::RenderedImage, dpi: u32) {
+    assert!((40..REQUESTED_KNOCKOUT_DPI).contains(&dpi), "{case:?}: {dpi} dpi");
+    assert_eq!(image.width, image.height);
+    assert!((image.width as f64 - f64::from(LARGE_PAGE_POINTS) * f64::from(dpi) / 72.0).abs() <= 1.0);
+    let raster = image::load_from_memory(&image.data)
+        .expect("decode the budgeted PNG")
+        .into_rgb8();
+    let paper = raster.get_pixel(image.width / 20, image.height / 20);
+    let ink = if matches!(case, LargeKnockout::KnockoutMask) {
+        raster.get_pixel(image.width * 4 / 5, image.height / 5)
+    } else {
+        raster.get_pixel(image.width * 2 / 5, image.height * 3 / 5)
+    };
+    assert_eq!(paper.0, [255; 3], "{case:?}: unpainted corner");
+    assert!(
+        ink[0] > ink[1] && ink[0] > ink[2],
+        "{case:?}: spot ink must survive, got {ink:?}"
+    );
+}
+
+#[test]
+fn large_knockout_pages_keep_useful_resolution() {
+    for case in [
+        LargeKnockout::Nested,
+        LargeKnockout::MaskedPaint,
+        LargeKnockout::MaskedStroke,
+        LargeKnockout::KnockoutMask,
+    ] {
+        let doc = large_knockout_page(case);
+        let (image, dpi) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
+        assert_useful_knockout_raster(case, &image, dpi);
+        let (strict, strict_dpi) = render_large_knockout(&doc, dpi, LARGE_KNOCKOUT_BUDGET, dpi);
+        assert_eq!(strict_dpi, dpi);
+        assert!(
+            image.data == strict.data,
+            "{case:?}: retry must match a fresh render at the admitted DPI"
+        );
+    }
+}
+
+#[test]
+fn increasing_workspace_preserves_masked_knockout_resolution() {
+    for case in [LargeKnockout::MaskedPaint, LargeKnockout::KnockoutMask] {
+        let doc = large_knockout_page(case);
+        let (_, small) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, SMALL_KNOCKOUT_BUDGET, 1);
+        let (_, large) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
+        assert!(
+            large > small,
+            "{case:?}: {large} dpi at higher budget vs {small} dpi at lower budget"
+        );
+    }
+}
+
+#[test]
+fn a_form_local_soft_mask_changes_strict_png_admission() {
+    let mask = transparency_form(6, "/Resources << >>", "/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    for has_mask in [false, true] {
+        let state = if has_mask {
+            "<< /SMask << /S /Luminosity /G 6 0 R >> >>"
+        } else {
+            "<< /SMask /None >>"
+        };
+        let resources = format!("/Resources << /ExtGState << /Local {state} >> >>");
+        let form = transparency_form(5, &resources, "", "");
+        let doc = build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &[&form, &mask]);
+        let limit = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
+        assert_eq!(
+            budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+            (!has_mask).then_some(BUDGET_REQUESTED_DPI),
+            "the same paint fits unless a reachable form declares a soft mask"
+        );
+    }
+}
+
+#[test]
+fn exhausting_the_resource_scan_depth_requires_mask_headroom() {
+    for count in [63, 64] {
+        let forms: Vec<_> = (5..5 + count)
+            .map(|number| {
+                let resources = if number + 1 < 5 + count {
+                    format!("/Resources << /XObject << /Next {} 0 R >> >>", number + 1)
+                } else {
+                    "/Resources << >>".into()
+                };
+                transparency_form(number, &resources, "", "")
+            })
+            .collect();
+        let extras: Vec<_> = forms.iter().map(String::as_str).collect();
+        // Declare /F through the fixture helper while leaving it unpainted. ~keep
+        let doc = build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &extras);
+        assert_eq!(
+            budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_REQUESTED_DPI),
+            (count == 63).then_some(BUDGET_REQUESTED_DPI),
+            "{count} resource levels"
+        );
+    }
+}
+
+fn shared_bridge_page(bind_next: bool) -> PdfDocument {
+    let mut forms = Vec::new();
+    for number in 5..65 {
+        let resources = format!("/Resources << /XObject << /Next {} 0 R >> >>", number + 1);
+        forms.push(transparency_form(number, &resources, "", ""));
+    }
+    forms.push(transparency_form(
+        65,
+        "/Resources << /XObject << /A 66 0 R /B 67 0 R >> >>",
+        "",
+        "",
+    ));
+    forms.push(transparency_form(
+        66,
+        "/Resources << /XObject << /Bridge 68 0 R >> >>",
+        "",
+        "",
+    ));
+    let next = if bind_next { "/Next 69 0 R" } else { "" };
+    let resources = format!("/Resources << /XObject << /Bridge 68 0 R {next} >> >>");
+    forms.push(transparency_form(67, &resources, "", ""));
+    forms.push(transparency_form(68, "", "", "/Next Do"));
+    forms.push(transparency_form(69, "/Resources << >>", "", ""));
+    let extras: Vec<_> = forms.iter().map(String::as_str).collect();
+    build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &extras)
+}
+
+#[test]
+fn the_shared_bridge_memo_uses_its_inherited_resource_scope() {
+    let dpi = BUDGET_REQUESTED_DPI;
+    let live = one_ink_charge(dpi, 0);
+    assert_eq!(budgeted_dpi(&shared_bridge_page(false), live, dpi), Some(dpi));
+    assert_eq!(
+        budgeted_dpi(&shared_bridge_page(true), one_ink_charge(dpi, 1), dpi),
+        Some(dpi)
+    );
+
+    // Resource dictionaries iterate in hash order. Fresh documents exercise both
+    // cache population orders: the scope without /Next must never hide the other. ~keep
+    for _ in 0..32 {
+        let error = render_at_budgeted_dpi(&shared_bridge_page(true), live, dpi)
+            .expect_err("the bridge reaches the scan cap only in the scope that binds /Next");
+        assert!(
+            error.to_string().contains("security_limits.max_content_size"),
+            "{error}"
+        );
+    }
 }

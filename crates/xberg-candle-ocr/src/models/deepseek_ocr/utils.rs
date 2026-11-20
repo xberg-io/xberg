@@ -256,7 +256,10 @@ pub fn topk(input: &Tensor, k: usize) -> Result<(Tensor, Tensor)> {
 
     for (b, row) in scores.iter().enumerate().take(batch_size) {
         let mut items: Vec<(usize, f32)> = row.iter().copied().enumerate().take(num_items).collect();
-        items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| match (a.1.is_nan(), b.1.is_nan()) {
+            (false, false) => b.1.total_cmp(&a.1),
+            (a_nan, b_nan) => a_nan.cmp(&b_nan),
+        });
 
         for (idx, (item_idx, val)) in items.iter().take(k).enumerate() {
             top_weights_vec[b][idx] = *val;

@@ -136,7 +136,7 @@ fn undersized_section_preserves_the_whole_admitted_table_and_metadata() {
         start: 0.0,
         end: 90.0,
     };
-    let actual = split_table_at_section_dividers(table, &[divider], &[], &config);
+    let actual = split_table_at_section_dividers(table, &[divider], &[], &config, false);
     assert_eq!(
         header_source_diagnostic::tables(&actual),
         expected,

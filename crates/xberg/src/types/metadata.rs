@@ -17,7 +17,7 @@ use super::page::PageStructure;
 /// Custom serialization and deserialization for AHashMap<Cow<'static, str>, Value>.
 ///
 /// serde doesn't natively support serializing Cow keys, so we convert to/from
-/// a HashMap<String, Value> for the wire format, while keeping the in-memory
+/// a map for the wire format (serialized in sorted key order), while keeping the in-memory
 /// representation optimized with Cow keys (avoiding allocations for static strings).
 mod additional_serde {
     use super::*;
@@ -29,9 +29,8 @@ mod additional_serde {
     where
         S: Serializer,
     {
-        let converted: HashMap<String, serde_json::Value> =
-            map.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
-        converted.serialize(serializer)
+        let sorted: BTreeMap<&str, &serde_json::Value> = map.iter().map(|(k, v)| (k.as_ref(), v)).collect();
+        sorted.serialize(serializer)
     }
 
     pub(crate) fn deserialize<'de, D>(
@@ -1723,5 +1722,30 @@ mod binding_value_serde_tests {
         assert_eq!(dimensions.height, 480);
         assert_eq!(named_attribute, attribute);
         assert_eq!(named_dimensions, dimensions);
+    }
+}
+
+#[cfg(test)]
+mod additional_serde_tests {
+    use super::Metadata;
+    use serde_json::json;
+    use std::borrow::Cow;
+
+    #[test]
+    fn should_serialize_additional_in_sorted_key_order() {
+        let mut metadata = Metadata::default();
+        for (key, value) in [("zeta", 3), ("alpha", 1), ("mid", 2), ("beta", 4)] {
+            metadata.additional.insert(Cow::Borrowed(key), json!(value));
+        }
+
+        let serialized = serde_json::to_string(&metadata).expect("metadata serializes");
+        assert!(
+            serialized.contains(r#""additional":{"alpha":1,"beta":4,"mid":2,"zeta":3}"#),
+            "additional keys must be sorted, got {serialized}"
+        );
+
+        let round_trip: Metadata = serde_json::from_str(&serialized).expect("metadata deserializes");
+        assert_eq!(round_trip.additional.len(), 4);
+        assert_eq!(round_trip.additional.get("mid"), Some(&json!(2)));
     }
 }

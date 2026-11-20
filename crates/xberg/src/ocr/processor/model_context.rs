@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::script_retry::{self, RetryModels, hash_language_models};
+use super::script_retry::{self, HanModels, RetryModels, hash_language_models, hash_model_file};
 use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
@@ -23,6 +23,7 @@ pub(super) struct ModelContext {
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
     han_cache_invalidated: Arc<AtomicBool>,
+    vertical_cache_invalidated: Arc<AtomicBool>,
     khmer_cache_invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
 }
@@ -59,7 +60,7 @@ impl ModelContext {
                 crate::core::extractor::cacheability::invalidate_current();
             }
         })?;
-        let mut context = Self::for_path(directory, config.psm)?;
+        let mut context = Self::for_config(directory, config.psm, languages)?;
         if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config))
             && !crate::core::extractor::cacheability::ocr_stop_requested()
         {
@@ -69,13 +70,17 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
-        let han = match RetryModels::resolve_han(&directories, &config.language, config.psm) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
+        let horizontal =
+            RetryModels::resolve_horizontal(&directories, &config.language, config.psm).unwrap_or_else(|error| {
                 self.invalidate_han_cache(&error);
                 None
-            }
-        };
+            });
+        let vertical =
+            RetryModels::resolve_vertical(&directories, &config.language, config.psm).unwrap_or_else(|error| {
+                self.invalidate_vertical_cache(&error);
+                None
+            });
+        let han = HanModels::from_snapshots(horizontal, vertical);
         let khmer = match RetryModels::resolve_requested_khmer(&directories, &config.language, config.psm) {
             Ok(snapshot) => snapshot,
             Err(error) => {
@@ -84,7 +89,7 @@ impl ModelContext {
             }
         };
         let models = RetryModels::from_snapshots(han, khmer);
-        if models.is_some() {
+        if models.is_some() && self.primary.is_none() {
             // ~keep The first pass can use a different directory from the complete retry set.
             let languages: Vec<String> = config.language.split('+').map(|name| name.trim().into()).collect();
             match self.read_primary_revision(&languages) {
@@ -99,16 +104,45 @@ impl ModelContext {
         });
     }
 
+    pub(super) fn capture_primary(&self, language: &str) -> Result<Option<script_retry::RetryModelFiles>, OcrError> {
+        if self.primary.is_none() && self.osd_revision.is_none() {
+            return Ok(None);
+        }
+        let languages: Vec<_> = language.split('+').map(|name| name.trim().to_owned()).collect();
+        let mut hash = self.primary_hasher(&languages)?;
+        if let Some(primary) = &self.primary
+            && (languages != primary.languages || hash.finalize() != primary.revision)
+        {
+            return Err(OcrError::ProcessingFailed(
+                "Primary Tesseract models changed before initialization".into(),
+            ));
+        }
+        if let Some(expected) = self.osd_revision {
+            hash.update(expected.as_bytes());
+        }
+        let models = script_retry::ModelSet::from_revision(
+            self.directory.clone(),
+            languages.join("+"),
+            hash.finalize(),
+            self.osd_revision.is_some(),
+        );
+        script_retry::RetryModelFiles::capture(&models).map(Some)
+    }
+
     pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
         self.primary.as_ref().map(|primary| primary.revision)
     }
 
     fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
+        self.primary_hasher(languages).map(|hash| hash.finalize())
+    }
+
+    fn primary_hasher(&self, languages: &[String]) -> Result<blake3::Hasher, OcrError> {
         hash_language_models(
             std::path::Path::new(&self.directory),
             languages.iter().map(String::as_str),
+            hash_model_file,
         )
-        .map(|hash| hash.finalize())
     }
 
     fn primary_is_current(&self) -> bool {
@@ -134,23 +168,35 @@ impl ModelContext {
         invalidate_script_cache(&self.han_cache_invalidated, "Han", error);
     }
 
+    pub(super) fn invalidate_vertical_cache(&self, error: &OcrError) {
+        invalidate_script_cache(&self.vertical_cache_invalidated, "vertical Japanese", error);
+    }
+
     pub(super) fn invalidate_khmer_cache(&self, error: &OcrError) {
         invalidate_script_cache(&self.khmer_cache_invalidated, "Khmer", error);
     }
 
-    pub(super) fn retry_models(&self, config: &TesseractConfig, mean_confidence: f64) -> Option<RetryModels> {
+    pub(super) fn retry_models(
+        &self,
+        config: &TesseractConfig,
+        mean_confidence: f64,
+        han_is_plausible: impl FnOnce() -> bool,
+    ) -> Option<RetryModels> {
         let retry = self.retry.as_ref()?;
         if mean_confidence >= retry.noisy_below || self.invalidated.load(Ordering::Acquire) {
             return None;
         }
         let mut models = retry.models.clone()?;
-        if !self.han_retry_is_current(config) {
-            models.han = None;
-        }
-        if !self.khmer_retry_is_current(config) {
+        models.han = models.han.filter(|_| han_is_plausible()).and_then(|han| {
+            HanModels::from_snapshots(
+                han.horizontal.filter(|_| self.han_retry_is_current(config)),
+                han.vertical_japanese.filter(|_| self.vertical_retry_is_current(config)),
+            )
+        });
+        if models.khmer.is_some() && !self.khmer_retry_is_current(config) {
             models.khmer = None;
         }
-        (models.han.is_some() || models.khmer.is_some()).then_some(models)
+        RetryModels::from_snapshots(models.han, models.khmer)
     }
 
     pub(super) fn han_retry_is_current(&self, config: &TesseractConfig) -> bool {
@@ -160,13 +206,40 @@ impl ModelContext {
         let Some(retry) = &self.retry else {
             return true;
         };
-        let expected = retry.models.as_ref().and_then(|models| models.han.as_ref());
-        let error = match RetryModels::resolve_han(&retry.directories, &config.language, config.psm) {
+        let expected = retry
+            .models
+            .as_ref()
+            .and_then(|models| models.han.as_ref())
+            .and_then(|han| han.horizontal.as_ref());
+        match RetryModels::resolve_horizontal(&retry.directories, &config.language, config.psm) {
             Ok(current) if current.as_ref() == expected => return true,
-            Ok(_) => OcrError::ProcessingFailed("Selected Han retry models changed during OCR".into()),
-            Err(error) => error,
+            Ok(_) => self.invalidate_han_cache(&OcrError::ProcessingFailed(
+                "Selected Han retry models changed during OCR".into(),
+            )),
+            Err(error) => self.invalidate_han_cache(&error),
+        }
+        false
+    }
+
+    pub(super) fn vertical_retry_is_current(&self, config: &TesseractConfig) -> bool {
+        if self.invalidated.load(Ordering::Acquire) || self.vertical_cache_invalidated.load(Ordering::Acquire) {
+            return false;
+        }
+        let Some(retry) = &self.retry else {
+            return true;
         };
-        self.invalidate_han_cache(&error);
+        let expected = retry
+            .models
+            .as_ref()
+            .and_then(|models| models.han.as_ref())
+            .and_then(|han| han.vertical_japanese.as_ref());
+        match RetryModels::resolve_vertical(&retry.directories, &config.language, config.psm) {
+            Ok(current) if current.as_ref() == expected => return true,
+            Ok(_) => self.invalidate_vertical_cache(&OcrError::ProcessingFailed(
+                "Selected vertical Japanese model changed during OCR".into(),
+            )),
+            Err(error) => self.invalidate_vertical_cache(&error),
+        }
         false
     }
 
@@ -188,7 +261,10 @@ impl ModelContext {
     }
 
     pub(super) fn if_result_current<T>(&self, config: &TesseractConfig, action: impl FnOnce() -> T) -> Option<T> {
-        if !self.han_retry_is_current(config) || !self.khmer_retry_is_current(config) {
+        if !self.vertical_retry_is_current(config)
+            || !self.han_retry_is_current(config)
+            || !self.khmer_retry_is_current(config)
+        {
             return None;
         }
         self.if_current(action)
@@ -204,13 +280,23 @@ impl ModelContext {
                 OcrError::InvalidConfiguration("Provisioned OCR requires an explicit model directory".into())
             })?;
         super::validation::validate_language_and_traineddata(&config.language, directory)?;
-        Self::for_path(directory.to_owned(), config.psm)
+        let languages = config.language.split('+').map(|name| name.trim().to_owned()).collect();
+        Self::for_config(directory.to_owned(), config.psm, languages)
+    }
+
+    fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
+        let mut context = Self::for_path(directory, psm)?;
+        if context.osd_revision.is_some() {
+            let revision = context.read_primary_revision(&languages)?;
+            context.primary = Some(PrimaryModels { languages, revision });
+        }
+        Ok(context)
     }
 
     pub(super) fn for_path(directory: String, psm: u8) -> Result<Self, OcrError> {
         // Match pinned Tesseract's PSM_OSD_ENABLED: these modes load and retain osd.traineddata. ~keep
         let osd_revision = if matches!(psm, 0 | 1 | 12) {
-            Some(osd_revision(std::path::Path::new(&directory))?)
+            Some(osd_revision_with(std::path::Path::new(&directory), hash_model_file)?)
         } else {
             None
         };
@@ -221,6 +307,7 @@ impl ModelContext {
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
             han_cache_invalidated: Arc::new(AtomicBool::new(false)),
+            vertical_cache_invalidated: Arc::new(AtomicBool::new(false)),
             khmer_cache_invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
         })
@@ -240,7 +327,7 @@ impl ModelContext {
             return Some(action());
         };
         // Files can change while waiting for or using a handle; uncertain state must not be retained. ~keep
-        match osd_revision(std::path::Path::new(&self.directory)) {
+        match osd_revision_with(std::path::Path::new(&self.directory), crate::cache::blake3_hash_file) {
             Ok(current) if current == expected => Some(action()),
             Ok(_) => {
                 self.invalidated.store(true, Ordering::Release);
@@ -264,7 +351,7 @@ impl ModelContext {
         let mut base = super::config::hash_config(config, &self.directory);
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v4");
+            hash.update(b"tesseract-script-retry-v7");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
             if script_retry::mixed_pdf_khmer_retry_requested() {
@@ -282,15 +369,21 @@ impl ModelContext {
             return base;
         };
         let mut hash = blake3::Hasher::new();
-        hash.update(b"tesseract-osd-model-result-v1");
+        hash.update(b"tesseract-osd-model-result-v2");
         hash.update(base.as_bytes());
         hash.update(revision.as_bytes());
+        if let Some(primary) = self.primary_revision() {
+            hash.update(primary.as_bytes());
+        }
         hash.finalize().to_hex().to_string()
     }
 }
 
-fn osd_revision(directory: &std::path::Path) -> Result<blake3::Hash, OcrError> {
-    crate::core::extractor::cacheability::osd_revision(directory)
+fn osd_revision_with(
+    directory: &std::path::Path,
+    read_hash: impl FnOnce(&std::path::Path) -> crate::Result<String>,
+) -> Result<blake3::Hash, OcrError> {
+    crate::core::extractor::cacheability::osd_revision_with(directory, read_hash)
         .map_err(|error| model_read_error(&directory.join("osd.traineddata"), error))
 }
 
@@ -304,6 +397,24 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osd_only_key_requires_the_captured_osd_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let osd = root.path().join("osd.traineddata");
+        std::fs::write(root.path().join("eng.traineddata"), b"language").unwrap();
+        std::fs::write(&osd, b"revision A").unwrap();
+        let models = ModelContext::for_path(root.path().to_str().unwrap().to_owned(), 1).unwrap();
+        assert!(models.primary_revision().is_none());
+        let files = models.capture_primary("eng").unwrap().unwrap();
+        let captured = std::path::Path::new(files.directory().unwrap()).join("osd.traineddata");
+        std::fs::write(&osd, b"revision B").unwrap();
+        assert_eq!(std::fs::read(captured).unwrap(), b"revision A");
+        assert!(matches!(
+            models.capture_primary("eng"),
+            Err(OcrError::ProcessingFailed(message)) if message.contains("models changed")
+        ));
+    }
 
     #[test]
     fn missing_present_and_non_file_osd_are_distinct_for_every_osd_mode() {
@@ -393,7 +504,7 @@ mod tests {
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
                 context.select_retry(&config, vec![directory], 75.0);
                 assert!(
-                    context.retry_models(&config, 30.0).is_some(),
+                    context.retry_models(&config, 30.0, || true).is_some(),
                     "Han must remain selectable"
                 );
                 assert!(context.if_result_current(&config, || ()).is_none());
@@ -401,6 +512,55 @@ mod tests {
             });
         })
         .await;
+    }
+
+    #[cfg(feature = "bundle-tessdata-eng")]
+    #[test]
+    fn marks_only_first_pass_selects_han_osd() {
+        let api = xberg_tesseract::TesseractAPI::new().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+        context.select_retry(&config, vec![directory], 75.0);
+        let header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext";
+        for (token, confidence, expected) in [("|", 20, true), ("|", 65, false), ("1", 20, false)] {
+            let tsv = format!("{header}\n5\t1\t1\t1\t1\t1\t0\t100\t3\t40\t{confidence}\t{token}");
+            let retry = context.retry_models(&config, f64::from(confidence), || {
+                script_retry::first_read_suggests_han(&api, Some(&tsv))
+            });
+            assert_eq!(
+                retry.is_some_and(|models| models.han.is_some()),
+                expected,
+                "{token} at {confidence}"
+            );
+        }
+    }
+
+    #[test]
+    fn han_gate_keeps_requested_khmer_retry() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim", "khm"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+            let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+            context.select_retry(&config, vec![directory], 75.0);
+            let models = context.retry_models(&config, 30.0, || false).unwrap();
+            assert!(models.han.is_none());
+            assert!(models.khmer.is_some());
+        });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -443,7 +603,7 @@ mod tests {
                     std::fs::write(&han, b"Han revision two").unwrap();
                 }
                 let models = context
-                    .retry_models(&config, 30.0)
+                    .retry_models(&config, 30.0, || true)
                     .expect("Khmer must remain selectable");
                 assert!(models.han.is_none());
                 assert!(models.khmer.is_some());
@@ -488,6 +648,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         let lookup = |context: &ModelContext| {
             cache
@@ -502,20 +663,20 @@ mod tests {
         };
 
         let missing = snapshot(75.0);
-        assert!(missing.retry_models(&config, 30.0).is_none());
+        assert!(missing.retry_models(&config, 30.0, || true).is_none());
         seed(&missing);
         write(&fallback, "eng", b"eng");
         assert!(missing.if_result_current(&config, || ()).is_none());
         let complete = snapshot(75.0);
         assert!(lookup(&complete).is_none());
-        assert!(complete.retry_models(&config, 30.0).is_some());
-        assert!(complete.retry_models(&config, 75.0).is_none());
+        assert!(complete.retry_models(&config, 30.0, || true).is_some());
+        assert!(complete.retry_models(&config, 75.0, || true).is_none());
         seed(&complete);
         assert!(lookup(&snapshot(80.0)).is_none());
 
         write(&primary, "eng", b"ENG");
         let replaced_primary = snapshot(75.0);
-        assert!(replaced_primary.retry_models(&config, 30.0).is_some());
+        assert!(replaced_primary.retry_models(&config, 30.0, || true).is_some());
         assert!(lookup(&replaced_primary).is_none());
         assert!(complete.if_result_current(&config, || ()).is_none());
         seed(&replaced_primary);
@@ -554,6 +715,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         cache
             .set_cached_result("page", "tesseract", &before.result_key(&config), None, &result)
@@ -597,6 +759,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         std::fs::write(&osd, b"revision two").unwrap();
         let published = before
@@ -621,6 +784,34 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(cached().unwrap().content, "seeded model B result");
+    }
+
+    #[tokio::test]
+    async fn observed_osd_rollback_invalidates_the_request() {
+        use crate::core::extractor::cacheability;
+
+        let root = tempfile::tempdir().unwrap();
+        let osd = root.path().join("osd.traineddata");
+        std::fs::write(&osd, b"revision one").unwrap();
+        let snapshot = || ModelContext::for_path(root.path().to_str().unwrap().into(), 1).unwrap();
+
+        cacheability::scope(async {
+            cacheability::with_ocr_cancellation(None, async {
+                let before = snapshot();
+                assert_eq!(before.if_current(|| 7), Some(7));
+                std::fs::write(&osd, b"revision two").unwrap();
+                let changed = before.if_current(|| ());
+                std::fs::write(&osd, b"revision one").unwrap();
+
+                assert!(changed.is_none());
+                assert!(!cacheability::can_publish_outer_result());
+                assert!(snapshot().if_current(|| ()).is_none());
+            })
+            .await;
+        })
+        .await;
+
+        assert_eq!(snapshot().if_current(|| 7), Some(7));
     }
 
     #[cfg(unix)]

@@ -3,6 +3,8 @@
 mod helpers;
 
 use helpers::extract_bytes_document_blocking;
+#[cfg(feature = "tokio-runtime")]
+use helpers::extract_uri_document_blocking;
 use sha2::{Digest, Sha256};
 use xberg::types::document_structure::NodeContent;
 use xberg::{ExtractedDocument, ExtractionConfig, OutputFormat, PdfConfig};
@@ -26,6 +28,61 @@ fn source_document(output_format: OutputFormat) -> ExtractedDocument {
         ..Default::default()
     };
     extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
+}
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF via XBERG_2332_SIDE_TABLE_PDF"]
+fn identical_ruled_tables_with_disjoint_source_bounds_reach_public_html() {
+    let path = std::env::var_os("XBERG_2332_SIDE_TABLE_PDF").expect("set the pinned public PDF path");
+    let bytes = std::fs::read(&path).expect("read public ParseBench fixture 7bc0fc8c64c67829dc21");
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "bd5f64d7f3e329e55f6a000495169306b53e73cd99cf73476efb41e36471ef11"
+    );
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html",
+        "use_cache": false,
+        "force_ocr": false,
+        "disable_ocr": true,
+        "enable_quality_processing": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "tesseract_config": {"language": ["eng"], "use_cache": false}
+        },
+        "concurrency": {"max_threads": 1}
+    }))
+    .expect("frozen native HTML extraction config");
+    #[cfg(feature = "tokio-runtime")]
+    let result = extract_uri_document_blocking(path, None, &config).expect("native HTML extraction");
+    #[cfg(not(feature = "tokio-runtime"))]
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("native HTML extraction");
+    let [first, second] = result.tables.as_slice() else {
+        panic!("expected both Proposed and Current tables, got {}", result.tables.len());
+    };
+    let first_box = first.bounding_box.expect("Proposed table bounds");
+    let second_box = second.bounding_box.expect("Current table bounds");
+    assert!(
+        first_box.x1 < second_box.x0,
+        "Proposed is left of Current in the source"
+    );
+    for table in [first, second] {
+        assert_eq!(table.cells.len(), 51);
+        assert!(table.cells.iter().all(|row| row.len() == 8));
+        assert_eq!(
+            table.cells[0],
+            ["Model Year", "Symbol Code", "BI", "PD", "UMBI", "MP", "COMP", "COLL"]
+        );
+    }
+    assert_eq!(result.content.matches("<table").count(), 2);
+    assert_eq!(
+        result.content.matches("<th>").count(),
+        16,
+        "only the two column-label rows are headers"
+    );
+    for year in ["1998", "1999"] {
+        assert_eq!(result.content.matches(&format!("<td>{year}</td>")).count(), 2);
+    }
 }
 
 #[test]
@@ -263,4 +320,664 @@ fn survey_html(content: &str) -> &str {
     let tables = content.split("<table").skip(1).collect::<Vec<_>>();
     assert_eq!(tables.len(), 2);
     tables[1].split_once("</table>").expect("complete survey HTML table").0
+}
+
+#[cfg(all(feature = "layout-detection", feature = "ocr", feature = "tokio-runtime"))]
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF and provisioned RT-DETR, TATR, and Tesseract models"]
+fn forced_ocr_tatr_owns_words_without_exposing_ocr_elements() {
+    let directory =
+        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
+    let path = std::path::Path::new(&directory).join("7d6a55d4b9bf0316f7eb.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(std::fs::read(&path).unwrap())),
+        "d9b147dc465a8812de2600d707b67d36d3119e324949ed458d735afd8c33c722"
+    );
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html",
+        "use_cache": false,
+        "force_ocr": true,
+        "disable_ocr": false,
+        "enable_quality_processing": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "tesseract_config": {"language": ["eng"], "use_cache": false}
+        },
+        "concurrency": {"max_threads": 1},
+        "layout": {"strategy": "always", "table_model": "tatr", "acceleration": {"provider": "cpu"}}
+    }))
+    .unwrap();
+    let result = extract_uri_document_blocking(&path, None, &config).unwrap();
+    assert!(result.ocr_elements.as_ref().is_none_or(Vec::is_empty));
+    let [table] = result.tables.as_slice() else {
+        panic!("expected the forced OCR rate table, got {}", result.tables.len());
+    };
+    assert_eq!(table.cells.len(), 6);
+    assert!(table.cells.iter().all(|row| row.len() == 12));
+    assert_eq!(&table.cells[1][..4], &["2008", "$57,951", "1,022,724", "645,075"]);
+    assert_eq!(table.cells[5][0], "2012 Total");
+    assert_eq!(result.content.matches("<table").count(), 1);
+}
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_wrapped_labels_render_as_headers_over_numeric_records() {
+    let bytes = insurance_source();
+    let config = parsebench_html_config();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    assert_insurance_tables(&result);
+    let combined: Vec<Vec<String>> = (0..41)
+        .map(|index| {
+            result
+                .tables
+                .iter()
+                .flat_map(|table| table.cells[index].iter().cloned())
+                .collect()
+        })
+        .collect();
+
+    let mut pdf = lopdf::Document::load_mem(&bytes).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
+    let key_paint = "0 0.5 0 rg\n";
+    assert_eq!(source.matches(key_paint).count(), 120);
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(source.replace(key_paint, "0 g\n").into_bytes());
+    let mut neutral = Vec::new();
+    pdf.save_to(&mut neutral).unwrap();
+    let control = extract_bytes_document_blocking(&neutral, "application/pdf", &config).unwrap();
+    let [neutral_table] = control.tables.as_slice() else {
+        panic!("expected one native grid after recoloring keys");
+    };
+    assert_eq!(neutral_table.cells, combined);
+    assert_eq!(control.content.matches("<th>").count(), 0);
+    assert_eq!(control.content.matches("<td>").count(), 41 * 12);
+}
+
+fn insurance_source() -> Vec<u8> {
+    let directory =
+        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
+    let path = std::path::Path::new(&directory).join("f48db8574acac2e2744d.pdf");
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "0085e250b078694c7a6887245e52108e511401b90db99052fe1ee2b4c0d099a3"
+    );
+    bytes
+}
+
+fn assert_insurance_tables(result: &ExtractedDocument) {
+    assert_eq!(result.tables.len(), 3, "source prints three independent groups");
+    for (table, code) in result.tables.iter().zip(["3400", "4112", "4635"]) {
+        assert_eq!(table.cells.len(), 41);
+        assert!(table.cells.iter().all(|row| row.len() == 4));
+        assert_eq!(table.cells[0], ["CLASS CODE", "RATE", "MIN. PREM.", "HAZ L/C CODE"]);
+        assert_eq!(table.cells[1][0], code);
+    }
+    assert!(
+        result
+            .tables
+            .windows(2)
+            .all(|pair| pair[0].bounding_box.unwrap().x1 < pair[1].bounding_box.unwrap().x0)
+    );
+    assert_eq!(result.content.matches("<table").count(), 3);
+    assert_eq!(result.content.matches("<th>").count(), 12);
+    assert_eq!(result.content.matches("<td>").count(), 40 * 12);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+#[ignore = "requires the pinned public PDF and layout models"]
+fn insurance_layout_retains_caption_text_before_three_source_tables() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html", "use_cache": false, "disable_ocr": true,
+        "enable_quality_processing": false, "concurrency": {"max_threads": 1},
+        "layout": {"strategy": "always", "table_model": "tatr", "acceleration": {"provider": "cpu"}}
+    }))
+    .unwrap();
+    let result = extract_bytes_document_blocking(&insurance_source(), "application/pdf", &config).unwrap();
+    assert_insurance_tables(&result);
+    let (prose, tables) = result.content.split_once("<table").unwrap();
+    for token in ["WORKERS", "OBI NATIONAL", "STANDARD", "CALIFORNIA", "EFFECTIVE DATE"] {
+        assert_eq!(prose.matches(token).count(), 1, "{token}: {prose}");
+        assert!(!tables.contains(token));
+    }
+}
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_comparison_with_a_shared_rule_keeps_one_table() {
+    let mut pdf = lopdf::Document::load_mem(&insurance_source()).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let mut content = pdf.get_page_content(page);
+    content.extend_from_slice(b"\nq 0 G 0.8 w 43 650 m 565 650 l S Q\n");
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(content);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let [table] = result.tables.as_slice() else {
+        panic!(
+            "a shared rule joins the comparison table, got {} tables",
+            result.tables.len()
+        );
+    };
+    assert_eq!(table.cells.len(), 41);
+    assert!(table.cells.iter().all(|row| row.len() == 12));
+    assert_eq!(table.cells[1][..4], ["3400", "9.97", "1000", "2"]);
+    assert_eq!(result.content.matches("<table").count(), 1);
+}
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
+    use lopdf::dictionary;
+
+    for (width, in_form, table_count) in [(10, false, 3), (522, false, 1), (522, true, 1)] {
+        let mut pdf = lopdf::Document::load_mem(&insurance_source()).unwrap();
+        let page = pdf.get_pages()[&1];
+        let image = pdf.add_object(lopdf::Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+                "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+            },
+            vec![0],
+        ));
+        let rule = if in_form {
+            pdf.add_object(lopdf::Stream::new(
+                dictionary! {
+                    "Type" => "XObject", "Subtype" => "Form", "BBox" => lopdf::Object::Array(vec![0.into(), 0.into(), 1.into(), 1.into()]),
+                    "Resources" => dictionary! { "XObject" => dictionary! { "Image" => image } },
+                },
+                b"/Image Do".to_vec(),
+            ))
+        } else {
+            image
+        };
+        pdf.add_xobject(page, "GutterRule", rule).unwrap();
+        let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+        let mut content = pdf.get_page_content(page);
+        content.extend_from_slice(format!("\nq {width} 0 0 1 43 650 cm /GutterRule Do Q\n").as_bytes());
+        pdf.get_object_mut(stream)
+            .unwrap()
+            .as_stream_mut()
+            .unwrap()
+            .set_plain_content(content);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+
+        let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+        assert_eq!(result.tables.len(), table_count, "image width {width}, Form {in_form}");
+        if table_count == 3 {
+            assert_insurance_tables(&result);
+        } else {
+            let table = &result.tables[0];
+            assert_eq!(table.cells.len(), 41);
+            assert!(table.cells.iter().all(|row| row.len() == 12));
+            assert_eq!(result.content.matches("<table").count(), 1);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DecimalHeaderPaint {
+    Plain,
+    Shaded,
+    ContrastingRule,
+    ContrastingRuleAndBoldLabels,
+    Tagged,
+}
+
+fn ruled_decimal_table(
+    first_band: [&str; 5],
+    centered_band: bool,
+    body_rows: usize,
+    header: DecimalHeaderPaint,
+) -> Vec<u8> {
+    use lopdf::{Document, Object, Stream, dictionary};
+    use std::fmt::Write as _;
+
+    let mut paint = String::from("0 G 1 w\n");
+    let tagged = matches!(header, DecimalHeaderPaint::Tagged);
+    if matches!(header, DecimalHeaderPaint::Shaded) {
+        paint.push_str("0.8 g 30 120 250 40 re f 0 g\n");
+    }
+    let bottom = 120 - 20 * body_rows;
+    for y in (bottom..=160).step_by(20) {
+        let contrasting = matches!(
+            header,
+            DecimalHeaderPaint::ContrastingRule | DecimalHeaderPaint::ContrastingRuleAndBoldLabels
+        );
+        if y == 120 && contrasting {
+            writeln!(paint, "q 2 w 30 {y} m 280 {y} l S Q").unwrap();
+        } else {
+            writeln!(paint, "30 {y} m 280 {y} l S").unwrap();
+        }
+    }
+    for column in 0..=5 {
+        let x = 30 + column * 50;
+        let top = if column == 3 && !tagged { 140 } else { 160 };
+        writeln!(paint, "{x} {bottom} m {x} {top} l S").unwrap();
+    }
+    paint.push_str("BT /F1 8 Tf\n");
+    for (row, cells) in [
+        ["Group", "Code", "Rates", if tagged { "East" } else { "" }, "West"],
+        first_band,
+        ["Latency", "p95", "0.924", "0.863", "0.985"],
+        ["Throughput", "p99", "0.930", "0.888", "0.988"],
+        ["Latency", "max", "0.937", "0.906", "1.001"],
+    ]
+    .iter()
+    .take(2 + body_rows)
+    .enumerate()
+    {
+        let y = 145 - row * 20;
+        for (column, text) in cells.iter().enumerate().filter(|(_, text)| !text.is_empty()) {
+            let offset = if column < 2 || row == 0 {
+                3.0
+            } else if row == 1 && centered_band {
+                19.44
+            } else {
+                28.0
+            };
+            let x = 30.0 + 50.0 * column as f32 + offset;
+            let font = if row <= 1 && column == 1 && matches!(header, DecimalHeaderPaint::ContrastingRuleAndBoldLabels)
+            {
+                "F2"
+            } else {
+                "F1"
+            };
+            if tagged {
+                let mcid = row * 5 + column;
+                writeln!(paint, "/Span <</MCID {mcid}>> BDC").unwrap();
+            }
+            writeln!(paint, "/{font} 8 Tf 1 0 0 1 {x} {y} Tm ({text}) Tj").unwrap();
+            if tagged {
+                paint.push_str("EMC\n");
+            }
+        }
+    }
+    paint.push_str("ET\n");
+    let mut pdf = Document::with_version("1.4");
+    let pages = pdf.new_object_id();
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let bold = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica-Bold" });
+    let stream = pdf.add_object(Stream::new(dictionary! {}, paint.into_bytes()));
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "MediaBox" => Object::Array(vec![0.into(), 0.into(), 310.into(), 200.into()]),
+        "Contents" => stream, "Resources" => dictionary! { "Font" => dictionary! { "F1" => font, "F2" => bold } },
+    });
+    pdf.objects.insert(
+        pages,
+        dictionary! {
+            "Type" => "Pages", "Kids" => Object::Array(vec![page.into()]), "Count" => 1,
+        }
+        .into(),
+    );
+    let catalog = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    if tagged {
+        tag_decimal_fixture(&mut pdf, catalog, page, body_rows);
+    }
+    pdf.trailer.set("Root", catalog);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn tag_decimal_fixture(pdf: &mut lopdf::Document, catalog: lopdf::ObjectId, page: lopdf::ObjectId, body_rows: usize) {
+    use lopdf::{Object, dictionary};
+
+    let root = pdf.new_object_id();
+    let table = pdf.new_object_id();
+    let thead = pdf.new_object_id();
+    let tbody = pdf.new_object_id();
+    let (mut header, mut body) = (Vec::new(), Vec::new());
+    let mut parent_cells = Vec::new();
+    for row in 0..(2 + body_rows) {
+        let row_id = pdf.new_object_id();
+        let cells: Vec<_> = (0..5)
+            .map(|column| {
+                let cell = pdf.add_object(dictionary! {
+                    "Type" => "StructElem", "S" => if row < 2 { "TH" } else { "TD" },
+                    "P" => row_id, "Pg" => page, "K" => (row * 5 + column) as i64,
+                });
+                parent_cells.push(Object::from(cell));
+                Object::from(cell)
+            })
+            .collect();
+        pdf.objects.insert(
+            row_id,
+            dictionary! {
+                "Type" => "StructElem", "S" => "TR", "P" => if row < 2 { thead } else { tbody },
+                "Pg" => page, "K" => Object::Array(cells),
+            }
+            .into(),
+        );
+        let rows = if row < 2 { &mut header } else { &mut body };
+        rows.push(Object::from(row_id));
+    }
+    for (id, kind, rows) in [(thead, "THead", header), (tbody, "TBody", body)] {
+        pdf.objects.insert(
+            id,
+            dictionary! {
+                "Type" => "StructElem", "S" => kind, "P" => table, "Pg" => page, "K" => Object::Array(rows),
+            }
+            .into(),
+        );
+    }
+    pdf.objects.insert(
+        table,
+        dictionary! {
+            "Type" => "StructElem", "S" => "Table", "P" => root, "Pg" => page,
+            "K" => Object::Array(vec![thead.into(), tbody.into()]),
+        }
+        .into(),
+    );
+    let parent_tree = pdf.add_object(dictionary! {
+        "Nums" => Object::Array(vec![0.into(), Object::Array(parent_cells)]),
+    });
+    pdf.objects.insert(
+        root,
+        dictionary! {
+            "Type" => "StructTreeRoot", "K" => table, "ParentTree" => parent_tree, "ParentTreeNextKey" => 1,
+        }
+        .into(),
+    );
+    pdf.get_object_mut(page)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("StructParents", 0);
+    let catalog = pdf.get_object_mut(catalog).unwrap().as_dict_mut().unwrap();
+    catalog.set("StructTreeRoot", root);
+    catalog.set("MarkInfo", dictionary! { "Marked" => true });
+}
+
+#[test]
+fn tagged_unshaded_decimal_leaves_remain_headers_under_uniform_rules() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let pdf = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains("<th>1.0</th>"), "{}", result.content);
+    assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
+}
+
+#[test]
+fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
+    let config = parsebench_html_config();
+    for (centered, token, tag) in [(false, "0.910", "td"), (true, "1.0", "th")] {
+        let first_band = if centered {
+            ["Version", "Build", "1.0", "1.1", "2.0"]
+        } else {
+            ["Latency", "p50", "0.910", "0.850", "0.970"]
+        };
+        let result = extract_bytes_document_blocking(
+            &ruled_decimal_table(
+                first_band,
+                centered,
+                3,
+                if centered {
+                    DecimalHeaderPaint::Shaded
+                } else {
+                    DecimalHeaderPaint::Plain
+                },
+            ),
+            "application/pdf",
+            &config,
+        )
+        .unwrap();
+        assert_eq!(result.tables.len(), 1, "{}", result.content);
+        assert_eq!(result.tables[0].cells.len(), 5);
+        assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+        assert!(
+            result.content.contains(&format!("<{tag}>{token}</{tag}>")),
+            "{}",
+            result.content
+        );
+        assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
+    }
+}
+
+#[test]
+fn centered_decimal_record_remains_body_under_uniform_rules() {
+    let first_band = ["Latency", "p50", "0.9", "0.8", "0.9"];
+    let pdf = ruled_decimal_table(first_band, true, 3, DecimalHeaderPaint::Plain);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], first_band);
+    assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+    assert!(
+        result
+            .content
+            .contains("<tr><td>Latency</td><td>p50</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+        "{}",
+        result.content,
+    );
+    assert!(result.content.contains("<td>0.924</td>"));
+}
+
+#[test]
+fn decimal_header_evidence_rejects_centered_median_record() {
+    let first_band = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    let pdf = ruled_decimal_table(first_band, true, 3, DecimalHeaderPaint::Plain);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], first_band);
+    assert!(
+        result
+            .content
+            .contains("<tr><td>Latency</td><td>Median</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+        "{}",
+        result.content,
+    );
+}
+
+#[test]
+fn decimal_header_evidence_accepts_painted_header_above_one_body_row() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let config = parsebench_html_config();
+    let plain = extract_bytes_document_blocking(
+        &ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Plain),
+        "application/pdf",
+        &config,
+    )
+    .unwrap();
+    let painted = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Shaded);
+    let result = extract_bytes_document_blocking(&painted, "application/pdf", &config).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells.len(), 3);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+    assert!(
+        result
+            .content
+            .contains("<tr><th>Version</th><th>Build</th><th>1.0</th><th>1.1</th><th>2.0</th></tr>"),
+        "{}",
+        result.content,
+    );
+    assert!(result.content.contains("<td>0.924</td>"));
+    assert_eq!(plain.tables.len(), 1);
+    assert_eq!(plain.tables[0].cells, result.tables[0].cells);
+    assert!(plain.content.contains("<td>1.0</td>"), "{}", plain.content);
+}
+
+#[test]
+fn unshaded_decimal_roles_abstain_when_only_typography_and_rules_differ() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let median = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    let config = parsebench_html_config();
+    for (first_band, decoration, decimal, role) in [
+        (median, DecimalHeaderPaint::ContrastingRule, "0.9", "td"),
+        (labels, DecimalHeaderPaint::ContrastingRule, "1.0", "td"),
+        (labels, DecimalHeaderPaint::ContrastingRuleAndBoldLabels, "1.0", "td"),
+    ] {
+        for body_rows in [1, 3] {
+            let bytes = ruled_decimal_table(first_band, true, body_rows, decoration);
+            let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+            assert_eq!(result.tables.len(), 1);
+            assert_eq!(result.tables[0].cells.len(), 2 + body_rows);
+            assert_eq!(result.tables[0].cells[1], first_band);
+            assert!(
+                result.content.contains(&format!("<{role}>{decimal}</{role}>")),
+                "{}",
+                result.content
+            );
+            assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
+        }
+    }
+}
+
+#[test]
+fn bold_centered_median_with_a_contrasting_divider_remains_body() {
+    let record = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    for body_rows in [1, 3] {
+        let pdf = ruled_decimal_table(
+            record,
+            true,
+            body_rows,
+            DecimalHeaderPaint::ContrastingRuleAndBoldLabels,
+        );
+        let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+        assert_eq!(result.tables.len(), 1);
+        assert_eq!(result.tables[0].cells[1], record);
+        assert!(
+            result
+                .content
+                .contains("<tr><td>Latency</td><td>Median</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+            "{}",
+            result.content,
+        );
+    }
+}
+
+#[test]
+fn mixed_font_decimal_cells_are_not_repeated_as_prose() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let pdf = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::ContrastingRuleAndBoldLabels);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert_eq!(
+        result.content.split_once("</table>").unwrap().1.trim(),
+        "",
+        "{}",
+        result.content
+    );
+}
+
+#[test]
+fn identical_decimal_prose_outside_table_remains() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let mut pdf = lopdf::Document::load_mem(&ruled_decimal_table(
+        labels,
+        true,
+        1,
+        DecimalHeaderPaint::ContrastingRuleAndBoldLabels,
+    ))
+    .unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let mut content = pdf.get_page_content(page);
+    content.extend_from_slice(b"\nBT /F1 8 Tf 1 0 0 1 149.44 55 Tm (1.01.12.0) Tj ET\n");
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(content);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(
+        result.content.matches("<p>1.01.12.0</p>").count(),
+        1,
+        "{}",
+        result.content
+    );
+}
+
+#[test]
+fn decimal_header_tags_must_name_the_emitted_source_cells() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let mut pdf = lopdf::Document::load_mem(&ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged)).unwrap();
+    let mut changed = 0;
+    for object in pdf.objects.values_mut() {
+        if let Ok(dict) = object.as_dict_mut()
+            && dict.get(b"S").and_then(lopdf::Object::as_name).ok() == Some(b"TH")
+            && dict.get(b"K").and_then(lopdf::Object::as_i64).ok() == Some(7)
+        {
+            dict.set("K", 8);
+            changed += 1;
+        }
+    }
+    assert_eq!(changed, 1);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains("<td>1.0</td>"), "{}", result.content);
+}
+fn extend_tag_tree(bytes: &[u8], extra_nodes: usize) -> Vec<u8> {
+    use lopdf::{Document, Object, dictionary};
+    let mut pdf = Document::load_mem(bytes).unwrap();
+    let catalog = pdf.trailer.get(b"Root").unwrap().as_reference().unwrap();
+    let root = pdf
+        .get_dictionary(catalog)
+        .unwrap()
+        .get(b"StructTreeRoot")
+        .unwrap()
+        .as_reference()
+        .unwrap();
+    let table = pdf.get_dictionary(root).unwrap().get(b"K").unwrap().clone();
+    let section = pdf.new_object_id();
+    let children = (0..extra_nodes)
+        .map(|_| Object::from(pdf.add_object(dictionary! { "Type" => "StructElem", "S" => "P", "P" => section })))
+        .collect();
+    pdf.objects.insert(
+        section,
+        dictionary! {
+            "Type" => "StructElem", "S" => "Sect", "P" => root, "K" => Object::Array(children),
+        }
+        .into(),
+    );
+    pdf.get_object_mut(root)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("K", Object::Array(vec![table, section.into()]));
+    let mut result = Vec::new();
+    pdf.save_to(&mut result).unwrap();
+    result
+}
+
+#[test]
+fn tagged_header_lookup_abstains_when_unrelated_structure_exhausts_its_budget() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let bare = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged);
+    let config = parsebench_html_config();
+    for (nodes, role) in [(8, "th"), (4096, "td")] {
+        let pdf = extend_tag_tree(&bare, nodes);
+        let result = extract_bytes_document_blocking(&pdf, "application/pdf", &config).unwrap();
+        assert_eq!(result.tables.len(), 1);
+        assert_eq!(result.tables[0].cells[1], labels);
+        assert!(
+            result.content.contains(&format!("<{role}>1.0</{role}>")),
+            "{nodes} nodes: {}",
+            result.content
+        );
+        assert!(result.content.contains("<td>0.924</td>"));
+    }
 }

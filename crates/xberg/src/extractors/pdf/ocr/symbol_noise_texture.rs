@@ -1,6 +1,6 @@
 //! Positive raster evidence for word-shaped OCR noise on repeating backgrounds.
 
-use super::{is_prunable_element, page_is_dominated_by_noise_lines, prune_document_elements, prune_text};
+use super::{is_prunable_element, page_is_dominated_by_noise_lines};
 use crate::pdf::structure::types::PdfParagraph;
 use crate::types::internal::InternalDocument;
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel};
@@ -12,6 +12,9 @@ const MIN_PEERS: usize = 4;
 const SAMPLE_WIDTH: usize = 32;
 const SAMPLE_HEIGHT: usize = 16;
 const MAX_MEAN_DIFFERENCE: u32 = 25;
+const TEXT_BAND_START: usize = 6;
+const TEXT_BAND_END: usize = 10;
+const COLLAR_SAMPLES: u32 = (SAMPLE_WIDTH * (SAMPLE_HEIGHT - (TEXT_BAND_END - TEXT_BAND_START))) as u32;
 const MIN_CONTRAST: u8 = 48;
 const MAX_SCALE_MISMATCH: f64 = 0.01;
 
@@ -120,7 +123,7 @@ fn collar_difference(target: &Sample, peer: &Sample) -> u32 {
         .iter()
         .zip(peer)
         .enumerate()
-        .filter(|(i, _)| !(6..10).contains(&(i / SAMPLE_WIDTH)))
+        .filter(|(i, _)| !(TEXT_BAND_START..TEXT_BAND_END).contains(&(i / SAMPLE_WIDTH)))
         .map(|(_, (&a, &b))| u32::from(a.abs_diff(b)))
         .sum()
 }
@@ -147,6 +150,18 @@ fn best_peer(
         .filter(|(_, pixels)| sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32)
 }
 
+fn collar_agrees(target: &Sample, peer: &Sample) -> bool {
+    collar_difference(target, peer) <= MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES
+}
+
+fn add_distinct_donor(donors: &mut Vec<(BoxInRaster, Sample)>, donor: BoxInRaster, pixels: Sample) -> bool {
+    if donors.len() == MIN_PEERS || donors.iter().any(|(previous, _)| donor.overlaps(*previous)) {
+        return false;
+    }
+    donors.push((donor, pixels));
+    donors.len() == MIN_PEERS
+}
+
 fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iterator<Item = BoxInRaster>) -> bool {
     let Some(window) = target.window(0, 0) else {
         return false;
@@ -160,16 +175,29 @@ fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iter
     if high - low < MIN_CONTRAST {
         return false;
     }
-    let mut distinct = Vec::<(BoxInRaster, Sample)>::with_capacity(MIN_PEERS);
+    let mut whole_window_donors = Vec::with_capacity(MIN_PEERS);
+    let mut collar_donors = Vec::with_capacity(MIN_PEERS);
     for peer in peers {
-        if let Some((donor, pixels)) = best_peer(image, peer, target, &sampled)
-            && !donor.overlaps(window)
-            && distinct.iter().all(|(previous, _)| !donor.overlaps(*previous))
+        let Some((donor, pixels)) = best_peer(image, peer, target, &sampled) else {
+            continue;
+        };
+        if donor.overlaps(window) {
+            continue;
+        }
+        // Keep the original ink veto even when the collar check changes the donor set.
+        if add_distinct_donor(&mut whole_window_donors, donor, pixels)
+            && has_local_residual(&sampled, &whole_window_donors)
         {
-            distinct.push((donor, pixels));
-            if distinct.len() == MIN_PEERS {
-                return !has_local_residual(&sampled, &distinct);
-            }
+            return false;
+        }
+        if collar_agrees(&sampled, &pixels)
+            && add_distinct_donor(&mut collar_donors, donor, pixels)
+            && has_local_residual(&sampled, &collar_donors)
+        {
+            return false;
+        }
+        if whole_window_donors.len() == MIN_PEERS && collar_donors.len() == MIN_PEERS {
+            return true;
         }
     }
     false
@@ -179,7 +207,7 @@ fn has_local_residual(target: &Sample, donors: &[(BoxInRaster, Sample)]) -> bool
     // A localized mark can survive a low whole-window average. Test the OCR box interior
     // against the full donor range so small registration differences do not become ink.
     let mut outside = [false; SAMPLE_WIDTH * SAMPLE_HEIGHT];
-    for y in 6..10 {
+    for y in TEXT_BAND_START..TEXT_BAND_END {
         for x in 3..SAMPLE_WIDTH - 3 {
             let i = y * SAMPLE_WIDTH + x;
             outside[i] = donors
@@ -202,6 +230,11 @@ tokio::task_local! {
 }
 
 #[cfg(test)]
+pub(in crate::extractors::pdf::ocr) fn replay_disabled() -> bool {
+    REPLAY.try_with(Option::is_none).unwrap_or(false)
+}
+
+#[cfg(test)]
 type ReplayTokens = std::sync::Arc<parking_lot::Mutex<Vec<String>>>;
 
 #[cfg(test)]
@@ -211,6 +244,7 @@ mod public_replay;
 pub(in crate::extractors::pdf::ocr) struct Evidence {
     transcript: blake3::Hash,
     occurrences: Vec<Occurrence>,
+    pcb_row: Option<PcbRow>,
 }
 
 struct Occurrence {
@@ -240,7 +274,7 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     remaining_work: &mut usize,
 ) -> Option<Evidence> {
     #[cfg(test)]
-    if REPLAY.try_with(Option::is_none).unwrap_or(false) {
+    if replay_disabled() {
         return None;
     }
     let render = (raster.2, raster.3);
@@ -281,13 +315,22 @@ pub(in crate::extractors::pdf::ocr) fn capture(
         return None;
     }
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
-    let occurrences = find_repeated_lines(&image, &boxes, lines)
-        .into_iter()
-        .filter(|source| source.inside_margins(processed.1, margins))
-        .collect::<Vec<_>>();
-    (!occurrences.is_empty()).then(|| Evidence {
+    let pcb_strip = margins.top == 0.0
+        && margins.bottom == 0.0
+        && super::super::symbol_noise_background::certified_pcb_strip(&image, processed);
+    let pcb_row = pcb_strip
+        .then(|| PcbRow::capture(&read.content, lines.clone()))
+        .flatten();
+    let occurrences = find_repeated_lines(&image, &boxes, lines, |geometry| {
+        pcb_strip && super::super::symbol_noise_background::contains_discrete_pcb_pad(geometry)
+    })
+    .into_iter()
+    .filter(|source| source.inside_margins(processed.1, margins))
+    .collect::<Vec<_>>();
+    (!occurrences.is_empty() || pcb_row.is_some()).then(|| Evidence {
         transcript: blake3::hash(read.content.as_bytes()),
         occurrences,
+        pcb_row,
     })
 }
 
@@ -295,6 +338,7 @@ fn find_repeated_lines<'a>(
     image: &image::RgbImage,
     boxes: &[(&OcrElement, BoxInRaster)],
     lines: impl Iterator<Item = &'a OcrElement> + Clone,
+    certified_pad: impl Fn(&OcrBoundingGeometry) -> bool,
 ) -> Vec<Occurrence> {
     boxes
         .iter()
@@ -302,13 +346,14 @@ fn find_repeated_lines<'a>(
             let text = line.text.trim();
             let unique = lines.clone().filter(|line| line.text.trim() == text).take(2).count() == 1;
             let matched = unique
-                && matching_peers(
-                    image,
-                    target,
-                    boxes
-                        .iter()
-                        .filter_map(|&(other, peer)| (text != other.text.trim() && target.peer(peer)).then_some(peer)),
-                );
+                && (certified_pad(&line.geometry)
+                    || matching_peers(
+                        image,
+                        target,
+                        boxes.iter().filter_map(|&(other, peer)| {
+                            (text != other.text.trim() && target.peer(peer)).then_some(peer)
+                        }),
+                    ));
             #[cfg(test)]
             if REPLAY.try_with(Option::is_some).unwrap_or(false) && matches!(text, "ceeces" | "ccccee") {
                 eprintln!("raster {text}: box={target:?} unique={unique} matched={matched}");
@@ -343,6 +388,13 @@ impl Occurrence {
 }
 
 impl Evidence {
+    pub(in crate::extractors::pdf::ocr) fn reconciled_pcb_row(&self, text: &str, read: &str) -> Option<&PcbRow> {
+        if text != read || blake3::hash(read.as_bytes()) != self.transcript {
+            return None;
+        }
+        self.pcb_row.as_ref()
+    }
+
     pub(in crate::extractors::pdf::ocr) fn reconciled_tokens<'a>(&'a self, text: &str, read: &str) -> Vec<&'a str> {
         // Source geometry is checked before publication filters. If mixed assembly
         // changed the transcript, the original occurrence can no longer authorize removal.
@@ -353,32 +405,100 @@ impl Evidence {
     }
 }
 
+pub(in crate::extractors::pdf::ocr) struct MixedPruningEvidence<'a> {
+    pub candidates: &'a [&'a str],
+    pub retained: Option<&'a str>,
+    pub pcb_row: Option<&'a PcbRow>,
+}
+
+pub(in crate::extractors::pdf::ocr) fn prune_mixed(
+    text: &mut String,
+    mut read: Option<&mut String>,
+    mut paragraphs: Option<&mut Vec<PdfParagraph>>,
+    mut document: Option<&mut InternalDocument>,
+    evidence: MixedPruningEvidence<'_>,
+) -> (usize, usize, usize) {
+    let MixedPruningEvidence {
+        candidates,
+        retained,
+        pcb_row,
+    } = evidence;
+    let planned = candidates
+        .iter()
+        .copied()
+        .filter(|word| {
+            text_owns_token(
+                text,
+                read.as_ref().map(|read| read.as_str()),
+                paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+                word,
+            ) && document.as_ref().is_none_or(|document| {
+                unique_document_owner(document, word).is_some_and(|element| element.annotations.is_empty())
+            })
+        })
+        .collect::<Vec<_>>();
+    let retained = retained.filter(|word| {
+        text_owns_token(
+            text,
+            read.as_ref().map(|read| read.as_str()),
+            paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+            word,
+        )
+    });
+    let pcb_removed = pcb_row.map_or(0, |row| {
+        prune_pcb_row(
+            row,
+            text,
+            read.as_deref_mut(),
+            paragraphs.as_deref_mut(),
+            document.as_deref_mut(),
+        )
+    });
+    let (lines, texture) = prune(text, read, paragraphs, document, &planned, retained);
+    (lines, texture, pcb_removed)
+}
+
 pub(in crate::extractors::pdf::ocr) fn prune(
     text: &mut String,
     read: Option<&mut String>,
     paragraphs: Option<&mut Vec<PdfParagraph>>,
     document: Option<&mut InternalDocument>,
     candidates: &[&str],
+    retained: Option<&str>,
 ) -> (usize, usize) {
-    let owned = |candidate: &str| {
-        unique(text.split_whitespace(), candidate)
-            && read
-                .as_ref()
-                .is_some_and(|read| unique(read.split_whitespace(), candidate))
-            && paragraphs
-                .as_ref()
-                .is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
-            && document
-                .as_ref()
-                .is_none_or(|document| document_owns_token(document, candidate))
+    let owned_text = |candidate: &str| {
+        text_owns_token(
+            text,
+            read.as_ref().map(|read| read.as_str()),
+            paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+            candidate,
+        )
     };
-    // Reconcile against every text surface before changing any of them.
+    let retained = retained.filter(|word| {
+        owned_text(word)
+            && text.lines().any(|line| line.trim() == *word)
+            && paragraphs.as_ref().is_none_or(|paragraphs| {
+                paragraphs
+                    .iter()
+                    .any(|paragraph| paragraph.text.lines().any(|line| line.trim() == *word))
+            })
+            && document.as_ref().is_none_or(|document| {
+                unique_document_owner(document, word)
+                    .is_some_and(|element| element.text.lines().any(|line| line.trim() == *word))
+            })
+    });
     let accepted = candidates
         .iter()
         .copied()
-        .filter(|text| owned(text))
+        .filter(|&word| {
+            Some(word) != retained
+                && owned_text(word)
+                && document.as_ref().is_none_or(|document| {
+                    unique_document_owner(document, word).is_some_and(|element| element.annotations.is_empty())
+                })
+        })
         .collect::<Vec<_>>();
-    let (pruned, removed) = prune_text(text);
+    let (pruned, removed) = super::prune_text_with_retention(text, retained);
     let (pruned, texture_removed) = strip_tokens(&pruned, &accepted);
     #[cfg(test)]
     let _ = REPLAY.try_with(|replay| {
@@ -388,14 +508,14 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     });
     *text = pruned;
     if let Some(read) = read {
-        *read = strip_tokens(&prune_text(read).0, &accepted).0;
+        *read = strip_tokens(&super::prune_text_with_retention(read, retained).0, &accepted).0;
     }
     if let Some(paragraphs) = paragraphs {
-        super::prune_paragraphs(paragraphs);
+        super::prune_paragraphs_with_retention(paragraphs, retained);
         strip_paragraph_tokens(paragraphs, &accepted);
     }
     if let Some(document) = document {
-        prune_document_elements(document);
+        super::prune_document_elements_with_retention(document, retained);
         document.elements.retain_mut(|element| {
             if !is_prunable_element(element) || !element.annotations.is_empty() {
                 return true;
@@ -408,7 +528,15 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     (removed, texture_removed)
 }
 
+#[path = "symbol_noise_pcb_row.rs"]
+mod pcb;
+pub(in crate::extractors::pdf::ocr) use pcb::{PcbRow, prune_pcb_row};
+
 fn strip_tokens(text: &str, accepted: &[&str]) -> (String, usize) {
+    strip_matching_tokens(text, |token| accepted.contains(&token))
+}
+
+fn strip_matching_tokens(text: &str, mut matches: impl FnMut(&str) -> bool) -> (String, usize) {
     let mut kept = String::with_capacity(text.len());
     let mut removed = 0;
     for line in text.split_inclusive('\n') {
@@ -419,7 +547,7 @@ fn strip_tokens(text: &str, accepted: &[&str]) -> (String, usize) {
         for token in line.split_whitespace() {
             let offset = token.as_ptr() as usize - line.as_ptr() as usize;
             let end = offset + token.len();
-            let remove = accepted.contains(&token);
+            let remove = matches(token);
             if remove {
                 kept.push_str(&line[copy_from..previous_end]);
                 copy_from = end;
@@ -446,6 +574,12 @@ fn unique<'a>(tokens: impl Iterator<Item = &'a str>, candidate: &str) -> bool {
     tokens.filter(|&token| token == candidate).take(2).count() == 1
 }
 
+fn text_owns_token(text: &str, read: Option<&str>, paragraphs: Option<&[PdfParagraph]>, candidate: &str) -> bool {
+    unique(text.split_whitespace(), candidate)
+        && read.is_none_or(|read| unique(read.split_whitespace(), candidate))
+        && paragraphs.is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
+}
+
 fn unique_paragraph_token(paragraphs: &[PdfParagraph], candidate: &str) -> bool {
     let mut owners = paragraphs.iter().filter(|paragraph| {
         paragraph.text.split_whitespace().any(|token| token == candidate)
@@ -467,16 +601,17 @@ fn paragraph_segments(paragraph: &PdfParagraph) -> impl Iterator<Item = &str> {
         .flat_map(|segment| segment.text.split_whitespace())
 }
 
-fn document_owns_token(document: &InternalDocument, candidate: &str) -> bool {
+fn unique_document_owner<'a>(
+    document: &'a InternalDocument,
+    candidate: &str,
+) -> Option<&'a crate::types::internal::InternalElement> {
     let mut owners = document
         .elements
         .iter()
         .filter(|element| element.text.split_whitespace().any(|token| token == candidate));
-    owners.next().is_some_and(|element| {
-        is_prunable_element(element)
-            && element.annotations.is_empty()
-            && unique(element.text.split_whitespace(), candidate)
-    }) && owners.next().is_none()
+    let owner = owners.next()?;
+    (owners.next().is_none() && is_prunable_element(owner) && unique(owner.text.split_whitespace(), candidate))
+        .then_some(owner)
 }
 
 fn strip_paragraph_tokens(paragraphs: &mut Vec<PdfParagraph>, accepted: &[&str]) {
@@ -544,9 +679,46 @@ mod tests {
     fn unique_noise_token_is_removed_from_a_joined_read() {
         let mut output = format!("{FAINT_WORD} ccccee Nina");
         let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-        assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 1));
+        assert_eq!(
+            prune(&mut output, Some(&mut read), None, None, &["ccccee"], None),
+            (0, 1)
+        );
         assert_eq!(output, format!("{FAINT_WORD} Nina"));
         assert_eq!(read, format!("{FAINT_WORD}\nNina"));
+    }
+
+    #[test]
+    fn mixed_pruning_preserves_annotated_cas_and_remaps_its_span() {
+        use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+        use crate::types::internal::{ElementKind, InternalElement};
+
+        let mut text = String::from("oe\nCAS\nSECTION TITLE");
+        let mut read = text.clone();
+        let mut document = InternalDocument::new("pdf");
+        let mut element = InternalElement::text(ElementKind::Paragraph, &text, 0);
+        element.annotations.push(TextAnnotation {
+            start: 3,
+            end: 6,
+            kind: AnnotationKind::Bold,
+        });
+        document.elements.push(element);
+        assert_eq!(
+            prune(
+                &mut text,
+                Some(&mut read),
+                None,
+                Some(&mut document),
+                &["CAS"],
+                Some("CAS")
+            ),
+            (1, 0)
+        );
+        assert_eq!(text, "CAS\nSECTION TITLE");
+        assert_eq!(read, text);
+        assert_eq!(document.elements[0].text, text);
+        let annotation = &document.elements[0].annotations[0];
+        assert_eq!((annotation.start, annotation.end), (0, 3));
+        assert!(matches!(annotation.kind, AnnotationKind::Bold));
     }
 
     #[test]
@@ -557,7 +729,10 @@ mod tests {
         ] {
             let mut output = input.to_owned();
             let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-            assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 0));
+            assert_eq!(
+                prune(&mut output, Some(&mut read), None, None, &["ccccee"], None),
+                (0, 0)
+            );
             assert_eq!(output, input);
             assert_eq!(read, format!("{FAINT_WORD}\nccccee\nNina"));
         }
@@ -578,6 +753,72 @@ pub(in crate::extractors::pdf::ocr) fn warning(page: u32, removed: usize) -> cra
 #[cfg(test)]
 mod revision_tests {
     use super::*;
+
+    #[test]
+    fn similar_glyph_band_does_not_compensate_for_a_different_collar() {
+        let target = [100; SAMPLE_WIDTH * SAMPLE_HEIGHT];
+        let rect = BoxInRaster {
+            x: 50,
+            y: 45,
+            width: 72,
+            height: 8,
+        };
+        let window = rect.window(0, 0).unwrap();
+        let image = image::RgbImage::from_fn(140, 100, |_, y| {
+            let tone = if (window.y + 15..window.y + 25).contains(&y) {
+                100
+            } else {
+                132
+            };
+            image::Rgb([tone; 3])
+        });
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let peer = sample(&image, rect.window(dx, dy).unwrap()).expect("registered peer fits the raster");
+                assert!(sample_difference(&target, &peer) <= MAX_MEAN_DIFFERENCE * target.len() as u32);
+                assert!(collar_difference(&target, &peer) > MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES);
+            }
+        }
+        let (_, peer) = best_peer(&image, rect, rect, &target).expect("whole-window match");
+        assert!(!collar_agrees(&target, &peer));
+    }
+
+    #[test]
+    fn collar_filter_preserves_the_original_four_donor_ink_veto() {
+        let rect = |index: u32| BoxInRaster {
+            x: 20 + 100 * index,
+            y: 45,
+            width: 72,
+            height: 8,
+        };
+        let target = rect(0);
+        let peers = [rect(1), rect(2), rect(3), rect(4), rect(5)];
+        let raster = image::RgbImage::from_fn(620, 100, |x, y| {
+            let region = x / 100;
+            let column = x % 100;
+            let background = if column < 55 { 100 } else { 170 };
+            let tone = if region == 1 && !(39..50).contains(&y) {
+                background + 32
+            } else if matches!(region, 0 | 5) && (25..42).contains(&column) && (40..50).contains(&y) {
+                140
+            } else {
+                background
+            };
+            image::Rgb([tone; 3])
+        });
+        let target_pixels = sample(&raster, target.window(0, 0).unwrap()).unwrap();
+        let donors = peers.map(|peer| best_peer(&raster, peer, target, &target_pixels).unwrap());
+        assert!(!collar_agrees(&target_pixels, &donors[0].1));
+        assert!(
+            donors[1..]
+                .iter()
+                .all(|(_, pixels)| collar_agrees(&target_pixels, pixels))
+        );
+        assert!(has_local_residual(&target_pixels, &donors[..4]));
+        assert!(!has_local_residual(&target_pixels, &donors[1..]));
+        assert!(matching_peers(&raster, target, peers[1..].iter().copied()));
+        assert!(!matching_peers(&raster, target, peers.into_iter()));
+    }
 
     #[test]
     fn localized_faint_ink_vetoes_same_pad_texture_match() {
@@ -623,6 +864,7 @@ mod revision_tests {
         let evidence = Evidence {
             transcript: blake3::hash(text.as_bytes()),
             occurrences: vec![occurrence],
+            pcb_row: None,
         };
         assert!(evidence.reconciled_tokens("genuine text ccccee", text).is_empty());
         assert!(evidence.reconciled_tokens("ccccee", "ccccee").is_empty());

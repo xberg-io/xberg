@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::cancellation::check_cancelled;
 use crate::core::config::OcrConfig;
 use crate::plugins::OcrBackend;
 use crate::types::ExtractedDocument;
@@ -185,13 +186,6 @@ where
     Ok(document)
 }
 
-fn check_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
-}
-
 async fn key(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey> {
     if identity.whole_page_raster
         || observer_active()
@@ -242,18 +236,20 @@ async fn key(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>, bytes: Arc<Ve
 }
 
 fn observer_active() -> bool {
-    if !crate::core::extractor::cacheability::is_cacheable()
+    !crate::core::extractor::cacheability::is_cacheable()
         || crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested().is_some()
-    {
-        return true;
-    }
-    #[cfg(auto_rotate)]
-    if crate::ocr::tesseract_backend::orientation_evidence::CAPTURE
+        || orientation_capture_active()
+}
+
+#[cfg(auto_rotate)]
+fn orientation_capture_active() -> bool {
+    crate::ocr::tesseract_backend::orientation_evidence::CAPTURE
         .try_with(|_| ())
         .is_ok()
-    {
-        return true;
-    }
+}
+
+#[cfg(not(auto_rotate))]
+fn orientation_capture_active() -> bool {
     false
 }
 

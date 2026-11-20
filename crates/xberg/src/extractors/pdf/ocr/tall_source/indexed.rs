@@ -21,6 +21,7 @@ pub(super) struct IndexedSource {
     pub(super) dpi: f64,
     pub(super) frame: Rect,
     pub(super) painted_height: f64,
+    pub(super) painted_width: f64,
     indices: Vec<u8>,
     palette: [u8; PALETTE_BYTES],
     available: usize,
@@ -113,59 +114,121 @@ fn palette(source: &PdfDocument, resources: &Object, color: &Object, available: 
     }
 }
 
+pub(super) fn is_indexed_rgb_scan(attempt: &super::Attempt<'_>) -> bool {
+    indexed_image(attempt, None)
+        .and_then(|image| image.admit_palette(attempt.document))
+        .is_some()
+}
+
+struct IndexedImage {
+    frame: Rect,
+    painted_height: f64,
+    painted_width: f64,
+    available: usize,
+    dict: std::collections::HashMap<String, Object>,
+    data: bytes::Bytes,
+    resources: Object,
+    pixels: usize,
+    width: u32,
+    height: u32,
+    dpi: f64,
+}
+
+fn indexed_image(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<IndexedImage> {
+    let (raster_w, raster_h, raster_png) = attempt.raster?;
+    let raster = (raster_w as usize)
+        .checked_mul(raster_h as usize)?
+        .checked_mul(4)?
+        .checked_add(raster_png)?;
+    let available = attempt.byte_limit.checked_sub(raster)?.checked_sub(FIXED_WORK_BYTES)?;
+    let (frame, contents) = page_frame_and_contents(attempt.document, attempt.page)?;
+    let Object::Stream { dict, data } = contents else {
+        return None;
+    };
+    if dict.contains_key("DecodeParms") {
+        return None;
+    }
+    let paint = decode_probe_stream(&data, stream_filters(dict.get("Filter"))?, 4096, available)?;
+    let (name, painted_w, painted_height) = image_placement(&paint, frame)?;
+    let resources = attempt.document.get_page_resources(attempt.page).ok()?;
+    let xobjects = attempt
+        .document
+        .resolve_object(resources.as_dict()?.get("XObject")?)
+        .ok()?;
+    let Object::Stream { dict, data } = attempt.document.resolve_object(xobjects.as_dict()?.get(&name)?).ok()? else {
+        return None;
+    };
+    if dict.get("Subtype")?.as_name()? != "Image"
+        || dict.get("BitsPerComponent")?.as_integer()? != 8
+        || !matches!(stream_filters(dict.get("Filter")), Some(StreamFilters::Flate))
+        || [
+            "Mask",
+            "SMask",
+            "SMaskInData",
+            "Decode",
+            "DecodeParms",
+            "ImageMask",
+            "Alternates",
+            "OC",
+        ]
+        .iter()
+        .any(|key| dict.contains_key(*key))
+    {
+        return None;
+    }
+    let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
+    let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    if width > MAX_TILE_SIDE
+        || height <= MAX_TILE_SIDE
+        || pixels > MAX_SOURCE_PIXELS
+        || width <= selected_width.unwrap_or(raster_w)
+    {
+        return None;
+    }
+    let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
+    let available = available.checked_sub(data.len())?.checked_sub(pixels.checked_add(1)?)?;
+    Some(IndexedImage {
+        frame,
+        painted_height,
+        painted_width: painted_w,
+        available,
+        dict,
+        data,
+        resources,
+        pixels,
+        width,
+        height,
+        dpi,
+    })
+}
+
+impl IndexedImage {
+    fn admit_palette(&self, document: &PdfDocument) -> Option<[u8; PALETTE_BYTES]> {
+        palette(document, &self.resources, self.dict.get("ColorSpace")?, self.available)
+    }
+}
+
 impl IndexedSource {
     pub(super) fn load(attempt: &super::Attempt<'_>) -> Option<Self> {
-        let (raster_w, raster_h, raster_png) = attempt.raster?;
-        let raster = (raster_w as usize)
-            .checked_mul(raster_h as usize)?
-            .checked_mul(4)?
-            .checked_add(raster_png)?;
-        let available = attempt.byte_limit.checked_sub(raster)?.checked_sub(FIXED_WORK_BYTES)?;
-        let (frame, contents) = page_frame_and_contents(attempt.document, attempt.page)?;
-        let Object::Stream { dict, data } = contents else {
-            return None;
-        };
-        if dict.contains_key("DecodeParms") {
-            return None;
-        }
-        let paint = decode_probe_stream(&data, stream_filters(dict.get("Filter"))?, 4096, available)?;
-        let (name, painted_w, painted_height) = image_placement(&paint, frame)?;
-        let resources = attempt.document.get_page_resources(attempt.page).ok()?;
-        let xobjects = attempt
-            .document
-            .resolve_object(resources.as_dict()?.get("XObject")?)
-            .ok()?;
-        let Object::Stream { dict, data } = attempt.document.resolve_object(xobjects.as_dict()?.get(&name)?).ok()?
-        else {
-            return None;
-        };
-        if dict.get("Subtype")?.as_name()? != "Image"
-            || dict.get("BitsPerComponent")?.as_integer()? != 8
-            || !matches!(stream_filters(dict.get("Filter")), Some(StreamFilters::Flate))
-            || [
-                "Mask",
-                "SMask",
-                "SMaskInData",
-                "Decode",
-                "DecodeParms",
-                "ImageMask",
-                "Alternates",
-                "OC",
-            ]
-            .iter()
-            .any(|key| dict.contains_key(*key))
-        {
-            return None;
-        }
-        let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
-        let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
-        let pixels = (width as usize).checked_mul(height as usize)?;
-        if width > MAX_TILE_SIDE || height <= MAX_TILE_SIDE || pixels > MAX_SOURCE_PIXELS || width <= raster_w {
-            return None;
-        }
-        let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
-        let available = available.checked_sub(data.len())?.checked_sub(pixels.checked_add(1)?)?;
-        let palette = palette(attempt.document, &resources, dict.get("ColorSpace")?, available)?;
+        Self::load_with_selected_width(attempt, None)
+    }
+
+    pub(super) fn load_with_selected_width(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<Self> {
+        let image = indexed_image(attempt, selected_width)?;
+        let palette = image.admit_palette(attempt.document)?;
+        let IndexedImage {
+            frame,
+            painted_height,
+            painted_width,
+            available,
+            data,
+            pixels,
+            width,
+            height,
+            dpi,
+            ..
+        } = image;
         let indices = decode_exact_flate(&data, pixels)?;
         let available = available.checked_sub(indices.capacity().saturating_sub(pixels + 1))?;
         let source = Self {
@@ -174,6 +237,7 @@ impl IndexedSource {
             dpi,
             frame,
             painted_height,
+            painted_width,
             indices,
             palette,
             available,
@@ -350,6 +414,365 @@ impl IndexedSource {
         })
     }
 
+    pub(super) fn native_bounds(
+        &self,
+        raster: (u32, u32),
+        bbox: [u32; 4],
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        let [left, top, right, bottom] = bbox;
+        if left >= right || top >= bottom || right > raster.0 || bottom > raster.1 {
+            return None;
+        }
+        let x = |value| {
+            f64::from(value) / f64::from(raster.0) * f64::from(self.frame.width) / self.painted_width
+                * f64::from(self.width)
+        };
+        let coordinates = [
+            x(left).floor(),
+            self.source_y(top, raster.1)?.floor(),
+            x(right).ceil(),
+            self.source_y(bottom, raster.1)?.ceil(),
+        ];
+        if coordinates.iter().any(|value| !value.is_finite() || *value < 0.0)
+            || coordinates[2] > f64::from(self.width)
+            || coordinates[3] > f64::from(self.height)
+        {
+            return None;
+        }
+        let [left, top, right, bottom] = coordinates.map(|value| value as u32);
+        Some(super::region_reconciliation::RegionBox {
+            left,
+            top,
+            right,
+            bottom,
+        })
+    }
+
+    pub(super) fn line_ink_components(
+        &self,
+        bounds: super::region_reconciliation::RegionBox,
+    ) -> Option<Vec<Range<u32>>> {
+        const MAX_SCAN_PIXELS: u32 = 64 * 1024;
+        const BRIDGE: u32 = 2;
+        let width = bounds.right.checked_sub(bounds.left)?;
+        let height = bounds.bottom.checked_sub(bounds.top)?;
+        if width == 0
+            || height == 0
+            || bounds.right > self.width
+            || bounds.bottom > self.height
+            || width.checked_mul(height)? > MAX_SCAN_PIXELS
+        {
+            return None;
+        }
+
+        let mut components: Vec<Range<u32>> = Vec::new();
+        for x in bounds.left..bounds.right {
+            if !self
+                .rows(bounds.top..bounds.bottom)
+                .any(|row| self.sample_has_ink(row[x as usize]))
+            {
+                continue;
+            }
+            if let Some(last) = components.last_mut()
+                && x - last.end <= BRIDGE
+            {
+                last.end = x + 1;
+            } else {
+                components.push(x..x + 1);
+            }
+        }
+        Some(components)
+    }
+
+    pub(super) fn source_line_column(
+        &self,
+        region: super::region_reconciliation::RegionBox,
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        use super::region_reconciliation::RegionBox;
+        let gutter_width = region.bottom.checked_sub(region.top)?.checked_mul(2)?.max(12);
+        let scan = RegionBox {
+            left: 0,
+            right: self.width,
+            top: region.top,
+            bottom: region.bottom,
+        };
+        let components = self.line_ink_components(scan)?;
+        let mut left = 0;
+        let mut right = self.width;
+        let mut previous = 0;
+        for next in components
+            .iter()
+            .map(|ink| ink.start)
+            .chain(std::iter::once(self.width))
+            .zip(components.iter().map(|ink| ink.end).chain(std::iter::once(self.width)))
+        {
+            let (start, end) = next;
+            if start - previous >= gutter_width {
+                let center = previous + (start - previous) / 2;
+                if region.left < center && center < region.right {
+                    return None;
+                }
+                if center <= region.left {
+                    left = center;
+                }
+                if center >= region.right {
+                    right = right.min(center);
+                }
+            }
+            previous = end;
+        }
+        let column = RegionBox { left, right, ..scan };
+        (column.contains(region) && (left != 0 || right != self.width)).then_some(column)
+    }
+
+    fn sample_has_ink(&self, sample: u8) -> bool {
+        const INK_THRESHOLD: u8 = 224;
+        let offset = usize::from(sample) * 3;
+        self.palette[offset..offset + 3]
+            .iter()
+            .any(|&channel| channel < INK_THRESHOLD)
+    }
+
+    pub(super) fn has_panel_gutter(&self, bounds: super::region_reconciliation::RegionBox) -> bool {
+        const MAX_SCAN: u32 = 256 * 1024;
+        const MIN_GUTTER: u32 = 16;
+        if bounds.right > self.width
+            || bounds.bottom > self.height
+            || bounds.top >= bounds.bottom
+            || bounds.left >= bounds.right
+            || (bounds.right - bounds.left).saturating_mul(bounds.bottom - bounds.top) > MAX_SCAN
+        {
+            return false;
+        }
+        let mut white_columns = 0;
+        for x in bounds.left..bounds.right {
+            if self
+                .rows(bounds.top..bounds.bottom)
+                .all(|row| self.white(row[x as usize]))
+            {
+                white_columns += 1;
+                if white_columns >= MIN_GUTTER {
+                    return true;
+                }
+            } else {
+                white_columns = 0;
+            }
+        }
+        false
+    }
+
+    pub(super) fn panel_gap_label(
+        &self,
+        rows: Range<u32>,
+    ) -> Option<(
+        super::region_reconciliation::RegionBox,
+        super::region_reconciliation::RegionBox,
+    )> {
+        use super::region_reconciliation::RegionBox;
+        const MAX_GAP_PIXELS: u32 = 3 * 1024 * 1024;
+        const CONTRAST: u8 = 8;
+        if rows.end > self.height || self.width.checked_mul(rows.end.checked_sub(rows.start)?)? > MAX_GAP_PIXELS {
+            return None;
+        }
+        let tone = |sample: u8| {
+            let offset = usize::from(sample) * 3;
+            *self.palette[offset..offset + 3].iter().max().unwrap()
+        };
+        let mut panel: Option<RegionBox> = None;
+        for (offset, row) in self.rows(rows.clone()).enumerate() {
+            let y = rows.start + offset as u32;
+            let Some(left) = row.iter().position(|&sample| self.sample_has_ink(sample)) else {
+                continue;
+            };
+            let right = row.iter().rposition(|&sample| self.sample_has_ink(sample))? + 1;
+            if left == 0
+                || right == row.len()
+                || y == rows.start
+                || y + 1 == rows.end
+                || !row[left..right].iter().all(|&sample| tone(sample) <= 128)
+            {
+                return None;
+            }
+            if let Some(panel) = &mut panel {
+                if (panel.left, panel.right, panel.bottom) != (left as u32, right as u32, y) {
+                    return None;
+                }
+                panel.bottom += 1;
+            } else {
+                panel = Some(RegionBox {
+                    left: left as u32,
+                    right: right as u32,
+                    top: y,
+                    bottom: y + 1,
+                });
+            }
+        }
+        let panel = panel?;
+        let panel_rows = self.rows(panel.top..panel.bottom);
+        let mut background = u8::MAX;
+        let slice = panel.left as usize..panel.right as usize;
+        for (i, row) in panel_rows.enumerate() {
+            let row = &row[slice.clone()];
+            let border = if i == 0 || i + 1 == (panel.bottom - panel.top) as usize {
+                row.iter().copied().map(tone).min()?
+            } else {
+                tone(row[0]).min(tone(*row.last()?))
+            };
+            background = background.min(border);
+        }
+        let threshold = background.checked_sub(CONTRAST)?;
+        let mut label: Option<RegionBox> = None;
+        for (i, row) in self.rows(panel.top..panel.bottom).enumerate() {
+            let y = panel.top + i as u32;
+            let row = &row[slice.clone()];
+            let mut ink = row.iter().enumerate().filter(|&(_, sample)| tone(*sample) <= threshold);
+            let Some((left, _)) = ink.next() else { continue };
+            let right = ink.next_back().map_or(left, |(right, _)| right) + 1;
+            let (left, right) = (panel.left + left as u32, panel.left + right as u32);
+            label = Some(match label {
+                Some(prior) if y == prior.bottom => RegionBox {
+                    left: prior.left.min(left),
+                    right: prior.right.max(right),
+                    bottom: y + 1,
+                    ..prior
+                },
+                Some(_) => return None,
+                None => RegionBox {
+                    left,
+                    right,
+                    top: y,
+                    bottom: y + 1,
+                },
+            });
+        }
+        let label = label?;
+        (label.left > panel.left && label.right < panel.right && label.top > panel.top && label.bottom < panel.bottom)
+            .then_some((label, panel))
+    }
+
+    pub(super) fn select_full_line_crop(
+        &self,
+        stock: super::region_reconciliation::RegionBox,
+        protected: &[super::region_reconciliation::RegionBox],
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        use super::region_reconciliation::{RegionBox, select_full_line_crop};
+        let frame = RegionBox {
+            left: 0,
+            top: 0,
+            right: self.width,
+            bottom: self.height,
+        };
+        select_full_line_crop(frame, stock, protected, |x, y| {
+            self.sample_has_ink(self.indices[y as usize * self.width as usize + x as usize])
+        })
+    }
+
+    pub(super) fn line_ink_fully_covered(
+        &self,
+        region: super::region_reconciliation::RegionBox,
+        boxes: &[super::region_reconciliation::RegionBox],
+    ) -> bool {
+        const MAX_SCAN_PIXELS: u32 = 64 * 1024;
+        if region.left >= region.right
+            || region.top >= region.bottom
+            || region.right > self.width
+            || region.bottom > self.height
+            || (region.right - region.left)
+                .checked_mul(region.bottom - region.top)
+                .is_none_or(|pixels| pixels > MAX_SCAN_PIXELS)
+        {
+            return false;
+        }
+        let mut found = false;
+        for y in region.top..region.bottom {
+            let row_start = y as usize * self.width as usize;
+            for x in region.left..region.right {
+                if !self.sample_has_ink(self.indices[row_start + x as usize]) {
+                    continue;
+                }
+                if !boxes
+                    .iter()
+                    .any(|bounds| bounds.left <= x && x < bounds.right && bounds.top <= y && y < bounds.bottom)
+                {
+                    return false;
+                }
+                found = true;
+            }
+        }
+        found
+    }
+
+    pub(super) fn certify_line_ink(
+        &self,
+        hull: super::region_reconciliation::RegionBox,
+        column: super::region_reconciliation::RegionBox,
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        const COLLAR: u32 = 4;
+        let frame = super::region_reconciliation::RegionBox {
+            left: 0,
+            top: 0,
+            right: self.width,
+            bottom: self.height,
+        };
+        if !column.contains(hull)
+            || !frame.contains(column)
+            || (hull.right - hull.left).checked_mul(hull.bottom - hull.top)? > 64 * 1024
+        {
+            return None;
+        }
+        let mut found_ink = false;
+        for y in hull.top.checked_sub(COLLAR)?..hull.bottom.checked_add(COLLAR)? {
+            let left = hull.left.checked_sub(COLLAR)?;
+            let right = hull.right.checked_add(COLLAR)?;
+            if y >= self.height || right > self.width {
+                return None;
+            }
+            let row_start = y as usize * self.width as usize;
+            for x in left..right {
+                if self.sample_has_ink(self.indices[row_start + x as usize]) {
+                    if x < hull.left || x >= hull.right || y < hull.top || y >= hull.bottom {
+                        return None;
+                    }
+                    found_ink = true;
+                }
+            }
+        }
+        found_ink.then_some(hull)
+    }
+
+    pub(super) fn encode_region(&self, region: super::region_reconciliation::RegionBox, pad: u32) -> Option<Vec<u8>> {
+        let width = region.right.checked_sub(region.left)?;
+        let height = region.bottom.checked_sub(region.top)?;
+        if width == 0 || height == 0 || region.right > self.width || region.bottom > self.height {
+            return None;
+        }
+        let margin = pad.checked_mul(2)?;
+        let padded_width = width.checked_add(margin)?;
+        let padded_height = height.checked_add(margin)?;
+        let pixels = (padded_width as usize).checked_mul(padded_height as usize)?;
+        let working = pixels.checked_mul(TILE_BYTES_PER_PIXEL)?;
+        if padded_width > MAX_TILE_SIDE || padded_height > MAX_TILE_SIDE || working > self.available {
+            return None;
+        }
+        let mut rgb = Vec::new();
+        let rgb_len = pixels.checked_mul(3)?;
+        rgb.try_reserve_exact(rgb_len).ok()?;
+        rgb.resize(rgb_len, 255);
+        for (y, row) in self.rows(region.top..region.bottom).enumerate() {
+            let start = ((y + pad as usize) * padded_width as usize + pad as usize) * 3;
+            for (x, &sample) in row[region.left as usize..region.right as usize].iter().enumerate() {
+                let palette_offset = usize::from(sample) * 3;
+                let dest = start + x * 3;
+                rgb[dest..dest + 3].copy_from_slice(&self.palette[palette_offset..palette_offset + 3]);
+            }
+        }
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&rgb, padded_width, padded_height, image::ExtendedColorType::Rgb8)
+            .ok()?;
+        (working.checked_add(png.capacity())? <= self.available).then_some(png)
+    }
+
     pub(super) fn encode(&self, rows: Range<u32>) -> Option<Vec<u8>> {
         let height = rows.end.checked_sub(rows.start)?;
         if rows.end > self.height || height == 0 || height as usize > self.max_tile_rows() {
@@ -395,6 +818,124 @@ fn ink_bands<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agreed_collapsed_reads_cannot_omit_source_ink_at_an_edge() {
+        use super::super::{
+            region_probe::{RegionWord, collapsed_read_covers_ink},
+            region_reconciliation::RegionBox,
+        };
+        let mut palette = [255; PALETTE_BYTES];
+        palette[..3].fill(0);
+        let mut indices = vec![1; 32 * 16];
+        for y in 5..11 {
+            indices[y * 32 + 4..y * 32 + 11].fill(0);
+            indices[y * 32 + 15..y * 32 + 24].fill(0);
+        }
+        let source = IndexedSource {
+            width: 32,
+            height: 16,
+            dpi: 72.0,
+            frame: Rect::new(0.0, 0.0, 32.0, 16.0),
+            painted_height: 16.0,
+            painted_width: 32.0,
+            indices,
+            palette,
+            available: FIXED_WORK_BYTES,
+        };
+        let region = RegionBox {
+            left: 3,
+            top: 4,
+            right: 25,
+            bottom: 12,
+        };
+        let read = |left, top| {
+            [
+                RegionWord {
+                    text: "First".into(),
+                    confidence: 99.0,
+                    bounds: RegionBox {
+                        left,
+                        top,
+                        right: 11,
+                        bottom: 11,
+                    },
+                },
+                RegionWord {
+                    text: "Second".into(),
+                    confidence: 99.0,
+                    bounds: RegionBox {
+                        left: 15,
+                        top: 5,
+                        right: 24,
+                        bottom: 11,
+                    },
+                },
+            ]
+        };
+        for words in [read(5, 6), read(5, 6)] {
+            assert!(collapsed_read_covers_ink(&source, region, &words));
+        }
+        for words in [read(10, 5), read(10, 5), read(4, 8)] {
+            assert!(!collapsed_read_covers_ink(&source, region, &words));
+        }
+    }
+
+    #[test]
+    fn owned_gap_scan_rejects_same_height_sidebar_panel() {
+        use super::super::{region_probe::owned_gap_crop, region_reconciliation::RegionBox};
+        let width = 240;
+        let height = 160;
+        let anchors = [
+            RegionBox {
+                left: 36,
+                right: 68,
+                top: 12,
+                bottom: 24,
+            },
+            RegionBox {
+                left: 37,
+                right: 69,
+                top: 126,
+                bottom: 138,
+            },
+        ];
+        let make_source = |panel_left: u32| {
+            let mut palette = [255; PALETTE_BYTES];
+            palette[3..6].fill(64);
+            palette[6..9].fill(0);
+            let mut indices = vec![0; (width * height) as usize];
+            for y in 32..120 {
+                let row = (y * width + panel_left) as usize;
+                indices[row..row + 96].fill(1);
+            }
+            for y in 62..70 {
+                let row = (y * width + panel_left + 30) as usize;
+                indices[row..row + 24].fill(2);
+            }
+            IndexedSource {
+                width,
+                height,
+                dpi: 72.0,
+                frame: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: width as _,
+                    height: height as _,
+                },
+                painted_height: f64::from(height),
+                painted_width: f64::from(width),
+                indices,
+                palette,
+                available: 4 * 1024 * 1024,
+            }
+        };
+        let sidebar = make_source(124);
+        assert!(sidebar.panel_gap_label(24..126).is_some());
+        assert!(owned_gap_crop(&sidebar, 24..126, anchors).is_none());
+        let aligned = make_source(28);
+        assert!(owned_gap_crop(&aligned, 24..126, anchors).is_some());
+    }
 
     const SCAN_WIDTH: usize = 4;
     const SCAN_HEIGHT: usize = 4100;
@@ -541,6 +1082,31 @@ mod tests {
     }
 
     #[test]
+    fn indexed_stream_palette_requires_budget_after_reserving_source_indices() {
+        let mut document = filtered_scan(singleton_flate(), false);
+        wrap_content_and_palette(&mut document);
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).unwrap();
+        let document = PdfDocument::from_bytes(bytes).unwrap();
+        let mut attempt = super::super::Attempt {
+            document: &document,
+            page: 0,
+            raster: Some((1, 100, 0)),
+            read_width: Some(1),
+            byte_limit: 8 * FIXED_WORK_BYTES,
+            max_strips: 4,
+            cancel: None,
+        };
+        let image = indexed_image(&attempt, None).expect("single supported indexed frame");
+        assert!(IndexedSource::load(&attempt).is_some());
+        assert!(is_indexed_rgb_scan(&attempt));
+        attempt.byte_limit -= image.available;
+        assert_eq!(indexed_image(&attempt, None).unwrap().available, 0);
+        assert!(IndexedSource::load(&attempt).is_none());
+        assert!(!is_indexed_rgb_scan(&attempt));
+    }
+
+    #[test]
     fn should_decode_singleton_flate_in_content_and_palette_like_the_scalar_form() {
         let scalar = load_filtered_scan(lopdf::Object::Name(b"FlateDecode".to_vec()), false).unwrap();
         let mut document = filtered_scan(singleton_flate(), false);
@@ -621,6 +1187,46 @@ mod tests {
         assert!(placement_fits(frame, (100, 1000), (100.01, 998.9)).is_none());
     }
     #[test]
+    fn heading_planner_rejects_native_gutter_after_same_line_admission() {
+        use super::super::{
+            region_probe::{discover_isolated_headings, same_line},
+            region_reconciliation::RegionBox,
+        };
+        let word = |left| RegionBox {
+            left,
+            right: left + 10,
+            top: 10,
+            bottom: 20,
+        };
+        let plan = |second| {
+            let words = [word(20), word(second)];
+            assert!(same_line(words[0], words[1]));
+            let mut palette = [255; PALETTE_BYTES];
+            palette[..3].fill(0);
+            let mut indices = vec![1; 100 * 30];
+            for y in 10..20 {
+                for word in words {
+                    indices[y * 100 + word.left as usize..y * 100 + word.right as usize].fill(0);
+                }
+            }
+            let source = IndexedSource {
+                width: 100,
+                height: 30,
+                dpi: 72.0,
+                frame: Rect::new(0.0, 0.0, 100.0, 30.0),
+                painted_height: 30.0,
+                painted_width: 100.0,
+                indices,
+                palette,
+                available: FIXED_WORK_BYTES,
+            };
+            discover_isolated_headings(&source, &words, 2).unwrap()
+        };
+        assert_eq!(plan(36).len(), 1);
+        assert!(plan(54).is_empty());
+    }
+
+    #[test]
     fn clipped_edge_must_be_white_even_if_placement_is_subpixel() {
         let mut palette = [255; PALETTE_BYTES];
         palette[..3].fill(0);
@@ -630,6 +1236,7 @@ mod tests {
             dpi: 72.0,
             frame: Rect::new(0.0, 0.0, 3.0, 3.0),
             painted_height: 3.0,
+            painted_width: 3.0,
             indices: vec![1, 1, 1, 1, 0, 1, 1, 1, 1],
             palette,
             available: FIXED_WORK_BYTES,
@@ -646,6 +1253,7 @@ mod tests {
             dpi: 72.0,
             frame: Rect::new(0.0, 0.0, 3.0, 3.0),
             painted_height: 3.0,
+            painted_width: 3.0,
             indices: vec![0; 9],
             palette: [255; PALETTE_BYTES],
             available: 8 * TILE_BYTES_PER_PIXEL,

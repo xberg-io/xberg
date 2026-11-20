@@ -18,6 +18,17 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub(crate) fn record_missing_tounicode_warning(doc: &PdfDocument, base_font: &str) {
+    use crate::extractors::warnings::{Warning, WarningCategory};
+
+    doc.push_structured_warning(Warning {
+        category: WarningCategory::ToUnicodeMissing,
+        page: None,
+        message: format!("Type0 font '{base_font}' has no ToUnicode entry!"),
+        spec_section: Some("9.10.2"),
+    });
+}
+
 #[path = "unmapped_minus.rs"]
 mod unmapped_minus;
 #[cfg(test)]
@@ -807,7 +818,7 @@ impl FontInfo {
             // user-defined CharProcs glyph-program model; the
             // standard glyph name registry doesn't apply, so
             // extraction may fall back to glyph-name heuristics. ~keep
-            crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+            doc.push_structured_warning(crate::extractors::warnings::Warning {
                 category: crate::extractors::warnings::WarningCategory::Type3Font,
                 page: None,
                 message: msg,
@@ -924,23 +935,13 @@ impl FontInfo {
             }
         } else {
             if subtype == "Type0" {
-                let msg = format!("Type0 font '{}' has no ToUnicode entry!", base_font);
                 tracing::warn!(
                     target: crate::LOG_TARGET_ROOT,
                     operation = "load_font",
                     error_code = "missing_tounicode",
                     "using composite-font fallback mapping"
                 );
-                // push to the structured sink. PDF
-                // Spec §9.10.2 "ToUnicode CMaps" describes the
-                // mapping; absent ToUnicode triggers the fallback
-                // chain (Encoding → AGL → CID-as-Unicode) per §9.10.3. ~keep
-                crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-                    category: crate::extractors::warnings::WarningCategory::ToUnicodeMissing,
-                    page: None,
-                    message: msg,
-                    spec_section: Some("9.10.2"),
-                });
+                record_missing_tounicode_warning(doc, &base_font);
             }
             None
         };
@@ -1525,6 +1526,7 @@ impl FontInfo {
         let Some(decoded) = decoded else {
             return false;
         };
+        let _warnings = doc.warning_scope();
         let Ok(operators) = crate::content::parse_content_stream(&decoded)
             .inspect_err(|error| crate::error::trace_recovery("parse_type3_charproc", error))
         else {
@@ -4355,21 +4357,31 @@ impl FontInfo {
     /// Latin ligature presentation form (U+FB00–FB06) yields its letters, so a
     /// ligature takes the same path as a ToUnicode map to letter pairs.
     pub fn char_to_unicode(&self, char_code: u32) -> Option<String> {
+        self.with_char_to_unicode(char_code, |mapped| mapped.map(str::to_owned))
+    }
+
+    /// [`Self::char_to_unicode`] handed to `f` as a borrow, so a caller that
+    /// appends the mapping to its own buffer does not allocate per glyph.
+    ///
+    /// On a memo hit `f` runs while the memo lock is held, so `f` must not
+    /// decode through this font again (the lock is not reentrant). ~keep
+    pub(crate) fn with_char_to_unicode<R>(&self, char_code: u32, f: impl FnOnce(Option<&str>) -> R) -> R {
         // Serve from the per-font memo. Read and write are separate lock scopes
         // so the decode in between never holds the lock. ~keep
         if let Ok(memo) = self.type0_unicode_memo.lock()
             && let Some(cached) = memo.get(&char_code)
         {
-            return cached.clone();
+            return f(cached.as_deref());
         }
         let result = self
             .char_to_unicode_uncached(char_code)
             .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)))
             .map(|s| s.replace(crate::LOST_SYMBOL_GLYPH_MARKER, "\u{FFFD}"));
+        let output = f(result.as_deref());
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
-            memo.insert(char_code, result.clone());
+            memo.insert(char_code, result);
         }
-        result
+        output
     }
 
     /// Uncached decode cascade behind [`Self::char_to_unicode`].
@@ -7002,9 +7014,6 @@ mod tests {
             Object::Array(vec![Object::String(SECRET_OBJECT.as_bytes().to_vec())]),
         )]));
 
-        // This test asserts on tracing output only. It used to bracket the run with
-        // drain_global_warnings() as tidy-up, but that sink is process-wide: the drain
-        // emptied it for whichever peer test was mid-assertion on its own warnings. ~keep
         let logs = capture_warnings(|| {
             FontInfo::from_dict(&type3, &doc).expect("minimal Type3 dictionary must parse");
             FontInfo::parse_encoding(&encoding, &doc, None, false).expect("malformed differences must recover");

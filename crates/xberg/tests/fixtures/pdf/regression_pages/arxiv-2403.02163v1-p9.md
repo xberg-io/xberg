@@ -6,7 +6,7 @@
 | all | 0.01 | 246556 | 0.190 | 0.286 | 0.217 | 0.058 | 0.434 |
 | all | 0.05 | 309116 | 0.193 | 0.311 | 0.219 | 0.072 | 0.472 |
 | all | 0.1 | 387315 | 0.178 | 0.265 | 0.205 | 0.083 | 0.454 |
-| all | all | 1794907 |  |  | 0.216.0.338.0.245.0.054.0.505 |  |  |
+| all | all | 1794907 | 0.216 | 0.338 | 0.245 | 0.054 | 0.505 |
 
 **Table 3.** This table presents detection results from experiments utilizing different training dataset subsets, with metrics aligned to COCO object detection. AP measures the mean Average Precision across a range of IoU thresholds from 0.5 to 0.95, while AP50 and AP75 specifically refer to IoU thresholds of 0.5 and 0.75, respectively. The False Positive Rate (FPR) and True Positive Rate (TPR) indicate the percentage of polyp-negative frames in which models erroneously detected bounding boxes and the percentage of positive frames in which models flagged an alert, respectively. Testing was conducted on the entire 591,647 frames test set. Each row corresponds to a distinct subset of training images from the 40 videos in the training split, varying the number of selected positive frames per lesion and the ratio of selected negative frames to total negative frames per video.
 

@@ -33,6 +33,8 @@ pub(crate) use api_pool::tesseract_api_capacity;
 pub(crate) use execution::render_inline_ocr_table_content;
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) use execution::{light_page_foreground_mode, lower_mode_mask_has_text_structure};
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use execution::{render_inline_ocr_table_content_with_occurrences, serialize_hocr_occurrences};
 
 use crate::ocr::cache::OcrCache;
 use crate::ocr::error::OcrError;
@@ -42,6 +44,10 @@ use crate::ocr::types::TesseractConfig;
 use crate::types::OcrExtractionResult;
 #[cfg(feature = "otel")]
 use std::time::Instant;
+
+tokio::task_local! {
+    pub(super) static CAPTURE_REGION_HOCR: bool;
+}
 
 /// Tesseract-backed OCR processor with persistent result caching.
 #[cfg_attr(alef, alef(skip))]
@@ -57,8 +63,11 @@ pub(crate) enum ImageOcrPolicy {
     ProvisionedModelsOnly,
     BoundedInferredUpscale,
     StandaloneDotLeaderRows,
+    StandaloneAutoTableRows,
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     StandaloneSparseRows,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    ImplicitStandaloneSparseRows,
 }
 
 impl ImageOcrPolicy {
@@ -307,6 +316,7 @@ mod tests {
                 ocr_elements: None,
                 internal_document: None,
                 raw_ocr_source_frame: None,
+                retained_hocr_read: None,
             }),
             error: None,
         };

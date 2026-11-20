@@ -57,10 +57,11 @@ fn page_paint(document: &crate::PdfDocument, page: usize) -> Option<Vec<Paint>> 
     if document.get_page_rotation(page).ok()? != 0 {
         return None;
     }
-    let data = document.get_page_content_data(page).ok()?;
+    let data = document.cached_page_content(page).ok()?;
     if data.len() > MAX_CONTENT {
         return None;
     }
+    let _warnings = document.warning_scope();
     let operators = parse_content_stream(&data).ok()?;
     if operators.len() > MAX_OPERATORS {
         return None;

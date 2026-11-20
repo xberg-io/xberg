@@ -2042,3 +2042,37 @@ fn test_render_djot_heading_keeps_mark_text_when_an_earlier_annotation_hides_the
     assert_eq!(count_marks(&out), 0, "{out:?}");
     assert_eq!(texts, ["{-x-} y", "{-x-} y", "{-x-} y"], "{out:?}");
 }
+
+#[test]
+fn should_drop_script_link_destinations_in_djot() {
+    let mut b = InternalDocumentBuilder::new("test");
+    let ann = vec![TextAnnotation {
+        start: 0,
+        end: 4,
+        kind: AnnotationKind::Link {
+            url: "JavaScript:alert(1)".to_string(),
+            title: None,
+        },
+    }];
+    b.push_paragraph("link text", ann, None, None);
+    let out = render_djot(&b.build());
+    assert_eq!(out, "link text\n");
+}
+
+#[test]
+fn should_drop_script_image_sources_in_djot() {
+    let mut doc = InternalDocument::new("html");
+    doc.images.push(crate::types::ExtractedImage {
+        source_path: Some("javascript:alert(1)".into()),
+        description: Some("pic".into()),
+        ..Default::default()
+    });
+    doc.push_element(crate::types::internal::InternalElement::text(
+        ElementKind::Image { image_index: 0 },
+        "",
+        0,
+    ));
+    let out = render_djot(&doc);
+    assert!(!out.contains("javascript"), "got: {out}");
+    assert!(out.contains("![pic]()"), "got: {out}");
+}

@@ -25,6 +25,7 @@ fn scaled_ink(scale: u32, columns: &[Range<usize>], rows: Range<usize>) -> Sourc
         retained_bytes: samples.len(),
         samples,
         certify_rows: true,
+        reread_split_row: false,
     }
 }
 

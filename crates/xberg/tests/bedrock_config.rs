@@ -24,9 +24,9 @@
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test binaries print by design; org logging policy exempts tests
 #![cfg(feature = "liter-llm")]
 
-use serial_test::serial;
 use xberg::core::config::{BedrockConfig, ExtractionConfig, LlmConfig, OcrConfig};
 use xberg::doctor::ProbeStatus;
+use xberg_child_test::{child_test_root, run_child_test};
 
 const BEDROCK_MODEL: &str = "bedrock/anthropic.claude-3-sonnet-20240229-v1:0";
 
@@ -48,35 +48,38 @@ fn bedrock_ocr_config(bedrock: Option<BedrockConfig>) -> ExtractionConfig {
 }
 
 /// A `bedrock/`-prefixed model with no explicit `BedrockConfig` credentials and
-/// no `AWS_ACCESS_KEY_ID` in the environment must be reported by `doctor` as a
+/// no AWS credentials in the environment must be reported by `doctor` as a
 /// `Fail`, naming the missing AWS credentials — not silently pass, and not fail
 /// with a generic "backend not available" (which would mean the `vlm` backend,
 /// and therefore Bedrock SigV4 signing, never got compiled in at all).
-///
-/// `#[serial]` because the test mutates the process-wide `AWS_ACCESS_KEY_ID`
-/// environment variable, matching the convention used by
-/// `xberg::llm::client`'s own equivalent unit test.
-#[allow(unsafe_code)]
-#[serial]
 #[test]
 fn test_doctor_reports_clear_failure_for_unconfigured_bedrock_model() {
-    let original = std::env::var("AWS_ACCESS_KEY_ID").ok();
-    // SAFETY: guarded by #[serial] — no other test in this process observes
-    // AWS_ACCESS_KEY_ID concurrently while this one runs.
-    unsafe {
-        std::env::remove_var("AWS_ACCESS_KEY_ID");
-    }
+    run_child_test(
+        "unconfigured_bedrock_child",
+        BEDROCK_DOCTOR_CHILD,
+        "unconfigured",
+        |command| {
+            command
+                .env_remove("AWS_ACCESS_KEY_ID")
+                .env_remove("AWS_SECRET_ACCESS_KEY")
+                .env_remove("AWS_SESSION_TOKEN")
+                .env_remove("AWS_BEARER_TOKEN_BEDROCK");
+        },
+    );
+}
+
+const BEDROCK_DOCTOR_CHILD: &str = "XBERG_TEST_BEDROCK_DOCTOR_CHILD";
+
+#[test]
+#[ignore = "run in an isolated subprocess"]
+fn unconfigured_bedrock_child() {
+    let Some(root) = child_test_root(BEDROCK_DOCTOR_CHILD) else {
+        return;
+    };
+    assert_eq!(root.as_os_str(), "unconfigured");
 
     let config = bedrock_ocr_config(None);
     let report = xberg::doctor(&config);
-
-    // SAFETY: see above.
-    unsafe {
-        match &original {
-            Some(val) => std::env::set_var("AWS_ACCESS_KEY_ID", val),
-            None => std::env::remove_var("AWS_ACCESS_KEY_ID"),
-        }
-    }
 
     let check = report
         .checks

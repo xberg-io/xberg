@@ -11,3 +11,19 @@ The test also accepts the exact original file via `XBERG_2503_SCAN`.
 six-by-two pixel dash (127 dots in the 12 leader runs), wrapped by a minimal
 uncompressed-structure PDF writer. It keeps the layout and tint, and the dash
 aspect ratio fails the dot proof.
+
+`scan-150-plain.pdf.gz` contains a synthetic 150-DPI scan from the #2432
+numeric-table generator. It has 12 invented municipal budget rows, aligned
+DejaVu Sans columns, and dot leaders on a white background. Its 1275×1650
+RGB page is stored as an unfiltered PDF image. The decompressed PDF has
+SHA-256 `9f427df6284fe295ea131e46211844b24b0a8693b2c36da1ce004439148abc6c`.
+
+`scan-150-shifted-count-header.pdf.gz` preserves the source scan except for
+the Count heading. Replace the pixels at x=[360,419), y=[138,166) with white,
+then paste the captured rectangle at x=303, y=138. The shift leaves the
+recognized lines intact and removes alignment with the Count values.
+The decompressed control has SHA-256
+`5d6a45358a6824f9003ead2d6bb0aed701e98a4e72826511848c38819bc56b60`.
+
+Both files use `gzip -n -9` to retain the exact PDF bytes without storing
+the unfiltered image streams in Git.

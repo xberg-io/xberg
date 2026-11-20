@@ -38,3 +38,39 @@ NIST page. Focused PDF CI checks out the corpus manifest, fetches only
 `--exact`, requiring one collected and one passed case each. A missing fixture or
 excluded feature configuration is a failure, never a skip. The PDF suite requires
 ten exact cases in total, including these five.
+
+## Hidden-layer probe isolation (#3069)
+
+With the public NIST fixture configured as above, repeat the whole target
+with four test threads. The marker probe must capture exactly two decisions
+while the sibling extracts the same synthetic PDF on its own current-thread
+runtime and dispatcher. The first captured probe event releases the sibling
+and waits inside the event handler for the sibling's first probe event.
+Each channel wait is bounded at 60 seconds. The parent test gives the exact
+child test 120 seconds for fixture creation, extraction, and runtime shutdown.
+It kills and reaps the child at the deadline.
+
+```sh
+for run in 1 2 3 4 5; do
+  cargo test --locked -p xberg --no-default-features \
+    --features pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types \
+    --test pdf_type0_scope_2533 -- --test-threads 4 || exit 1
+done
+cargo test --locked -p xberg --no-default-features \
+  --features pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types \
+  --test pdf_partial_hidden_ocr_layer -- --test-threads 4
+```
+
+For a deterministic overlap control in a disposable checkout, suppress the
+sibling's first-probe callback by passing `None` in `check_sibling_probe`
+and keeping its sender alive until the end of that function (or dropping it
+explicitly after extraction). Run the Type0 target with the exact filter
+`marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`.
+The captured event handler must fail with the diagnostic that the sibling
+failed to reach its probe while the captured extraction was at its probe.
+
+To verify the process deadline in a disposable checkout, reduce `DEADLINE`
+to two seconds and temporarily park the sibling worker forever immediately
+after it signals its first probe. Run the same exact test and confirm the
+parent reports a deadline failure and returns without waiting for Tokio
+runtime shutdown in the child.

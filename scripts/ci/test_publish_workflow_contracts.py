@@ -1,15 +1,21 @@
 import ast
+import hashlib
 import itertools
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
 import textwrap
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
+import yaml
 from test_macos_deployment_target import macos_floor
+from verify_no_gpl_cli_archive import parse_args as parse_no_gpl_args
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish.yaml"
@@ -105,6 +111,31 @@ def evaluate_expression(expression: str, context: dict[str, object]) -> object:
 
 def evaluate_condition(expression: str, context: dict[str, object]) -> bool:
     return bool(evaluate_expression(expression, context))
+
+
+def gate_passes(job: str, context: dict[str, object]) -> bool:
+    """Evaluate a job's leading require-job-results step the way the action does.
+
+    The step's `succeeded` / `succeeded-or-skipped` entries may be expressions that render a job
+    name or ''. A gate that names no job at all is rejected by the action, so it fails here too.
+    """
+    [step, *_] = yaml.safe_load(WORKFLOW.read_text())["jobs"][job]["steps"]
+    assert step.get("uses") == "xberg-io/actions/require-job-results@v1", f"{job} has no leading gate"
+    assert step["with"]["needs"] == "${{ toJSON(needs) }}"
+    needs = context["needs"]
+    assert isinstance(needs, dict)
+    named = 0
+    for key, accepted in (("succeeded", {"success"}), ("succeeded-or-skipped", {"success", "skipped"})):
+        for entry in re.split(r"[\n,]", step["with"].get(key, "")):
+            entry = entry.strip()
+            if entry.startswith("${{"):
+                entry = str(evaluate_expression(entry.removeprefix("${{").removesuffix("}}").strip(), context))
+            if not entry:
+                continue
+            named += 1
+            if needs[entry.replace("-", "_")]["result"] not in accepted:
+                return False
+    return named > 0
 
 
 def github_context(event_name: str, tag: str, actor: str, triggering_actor: str) -> dict[str, object]:
@@ -228,7 +259,7 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     workflow = WORKFLOW.read_text().split("\njobs:\n", 1)[1]
     jobs = re.findall(r"(?m)^  ([a-zA-Z0-9_-]+):$", workflow)
     core_jobs = [job for job in jobs if job not in ("dispatch-plugin-npm", "dispatch-plugin-hermes")]
-    assert len(core_jobs) == 84
+    assert len(core_jobs) == 86
     for job in core_jobs:
         expression = job_if_expression(job_block(workflow, job))
         assert expression.startswith("!inputs.plugins-only && ("), job
@@ -236,25 +267,342 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     assert evaluate_condition(prepare_expression, {"inputs": {"plugins_only": True}}) is False
 
 
+def test_node_sha_dry_run_builds_and_packs_without_publishing() -> None:
+    workflow = WORKFLOW.read_text()
+    matrices = ("node-bindings", "node-bindings-musl", "node-bindings-manylinux")
+    jobs = {name: job_block(workflow, name) for name in (*matrices, "publish-node")}
+    outputs = {"dry_run": "true", "is_tag": "false", "release_node": "true", "force_republish": "false"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "cancelled": False,
+        "needs": {
+            "prepare": {"result": "success", "outputs": outputs},
+            "check_npm": {"result": "skipped", "outputs": {"node_exists": ""}},
+            "publish_crates": {"result": "skipped"},
+            **{name.replace("-", "_"): {"result": "success"} for name in matrices},
+        },
+    }
+    for name, block in jobs.items():
+        condition = job_if_expression(block)
+        assert "cancelled()" in condition and evaluate_condition(condition, context), name
+    # A failed build leg must fail the publish job by name rather than skip it silently.
+    assert gate_passes("publish-node", context)
+    for name in matrices:
+        for result in ("failure", "skipped", "cancelled"):
+            context["needs"][name.replace("-", "_")]["result"] = result
+            assert evaluate_condition(job_if_expression(jobs["publish-node"]), context), (name, result)
+            assert not gate_passes("publish-node", context), (name, result)
+        context["needs"][name.replace("-", "_")]["result"] = "success"
+    publish = jobs["publish-node"]
+    steps = re.findall(r"(?m)^      - name: (.+)\n        if: \$\{\{ (.+) \}\}$", publish)
+    publish_steps = {name: expression for name, expression in steps if name.startswith("Publish ")}
+    assert set(publish_steps) == {"Publish platform sub-packages", "Publish main @xberg-io/xberg package"}
+    assert publish.count("uses: xberg-io/actions/publish-npm@v1") == len(publish_steps)
+    assert all(not evaluate_condition(expression, context) for expression in publish_steps.values())
+    assert evaluate_condition(dict(steps)["Verify and archive local npm packages"], context)
+    outputs["dry_run"] = "false"
+    assert all(not evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+    outputs["is_tag"] = "true"
+    context["needs"]["check_npm"]["result"] = "success"
+    context["needs"]["publish_crates"]["result"] = "success"
+    assert all(evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+    # npm consumes nothing from crates.io, so a crates.io failure must not hold it back.
+    assert "publish-crates" not in publish[: publish.index("    runs-on:")]
+    tools = publish.split("- name: Checkout Node dry-run verification tools", 1)[1].split("- name:", 1)[0]
+    assert "ref: ${{ github.sha }}" in tools
+    assert "path: .release-tools" in tools
+    assert ".github/workflows/publish.yaml" in tools
+    assert "python3 .release-tools/scripts/ci/verify-node-dry-run.py" in publish
+    context["needs"]["check_npm"]["outputs"]["node_exists"] = "true"
+    assert all(not evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+
+
+def test_npm_integrations_require_an_available_core_version() -> None:
+    block = job_block(WORKFLOW.read_text(), "publish-integrations-npm")
+    expression = job_if_expression(block)
+    for node_result, node_exists, dry_run, expected in (
+        ("skipped", "false", "false", False),
+        ("skipped", "true", "false", True),
+        ("success", "false", "false", True),
+        ("failure", "true", "false", False),
+        ("cancelled", "true", "false", False),
+        ("skipped", "false", "true", True),
+    ):
+        context = {
+            "inputs": {"plugins_only": False},
+            "cancelled": False,
+            "needs": {
+                "prepare": {
+                    "result": "success",
+                    "outputs": {"dry_run": dry_run, "release_node": "true", "is_tag": "true"},
+                },
+                "check_npm": {"result": "success", "outputs": {"node_exists": node_exists}},
+                "publish_node": {"result": node_result},
+                "publish_crates": {"result": "success"},
+            },
+        }
+        assert evaluate_condition(expression, context) is expected, (node_result, node_exists, dry_run)
+
+    assert "check-npm" in re.search(r"(?m)^    needs: \[(.+)\]$", block)[1].split(", ")
+
+
+def test_python_wheels_build_from_sha_in_dry_run_only() -> None:
+    workflow = WORKFLOW.read_text()
+    for dry_run, tag, registry, exists, force, expected in (
+        ("true", "false", "skipped", "", "false", True),
+        ("true", "true", "success", "true", "false", True),
+        ("false", "false", "skipped", "", "false", False),
+        ("false", "true", "skipped", "", "false", False),
+        ("false", "true", "failure", "", "false", False),
+        ("false", "true", "success", "false", "false", True),
+        ("false", "true", "success", "true", "false", False),
+        ("false", "true", "success", "true", "true", True),
+    ):
+        context = {
+            "inputs": {"plugins_only": False},
+            "cancelled": False,
+            "needs": {
+                "prepare": {
+                    "result": "success",
+                    "outputs": {
+                        "dry_run": dry_run,
+                        "is_tag": tag,
+                        "release_python": "true",
+                        "force_republish": force,
+                    },
+                },
+                "check_pypi": {"result": registry, "outputs": {"exists": exists}},
+                "publish_crates": {"result": "success"},
+                "python_wheels": {"result": "success"},
+                "python_wheels_musl": {"result": "success"},
+                "python_sdist": {"result": "success"},
+            },
+        }
+        for job in ("python-wheels", "python-wheels-musl"):
+            expression = job_if_expression(job_block(workflow, job))
+            # Actions implicitly requires success of all needs unless a status function appears.
+            dependencies_ok = "cancelled()" in expression or registry == "success"
+            assert (dependencies_ok and evaluate_condition(expression, context)) is expected, (
+                job,
+                dry_run,
+                tag,
+                registry,
+            )
+        if tag == "false":
+            publish = job_if_expression(job_block(workflow, "publish-pypi"))
+            assert not evaluate_condition(publish, context)
+
+
+def test_android_dry_run_and_live_release_gates() -> None:
+    workflow = WORKFLOW.read_text()
+    native = job_if_expression(job_block(workflow, "kotlin-android-natives"))
+    publish = job_if_expression(job_block(workflow, "publish-kotlin-android"))
+    check = job_if_expression(job_block(workflow, "check-maven"))
+    assert "release_kotlin_android: ${{ steps.meta.outputs.release_kotlin_android }}" in job_block(workflow, "prepare")
+    outputs = {"release_kotlin_android": "true", "release_kotlin": "false", "release_java": "false"}
+    needs = {
+        "prepare": {"result": "success", "outputs": outputs},
+        "check_maven": {"result": "skipped", "outputs": {"kotlin_exists": ""}},
+        "publish_crates": {"result": "skipped"},
+        "kotlin_android_natives": {"result": "success"},
+    }
+    context = {"inputs": {"plugins_only": False}, "cancelled": False, "needs": needs}
+    for dry, tag, registry, exists, force, expected in (
+        ("true", "false", "skipped", "", "false", True),
+        ("true", "true", "success", "true", "false", True),
+        ("false", "false", "skipped", "", "false", False),
+        ("false", "true", "skipped", "", "true", False),
+        ("false", "true", "failure", "", "true", False),
+        ("false", "true", "success", "false", "false", True),
+        ("false", "true", "success", "true", "false", False),
+        ("false", "true", "success", "true", "true", True),
+    ):
+        outputs.update(dry_run=dry, is_tag=tag, force_republish=force)
+        needs["check_maven"] = {"result": registry, "outputs": {"kotlin_exists": exists}}
+        assert evaluate_condition(check, context) is (tag == "true" and dry == "false")
+        for expression in (native, publish):
+            assert evaluate_condition(expression, context) is expected, (dry, tag, registry, exists, force)
+
+    outputs.update(release_kotlin_android="false", release_kotlin="true")
+    assert all(evaluate_condition(expr, context) for expr in (check, native, publish))
+    outputs.update(release_kotlin_android="true", release_kotlin="false")
+
+    for dependency, results, expressions in (("prepare", ("failure", "skipped", "cancelled"), (native, publish)),):
+        original = needs[dependency]["result"]
+        for result in results:
+            needs[dependency]["result"] = result
+            assert all(not evaluate_condition(expr, context) for expr in expressions), (dependency, result)
+        needs[dependency]["result"] = original
+
+    # A failed natives build runs the publish job so its gate fails it by name.
+    outputs.update(dry_run="false", is_tag="true", force_republish="false")
+    needs["check_maven"] = {"result": "success", "outputs": {"kotlin_exists": "false"}}
+    assert gate_passes("publish-kotlin-android", context)
+    for result in ("failure", "skipped", "cancelled"):
+        needs["kotlin_android_natives"]["result"] = result
+        assert evaluate_condition(publish, context), result
+        assert not gate_passes("publish-kotlin-android", context), result
+    needs["kotlin_android_natives"]["result"] = "success"
+    assert "publish-crates" not in job_block(workflow, "publish-kotlin-android").split("    runs-on:", 1)[0]
+
+    for disable in ("cancelled", "plugins_only", "release_kotlin"):
+        context["cancelled"] = disable == "cancelled"
+        context["inputs"]["plugins_only"] = disable == "plugins_only"
+        outputs["release_kotlin_android"] = str(disable != "release_kotlin").lower()
+        assert not evaluate_condition(native, context), disable
+        assert not evaluate_condition(publish, context), disable
+
+
+def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -> None:
+    workflow = WORKFLOW.read_text()
+    native = job_block(workflow, "kotlin-android-natives")
+    publish = job_block(workflow, "publish-kotlin-android")
+    assert re.findall(r"(?m)^          - \{ abi: (.+) \}$", native) == ["arm64-v8a", "x86_64"]
+    assert "          abis: ${{ matrix.abi }}" in native
+    assert "          name: kotlin-android-${{ matrix.abi }}" in native
+    assert "          if-no-files-found: error" in native
+
+    [source] = re.findall(r"(?m)^      source_sha: (.+)$", job_block(workflow, "prepare"))
+    assert source == "${{ steps.release-source.outputs.commit }}"
+    assert re.search(
+        r"(?m)^        id: release-source\n        uses: actions/checkout@", job_block(workflow, "prepare")
+    )
+    for block, live_ref in ((native, "checkout_ref"), (publish, "ref")):
+        [checkout, *_] = [s for s in re.split(r"(?m)^(?=      - )", block) if "uses: actions/checkout@" in s]
+        [ref] = re.findall(r"(?m)^          ref: (.+)$", checkout)
+        assert ref == (
+            "${{ needs.prepare.outputs.dry_run == 'true' && "
+            f"needs.prepare.outputs.source_sha || needs.prepare.outputs.{live_ref}" + " }}"
+        )
+
+    steps = re.split(r"(?m)^(?=      - )", publish)
+    [download] = [step for step in steps if "uses: actions/download-artifact@" in step]
+    assert "          pattern: kotlin-android-*" in download
+    assert "          merge-multiple: true" in download
+    [stage] = [step for step in steps if "verify-android-jni.py stage" in step]
+    [verify] = [step for step in steps if "run: gradle " in step]
+    [action] = [step for step in steps if "uses: xberg-io/actions/publish-maven-gradle@v1" in step]
+    [guard] = [step for step in steps if "ref: ${{ github.workflow_sha }}" in step]
+    assert steps.index(download) < steps.index(guard) < steps.index(stage) < steps.index(action) < steps.index(verify)
+    assert (
+        "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true"
+        in action
+    )
+    assert "        if:" not in stage
+    assert "          dry-run: ${{ needs.prepare.outputs.dry_run }}" in action
+    assert "          expected-version: ${{ needs.prepare.outputs.tag }}" in action
+    bindings = re.findall(r"(?m)^          MAVEN_[A-Z_]+: \$\{\{ (.+) \}\}$", action)
+    assert len(bindings) == 4
+    context = {"needs": {"prepare": {"outputs": {"dry_run": "true"}}}}
+    for binding in bindings:
+        assert evaluate_expression(binding, context) == ""
+    assert "        if: ${{ needs.prepare.outputs.dry_run == 'true' }}" in verify
+    assert "        working-directory: packages/kotlin-android" in verify
+    [command] = re.findall(r"(?m)^        run: (.+)$", verify)
+    assert shlex.split(command) == [
+        "gradle",
+        "--no-daemon",
+        "-I",
+        "../../.release-tools/scripts/ci/verify-android-aar.init.gradle",
+        "-Palef.skipAndroidJni=true",
+        "verifyReleaseAarJni",
+    ]
+
+
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
-    for plugins_only, cancelled, dry_run, crates_result, expected in (
-        (False, False, "false", "skipped", True),
-        (True, False, "false", "skipped", False),
-        (False, True, "false", "skipped", False),
-        (False, False, "true", "skipped", False),
-        (False, False, "false", "failure", False),
+    # PIE is gated on the release assets (check-php-pie), not Packagist, which lists every tag
+    # before a single archive exists.
+    assert "check-packagist" not in expression
+    for plugins_only, cancelled, dry_run, crates_result, available, pie, force, expected in (
+        (False, False, "true", "skipped", "true", "", "false", True),
+        (False, False, "true", "skipped", "false", "", "false", False),
+        (False, False, "false", "skipped", "", "true", "true", True),
+        (False, False, "false", "skipped", "", "false", "false", True),
+        (False, False, "false", "skipped", "", "true", "false", False),
+        (True, False, "false", "skipped", "", "false", "false", False),
+        (False, True, "false", "skipped", "", "false", "false", False),
+        (False, False, "false", "failure", "", "false", "false", False),
     ):
         context = {
             "inputs": {"plugins_only": plugins_only},
             "cancelled": cancelled,
             "needs": {
-                "prepare": {"outputs": {"dry_run": dry_run, "release_php": "true", "force_republish": "true"}},
+                "prepare": {
+                    "result": "success",
+                    "outputs": {
+                        "dry_run": dry_run,
+                        "release_php": "true",
+                        "force_republish": force,
+                        "php_registry_core_available": available,
+                    },
+                },
                 "publish_crates": {"result": crates_result},
-                "check_packagist": {"outputs": {"exists": "true"}},
+                "check_php_pie": {"outputs": {"exists": pie}},
             },
         }
-        assert evaluate_condition(expression, context) is expected
+        assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result, pie, force)
+
+
+def live_lines(text: str) -> list[str]:
+    """Drop whole-line and trailing `#` comments so only text the shell or Docker runs remains."""
+    lines = (re.sub(r"(^|\s)#.*$", "", line).rstrip() for line in text.splitlines())
+    return [line for line in lines if line.strip()]
+
+
+def test_python_musl_arm64_builds_with_thin_lto() -> None:
+    lines = live_lines(job_block(WORKFLOW.read_text(), "python-wheels-musl"))
+    arches = re.findall(r"arch: (\w+), target:", "\n".join(lines))
+    assert sorted(arches) == ["aarch64", "x86_64"]
+    [start] = [i for i, line in enumerate(lines) if "docker build -f docker/Dockerfile.musl-python" in line]
+    command = [lines[start]]
+    while command[-1].endswith("\\"):
+        command.append(lines[start + len(command)])
+    selectors = [
+        match[1]
+        for line in command[1:]
+        if (match := re.fullmatch(r"\s*--build-arg CARGO_PROFILE_RELEASE_LTO=\$\{\{ (.+) \}\}\s*\\?", line))
+    ]
+    assert len(selectors) == 1, "docker build does not pass the LTO build arg as a live continuation line"
+    for arch in arches:
+        resolved = evaluate_expression(selectors[0], {"matrix": {"arch": arch}})
+        assert resolved == ("thin" if arch == "aarch64" else "fat"), arch
+
+    dockerfile = "\n".join(live_lines((WORKFLOW.parents[2] / "docker" / "Dockerfile.musl-python").read_text()))
+    declared = dockerfile.index("ARG CARGO_PROFILE_RELEASE_LTO")
+    runs = [
+        [step.strip() for step in run.replace("\\\n", " ").split("&&")]
+        for run in re.findall(r"(?m)^RUN ((?:.*\\\n)*.*)$", dockerfile)
+    ]
+    [steps] = [run for run in runs if any(step.startswith("maturin build --release") for step in run)]
+    export = re.compile(r'export CARGO_PROFILE_RELEASE_LTO="\$\{CARGO_PROFILE_RELEASE_LTO:\?\}"')
+    exported = [i for i, step in enumerate(steps) if export.fullmatch(step)]
+    built = [i for i, step in enumerate(steps) if step.startswith("maturin build --release")]
+    assert exported, "the maturin RUN does not export CARGO_PROFILE_RELEASE_LTO as a live command"
+    assert exported[0] < built[0]
+    assert declared < dockerfile.index("RUN", declared)
+
+
+def test_php_tagged_dry_run_cannot_upload_or_publish() -> None:
+    workflow = WORKFLOW.read_text()
+    outputs = {"dry_run": "true", "is_tag": "true", "release_php": "true", "force_republish": "true"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "cancelled": False,
+        "needs": {
+            "prepare": {"outputs": outputs},
+            "php_extension": {"result": "success"},
+            "upload_php_pie_release": {"result": "success"},
+            "publish_crates": {"result": "skipped"},
+            "check_packagist": {"outputs": {"exists": "true"}},
+        },
+    }
+    for job in ("upload-php-pie-release", "publish-packagist"):
+        expression = job_if_expression(job_block(workflow, job))
+        outputs["dry_run"] = "true"
+        assert not evaluate_condition(expression, context), job
+        outputs["dry_run"] = "false"
+        assert evaluate_condition(expression, context), job
 
 
 def test_partial_release_retries_skip_plugin_distribution_and_announcements() -> None:
@@ -282,8 +630,28 @@ def test_php_partial_retry_publishes_packagist_only_after_successful_upload() ->
     block = job_block(WORKFLOW.read_text(), "publish-packagist")
     condition = block[: block.index("    runs-on:")]
     assert "!cancelled()" in condition
-    assert "needs.upload-php-pie-release.result == 'success'" in condition
     assert "needs.prepare.outputs.release_php == 'true'" in condition
+    needs = {
+        "php_extension": {"result": "success"},
+        "upload_php_pie_release": {"result": "success"},
+        "check_php_pie": {"outputs": {"exists": "false"}},
+    }
+    context = {"needs": needs}
+    for build, upload, pie, expected in (
+        ("success", "success", "false", True),
+        ("failure", "success", "false", False),
+        ("success", "failure", "false", False),
+        # publish-crates failed, so the PHP build never ran: Packagist must not go out.
+        ("skipped", "skipped", "false", False),
+        # Every archive already released, so the build and upload were skipped on purpose.
+        ("skipped", "skipped", "true", True),
+        ("failure", "skipped", "true", False),
+        ("cancelled", "cancelled", "true", False),
+    ):
+        needs["php_extension"]["result"] = build
+        needs["upload_php_pie_release"]["result"] = upload
+        needs["check_php_pie"]["outputs"]["exists"] = pie
+        assert gate_passes("publish-packagist", context) is expected, (build, upload, pie)
 
 
 def test_release_finalization_requires_successful_asset_verification() -> None:
@@ -432,6 +800,18 @@ def test_glibc_ffi_jobs_build_lzma_statically() -> None:
         assert "contains(matrix.target, '-linux-gnu')" in setup_block, job
 
 
+def test_windows_c_ffi_release_uses_the_reviewed_vs2022_runner() -> None:
+    block = job_block(WORKFLOW.read_text(), "c-ffi-libraries")
+    [runner] = re.findall(
+        r"(?m)^          - \{ os: ([^,]+), platform: windows-x86_64, target: x86_64-pc-windows-msvc \}$",
+        block,
+    )
+    assert runner == "windows-2022"
+    assert "runs-on: ${{ matrix.os }}" in block
+    assert 'vendor-windows-native-closure.ps1" -Artifact "$STAGE"' in block
+    assert '-NativeGlob "xberg_ffi.dll" -ArtifactKind raw -RequireCrtNotices' in block
+
+
 def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
     expected = {
@@ -451,6 +831,51 @@ def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
     assert 'return base + "-musl", nil' in setup
 
 
+def test_go_preflight_requires_every_archive_and_checksum() -> None:
+    workflow = WORKFLOW.read_text()
+    check = job_block(workflow, "check-go")
+    build = job_block(workflow, "go-ffi-libraries")
+    assert "asset-prefix:" not in check, "Go preflight must use exact asset names"
+    [assets] = re.findall(r"(?m)^            (xberg-go-.+)$", check)
+    version = "1.4.0"
+    required = assets.replace("${{ needs.prepare.outputs.version }}", version).split(",")
+    platforms = re.findall(r"platform: ([^, }]+), target:", build)
+    assert len(platforms) == 7 and len(required) == 14
+    archives = {f"xberg-go-v{version}-{platform}.tar.gz" for platform in platforms}
+    expected = archives | {f"{archive}.sha256" for archive in archives}
+    assert set(required) == expected
+
+    outputs = {"release_go": "true", "is_tag": "true", "dry_run": "false", "force_republish": "false"}
+    registry = {"exists": "true"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "needs": {"prepare": {"outputs": outputs}, "check_go": {"outputs": registry}},
+    }
+    check_if = job_if_expression(check)
+    build_if = job_if_expression(build)
+    [lookup_if] = re.findall(r"(?m)^        if: (.+)$", check)
+    assert evaluate_condition(check_if, context)
+    assert evaluate_condition(lookup_if, context)
+    assert not evaluate_condition(build_if, context)
+    for missing in required:
+        available = (expected - {missing}) | {f"{missing}.bak"}
+        registry["exists"] = str(set(required) <= available).lower()
+        assert evaluate_condition(build_if, context), missing
+
+    registry["exists"] = "true"
+    outputs["force_republish"] = "true"
+    assert evaluate_condition(build_if, context)
+    outputs["force_republish"] = "false"
+    outputs["dry_run"] = "true"
+    outputs["is_tag"] = "false"
+    assert evaluate_condition(check_if, context)
+    assert not evaluate_condition(lookup_if, context)
+    assert evaluate_condition(build_if, context)
+    outputs["release_go"] = "false"
+    assert not evaluate_condition(check_if, context)
+    assert not evaluate_condition(build_if, context)
+
+
 def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
     assert 'mise run go:publish:package "${{ matrix.target }}"' in block
@@ -467,6 +892,94 @@ def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     musl_script = GO_MUSL_RELEASE_SCRIPT.read_text()
     assert "xberg-go-v$VERSION-$PLATFORM.tar.gz" in musl_script
     assert 'grep -q "/lib/libxberg_ffi.so$"' in musl_script
+
+
+@contextmanager
+def rejected_contract(message: str) -> Iterator[None]:
+    try:
+        yield
+    except AssertionError as error:
+        if str(error) != message:
+            raise
+    else:
+        raise AssertionError(f"expected rejection: {message}")
+
+
+def test_node_musl_smoke_uses_workflow_launcher_with_release_checkout() -> None:
+    block = job_block(WORKFLOW.read_text(), "node-bindings-musl")
+    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" in block
+    launcher = block.split("      - name: Check out Node smoke launcher", 1)[1].split("      - name:", 1)[0]
+    assert "ref: ${{ github.workflow_sha }}" in launcher
+    assert "path: .release-tools" in launcher
+    assert "sparse-checkout: scripts/ci/smoke-test-musl-node-binding.sh" in launcher
+    assert (
+        'bash .release-tools/scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}" "$GITHUB_WORKSPACE"'
+        in block
+    )
+
+
+def test_node_musl_launcher_mounts_both_release_wrappers() -> None:
+    launcher = Path(__file__).with_name("smoke-test-musl-node-binding.sh")
+    mount = '  -v "$BINDING_CJS:/smoke/binding.cjs:ro" \\' + "\n"
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        release = root / "release"
+        staged = root / "staged"
+        staged.mkdir()
+        (staged / "xberg.node").touch()
+        for name in (
+            "crates/xberg-node/index.js",
+            "crates/xberg-node/binding.cjs",
+            "scripts/ci/fixtures/musl-python-smoke.pdf",
+            "scripts/ci/smoke_test_node_binding.js",
+        ):
+            path = release / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+
+        docker = root / "docker"
+        docker.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        docker.chmod(0o755)
+        env = {**os.environ, "PATH": f"{root}{os.pathsep}{os.environ['PATH']}"}
+        command = ["bash", str(launcher), str(staged), str(release)]
+        expected = f"{release.resolve()}/crates/xberg-node"
+
+        result = run(command, root, env)
+        assert result.returncode == 0, result.stderr
+
+        def assert_mounts(output: str) -> None:
+            assert f"{expected}/index.js:/smoke/index.js:ro" in output.splitlines()
+            assert f"{expected}/binding.cjs:/smoke/binding.cjs:ro" in output.splitlines(), "missing binding.cjs mount"
+            assert "node /smoke/smoke_test_node_binding.js /smoke/index.js" in output
+
+        assert_mounts(result.stdout)
+
+        source = launcher.read_text()
+        assert source.count(mount) == 1
+        broken = root / launcher.name
+        broken.write_text(source.replace(mount, "", 1))
+        result = run(["bash", str(broken), str(staged), str(release)], root, env)
+        assert result.returncode == 0, result.stderr
+        with rejected_contract("missing binding.cjs mount"):
+            assert_mounts(result.stdout)
+
+
+def assert_go_zig_install_is_gnu_only(block: str) -> None:
+    setup = block.split("      - name: Set up mise and install Zig", 1)[1].split("      - ", 1)[0]
+    assert "uses: xberg-io/actions/setup-mise@v1" in setup
+    assert "install-args: zig" in setup
+    assert "\n        if:" not in setup, "musl still needs mise to run its packaging task"
+    expected = "install: ${{ contains(matrix.target, '-linux-gnu') && 'true' || 'false' }}"
+    assert expected in setup, "Zig installation must be restricted to GNU targets"
+
+
+def test_go_zig_install_keeps_mise_on_the_musl_legs() -> None:
+    block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
+    assert_go_zig_install_is_gnu_only(block)
+    mutated = re.sub(r"(?m)^          install: .*\n", "", block, count=1)
+    assert mutated != block
+    with rejected_contract("Zig installation must be restricted to GNU targets"):
+        assert_go_zig_install_is_gnu_only(mutated)
 
 
 def test_glibc_native_closures_are_strictly_verified() -> None:
@@ -488,6 +1001,191 @@ def test_cli_release_enables_metal_only_for_macos_arm64() -> None:
     assert macos_arm64 is not None
     assert "candle-metal" in macos_arm64.group(1).split(",")
     assert block.count("candle-metal") == 1
+
+
+def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    variants = [entry for entry in matrix_entries(block) if entry.get("archive_suffix")]
+    assert [entry["archive_suffix"] for entry in variants] == ["-no-gpl-lgpl"], (
+        "expected exactly one suffixed CLI archive, the no-GPL Windows ZIP"
+    )
+    [variant] = variants
+    assert variant["target"] == "x86_64-pc-windows-msvc"
+    features = variant["cargo_features"].split(",")
+    assert "heic" not in features, "the no-GPL archive must not compile the HEIC/HEIF codecs in"
+    assert {"mcp", "mcp-http", "api"} <= set(features), "it must keep the capabilities the standard Windows ZIP ships"
+
+    [build] = [
+        step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    ]
+    assert "matrix.cargo_features" in build["with"]["extra-cargo-args"], (
+        "the build must consume the same feature list the license audit checks"
+    )
+    [upload] = [step for step in block["steps"] if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+    assert upload["with"]["name"] == "cli-${{ matrix.target }}${{ matrix.archive_suffix }}"
+
+    [gate] = [
+        step for step in block["steps"] if step.get("name") == "Verify no GPL/LGPL codecs in the no-GPL CLI archive"
+    ]
+    assert gate["if"] == "runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'"
+    run = gate["run"]
+    assert '--features "$FEATURES"' in run
+    assert "check licenses" in run
+    verifier_args = run.split("verify_no_gpl_cli_archive.py", 1)[1].replace("\\\n", " ")
+    parsed = parse_no_gpl_args(shlex.split(verifier_args))
+    assert set(parsed.required_formats) == {"pdf", "docx", "xlsx"}, (
+        "the gate must prove PDF and Office extraction survived the feature removal"
+    )
+
+    release = job_block(WORKFLOW.read_text(), "upload-cli-release")
+    assert "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip" in release
+    assert '"$total" -ne 10' in release, "the completeness gate must count the new archive"
+
+
+def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
+    block = job_block(WORKFLOW.read_text(), "python-wheels")
+    [matrix] = re.findall(r"(?m)^        os: \[([^\]]+)\]$", block)
+    runners = matrix.split(", ")
+    assert "ubuntu-24.04-arm" in runners
+    [environment] = re.findall(r"(?m)^          cibw-environment: >-\n((?: {12}[^\n]+\n)+)", block)
+    [selector] = re.findall(r"\$\{\{ (.+) \}\}", environment)
+    [guard] = re.findall(r"(?ms)^          cibw-before-build-linux: \|\n(.*?)^            pip install", block)
+    lto_key = "CARGO_PROFILE_RELEASE_LTO"
+    for runner in runners:
+        resolved = evaluate_expression(selector, {"matrix": {"os": runner}})
+        rendered = environment.replace("${{ " + selector + " }}", str(resolved))
+        lto_flags = [flag for flag in shlex.split(rendered) if flag.startswith(lto_key + "=")]
+        assert lto_flags == ([lto_key + "=thin"] if runner == "ubuntu-24.04-arm" else []), runner
+
+    for arch, lto, expected in [
+        ("aarch64", "thin", 0),
+        ("aarch64", "", 1),
+        ("aarch64", "fat", 1),
+        ("x86_64", "", 0),
+    ]:
+        script = 'uname() { printf "%s\\n" "$TEST_ARCH"; }\n'
+        result = run(
+            ["bash", "-c", script + textwrap.dedent(guard)],
+            WORKFLOW.parent,
+            env={"TEST_ARCH": arch, lto_key: lto},
+        )
+        assert result.returncode == expected, (arch, lto, result.stderr)
+        if expected:
+            assert "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" in result.stderr
+
+
+def test_python_manylinux_verifies_onnx_runtime_before_extraction() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        _check_python_manylinux_onnx_runtime_verification(Path(directory))
+
+
+def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
+    repo_root = WORKFLOW.parents[2]
+    integrity_path = Path("scripts/ci/actions/setup-onnx-runtime")
+    project = tmp_path / "staged project"
+    integrity = project / integrity_path
+    integrity.mkdir(parents=True)
+    shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
+    assert (repo_root / integrity_path / "nuget-fallback.sh").is_file()
+    (integrity / "nuget-fallback.sh").write_text(
+        '#!/usr/bin/env bash\nprintf "nuget %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
+        'exit "${TEST_NUGET_STATUS:-0}"\n'
+    )
+    pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
+    fixture_manifest = integrity / "checksums.sha256"
+    stub = r"""
+        uname() { printf '%s\n' "$TEST_ARCH"; }
+        mktemp() {
+          [[ "$*" == -d ]]
+          command mkdir "$TMPDIR/ort-download"
+          printf '%s\n' "$TMPDIR/ort-download"
+        }
+        mkdir() { [[ "$*" == '-p /opt/msort' ]]; }
+        curl() {
+          if [[ "$*" == '--retry-all-errors --version' ]]; then
+            return "${TEST_CURL_PROBE_STATUS:-0}"
+          fi
+          expected='--proto =https --proto-redir =https --retry 5 --retry-delay 5'
+          if [[ "${TEST_CURL_PROBE_STATUS:-0}" == 0 ]]; then
+            expected+=' --retry-all-errors'
+          fi
+          [[ "${*:1:$#-3}" == "$expected -fsSL" ]]
+          [[ "${@: -3:1}" == -o ]]
+          printf 'curl %s\n' "${@: -1}"
+          printf '%s' "$TEST_PAYLOAD" > "${@: -2:1}"
+          return "${TEST_CURL_STATUS:-0}"
+        }
+        tar() {
+          [[ "$*" == "-xzf $ort_archive -C /opt/msort --strip-components=1" ]]
+          printf 'tar %s\n' "${ort_archive##*/}"
+        }
+    """
+    original_entries = set(tmp_path.iterdir())
+    for filename, job_name in (("publish.yaml", "python-wheels"), ("ci-python-wheel-smoke.yaml", "python-wheel-smoke")):
+        workflow = workflow_job(WORKFLOW.with_name(filename), job_name)
+        [step] = [step for step in workflow["steps"] if step.get("uses") == "xberg-io/actions/build-python-wheels@v1"]
+        hook = step["with"]["cibw-before-build-linux"]
+        assert hook.startswith("set -euo pipefail\n"), filename
+        prefix, boundary, stage = hook.partition("\nort_version=")
+        assert boundary and "curl " not in prefix and "tar " not in prefix, filename
+        assert stage.count("nuget-fallback.sh") == 1, filename
+        assert f'ort_integrity="{{project}}/{integrity_path}"' in stage, filename
+        script = textwrap.dedent(stub) + boundary + stage.replace("{project}", str(project))
+        for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
+            archive = f"onnxruntime-linux-{asset_arch}-1.24.2.tgz"
+            assert len(re.findall(rf"(?m)^[a-f0-9]{{64}}\s+{re.escape(archive)}$", pinned_manifest)) == 1
+            url = f"https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/{archive}"
+            payload = f"fixture for {archive}"
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+            env = {**os.environ, "TEST_ARCH": uname, "TEST_PAYLOAD": payload, "TMPDIR": str(tmp_path)}
+
+            fixture_manifest.write_text("")
+            unpinned = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
+            assert unpinned.returncode == 1 and unpinned.stdout == "", (filename, uname, unpinned)
+            assert f"Expected exactly one pinned SHA-256 for {archive}" in unpinned.stderr
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            fixture_manifest.write_text(f"{digest}  {archive}\n")
+            for curl_probe_status in ("0", "2"):
+                verified = run(
+                    ["bash", "-euo", "pipefail", "-c", script],
+                    tmp_path,
+                    {**env, "TEST_CURL_PROBE_STATUS": curl_probe_status},
+                )
+                assert verified.returncode == 0, (filename, uname, curl_probe_status, verified.stderr)
+                assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname, curl_probe_status)
+
+            tampered = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_PAYLOAD": "tampered"})
+            assert tampered.returncode == 1 and tampered.stdout.splitlines() == [f"curl {url}"], (
+                filename,
+                uname,
+                tampered,
+            )
+            assert f"SHA-256 mismatch for {archive}" in tampered.stderr
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rid = "linux-arm64" if asset_arch == "aarch64" else "linux-x64"
+            nuget = f"nuget 1.24.2 {rid} /opt/msort {integrity}/checksums.sha256"
+            for curl_status in ("18", "22"):
+                fell_back = run(
+                    ["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": curl_status}
+                )
+                assert fell_back.returncode == 0, (filename, uname, curl_status, fell_back.stderr)
+                assert fell_back.stdout.splitlines() == [f"curl {url}", nuget, "runner_temp ort-download"], (
+                    filename,
+                    uname,
+                    fell_back,
+                )
+                assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
+
+            rejected = run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                tmp_path,
+                {**env, "TEST_CURL_STATUS": "22", "TEST_NUGET_STATUS": "7"},
+            )
+            assert rejected.returncode == 7 and rejected.stdout.splitlines()[:2] == [f"curl {url}", nuget], rejected
+            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
 
 def test_docker_preflight_checks_out_the_resolved_candidate() -> None:
@@ -920,11 +1618,11 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
     assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
     steps = re.split(r"(?m)^(?=      - )", job)
-    checks = [step for step in steps if step.startswith("      - name: cargo check -p xberg --no-default-features")]
+    checks = [step for step in steps if step.startswith("      - name: cargo clippy -p xberg --no-default-features")]
     assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
     commands = re.findall(r"(?m)^        run: ([^\n]+)$", checks[0])
     assert commands == [
-        'cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets'
+        'cargo clippy --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets -- -D warnings'
     ], "standalone Sceptre ORT check must retain its locked independent command"
     conditions = re.findall(r"(?m)^        if: ([^\n]+)$", checks[0])
     assert conditions == ["matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'"], (
@@ -945,6 +1643,44 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
         "standalone Sceptre ORT must use the supported shared runtime version"
     )
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
+
+
+def test_live_release_assets_verify_only_selected_groups() -> None:
+    job = job_block(WORKFLOW.read_text(), "verify-assets")
+    steps = re.split(r"(?m)^(?=      - )", job)
+    verifiers = [step for step in steps if step.startswith("      - uses: xberg-io/actions/verify-release-assets@")]
+    elixir = "\n".join(f"elixir-nif-{index}.tar.gz" for index in range(6))
+    php = {
+        f"php_xberg-*_php{version}-{platform}.tgz"
+        for version in ("8.3", "8.4", "8.5")
+        for platform in ("x86_64-linux-glibc-nts", "arm64-linux-glibc-nts", "arm64-darwin-bsdlibc-nts")
+    } | {f"php_xberg-*-{version}-nts-vs17-x86_64.zip" for version in ("8.3", "8.4", "8.5")}
+    groups = {
+        "release_cli": {"xberg-cli-*.tar.gz", "xberg-cli-*.zip"},
+        "release_go": {"xberg-go-*.tar.gz"},
+        "release_c_ffi": {"xberg-ffi-*.tar.gz"},
+        "release_php": php,
+        "release_elixir": set(elixir.splitlines()),
+    }
+    for selected, dry_run in (
+        ({"release_elixir"}, "false"),
+        (set(groups), "false"),
+        (set(groups), "true"),
+    ):
+        outputs = {group: str(group in selected).lower() for group in groups}
+        outputs.update(dry_run=dry_run, elixir_assets_multiline=elixir)
+        context = {"needs": {"prepare": {"outputs": outputs}}}
+        required = []
+        for step in verifiers:
+            [condition] = re.findall(r"(?m)^        if: \$\{\{ (.+) \}\}$", step)
+            if evaluate_condition(condition, context):
+                if "expected-assets: |" in step:
+                    required.extend(re.findall(r"(?m)^            ([^#\s]\S*)$", step))
+                else:
+                    [expression] = re.findall(r"(?m)^          expected-assets: \$\{\{ (.+) \}\}$", step)
+                    required.extend(str(evaluate_expression(expression, context)).splitlines())
+        expected = set().union(*(groups[group] for group in selected)) if dry_run == "false" else set()
+        assert sorted(required) == sorted(expected), (selected, dry_run, required)
 
 
 def test_dry_release_assets_verify_only_selected_groups() -> None:
@@ -989,6 +1725,155 @@ def test_dry_release_assets_verify_only_selected_groups() -> None:
                 outputs["dry_run"] = "false"
                 assert not evaluate_condition(condition, context)
                 outputs["dry_run"] = "true"
+
+
+def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
+    workflow = WORKFLOW.read_text()
+    for job, libc, image in (
+        ("cli-binaries", "gnu", "ubuntu:24.04"),
+        ("cli-binaries-musl", "musl", "debian:12-slim"),
+    ):
+        block = job_block(workflow, job)
+        for arch in ("x86_64", "aarch64"):
+            assert f"target: {arch}-unknown-linux-{libc}" in block
+        package = block.index('tar -czf "${STAGE}.tar.gz" "$STAGE"')
+        smoke = block.index("- name: Smoke test packaged Linux CLI in a clean container")
+        upload = block.index("uses: actions/upload-artifact@", package)
+        checkout = block.index("- name: Checkout Linux CLI installer verification tools")
+        assert package < checkout < smoke < upload
+        tools = block[checkout:smoke]
+        assert "ref: ${{ github.workflow_sha }}" in tools
+        assert "scripts/install.sh" in tools
+        assert "scripts/ci/smoke-test-cli-installer.sh" in tools
+        gate = block[smoke:upload]
+        assert "docker run --rm --network none" in gate
+        assert f" {image} " in gate
+        assert "/src/.cli-release-tools/scripts/ci/smoke-test-cli-installer.sh" in gate
+        assert f'"$VERSION" {libc}' in gate
+        assert "continue-on-error" not in gate
+        if libc == "gnu":
+            assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
+            assert "SMOKE_REQUIRE_MIMALLOC" not in gate
+        else:
+            assert "if:" not in gate
+            assert '-e "SMOKE_REQUIRE_MIMALLOC=$mimalloc_required"' in gate
+
+
+def test_musl_smoke_uses_the_packaged_source_allocator_policy() -> None:
+    steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["cli-binaries-musl"]["steps"]
+    [smoke] = [
+        step["run"] for step in steps if step.get("name") == "Smoke test packaged Linux CLI in a clean container"
+    ]
+    source = (DOCKER_DIR / "Dockerfile.musl-build").read_text()
+    marker = "# xberg-release-smoke: mimalloc-required ~keep"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "docker").mkdir()
+        (root / "Cargo.toml").write_text('[workspace.package]\nversion = "1.4.1"\n')
+        docker = root / "docker-stub"
+        docker.mkdir()
+        command = docker / "docker"
+        command.write_text('#!/bin/sh\n[ "$1" = run ] || exit 0\nprintf "%s\\n" "$@"\n')
+        command.chmod(0o755)
+        env = {**os.environ, "PATH": f"{docker}:{os.environ['PATH']}", "TARGET": "aarch64-unknown-linux-musl"}
+        for checkout_policy, expected in [(source.replace(f"{marker}\n", ""), 0), (source, 1)]:
+            (root / "docker/Dockerfile.musl-build").write_text(checkout_policy)
+            result = run(["bash", "-c", smoke], root, env)
+            assert result.returncode == 0, result.stderr
+            [observed] = [line for line in result.stdout.splitlines() if line.startswith("SMOKE_REQUIRE_MIMALLOC=")]
+            assert observed == f"SMOKE_REQUIRE_MIMALLOC={expected}"
+
+
+DOCKER_DIR = Path(__file__).parents[2] / "docker"
+LTO_ENV = "CARGO_PROFILE_RELEASE_LTO"
+
+
+def workflow_job(workflow: Path, job: str) -> dict:
+    return yaml.safe_load(workflow.read_text())["jobs"][job]
+
+
+def matrix_entries(job: dict) -> list[dict]:
+    matrix = job["strategy"]["matrix"]
+    entries = matrix.get("include", [])
+    if "platform" in matrix:
+        entries = [{**entry, "platform": platform} for entry in entries for platform in matrix["platform"]]
+    return entries
+
+
+def lto_selector(text: str) -> str:
+    """Return the one `${{ ... }}` expression that fills CARGO_PROFILE_RELEASE_LTO in live text."""
+    selectors = re.findall(rf"{LTO_ENV}=\$\{{\{{ (.+?) \}}\}}", "\n".join(live_lines(text)))
+    assert len(selectors) == 1, f"expected one live {LTO_ENV} selector, found {selectors}"
+    return selectors[0]
+
+
+def assert_thin_only_on_arm64(selector: str, contexts: list[tuple[dict, bool]]) -> None:
+    for context, arm64 in contexts:
+        resolved = evaluate_expression(selector, context)
+        assert resolved == ("thin" if arm64 else "fat"), context
+
+
+def assert_dockerfile_exports_lto_before(dockerfile: str, build_command: str) -> None:
+    text = "\n".join(live_lines((DOCKER_DIR / dockerfile).read_text()))
+    assert re.search(rf"(?m)^ARG {LTO_ENV}=fat$", text), f"{dockerfile} does not declare ARG {LTO_ENV}=fat"
+    runs = [
+        [step.strip() for step in run.replace("\\\n", " ").split("&&")]
+        for run in re.findall(r"(?m)^RUN ((?:.*\\\n)*.*)$", text)
+    ]
+    [steps] = [run for run in runs if any(build_command in step for step in run)]
+    export = f'export {LTO_ENV}="${{{LTO_ENV}:?}}"'
+    exported = [i for i, step in enumerate(steps) if step == export]
+    built = [i for i, step in enumerate(steps) if build_command in step]
+    assert exported, f"{dockerfile} does not export {LTO_ENV} in the RUN that builds"
+    assert exported[0] < built[0]
+
+
+def docker_build_command(run: str, dockerfile: str) -> str:
+    joined = "\n".join(live_lines(run.replace("\\\n", " ")))
+    [command] = [line for line in joined.splitlines() if f"docker build -f {dockerfile}" in line]
+    return command
+
+
+def test_node_arm64_builds_with_thin_lto() -> None:
+    legs = [
+        ("node-bindings-musl", "Dockerfile.musl-node", "Build Node NAPI binding via Alpine Docker"),
+        ("node-bindings-manylinux", "Dockerfile.manylinux-node", "Build Node NAPI binding via manylinux Docker"),
+    ]
+    for job, dockerfile, step in legs:
+        block = workflow_job(WORKFLOW, job)
+        entries = matrix_entries(block)
+        assert sorted(entry["arch"] for entry in entries) == ["aarch64", "x86_64"], job
+        [run] = [s["run"] for s in block["steps"] if s.get("name") == step]
+        selector = lto_selector(docker_build_command(run, f"docker/{dockerfile}"))
+        assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["arch"] == "aarch64") for entry in entries])
+        assert_dockerfile_exports_lto_before(dockerfile, "napi build --platform --release")
+
+
+def test_cli_arm64_gnu_builds_with_thin_lto() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [build] = [s for s in block["steps"] if str(s.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")]
+    assert LTO_ENV in build.get("env", {}), f"the CLI build step does not set {LTO_ENV} in its env"
+    selector = lto_selector(f"{LTO_ENV}={build['env'][LTO_ENV]}")
+    entries = matrix_entries(block)
+    arm = "aarch64-unknown-linux-gnu"
+    assert any(entry["target"] == arm for entry in entries)
+    assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["target"] == arm) for entry in entries])
+
+
+def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
+    block = workflow_job(DOCKER_WORKFLOW, "build-docker")
+    entries = matrix_entries(block)
+    assert {entry["platform"]["name"] for entry in entries} == {"amd64", "arm64"}
+    contexts = [({"matrix": entry}, entry["platform"]["name"] == "arm64") for entry in entries]
+    [test_build] = [s for s in block["steps"] if s.get("name") == "Build test image"]
+    # #3301 builds each image once through build-push-action, so the LTO argument moved from the
+    # retired `run` step into the action's build-args. ~keep
+    assert_thin_only_on_arm64(lto_selector(test_build["with"]["build-args"]), contexts)
+    [push] = [s for s in block["steps"] if s.get("name") == "Build and push by digest"]
+    assert_thin_only_on_arm64(lto_selector(push["with"]["build-args"]), contexts)
+    for dockerfile in ("Dockerfile.core", "Dockerfile.full"):
+        assert_dockerfile_exports_lto_before(dockerfile, "cargo build --release --package xberg-cli")
 
 
 if __name__ == "__main__":

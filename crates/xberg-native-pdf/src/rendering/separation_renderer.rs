@@ -193,6 +193,7 @@ pub struct SeparationPlate {
 /// are also recursed into once per page. Unreferenced inks short-circuit
 /// to an all-zero plate before any pixmap is allocated.
 pub fn render_separations(doc: &PdfDocument, page_num: usize, dpi: u32) -> Result<Vec<SeparationPlate>> {
+    let _warnings = doc.warning_scope();
     let inks = collect_page_inks(doc, page_num)?;
     if inks.is_empty() {
         return Ok(Vec::new());
@@ -216,6 +217,7 @@ pub fn render_separations(doc: &PdfDocument, page_num: usize, dpi: u32) -> Resul
 /// plate on a page, call [`render_separations`] instead — it walks the
 /// content stream once for all inks together.
 pub fn render_separation(doc: &PdfDocument, page_num: usize, ink_name: &str, dpi: u32) -> Result<SeparationPlate> {
+    let _warnings = doc.warning_scope();
     // Always walk operators for the requested ink — the per-page short-circuit
     // in [`render_separations`] is an optimisation that scans the resource
     // declarations to skip inks that are *definitely* unused. For the single-ink
@@ -284,7 +286,7 @@ fn render_plates_for_inks(
         let fonts = load_fonts(doc, &resources);
         let text_rasterizer = TextRasterizer::new();
 
-        let content_data = doc.get_page_content_data(page_num)?;
+        let content_data = doc.cached_page_content(page_num)?;
         let operators = parse_content_stream(&content_data)?;
 
         let mut ctx = SeparationContext {
@@ -499,7 +501,7 @@ fn collect_page_inks(doc: &PdfDocument, page_num: usize) -> Result<Vec<String>> 
 fn collect_referenced_inks(doc: &PdfDocument, page_num: usize) -> Result<Vec<String>> {
     let resources = doc.get_page_resources(page_num)?;
     let color_spaces = load_color_spaces(doc, &resources)?;
-    let content_data = doc.get_page_content_data(page_num)?;
+    let content_data = doc.cached_page_content(page_num)?;
     let operators = parse_content_stream(&content_data)?;
     let mut referenced: Vec<String> = Vec::new();
     let mut visited: Vec<String> = Vec::new();

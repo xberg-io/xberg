@@ -117,7 +117,7 @@ fn accepted_tinted_table_keeps_the_header_and_first_record_separate() {
 }
 
 #[test]
-fn explicit_sparse_mode_and_disabled_tables_keep_standalone_rows_unassociated() {
+fn explicit_sparse_mode_keeps_non_plain_routes_and_respects_disabled_tables() {
     for (format, mode) in FORMATS
         .into_iter()
         .flat_map(|format| [(format.clone(), Some(11)), (format, None)])
@@ -131,7 +131,17 @@ fn explicit_sparse_mode_and_disabled_tables_keep_standalone_rows_unassociated() 
         let result = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
         assert!(result.metadata.ocr_used, "{format:?} {mode:?}");
         assert!(result.content.contains("(1.463)"), "{format:?} {mode:?}");
-        assert!(result.tables.is_empty(), "{format:?} {mode:?}");
+        if format == OutputFormat::Plain && mode == Some(11) {
+            assert_eq!(result.tables.len(), 1);
+            let expected = expected_rows()
+                .iter()
+                .map(|row| row.join(" "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert_eq!(result.pages.unwrap()[0].content.trim(), expected);
+        } else {
+            assert!(result.tables.is_empty(), "{format:?} {mode:?}");
+        }
     }
 }
 
@@ -164,6 +174,7 @@ fn standalone_row_claim_keeps_the_public_ocr_elements() {
     let selected = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
     config.ocr.as_mut().unwrap().tesseract_config = Some(TesseractConfig {
         psm: Some(11),
+        enable_table_detection: false,
         ..Default::default()
     });
     let ordinary = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
@@ -222,4 +233,21 @@ fn markdown_picture_without_a_table_gets_no_table() {
         .filter(|line| line.contains('|'))
         .collect::<Vec<_>>();
     assert!(piped.is_empty(), "pipe lines in a non-table picture: {piped:?}");
+}
+
+#[test]
+fn explicit_psm6_markdown_keeps_the_standalone_ocr_rows_in_both_outputs() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "output_format": "markdown",
+        "ocr": {"enabled": true, "backend": "tesseract", "language": ["eng"],
+                "tesseract_config": {"psm": 6}},
+        "pages": {"extract_pages": true}
+    }))
+    .unwrap();
+    let result = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
+    let page = &result.pages.as_ref().unwrap()[0];
+    let row = "Water service 42 299,751 684.57";
+    assert_eq!(page.content.lines().filter(|line| line.trim() == row).count(), 1);
+    assert_eq!(result.content.lines().filter(|line| line.trim() == row).count(), 1);
 }

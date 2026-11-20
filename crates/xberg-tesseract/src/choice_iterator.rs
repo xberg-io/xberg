@@ -1,24 +1,29 @@
+use crate::api::TesseractAPI;
 use crate::error::{Result, TesseractError};
+use crate::native_iterator::NativeIterator;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
-use std::sync::{Arc, Mutex};
 
-pub struct ChoiceIterator {
-    handle: Arc<Mutex<*mut c_void>>,
+/// Owns a native choice iterator allocation, created by [`ResultIterator::choices`](crate::ResultIterator::choices).
+///
+/// It borrows the [`TesseractAPI`](crate::TesseractAPI) that produced the source iterator and
+/// reads the same recognition result: once the engine replaces that result, every query returns
+/// [`TesseractError::StaleIterator`]. Choice text is copied before the engine lock is released.
+pub struct ChoiceIterator<'api> {
+    inner: NativeIterator<'api>,
 }
 
-unsafe impl Send for ChoiceIterator {}
-unsafe impl Sync for ChoiceIterator {}
-
-impl ChoiceIterator {
-    /// Creates a new instance of the ChoiceIterator.
+impl<'api> ChoiceIterator<'api> {
+    /// Wraps a choice iterator created by `api` from the recognition result at `epoch`.
     ///
-    /// # Arguments
+    /// # Safety
     ///
-    /// * `handle` - Pointer to the ChoiceIterator.
-    pub fn new(handle: *mut c_void) -> Self {
+    /// `raw` must be a non-null `TessChoiceIterator` that `api`'s engine created from the result
+    /// at `epoch`, owned by nothing else.
+    pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
         ChoiceIterator {
-            handle: Arc::new(Mutex::new(handle)),
+            // SAFETY: forwarded from this function's contract. ~keep
+            inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
     }
 
@@ -28,7 +33,8 @@ impl ChoiceIterator {
     ///
     /// Returns `true` if the next choice is successful, otherwise returns `false`.
     pub fn next(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes advancement on a live choice iterator whose source word is still valid. ~keep
         Ok(unsafe { TessChoiceIteratorNext(*handle) != 0 })
     }
 
@@ -38,13 +44,15 @@ impl ChoiceIterator {
     ///
     /// Returns the UTF-8 text as a `String` if successful, otherwise returns an error.
     pub fn get_utf8_text(&self) -> Result<String> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // The returned pointer is owned by the iterator, so it must not be passed to
-        // `TessDeleteText`. ~keep
+        let handle = self.inner.lock()?;
+        // The lock guard proves the handle is live and its recognition result current. ~keep
+        // SAFETY: The guard prevents advancement through this wrapper. The source word must remain valid.
+        // The returned string borrows Tesseract's internal storage and requires no deallocation. ~keep
         let text_ptr = unsafe { TessChoiceIteratorGetUTF8Text(*handle) };
         if text_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: The non-null native string is NUL-terminated and copied before advancing or unlocking. ~keep
         let c_str = unsafe { CStr::from_ptr(text_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -55,14 +63,17 @@ impl ChoiceIterator {
     ///
     /// Returns the confidence as a `f32`.
     pub fn confidence(&self) -> Result<f32> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the read of the current choice confidence, returned as a C float.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessChoiceIteratorConfidence(*handle) })
     }
 }
 
-impl Drop for ChoiceIterator {
+impl Drop for ChoiceIterator<'_> {
     fn drop(&mut self) {
-        if let Ok(handle) = self.handle.lock() {
+        if let Some(handle) = self.inner.lock_for_release() {
+            // SAFETY: The wrapper must own the choice iterator allocation. This native deleter frees it. ~keep
             unsafe { TessChoiceIteratorDelete(*handle) };
         }
     }

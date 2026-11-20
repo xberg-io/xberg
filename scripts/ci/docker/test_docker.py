@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import random
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -317,6 +318,12 @@ def test_readonly_mount(t: TestRunner) -> None:
         t.fail_test("Read-only mount", "Failed to extract with read-only filesystem")
 
 
+# The images bind 0.0.0.0, so the server refuses to start without a token.
+API_TEST_TOKEN = secrets.token_hex(16)
+API_TOKEN_ENV_ARGS = ["-e", f"XBERG_API_TOKEN={API_TEST_TOKEN}"]
+API_AUTH_CURL_ARGS = ["-H", f"Authorization: Bearer {API_TEST_TOKEN}"]
+
+
 def _wait_for_api(port: int, retries: int = 10) -> bool:
     import urllib.request
 
@@ -332,8 +339,11 @@ def _wait_for_api(port: int, retries: int = 10) -> bool:
 def _api_get(port: int, path: str) -> str | None:
     import urllib.request
 
+    request = urllib.request.Request(
+        f"http://localhost:{port}{path}", headers={"Authorization": f"Bearer {API_TEST_TOKEN}"}
+    )
     try:
-        with urllib.request.urlopen(f"http://localhost:{port}{path}", timeout=10) as resp:
+        with urllib.request.urlopen(request, timeout=10) as resp:  # noqa: S310
             return resp.read().decode()
     except Exception:
         return None
@@ -342,7 +352,17 @@ def _api_get(port: int, path: str) -> str | None:
 def _api_post_file(port: int, path: str, filepath: str) -> str | None:
     """POST a file using curl (simplest multipart approach)."""
     r = subprocess.run(
-        ["curl", "-f", "-s", "-X", "POST", f"http://localhost:{port}{path}", "-F", f"files=@{filepath}"],
+        [
+            "curl",
+            "-f",
+            "-s",
+            *API_AUTH_CURL_ARGS,
+            "-X",
+            "POST",
+            f"http://localhost:{port}{path}",
+            "-F",
+            f"files=@{filepath}",
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -357,6 +377,7 @@ def _api_put_body(port: int, path: str, filepath: str, extra_headers: dict[str, 
         "curl",
         "-f",
         "-s",
+        *API_AUTH_CURL_ARGS,
         "-X",
         "PUT",
         f"http://localhost:{port}{path}",
@@ -375,7 +396,17 @@ def _api_put_body(port: int, path: str, filepath: str, extra_headers: dict[str, 
 
 def _api_post_multipart(port: int, path: str, filepath: str, fields: dict[str, str] | None = None) -> str | None:
     """POST a multipart form (OpenWebUI Docling engine): a `files` part plus optional text fields."""
-    cmd = ["curl", "-f", "-s", "-X", "POST", f"http://localhost:{port}{path}", "-F", f"files=@{filepath}"]
+    cmd = [
+        "curl",
+        "-f",
+        "-s",
+        *API_AUTH_CURL_ARGS,
+        "-X",
+        "POST",
+        f"http://localhost:{port}{path}",
+        "-F",
+        f"files=@{filepath}",
+    ]
     for key, value in (fields or {}).items():
         cmd += ["-F", f"{key}={value}"]
     r = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
@@ -495,6 +526,7 @@ def test_api_health(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -541,6 +573,28 @@ def test_api_health(t: TestRunner) -> None:
     t.docker_rm(name)
 
 
+def test_api_requires_token_off_loopback(t: TestRunner) -> None:
+    t.start("API refuses to start without a token on 0.0.0.0")
+    name = t.container_name()
+    try:
+        r = subprocess.run(
+            ["docker", "run", "--rm", "--name", name, t.image, "serve", "--host", "0.0.0.0", "--port", "8000"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        t.docker_rm(name)
+        t.fail_test("API token requirement", "Server started without XBERG_API_TOKEN")
+        return
+    output = r.stdout + r.stderr
+    if r.returncode != 0 and "XBERG_API_TOKEN" in output and "XBERG_ALLOW_UNAUTHENTICATED" in output:
+        t.pass_test()
+    else:
+        t.fail_test("API token requirement", f"exit={r.returncode}, output: {output[:300]}")
+
+
 def test_api_extract(t: TestRunner) -> None:
     t.start("API extraction endpoint")
     port = 9000 + random.randint(0, 999)
@@ -551,6 +605,7 @@ def test_api_extract(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -583,6 +638,7 @@ def test_api_info(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -609,6 +665,7 @@ def test_api_openapi(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -635,6 +692,7 @@ def test_api_cache(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -651,7 +709,7 @@ def test_api_cache(t: TestRunner) -> None:
 
     t.start("API /cache/clear endpoint")
     r = subprocess.run(
-        ["curl", "-f", "-s", "-X", "DELETE", f"http://localhost:{port}/cache/clear"],
+        ["curl", "-f", "-s", *API_AUTH_CURL_ARGS, "-X", "DELETE", f"http://localhost:{port}/cache/clear"],
         check=False,
         capture_output=True,
         text=True,
@@ -674,6 +732,7 @@ def test_api_batch(t: TestRunner) -> None:
         "2",
         "-p",
         f"{port}:8000",
+        *API_TOKEN_ENV_ARGS,
         t.image,
     )
     if not _wait_for_api(port):
@@ -693,6 +752,7 @@ def test_api_batch(t: TestRunner) -> None:
             "curl",
             "-f",
             "-s",
+            *API_AUTH_CURL_ARGS,
             "-X",
             "POST",
             f"http://localhost:{port}/extract",
@@ -725,7 +785,7 @@ def test_api_openweb(t: TestRunner) -> None:
     must differ from the default Markdown rendering.
     """
     port = 9000 + random.randint(0, 999)
-    name = t.docker_run_detached("--memory", "2g", "--cpus", "2", "-p", f"{port}:8000", t.image)
+    name = t.docker_run_detached("--memory", "2g", "--cpus", "2", "-p", f"{port}:8000", *API_TOKEN_ENV_ARGS, t.image)
     if not _wait_for_api(port):
         t.start("OpenWebUI endpoints")
         t.fail_test("OpenWebUI endpoints", "Server not ready")
@@ -883,6 +943,56 @@ def test_security_nonroot(t: TestRunner) -> None:
         t.fail_test("Non-root user", f"Container running as: {user} (expected: xberg)")
 
 
+def test_cli_nonroot_paths(t: TestRunner) -> None:
+    checks = """
+        test "${HOME:?}" = /app
+        test "${XBERG_CACHE_DIR:?}" = /app/.xberg
+        test "${HF_HOME:?}" = /app/.xberg/huggingface
+        touch "$HOME/.xberg-ci"
+        touch "$XBERG_CACHE_DIR/.xberg-ci"
+        mkdir -p "$HF_HOME"
+        touch "$HF_HOME/.xberg-ci"
+        test -x /usr/local/bin/xberg
+        test ! -w /usr/local/bin/xberg
+        test ! -w /usr/local/bin
+        test ! -w /usr/local/lib
+        """
+    for identity, user_args in (("the default user", ()), ("12345:0", ("--user", "12345:0"))):
+        t.start(f"CLI home and caches are writable as {identity}")
+        result = t.docker_run(
+            "--name", t.container_name(), *user_args, "--entrypoint", "/bin/sh", t.image, "-exc", checks
+        )
+        if result.returncode == 0:
+            t.pass_test()
+        else:
+            t.fail_test(
+                f"CLI filesystem access as {identity}", f"Exit code {result.returncode}: {result.stderr.strip()}"
+            )
+
+
+def test_cli_extract_as_arbitrary_uid(t: TestRunner) -> None:
+    """Extract a read-only mounted fixture with a UID absent from the image passwd file."""
+    name = "Extract plain text as UID 12345 with group 0"
+    t.start(name)
+    result = t.docker_run(
+        "--name",
+        t.container_name(),
+        "--user",
+        "12345:0",
+        "-v",
+        f"{TEST_DOCS_DIR}:/data:ro",
+        t.image,
+        "extract",
+        "/data/text/contract.txt",
+    )
+    if result.returncode != 0:
+        t.fail_test(name, f"Exit code {result.returncode}: {result.stderr.strip()[:300]}")
+    elif "Test content for contract.txt file" in result.stdout:
+        t.pass_test()
+    else:
+        t.fail_test(name, f"Expected fixture text in stdout, got: {result.stdout[:300]}")
+
+
 def test_security_readonly(t: TestRunner) -> None:
     t.start("Security: Read-only volume enforcement")
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -983,6 +1093,9 @@ def run_cli_tests(t: TestRunner) -> None:
     test_batch_cli(t)
     test_readonly_mount(t)
     test_nonexistent_file(t)
+    test_security_nonroot(t)
+    test_cli_nonroot_paths(t)
+    test_cli_extract_as_arbitrary_uid(t)
 
 
 def run_core_full_tests(t: TestRunner) -> None:
@@ -1002,6 +1115,7 @@ def run_core_full_tests(t: TestRunner) -> None:
         test_paddle_ocr_extraction(t)
 
     test_api_health(t)
+    test_api_requires_token_off_loopback(t)
     test_api_extract(t)
     test_api_info(t)
     test_api_openapi(t)

@@ -20,7 +20,10 @@ setup() {
 	dd if=/dev/zero of="$REPO_ROOT/target/tessdata/osd.traineddata" bs=100000 count=1 2>/dev/null
 	export RUNNER_OS=fixture GITHUB_WORKSPACE="$REPO_ROOT" TMPDIR="$XBERG_WORK/tmp"
 	unset BUNDLE_PATH BUNDLE_GEMFILE PIP_STATUS PYTHON_STATUS BUNDLE_STATUS VENDOR_STATUS WASM_STATUS CC_STATUS POSIX_STATUS \
-		RUST_MIN_STACK CARGO_FAILURE_MATCH JPEG_EMPTY_LIST TESSERACT_LISTED NODE_PATH RUSTFLAGS CARGO_ENCODED_RUSTFLAGS XBERG_PDFIUM_PREBUILT
+		RUST_MIN_STACK CARGO_FAILURE_MATCH CARGO_LINKS_NOTHING JPEG_EMPTY_LIST TESSERACT_LISTED NODE_PATH RUSTFLAGS CARGO_ENCODED_RUSTFLAGS XBERG_PDFIUM_PREBUILT
+	export METADATA_FIXTURE="$XBERG_WORK/metadata.json"
+	printf '{"target_directory":"%s/target","packages":[{"name":"xberg","targets":[{"name":"only-case","kind":["test"]}]}]}\n' \
+		"$REPO_ROOT" >"$METADATA_FIXTURE"
 	xberg_stub_curl_offline
 	xberg_stub pip 'printf "pip %s\n" "$*" >>"$XBERG_TRACE"' 'exit "${PIP_STATUS:-0}"'
 	xberg_stub python 'printf "python %s\n" "$*" >>"$XBERG_TRACE"' 'exit "${PYTHON_STATUS:-0}"'
@@ -32,9 +35,10 @@ setup() {
 		'if [ "$1" = metadata ]; then cat "$METADATA_FIXTURE"; exit 0; fi' \
 		'case "$*" in *"${CARGO_FAILURE_MATCH:-__never__}"*) exit 17 ;; esac' \
 		'if [ "$1" = test ]; then printf "live=%s stack=%s backtrace=%s\n" "${XBERG_SKIP_LIVE_HF:-}" "${RUST_MIN_STACK:-}" "${RUST_BACKTRACE:-}" >>"$XBERG_WORK/cargo-env"; fi' \
+		'if [ "$1" = test ] && [ -z "${CARGO_LINKS_NOTHING:-}" ]; then prev=; for arg in "$@"; do if [ "$prev" = --test ]; then out="$REPO_ROOT/target/debug/build/xberg/0123456789abcdef/out"; mkdir -p "$out"; printf "binary\n" >"$out/${arg//-/_}-0123456789abcdef"; printf "data\n" >"$out/${arg//-/_}-0123456789abcdef.d"; fi; prev=$arg; done; fi' \
 		'tests=1' \
 		'case "$*" in' \
-		'  *"-p xberg-tesseract"*) tests=3 ;;' \
+		'  *"-p xberg-tesseract"*) tests=6 ;;' \
 		'  *english_recovery_tests::small_english_*|*english_recovery_tests::large::large_english_*) tests=2 ;;' \
 		'  *encoded_pipeline::builtin_pipeline_png_*) tests=3 ;;' \
 		'esac' \
@@ -204,13 +208,19 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	export TEST_OS=Darwin TEST_ARCH=arm64 RUST_MIN_STACK=33554432
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 17 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 18 ]
 	grep -Fxq 'cargo clean -p xberg' "$XBERG_TRACE"
 	grep -Fxq 'mise run rust:clean' "$XBERG_TRACE"
-	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 17 ]
-	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 5 ]
+	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 18 ]
+	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 6 ]
 	xberg_assert_output_contains 'JPEG recovery model tests expected 9, passed 9'
-	grep -Fq -- '--features full,formula-recognition,classification-onnx,bundle-tessdata-eng --all-targets --verbose' "$XBERG_TRACE"
+	local features='full,formula-recognition,classification-onnx,bundle-tessdata-eng'
+	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --lib --benches --verbose" "$XBERG_TRACE"
+	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test only-case --verbose" "$XBERG_TRACE"
+	refute_trace_pattern '-p xberg --features [^ ]+ --all-targets'
+	xberg_assert_output_contains 'pruned test executables: 1'
+	[ ! -e "$REPO_ROOT/target/debug/build/xberg/0123456789abcdef/out/only_case-0123456789abcdef" ]
+	[ -f "$REPO_ROOT/target/debug/build/xberg/0123456789abcdef/out/only_case-0123456789abcdef.d" ]
 	grep -Fq -- '-p xberg-candle-ocr --features trocr,paddleocr-vl,glm-ocr,deepseek-ocr' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-gliner --features candle,ort-dynamic' "$XBERG_TRACE"
 	grep -Fq -- '-p xberg-libheif --all-targets' "$XBERG_TRACE"
@@ -243,7 +253,7 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 1
 	xberg_assert_output_contains '=== Test execution failed ==='
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 1 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 2 ]
 	refute_trace_pattern '^cargo clean '
 	[[ "$output" != *'=== Tests complete ==='* ]]
 }
@@ -253,21 +263,21 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 1
 	xberg_assert_output_contains "expected 2 collected tests, observed 0"
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 2 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 3 ]
 	refute_trace_pattern '^cargo clean '
 }
 
 @test "Rust unit runner should reject a Tesseract exit cleanup leg that lists the wrong number of tests" {
-	for listed in 0 2; do
+	for listed in 0 5; do
 		export TESSERACT_LISTED=$listed
 		: >"$XBERG_TRACE"
 		run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 		xberg_assert_status 1
-		xberg_assert_output_contains "expected 3 collected tests, observed $listed"
+		xberg_assert_output_contains "expected 6 collected tests, observed $listed"
 		grep -Fq -- '-p xberg-tesseract --all-features --test exit_cleanup_leak --test exit_cleanup_race -- --list' "$XBERG_TRACE"
 		refute_trace_pattern 'xberg-tesseract.*--no-fail-fast'
 		refute_trace_pattern '-p xberg-libheif'
-		[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 13 ]
+		[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 14 ]
 	done
 }
 
@@ -276,6 +286,15 @@ prepare_chunk_metadata() {
 	printf '{"target_directory":"%s/target","packages":[{"name":"xberg","targets":%s}]}\n' \
 		"$REPO_ROOT" "$1" >"$METADATA_FIXTURE"
 	export TEST_OS=Linux TEST_ARCH=x86_64 XBERG_TEST_CHUNK_SIZE=1
+}
+
+@test "Rust chunked runner should fail a chunk whose executables it cannot find to prune" {
+	export TEST_OS=Darwin CARGO_LINKS_NOTHING=1
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'pruned test executables: 0'
+	xberg_assert_output_contains 'no test executables found to prune for: only-case'
+	refute_trace_pattern '^cargo clean '
 }
 
 @test "Rust chunked runner should reject zero collected integration targets before executing tests" {

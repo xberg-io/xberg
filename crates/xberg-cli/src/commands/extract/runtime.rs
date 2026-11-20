@@ -55,7 +55,9 @@ fn build_runtime(config: &ExtractionConfig) -> std::io::Result<tokio::runtime::R
 }
 
 pub(super) fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    build_runtime(config)?.block_on(extract(input, config))
+    build_runtime(config)?
+        .block_on(extract(input, config))
+        .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
 }
 
 pub(super) fn block_on_extract_batch(

@@ -29,13 +29,17 @@ fn extraction_config() -> ExtractionConfig {
 }
 
 fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    extract_mime(bytes, "application/pdf", config)
+}
+
+fn extract_mime(bytes: &[u8], mime: &str, config: &ExtractionConfig) -> ExtractedDocument {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("integration runtime");
     let mut result = runtime
         .block_on(extract_public(
-            ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
+            ExtractInput::from_bytes(bytes.to_vec(), mime, None),
             config,
         ))
         .expect("extract with the real Tesseract backend");
@@ -76,6 +80,97 @@ fn assert_image_text(document: &ExtractedDocument, used_strips: bool) {
         assert_eq!(confidence.word_count, 440);
         assert_eq!(confidence.backend, "tesseract");
     }
+}
+
+fn standalone_gray_png(pdf: &[u8], height: u32) -> Vec<u8> {
+    use image::ImageEncoder;
+    let source = lopdf::Document::load_mem(pdf).unwrap();
+    let mut images = source
+        .objects
+        .values()
+        .filter_map(|object| object.as_stream().ok())
+        .filter(|stream| stream.dict.get(b"Subtype").and_then(lopdf::Object::as_name).ok() == Some(b"Image"));
+    let stream = images.next().unwrap();
+    assert!(images.next().is_none());
+    assert_eq!(
+        stream.dict.get(b"ColorSpace").and_then(lopdf::Object::as_name).unwrap(),
+        b"DeviceGray"
+    );
+    let width = stream.dict.get(b"Width").and_then(lopdf::Object::as_i64).unwrap() as u32;
+    let source_height = stream.dict.get(b"Height").and_then(lopdf::Object::as_i64).unwrap() as u32;
+    let mut pixels = stream.decompressed_content().unwrap();
+    assert_eq!(pixels.len(), (width * source_height) as usize);
+    assert!(height >= source_height);
+    pixels.resize((width * height) as usize, 255);
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(&pixels, width, height, image::ExtendedColorType::L8)
+        .unwrap();
+    png
+}
+
+#[test]
+fn clamped_standalone_tall_png_recovers_every_source_word() {
+    let config = extraction_config();
+    let tall = extract_mime(&standalone_gray_png(TALL, 12000), "image/png", &config);
+    assert!(tall.metadata.ocr_used);
+    assert_image_text(&tall, true);
+    assert!(tall.metadata.image_preprocessing.is_none());
+    let short = extract_mime(&standalone_gray_png(SHORT, 3600), "image/png", &config);
+    assert!(short.metadata.ocr_used);
+    assert!(!strip_warning(&short));
+    assert!(
+        !short
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("source-image strips were not used"))
+    );
+}
+
+#[test]
+fn a_standalone_tall_png_without_certified_blank_rows_names_the_skip() {
+    let config = extraction_config();
+    let two_columns = two_column_gray_png(TALL, 12000);
+    let document = extract_mime(&two_columns, "image/png", &config);
+    assert!(document.metadata.ocr_used);
+    assert!(!strip_warning(&document));
+    let warnings = document
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.contains("source-image strips were not used"))
+        .map(|warning| warning.message.as_ref())
+        .collect::<Vec<_>>();
+    let [warning] = warnings.as_slice() else {
+        panic!("expected one skip warning, got {warnings:?}");
+    };
+    assert!(warning.starts_with("Standalone image OCR reduced "), "{warning}");
+    assert!(warning.ends_with("The text may be incomplete."), "{warning}");
+    assert!(!warning.contains("requires PDF input"), "{warning}");
+}
+
+/// Two 900 px columns separated by a 100 px gap exceed the certified column gap, so the
+/// source rows cannot be certified and recovery must say so rather than guess. ~keep
+fn two_column_gray_png(pdf: &[u8], height: u32) -> Vec<u8> {
+    use image::ImageEncoder;
+    let source = standalone_gray_png(pdf, height);
+    let decoded = image::load_from_memory(&source).unwrap().into_luma8();
+    let (width, _) = decoded.dimensions();
+    let column = 900;
+    let output_width = 1900;
+    let mut pixels = vec![255; (output_width * height) as usize];
+    for row in 0..height {
+        for x in 0..column {
+            let sample = decoded.get_pixel(x, row)[0];
+            pixels[(row * output_width + x) as usize] = sample;
+            pixels[(row * output_width + column + 100 + x) as usize] = sample;
+        }
+    }
+    assert_eq!(width, 1275);
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(&pixels, output_width, height, image::ExtendedColorType::L8)
+        .unwrap();
+    png
 }
 
 #[test]
@@ -213,10 +308,9 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
     }
 }
 
-/// A single-page scan takes the whole-document route, which reads no embedded image after a render
-/// refusal: Djot output has no strip recovery, so it keeps the refusal as it is.
+/// Djot preserves the render refusal and reports the noisy embedded-image probe.
 #[test]
-fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
+fn tall_gray_jpeg_djot_keeps_the_typed_refusal_and_reports_retry_noise() {
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false,
         "output_format": "djot",
@@ -249,6 +343,7 @@ fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
         panic!("expected the typed render refusal, got {error:?}");
     };
     assert!(message.contains("image working budget"), "{message}");
+    assert!(message.contains("the retry read was rejected as noise"), "{message}");
     let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
         source
             .source()
@@ -424,39 +519,77 @@ fn indexed_scan_rendered_at_120_dpi_recovers_every_source_word() {
 }
 
 #[test]
-fn bilevel_rgb_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
-    for source in [
-        fixture_120!("bilevel-120.pdf"),
-        fixture_120!("neutral-rgb-120.pdf"),
-        fixture_120!("jpeg-120.pdf"),
-    ] {
-        let document = extract(source, &extraction_config());
-        assert!(!strip_warning(&document));
-        assert!(
-            document
-                .processing_warnings
-                .iter()
-                .any(|warning| warning.message.contains("source-image strips were not used")),
-            "{:?}",
-            document.processing_warnings
-        );
-    }
+fn neutral_rgb_scan_rendered_at_120_dpi_recovers_every_source_word() {
+    assert_exact_tall_source_text(fixture_120!("neutral-rgb-120.pdf"));
+}
+
+#[test]
+fn neutral_rgb_120_dpi_keeps_stock_when_four_reread_calls_cannot_be_reserved() {
+    let mut config = extraction_config();
+    config.ocr.as_mut().unwrap().security_limits =
+        Some(serde_json::from_value(serde_json::json!({ "max_iterations": 7 })).unwrap());
+    let document = extract(fixture_120!("neutral-rgb-120.pdf"), &config);
+    assert!(!strip_warning(&document));
+    assert!(!document.content.split_whitespace().eq(ORACLE.split_whitespace()));
+}
+
+#[test]
+fn bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
+    let bilevel = extract(fixture_120!("bilevel-120.pdf"), &extraction_config());
+    assert_bilevel_density_warning(&bilevel, 120);
+    let jpeg = extract(fixture_120!("jpeg-120.pdf"), &extraction_config());
+    assert!(!strip_warning(&jpeg));
+    let warnings = not_used_warnings(&jpeg);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(!warnings[0].contains("one-bit grayscale"), "{warnings:?}");
+}
+
+#[test]
+fn a_120_dpi_bilevel_scan_explains_the_source_density_refusal() {
+    use sha2::{Digest, Sha256};
+
+    let source = fixture_120!("bilevel-120.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(source)),
+        "a77555aab24bedb54f6c92142766e82e44114702609d59d04928551ce36a2b13"
+    );
+    let result = extract(source, &extraction_config());
+    assert!(result.metadata.ocr_used);
+    assert!(!strip_warning(&result));
+    assert_bilevel_density_warning(&result, 120);
 }
 
 #[test]
 fn tall_scans_below_the_density_floor_say_recovery_was_not_used() {
-    for source in [TALL_PREDICTOR, NEUTRAL_RGB, BILEVEL] {
+    for source in [TALL_PREDICTOR, NEUTRAL_RGB] {
         let document = extract(&lower_density(source, BELOW_FLOOR_DENSITY), &extraction_config());
         assert!(!strip_warning(&document));
-        assert!(
-            document
-                .processing_warnings
-                .iter()
-                .any(|warning| warning.message.contains("source-image strips were not used")),
-            "{:?}",
-            document.processing_warnings
-        );
+        let warnings = not_used_warnings(&document);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(!warnings[0].contains("one-bit grayscale"), "{warnings:?}");
     }
+    let bilevel = extract(&lower_density(BILEVEL, BELOW_FLOOR_DENSITY), &extraction_config());
+    assert_bilevel_density_warning(&bilevel, 100);
+}
+
+#[test]
+fn fractional_bilevel_source_density_is_floored_below_the_minimum() {
+    let source = lower_density(BILEVEL, (614, 5779));
+    assert_bilevel_density_warning(&extract(&source, &extraction_config()), 149);
+}
+
+fn assert_bilevel_density_warning(document: &ExtractedDocument, dpi: u32) {
+    assert!(!strip_warning(document));
+    let warnings = not_used_warnings(document);
+    assert_eq!(warnings.len(), 1, "expected one retained-read warning: {warnings:?}");
+    let (_, reason) = warnings[0].split_once(": ").expect("a warning with a recovery reason");
+    assert_eq!(
+        reason,
+        format!(
+            "the {dpi} DPI one-bit grayscale Flate scan is below the 150 DPI strip-recovery minimum. \
+             The text may be incomplete."
+        ),
+    );
 }
 
 #[test]
@@ -558,6 +691,86 @@ fn not_used_warnings(document: &ExtractedDocument) -> Vec<&str> {
         .collect()
 }
 
+#[test]
+fn an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm() {
+    use sha2::{Digest, Sha256};
+
+    const CACHE: &str = "XBERG_TEST_TALL_JPEG_WARNING_CACHE";
+    if std::env::var_os(CACHE).is_none() {
+        let cache = tempfile::tempdir().expect("isolated OCR cache");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "an_unsupported_tall_jpeg_reports_one_preprocessing_warning_cold_and_warm",
+                "--nocapture",
+            ])
+            .env(CACHE, "1")
+            .env("XBERG_CACHE_DIR", cache.path())
+            .output()
+            .expect("run cold and warm extraction in an isolated process");
+        let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{report}");
+        assert!(
+            report.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "{report}"
+        );
+        let lookups: Vec<_> = report
+            .lines()
+            .filter(|line| line.contains("OCR cache lookup"))
+            .collect();
+        let [cold, warm] = lookups.as_slice() else {
+            panic!("expected two OCR cache lookups: {lookups:?}\n{report}");
+        };
+        assert!(cold.contains("xberg.cache.hit=false"), "{cold}");
+        assert!(warm.contains("xberg.cache.hit=true"), "{warm}");
+        return;
+    }
+
+    tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init()
+        .expect("isolated cache lookup logging");
+    assert_eq!(
+        hex::encode(Sha256::digest(TALL_JPEG)),
+        "c1d51612ea92e34e7ac0bac621fad1615d14508e4864402839478a45e6001da8"
+    );
+    // Call the PDF extractor directly to bypass the document cache and exercise cached OCR metadata. ~keep
+    // Optional script retries can suppress OCR cache publication if their models fail. ~keep
+    let config = configured(serde_json::json!({
+        "use_cache": true,
+        "output_format": "html",
+        "security_limits": { "max_content_size": 192 * 1024 * 1024 },
+        "ocr": {
+            "backend_options": { "use_cache": true },
+            "quality_thresholds": { "min_ocr_mean_confidence": 0.0 }
+        },
+    }));
+    use xberg::extractors::pdf::PdfExtractor;
+    use xberg::plugins::DocumentExtractor;
+
+    let extractor = PdfExtractor;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("integration runtime");
+    for _ in 0..2 {
+        let input = ExtractInput::from_bytes(TALL_JPEG.to_vec(), "application/pdf", None);
+        let document = runtime
+            .block_on(extractor.extract(input, &config))
+            .expect("extract with the real Tesseract backend");
+        assert!(!strip_warning(&document));
+        assert_eq!(
+            not_used_warnings(&document),
+            [
+                "Page 1 was read from a 150 DPI render that OCR preprocessing reduced to 51 DPI and its \
+              source-image strips were not used: the output format is not plain text or Markdown. \
+              The text may be incomplete."
+            ]
+        );
+    }
+}
+
 /// The mixed route retries nothing for a scan its configuration keeps from strip recovery, and says why.
 #[test]
 fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
@@ -567,12 +780,15 @@ fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
     );
     assert_eq!(blocked.extraction_method, Some(ExtractionMethod::Mixed));
     assert!(!strip_warning(&blocked));
+    let warnings = not_used_warnings(&blocked);
+    let [warning] = warnings.as_slice() else {
+        panic!("expected one warning for the mixed scan, got {warnings:?}");
+    };
     assert_eq!(
-        not_used_warnings(&blocked),
-        vec![
-            "Page 2 was read from a render downscaled to 130 DPI and its source-image strips were not used: \
-             per-element results or document structure were requested. The text may be incomplete."
-        ]
+        *warning,
+        "Page 2 was read from a 130 DPI render that OCR preprocessing reduced to 68 DPI and its \
+         source-image strips were not used: per-element results or document structure were requested. \
+         The text may be incomplete."
     );
     let allowed = extract(MIXED, &extraction_config());
     assert!(strip_warning(&allowed));

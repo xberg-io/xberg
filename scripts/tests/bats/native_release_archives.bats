@@ -105,12 +105,12 @@ alef publish package --lang go --target $GO_TARGET --version 1.4.0 --output $XBE
 }
 
 @test "Go release packaging should strip terminal escapes from macOS link flags and keep libc++ untouched" {
-	export ALEF_NATIVE_LIBS='-framework Security -lc++ -lc\033[0m'
+	export ALEF_NATIVE_LIBS='   -framework Security -lstdc++ -lstdc++fs -lc++ -lc\033[0m'
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/package-go-release.sh" "$GO_TARGET" 1.4.0 "$XBERG_WORK/output"
 	xberg_assert_status 0
 	mkdir extracted
 	tar -xzf "output/xberg-go-v1.4.0-$GO_PLATFORM.tar.gz" -C extracted
-	[ "$(cat "extracted/$GO_PLATFORM/lib/native-static-libs.txt")" = '-framework Security -lc++ -lc' ]
+	[ "$(cat "extracted/$GO_PLATFORM/lib/native-static-libs.txt")" = '-framework Security -lstdc++ -lstdc++fs -lc++ -lc' ]
 }
 
 @test "Go release packaging should restore both glibc-floor libraries after the generic build overwrites them" {

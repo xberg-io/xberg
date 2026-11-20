@@ -32,7 +32,19 @@ const MAX_MODEL_ROOTS: usize = 64;
 pub(crate) struct Cacheability(
     Arc<Operation>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<crate::cancellation::CancellationToken>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<Arc<request_models::RequestModels>>,
 );
+
+#[cfg(any(
+    all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
+    all(feature = "ocr", not(target_arch = "wasm32"))
+))]
+#[derive(Eq, Hash, PartialEq)]
+enum ModelObservation {
+    Osd(PathBuf),
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    VerticalJapanese(Vec<String>),
+}
 
 #[derive(Default)]
 struct Operation {
@@ -43,7 +55,7 @@ struct Operation {
         all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
         all(feature = "ocr", not(target_arch = "wasm32"))
     ))]
-    revisions: Mutex<HashMap<PathBuf, blake3::Hash>>,
+    revisions: Mutex<HashMap<ModelObservation, blake3::Hash>>,
 }
 
 #[cfg(feature = "tokio-runtime")]
@@ -70,12 +82,20 @@ impl Cacheability {
         all(feature = "ocr", not(target_arch = "wasm32"))
     ))]
     fn observe(&self, root: PathBuf, revision: blake3::Hash) {
+        self.observe_model(ModelObservation::Osd(root), revision);
+    }
+
+    #[cfg(any(
+        all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
+        all(feature = "ocr", not(target_arch = "wasm32"))
+    ))]
+    fn observe_model(&self, model: ModelObservation, revision: blake3::Hash) {
         let Ok(mut revisions) = self.0.revisions.lock() else {
             self.invalidate();
             tracing::warn!("Model observation state was poisoned; bypassing operation caches");
             return;
         };
-        match revisions.get(&root) {
+        match revisions.get(&model) {
             Some(previous) if *previous != revision => self.invalidate(),
             Some(_) => {}
             None if revisions.len() >= MAX_MODEL_ROOTS => {
@@ -83,7 +103,7 @@ impl Cacheability {
                 tracing::warn!("Model observation bound reached; bypassing operation caches");
             }
             None => {
-                revisions.insert(root, revision);
+                revisions.insert(model, revision);
             }
         }
     }
@@ -133,14 +153,19 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
     token: Option<&crate::cancellation::CancellationToken>,
     future: F,
 ) -> F::Output {
-    let Some(token) = token else {
-        return future.await;
-    };
     let mut context = current().unwrap_or_default();
-    context.1 = Some(token.clone());
+    if let Some(token) = token {
+        context.1 = Some(token.clone());
+    }
+    let models = Arc::new(request_models::RequestModels::default());
+    context.2 = Some(Arc::clone(&models));
     ASYNC_CONTEXT
         .scope(context, async {
             let result = future.await;
+            if let Err(error) = tokio::task::spawn_blocking(blocking(move || models.finish())).await {
+                tracing::warn!(%error, "Could not finish OCR model validation");
+                invalidate_current();
+            }
             // The engine checks the shared operation after this per-input token leaves scope. ~keep
             if ocr_stop_requested() {
                 block_outer_result_publication();
@@ -151,10 +176,13 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_stop_token() -> Option<crate::cancellation::CancellationToken> {
+    current().and_then(|context| context.1)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn ocr_stop_requested() -> bool {
-    current()
-        .and_then(|context| context.1)
-        .is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
+    ocr_stop_token().is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
 }
 
 #[cfg(all(feature = "ocr", target_arch = "wasm32"))]
@@ -231,8 +259,44 @@ pub(crate) fn blocking<F: FnOnce() -> T, T>(operation: F) -> impl FnOnce() -> T 
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod request_models;
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) use request_models::request_model_digest;
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
+    if ocr_stop_requested() {
+        return;
+    }
+    if let Some(models) = current().and_then(|context| context.2) {
+        models.defer(write);
+    } else {
+        write();
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn observe_vertical_model(directories: &[String], revision: Option<blake3::Hash>) {
+    if let Some(context) = current() {
+        context.observe_model(
+            ModelObservation::VerticalJapanese(directories.to_vec()),
+            revision.unwrap_or_else(|| blake3::hash(b"missing-vertical-japanese")),
+        );
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn osd_revision(directory: &Path) -> crate::Result<blake3::Hash> {
-    let result = read_osd_revision(directory);
+    osd_revision_with(directory, crate::cache::blake3_hash_file)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn osd_revision_with(
+    directory: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<blake3::Hash> {
+    let result = read_osd_revision(directory, read_hash);
     match &result {
         Ok((root, revision)) => {
             if let Some(context) = current() {
@@ -245,11 +309,23 @@ pub(crate) fn osd_revision(directory: &Path) -> crate::Result<blake3::Hash> {
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn read_osd_revision(directory: &Path) -> crate::Result<(PathBuf, blake3::Hash)> {
+fn read_osd_revision(
+    directory: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<(PathBuf, blake3::Hash)> {
     let root = std::fs::canonicalize(directory)?;
     let path = root.join("osd.traineddata");
+    let revision = fingerprint_osd_file(&path, read_hash)?;
+    Ok((root, revision))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn fingerprint_osd_file(
+    path: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<blake3::Hash> {
     let mut hash = blake3::Hasher::new();
-    match std::fs::metadata(&path) {
+    match std::fs::metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             hash.update(b"missing-osd");
         }
@@ -258,15 +334,15 @@ fn read_osd_revision(directory: &Path) -> crate::Result<(PathBuf, blake3::Hash)>
             hash.update(b"osd-is-not-file");
         }
         Ok(_) => {
-            let resolved = std::fs::canonicalize(&path)?;
+            let resolved = std::fs::canonicalize(path)?;
             hash.update(b"present-osd");
             let name = resolved.as_os_str().as_encoded_bytes();
             hash.update(&(name.len() as u64).to_le_bytes());
             hash.update(name);
-            hash.update(crate::cache::blake3_hash_file(&resolved)?.as_bytes());
+            hash.update(read_hash(&resolved)?.as_bytes());
         }
     }
-    Ok((root, hash.finalize()))
+    Ok(hash.finalize())
 }
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]

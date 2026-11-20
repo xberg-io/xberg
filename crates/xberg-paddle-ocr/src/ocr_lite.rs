@@ -141,6 +141,17 @@ impl PaddleOcrEngine {
         }
     }
 
+    /// Recognize a source crop with the loaded recognizer and no detector or angle classifier.
+    #[doc(hidden)]
+    pub fn recognize_source_crop(&self, image: &image::RgbImage) -> Result<String, OcrError> {
+        const HEIGHT: u32 = 48;
+        let width = image.width().saturating_mul(HEIGHT) / image.height().max(1);
+        let resized = image::imageops::resize(image, width.max(1), HEIGHT, image::imageops::FilterType::Triangle);
+        self.crnn_net
+            .get_text_lines(&[resized], &HashMap::new(), 0.0, 1)
+            .map(|mut lines| lines.pop().map_or_else(String::new, |line| line.text))
+    }
+
     pub fn init_models(
         &mut self,
         det_path: &str,

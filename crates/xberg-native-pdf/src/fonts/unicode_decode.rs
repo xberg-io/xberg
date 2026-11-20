@@ -539,22 +539,30 @@ pub(crate) fn char_codes_with_len(bytes: &[u8], font: &FontInfo) -> Vec<(u32, us
     }
 }
 
-/// `char_to_unicode` then the shared fallback, except that a code outside
-/// the Unicode scalar range only becomes '?' under
-/// `DecodePolicy::question_mark_for_invalid` — otherwise it is returned as
-/// U+FFFD so the caller's drop/tally branch sees it.
-fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3: bool) -> String {
-    if let Some(char_str) = font.char_to_unicode(code) {
-        return char_str;
+/// Append `char_to_unicode` or the shared fallback for `code` to `out`; a code outside the Unicode
+/// scalar range becomes '?' only under `DecodePolicy::question_mark_for_invalid`, else U+FFFD. A
+/// U+FFFD is appended only under `preserve_unmapped`; `false` means it was dropped (to tally).
+fn push_resolved(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3: bool, out: &mut String) -> bool {
+    if let Some(kept) = font.with_char_to_unicode(code, |mapped| mapped.map(|s| push_unless_dropped(out, s, policy))) {
+        return kept;
     }
     if char::from_u32(code).is_none() && !policy.question_mark_for_invalid {
-        return "\u{FFFD}".to_string();
+        return push_unless_dropped(out, "\u{FFFD}", policy);
     }
-    if policy.question_mark_for_invalid {
+    let fallback = if policy.question_mark_for_invalid {
         fallback_extraction_char_to_unicode(unmapped_type3, code)
     } else {
         fallback_char_to_unicode(code)
+    };
+    push_unless_dropped(out, &fallback, policy)
+}
+
+fn push_unless_dropped(out: &mut String, char_str: &str, policy: DecodePolicy) -> bool {
+    let keep = char_str != "\u{FFFD}" || policy.preserve_unmapped;
+    if keep {
+        out.push_str(char_str);
     }
+    keep
 }
 
 /// The marker a preserved decode leaves for a glyph without a Unicode value when its font is a
@@ -647,7 +655,7 @@ pub(crate) fn mark_symbol_font_losses(decoded: String, font: Option<&FontInfo>, 
 }
 
 /// Decode `bytes` for a simple (non-Type0) font via its precomputed
-/// byte→char table, falling back to `resolve_char` for unmapped bytes. Split
+/// byte→char table, falling back to `push_resolved` for unmapped bytes. Split
 /// out of `decode_text_to_unicode` purely to keep that function within the
 /// repository's line-length guideline; behavior is unchanged. ~keep
 fn decode_simple_font_bytes(
@@ -659,19 +667,16 @@ fn decode_simple_font_bytes(
     let unmapped_type3 = policy.question_mark_for_invalid
         && font.subtype == "Type3"
         && font.best_mapping_provenance() == MappingProvenance::Fallback;
-    let mut result = String::new();
+    let mut result = String::with_capacity(bytes.len());
     let table = font.get_byte_to_char_table();
     for &byte in bytes {
         let c = table[byte as usize];
         if c != '\0' {
             result.push(c);
-        } else {
-            let char_str = resolve_char(font, byte as u32, policy, unmapped_type3);
-            if char_str != "\u{FFFD}" || policy.preserve_unmapped {
-                result.push_str(&char_str);
-            } else if let Some(tally) = drops.as_deref_mut() {
-                tally.record("no Unicode mapping", byte as u32, 0);
-            }
+        } else if !push_resolved(font, byte as u32, policy, unmapped_type3, &mut result)
+            && let Some(tally) = drops.as_deref_mut()
+        {
+            tally.record("no Unicode mapping", byte as u32, 0);
         }
     }
     result
@@ -693,12 +698,11 @@ fn decode_utf8_cmap_bytes(
     policy: DecodePolicy,
     mut drops: Option<&mut GlyphDropTally>,
 ) -> String {
-    let mut result = String::new();
+    let mut result = String::with_capacity(bytes.len());
     for code in utf8_codes(bytes) {
-        let char_str = resolve_char(font, code, policy, false);
-        if char_str != "\u{FFFD}" || policy.preserve_unmapped {
-            result.push_str(&char_str);
-        } else if let Some(tally) = drops.as_deref_mut() {
+        if !push_resolved(font, code, policy, false, &mut result)
+            && let Some(tally) = drops.as_deref_mut()
+        {
             tally.record("no Unicode mapping", code, 0);
         }
     }
@@ -715,13 +719,11 @@ fn decode_generic_type0_bytes(
     policy: DecodePolicy,
     mut drops: Option<&mut GlyphDropTally>,
 ) -> String {
-    let mut result = String::new();
+    let mut result = String::with_capacity(bytes.len());
     for (char_code, _) in TextCharIter::new(bytes, Some(font)) {
-        let char_str = resolve_char(font, char_code as u32, policy, false);
-
-        if char_str != "\u{FFFD}" || policy.preserve_unmapped {
-            result.push_str(&char_str);
-        } else if let Some(tally) = drops.as_deref_mut() {
+        if !push_resolved(font, char_code as u32, policy, false, &mut result)
+            && let Some(tally) = drops.as_deref_mut()
+        {
             tally.record("no Unicode mapping", char_code as u32, 0);
         }
     }

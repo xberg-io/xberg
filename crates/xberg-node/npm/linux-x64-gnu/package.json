@@ -10,7 +10,7 @@
     }
   ],
   "name": "@xberg-io/xberg-linux-x64-gnu",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -434,3 +434,38 @@ fn zip_bomb_ratio_cap_ignores_small_members_and_keeps_large_ones() {
         .expect_err("an 8 MiB member past the ratio cap is rejected");
     assert!(matches!(error, SecurityError::ZipBombDetected { .. }), "{error}");
 }
+
+#[cfg(feature = "archives")]
+#[test]
+fn archive_budget_refuses_a_charge_past_the_limit_without_consuming_it() {
+    let limits = SecurityLimits {
+        max_archive_size: 100,
+        max_content_size: 10,
+        ..Default::default()
+    };
+    let budget = ArchiveBudget::new(&limits);
+
+    budget.charge_decompressed(60).expect("60 of 100 fits");
+    assert_eq!(budget.remaining_decompressed(), 40);
+    assert!(matches!(
+        budget.charge_decompressed(41),
+        Err(SecurityError::ArchiveTooLarge { size: 101, max: 100 })
+    ));
+    assert_eq!(
+        budget.remaining_decompressed(),
+        40,
+        "a refused charge must not consume budget"
+    );
+    budget.charge_decompressed(40).expect("exactly the remainder fits");
+    assert_eq!(budget.remaining_decompressed(), 0);
+    assert!(
+        budget.charge_decompressed(usize::MAX).is_err(),
+        "a huge charge must not wrap"
+    );
+
+    budget.charge_child_output(10).expect("10 of 10 fits");
+    assert!(matches!(
+        budget.charge_child_output(1),
+        Err(SecurityError::ContentTooLarge { size: 11, max: 10 })
+    ));
+}

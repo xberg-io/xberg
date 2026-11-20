@@ -6,7 +6,7 @@
 //! coordinate system (origin top-left, y increases downward).
 
 use crate::layout::models::tatr::{self, TatrModel};
-use crate::layout::types::{BBox, DetectionResult, LayoutClass, RecognizedTable};
+use crate::layout::types::{BBox, DetectionResult, LayoutClass, LayoutDetection, RecognizedTable};
 use crate::types::internal::table_grid::TableGridSidecar;
 use crate::types::{BoundingBox, GridCell, OcrElement, OcrElementLevel, Table, TableGrid};
 
@@ -70,6 +70,10 @@ impl RecognizedTablesOutcome {
     }
 }
 
+pub(crate) fn can_recognize_table_region(detection: &LayoutDetection) -> bool {
+    !(detection.class_name != LayoutClass::Table || detection.confidence < MIN_CONFIDENCE)
+}
+
 /// Recognize detected table regions while retaining private structure metadata and unrecognized OCR text.
 pub(crate) fn recognize_page_tables_with_fallback(
     page_image: &image::RgbImage,
@@ -80,7 +84,7 @@ pub(crate) fn recognize_page_tables_with_fallback(
     let mut outcome = RecognizedTablesOutcome::default();
 
     for det in &detection.detections {
-        if det.class_name != LayoutClass::Table || det.confidence < MIN_CONFIDENCE {
+        if !can_recognize_table_region(det) {
             continue;
         }
 

@@ -1,9 +1,10 @@
+# xberg-release-smoke: mimalloc-required ~keep
 # =============================================================================
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS builder
 
 ARG CARGO_BUILD_JOBS=1
 
-ARG RUST_TOOLCHAIN=1.99.1
+ARG RUST_TOOLCHAIN=1.100.0
 # Must equal the binding set compiled into xberg-pdfium-render
 # (`src/lib.rs` includes `bindgen/pdfium_7678.rs`, the only one in the tree). The engine
 # dlopen()s this library at run time, so a mismatch is not a build error: a missing symbol
@@ -13,10 +14,7 @@ ARG PDFIUM_VERSION=7678
 
 WORKDIR /build
 
-# Alpine's /bin/sh is busybox ash, which supports `-o pipefail`. Without it the
-# `curl ... | sh` rustup bootstrap below reports only sh's status, so a failed or
-# truncated download silently installs nothing, and the `readelf ... | grep`
-# linkage diagnostics report success on an empty pipe. (hadolint DL4006)
+# Propagate failures through checksum and linkage diagnostic pipelines. ~keep
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 RUN apk add --no-cache \
@@ -28,8 +26,21 @@ RUN apk add --no-cache \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+# The pins come from the matching rustup-init.sha256 files in Rust's release archive. ~keep
+RUN RUSTUP_VERSION=1.29.3 && \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) RUSTUP_SHA256=1552169aba2836777136ccff7a381e95c17233b5d8250cd5e10ae3cb971bfcfc ;; \
+        aarch64) RUSTUP_SHA256=956deacdc27ab82ae7ac821d5d3e9e95e4795d476d17efe99743bb8531ca1031 ;; \
+        *) printf 'Unsupported Rustup architecture: %s\n' "$ARCH" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${ARCH}-unknown-linux-musl/rustup-init" \
+        -o rustup-init && \
+    printf '%s  rustup-init\n' "$RUSTUP_SHA256" | sha256sum -c - && \
+    chmod 0755 rustup-init && \
+    ./rustup-init -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+    rm rustup-init && \
     echo "Rust host: $(~/.cargo/bin/rustc -vV | grep host)" && \
     echo "Default target: $(~/.cargo/bin/rustc --print cfg | grep target)"
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -44,14 +55,23 @@ ENV ORT_PREFER_DYNAMIC_LINK=1
 # chromium-browser-snapshots mirror used for the glibc images -- so this is
 # single-source with retries. Bundled into /build/lib below (not linked at build
 # time; see crates/xberg/src/extractors/pdf/pdfium_engine.rs for why).
+COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh scripts/pdfium-runtime-checksums.sha256 /opt/xberg-integrity/
+
 RUN mkdir -p /build/pdfium && \
+    case "$PDFIUM_VERSION" in ''|*[!0-9]*) echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2; exit 1 ;; esac && \
     ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then PDFIUM_ARCH="arm64"; else PDFIUM_ARCH="x64"; fi && \
+    PDFIUM_ASSET="pdfium-linux-musl-${PDFIUM_ARCH}.tgz" && \
+    PDFIUM_ARCHIVE="/build/${PDFIUM_VERSION}-${PDFIUM_ASSET}" && \
+    apk add --no-cache --virtual .pdfium-verify bash && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 --known && \
     curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
-        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-linux-musl-${PDFIUM_ARCH}.tgz" \
-        -o /build/pdfium.tgz && \
-    tar -xzf /build/pdfium.tgz -C /build/pdfium && \
-    rm /build/pdfium.tgz
+        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/${PDFIUM_ASSET}" \
+        -o "$PDFIUM_ARCHIVE" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 && \
+    tar -xzf "$PDFIUM_ARCHIVE" -C /build/pdfium && \
+    rm "$PDFIUM_ARCHIVE" && \
+    apk del .pdfium-verify
 
 COPY Cargo.toml Cargo.lock ./
 COPY vendored/sysinfo/ vendored/sysinfo/
@@ -77,7 +97,7 @@ RUN sed -i '/xberg-py/d; /xberg_rb/d; /xberg-node/d; /xberg-ffi/d; /xberg-jni/d;
 ARG XBERG_BUILD_ID
 
 RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
-    cargo build --profile release-musl --package xberg-cli --features all && \
+    cargo build --profile release-musl --package xberg-cli --features all,mimalloc && \
     cp target/release-musl/xberg /build/xberg && \
     strip /build/xberg
 
@@ -130,7 +150,7 @@ RUN set -eu; \
 
 RUN mv /build/xberg /build/xberg.bin && \
     INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \
-    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
+    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexport PDFIUM_DYNAMIC_LIB_PATH="$SCRIPT_DIR/lib"\nif [ -z "${MIMALLOC_PURGE_DELAY+x}${MIMALLOC_RESET_DELAY+x}" ]; then export MIMALLOC_PURGE_DELAY=0; fi\nexport MIMALLOC_ALLOW_THP="${MIMALLOC_ALLOW_THP-0}"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
         "$INTERP_NAME" > /build/xberg && \
     chmod +x /build/xberg
 

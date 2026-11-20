@@ -615,7 +615,7 @@ pub(super) struct NativeLayoutInput<'a> {
 /// - Font encoding issue detection is not available; the flag is always `false`.
 #[cfg(feature = "pdf")]
 pub(crate) fn extract_all_from_native_document(
-    mut doc: crate::pdf::native::NativeDocument,
+    doc: &mut crate::pdf::native::NativeDocument,
     config: &ExtractionConfig,
     outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
     #[cfg(all(
@@ -670,8 +670,7 @@ pub(crate) fn extract_all_from_native_document(
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
     let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata, financial_rows) =
-        crate::pdf::native::text::extract_text_and_metadata(&mut doc, Some(text_config))
-            .map_err(map_native_text_error)?;
+        crate::pdf::native::text::extract_text_and_metadata(doc, Some(text_config)).map_err(map_native_text_error)?;
 
     // The time limit cut the text loop short: what the limit leaves is the grace period to return the
     // pages already read, which the stages below (each re-reads every page) would outlast. They only
@@ -697,7 +696,7 @@ pub(crate) fn extract_all_from_native_document(
         && let Some(hints) = layout_hints
     {
         match apply_reading_order_reordering(
-            &mut doc,
+            doc,
             &native_text,
             hints,
             config.pages.as_ref(),
@@ -759,23 +758,26 @@ pub(crate) fn extract_all_from_native_document(
     let (mut tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
             || -> Result<TableExtractionResult> {
-                let ruled = crate::pdf::native::table::extract_ruled_tables(&doc).unwrap_or_else(|error| {
-                    tracing::warn!("xberg_native_pdf ruled table extraction failed: {error}");
-                    crate::pdf::native::table::RuledTableExtraction {
-                        tables: Vec::new(),
-                        warnings: vec![
-                            table_stage_failure_warning("native", &error),
-                            table_stage_failure_warning("bordered", &error),
-                        ],
-                        recovered_only: Default::default(),
-                    }
-                });
+                let mut page_paths = crate::pdf::native::table::TablePagePaths::default();
+                let ruled =
+                    crate::pdf::native::table::extract_ruled_tables(doc, &mut page_paths).unwrap_or_else(|error| {
+                        tracing::warn!("xberg_native_pdf ruled table extraction failed: {error}");
+                        crate::pdf::native::table::RuledTableExtraction {
+                            tables: Vec::new(),
+                            warnings: vec![
+                                table_stage_failure_warning("native", &error),
+                                table_stage_failure_warning("bordered", &error),
+                            ],
+                            recovered_only: Default::default(),
+                        }
+                    });
                 let covered_pages = ruled.covered_pages();
                 let hierarchy_segments = crate::pdf::native::table::extract_tables_heuristic(
-                    &mut doc,
+                    doc,
                     allow_single_column,
                     &covered_pages,
                     artifacts,
+                    &mut page_paths,
                 );
                 let hierarchy_segments = hierarchy_segments.map(|mut extraction| {
                     extraction.tables.retain(|table| ruled.allows_heuristic_table(table));
@@ -810,7 +812,7 @@ pub(crate) fn extract_all_from_native_document(
                         if retain_hierarchy_segments {
                             let (pages, used_structure_tree) =
                                 crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(
-                                    &mut doc, artifacts,
+                                    doc, artifacts,
                                 )
                                 .map_err(|error| {
                                     crate::XbergError::parsing(format!("PDF hierarchy extraction failed: {error}"))
@@ -859,7 +861,7 @@ pub(crate) fn extract_all_from_native_document(
     extraction_warnings.extend(table_warnings);
 
     let (annotations, annotation_text_fallback, annotation_warnings) = extract_annotations_with_empty_body_fallback(
-        &mut doc,
+        doc,
         config
             .pdf_options
             .as_ref()
@@ -895,7 +897,7 @@ pub(crate) fn extract_all_from_native_document(
     let (images, image_positions) = if !cut_short && (images_extraction_enabled || ocr_inline_images) {
         let max_images = config.images.as_ref().and_then(|i| i.max_images_per_page);
         let (extracted, image_warnings) = crate::pdf::native::images::extract_images_with_data(
-            &mut doc,
+            doc,
             max_images,
             config.cancel_token.as_ref(),
             &ocr_skip_candidate_pages,
@@ -946,6 +948,9 @@ pub(crate) fn extract_all_from_native_document(
     // once `assign_hierarchy_to_pages` has run, since that happens after this function
     // returns and the `NativeDocument` this loop reads from is dropped. ~keep
     let mut pdf_page_coordinate_frames: Vec<crate::types::internal::PdfPageCoordinateFrame> = Vec::new();
+    use crate::pdf::native::table::repeated_schema_header;
+    let ruled_count = native_table_grids.iter().take_while(|metadata| metadata.ruled).count();
+    let verified_schemas = repeated_schema_header::verify(&doc.doc, &tables, ruled_count);
     let mut pre_rendered_doc = if needs_structured && !config.force_ocr {
         let k = hierarchy_cluster_count(config);
 
@@ -976,11 +981,11 @@ pub(crate) fn extract_all_from_native_document(
 
         let (mut native_pages, used_structure_tree) = match extracted_hierarchy_segments.take() {
             Some(segments) => (segments.pages, segments.used_structure_tree),
-            None => crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(&mut doc, artifacts)
+            None => crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(doc, artifacts)
                 .map_err(|e| crate::error::XbergError::Parsing {
-                message: format!("xberg_native_pdf hierarchy extraction failed: {e}"),
-                source: None,
-            })?,
+                    message: format!("xberg_native_pdf hierarchy extraction failed: {e}"),
+                    source: None,
+                })?,
         };
 
         if config.pdf_options.as_ref().is_some_and(|options| options.reading_order) {
@@ -1050,12 +1055,14 @@ pub(crate) fn extract_all_from_native_document(
         let inject_placeholders = images_extraction_enabled && image_anchor != ImageAnchor::None;
 
         match crate::pdf::structure::pipeline::extract_document_structure_from_native_pages(
+            &doc.doc,
             native_pages,
             &native_table_grids
                 .iter()
                 .filter_map(|metadata| metadata.source_members.as_ref())
                 .collect::<Vec<_>>(),
-            native_table_grids.iter().take_while(|metadata| metadata.ruled).count(),
+            ruled_count,
+            &verified_schemas,
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
                 tables: &tables,
@@ -1135,6 +1142,13 @@ pub(crate) fn extract_all_from_native_document(
     for (table, metadata) in tables.iter_mut().zip(&native_table_grids) {
         metadata.retain_column_labels(table);
     }
+    repeated_schema_header::retain_labels(
+        &verified_schemas,
+        &mut tables,
+        pre_rendered_doc
+            .as_mut()
+            .map_or(&mut [], |document| &mut document.tables),
+    );
     if let Some(document) = &mut pre_rendered_doc {
         attach_native_table_grids(document, &tables, &native_table_grids)?;
     }
@@ -1144,6 +1158,8 @@ pub(crate) fn extract_all_from_native_document(
         &financial_rows,
         pre_rendered_doc.as_mut(),
     );
+
+    repeated_schema_header::apply_splits(&verified_schemas, &mut tables, false);
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let outlined_ocr_pages = if cut_short {
@@ -1164,7 +1180,7 @@ pub(crate) fn extract_all_from_native_document(
         skipped_stages.push("form fields");
     }
     let form_fields = if !cut_short && form_fields_requested {
-        let (fields, form_warnings) = crate::pdf::native::forms::extract_form_fields(&mut doc);
+        let (fields, form_warnings) = crate::pdf::native::forms::extract_form_fields(doc);
         extraction_warnings.extend(form_warnings);
         fields
     } else {
@@ -1174,7 +1190,7 @@ pub(crate) fn extract_all_from_native_document(
     // Issue #66: `/PageLabels` (roman-numeral front matter, per-section
     // numbering, ...). `None` when the document defines none, which is the
     // common case.
-    let page_labels = crate::pdf::native::metadata::extract_page_labels_all(&mut doc).unwrap_or_else(|e| {
+    let page_labels = crate::pdf::native::metadata::extract_page_labels_all(doc).unwrap_or_else(|e| {
         tracing::debug!("page label extraction failed: {e}");
         None
     });
@@ -1533,6 +1549,7 @@ mod tests {
             baseline_y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         };
         let mut segments = vec![
             segment("header", 1000.01),

@@ -76,7 +76,7 @@ reference.
 ## Part of Xberg.io
 
 - [Xberg](https://github.com/xberg-io/xberg) — document intelligence: text, tables, metadata from 107 formats with optional OCR.
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
+- [Xberg Enterprise](https://pro.xberg.io) — managed extraction API with SDKs, dashboards, and observability.
 
 ## License
 

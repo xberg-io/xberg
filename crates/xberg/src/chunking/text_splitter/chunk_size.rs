@@ -171,6 +171,15 @@ impl From<RangeToInclusive<usize>> for ChunkCapacity {
 pub trait ChunkSizer {
     /// Determine the size of a given chunk to use for validation
     fn size(&self, chunk: &str) -> usize;
+
+    /// The largest `size` a chunk of `byte_len` bytes can have, when the sizer can bound it
+    /// without measuring. `None`, the default, makes the splitter measure every candidate.
+    ///
+    /// Tokenizers return `None`: neither special tokens nor byte-fallback pieces are bounded by
+    /// the byte length plus a constant probed once (#3291).
+    fn max_size_for_bytes(&self, _byte_len: usize) -> Option<usize> {
+        None
+    }
 }
 
 impl<T> ChunkSizer for &T
@@ -179,6 +188,10 @@ where
 {
     fn size(&self, chunk: &str) -> usize {
         (*self).size(chunk)
+    }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        (*self).max_size_for_bytes(byte_len)
     }
 }
 
@@ -189,6 +202,10 @@ where
     fn size(&self, chunk: &str) -> usize {
         self.deref().size(chunk)
     }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.deref().max_size_for_bytes(byte_len)
+    }
 }
 
 impl<T> ChunkSizer for RefMut<'_, T>
@@ -198,6 +215,10 @@ where
     fn size(&self, chunk: &str) -> usize {
         self.deref().size(chunk)
     }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.deref().max_size_for_bytes(byte_len)
+    }
 }
 
 impl<T> ChunkSizer for Box<T>
@@ -206,6 +227,10 @@ where
 {
     fn size(&self, chunk: &str) -> usize {
         self.deref().size(chunk)
+    }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.deref().max_size_for_bytes(byte_len)
     }
 }
 
@@ -217,6 +242,10 @@ where
     fn size(&self, chunk: &str) -> usize {
         self.as_ref().size(chunk)
     }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.as_ref().max_size_for_bytes(byte_len)
+    }
 }
 
 impl<T> ChunkSizer for Rc<T>
@@ -226,6 +255,10 @@ where
     fn size(&self, chunk: &str) -> usize {
         self.deref().size(chunk)
     }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.deref().max_size_for_bytes(byte_len)
+    }
 }
 
 impl<T> ChunkSizer for Arc<T>
@@ -234,6 +267,10 @@ where
 {
     fn size(&self, chunk: &str) -> usize {
         self.as_ref().size(chunk)
+    }
+
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        self.as_ref().max_size_for_bytes(byte_len)
     }
 }
 
@@ -401,15 +438,17 @@ where
             }
         });
 
+        // A section is skipped only when the sizer bounds its size within `max` without measuring;
+        // a tokenizer has no such bound, since special tokens can exceed a short section's
+        // byte count (#3291), so its sections are all measured.
         for (level, str) in levels_with_first_chunk {
-            let len = str.len();
-            if len > capacity.max {
-                let chunk_size = self.chunk_size(offset, str, trim);
-                let fits = capacity.fits(chunk_size);
-                if fits.is_gt() {
-                    max_offset = Some(offset + len);
-                    break;
-                }
+            let bounded_fit = self
+                .sizer
+                .max_size_for_bytes(str.len())
+                .is_some_and(|bound| bound <= capacity.max);
+            if !bounded_fit && capacity.fits(self.chunk_size(offset, str, trim)).is_gt() {
+                max_offset = Some(offset + str.len());
+                break;
             }
             semantic_level = Some(level);
         }
@@ -561,6 +600,85 @@ mod tests {
         }
 
         assert_eq!(memoized_sizer.sizer.calls.load(atomic::Ordering::SeqCst), 10);
+    }
+
+    /// Counts calls like [`CountingSizer`] but declares the character sizer's byte bound.
+    #[derive(Default)]
+    struct BoundedCountingSizer {
+        calls: AtomicUsize,
+    }
+
+    impl ChunkSizer for BoundedCountingSizer {
+        fn size(&self, chunk: &str) -> usize {
+            self.calls.fetch_add(1, atomic::Ordering::SeqCst);
+            Characters.size(chunk)
+        }
+
+        fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+            Characters.max_size_for_bytes(byte_len)
+        }
+    }
+
+    const FIRST_SECTIONS: [(usize, &str); 4] = [(0, "ab"), (1, "abcde"), (2, "abcdefghi"), (3, "abcdefghijklmnopqrst")];
+
+    #[test]
+    fn find_correct_level_skips_sections_bounded_within_capacity() {
+        let sizer = BoundedCountingSizer::default();
+        let mut memoized_sizer = MemoizedChunkSizer::new(&sizer);
+
+        let level = memoized_sizer.find_correct_level(0, &10.into(), FIRST_SECTIONS.into_iter(), Trim::All);
+
+        assert_eq!(level, (Some(2), Some(20)));
+        assert_eq!(sizer.calls.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn find_correct_level_measures_every_section_without_a_bound() {
+        let sizer = CountingSizer::default();
+        let mut memoized_sizer = MemoizedChunkSizer::new(&sizer);
+
+        let level = memoized_sizer.find_correct_level(0, &10.into(), FIRST_SECTIONS.into_iter(), Trim::All);
+
+        assert_eq!(level, (Some(2), Some(20)));
+        assert_eq!(sizer.calls.load(atomic::Ordering::SeqCst), 4);
+    }
+
+    #[test]
+    fn splitter_with_a_byte_bound_makes_fewer_sizer_calls_for_identical_chunks() {
+        use crate::chunking::text_splitter::TextSplitter;
+
+        fn split<S: ChunkSizer>(sizer: &S, text: &str) -> Vec<String> {
+            let config = ChunkConfig {
+                capacity: 64.into(),
+                overlap: 0,
+                sizer,
+                trim: true,
+            };
+            TextSplitter::new(config).chunks(text).map(str::to_owned).collect()
+        }
+
+        let text = (0..20_usize)
+            .map(|i| {
+                format!(
+                    "Paragraph {i} opens here. It has a second sentence with more words in it. \
+                     A third sentence follows.\nIts next line wraps once more, and ends."
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let bounded = BoundedCountingSizer::default();
+        let unbounded = CountingSizer::default();
+
+        let bounded_chunks = split(&bounded, &text);
+        let unbounded_chunks = split(&unbounded, &text);
+
+        let bounded_calls = bounded.calls.load(atomic::Ordering::SeqCst);
+        let unbounded_calls = unbounded.calls.load(atomic::Ordering::SeqCst);
+        assert_eq!(bounded_chunks, unbounded_chunks);
+        assert!(
+            bounded_calls < unbounded_calls,
+            "bounded={bounded_calls} unbounded={unbounded_calls}"
+        );
     }
 
     #[test]

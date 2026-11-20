@@ -133,6 +133,16 @@ async fn a_retained_single_read_keeps_its_preprocessing_and_tesseract_mode() {
 }
 
 #[tokio::test]
+async fn a_retained_first_read_does_not_publish_its_mode_after_a_second_attempt() {
+    let noise = "ab ".repeat(20);
+    let outcome = recover(vec![read(PROSE, "kept", false), read(&noise, "discarded", true)], true).await;
+    assert_eq!(outcome.attempted, 2);
+    assert_eq!(outcome.text, PROSE);
+    assert_eq!(outcome.image_preprocessing.unwrap().resample_method, "kept");
+    assert_eq!(outcome.tesseract_psm, None);
+}
+
+#[tokio::test]
 async fn pooled_rejections_do_not_supply_page_preprocessing() {
     let noise = "ab ".repeat(12);
     let outcome = recover(
@@ -286,4 +296,31 @@ async fn unpublished_preprocessing_does_not_consume_the_output_budget() {
     assert_eq!(outcome.text, text);
     assert_eq!(outcome.text_outside_tables, text);
     assert_eq!(outcome.image_preprocessing.unwrap().resample_method, marker);
+}
+
+#[tokio::test]
+async fn publishing_preprocessing_uses_the_remaining_output_budget() {
+    let marker = "first-resampling";
+    let required = 2 * PROSE.len() + marker.len();
+    let limits = |max_content_size| SecurityLimits {
+        max_content_size,
+        ..Default::default()
+    };
+    let thresholds = OcrQualityThresholds::default();
+    let accepted = recover_with_limits(vec![read(PROSE, marker, false)], &thresholds, &limits(required))
+        .await
+        .expect("text and preprocessing fit exactly");
+    assert_eq!(accepted.text, PROSE);
+    assert_eq!(accepted.image_preprocessing.unwrap().resample_method, marker);
+
+    let error = recover_with_limits(vec![read(PROSE, marker, false)], &thresholds, &limits(required - 1))
+        .await
+        .expect_err("publishing preprocessing would exceed the limit by one byte");
+    let crate::XbergError::Security { message, .. } = error else {
+        panic!("expected a content-size error, got {error}");
+    };
+    assert_eq!(
+        message,
+        format!("Content too large: {required} bytes (max: {} bytes)", required - 1)
+    );
 }

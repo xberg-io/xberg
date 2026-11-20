@@ -43,9 +43,10 @@ impl PdfDocument {
     /// the page, when the page's content cannot be read, or when the walk reads more than
     /// [`MAX_WALK_OPERATORS`] operators.
     pub fn glyphs_over_covering_image(&self, page_index: usize, min_coverage: f32) -> Option<GlyphsOverPicture> {
+        let _warnings = self.warning_scope();
         let (x0, y0, x1, y1) = self.get_page_media_box(page_index).ok()?;
         let resources = self.get_page_resources(page_index).ok()?;
-        let operators = crate::content::parse_content_stream(&self.get_page_content_data(page_index).ok()?).ok()?;
+        let operators = crate::content::parse_content_stream(&self.cached_page_content(page_index).ok()?).ok()?;
         let mut walk = PictureTextWalk {
             page: (x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)),
             min_coverage,

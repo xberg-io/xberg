@@ -37,6 +37,14 @@ const EXTRACTION_TASK_TTL_MS: u64 = 15 * 60 * 1000;
 /// third-party hosts and can legitimately take longer than extraction.
 const CACHE_WARM_TASK_TTL_MS: u64 = 30 * 60 * 1000;
 
+/// Server environment variable that lets the MCP HTTP transport read local paths and `file://`
+/// URIs. The stdio transport always may.
+#[cfg(feature = "mcp-http")]
+const MCP_ALLOW_LOCAL_URI_INPUTS_ENV: &str = "XBERG_MCP_ALLOW_LOCAL_URI_INPUTS";
+
+const LOCAL_URI_INPUTS_DISABLED: &str = "Local path and file:// URI inputs are disabled on the MCP HTTP transport. \
+     Set XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1 to enable server-side local file access.";
+
 #[cfg(any(
     test,
     paddle_ocr,
@@ -102,6 +110,15 @@ pub struct XbergMcp {
     /// SEP-2663 task store for tools in [`TASK_ELIGIBLE_TOOLS`]. Cheaply
     /// cloneable; all clones of an `XbergMcp` share the same task state.
     tasks: TaskManager,
+    /// Whether the server answers over HTTP, where callers are remote, rather than over stdio,
+    /// where the caller is the operator's own process.
+    http_transport: bool,
+    /// Whether a remote caller's added or changed LLM stage may run; set over HTTP from
+    /// `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS`.
+    allow_caller_llm_env_credentials: bool,
+    /// Whether tools may read server-local paths and `file://` URIs: always on stdio, on the
+    /// HTTP transport only when the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS`.
+    allow_local_paths: bool,
 }
 
 impl Clone for XbergMcp {
@@ -117,6 +134,9 @@ impl Clone for XbergMcp {
             default_config: self.default_config.clone(),
             extraction_service: std::sync::Mutex::new(svc),
             tasks: self.tasks.clone(),
+            http_transport: self.http_transport,
+            allow_caller_llm_env_credentials: self.allow_caller_llm_env_credentials,
+            allow_local_paths: self.allow_local_paths,
         }
     }
 }
@@ -165,7 +185,153 @@ impl XbergMcp {
             default_config: std::sync::Arc::new(config),
             extraction_service: std::sync::Mutex::new(extraction_service),
             tasks: TaskManager::new(),
+            http_transport: false,
+            allow_caller_llm_env_credentials: false,
+            allow_local_paths: true,
         }
+    }
+
+    /// Configure the server for the HTTP transport, where local paths are readable only when
+    /// `allow_local_paths` is set and a caller's added or changed LLM stage runs only when
+    /// `allow_caller_llm_env_credentials` is set.
+    #[cfg_attr(not(any(test, feature = "mcp-http")), allow(dead_code))]
+    pub(crate) fn for_http(mut self, allow_local_paths: bool, allow_caller_llm_env_credentials: bool) -> Self {
+        self.http_transport = true;
+        self.allow_local_paths = allow_local_paths;
+        self.allow_caller_llm_env_credentials = allow_caller_llm_env_credentials;
+        self
+    }
+
+    /// Map an extraction error for the client. Over HTTP, server filesystem paths in the message
+    /// become `<path>` and the full error is logged.
+    fn xberg_error(&self, error: crate::XbergError) -> rmcp::ErrorData {
+        let fixed = self.public_filesystem_message(&error);
+        let mut mapped = super::errors::map_xberg_error_to_mcp(error);
+        if let Some(fixed) = fixed {
+            tracing::warn!(error = %mapped.message, "MCP tool call failed");
+            mapped.message = fixed.into();
+            return mapped;
+        }
+        mapped.message = self
+            .client_message(std::mem::take(&mut mapped.message).into_owned())
+            .into();
+        mapped
+    }
+
+    /// Over HTTP, the fixed public message of a filesystem-backed error, whose text is not shown.
+    fn public_filesystem_message(&self, error: &crate::XbergError) -> Option<&'static str> {
+        self.http_transport
+            .then(|| crate::core::config::remote_errors::filesystem_error_message(error))
+            .flatten()
+    }
+
+    /// An internal error for a failed model download: `context` with the error's public message.
+    #[cfg_attr(
+        not(any(test, paddle_ocr, feature = "embeddings", feature = "ner-onnx")),
+        allow(dead_code)
+    )]
+    fn download_error(&self, context: String, error: crate::XbergError) -> rmcp::ErrorData {
+        if !self.http_transport {
+            return rmcp::ErrorData::internal_error(format!("{context}: {error}"), None);
+        }
+        let full_message = error.to_string();
+        let public = crate::core::config::remote_errors::public_error_message(&error, &full_message);
+        if public != full_message {
+            tracing::warn!(error = %full_message, "{context}");
+        }
+        rmcp::ErrorData::internal_error(format!("{context}: {public}"), None)
+    }
+
+    /// An internal error for a failed model download whose error is not an `XbergError` and may
+    /// name a path: over HTTP the client gets only `context` and the full error is logged.
+    #[cfg_attr(
+        not(any(test, feature = "formula-recognition", feature = "layout-detection")),
+        allow(dead_code)
+    )]
+    fn opaque_download_error(&self, context: &str, error: &dyn std::fmt::Display) -> rmcp::ErrorData {
+        if !self.http_transport {
+            return rmcp::ErrorData::internal_error(format!("{context}: {error}"), None);
+        }
+        tracing::warn!(error = %error, "{context}");
+        rmcp::ErrorData::internal_error(context.to_string(), None)
+    }
+
+    /// `message` as shown to the client: over HTTP, server filesystem paths become `<path>` and
+    /// the full message is logged.
+    fn client_message(&self, message: String) -> String {
+        if !self.http_transport {
+            return message;
+        }
+        let redacted = crate::core::config::remote_errors::redact_paths(&message);
+        if redacted != message {
+            tracing::warn!(error = %message, "MCP tool call failed");
+        }
+        redacted
+    }
+
+    /// Over HTTP, redact server filesystem paths in the result's per-input error messages.
+    fn redact_result_errors(&self, output: &mut crate::ExtractionResult) {
+        if self.http_transport {
+            crate::core::config::remote_errors::redact_error_items(&mut output.errors);
+        }
+    }
+
+    /// The cache directory as shown to the client: hidden over HTTP.
+    fn client_cache_dir(&self, cache_dir: &std::path::Path) -> String {
+        if self.http_transport {
+            crate::core::config::remote_errors::REDACTED_PATH.to_string()
+        } else {
+            cache_dir.to_string_lossy().into_owned()
+        }
+    }
+
+    /// Merge the caller's request config over the server config.
+    fn request_config(&self, caller: Option<serde_json::Value>) -> Result<ExtractionConfig, rmcp::ErrorData> {
+        let config = if self.http_transport {
+            crate::core::config::request_security::resolve_remote_caller_extraction_config(
+                &self.default_config,
+                caller.as_ref(),
+                self.allow_caller_llm_env_credentials,
+            )
+        } else {
+            build_config(&self.default_config, caller)
+        };
+        config.map_err(|e| rmcp::ErrorData::invalid_params(e, None))
+    }
+
+    /// On HTTP, reject a parsed per-input override whose LLM stage differs from the request's
+    /// effective stage, unless the operator opted in.
+    fn reject_remote_input_llm_stage(
+        &self,
+        input: &crate::ExtractInput,
+        effective: &ExtractionConfig,
+    ) -> Result<(), rmcp::ErrorData> {
+        if let Some(config) = input.config.as_ref().filter(|_| self.http_transport) {
+            crate::core::config::request_security::reject_caller_input_llm_stages(
+                effective,
+                config,
+                self.allow_caller_llm_env_credentials,
+            )
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        }
+        Ok(())
+    }
+
+    /// Without local access, disable local URLs for the request and its per-input overrides.
+    /// Runs before the inputs are parsed so their overrides inherit the disabled flags.
+    fn apply_local_path_policy(&self, config: &mut ExtractionConfig) {
+        if !self.allow_local_paths {
+            config.url.allow_local_file_inputs = false;
+            config.url.allow_file_uris = false;
+        }
+    }
+
+    fn reject_local_input(&self, input: &crate::ExtractInput) -> Result<(), rmcp::ErrorData> {
+        let is_local = input.kind == crate::ExtractInputKind::Uri && !input.uri.as_deref().is_some_and(is_remote_uri);
+        if is_local && !self.allow_local_paths {
+            return Err(rmcp::ErrorData::invalid_params(LOCAL_URI_INPUTS_DISABLED, None));
+        }
+        Ok(())
     }
 
     /// Extract content from bytes or a URI.
@@ -178,19 +344,22 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::ExtractParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
-
         let use_toon = params
             .response_format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let mut config =
-            build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        let mut config = self.request_config(params.config)?;
         apply_pdf_password(&mut config, params.pdf_password)?;
+        self.apply_local_path_policy(&mut config);
         let input = parse_extract_input(params.input, &config)?;
+        self.reject_remote_input_llm_stage(&input, &config)?;
+        self.reject_local_input(&input)?;
 
-        let output = crate::extract(input, &config).await.map_err(map_xberg_error_to_mcp)?;
+        let mut output = crate::extract(input, &config)
+            .await
+            .map_err(|error| self.xberg_error(error))?;
+        self.redact_result_errors(&mut output);
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -207,25 +376,31 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::ExtractBatchParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
-
         let use_toon = params
             .response_format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let mut config =
-            build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        let mut config = self.request_config(params.config)?;
         apply_pdf_password(&mut config, params.pdf_password)?;
+        self.apply_local_path_policy(&mut config);
         let inputs = params
             .inputs
             .into_iter()
-            .map(|input| parse_batch_extract_input(input, &config))
+            .map(|input| {
+                let options = parse_batch_extract_input(input, &config)?;
+                self.reject_remote_input_llm_stage(&options.input, &config)?;
+                Ok(options)
+            })
             .collect::<Result<Vec<_>, _>>()?;
+        for options in &inputs {
+            self.reject_local_input(&options.input)?;
+        }
 
-        let output = crate::extract_batch_with_input_options(inputs, &config)
+        let mut output = crate::extract_batch_with_input_options(inputs, &config)
             .await
-            .map_err(map_xberg_error_to_mcp)?;
+            .map_err(|error| self.xberg_error(error))?;
+        self.redact_result_errors(&mut output);
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -244,10 +419,13 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::DetectMimeTypeParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::detect_mime_type;
 
-        let mime_type = detect_mime_type(params.path.clone(), params.use_content).map_err(map_xberg_error_to_mcp)?;
+        if !self.allow_local_paths {
+            return Err(rmcp::ErrorData::invalid_params(LOCAL_URI_INPUTS_DISABLED, None));
+        }
+        let mime_type =
+            detect_mime_type(params.path.clone(), params.use_content).map_err(|error| self.xberg_error(error))?;
 
         let dto = super::schema::DetectMimeTypeOutput {
             mime_type: mime_type.clone(),
@@ -269,12 +447,12 @@ impl XbergMcp {
         &self,
         Parameters(_): Parameters<super::params::EmptyParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::cache;
 
         let cache_dir = crate::cache_dir::resolve_cache_base();
 
-        let stats = cache::get_cache_metadata(cache_dir.to_str().unwrap_or(".")).map_err(map_xberg_error_to_mcp)?;
+        let stats =
+            cache::get_cache_metadata(cache_dir.to_str().unwrap_or(".")).map_err(|error| self.xberg_error(error))?;
 
         let response = format!(
             "Cache Statistics\n\
@@ -285,7 +463,7 @@ impl XbergMcp {
              Available space: {:.2} MB\n\
              Oldest file age: {:.2} days\n\
              Newest file age: {:.2} days",
-            cache_dir.to_string_lossy(),
+            self.client_cache_dir(&cache_dir),
             stats.total_files,
             stats.total_size_mb,
             stats.available_space_mb,
@@ -294,7 +472,7 @@ impl XbergMcp {
         );
 
         let dto = super::schema::CacheStatsOutput {
-            directory: cache_dir.to_string_lossy().into_owned(),
+            directory: self.client_cache_dir(&cache_dir),
             total_files: stats.total_files as u64,
             total_size_mb: stats.total_size_mb,
             available_space_mb: stats.available_space_mb,
@@ -341,13 +519,12 @@ impl XbergMcp {
         &self,
         Parameters(_): Parameters<super::params::EmptyParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::cache;
 
         let cache_dir = crate::cache_dir::resolve_cache_base();
 
         let (removed_files, freed_mb) =
-            cache::clear_cache_directory(cache_dir.to_str().unwrap_or(".")).map_err(map_xberg_error_to_mcp)?;
+            cache::clear_cache_directory(cache_dir.to_str().unwrap_or(".")).map_err(|error| self.xberg_error(error))?;
 
         let response = format!(
             "Xberg-managed cache cleared successfully\n\
@@ -355,13 +532,13 @@ impl XbergMcp {
              Removed files: {}\n\
              Freed space: {:.2} MB\n\
              Shared Hugging Face cache cleared: no",
-            cache_dir.to_string_lossy(),
+            self.client_cache_dir(&cache_dir),
             removed_files,
             freed_mb
         );
 
         let dto = super::schema::CacheClearOutput {
-            directory: cache_dir.to_string_lossy().into_owned(),
+            directory: self.client_cache_dir(&cache_dir),
             removed_files: removed_files as u64,
             freed_mb,
         };
@@ -504,9 +681,9 @@ impl XbergMcp {
         {
             let paddle_dir = cache_base.join("paddle-ocr");
             let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
-            manager.ensure_all_models().map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Failed to download PaddleOCR models: {}", e), None)
-            })?;
+            manager
+                .ensure_all_models()
+                .map_err(|e| self.download_error("Failed to download PaddleOCR models".to_string(), e))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -520,9 +697,8 @@ impl XbergMcp {
         {
             let formula_dir = cache_base.join("formula-recognition");
             let was_cached = crate::formula_recognition::models_cached_in(Some(&formula_dir));
-            crate::formula_recognition::ensure_models_in(Some(&formula_dir)).map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Failed to download formula recognition models: {e}"), None)
-            })?;
+            crate::formula_recognition::ensure_models_in(Some(&formula_dir))
+                .map_err(|e| self.opaque_download_error("Failed to download formula recognition models", &e))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -551,9 +727,9 @@ impl XbergMcp {
                     CacheWarmDisposition::AlreadyCached,
                 );
             } else {
-                manager.ensure_all_models().map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("Failed to download layout models: {}", e), None)
-                })?;
+                manager
+                    .ensure_all_models()
+                    .map_err(|e| self.opaque_download_error("Failed to download layout models", &e))?;
                 let disposition = if !rtdetr_was_cached && !tatr_was_cached {
                     CacheWarmDisposition::Downloaded
                 } else {
@@ -601,12 +777,7 @@ impl XbergMcp {
                     },
                     Some(embeddings_dir.clone()),
                 )
-                .map_err(|e| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Failed to download embedding model '{}': {}", preset.name, e),
-                        None,
-                    )
-                })?;
+                .map_err(|e| self.download_error(format!("Failed to download embedding model '{}'", preset.name), e))?;
                 record_warmed_model(
                     &mut available,
                     &mut downloaded,
@@ -639,17 +810,13 @@ impl XbergMcp {
                 };
 
                 for model in &models_to_warm {
-                    let path = crate::text::ner::download_model(model, None).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to download NER model '{}': {}", model, e),
-                            None,
-                        )
-                    })?;
+                    crate::text::ner::download_model(model, None)
+                        .map_err(|e| self.download_error(format!("Failed to download NER model '{model}'"), e))?;
                     record_warmed_model(
                         &mut available,
                         &mut downloaded,
                         &mut already_cached,
-                        format!("ner gliner ({model}) -> {} (Hugging Face cache)", path.display()),
+                        ner_warm_label(model),
                         CacheWarmDisposition::AvailabilityConfirmed,
                     );
                 }
@@ -667,15 +834,15 @@ impl XbergMcp {
         }
 
         let dto = super::schema::CacheWarmOutput {
-            cache_dir: cache_base.to_string_lossy().into_owned(),
+            cache_dir: self.client_cache_dir(&cache_base),
             available,
             downloaded,
             already_cached,
         };
 
         let response = serde_json::json!({
-            "cache_dir": cache_base.to_string_lossy(),
-            "xberg_cache_dir": cache_base.to_string_lossy(),
+            "cache_dir": dto.cache_dir,
+            "xberg_cache_dir": dto.cache_dir,
             "hugging_face_cache": if params.ner || params.all_ner_models || params.ner_model.is_some() {
                 Some("HF_HUB_CACHE/HF_HOME/platform default")
             } else {
@@ -772,23 +939,42 @@ impl XbergMcp {
     }
 }
 
+/// The label of a warmed NER model. It names the model, never its Hugging Face cache path.
+#[cfg(any(test, feature = "ner-onnx"))]
+fn ner_warm_label(model: &str) -> String {
+    format!("ner gliner ({model}) (Hugging Face cache)")
+}
+
+fn is_remote_uri(uri: &str) -> bool {
+    uri.starts_with("http://") || uri.starts_with("https://")
+}
+
+/// Whether the operator set [`MCP_ALLOW_LOCAL_URI_INPUTS_ENV`].
+#[cfg(feature = "mcp-http")]
+fn mcp_http_allows_local_paths() -> bool {
+    std::env::var(MCP_ALLOW_LOCAL_URI_INPUTS_ENV)
+        .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+}
+
 /// Resolve the cache base directory.
 fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
 fn parse_extract_input(
-    value: serde_json::Value,
+    mut value: serde_json::Value,
     operator: &ExtractionConfig,
 ) -> Result<crate::ExtractInput, rmcp::ErrorData> {
-    if let Some(config) = value.get("config") {
+    if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }
     let mut input = serde_json::from_value::<crate::ExtractInput>(value)
         .map_err(|error| rmcp::ErrorData::invalid_params(format!("Invalid ExtractInput: {error}"), None))?;
     if let Some(config) = input.config.as_mut() {
-        crate::core::config::request_security::adopt_file_operator_crawl_egress(config, operator);
+        crate::core::config::request_security::adopt_file_operator_policy(config, operator);
     }
     Ok(input)
 }
@@ -1211,19 +1397,25 @@ pub async fn start_mcp_server_http(
     extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
-    use std::net::SocketAddr;
 
+    let allow_local_paths = mcp_http_allows_local_paths();
+    let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
     let http_service = StreamableHttpService::new(
-        || XbergMcp::new().map_err(|e| std::io::Error::other(e.to_string())),
+        move || {
+            XbergMcp::new()
+                .map(|server| server.for_http(allow_local_paths, allow_llm_env))
+                .map_err(|e| std::io::Error::other(e.to_string()))
+        },
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
 
-    let router = Router::new().nest_service("/mcp", http_service);
-
-    let addr: SocketAddr = format!("{}:{}", host.as_ref(), port)
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let (addr, router) = prepare_mcp_http(
+        host.as_ref(),
+        port,
+        &crate::api::auth::ApiAuth::from_env(),
+        Router::new().nest_service("/mcp", http_service),
+    )?;
 
     #[cfg(feature = "api")]
     tracing::info!("Starting MCP HTTP server on http://{}", addr);
@@ -1273,19 +1465,21 @@ pub async fn start_mcp_server_http_with_config(
     extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
-    use std::net::SocketAddr;
 
+    let allow_local_paths = mcp_http_allows_local_paths();
+    let allow_llm_env = crate::core::config::request_security::caller_llm_env_credentials_allowed();
     let http_service = StreamableHttpService::new(
-        move || Ok(XbergMcp::with_config(config.clone())),
+        move || Ok(XbergMcp::with_config(config.clone()).for_http(allow_local_paths, allow_llm_env)),
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
 
-    let router = Router::new().nest_service("/mcp", http_service);
-
-    let addr: SocketAddr = format!("{}:{}", host.as_ref(), port)
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let (addr, router) = prepare_mcp_http(
+        host.as_ref(),
+        port,
+        &crate::api::auth::ApiAuth::from_env(),
+        Router::new().nest_service("/mcp", http_service),
+    )?;
 
     #[cfg(feature = "api")]
     tracing::info!("Starting MCP HTTP server on http://{}", addr);
@@ -1298,9 +1492,82 @@ pub async fn start_mcp_server_http_with_config(
     Ok(())
 }
 
+/// Parse the bind address, refuse an unauthenticated off-loopback bind, and put the bearer
+/// check (`XBERG_API_TOKEN`) in front of the MCP routes.
+#[cfg(feature = "mcp-http")]
+fn prepare_mcp_http(
+    host: &str,
+    port: u16,
+    auth: &crate::api::auth::ApiAuth,
+    router: axum::Router,
+) -> Result<(std::net::SocketAddr, axum::Router), Box<dyn std::error::Error + Send + Sync>> {
+    let addr: std::net::SocketAddr = format!("{host}:{port}")
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+    auth.validate()?;
+    auth.check_bind(addr.ip())?;
+    Ok((addr, auth.protect(router)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "mcp-http")]
+    mod http_auth {
+        use super::super::prepare_mcp_http;
+        use crate::api::auth::ApiAuth;
+        use axum::{
+            Router,
+            body::Body,
+            http::{Request, StatusCode, header},
+            routing::get,
+        };
+        use tower::ServiceExt;
+
+        fn inner() -> Router {
+            Router::new().route("/mcp", get(|| async { "ok" }))
+        }
+
+        async fn status(router: Router, authorization: Option<&str>) -> StatusCode {
+            let mut request = Request::builder().uri("/mcp");
+            if let Some(value) = authorization {
+                request = request.header(header::AUTHORIZATION, value);
+            }
+            router
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap()
+                .status()
+        }
+
+        #[tokio::test]
+        async fn mcp_http_requires_the_token_when_set() {
+            let (_, router) = prepare_mcp_http("127.0.0.1", 0, &ApiAuth::new(Some("tok"), false), inner()).unwrap();
+            assert_eq!(status(router.clone(), None).await, StatusCode::UNAUTHORIZED);
+            assert_eq!(
+                status(router.clone(), Some("Bearer nope")).await,
+                StatusCode::UNAUTHORIZED
+            );
+            assert_eq!(status(router, Some("Bearer tok")).await, StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn mcp_http_on_loopback_without_token_is_open() {
+            let (_, router) = prepare_mcp_http("127.0.0.1", 0, &ApiAuth::new(None, false), inner()).unwrap();
+            assert_eq!(status(router, None).await, StatusCode::OK);
+        }
+
+        #[test]
+        fn mcp_http_refuses_off_loopback_without_token() {
+            let err = prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(None, false), inner())
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("XBERG_API_TOKEN"), "{err}");
+            assert!(prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(Some("t"), false), inner()).is_ok());
+            assert!(prepare_mcp_http("0.0.0.0", 8001, &ApiAuth::new(None, true), inner()).is_ok());
+        }
+    }
 
     #[tokio::test]
     async fn test_tool_router_has_routes() {
@@ -1366,6 +1633,81 @@ mod tests {
         );
     }
 
+    fn vlm_stage_input() -> serde_json::Value {
+        serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}}
+        })
+    }
+
+    const VLM_ENV_CREDENTIALS_REJECTION: &str = "Caller extraction config may not use the server's \
+         LLM credentials for ocr.vlm_config; the server operator must set \
+         XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it";
+
+    #[test]
+    fn should_reject_mcp_http_llm_stage_that_would_use_server_env_credentials() {
+        let server = XbergMcp::with_config(ExtractionConfig::default()).for_http(false, false);
+        let request_config = vlm_stage_input()["config"].clone();
+
+        let error = server
+            .request_config(Some(request_config))
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+        assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
+
+        let input = parse_extract_input(vlm_stage_input(), &ExtractionConfig::default()).expect("input parses");
+        let error = server
+            .reject_remote_input_llm_stage(&input, &ExtractionConfig::default())
+            .expect_err("a per-input LLM stage needs the operator's opt-in");
+        assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
+    }
+
+    #[test]
+    fn should_accept_operator_llm_stage_resent_unchanged_over_mcp_http() {
+        let operator = ExtractionConfig {
+            ocr: Some(crate::OcrConfig {
+                vlm_config: Some(crate::LlmConfig {
+                    model: "openai/gpt-4o-mini".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let server = XbergMcp::with_config(operator.clone()).for_http(false, false);
+
+        let config = server
+            .request_config(Some(vlm_stage_input()["config"].clone()))
+            .expect("an unchanged operator stage needs no opt-in");
+        let input = parse_extract_input(vlm_stage_input(), &config).expect("input parses");
+        assert!(server.reject_remote_input_llm_stage(&input, &config).is_ok());
+    }
+
+    #[test]
+    fn should_accept_caller_llm_stage_on_mcp_stdio() {
+        let server = XbergMcp::with_config(ExtractionConfig::default());
+        let request_config = vlm_stage_input()["config"].clone();
+
+        let config = server
+            .request_config(Some(request_config))
+            .expect("the stdio caller is the operator");
+        assert_eq!(
+            config.ocr.and_then(|ocr| ocr.vlm_config).map(|llm| llm.model),
+            Some("openai/gpt-4o-mini".to_string())
+        );
+
+        let input =
+            parse_extract_input(vlm_stage_input(), &ExtractionConfig::default()).expect("per-input stage parses");
+        assert!(
+            server
+                .reject_remote_input_llm_stage(&input, &ExtractionConfig::default())
+                .is_ok()
+        );
+        assert!(input.config.and_then(|config| config.ocr).is_some());
+    }
+
     #[test]
     #[cfg(feature = "url-config-types")]
     fn should_preserve_operator_crawl_egress_in_mcp_per_input_override() {
@@ -1406,6 +1748,111 @@ mod tests {
             crawl.custom_headers.get("x-caller-input").map(String::as_str),
             Some("input-value")
         );
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn mcp_preserves_omitted_per_input_html_settings() {
+        use crate::core::config::{HtmlOutputConfig, HtmlTheme};
+
+        let operator = ExtractionConfig {
+            html_output: Some(HtmlOutputConfig {
+                theme: HtmlTheme::Dark,
+                class_prefix: "operator-".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let effective = build_config(
+            &operator,
+            Some(serde_json::json!({"html_output": {"class_prefix": "request-"}})),
+        )
+        .unwrap();
+        let input = parse_extract_input(
+            serde_json::json!({"kind": "bytes", "data": [65], "config": {"html_output": {"embed_css": false}}}),
+            &effective,
+        )
+        .unwrap();
+
+        let html = input.config.unwrap().html_output.unwrap();
+        assert_eq!(html.theme, HtmlTheme::Dark);
+        assert_eq!(html.class_prefix, "request-");
+        assert!(!html.embed_css);
+    }
+
+    #[test]
+    fn should_reject_server_css_file_in_mcp_per_input_override() {
+        let value = serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"html_output": {"css_file": "/proc/self/environ"}}
+        });
+
+        let error =
+            parse_extract_input(value, &ExtractionConfig::default()).expect_err("server css_file must be rejected");
+
+        assert_eq!(
+            error.message,
+            "Caller extraction config may not set html_output.css_file"
+        );
+    }
+
+    #[test]
+    fn should_cap_mcp_per_input_timeout_at_request_timeout() {
+        let request = ExtractionConfig {
+            extraction_timeout_secs: Some(30),
+            ..Default::default()
+        };
+        let input_with_timeout = |timeout: u64| {
+            serde_json::json!({
+                "kind": "bytes",
+                "data": [115, 97, 102, 101],
+                "mime_type": "text/plain",
+                "config": {"timeout_secs": timeout}
+            })
+        };
+
+        let raised = parse_extract_input(input_with_timeout(86_400), &request).expect("timeout override parses");
+        assert_eq!(
+            raised.config.expect("per-input config is present").timeout_secs,
+            Some(30)
+        );
+
+        let lowered = parse_extract_input(input_with_timeout(5), &request).expect("timeout override parses");
+        assert_eq!(
+            lowered.config.expect("per-input config is present").timeout_secs,
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn should_keep_request_url_restrictions_in_mcp_per_input_override() {
+        let mut request = ExtractionConfig::default();
+        request.url.allow_local_file_inputs = false;
+        request.url.allow_file_uris = false;
+        request.url.max_total_urls = Some(10);
+        let value = serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"url": {
+                "allow_local_file_inputs": true,
+                "allow_file_uris": true,
+                "max_total_urls": null
+            }}
+        });
+
+        let input = parse_extract_input(value, &request).expect("URL override parses");
+        let url = input
+            .config
+            .expect("per-input config is present")
+            .url
+            .expect("URL override is present");
+
+        assert!(!url.allow_local_file_inputs);
+        assert!(!url.allow_file_uris);
+        assert_eq!(url.max_total_urls, Some(10));
     }
 
     #[test]
@@ -1776,6 +2223,235 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.message, "use_layout_for_markdown must be a boolean");
+    }
+
+    fn http_server_without_local_paths() -> XbergMcp {
+        XbergMcp::with_config(ExtractionConfig::default()).for_http(false, false)
+    }
+
+    #[tokio::test]
+    async fn should_reject_local_path_and_file_uri_on_http_transport_without_opt_in() {
+        let server = http_server_without_local_paths();
+
+        for uri in ["/etc/passwd", "file:///etc/passwd", "relative/report.pdf"] {
+            let params = crate::mcp::params::ExtractParams {
+                input: serde_json::json!({"kind": "uri", "uri": uri}),
+                config: None,
+                pdf_password: None,
+                response_format: None,
+            };
+            let error = server.extract(Parameters(params)).await.unwrap_err();
+            assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS, "{uri}");
+            assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED, "{uri}");
+
+            let params = crate::mcp::params::ExtractBatchParams {
+                inputs: vec![
+                    serde_json::json!({"kind": "bytes", "bytes": [65], "mime_type": "text/plain"}),
+                    serde_json::json!({"kind": "uri", "uri": uri}),
+                ],
+                config: None,
+                pdf_password: None,
+                response_format: None,
+            };
+            let error = server.extract_batch(Parameters(params)).await.unwrap_err();
+            assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED, "{uri}");
+        }
+    }
+
+    #[test]
+    fn should_redact_server_paths_from_tool_errors_only_on_http_transport() {
+        let error = || crate::XbergError::parsing("cannot open /srv/xberg/models/layout.onnx: truncated");
+
+        let http = http_server_without_local_paths().xberg_error(error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::PARSE_ERROR);
+        assert_eq!(http.message, "Parsing error: cannot open <path>: truncated");
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).xberg_error(error());
+        assert_eq!(
+            stdio.message,
+            "Parsing error: cannot open /srv/xberg/models/layout.onnx: truncated"
+        );
+    }
+
+    #[test]
+    fn should_redact_per_input_batch_errors_only_on_http_transport() {
+        let result = || crate::ExtractionResult {
+            errors: vec![crate::ExtractionErrorItem {
+                index: 1,
+                code: 2,
+                error_type: "parsing".to_string(),
+                source: "report.pdf".to_string(),
+                message: "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let mut http = result();
+        http_server_without_local_paths().redact_result_errors(&mut http);
+        assert_eq!(http.errors[0].message, "Parsing error: cannot open <path>: truncated");
+        assert_eq!(http.errors[0].source, "report.pdf");
+
+        let mut stdio = result();
+        XbergMcp::with_config(ExtractionConfig::default()).redact_result_errors(&mut stdio);
+        assert_eq!(
+            stdio.errors[0].message,
+            "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated"
+        );
+    }
+
+    #[test]
+    fn should_give_filesystem_tool_errors_a_fixed_message_only_on_http_transport() {
+        let error = || {
+            crate::XbergError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "File does not exist: \"/srv/my docs/a.pdf\"",
+            ))
+        };
+
+        let http = http_server_without_local_paths().xberg_error(error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(http.message, "IO error: file not found");
+        for fragment in ["srv", "my docs", "a.pdf"] {
+            assert!(!http.message.contains(fragment), "{fragment} survived");
+        }
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).xberg_error(error());
+        assert!(stdio.message.contains("/srv/my docs/a.pdf"), "{}", stdio.message);
+    }
+
+    #[test]
+    fn should_give_filesystem_download_errors_a_fixed_message_only_on_http_transport() {
+        let error = || {
+            crate::XbergError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "cannot write 'C:\\Program Files\\x\\a.pdf'",
+            ))
+        };
+        let context = || "Failed to download NER model 'gliner'".to_string();
+
+        let http = http_server_without_local_paths().download_error(context(), error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(
+            http.message,
+            "Failed to download NER model 'gliner': IO error: permission denied"
+        );
+        for fragment in ["Program", "Files", "a.pdf"] {
+            assert!(!http.message.contains(fragment), "{fragment} survived");
+        }
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).download_error(context(), error());
+        assert!(stdio.message.contains("Program Files"), "{}", stdio.message);
+    }
+
+    #[test]
+    fn should_hide_untyped_download_error_details_only_on_http_transport() {
+        let context = "Failed to download formula recognition models";
+        let detail = "cannot create model cache dir \"/srv/my docs/formula\": denied";
+
+        let http = http_server_without_local_paths().opaque_download_error(context, &detail);
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(http.message, context);
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).opaque_download_error(context, &detail);
+        assert_eq!(stdio.message, format!("{context}: {detail}"));
+    }
+
+    #[test]
+    fn should_label_warmed_ner_model_without_its_cache_path() {
+        assert_eq!(
+            ner_warm_label("gliner-small"),
+            "ner gliner (gliner-small) (Hugging Face cache)"
+        );
+    }
+
+    #[test]
+    fn should_hide_cache_directory_from_cache_stats_only_on_http_transport() {
+        let cache_dir = crate::cache_dir::resolve_cache_base().to_string_lossy().into_owned();
+
+        let http = http_server_without_local_paths()
+            .cache_stats(Parameters(crate::mcp::params::EmptyParams {}))
+            .expect("cache stats are readable");
+        let structured = http.structured_content.expect("structured output");
+        assert_eq!(structured["directory"], "<path>");
+        let text = serde_json::to_string(&http.content).expect("content serializes");
+        assert!(text.contains("Directory: <path>"), "{text}");
+        assert!(!text.contains(&cache_dir), "{text}");
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default())
+            .cache_stats(Parameters(crate::mcp::params::EmptyParams {}))
+            .expect("cache stats are readable");
+        assert_eq!(
+            stdio.structured_content.expect("structured output")["directory"],
+            serde_json::json!(cache_dir)
+        );
+    }
+
+    #[test]
+    fn should_reject_detect_mime_type_on_http_transport_without_opt_in() {
+        let params = crate::mcp::params::DetectMimeTypeParams {
+            path: "/etc/passwd".to_string(),
+            use_content: true,
+        };
+
+        let error = http_server_without_local_paths()
+            .detect_mime_type(Parameters(params))
+            .unwrap_err();
+
+        assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED);
+    }
+
+    #[test]
+    fn should_accept_remote_inputs_on_http_transport_and_local_paths_on_stdio() {
+        let remote = crate::ExtractInput {
+            uri: Some("https://example.com/report.pdf".to_string()),
+            ..Default::default()
+        };
+        let local = crate::ExtractInput {
+            uri: Some("/srv/report.pdf".to_string()),
+            ..Default::default()
+        };
+
+        assert!(http_server_without_local_paths().reject_local_input(&remote).is_ok());
+        assert!(
+            http_server_without_local_paths()
+                .reject_local_input(&crate::ExtractInput::from_bytes(b"x".to_vec(), "text/plain", None))
+                .is_ok()
+        );
+        let stdio = XbergMcp::with_config(ExtractionConfig::default());
+        assert!(stdio.reject_local_input(&local).is_ok());
+        assert!(
+            XbergMcp::with_config(ExtractionConfig::default())
+                .for_http(true, false)
+                .reject_local_input(&local)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn should_disable_local_url_flags_for_request_and_per_input_overrides_without_opt_in() {
+        let mut config = ExtractionConfig::default();
+        http_server_without_local_paths().apply_local_path_policy(&mut config);
+        assert!(!config.url.allow_local_file_inputs);
+        assert!(!config.url.allow_file_uris);
+
+        let value = serde_json::json!({
+            "kind": "uri",
+            "uri": "https://example.com/report.pdf",
+            "config": {"url": {"allow_local_file_inputs": true, "allow_file_uris": true}}
+        });
+        let input = parse_extract_input(value, &config).expect("remote input parses");
+        let url = input
+            .config
+            .and_then(|config| config.url)
+            .expect("per-input url config");
+        assert!(!url.allow_local_file_inputs);
+        assert!(!url.allow_file_uris);
+
+        let mut stdio_config = ExtractionConfig::default();
+        XbergMcp::with_config(ExtractionConfig::default()).apply_local_path_policy(&mut stdio_config);
+        assert!(stdio_config.url.allow_local_file_inputs);
+        assert!(stdio_config.url.allow_file_uris);
     }
 
     #[tokio::test]

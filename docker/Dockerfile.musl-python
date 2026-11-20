@@ -3,15 +3,12 @@ FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c
 
 ARG CARGO_BUILD_JOBS=1
 
-ARG RUST_TOOLCHAIN=1.99.1
+ARG RUST_TOOLCHAIN=1.100.0
 ARG TARGET=x86_64-unknown-linux-musl
 
 WORKDIR /build
 
-# Alpine's /bin/sh is busybox ash, which supports `-o pipefail`. Without it the
-# `curl ... | sh` rustup bootstrap below reports only sh's status, so a failed or
-# truncated download silently installs nothing and the failure surfaces much
-# later as a confusing "cargo: not found". (hadolint DL4006)
+# Propagate failures through the linkage diagnostic pipelines. (hadolint DL4006)
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 RUN apk add --no-cache \
@@ -27,8 +24,8 @@ RUN apk add --no-cache \
 # for maturin instead of `pip install --break-system-packages`.
 RUN python3 -m venv /venv && /venv/bin/pip install --no-cache-dir maturin==1.15.0
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+COPY docker/install-rustup-musl.sh /tmp/install-rustup-musl.sh
+RUN sh /tmp/install-rustup-musl.sh "${RUST_TOOLCHAIN}" && \
     echo "Rust host: $(~/.cargo/bin/rustc -vV | grep host)" && \
     echo "Default target: $(~/.cargo/bin/rustc --print cfg | grep target)"
 ENV PATH="/root/.cargo/bin:/venv/bin:${PATH}"
@@ -69,12 +66,15 @@ ENV CXX_x86_64_unknown_linux_musl=g++
 # build.rs honours the override only when it is non-empty, so an empty value falls straight back
 # through its `!id.is_empty()` check and silently restores the collision. ~keep
 ARG XBERG_BUILD_ID
+# The publish workflow passes thin for aarch64, where fat LTO exhausts the runner's memory.
+ARG CARGO_PROFILE_RELEASE_LTO=fat
 
 # `manifest-path` in packages/python/pyproject.toml points at
 # ../../crates/xberg-py/Cargo.toml, so maturin must run with packages/python as
 # its working directory to resolve that relative path against this layout.
 RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
     export RUSTFLAGS='-C target-feature=-crt-static -C link-arg=-Wl,-rpath,$ORIGIN' && \
+    export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO:?}" && \
     rustup target add "${TARGET}" && \
     cd packages/python && \
     maturin build --release --strip --target "${TARGET}" --interpreter python3 --out /build/wheelhouse && \

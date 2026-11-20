@@ -8,7 +8,9 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 
 use crate::cache;
-use crate::core::config::{ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionResult};
+use crate::core::config::{
+    ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionResult, FileExtractionConfig,
+};
 
 use std::sync::Arc;
 
@@ -54,26 +56,42 @@ enum ApiExtractInput {
         data: Bytes,
         mime_type: String,
         file_name: Option<String>,
-        config: Option<crate::core::config::FileExtractionConfig>,
+        config: Option<serde_json::Value>,
         use_layout_for_markdown: Option<bool>,
     },
     Uri {
         uri: String,
         mime_type: Option<String>,
-        config: Option<crate::core::config::FileExtractionConfig>,
+        config: Option<serde_json::Value>,
         use_layout_for_markdown: Option<bool>,
     },
 }
 
 impl ApiExtractInput {
+    fn resolve_config(mut self, effective: &crate::ExtractionConfig) -> Result<ResolvedApiExtractInput, ApiError> {
+        let config = match &mut self {
+            Self::Bytes { config, .. } | Self::Uri { config, .. } => config.take(),
+        };
+        let config = resolve_input_config(config, effective)?;
+        Ok(ResolvedApiExtractInput { input: self, config })
+    }
+}
+
+struct ResolvedApiExtractInput {
+    input: ApiExtractInput,
+    config: Option<FileExtractionConfig>,
+}
+
+impl ResolvedApiExtractInput {
     fn into_core_input(self) -> ExtractInputWithOptions {
-        let (input, use_layout_for_markdown) = match self {
-            Self::Bytes {
+        let Self { input, config } = self;
+        let (input, use_layout_for_markdown) = match input {
+            ApiExtractInput::Bytes {
                 data,
                 mime_type,
                 file_name,
-                config,
                 use_layout_for_markdown,
+                ..
             } => (
                 ExtractInput {
                     config,
@@ -81,11 +99,11 @@ impl ApiExtractInput {
                 },
                 use_layout_for_markdown,
             ),
-            Self::Uri {
+            ApiExtractInput::Uri {
                 uri,
                 mime_type,
-                config,
                 use_layout_for_markdown,
+                ..
             } => (
                 ExtractInput {
                     kind: ExtractInputKind::Uri,
@@ -106,7 +124,8 @@ impl ApiExtractInput {
 #[derive(Debug)]
 pub(crate) struct UnifiedExtractRequest {
     inputs: Vec<ApiExtractInput>,
-    config: Option<crate::core::config::ExtractionConfig>,
+    /// Caller config as sent, kept as JSON so it merges over the operator config field by field.
+    config: Option<serde_json::Value>,
     output_format: Option<crate::core::config::OutputFormat>,
     pdf_passwords: Vec<String>,
     use_toon: bool,
@@ -114,24 +133,89 @@ pub(crate) struct UnifiedExtractRequest {
 }
 
 impl UnifiedExtractRequest {
-    fn adopt_operator_crawl_egress(&mut self, operator: &crate::core::config::ExtractionConfig) {
-        if let Some(config) = self.config.as_mut() {
-            crate::core::config::request_security::adopt_operator_crawl_egress(config, operator);
-        }
-        for input in &mut self.inputs {
-            let config = match input {
-                ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => config,
-            };
-            if let Some(config) = config.as_mut() {
-                crate::core::config::request_security::adopt_file_operator_crawl_egress(config, operator);
-            }
-        }
+    /// Merge the caller config over the operator config and apply the operator's policy.
+    fn resolve_config(
+        &mut self,
+        operator: &crate::core::config::ExtractionConfig,
+    ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
+        self.resolve_config_with(
+            operator,
+            crate::core::config::request_security::caller_llm_env_credentials_allowed(),
+        )
+    }
+
+    fn resolve_config_with(
+        &mut self,
+        operator: &crate::core::config::ExtractionConfig,
+        allow_caller_llm_env_credentials: bool,
+    ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
+        crate::core::config::request_security::resolve_remote_caller_extraction_config(
+            operator,
+            self.config.take().as_ref(),
+            allow_caller_llm_env_credentials,
+        )
+        .map_err(ApiError::caller_config)
+    }
+
+    fn resolve_input_configs(
+        inputs: Vec<ApiExtractInput>,
+        effective: &crate::ExtractionConfig,
+    ) -> Result<Vec<ResolvedApiExtractInput>, ApiError> {
+        inputs
+            .into_iter()
+            .map(|input| input.resolve_config(effective))
+            .collect()
     }
 }
 
+fn resolve_input_config(
+    config: Option<serde_json::Value>,
+    effective: &crate::ExtractionConfig,
+) -> Result<Option<FileExtractionConfig>, ApiError> {
+    resolve_input_config_with(
+        config,
+        effective,
+        crate::core::config::request_security::caller_llm_env_credentials_allowed(),
+    )
+}
+
+fn resolve_input_config_with(
+    config: Option<serde_json::Value>,
+    effective: &crate::ExtractionConfig,
+    allow_caller_llm_env_credentials: bool,
+) -> Result<Option<FileExtractionConfig>, ApiError> {
+    use crate::core::config::request_security::{
+        adopt_file_operator_policy, merge_html_override, reject_caller_input_llm_stages,
+    };
+
+    let Some(mut config) = config else {
+        return Ok(None);
+    };
+    merge_html_override(effective, &mut config).map_err(ApiError::caller_config)?;
+    let mut config: FileExtractionConfig = serde_json::from_value(config).map_err(|error| {
+        ApiError::validation(crate::error::XbergError::validation(format!(
+            "Invalid per-input configuration: {error}"
+        )))
+    })?;
+    reject_caller_input_llm_stages(effective, &config, allow_caller_llm_env_credentials)
+        .map_err(ApiError::caller_config)?;
+    adopt_file_operator_policy(&mut config, effective);
+    Ok(Some(config))
+}
+
 fn validate_caller_config_value(config: &serde_json::Value) -> Result<(), ApiError> {
-    crate::core::config::request_security::validate_caller_extraction_config(config)
-        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
+    crate::core::config::request_security::validate_caller_extraction_config(config).map_err(ApiError::caller_config)
+}
+
+/// Reject a request config that does not deserialize, at parse time rather than at merge time.
+fn check_request_config_shape(config: &serde_json::Value) -> Result<(), ApiError> {
+    serde_json::from_value::<crate::core::config::ExtractionConfig>(config.clone())
+        .map(drop)
+        .map_err(|e| {
+            ApiError::validation(crate::error::XbergError::validation(format!(
+                "Invalid extraction configuration: {e}"
+            )))
+        })
 }
 
 fn validate_input_config_values(inputs: &serde_json::Value) -> Result<(), ApiError> {
@@ -151,7 +235,7 @@ fn validate_input_config_values(inputs: &serde_json::Value) -> Result<(), ApiErr
 struct JsonUnifiedExtractRequest {
     inputs: Vec<JsonExtractInput>,
     #[serde(default)]
-    config: Option<crate::core::config::ExtractionConfig>,
+    config: Option<serde_json::Value>,
     #[serde(default)]
     format: Option<String>,
     #[serde(default = "default_include_image_data")]
@@ -198,7 +282,7 @@ struct JsonExtractInputObject {
     /// `ExtractionConfig::with_file_overrides`. Without this the HTTP API could
     /// only ever apply one config to every input in a batch (#247).
     #[serde(default)]
-    config: Option<crate::core::config::FileExtractionConfig>,
+    config: Option<serde_json::Value>,
     #[serde(default)]
     use_layout_for_markdown: Option<bool>,
 }
@@ -249,8 +333,9 @@ async fn parse_json_extract_request(req: Request) -> Result<UnifiedExtractReques
             crate::error::XbergError::validation(format!("Invalid extraction request JSON: {e}")),
         )
     })?;
-    if let Some(config) = raw.get("config") {
+    if let Some(config) = raw.get("config").filter(|config| !config.is_null()) {
         validate_caller_config_value(config)?;
+        check_request_config_shape(config)?;
     }
     if let Some(inputs) = raw.get("inputs") {
         validate_input_config_values(inputs)?;
@@ -298,7 +383,7 @@ where
         })?;
 
     let mut inputs = Vec::new();
-    let mut config: Option<crate::core::config::ExtractionConfig> = None;
+    let mut config: Option<serde_json::Value> = None;
     let mut output_format = None;
     let mut pdf_passwords = Vec::new();
     let mut use_toon = false;
@@ -358,12 +443,8 @@ where
                     )))
                 })?;
                 validate_caller_config_value(&config_value)?;
-                config = Some(serde_json::from_str(&config_str).map_err(|e| {
-                    ApiError::validation(crate::error::XbergError::validation(format!(
-                        "Invalid extraction configuration: {}",
-                        e
-                    )))
-                })?);
+                check_request_config_shape(&config_value)?;
+                config = Some(config_value);
             }
             "output_format" => {
                 let format_str = field
@@ -742,11 +823,11 @@ pub(crate) async fn extract_handler(
     #[cfg(feature = "otel")]
     tracing::Span::current().record("files_count", request.inputs.len());
 
-    request.adopt_operator_crawl_egress(&state.default_config);
-    let mut final_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
-    apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
+    let mut final_config = request.resolve_config(&state.default_config)?;
     enforce_and_apply_api_uri_policy(&request.inputs, &mut final_config, api_allows_local_uri_inputs())?;
-    let results = extract_unified_inputs(request.inputs, final_config).await?;
+    apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
+    let inputs = UnifiedExtractRequest::resolve_input_configs(request.inputs, &final_config)?;
+    let results = extract_unified_inputs(inputs, final_config).await?;
 
     if !request.include_image_data {
         let value = super::response::serialize_results(results, false).map_err(|e| {
@@ -768,7 +849,7 @@ pub(crate) async fn extract_handler(
 }
 
 async fn extract_unified_inputs(
-    inputs: Vec<ApiExtractInput>,
+    inputs: Vec<ResolvedApiExtractInput>,
     config: crate::core::config::ExtractionConfig,
 ) -> Result<ExtractionResult, ApiError> {
     if inputs.is_empty() {
@@ -777,10 +858,15 @@ async fn extract_unified_inputs(
         )));
     }
 
-    let inputs = inputs.into_iter().map(ApiExtractInput::into_core_input).collect();
-    crate::extract_batch_with_input_options(inputs, &config)
+    let inputs = inputs
+        .into_iter()
+        .map(ResolvedApiExtractInput::into_core_input)
+        .collect();
+    let mut result = crate::extract_batch_with_input_options(inputs, &config)
         .await
-        .map_err(ApiError::from)
+        .map_err(ApiError::from)?;
+    crate::core::config::remote_errors::redact_error_items(&mut result.errors);
+    Ok(result)
 }
 
 fn enforce_and_apply_api_uri_policy(
@@ -866,7 +952,7 @@ pub(crate) async fn cache_stats_handler() -> Result<Json<CacheStatsResponse>, Ap
     let stats = cache::get_cache_metadata(cache_dir_str).map_err(ApiError::internal)?;
 
     Ok(Json(CacheStatsResponse {
-        directory: cache_dir.to_string_lossy().to_string(),
+        directory: String::new(),
         total_files: stats.total_files,
         total_size_mb: stats.total_size_mb,
         available_space_mb: stats.available_space_mb,
@@ -896,8 +982,11 @@ pub(crate) async fn cache_stats_handler() -> Result<Json<CacheStatsResponse>, Ap
 )]
 #[cfg_attr(feature = "otel", tracing::instrument(name = "api.cache_clear"))]
 pub(crate) async fn cache_clear_handler() -> Result<Json<CacheClearResponse>, ApiError> {
-    let cache_dir = crate::cache_dir::resolve_cache_base();
+    clear_cache_at(&crate::cache_dir::resolve_cache_base())
+}
 
+/// The body of [`cache_clear_handler`] for a given cache directory.
+fn clear_cache_at(cache_dir: &std::path::Path) -> Result<Json<CacheClearResponse>, ApiError> {
     let cache_dir_str = cache_dir.to_str().ok_or_else(|| {
         ApiError::internal(crate::error::XbergError::Other(format!(
             "Cache directory path contains non-UTF8 characters: {}",
@@ -908,7 +997,7 @@ pub(crate) async fn cache_clear_handler() -> Result<Json<CacheClearResponse>, Ap
     let (removed_files, freed_mb) = cache::clear_cache_directory(cache_dir_str).map_err(ApiError::internal)?;
 
     Ok(Json(CacheClearResponse {
-        directory: cache_dir.to_string_lossy().to_string(),
+        directory: String::new(),
         removed_files,
         freed_mb,
     }))
@@ -1112,6 +1201,8 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         )));
     }
 
+    // Read only by the feature-gated model blocks below. ~keep
+    #[allow(unused_variables)]
     let cache_base = resolve_cache_base();
 
     #[allow(unused_mut)]
@@ -1138,12 +1229,9 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         if was_cached {
             already_cached.push("layout (rtdetr, tatr)".to_string());
         } else {
-            manager.ensure_all_models().map_err(|e| {
-                ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                    "Failed to download layout models: {}",
-                    e
-                )))
-            })?;
+            manager
+                .ensure_all_models()
+                .map_err(|e| opaque_download_error("Failed to download layout models", &e))?;
             downloaded.push("layout (rtdetr, tatr)".to_string());
         }
     }
@@ -1177,12 +1265,7 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
                 },
                 Some(embeddings_dir.clone()),
             )
-            .map_err(|e| {
-                ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                    "Failed to download embedding model '{}': {}",
-                    preset.name, e
-                )))
-            })?;
+            .map_err(|e| download_error(&format!("Failed to download embedding model '{}'", preset.name), &e))?;
             downloaded.push(label);
         }
     }
@@ -1208,16 +1291,9 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
             };
 
             for model in &models_to_warm {
-                let path = crate::text::ner::download_model(model, None).map_err(|e| {
-                    ApiError::bad_gateway(crate::error::XbergError::Other(format!(
-                        "Failed to download NER model '{}': {}",
-                        model, e
-                    )))
-                })?;
-                downloaded.push(format!(
-                    "ner gliner ({model}) -> {} (Hugging Face cache)",
-                    path.display()
-                ));
+                crate::text::ner::download_model(model, None)
+                    .map_err(|e| download_error(&format!("Failed to download NER model '{model}'"), &e))?;
+                downloaded.push(ner_warm_label(model));
             }
         }
     }
@@ -1232,10 +1308,40 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
     }
 
     Ok(Json(WarmResponse {
-        cache_dir: cache_base.to_string_lossy().to_string(),
+        cache_dir: String::new(),
         downloaded,
         already_cached,
     }))
+}
+
+/// A 502 for a failed model download: `context` with the error's public message, the full error
+/// logged.
+#[cfg(any(test, feature = "embeddings", feature = "ner-onnx"))]
+fn download_error(context: &str, error: &crate::error::XbergError) -> ApiError {
+    let full_message = error.to_string();
+    tracing::error!(error = %full_message, "{context}");
+    let public = crate::core::config::remote_errors::public_error_message(error, &full_message);
+    ApiError::new(
+        axum::http::StatusCode::BAD_GATEWAY,
+        crate::error::XbergError::Other(format!("{context}: {public}")),
+    )
+}
+
+/// A 502 for a failed model download whose error is not an `XbergError` and may name a path:
+/// the client gets only `context`, the full error is logged.
+#[cfg(any(test, feature = "layout-detection"))]
+fn opaque_download_error(context: &str, error: &dyn std::fmt::Display) -> ApiError {
+    tracing::error!(error = %error, "{context}");
+    ApiError::new(
+        axum::http::StatusCode::BAD_GATEWAY,
+        crate::error::XbergError::Other(context.to_string()),
+    )
+}
+
+/// The `downloaded` label of a warmed NER model. It names the model, never its cache path.
+#[cfg(any(test, feature = "ner-onnx"))]
+pub(crate) fn ner_warm_label(model: &str) -> String {
+    format!("ner gliner ({model}) (Hugging Face cache)")
 }
 
 /// Resolve the cache base directory.
@@ -1330,14 +1436,14 @@ pub(crate) async fn extract_async_handler(
         )));
     }
 
-    request.adopt_operator_crawl_egress(&state.default_config);
-    let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
-    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    let mut effective_config = request.resolve_config(&state.default_config)?;
     #[cfg(not(test))]
     let allow_local = api_allows_local_uri_inputs();
     #[cfg(test)]
     let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
     enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
+    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    let inputs = UnifiedExtractRequest::resolve_input_configs(request.inputs, &effective_config)?;
     // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
     let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
@@ -1355,7 +1461,7 @@ pub(crate) async fn extract_async_handler(
     };
     tokio::spawn(run_extraction_job(
         guard,
-        request.inputs,
+        inputs,
         effective_config,
         request.include_image_data,
         state.job_timeout_secs,
@@ -1373,7 +1479,7 @@ pub(crate) async fn extract_async_handler(
 #[cfg(feature = "api")]
 async fn run_extraction_job(
     guard: JobAbortGuard,
-    inputs: Vec<ApiExtractInput>,
+    inputs: Vec<ResolvedApiExtractInput>,
     effective_config: crate::core::config::ExtractionConfig,
     include_image_data: bool,
     job_timeout_secs: u64,
@@ -1381,6 +1487,11 @@ async fn run_extraction_job(
     let store = Arc::clone(&guard.store);
     let jid = guard.job_id.clone();
 
+    // The job stays `Pending` until it holds one of the job execution slots, and its timeout
+    // starts only once it runs. ~keep
+    let Some(_slot) = store.acquire_execution_slot(&jid).await else {
+        return;
+    };
     store.set_running(&jid, super::jobs::now_rfc3339());
 
     let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
@@ -1565,11 +1676,11 @@ mod tests {
         test_router_with_store(std::sync::Arc::new(crate::api::jobs::JobStore::new()))
     }
 
-    fn test_router_with_store(job_store: std::sync::Arc<crate::api::jobs::JobStore>) -> Router {
+    fn test_api_state(job_store: Arc<crate::api::jobs::JobStore>) -> ApiState {
         let extraction_service = crate::service::ExtractionServiceBuilder::new()
             .build()
             .expect("default extraction service configuration should be valid");
-        let state = ApiState {
+        ApiState {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
@@ -1578,7 +1689,10 @@ mod tests {
             job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
             prometheus_registry: crate::telemetry::init_prometheus(),
-        };
+        }
+    }
+
+    fn test_router_with_store(job_store: Arc<crate::api::jobs::JobStore>) -> Router {
         #[allow(unused_mut)]
         let mut router = Router::new()
             .route("/version", get(version_handler))
@@ -1591,7 +1705,7 @@ mod tests {
             .route("/extract-async", post(extract_async_handler))
             .route("/jobs/{job_id}", get(job_status_handler).delete(cancel_job_handler));
 
-        router.with_state(state)
+        router.with_state(test_api_state(job_store))
     }
 
     /// Build a `multipart/form-data` request carrying a single named text field.
@@ -1640,11 +1754,14 @@ mod tests {
     }
 
     async fn extracted_mime_from_multipart(request: Request<Body>) -> String {
-        let parsed = UnifiedExtractRequest::from_request(request, &())
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
             .await
             .expect("multipart extraction request must parse");
-        let config = parsed.config.unwrap_or_default();
-        let result = extract_unified_inputs(parsed.inputs, config)
+        let config = parsed
+            .resolve_config(&crate::ExtractionConfig::default())
+            .expect("multipart config must resolve");
+        let inputs = UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &config).unwrap();
+        let result = extract_unified_inputs(inputs, config)
             .await
             .expect("multipart input must extract");
         assert_eq!(result.results.len(), 1);
@@ -1803,11 +1920,12 @@ mod tests {
             .await
             .expect("per-input config must parse");
 
-        let core_inputs: Vec<ExtractInputWithOptions> = parsed
-            .inputs
-            .into_iter()
-            .map(ApiExtractInput::into_core_input)
-            .collect();
+        let core_inputs: Vec<_> =
+            UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &crate::ExtractionConfig::default())
+                .unwrap()
+                .into_iter()
+                .map(ResolvedApiExtractInput::into_core_input)
+                .collect();
 
         assert_eq!(core_inputs.len(), 2, "both inputs must survive parsing");
         assert_eq!(
@@ -1819,6 +1937,38 @@ mod tests {
             core_inputs[1].input.config.is_none(),
             "an input that declared no config must not inherit its sibling's override"
         );
+    }
+
+    #[cfg(feature = "html")]
+    #[tokio::test]
+    async fn rest_preserves_omitted_per_input_html_settings() {
+        use crate::core::config::{HtmlOutputConfig, HtmlTheme};
+
+        let operator = crate::ExtractionConfig {
+            html_output: Some(HtmlOutputConfig {
+                theme: HtmlTheme::Dark,
+                class_prefix: "operator-".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let body = serde_json::json!({
+            "config": {"html_output": {"class_prefix": "request-"}},
+            "inputs": [{"kind": "text", "text": "Example", "config": {"html_output": {"embed_css": false}}}]
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let mut rest = UnifiedExtractRequest::from_request(request, &()).await.unwrap();
+        let effective = rest.resolve_config(&operator).unwrap();
+        let inputs = UnifiedExtractRequest::resolve_input_configs(rest.inputs, &effective).unwrap();
+        let html = inputs[0].config.as_ref().unwrap().html_output.as_ref().unwrap();
+        assert_eq!(html.theme, HtmlTheme::Dark);
+        assert_eq!(html.class_prefix, "request-");
+        assert!(!html.embed_css);
     }
 
     #[tokio::test]
@@ -1900,6 +2050,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn should_merge_extract_config_over_operator_and_keep_operator_limits() {
+        let operator = crate::ExtractionConfig {
+            use_cache: false,
+            extraction_timeout_secs: Some(30),
+            max_archive_depth: 1,
+            ..Default::default()
+        };
+        let body = serde_json::json!({
+            "inputs": [{"text": "safe input"}],
+            "config": {"force_ocr": false, "extraction_timeout_secs": null, "max_archive_depth": 64}
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
+            .expect("valid request");
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
+            .await
+            .expect("request parses");
+
+        let config = parsed.resolve_config(&operator).expect("request config resolves");
+
+        assert!(!config.use_cache, "unspecified fields come from the operator config");
+        assert_eq!(config.extraction_timeout_secs, Some(30));
+        assert_eq!(config.max_archive_depth, 1);
+    }
+
+    #[tokio::test]
     #[cfg(feature = "url-config-types")]
     async fn should_reject_request_level_crawl_egress_config_without_leaking_value() {
         let secret_proxy = "http://user:secret@proxy.internal:8080";
@@ -1944,11 +2123,14 @@ mod tests {
             .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
             .expect("valid request");
 
-        let parsed = UnifiedExtractRequest::from_request(request, &())
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
             .await
             .expect("caller-owned crawl config must remain valid");
+        let config = parsed
+            .resolve_config(&crate::ExtractionConfig::default())
+            .expect("caller-owned crawl config must resolve");
 
-        assert_eq!(parsed.config.expect("config is present").url.crawl.max_depth, Some(2));
+        assert_eq!(config.url.crawl.max_depth, Some(2));
     }
 
     #[tokio::test]
@@ -1991,9 +2173,11 @@ mod tests {
         operator.url.crawl.document_output_dir = Some("/operator/documents".into());
         operator.url.crawl.warc_output = Some("/operator/archive.warc".into());
 
-        parsed.adopt_operator_crawl_egress(&operator);
+        let request_config = parsed.resolve_config(&operator).expect("request config resolves");
+        let inputs = UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &request_config).unwrap();
+        let input_config = inputs[0].config.as_ref().expect("per-input config is present");
 
-        let request_crawl = &parsed.config.as_ref().expect("request config is present").url.crawl;
+        let request_crawl = &request_config.url.crawl;
         assert_operator_crawl_egress(request_crawl, &operator.url.crawl);
         assert_eq!(request_crawl.max_depth, Some(7));
         assert_eq!(
@@ -2001,17 +2185,7 @@ mod tests {
             Some("request-value")
         );
 
-        let input_crawl = match &parsed.inputs[0] {
-            ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => {
-                &config
-                    .as_ref()
-                    .expect("per-input config is present")
-                    .url
-                    .as_ref()
-                    .expect("URL config is present")
-                    .crawl
-            }
-        };
+        let input_crawl = &input_config.url.as_ref().expect("URL config is present").crawl;
         assert_operator_crawl_egress(input_crawl, &operator.url.crawl);
         assert_eq!(input_crawl.max_depth, Some(3));
         assert_eq!(
@@ -2019,16 +2193,7 @@ mod tests {
             Some("input-value")
         );
 
-        let input_config = match &parsed.inputs[0] {
-            ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => {
-                config.as_ref().expect("per-input config is present")
-            }
-        };
-        let resolved = parsed
-            .config
-            .as_ref()
-            .expect("request config is present")
-            .with_file_overrides(input_config);
+        let resolved = request_config.with_file_overrides(input_config);
         assert_operator_crawl_egress(&resolved.url.crawl, &operator.url.crawl);
         assert_eq!(resolved.url.crawl.max_depth, Some(3));
         assert_eq!(
@@ -2109,6 +2274,51 @@ mod tests {
     }
 
     #[test]
+    fn should_reject_per_input_llm_stage_that_would_use_server_env_credentials() {
+        let config = serde_json::json!({"captioning": {"llm": {"model": "openai/gpt-4o-mini"}}});
+
+        let error = resolve_input_config_with(Some(config), &crate::ExtractionConfig::default(), false)
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not use the server's \
+             LLM credentials for captioning.llm; the server operator must set \
+             XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_reject_request_level_llm_stage_that_would_use_server_env_credentials() {
+        let body = serde_json::json!({
+            "inputs": [{"text": "safe input"}],
+            "config": {"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}}
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
+            .expect("valid request");
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
+            .await
+            .expect("request parses");
+
+        let error = parsed
+            .resolve_config_with(&crate::ExtractionConfig::default(), false)
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not use the server's \
+             LLM credentials for ocr.vlm_config; the server operator must set \
+             XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+        );
+    }
+
+    #[test]
     fn should_disable_nested_url_flags_for_remote_inputs_when_local_access_is_disabled() {
         let inputs = vec![ApiExtractInput::Uri {
             uri: "https://example.com/document.pdf".to_string(),
@@ -2156,6 +2366,36 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(json["version"].is_string());
         assert!(!json["version"].as_str().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn should_omit_cache_directory_from_cache_stats_response() {
+        let Json(stats) = cache_stats_handler().await.expect("cache stats are readable");
+
+        let body = serde_json::to_value(&stats).expect("stats serialize");
+        let fields = body.as_object().expect("stats are an object");
+        assert!(!fields.contains_key("directory"), "{body}");
+        assert!(fields.contains_key("total_files"), "{body}");
+        let cache_dir = crate::cache_dir::resolve_cache_base();
+        assert!(!body.to_string().contains(&*cache_dir.to_string_lossy()), "{body}");
+    }
+
+    #[test]
+    fn should_omit_cache_directory_from_cache_clear_response() {
+        // Runs the handler's body on a temporary directory: the handler itself clears the real
+        // cache, and pointing XBERG_CACHE_DIR elsewhere would race every concurrent test. ~keep
+        let cache_dir = tempfile::tempdir().expect("temporary cache directory");
+
+        let Json(response) = clear_cache_at(cache_dir.path()).expect("an empty cache clears");
+
+        let body = serde_json::to_value(&response).expect("response serializes");
+        let fields = body.as_object().expect("response is an object");
+        assert!(!fields.contains_key("directory"), "{body}");
+        assert_eq!(body["removed_files"], 0, "{body}");
+        assert!(
+            !body.to_string().contains(&*cache_dir.path().to_string_lossy()),
+            "{body}"
+        );
     }
 
     #[tokio::test]
@@ -2230,10 +2470,57 @@ mod tests {
         if status == StatusCode::OK {
             let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-            assert!(json["cache_dir"].is_string());
+            assert!(json.get("cache_dir").is_none(), "{json}");
             assert!(json["downloaded"].is_array());
             assert!(json["already_cached"].is_array());
+            let cache_dir = crate::cache_dir::resolve_cache_base();
+            assert!(!json.to_string().contains(&*cache_dir.to_string_lossy()), "{json}");
         }
+    }
+
+    #[test]
+    fn should_report_model_download_failures_without_server_paths() {
+        let error = crate::error::XbergError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "cannot write 'C:\\Program Files\\x\\a.pdf'",
+        ));
+
+        let typed = download_error("Failed to download NER model 'gliner'", &error);
+        assert_eq!(typed.status, StatusCode::BAD_GATEWAY);
+        assert_eq!(
+            typed.body.message,
+            "Failed to download NER model 'gliner': IO error: permission denied"
+        );
+
+        let opaque = opaque_download_error(
+            "Failed to download layout models",
+            &"Model download failed: cannot write \"/srv/my docs/a.onnx\"",
+        );
+        assert_eq!(opaque.status, StatusCode::BAD_GATEWAY);
+        assert_eq!(opaque.body.message, "Failed to download layout models");
+
+        for message in [&typed.body.message, &opaque.body.message] {
+            for fragment in ["Program", "Files", "a.pdf", "srv", "my docs", "a.onnx"] {
+                assert!(!message.contains(fragment), "{fragment} survived in {message}");
+            }
+        }
+    }
+
+    #[test]
+    fn should_omit_cache_directory_and_model_paths_from_cache_warm_response() {
+        let response = WarmResponse {
+            cache_dir: String::new(),
+            downloaded: vec![ner_warm_label("gliner-small")],
+            already_cached: vec!["layout (rtdetr, tatr)".to_string()],
+        };
+
+        assert_eq!(
+            serde_json::to_value(&response).expect("response serializes"),
+            serde_json::json!({
+                "downloaded": ["ner gliner (gliner-small) (Hugging Face cache)"],
+                "already_cached": ["layout (rtdetr, tatr)"]
+            })
+        );
     }
 
     #[tokio::test]
@@ -2453,7 +2740,7 @@ mod tests {
             job_store.create_job().expect("slot available");
         }
         let app = test_router_with_store(std::sync::Arc::clone(&job_store));
-        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
+        let body = serde_json::json!({"inputs": [{"kind": "text", "text": "Example", "config": {"force_ocr": false}}]});
 
         let response = app
             .oneshot(
@@ -2469,6 +2756,100 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(job_store.active_count(), crate::api::jobs::MAX_ACTIVE_JOBS);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn should_reject_saturated_async_upload_before_converting_its_bytes() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS, now_rfc3339};
+
+        struct Upload {
+            job_store: Arc<JobStore>,
+            job_id: String,
+        }
+
+        impl AsRef<[u8]> for Upload {
+            fn as_ref(&self) -> &[u8] {
+                b"Example"
+            }
+        }
+
+        impl Drop for Upload {
+            fn drop(&mut self) {
+                self.job_store.cancel(&self.job_id, now_rfc3339());
+            }
+        }
+
+        let job_store = Arc::new(JobStore::new());
+        for _ in 1..MAX_ACTIVE_JOBS {
+            job_store.create_job().expect("slot available");
+        }
+        // Copying these bytes into a core input drops the owner and frees a slot. ~keep
+        let data = Bytes::from_owner(Upload {
+            job_store: Arc::clone(&job_store),
+            job_id: job_store.create_job().expect("last slot available"),
+        });
+        assert_eq!(job_store.active_count(), MAX_ACTIVE_JOBS);
+
+        let request = UnifiedExtractRequest {
+            inputs: vec![ApiExtractInput::Bytes {
+                data,
+                mime_type: "text/plain".into(),
+                file_name: Some("example.txt".into()),
+                config: None,
+                use_layout_for_markdown: None,
+            }],
+            config: None,
+            output_format: None,
+            pdf_passwords: Vec::new(),
+            use_toon: false,
+            include_image_data: false,
+        };
+        let error = extract_async_handler(State(test_api_state(Arc::clone(&job_store))), None, request)
+            .await
+            .expect_err("admission must see the upload owner still holding the last slot");
+
+        assert_eq!(error.status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(job_store.active_count(), MAX_ACTIVE_JOBS - 1);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_rejects_invalid_per_input_config_before_admission() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS};
+
+        for active_count in [0, MAX_ACTIVE_JOBS] {
+            let job_store = Arc::new(JobStore::new());
+            for _ in 0..active_count {
+                job_store.create_job().expect("slot available");
+            }
+            let app = test_router_with_store(Arc::clone(&job_store));
+            let body = serde_json::json!({
+                "inputs": [{"kind": "text", "text": "Example", "config": {"force_ocr": "invalid"}}]
+            });
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let error: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert!(
+                error["message"]
+                    .as_str()
+                    .expect("error message")
+                    .contains("Invalid per-input configuration")
+            );
+            assert_eq!(job_store.active_count(), active_count);
+        }
     }
 
     #[cfg(feature = "api")]
@@ -2887,6 +3268,67 @@ mod tests {
             final_status.result.is_some(),
             "completed job must carry an extraction result"
         );
+    }
+
+    /// Submission returns 202 at once while every job execution slot is held; the job stays
+    /// `Pending` until a slot frees, then completes.
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_job_waits_for_a_free_extraction_slot() {
+        use crate::api::types::JobState;
+
+        let slots = Arc::new(tokio::sync::Semaphore::new(1));
+        let job_store = Arc::new(crate::api::jobs::JobStore::with_execution_slots(Some(Arc::clone(
+            &slots,
+        ))));
+        let app = test_router_with_store(Arc::clone(&job_store));
+        let running_job = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
+        let body = serde_json::json!({"inputs": [{"kind": "text", "text": "Example"}]});
+
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            app.oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .expect("valid request"),
+            ),
+        )
+        .await
+        .expect("submission must not wait for an execution slot")
+        .expect("handler responded");
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes readable");
+        let job_id = serde_json::from_slice::<AsyncJobResponse>(&bytes)
+            .expect("response parses")
+            .job_id;
+
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert_eq!(
+            job_store.get(&job_id).unwrap().state,
+            JobState::Pending,
+            "the job must not run while the only slot is held"
+        );
+
+        drop(running_job);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let state = job_store.get(&job_id).unwrap().state;
+            // The task drops its slot just after it publishes `Completed`. ~keep
+            if state == JobState::Completed && slots.available_permits() == 1 {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "job did not complete and release its slot: {state:?}, {} free",
+                slots.available_permits()
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     #[cfg(feature = "api")]

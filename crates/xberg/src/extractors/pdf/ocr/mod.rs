@@ -23,6 +23,20 @@ mod caption_conversion;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[path = "../../../ocr/caption_grid_proof.rs"]
 mod caption_grid_proof;
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod column_retry;
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod column_selection;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use document::join_run_pages;
@@ -57,8 +71,6 @@ pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(in crate::extractors::pdf) use pipeline::read_rendered_page;
 mod pipeline;
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) use pipeline::TIME_LIMIT_UNREAD_PAGE_ERROR;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use pipeline::render_mixed_plain_pages;
 #[cfg(all(
@@ -66,11 +78,15 @@ pub(super) use pipeline::render_mixed_plain_pages;
     any(paddle_ocr, all(feature = "ocr", not(target_arch = "wasm32")))
 ))]
 pub(super) use pipeline::uses_default_ocr_pipeline;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) use pipeline::{TIME_LIMIT_UNREAD_PAGE_ERROR, report_native_page_recovery};
 mod plausibility;
 mod rendering;
 mod scoring;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod stage_model_inputs;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod symbol_noise_background;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod symbol_noise_lines;
 #[cfg(all(
@@ -87,9 +103,26 @@ mod tall_geometry;
     not(target_arch = "wasm32")
 ))]
 mod tall_source;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use tall_source::try_replace_standalone;
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) use tall_source::with_document_region_ocr_budget;
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) use pipeline::probe_incomplete_hidden_layers;
 
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) use pipeline::MixedOcrRun;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use plausibility::scan_text_plausibility;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -189,8 +222,29 @@ mod proven_read_tests;
 mod recognition_noise_tests;
 #[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
 mod security_limits_tests;
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
+fn run_on_ocr_test_stack<F: std::future::Future<Output = ()>>(
+    stack_bytes: usize,
+    test: impl FnOnce() -> F + Send + 'static,
+) {
+    std::thread::Builder::new()
+        .stack_size(stack_bytes)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("build OCR test runtime")
+                .block_on(test())
+        })
+        .expect("spawn OCR test thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
 #[cfg(all(test, feature = "ocr"))]
 mod tests;
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
+pub(crate) use tests::tests::build_minimal_two_page_pdf_with_sizes;
 
 #[cfg(all(test, feature = "tokio-runtime", any(feature = "ocr", feature = "ocr-pipeline")))]
 mod raw_transcript_tests;

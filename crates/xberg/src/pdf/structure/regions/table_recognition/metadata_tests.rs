@@ -11,70 +11,146 @@ fn detection(class_name: TatrClass, bbox: [f32; 4]) -> TatrDetection {
 }
 
 fn recognized(header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable {
+    recognize_rows(&[&["North", "Region"], &["A", "B"], &["C", "D"]], header_rows, span)
+}
+
+fn recognize_rows(rows: &[&[&str]], header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable {
+    recognize_rows_with_rules(rows, header_rows, span, &[])
+}
+
+fn recognize_rows_with_rules(
+    rows: &[&[&str]],
+    header_rows: usize,
+    span: Option<[f32; 4]>,
+    rules: &[(u32, u32, u32)],
+) -> RecognizedTatrTable {
+    recognize_rows_with_paint(rows, header_rows, span.as_slice(), rules, &[])
+}
+
+pub(super) fn recognize_rows_with_paint(
+    rows: &[&[&str]],
+    header_rows: usize,
+    spans: &[[f32; 4]],
+    rules: &[(u32, u32, u32)],
+    fills: &[(u32, u32, u32, u32, u8)],
+) -> RecognizedTatrTable {
+    let fills: Vec<_> = fills
+        .iter()
+        .map(|&(top, bottom, left, right, shade)| (top, bottom, left, right, [shade; 3]))
+        .collect();
+    recognize_rows_with_rgb_paint(rows, header_rows, spans, rules, &fills)
+}
+
+fn recognize_rows_with_rgb_paint(
+    rows: &[&[&str]],
+    header_rows: usize,
+    spans: &[[f32; 4]],
+    rules: &[(u32, u32, u32)],
+    fills: &[(u32, u32, u32, u32, [u8; 3])],
+) -> RecognizedTatrTable {
+    let cols = rows[0].len();
+    let width = (cols * 50) as u32;
+    let height = (rows.len() * 20) as u32;
+    let page_height = (height as f32).max(100.0);
     let result = TatrResult {
-        rows: (0..3)
-            .map(|row| detection(TatrClass::Row, [0.0, row as f32 * 20.0, 100.0, (row + 1) as f32 * 20.0]))
+        rows: (0..rows.len())
+            .map(|row| {
+                detection(
+                    TatrClass::Row,
+                    [0.0, row as f32 * 20.0, width as f32, (row + 1) as f32 * 20.0],
+                )
+            })
             .collect(),
-        columns: vec![
-            detection(TatrClass::Column, [0.0, 0.0, 50.0, 60.0]),
-            detection(TatrClass::Column, [50.0, 0.0, 100.0, 60.0]),
-        ],
+        columns: (0..cols)
+            .map(|col| {
+                detection(
+                    TatrClass::Column,
+                    [col as f32 * 50.0, 0.0, (col + 1) as f32 * 50.0, height as f32],
+                )
+            })
+            .collect(),
         headers: (header_rows > 0)
-            .then(|| detection(TatrClass::ColumnHeader, [0.0, 0.0, 100.0, header_rows as f32 * 20.0]))
+            .then(|| {
+                detection(
+                    TatrClass::ColumnHeader,
+                    [0.0, 0.0, width as f32, header_rows as f32 * 20.0],
+                )
+            })
             .into_iter()
             .collect(),
-        spanning: span
-            .map(|bbox| detection(TatrClass::SpanningCell, bbox))
-            .into_iter()
+        spanning: spans
+            .iter()
+            .map(|&bbox| detection(TatrClass::SpanningCell, bbox))
             .collect(),
-        table_bbox: Some([0.0, 0.0, 100.0, 60.0]),
+        table_bbox: Some([0.0, 0.0, width as f32, height as f32]),
     };
     let (cells, structure) = build_cell_grid_with_structure(&result, result.table_bbox);
-    let words: Vec<_> = ["North", "Region", "A", "B", "C", "D"]
-        .into_iter()
+    let words: Vec<_> = rows
+        .iter()
+        .flat_map(|row| row.iter().copied())
         .enumerate()
+        .filter(|(_, text)| !text.is_empty())
         .map(|(index, text)| HocrWord {
             text: text.to_owned(),
-            left: 10 + (index as u32 % 2) * 50,
-            top: 5 + (index as u32 / 2) * 20,
+            left: 10 + (index as u32 % cols as u32) * 50,
+            top: 5 + (index as u32 / cols as u32) * 20,
             width: 20,
             height: 8,
             confidence: 99.0,
         })
         .collect();
-    let image = image::RgbImage::new(100, 60);
+    let mut image = image::RgbImage::from_pixel(width, height, image::Rgb([255; 3]));
+    for &(top, bottom, left, right, shade) in fills {
+        for y in top..bottom {
+            for x in left..right {
+                image.put_pixel(x, y, image::Rgb(shade));
+            }
+        }
+    }
+    if !rules.is_empty() {
+        for word in &words {
+            for x in word.left + 2..word.left + word.width - 2 {
+                image.put_pixel(x, word.top + word.height - 1, image::Rgb([0; 3]));
+            }
+        }
+    }
+    for &(y, left, right) in rules {
+        for x in left..right {
+            image.put_pixel(x, y, image::Rgb([0; 3]));
+        }
+    }
     let page_result = crate::pdf::structure::types::PageLayoutResult {
-        page_width_pts: 100.0,
-        page_height_pts: 100.0,
+        page_width_pts: width as f32,
+        page_height_pts: page_height,
     };
     let crop = TatrCrop {
         image: image.clone(),
         px_left: 0,
         px_top: 0,
-        width: 100,
-        height: 60,
+        width,
+        height,
         sx: 1.0,
         sy: 1.0,
-        extended_bottom_pt: 60.0,
+        extended_bottom_pt: height as f32,
     };
     let hint = LayoutHint {
         class_name: LayoutHintClass::Table,
         confidence: 0.99,
         left: 0.0,
-        bottom: 40.0,
-        right: 100.0,
-        top: 100.0,
+        bottom: page_height - height as f32,
+        right: width as f32,
+        top: page_height,
     };
     let context = TatrPageContext {
         image: &image,
         words: &words,
         page_result: &page_result,
-        page_height: 100.0,
+        page_height,
         page_index: 0,
         allow_single_column: false,
     };
     assemble_tatr_table(&TatrInference { cells, structure }, &crop, &hint, None, &context)
-        .expect("populated three-row TATR table")
+        .expect("populated TATR table")
 }
 
 fn recognized_document(result: &RecognizedTatrTable) -> crate::types::internal::InternalDocument {
@@ -93,7 +169,7 @@ fn recognized_document(result: &RecognizedTatrTable) -> crate::types::internal::
     doc
 }
 
-fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
+pub(super) fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
     let doc = recognized_document(result);
     let derived =
         crate::extraction::derive::derive_extraction_result(doc, true, crate::core::config::OutputFormat::Markdown);
@@ -106,6 +182,402 @@ fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
             _ => None,
         })
         .expect("derived TATR table")
+}
+
+#[test]
+fn native_tatr_vertical_span_stops_at_a_painted_rule() {
+    let rows: &[&[&str]] = &[
+        &["in millions", "2024", "2023"],
+        &["Credit Exposures", "$48,013", "$50,820"],
+        &["Industry", "", ""],
+        &["Funds", "13%", "13%"],
+    ];
+    for divider in [(20, 0, 150), (20, 50, 100)] {
+        let result = recognize_rows_with_rules(rows, 3, Some([50.0, 0.0, 100.0, 40.0]), &[divider]);
+        let grid = derived_grid(&result);
+        assert_eq!(result.table.cells[0], rows[0]);
+        assert_eq!(result.table.cells[1], rows[1]);
+        assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+        let without_span = recognize_rows_with_rules(rows, 3, None, &[divider]);
+        assert_eq!(grid, derived_grid(&without_span));
+        assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 3)));
+        let html = crate::rendering::render_html(&recognized_document(&result));
+        assert!(!html.contains("rowspan="), "{html}");
+        assert_eq!(html.matches("Industry").count(), 1, "{html}");
+    }
+}
+
+#[test]
+fn native_tatr_vertical_span_survives_a_rule_outside_the_merged_track() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let result = recognize_rows_with_rules(rows, 1, Some([50.0, 0.0, 100.0, 40.0]), &[(20, 100, 150)]);
+    let grid = derived_grid(&result);
+    let merged = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+    assert_eq!((merged.row, merged.col, merged.row_span), (0, 1, 2));
+    assert!(merged.is_header);
+    assert!(grid.cells.iter().all(|cell| cell.row != 1 || cell.col != 1));
+}
+
+#[test]
+fn native_tatr_three_row_span_retains_only_the_source_supported_merge() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let span = Some([50.0, 0.0, 100.0, 60.0]);
+    let supported = recognize_rows_with_rules(rows, 1, span, &[(20, 0, 50), (20, 100, 150), (40, 0, 150)]);
+    let one_neighbor = recognize_rows_with_rules(rows, 1, span, &[(20, 100, 150), (40, 0, 150)]);
+    let unknown = recognize_rows_with_rules(rows, 1, span, &[(40, 0, 150)]);
+    for (result, expected_span) in [(&supported, 2), (&one_neighbor, 1), (&unknown, 1)] {
+        let grid = derived_grid(result);
+        let track: Vec<_> = grid.cells.iter().filter(|cell| cell.col == 1).collect();
+        let expected = if expected_span == 2 {
+            vec![(0, 2, "Region"), (2, 1, "Coast")]
+        } else {
+            vec![(0, 1, "Region"), (1, 1, ""), (2, 1, "Coast")]
+        };
+        let actual: Vec<_> = track
+            .iter()
+            .map(|cell| (cell.row, cell.row_span, cell.content.as_str()))
+            .collect();
+        assert_eq!(actual, expected);
+        let html = crate::rendering::render_html(&recognized_document(result));
+        assert_eq!(
+            html.matches("rowspan=\"2\"").count(),
+            usize::from(expected_span == 2),
+            "{html}"
+        );
+        assert_eq!(html.matches("Region").count(), 1, "{html}");
+        assert_eq!(html.matches("Coast").count(), 1, "{html}");
+    }
+}
+
+#[test]
+fn native_tatr_preserves_adjacent_source_supported_rowspans() {
+    let rows: &[&[&str]] = &[
+        &["Region", "Code", "2024", ""],
+        &["", "", "Q1", "Q2"],
+        &["North", "NY", "10", "12"],
+    ];
+    let spans = [
+        [0.0, 0.0, 50.0, 60.0],
+        [50.0, 0.0, 100.0, 60.0],
+        [100.0, 0.0, 200.0, 20.0],
+    ];
+    let rules = [(20, 100, 200), (40, 0, 200)];
+    for fills in [&[][..], &[(20, 21, 20, 21, 225)][..]] {
+        let result = recognize_rows_with_paint(rows, 2, &spans, &rules, fills);
+        let grid = derived_grid(&result);
+        let headers: Vec<_> = grid
+            .cells
+            .iter()
+            .filter(|cell| cell.row == 0)
+            .map(|cell| (cell.row_span, cell.col_span, cell.content.as_str()))
+            .collect();
+        assert_eq!(headers, [(2, 1, "Region"), (2, 1, "Code"), (1, 2, "2024")]);
+        let html = crate::rendering::render_html(&recognized_document(&result));
+        assert_eq!(html.matches("rowspan=\"2\"").count(), 2, "{html}");
+        assert_eq!(html.matches("colspan=\"2\"").count(), 1, "{html}");
+        for label in ["Region", "Code", "2024", "Q1", "Q2"] {
+            assert_eq!(html.matches(label).count(), 1, "{html}");
+        }
+    }
+
+    let independent: &[&[&str]] = &[rows[0], &["", "District", "Q1", "Q2"], rows[2]];
+    let result = recognize_rows_with_paint(independent, 2, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+    assert!(
+        grid.cells
+            .iter()
+            .any(|cell| cell.row == 1 && cell.content == "District")
+    );
+}
+
+#[test]
+fn native_tatr_preserves_three_adjacent_rowspans_across_empty_continuations() {
+    let rows: &[&[&str]] = &[
+        &["Region", "Country", "Code", "2024", ""],
+        &["", "", "", "H1", "H2"],
+        &["", "", "", "Q1", "Q2"],
+        &["North", "US", "NY", "10", "12"],
+    ];
+    let spans = [
+        [0.0, 0.0, 50.0, 80.0],
+        [50.0, 0.0, 100.0, 80.0],
+        [100.0, 0.0, 150.0, 80.0],
+        [150.0, 0.0, 250.0, 20.0],
+    ];
+    let rules = [(20, 150, 250), (40, 150, 250), (60, 0, 250)];
+    let result = recognize_rows_with_paint(rows, 3, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    let stubs: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.row == 0 && cell.col < 3)
+        .map(|cell| (cell.row_span, cell.col_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(stubs, [(3, 1, "Region"), (3, 1, "Country"), (3, 1, "Code")]);
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert_eq!(html.matches("rowspan=\"3\"").count(), 3, "{html}");
+
+    let independent: &[&[&str]] = &[rows[0], &["", "District", "", "H1", "H2"], rows[2], rows[3]];
+    let result = recognize_rows_with_paint(independent, 3, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+    assert!(
+        grid.cells
+            .iter()
+            .any(|cell| cell.row == 1 && cell.content == "District")
+    );
+}
+
+#[test]
+fn native_tatr_preserves_a_tinted_open_track() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    assert_source_supported_open_track(rows, &[(0, 31, 50, 100, 217)]);
+
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let flank_rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let split_tint = [(0, 20, 50, 100, 217), (20, 31, 50, 100, 198)];
+    let result = recognize_rows_with_paint(rows, 1, &spans, &flank_rules, &split_tint);
+    let grid = derived_grid(&result);
+    assert!(
+        grid.cells
+            .iter()
+            .any(|cell| cell.col == 1 && cell.row == 0 && cell.row_span == 1 && cell.content == "Region")
+    );
+}
+
+#[test]
+fn native_tatr_resolves_open_and_divided_tracks_on_full_width_tints() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let flank_rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let crossing_rules = [(20, 0, 150), (40, 0, 150)];
+    let separator_only = [(40, 0, 150)];
+    for tint in [[198; 3], [0xB8, 0xCC, 0xE4], [0xB8, 0xC8, 0xD8]] {
+        let fills = [(0, 60, 0, 150, tint)];
+        for (rules, expected_span) in [
+            (flank_rules.as_slice(), 2),
+            (crossing_rules.as_slice(), 1),
+            (separator_only.as_slice(), 1),
+        ] {
+            let result = recognize_rows_with_rgb_paint(rows, 1, &spans, rules, &fills);
+            let grid = derived_grid(&result);
+            let stub = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+            assert_eq!((stub.row_span, stub.col_span), (expected_span, 1), "{tint:?} {rules:?}");
+            let coast = grid.cells.iter().find(|cell| cell.content == "Coast").unwrap();
+            assert_eq!((coast.row, coast.row_span), (2, 1), "{tint:?} {rules:?}");
+        }
+    }
+}
+
+#[test]
+fn native_tatr_requires_continuous_flank_rule_on_a_tint() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let spans = [[50.0, 0.0, 100.0, 60.0]];
+    let solid = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let dashed = [(20, 0, 24), (20, 25, 50), (20, 100, 150), (40, 0, 150)];
+    let fill = [(0, 60, 0, 150, 198)];
+    for (rules, expected_span) in [(solid.as_slice(), 2), (dashed.as_slice(), 1)] {
+        let result = recognize_rows_with_paint(rows, 1, &spans, rules, &fill);
+        let grid = derived_grid(&result);
+        let stub = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+        assert_eq!((stub.row, stub.col, stub.row_span), (0, 1, expected_span), "{rules:?}");
+    }
+}
+
+#[test]
+fn native_tatr_preserves_a_noisy_near_white_open_track() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    assert_source_supported_open_track(rows, &[(20, 21, 73, 74, 225)]);
+}
+
+fn assert_source_supported_open_track(rows: &[&[&str]], fills: &[(u32, u32, u32, u32, u8)]) {
+    let span = [50.0, 0.0, 100.0, 60.0];
+    let rules = [(20, 0, 50), (20, 100, 150), (40, 0, 150)];
+    let result = recognize_rows_with_paint(rows, 1, &[span], &rules, fills);
+    let grid = derived_grid(&result);
+    let track: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.col == 1)
+        .map(|cell| (cell.row, cell.row_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(track, [(0, 2, "Region"), (2, 1, "Coast")]);
+
+    let crossing = [(20, 0, 150), (40, 0, 150)];
+    let result = recognize_rows_with_paint(rows, 1, &[span], &crossing, fills);
+    let grid = derived_grid(&result);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+}
+
+#[test]
+fn native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor() {
+    let rows: &[&[&str]] = &[
+        &["North", "Code", "Region"],
+        &["South", "NY", "Coast"],
+        &["East", "MA", ""],
+    ];
+    let span = Some([100.0, 0.0, 150.0, 60.0]);
+    let result = recognize_rows_with_rules(rows, 1, span, &[(20, 100, 150), (40, 0, 100)]);
+    let actual: Vec<_> = derived_grid(&result)
+        .cells
+        .into_iter()
+        .filter(|cell| cell.col == 2)
+        .map(|cell| (cell.row, cell.row_span, cell.content))
+        .collect();
+    assert_eq!(actual, [(0, 1, "Region".to_owned()), (1, 2, "Coast".to_owned())]);
+}
+
+#[test]
+fn native_tatr_stops_year_headers_before_section_and_records() {
+    let rows: &[&[&str]] = &[
+        &["$ in millions", "2024", "2023", "2022"],
+        &["Preferred stock", "", "", ""],
+        &["Beginning balance", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Issued", "4,250", "1,500", ""],
+        &["Redeemed", "(2,200)", "(1,000)", "–"],
+        &["Common stock", "", "", ""],
+        &["Beginning balance", "9", "9", ""],
+        &["Issued", "–", "–", ""],
+    ];
+    let result = recognize_rows(rows, 4, None);
+    assert_eq!(result.table.cells.len(), rows.len());
+    let grid = derived_grid(&result);
+    assert_eq!((grid.rows, grid.cols), (8, 4));
+    assert_eq!(grid.cells.len(), 32);
+    let doc = recognized_document(&result);
+    let html = crate::rendering::render_html(&doc);
+    assert_eq!(html.matches("<table>").count(), 1, "{html}");
+    for (index, (row, expected)) in grid.cells.as_chunks::<4>().0.iter().zip(rows).enumerate() {
+        let tag = if index == 0 { "th" } else { "td" };
+        let mut html_row = String::from("<tr>");
+        for (cell, text) in row.iter().zip(*expected) {
+            assert_eq!(cell.content, *text);
+            assert_eq!((cell.row_span, cell.col_span), (1, 1));
+            assert_eq!(cell.is_header, tag == "th", "{}", cell.content);
+            html_row.push_str(&format!("<{tag}>{text}</{tag}>"));
+        }
+        html_row.push_str("</tr>");
+        assert!(html.contains(&html_row), "{html}");
+    }
+}
+
+#[test]
+fn native_tatr_keeps_group_and_year_bands_before_section() {
+    let rows: &[&[&str]] = &[
+        &["", "Year Ended December", "", ""],
+        &["$ in millions", "2024", "2023", "2022"],
+        &["Preferred stock", "", "", ""],
+        &["Beginning balance", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Issued", "4,250", "1,500", ""],
+        &["Common stock", "", "", ""],
+        &["Beginning balance", "9", "9", ""],
+        &["Issued", "–", "–", ""],
+    ];
+    let result = recognize_rows(rows, 5, Some([50.0, 0.0, 200.0, 20.0]));
+    let grid = derived_grid(&result);
+    let group = grid
+        .cells
+        .iter()
+        .find(|cell| cell.content == "Year Ended December")
+        .unwrap();
+    assert_eq!((group.row, group.col, group.col_span), (0, 1, 3));
+    assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 2)));
+}
+
+#[test]
+fn native_tatr_preserves_numeric_subheaders_without_a_repeated_section() {
+    let rows: &[&[&str]] = &[
+        &["Fiscal year", "2024", "2023", "2022"],
+        &["Reporting period", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Revenue", "$ 11,203", "$ 10,703", "$ 10,703"],
+    ];
+    let result = recognize_rows(rows, 3, None);
+    let grid = derived_grid(&result);
+    let headers: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.is_header)
+        .map(|cell| cell.content.as_str())
+        .collect();
+    assert_eq!(
+        headers,
+        [
+            "Fiscal year",
+            "2024",
+            "2023",
+            "2022",
+            "Reporting period",
+            "",
+            "",
+            "",
+            "Quarter",
+            "4",
+            "4",
+            "4"
+        ]
+    );
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert!(
+        html.contains("<tr><th>Quarter</th><th>4</th><th>4</th><th>4</th></tr>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<tr><td>Revenue</td><td>$ 11,203</td><td>$ 10,703</td><td>$ 10,703</td></tr>"),
+        "{html}"
+    );
+}
+
+#[test]
+fn native_tatr_preserves_numeric_subheaders_when_body_repeats_one_label() {
+    let rows: &[&[&str]] = &[
+        &["Fiscal year", "2024", "2023", "2022"],
+        &["Reporting period", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Revenue", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Actuals", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Expenses", "2", "3", "4"],
+    ];
+    let result = recognize_rows(rows, 3, None);
+    let grid = derived_grid(&result);
+    assert_eq!((grid.rows, grid.cols), (7, 4));
+    assert_eq!(grid.cells.len(), 28);
+    assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 3)));
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert!(
+        html.contains("<tr><th>Quarter</th><th>4</th><th>4</th><th>4</th></tr>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<tr><td>Quarter</td><td>4</td><td>4</td><td>4</td></tr>"),
+        "{html}"
+    );
 }
 
 #[test]
@@ -338,5 +810,264 @@ mod html {
         let html = render_html(&recognized_document(&result));
         assert!(!html.contains("colspan="), "{html}");
         assert_eq!(html.matches("<td").count(), 6, "{html}");
+    }
+}
+
+#[test]
+fn ruled_parent_requires_rule_through_final_year_track() {
+    use crate::layout::models::tatr::CellBBox;
+
+    let cells: Vec<_> = (0..4)
+        .map(|col| CellBBox {
+            x1: col as f32 * 50.0,
+            x2: (col + 1) as f32 * 50.0,
+            y1: 30.0,
+            y2: 50.0,
+        })
+        .collect();
+    for (rule_start, rule_end, expected) in [
+        (50, 200, Some((50.0, 200.0, 28.0))),
+        (50, 150, None),
+        (0, 200, None),
+        (55, 200, None),
+        (50, 216, None),
+    ] {
+        let mut image = image::RgbImage::from_pixel(220, 50, image::Rgb([255; 3]));
+        for x in rule_start..rule_end {
+            image.put_pixel(x, 28, image::Rgb([0; 3]));
+        }
+        let crop = TatrCrop {
+            image,
+            px_left: 0,
+            px_top: 0,
+            width: 220,
+            height: 50,
+            sx: 1.0,
+            sy: 1.0,
+            extended_bottom_pt: 50.0,
+        };
+        assert_eq!(
+            ruled_year_parent(&crop, &cells, 54.0, 105.0, 145.0, 25.0, 30.0),
+            expected
+        );
+    }
+}
+
+#[test]
+fn ruled_parent_assembly_preserves_span_and_word_ownership_with_crop_offset() {
+    use crate::layout::models::tatr::{CellBBox, TableStructure};
+
+    let inference = TatrInference {
+        cells: (0..3)
+            .map(|row| {
+                (0..4)
+                    .map(|col| CellBBox {
+                        x1: col as f32 * 50.0,
+                        x2: (col + 1) as f32 * 50.0,
+                        y1: 30.0 + row as f32 * 20.0,
+                        y2: 50.0 + row as f32 * 20.0,
+                    })
+                    .collect()
+            })
+            .collect(),
+        structure: TableStructure {
+            header_row_count: 1,
+            spans: vec![(1, 3, 1, 3)],
+        },
+    };
+    let word = |text: &str, left, top, width| HocrWord {
+        text: text.into(),
+        left,
+        top,
+        width,
+        height: 4,
+        confidence: 99.0,
+    };
+    let words = vec![
+        word("Outside", 2, 5, 10),
+        word("Year", 64, 20, 8),
+        word("Ended", 74, 20, 11),
+        word("December", 87, 20, 12),
+        word("Units", 24, 31, 12),
+        word("2024", 49, 31, 12),
+        word("2023", 74, 31, 12),
+        word("2022", 99, 31, 12),
+        word("Capital", 24, 41, 12),
+        word("Long", 49, 41, 12),
+        word("term", 74, 41, 12),
+        word("12", 99, 41, 12),
+        word("Balance", 24, 51, 12),
+        word("100", 49, 51, 12),
+        word("200", 74, 51, 12),
+        word("300", 99, 51, 12),
+    ];
+    let hint = LayoutHint {
+        class_name: LayoutHintClass::Table,
+        confidence: 0.99,
+        left: 20.0,
+        right: 120.0,
+        top: 80.0,
+        bottom: 42.0,
+    };
+    let page_result = crate::pdf::structure::types::PageLayoutResult {
+        page_width_pts: 120.0,
+        page_height_pts: 100.0,
+    };
+    for (rule_start, rule_end, last_word_offset, accepted) in [
+        (50, 200, 0_i32, true),
+        (50, 150, 0, false),
+        (0, 200, 0, false),
+        (50, 200, 6, false),
+        (50, 200, -3, false),
+    ] {
+        let mut words = words.clone();
+        words[3].left = words[3].left.checked_add_signed(last_word_offset).unwrap();
+        let mut image = image::RgbImage::from_pixel(200, 90, image::Rgb([255; 3]));
+        for x in rule_start..rule_end {
+            image.put_pixel(x, 28, image::Rgb([0; 3]));
+        }
+        let crop = TatrCrop {
+            image: image.clone(),
+            px_left: 40,
+            px_top: 28,
+            width: 200,
+            height: 90,
+            sx: 2.0,
+            sy: 2.0,
+            extended_bottom_pt: 58.0,
+        };
+        let context = TatrPageContext {
+            image: &image,
+            words: &words,
+            page_result: &page_result,
+            page_height: 100.0,
+            page_index: 0,
+            allow_single_column: false,
+        };
+        let result = assemble_tatr_table(&inference, &crop, &hint, None, &context).unwrap();
+        let grid = result.grid.as_ref().unwrap();
+        assert_eq!(grid.rows, 3 + u32::from(accepted));
+        let shifted = grid
+            .cells
+            .iter()
+            .find(|cell| cell.row == 1 + u32::from(accepted) && cell.col == 1)
+            .unwrap();
+        assert_eq!(
+            (shifted.content.as_str(), shifted.row_span, shifted.col_span),
+            ("Long term 100 200", 2, 2)
+        );
+        let consumed: Vec<_> = result.consumed_word_ids.iter().copied().collect();
+        assert_eq!(consumed, ((if accepted { 1 } else { 4 })..16).collect::<Vec<_>>());
+        if accepted {
+            let parent = grid.cells.iter().find(|cell| cell.row == 0 && cell.col == 1).unwrap();
+            assert_eq!(
+                (parent.content.as_str(), parent.col_span, parent.is_header),
+                ("Year Ended December", 3, true)
+            );
+        }
+    }
+}
+
+#[test]
+fn ruled_parent_assembly_accepts_pinned_track_geometry_and_rejects_offset_words() {
+    use crate::layout::models::tatr::{CellBBox, TableStructure};
+
+    let tracks = [(2.60, 751.33), (766.56, 960.33), (969.46, 1060.15), (1059.81, 1106.98)];
+    let inference = TatrInference {
+        cells: [(26.31, 46.70), (46.88, 73.88), (73.88, 100.0)]
+            .map(|(y1, y2)| tracks.iter().map(|&(x1, x2)| CellBBox { x1, y1, x2, y2 }).collect())
+            .to_vec(),
+        structure: TableStructure {
+            header_row_count: 1,
+            spans: vec![],
+        },
+    };
+    let word = |text: &str, left, top, width| HocrWord {
+        text: text.into(),
+        left,
+        top,
+        width,
+        height: 8,
+        confidence: 99.0,
+    };
+    let mut image = image::RgbImage::from_pixel(1140, 110, image::Rgb([255; 3]));
+    for x in 872..1133 {
+        image.put_pixel(x, 24, image::Rgb([0; 3]));
+    }
+    let crop = TatrCrop {
+        image: image.clone(),
+        px_left: 69,
+        px_top: 133,
+        width: 1140,
+        height: 110,
+        sx: 2.0833333,
+        sy: 2.0833333,
+        extended_bottom_pt: 115.0,
+    };
+    let hint = LayoutHint {
+        class_name: LayoutHintClass::Table,
+        confidence: 0.99,
+        left: 34.0,
+        right: 578.0,
+        top: 729.0,
+        bottom: 677.0,
+    };
+    let page_result = crate::pdf::structure::types::PageLayoutResult {
+        page_width_pts: 612.0,
+        page_height_pts: 792.0,
+    };
+    for (shift, expected) in [(0, true), (-20, false)] {
+        let mut words = vec![
+            word("Year", 474, 64, 17),
+            word("Ended", 495, 64, 21),
+            word("December", 521, 64, 34),
+            word("Units", 37, 76, 30),
+            word("2024", 471, 76, 18),
+            word("2023", 514, 76, 18),
+            word("2022", 557, 76, 18),
+            word("Capital", 37, 88, 30),
+            word("100", 471, 88, 18),
+            word("200", 514, 88, 18),
+            word("300", 557, 88, 18),
+            word("Balance", 37, 101, 30),
+            word("400", 471, 101, 18),
+            word("500", 514, 101, 18),
+            word("600", 557, 101, 18),
+        ];
+        for word in &mut words[..3] {
+            word.left = word.left.checked_add_signed(shift).unwrap();
+        }
+        let to_x = |x| x as f32 * crop.sx - crop.px_left as f32;
+        assert_eq!(
+            ruled_year_parent(
+                &crop,
+                &inference.cells[0],
+                to_x(471),
+                to_x(words[0].left),
+                to_x(words[2].left + words[2].width),
+                17.0,
+                inference.cells[0][0].y1,
+            ),
+            Some((872.0, 1133.0, 24.0))
+        );
+        let context = TatrPageContext {
+            image: &image,
+            words: &words,
+            page_result: &page_result,
+            page_height: 792.0,
+            page_index: 0,
+            allow_single_column: false,
+        };
+        let result = assemble_tatr_table(&inference, &crop, &hint, None, &context).unwrap();
+        let grid = result.grid.as_ref().unwrap();
+        assert_eq!(grid.rows, 3 + u32::from(expected));
+        assert_eq!(result.consumed_word_ids.contains(&0), expected);
+        if expected {
+            assert!(grid.cells.iter().any(|cell| cell.row == 0
+                && cell.col == 1
+                && cell.col_span == 3
+                && cell.is_header
+                && cell.content == "Year Ended December"));
+        }
     }
 }

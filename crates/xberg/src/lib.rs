@@ -88,6 +88,18 @@ pub mod model_cache;
 pub mod plugins;
 pub mod rendering;
 pub mod telemetry;
+// `otel` declares tracing-opentelemetry for the embedder to install as its tracing layer, and
+// opentelemetry_sdk for the #332 telemetry test (a dev-dependency would build it for every test
+// build); the library never names either, so this marks them used for cargo's
+// unused_dependencies lint. ~keep
+#[cfg(feature = "otel")]
+use opentelemetry_sdk as _;
+#[cfg(feature = "otel")]
+use tracing_opentelemetry as _;
+// `ocr-pipeline` enables strsim for the PDF OCR passes, which only compile with `pdf` too; a
+// build with `ocr-pipeline` and without `pdf` (e.g. `sceptre-ocr-ort`) never names it. ~keep
+#[cfg(feature = "ocr-pipeline")]
+use strsim as _;
 /// Text post-processing: NER, summarisation, redaction, token reduction, and translation.
 pub mod text;
 pub mod types;
@@ -136,9 +148,13 @@ pub mod reranking;
 #[cfg(feature = "onnx-runtime")]
 pub(crate) mod onnx;
 
-#[cfg(feature = "onnx-runtime")]
-#[cfg_attr(alef, alef(skip))]
-pub use onnx::{OrtSessionOptions, ort_session_options, set_ort_session_options};
+// ~keep Feature-independent: the options are a plain DTO with no ORT dependency, and a
+// binding gate on a cfg its own crate cannot observe (the `paddle_ocr` build-script cfg)
+// would drop the type from builds that still need it. A build with no ORT-backed feature
+// exposes them without having a session to apply them to.
+mod ort_options;
+
+pub use ort_options::{OrtSessionOptions, ort_session_options, set_ort_session_options};
 
 /// Sparse (SPLADE) learned embeddings for hybrid dense+sparse retrieval.
 #[cfg(any(feature = "sparse-embedding-presets", feature = "sparse-embeddings"))]
@@ -165,8 +181,15 @@ mod engine_cache;
 // `layout-detection` renders PDF pages itself and needs `image::dpi` to honour a configured
 // render DPI (#1577); it does not imply `ocr-pipeline`, so the module gate has to cover both or
 // `pdf + layout-detection` fails to compile. The submodules that genuinely need the OCR
-// dependency set stay gated inside `image/mod.rs`. ~keep
-#[cfg(any(feature = "ocr-pipeline", feature = "layout-detection"))]
+// dependency set stay gated inside `image/mod.rs`, and the model preprocessors cover the
+// layout/orientation features. ~keep
+#[cfg(any(
+    feature = "ocr-pipeline",
+    feature = "layout-detection",
+    feature = "layout-tract",
+    feature = "auto-rotate",
+    feature = "auto-rotate-tract"
+))]
 /// Image preprocessing and DPI utilities for OCR and layout pipelines.
 pub mod image;
 
@@ -220,7 +243,7 @@ pub mod doctor;
 ))]
 pub mod ort_discovery;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), any(test, model_download)))]
 pub(crate) mod model_download;
 
 /// Engine-neutral inference seam (issue #1275): backend/session traits over ONNX
@@ -497,7 +520,7 @@ pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -
 pub use embeddings::embed_texts_async;
 
 /// Drop every resident model engine: dense, static, sparse and late-interaction
-/// embeddings and rerankers. Returns the number of engines removed.
+/// embeddings, rerankers and PaddleOCR engines. Returns the number of engines removed.
 ///
 /// A caller that still holds an engine keeps it alive until it drops its
 /// handle. The next call that needs a model loads it again. A build without
@@ -513,6 +536,8 @@ pub fn clear_engine_caches() -> usize {
     let removed = removed + sparse_embeddings::clear_engine_cache();
     #[cfg(feature = "late-interaction")]
     let removed = removed + late_interaction::clear_engine_cache();
+    #[cfg(feature = "paddle-ocr-ort")]
+    let removed = removed + paddle_ocr::clear_paddle_engine_caches();
     removed
 }
 
@@ -936,6 +961,16 @@ pub use enrich::{ChunkClassificationEnrichmentConfig, ClassificationEnrichmentCo
 #[cfg(feature = "captioning")]
 pub use enrich::CaptioningEnrichmentConfig;
 
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng"
+))]
+#[path = "../tests/embedded_psm6_2327/cache.rs"]
+mod embedded_psm6_cache_tests;
+
 #[cfg(test)]
 mod public_api_compile_tests {
     #[test]
@@ -952,3 +987,8 @@ mod public_api_compile_tests {
         accept_root_types(None, None, None, None, None);
     }
 }
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "../tests/ocr_pixel_phase_2711/fixture.rs"]
+#[allow(dead_code)]
+mod ocr_pixel_phase_fixture;

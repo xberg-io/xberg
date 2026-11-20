@@ -1,13 +1,8 @@
 //! Cross-encoder ONNX inference engine.
 //!
 //! Core inference pipeline for ONNX-based cross-encoder reranking.
-//! Key design: `rerank()` takes `&self` instead of `&mut self`, enabling
-//! concurrent inference from multiple threads without mutex contention.
-//!
-//! This is safe because `ort::Session::run()` takes `&mut self` purely as
-//! an API constraint — its internal `run_inner()` takes `&self`, and the
-//! ONNX Runtime C API (`OrtApi::Run`) is documented as thread-safe for
-//! concurrent calls on the same session.
+//! `rerank()` takes `&self` so one engine can be shared via `Arc`; the session
+//! sits behind a mutex because `ort::Session::run()` takes `&mut self`.
 //!
 //! Mirrors `crates/xberg/src/embeddings/engine.rs` with three changes:
 //! - Tokenizer encodes `(query, document)` pairs via `EncodeInput::Dual`.
@@ -30,6 +25,7 @@
 use ndarray::{ArrayView, ArrayView3, Dim, Dimension, IxDynImpl, s};
 use ort::session::Session;
 use ort::value::Value;
+use parking_lot::Mutex;
 use thiserror::Error;
 use tokenizers::{EncodeInput, InputSequence, Tokenizer};
 
@@ -75,8 +71,8 @@ const QWEN3_DOCUMENT_SUFFIX: &str = "<|im_end|>\n<|im_start|>assistant\n<think>\
 
 /// Cross-encoder reranking model with thread-safe inference.
 ///
-/// The `rerank()` method takes `&self` instead of `&mut self`, allowing it to
-/// be shared across threads via `Arc<RerankerEngine>` without mutex contention.
+/// The `rerank()` method takes `&self`, allowing it to be shared across threads
+/// via `Arc<RerankerEngine>`; concurrent calls serialize on the session lock.
 ///
 /// Supports two scoring heads, selected by `head`:
 /// - [`RerankerHead::CrossEncoder`] (default) — the original single-logit path.
@@ -86,7 +82,7 @@ const QWEN3_DOCUMENT_SUFFIX: &str = "<|im_end|>\n<|im_start|>assistant\n<think>\
 #[cfg_attr(alef, alef(skip))]
 pub struct RerankerEngine {
     tokenizer: Tokenizer,
-    session: Session,
+    session: Mutex<Session>,
     need_token_type_ids: bool,
     head: RerankerHead,
     /// Token id for "yes" (relevant). Only set/used for [`RerankerHead::Qwen3Generative`].
@@ -113,7 +109,7 @@ impl RerankerEngine {
         let need_token_type_ids = session.inputs().iter().any(|input| input.name() == "token_type_ids");
         Self {
             tokenizer,
-            session,
+            session: Mutex::new(session),
             need_token_type_ids,
             head,
             true_token_id,
@@ -128,13 +124,6 @@ impl RerankerEngine {
     ///
     /// This method is **thread-safe** — multiple threads can call `rerank()`
     /// concurrently on the same `RerankerEngine` instance.
-    ///
-    /// # Safety note
-    ///
-    /// Uses an internal unsafe cast because `ort::Session::run()` takes
-    /// `&mut self` despite performing no mutation (its `run_inner()` takes
-    /// `&self`). The ONNX Runtime C API is documented as thread-safe for
-    /// concurrent `Run()` calls on the same session.
     pub(crate) fn rerank(&self, query: &str, documents: &[&str], batch_size: usize) -> Result<Vec<f32>, RerankError> {
         if documents.is_empty() {
             return Ok(Vec::new());
@@ -275,14 +264,12 @@ impl RerankerEngine {
             session_inputs.push(("token_type_ids".into(), Value::from_array(type_ids_tensor)?.into()));
         }
 
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            let session_ptr = &self.session as *const Session as *mut Session;
-            (*session_ptr).run(session_inputs)
+        let output_value = {
+            let mut session = self.session.lock();
+            let outputs = session.run(session_inputs).map_err(RerankError::Ort)?;
+            outputs.into_iter().next().map(|(_, value)| value)
         }
-        .map_err(RerankError::Ort)?;
-
-        let (_, output_value) = outputs.iter().next().ok_or(RerankError::NoOutput)?;
+        .ok_or(RerankError::NoOutput)?;
         let tensor: ArrayView<f32, Dim<IxDynImpl>> = output_value.try_extract_array().map_err(RerankError::Ort)?;
 
         self.decode_scores(&tensor, &last_token_indices)
@@ -348,15 +335,16 @@ fn qwen3_scores(
     Ok(scores)
 }
 
-#[allow(unsafe_code)]
-unsafe impl Send for RerankerEngine {}
-#[allow(unsafe_code)]
-unsafe impl Sync for RerankerEngine {}
-
 #[cfg(test)]
 mod tests {
     use super::super::sigmoid_f32 as sigmoid;
     use super::*;
+
+    #[test]
+    fn reranker_engine_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<RerankerEngine>();
+    }
 
     #[test]
     fn sigmoid_zero_gives_half() {

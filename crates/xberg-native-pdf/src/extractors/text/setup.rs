@@ -41,6 +41,8 @@ impl<'doc> TextExtractor<'doc> {
         Self {
             state_stack: GraphicsStateStack::new(),
             fonts: HashMap::new(),
+            cmsy_witnesses: None,
+            cmsy_proof_budget: 32,
             font_provenance_cache: Default::default(),
             spans: Vec::new(),
             preserve_script_baselines: false,
@@ -231,6 +233,19 @@ impl<'doc> TextExtractor<'doc> {
         self.pen_seam = None;
         self.forget_drawn_end();
         self.pen_continuations.clear();
+    }
+
+    pub(crate) fn density_probe_font_height(&self) -> f32 {
+        let state = self.state_stack.current();
+        // The renderer applies the text matrix before the CTM. The c and d
+        // components map a unit vector along the glyph's vertical axis.
+        let text_to_page = state.text_matrix.multiply(&state.ctm);
+        state.font_size.abs() * text_to_page.c.hypot(text_to_page.d)
+    }
+
+    pub(crate) fn finish_density_probe(mut self) -> Option<Vec<TextSpan>> {
+        self.flush_tj_span_buffer().ok()?;
+        Some(std::mem::take(&mut self.spans))
     }
 
     /// Public wrapper for execute_operator (normally private).

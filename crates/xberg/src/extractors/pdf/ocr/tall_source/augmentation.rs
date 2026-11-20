@@ -171,7 +171,7 @@ fn capture_words(
                 top: bounds.y0,
                 width: bounds.x1 - bounds.x0,
                 height: bounds.y1 - bounds.y0,
-                confidence: 0.0,
+                confidence: element.confidence.recognition * 100.0,
             });
         }
     }
@@ -271,7 +271,7 @@ fn source_tiles(
     Some(candidates)
 }
 
-fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
+pub(super) fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
     let mut config = super::ocr_config_with_page_rotation_hint(config, 0, Some(dpi), true, false, false).into_owned();
     config.element_config = Some(crate::types::OcrElementConfig {
         include_elements: true,
@@ -513,6 +513,27 @@ mod tests {
             rows,
             lines: line.map(|line| vec![line.to_owned()]),
         }
+    }
+
+    #[test]
+    fn replay_words_keep_measured_recognition_confidence() {
+        use crate::types::{OcrBoundingGeometry, OcrConfidence, OcrElement};
+
+        let elements = [("weak", 0.0), ("clear", 87.5)].map(|(text, confidence)| {
+            OcrElement::new(
+                text.to_owned(),
+                OcrBoundingGeometry::Rectangle {
+                    left: 10,
+                    top: 20,
+                    width: 30,
+                    height: 15,
+                },
+                OcrConfidence::from_tesseract(confidence),
+            )
+            .with_level(OcrElementLevel::Word)
+        });
+        let words = capture_words(&elements, (80, 80), &mut Vec::new()).expect("words fit the replay frame");
+        assert_eq!([words[0].confidence, words[1].confidence], [0.0, 87.5]);
     }
 
     #[test]

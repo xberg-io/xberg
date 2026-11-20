@@ -53,6 +53,7 @@ pub(crate) struct PathGraphicsState {
     pub fill_color_rgb: (f32, f32, f32),
     pub line_width: f32,
     pub stroke_alpha: f32,
+    pub fill_alpha: f32,
     pub line_cap: u8,
     pub line_join: u8,
     /// `d` operand: on/off lengths in user space and phase; an empty array is solid.
@@ -67,6 +68,7 @@ impl PathGraphicsState {
             fill_color_rgb: (0.0, 0.0, 0.0),
             line_width: 1.0,
             stroke_alpha: 1.0,
+            fill_alpha: 1.0,
             line_cap: 0,
             line_join: 0,
             dash: (Vec::new(), 0.0),
@@ -162,6 +164,22 @@ impl PathReferenceFailures {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct FormPathKey {
+    object: crate::object::ObjectRef,
+    placement: [i32; 6],
+    stroke: Option<[u32; 3]>,
+    fill: Option<[u32; 3]>,
+    stroke_alpha: u32,
+    fill_alpha: u32,
+    line_width: u32,
+    line_cap: u8,
+    line_join: u8,
+    dash: Vec<u32>,
+    dash_phase: u32,
+    layer: Option<String>,
+}
+
 /// Path extractor for accumulating path operations from content streams.
 ///
 /// This struct maintains state during content stream processing and accumulates
@@ -194,6 +212,7 @@ pub struct PathExtractor {
     current_fill_color: Option<Color>,
     current_line_width: f32,
     current_stroke_alpha: f32,
+    current_fill_alpha: f32,
     current_line_cap: LineCap,
     current_line_join: LineJoin,
     current_dash: (Vec<f32>, f32),
@@ -202,12 +221,10 @@ pub struct PathExtractor {
     /// Page resources for XObject resolution
     resources: Option<crate::object::Object>,
     /// Stack of XObjects being processed to detect cycles
-    xobject_processing_stack: Vec<crate::object::ObjectRef>,
-    /// Set of XObjects already fully processed. Prevents combinatorial
-    /// explosion when multiple parent XObjects reference the same children
-    /// (e.g., chart/plot pages where 9 top-level Form XObjects each contain
-    /// 25-42 nested `Do` operators pointing to the same shared XObjects).
-    processed_xobjects: std::collections::HashSet<(crate::object::ObjectRef, [i32; 6])>,
+    xobject_processing_stack: Vec<FormPathKey>,
+    /// Last extracted path count after processing each Form. Repeating it without an intervening
+    /// path is redundant; after intervening paint it may cover a different color. ~keep
+    processed_xobjects: std::collections::HashMap<FormPathKey, usize>,
     /// Maximum XObject nesting depth (prevent stack overflow)
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
@@ -248,13 +265,14 @@ impl PathExtractor {
             current_fill_color: Some(Color::black()),
             current_line_width: 1.0,
             current_stroke_alpha: 1.0,
+            current_fill_alpha: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,
             current_dash: (Vec::new(), 0.0),
             ctm: Matrix::identity(),
             resources: None,
             xobject_processing_stack: Vec::new(),
-            processed_xobjects: std::collections::HashSet::new(),
+            processed_xobjects: std::collections::HashMap::new(),
             max_xobject_depth: 100,
             cached_xobject_dict: None,
             extgstate_cache: PathExtGStateCache::default(),
@@ -450,6 +468,7 @@ impl PathExtractor {
             .stroke_alpha
             .filter(|alpha| !alpha.is_nan())
             .map(|alpha| alpha.clamp(0.0, 1.0));
+        let fill_alpha = parsed.fill_alpha.filter(|alpha| !alpha.is_nan());
         if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;
@@ -459,6 +478,10 @@ impl PathExtractor {
         if let Some(alpha) = alpha {
             state.stroke_alpha = alpha;
             self.set_stroke_alpha(alpha);
+        }
+        if let Some(alpha) = fill_alpha {
+            state.fill_alpha = alpha.clamp(0.0, 1.0);
+            self.current_fill_alpha = state.fill_alpha;
         }
         true
     }
@@ -513,32 +536,42 @@ impl PathExtractor {
         ]
     }
 
+    fn form_path_key(&self, object: crate::object::ObjectRef) -> FormPathKey {
+        let color_bits = |color: Color| [color.r.to_bits(), color.g.to_bits(), color.b.to_bits()];
+        FormPathKey {
+            object,
+            placement: Self::ctm_fingerprint(&self.ctm),
+            stroke: self.current_stroke_color.map(color_bits),
+            fill: self.current_fill_color.map(color_bits),
+            stroke_alpha: self.current_stroke_alpha.to_bits(),
+            fill_alpha: self.current_fill_alpha.to_bits(),
+            line_width: self.current_line_width.to_bits(),
+            line_cap: self.current_line_cap as u8,
+            line_join: self.current_line_join as u8,
+            dash: self.current_dash.0.iter().map(|length| length.to_bits()).collect(),
+            dash_phase: self.current_dash.1.to_bits(),
+            layer: self.current_layer(),
+        }
+    }
+
     pub(crate) fn can_process_xobject(&self, xobject_ref: crate::object::ObjectRef) -> bool {
-        let key = (xobject_ref, Self::ctm_fingerprint(&self.ctm));
-        if self.processed_xobjects.contains(&key) {
-            return false;
-        }
-        if self.xobject_processing_stack.contains(&xobject_ref) {
-            return false;
-        }
-        if self.xobject_processing_stack.len() >= self.max_xobject_depth {
-            return false;
-        }
-        true
+        self.xobject_processing_stack.len() < self.max_xobject_depth
+            && !self
+                .xobject_processing_stack
+                .iter()
+                .any(|key| key.object == xobject_ref)
+            && self.processed_xobjects.get(&self.form_path_key(xobject_ref)) != Some(&self.paths.len())
     }
 
-    /// Push an XObject onto the processing stack (called before processing).
+    /// Push an XObject and its inherited paint state before entering the Form.
     pub(crate) fn push_xobject(&mut self, xobject_ref: crate::object::ObjectRef) {
-        self.xobject_processing_stack.push(xobject_ref);
+        self.xobject_processing_stack.push(self.form_path_key(xobject_ref));
     }
 
-    /// Pop an XObject from the processing stack after successful processing.
-    /// Marks it as permanently processed to prevent re-processing from
-    /// other parent XObjects at the same CTM.
+    /// Remember where this Form last painted in the extracted sequence.
     pub(crate) fn pop_xobject(&mut self) {
-        if let Some(ref_obj) = self.xobject_processing_stack.pop() {
-            let key = (ref_obj, Self::ctm_fingerprint(&self.ctm));
-            self.processed_xobjects.insert(key);
+        if let Some(key) = self.xobject_processing_stack.pop() {
+            self.processed_xobjects.insert(key, self.paths.len());
         }
     }
 
@@ -558,6 +591,7 @@ impl PathExtractor {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
         self.current_stroke_alpha = state.stroke_alpha;
+        self.current_fill_alpha = state.fill_alpha;
 
         // Convert line cap (0=butt, 1=round, 2=square) ~keep
         self.current_line_cap = match state.line_cap {
@@ -586,6 +620,7 @@ impl PathExtractor {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
         self.current_stroke_alpha = state.stroke_alpha;
+        self.current_fill_alpha = state.fill_alpha;
         self.current_line_cap = match state.line_cap {
             1 => LineCap::Round,
             2 => LineCap::Square,
@@ -699,17 +734,22 @@ impl PathExtractor {
     /// Adds a complete rectangle subpath.
     pub fn rectangle(&mut self, x: f32, y: f32, width: f32, height: f32) {
         let p1 = self.transform_point(x, y);
-        let p2 = self.transform_point(x + width, y + height);
-
-        let transformed_width = p2.x - p1.x;
-        let transformed_height = p2.y - p1.y;
-
-        self.current_operations.push(PathOperation::Rectangle(
-            p1.x,
-            p1.y,
-            transformed_width,
-            transformed_height,
-        ));
+        let p2 = self.transform_point(x + width, y);
+        let p3 = self.transform_point(x + width, y + height);
+        let p4 = self.transform_point(x, y + height);
+        if p1.y == p2.y && p2.x == p3.x && p3.y == p4.y && p4.x == p1.x {
+            self.current_operations
+                .push(PathOperation::Rectangle(p1.x, p1.y, p3.x - p1.x, p3.y - p1.y));
+        } else {
+            // ~keep A skewed or rotated rectangle is a polygon. Preserve its winding and start point.
+            self.current_operations.extend([
+                PathOperation::MoveTo(p1.x, p1.y),
+                PathOperation::LineTo(p2.x, p2.y),
+                PathOperation::LineTo(p3.x, p3.y),
+                PathOperation::LineTo(p4.x, p4.y),
+                PathOperation::ClosePath,
+            ]);
+        }
 
         // Rectangle implicitly closes the subpath ~keep
         self.current_point = Some(p1);
@@ -807,7 +847,7 @@ impl PathExtractor {
             path.stroke_color = None;
         }
 
-        if fill {
+        if fill && self.current_fill_alpha > 0.0 {
             path.fill_color = self.current_fill_color;
         } else {
             path.fill_color = None;

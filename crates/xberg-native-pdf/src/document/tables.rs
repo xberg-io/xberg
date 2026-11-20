@@ -459,7 +459,7 @@ impl PdfDocument {
                 _ => fused.push(word),
             }
         }
-        Ok(fused
+        let mut spans: Vec<_> = fused
             .into_iter()
             .map(|w| crate::layout::TextSpan {
                 provenance: None,
@@ -496,7 +496,9 @@ impl PdfDocument {
                 mirrored: false,
                 page_rotation_applied: 0,
             })
-            .collect())
+            .collect();
+        self.stamp_table_decimal_glyph_positions(page_index, &mut spans);
+        Ok(spans)
     }
 
     /// Extract tables from a page using a custom configuration.

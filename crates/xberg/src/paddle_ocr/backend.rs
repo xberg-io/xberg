@@ -23,6 +23,45 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "paddle-ocr-ort")]
 thread_local! {
     static PADDLE_TL_ACCEL: RefCell<Option<crate::core::config::acceleration::AccelerationConfig>> = const { RefCell::new(None) };
+    static PADDLE_TL_OPTIONS: RefCell<crate::ort_options::OrtSessionOptions> =
+        const { RefCell::new(crate::ort_options::OrtSessionOptions::DEFAULT) };
+}
+
+/// Carries the option snapshot taken for the engine pool key to every session the
+/// hook builds, so det, cls and rec cannot observe a later change.
+#[cfg(feature = "paddle-ocr-ort")]
+struct PaddleOptionsGuard {
+    previous: crate::ort_options::OrtSessionOptions,
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+impl PaddleOptionsGuard {
+    fn set(options: crate::ort_options::OrtSessionOptions) -> Self {
+        Self {
+            previous: PADDLE_TL_OPTIONS.with(|cell| std::mem::replace(&mut *cell.borrow_mut(), options)),
+        }
+    }
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+impl Drop for PaddleOptionsGuard {
+    fn drop(&mut self) {
+        PADDLE_TL_OPTIONS.with(|cell| *cell.borrow_mut() = std::mem::take(&mut self.previous));
+    }
+}
+
+#[cfg(feature = "paddle-ocr-ort")]
+type PaddleBuilderHook =
+    fn(ort::session::builder::SessionBuilder) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>;
+
+/// `None` (ORT's default session recipe) unless an acceleration or a non-default option
+/// set needs the hook.
+#[cfg(feature = "paddle-ocr-ort")]
+fn paddle_builder_hook(
+    accel_configured: bool,
+    options: &crate::ort_options::OrtSessionOptions,
+) -> Option<PaddleBuilderHook> {
+    (accel_configured || !(options.memory_pattern && options.cpu_arena)).then_some(paddle_accel_builder_fn)
 }
 
 #[cfg(feature = "paddle-ocr-ort")]
@@ -30,7 +69,46 @@ fn paddle_accel_builder_fn(
     builder: ort::session::builder::SessionBuilder,
 ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error> {
     let accel = PADDLE_TL_ACCEL.with(|cell| cell.borrow().clone());
-    crate::ort_discovery::apply_execution_providers(builder, accel.as_ref())
+    let builder = if accel.is_some() {
+        crate::ort_discovery::apply_execution_providers(builder, accel.as_ref())?
+    } else {
+        builder
+    };
+    apply_paddle_session_options(builder, &PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()))
+}
+
+/// Apply the process-wide memory options to a PaddleOCR session builder; a default
+/// option set leaves the builder untouched.
+#[cfg(feature = "paddle-ocr-ort")]
+fn apply_paddle_session_options(
+    mut builder: ort::session::builder::SessionBuilder,
+    options: &crate::ort_options::OrtSessionOptions,
+) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error> {
+    if !options.memory_pattern {
+        builder = builder
+            .with_memory_pattern(false)
+            .map_err(|e| ort::Error::new(e.message()))?;
+    }
+    if !options.cpu_arena {
+        builder = builder
+            .with_execution_providers([ort::ep::CPU::default().with_arena_allocator(false).build()])
+            .map_err(|e| ort::Error::new(e.message()))?;
+    }
+    Ok(builder)
+}
+
+/// Pool-key suffix for a non-default option set; empty for the defaults so existing keys
+/// are unchanged.
+fn session_options_pool_suffix(options: &crate::ort_options::OrtSessionOptions) -> String {
+    if options.memory_pattern && options.cpu_arena {
+        String::new()
+    } else {
+        format!(
+            "/mp{}-arena{}",
+            u8::from(options.memory_pattern),
+            u8::from(options.cpu_arena)
+        )
+    }
 }
 
 use crate::Result;
@@ -50,6 +128,9 @@ use super::model_manager::{ModelManager, ResolvedRecModel, SharedModelPaths};
 use super::{is_language_supported, language_to_script_family, map_language_code};
 
 use xberg_paddle_ocr::PaddleOcrEngine;
+
+#[path = "ruled_punctuation.rs"]
+mod ruled_punctuation;
 
 type InitCell<T> = Arc<once_cell::sync::OnceCell<T>>;
 type InitPool<T> = Mutex<AHashMap<String, InitCell<T>>>;
@@ -115,6 +196,27 @@ impl<T> BoundedInitPool<T> {
     }
 }
 
+#[cfg(feature = "paddle-ocr-ort")]
+static LIVE_MODEL_CONTEXTS: Mutex<Vec<std::sync::Weak<PaddleModelContext>>> = Mutex::new(Vec::new());
+
+/// Drop every pooled PaddleOCR engine so the next request rebuilds with the current
+/// session options. Returns the number of engines removed; a caller still holding an
+/// engine keeps it alive until it drops it.
+#[cfg(feature = "paddle-ocr-ort")]
+pub(crate) fn clear_paddle_engine_caches() -> usize {
+    let mut live = LIVE_MODEL_CONTEXTS.lock().unwrap_or_else(|e| e.into_inner());
+    live.retain(|weak| weak.strong_count() > 0);
+    live.iter()
+        .filter_map(std::sync::Weak::upgrade)
+        .map(|context| {
+            let mut pool = context.engine_pool.lock().unwrap_or_else(|e| e.into_inner());
+            let removed = pool.len();
+            pool.clear();
+            removed
+        })
+        .sum()
+}
+
 struct PaddleModelContext {
     cache_dir: PathBuf,
     model_manager: ModelManager,
@@ -174,6 +276,14 @@ impl PaddleModelContextCache {
 
         let cache_dir = cache_dir.to_path_buf();
         let context = Arc::new(PaddleModelContext::new(cache_dir.clone()));
+        #[cfg(feature = "paddle-ocr-ort")]
+        {
+            // Drop the references of evicted contexts before appending, so the registry is
+            // bounded by the live contexts rather than by every admission since startup.
+            let mut live = LIVE_MODEL_CONTEXTS.lock().unwrap_or_else(|e| e.into_inner());
+            live.retain(|weak| weak.strong_count() > 0);
+            live.push(Arc::downgrade(&context));
+        }
         self.entries.insert(cache_dir.clone(), Arc::clone(&context));
         self.recency.push_back(cache_dir);
         Some(context)
@@ -232,16 +342,17 @@ fn engine_pool_key(
     model_key: &str,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     backend: PaddleInferenceBackend,
+    options: &crate::ort_options::OrtSessionOptions,
 ) -> String {
     let accel_key = acceleration_pool_key(accel);
     // ~keep A build can compile both `paddle-ocr-ort` and `paddle-ocr-tract` together (native
     // parity benchmarks); fold the resolved backend into the key so the pool never hands
     // back an engine constructed on the other engine.
-    let backend_key = match backend {
-        PaddleInferenceBackend::Ort => "ort",
-        PaddleInferenceBackend::Tract => "tract",
+    let (backend_key, options_suffix) = match backend {
+        PaddleInferenceBackend::Ort => ("ort", session_options_pool_suffix(options)),
+        PaddleInferenceBackend::Tract => ("tract", String::new()),
     };
-    format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}")
+    format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}{options_suffix}")
 }
 
 fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::AccelerationConfig>) -> String {
@@ -306,12 +417,84 @@ struct RotationOutcome {
     orientation: Option<crate::doc_orientation::OrientationResult>,
 }
 
+#[derive(Clone, Copy)]
+struct RuledRepairs {
+    punctuation: bool,
+    split_rows: bool,
+    fused_words: bool,
+}
+
+impl RuledRepairs {
+    fn for_request(
+        image_bytes: &[u8],
+        config: &OcrConfig,
+        effective_config: &PaddleOcrConfig,
+        language: &str,
+        rotation: u32,
+    ) -> Self {
+        let ruled_table = effective_config.enable_table_detection
+            && matches!(
+                PaddleOcrBackend::effective_backend(effective_config),
+                Ok(PaddleInferenceBackend::Ort)
+            )
+            && !effective_config.use_angle_cls
+            && effective_config.model_version == "pp-ocrv6"
+            && effective_config.model_tier == "small"
+            && language == "en"
+            && config.auto_rotate != Some(true)
+            && rotation == 0
+            && image_bytes.starts_with(&[0xff, 0xd8, 0xff]);
+        let ruled_option = |key| {
+            ruled_table
+                && config
+                    .backend_options
+                    .as_ref()
+                    .and_then(|options| options.get(key))
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true)
+        };
+        Self {
+            punctuation: ruled_option("paddle_ruled_punctuation"),
+            split_rows: ruled_option("paddle_ruled_row_recovery"),
+            fused_words: ruled_option("paddle_ruled_word_recovery"),
+        }
+    }
+}
+
+struct PaddleRasterOcr {
+    blocks: Vec<xberg_paddle_ocr::DetailedTextBlock>,
+    width: u32,
+    height: u32,
+    repair: PaddleRuledRepair,
+}
+
+#[derive(Default)]
+struct PaddleRuledRepair {
+    blocks: Option<Vec<xberg_paddle_ocr::DetailedTextBlock>>,
+    rows: Option<ruled_punctuation::split_rows::RowRecovery>,
+}
+
+impl PaddleRasterOcr {
+    fn adopt_ruled_repair(
+        self,
+    ) -> (
+        Vec<xberg_paddle_ocr::DetailedTextBlock>,
+        Option<ruled_punctuation::split_rows::RowRecovery>,
+    ) {
+        if crate::core::extractor::cacheability::ocr_stop_requested() {
+            return (self.blocks, None);
+        }
+        (self.repair.blocks.unwrap_or(self.blocks), self.repair.rows)
+    }
+}
+
 struct PaddlePageOcr {
     text: String,
     line_elements: Vec<OcrElement>,
     word_elements: Vec<OcrElement>,
     processed_width: u32,
     processed_height: u32,
+    row_recovery: Option<ruled_punctuation::split_rows::RowRecovery>,
 }
 
 impl RotationOutcome {
@@ -666,7 +849,8 @@ impl PaddleOcrBackend {
         let version = &config.model_version;
         let backend = Self::effective_backend(config)?;
         let resolved = model_manager.resolve_rec_model_versioned(version, family, tier)?;
-        let pool_key = engine_pool_key(version, tier, &resolved.model_key, accel, backend);
+        let options = crate::ort_options::ort_session_options();
+        let pool_key = engine_pool_key(version, tier, &resolved.model_key, accel, backend, &options);
 
         let init_cell = init_cell_for_key(engine_pool, &pool_key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire engine pool lock: {error}"),
@@ -674,6 +858,8 @@ impl PaddleOcrBackend {
         })?;
         let engine = init_cell.get_or_try_init(|| -> Result<Arc<PaddleOcrEngine>> {
             let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config)?;
+            #[cfg(feature = "paddle-ocr-ort")]
+            let _options_guard = PaddleOptionsGuard::set(options);
             Self::initialize_engine(family, tier, &resolved, &shared, accel.cloned(), backend)
         })?;
 
@@ -817,15 +1003,10 @@ impl PaddleOcrBackend {
         crate::ort_discovery::ensure_ort_available();
         crate::ort_discovery::ort_environment()?;
 
-        let builder_fn: Option<
-            fn(
-                ort::session::builder::SessionBuilder,
-            ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>,
-        > = if PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()) {
-            Some(paddle_accel_builder_fn)
-        } else {
-            None
-        };
+        let builder_fn = paddle_builder_hook(
+            PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()),
+            &PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()),
+        );
 
         ocr_engine.init_models_with_dict_custom(
             det_model_path,
@@ -966,6 +1147,7 @@ impl PaddleOcrBackend {
         execution: PaddleOcrExecution,
         page_rotation_degrees: u32,
         security_limits: &crate::extractors::security::SecurityLimits,
+        ruled_repairs: RuledRepairs,
     ) -> Result<PaddlePageOcr> {
         let PaddleOcrExecution {
             context,
@@ -979,20 +1161,24 @@ impl PaddleOcrBackend {
         let image_bytes_owned = image_bytes.to_vec();
         let security_limits = security_limits.clone();
 
-        let (mut text_blocks, processed_width, processed_height) = tokio::task::spawn_blocking(move || {
+        let worker = crate::core::extractor::cacheability::blocking(move || {
             catch_unwind(std::panic::AssertUnwindSafe(|| {
-                Self::perform_ocr(&image_bytes_owned, &engine, &config, &security_limits)
+                Self::perform_ocr(&image_bytes_owned, &engine, &config, &security_limits, ruled_repairs)
             }))
             .map_err(|_| crate::XbergError::Plugin {
                 message: "PaddleOCR inference panicked (ONNX Runtime error)".to_string(),
                 plugin_name: "paddle-ocr".to_string(),
             })?
-        })
-        .await
-        .map_err(|e| crate::XbergError::Plugin {
-            message: format!("PaddleOCR task panicked: {}", e),
-            plugin_name: "paddle-ocr".to_string(),
-        })??;
+        });
+        let raster = tokio::task::spawn_blocking(worker)
+            .await
+            .map_err(|e| crate::XbergError::Plugin {
+                message: format!("PaddleOCR task panicked: {}", e),
+                plugin_name: "paddle-ocr".to_string(),
+            })??;
+
+        let (processed_width, processed_height) = (raster.width, raster.height);
+        let (mut text_blocks, row_recovery) = raster.adopt_ruled_repair();
 
         Self::reorder_blocks_for_page_rotation(
             &mut text_blocks,
@@ -1019,6 +1205,7 @@ impl PaddleOcrBackend {
             word_elements,
             processed_width,
             processed_height,
+            row_recovery,
         })
     }
 
@@ -1268,7 +1455,8 @@ impl PaddleOcrBackend {
         ocr_engine: &Arc<PaddleOcrEngine>,
         config: &PaddleOcrConfig,
         security_limits: &crate::extractors::security::SecurityLimits,
-    ) -> Result<(Vec<xberg_paddle_ocr::DetailedTextBlock>, u32, u32)> {
+        ruled_repairs: RuledRepairs,
+    ) -> Result<PaddleRasterOcr> {
         let img = crate::extraction::image::load_image_for_ocr(image_bytes, security_limits)
             .map_err(|e| crate::XbergError::Ocr {
                 message: e.to_string(),
@@ -1362,7 +1550,118 @@ impl PaddleOcrBackend {
 
         tracing::debug!(text_block_count = text_blocks.len(), "PaddleOCR detection completed");
 
-        Ok((text_blocks, processed_width, processed_height))
+        let mut repair = PaddleRuledRepair::default();
+        if ruled_repairs.punctuation && ruled_punctuation::eligible(&img, text_blocks.len()) {
+            let candidate = catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::repair_ruled_table(&img, &text_blocks, ocr_engine)
+            }));
+            if let Ok(corrected) = candidate {
+                repair.blocks = corrected;
+            }
+        }
+
+        let candidate_blocks = repair.blocks.as_deref().unwrap_or(&text_blocks);
+        if ruled_repairs.split_rows
+            && ruled_punctuation::eligible(&img, candidate_blocks.len())
+            && !crate::core::extractor::cacheability::ocr_stop_requested()
+        {
+            repair.rows = Self::table_for_blocks(candidate_blocks).and_then(|table| {
+                ruled_punctuation::split_rows::recover(&img, table, candidate_blocks, ruled_repairs.fused_words)
+            });
+        }
+        if ruled_repairs.punctuation
+            && let Some(recovery) = &repair.rows
+        {
+            let candidate = catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::repair_ruled_rows(&img, candidate_blocks, recovery, ocr_engine)
+            }));
+            if let Ok(Some((corrected, revised))) = candidate {
+                repair.blocks = Some(corrected);
+                repair.rows = Some(revised);
+            }
+        }
+        Ok(PaddleRasterOcr {
+            blocks: text_blocks,
+            width: processed_width,
+            height: processed_height,
+            repair,
+        })
+    }
+
+    fn table_for_blocks(blocks: &[xberg_paddle_ocr::DetailedTextBlock]) -> Option<Table> {
+        let mut lines = Vec::with_capacity(blocks.len());
+        let mut words = Vec::new();
+        for block in blocks {
+            let group = detailed_text_block_to_elements(block, 1).ok()??;
+            lines.push(group.line);
+            words.extend(group.words);
+        }
+        lines.extend(words);
+        let mut tables = Self::build_ocr_tables_from_words(&elements_to_hocr_words(&lines, 0.3)).tables;
+        (tables.len() == 1).then(|| tables.remove(0))
+    }
+
+    fn repair_ruled_table(
+        image: &image::RgbImage,
+        blocks: &[xberg_paddle_ocr::DetailedTextBlock],
+        engine: &PaddleOcrEngine,
+    ) -> Option<Vec<xberg_paddle_ocr::DetailedTextBlock>> {
+        let stopped = crate::core::extractor::cacheability::ocr_stop_requested;
+        if stopped() {
+            return None;
+        }
+        let stock = Self::table_for_blocks(blocks)?;
+        let edits = ruled_punctuation::corrections(image, &stock, blocks, stopped, |crop| {
+            engine
+                .recognize_source_crop(crop)
+                .ok()
+                .map(|text| text.trim().to_owned())
+        })?;
+        if edits.is_empty() {
+            return None;
+        }
+
+        let mut corrected = blocks.to_vec();
+        let mut expected = stock.cells;
+        for (block_index, row, column, text) in edits {
+            expected[row][column] = text.clone();
+            corrected[block_index].block.text = text.clone();
+            corrected[block_index].words[0].word.text = text;
+        }
+        let verified = Self::table_for_blocks(&corrected)?.cells == expected;
+        (verified && !stopped()).then_some(corrected)
+    }
+
+    fn repair_ruled_rows(
+        image: &image::RgbImage,
+        blocks: &[xberg_paddle_ocr::DetailedTextBlock],
+        recovery: &ruled_punctuation::split_rows::RowRecovery,
+        engine: &PaddleOcrEngine,
+    ) -> Option<(
+        Vec<xberg_paddle_ocr::DetailedTextBlock>,
+        ruled_punctuation::split_rows::RowRecovery,
+    )> {
+        let stopped = crate::core::extractor::cacheability::ocr_stop_requested;
+        if stopped() {
+            return None;
+        }
+        let edits = recovery.punctuation_edits(image, blocks, stopped, |crop| {
+            engine
+                .recognize_source_crop(crop)
+                .ok()
+                .map(|text| text.trim().to_owned())
+        })?;
+        if edits.is_empty() {
+            return None;
+        }
+        let mut corrected = blocks.to_vec();
+        for (index, _, _, text) in &edits {
+            corrected[*index].block.text.clone_from(text);
+            corrected[*index].words[0].word.text.clone_from(text);
+        }
+        let stock = Self::table_for_blocks(&corrected)?;
+        let revised = ruled_punctuation::split_rows::recover(image, stock, &corrected, true)?;
+        (recovery.matches_with_edits(&revised, &edits) && !stopped()).then_some((corrected, revised))
     }
 
     /// Clusters `words` into table-candidate regions, reconstructs a grid for each, validates
@@ -1623,12 +1922,21 @@ impl OcrBackend for PaddleOcrBackend {
         let residual_page_rotation_degrees =
             Self::residual_rotation_for_reorder(page_rotation_degrees, detected_auto_rotation_degrees);
 
+        let ruled_repairs = RuledRepairs::for_request(
+            image_bytes,
+            config,
+            &effective_config,
+            paddle_lang,
+            residual_page_rotation_degrees,
+        );
+
         let PaddlePageOcr {
             text,
             line_elements,
             word_elements,
             processed_width,
             processed_height,
+            row_recovery,
         } = Self::do_ocr(
             &ocr_image_bytes,
             paddle_lang,
@@ -1639,6 +1947,7 @@ impl OcrBackend for PaddleOcrBackend {
             },
             residual_page_rotation_degrees,
             &security_limits,
+            ruled_repairs,
         )
         .await?;
         let rotation_outcome =
@@ -1687,6 +1996,9 @@ impl OcrBackend for PaddleOcrBackend {
             let words = elements_to_hocr_words(&table_elements, 0.3);
             let built = Self::build_ocr_tables_from_words(&words);
             tables = built.tables;
+            if let Some(recovery) = row_recovery {
+                recovery.apply(&mut tables);
+            }
             table_count = built.table_count;
             table_rows = built.table_rows;
             table_cols = built.table_cols;
@@ -2073,6 +2385,7 @@ mod tests {
     fn engine_pool_key_distinguishes_gpu_devices() {
         use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
 
+        let defaults = crate::ort_options::OrtSessionOptions::default();
         let first_gpu = AccelerationConfig {
             provider: ExecutionProviderType::Cuda,
             device_id: 0,
@@ -2083,20 +2396,144 @@ mod tests {
         };
 
         assert_eq!(
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort),
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
             "v6/small/latin/cpu/ort"
         );
         assert_ne!(
-            engine_pool_key("v6", "small", "latin", Some(&first_gpu), PaddleInferenceBackend::Ort),
-            engine_pool_key("v6", "small", "latin", Some(&second_gpu), PaddleInferenceBackend::Ort)
+            engine_pool_key(
+                "v6",
+                "small",
+                "latin",
+                Some(&first_gpu),
+                PaddleInferenceBackend::Ort,
+                &defaults
+            ),
+            engine_pool_key(
+                "v6",
+                "small",
+                "latin",
+                Some(&second_gpu),
+                PaddleInferenceBackend::Ort,
+                &defaults
+            )
         );
     }
 
     #[test]
     fn engine_pool_key_distinguishes_inference_backends() {
+        let defaults = crate::ort_options::OrtSessionOptions::default();
         assert_ne!(
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort),
-            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract)
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &defaults)
+        );
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn builder_hook_is_absent_for_default_options_without_acceleration() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let defaults = OrtSessionOptions::default();
+        assert!(paddle_builder_hook(false, &defaults).is_none());
+        assert!(paddle_builder_hook(true, &defaults).is_some());
+        let no_arena = OrtSessionOptions {
+            cpu_arena: false,
+            ..defaults
+        };
+        assert!(paddle_builder_hook(false, &no_arena).is_some());
+        let capped = OrtSessionOptions {
+            max_threads: Some(2),
+            ..defaults
+        };
+        assert!(
+            paddle_builder_hook(false, &capped).is_none(),
+            "the thread cap alone needs no hook"
+        );
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn options_guard_restores_previous_snapshot() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let off = OrtSessionOptions {
+            memory_pattern: false,
+            cpu_arena: false,
+            max_threads: None,
+        };
+        {
+            let _guard = PaddleOptionsGuard::set(off.clone());
+            assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()), off);
+        }
+        assert_eq!(
+            PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()),
+            OrtSessionOptions::default()
+        );
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    fn session_options_apply_to_a_builder_for_every_combo() {
+        use crate::ort_options::OrtSessionOptions;
+
+        crate::ort_discovery::ensure_ort_available();
+        for (memory_pattern, cpu_arena) in [(true, true), (false, true), (true, false), (false, false)] {
+            let options = OrtSessionOptions {
+                memory_pattern,
+                cpu_arena,
+                max_threads: None,
+            };
+            let builder = ort::session::Session::builder(crate::ort_discovery::ort_environment().expect("ort env"))
+                .expect("session builder");
+            apply_paddle_session_options(builder, &options).unwrap_or_else(|e| panic!("{options:?}: {e}"));
+        }
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    #[serial_test::serial]
+    fn clearing_paddle_engine_caches_empties_every_live_pool() {
+        let context = Arc::new(PaddleModelContext::new(PathBuf::from("/nonexistent-paddle-clear-test")));
+        LIVE_MODEL_CONTEXTS.lock().unwrap().push(Arc::downgrade(&context));
+        init_cell_for_key(&context.engine_pool, "v6/small/latin/cpu/ort").unwrap();
+        init_cell_for_key(&context.engine_pool, "v6/small/latin/cpu/ort/mp1-arena0").unwrap();
+        assert_eq!(context.engine_pool.lock().unwrap().len(), 2);
+
+        assert!(clear_paddle_engine_caches() >= 2);
+        assert!(context.engine_pool.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn engine_pool_key_separates_ort_session_options() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let defaults = OrtSessionOptions::default();
+        let no_arena = OrtSessionOptions {
+            cpu_arena: false,
+            ..defaults
+        };
+        let no_pattern = OrtSessionOptions {
+            memory_pattern: false,
+            ..defaults
+        };
+        let key = |options| engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, options);
+        assert_eq!(key(&defaults), "v6/small/latin/cpu/ort");
+        assert_eq!(key(&no_arena), "v6/small/latin/cpu/ort/mp1-arena0");
+        assert_eq!(key(&no_pattern), "v6/small/latin/cpu/ort/mp0-arena1");
+        assert_ne!(key(&no_arena), key(&no_pattern));
+
+        let capped = OrtSessionOptions {
+            max_threads: Some(2),
+            ..defaults
+        };
+        assert_eq!(
+            key(&capped),
+            key(&defaults),
+            "thread cap does not affect PaddleOCR sessions"
+        );
+        assert_eq!(
+            engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &no_arena),
+            "v6/small/latin/cpu/tract"
         );
     }
 

@@ -1,8 +1,10 @@
 use std::ptr;
+use std::rc::Rc;
 
 use four_cc::FourCC;
 use libheif_sys as lh;
 
+use crate::context::ContextOwner;
 use crate::decoder::get_decoding_options_ptr;
 use crate::{ColorSpace, DecodingOptions, HeifError, Image, Result};
 
@@ -23,15 +25,19 @@ pub struct ImageResolution {
     pub height: u16,
 }
 
-pub struct Track {
+pub struct Track<'a> {
     pub(crate) inner: *mut lh::heif_track,
+    _context: Rc<ContextOwner<'a>>,
 }
 
 #[allow(unsafe_code)]
-impl Track {
+impl<'a> Track<'a> {
     #[inline]
-    pub(crate) fn from_heif_track(track: *mut lh::heif_track) -> Track {
-        Track { inner: track }
+    pub(crate) fn from_heif_track(track: *mut lh::heif_track, context: &Rc<ContextOwner<'a>>) -> Track<'a> {
+        Track {
+            inner: track,
+            _context: Rc::clone(context),
+        }
     }
 
     /// Get the ID of the track.
@@ -39,6 +45,8 @@ impl Track {
     /// The track ID will never be 0.
     #[allow(unsafe_code)]
     pub fn id(&self) -> u32 {
+        // SAFETY: `inner` is a live track owned by this wrapper, which shares the context keeping it alive;
+        // the query only reads its id.
         unsafe { lh::heif_track_get_id(self.inner) }
     }
 
@@ -49,6 +57,7 @@ impl Track {
     /// These are defined in [`track_types`] module, but files may also contain other types.
     #[allow(unsafe_code)]
     pub fn handler_type(&self) -> TrackType {
+        // SAFETY: `inner` is a live track owned by this wrapper; the query only reads its handler type.
         let c_track_type = unsafe { lh::heif_track_get_track_handler_type(self.inner) };
         TrackType::from(c_track_type as u32)
     }
@@ -56,6 +65,8 @@ impl Track {
     #[cfg(feature = "v1_21")]
     #[allow(unsafe_code)]
     pub fn has_alpha_channel(&self) -> bool {
+        // SAFETY: `inner` is a live track owned by this wrapper; the call only reads a flag from its
+        // parsed state.
         unsafe { lh::heif_track_has_alpha_channel(self.inner) != 0 }
     }
 
@@ -64,6 +75,7 @@ impl Track {
     /// Note that this can be different from the timescale used at sequence level.
     #[allow(unsafe_code)]
     pub fn timescale(&self) -> u32 {
+        // SAFETY: `inner` is a live track owned by this wrapper; the query only reads its timescale.
         unsafe { lh::heif_track_get_timescale(self.inner) }
     }
 
@@ -74,6 +86,8 @@ impl Track {
     pub fn image_resolution(&self) -> Result<ImageResolution> {
         let mut res = ImageResolution::default();
 
+        // SAFETY: `inner` is a live track and both out slots are initialized integers libheif writes
+        // through.
         let err = unsafe { lh::heif_track_get_image_resolution(self.inner, &mut res.width, &mut res.height) };
 
         HeifError::from_heif_error(err)?;
@@ -100,6 +114,9 @@ impl Track {
         decoding_options: Option<DecodingOptions>,
     ) -> Result<Image> {
         let mut c_image: *mut lh::heif_image = ptr::null_mut();
+        // SAFETY: `inner` is live, `color_space` values are passed by copy, and the options pointer is
+        // null or kept alive by the borrowed `decoding_options`. On success the out slot holds an
+        // image this wrapper adopts.
         let err = unsafe {
             lh::heif_track_decode_next_image(
                 self.inner,
@@ -115,9 +132,11 @@ impl Track {
 }
 
 #[allow(unsafe_code)]
-impl Drop for Track {
+impl Drop for Track<'_> {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: `inner` is the track this value owns and releases exactly once, before the
+        // context share in `_context` is dropped, so the native context is still live.
         unsafe { lh::heif_track_release(self.inner) };
     }
 }

@@ -1,0 +1,81 @@
+name: .NET Transport Memory CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify-3152:
+        description: Run the large PDF and DOCX path/bytes replay
+        type: boolean
+        default: false
+      revision:
+        description: Full SHA of the selected main revision
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-dotnet-transport-memory-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    name: Transport memory (${{ matrix.target }})
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' &&
+          github.event_name == 'workflow_dispatch' && inputs.verify-3152 }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    env:
+      CARGO_INCREMENTAL: "0"
+      REPLAY_TARGET: ${{ matrix.target }}
+      EXPECTED_SHA: ${{ inputs.revision }}
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify dispatched revision
+        shell: bash
+        run: |
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ || "$EXPECTED_SHA" != "$GITHUB_SHA" ||
+                "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo "Select main and supply the exact dispatched main SHA" >&2
+            exit 1
+          fi
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          target: ${{ matrix.target }}
+          disable-cache: "true"
+          use-sccache: "false"
+          report-stats: "false"
+          install-llvm-cov: "false"
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          tools: python dotnet
+      - uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
+      - uses: ./.github/actions/install-system-deps
+      - name: Build exact FFI and run 27 cases
+        shell: bash
+        run: mise exec -- python -B scripts/ci/verify-3152/ci.py
+      - name: Archive replay evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dotnet-transport-memory-${{ matrix.target }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/xberg-3152/evidence/
+          if-no-files-found: warn
+          retention-days: 14

@@ -65,6 +65,7 @@ impl CachedOcrResult {
 
 /// File-backed msgpack cache for OCR extraction results, keyed by image + config hash.
 #[cfg_attr(alef, alef(skip))]
+#[derive(Clone)]
 pub struct OcrCache {
     cache_dir: PathBuf,
 }
@@ -751,6 +752,7 @@ mod tests {
             tables: Vec::new(),
             ocr_elements: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
             internal_document: Some(InternalDocument {
                 source_format: "hocr".to_string(),
                 mime_type: "text/plain".to_string(),

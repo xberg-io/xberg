@@ -249,7 +249,7 @@ fn percentile_f32(values: &[f32], pct: f64) -> f32 {
         return 0.0;
     }
     let mut sorted: Vec<f32> = values.to_vec();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| a.total_cmp(b));
     let rank = (pct / 100.0) * (sorted.len() - 1) as f64;
     let lo = rank.floor() as usize;
     let hi = rank.ceil() as usize;

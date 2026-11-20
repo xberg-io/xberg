@@ -5,6 +5,10 @@
 //! `Cargo.toml` builds this file only with `bundle-tessdata-eng`.
 
 #![cfg(all(unix, not(target_arch = "wasm32")))]
+#![allow(
+    unsafe_code,
+    reason = "the child parks its engine and calls C `exit()` to reach the exit cleanup"
+)]
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -83,4 +87,54 @@ fn an_engine_in_use_is_skipped_at_exit_and_stays_leaked() {
         stderr.contains(LEAK_REPORT),
         "the cleanup freed an engine in use, or tesseract printed no leak report to detect: {stderr}"
     );
+}
+
+#[test]
+fn native_recognition_observes_the_stop_callback() {
+    use std::cell::Cell;
+    use xberg_tesseract::TessPageSegMode;
+
+    let models = english_models();
+    let api = TesseractAPI::new().expect("create engine");
+    api.init(models.path(), "eng").expect("initialize engine");
+    api.set_page_seg_mode(TessPageSegMode::PSM_SINGLE_BLOCK).unwrap();
+    let image = image::load_from_memory(include_bytes!(
+        "../../xberg/tests/fixtures/ocr/embedded_psm6_panel_2327.png"
+    ))
+    .unwrap()
+    .to_rgb8();
+    let (width, height) = (image.width() as i32, image.height() as i32);
+    let set_image = || api.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
+
+    // Stops at a later check than the first, so the recognition has read words before it stops.
+    const STOP_AT_CALL: u32 = 2;
+    set_image();
+    let calls = Cell::new(0);
+    let result = api.recognize_with_cancel(|| {
+        calls.set(calls.get() + 1);
+        calls.get() >= STOP_AT_CALL
+    });
+    assert_eq!(
+        calls.get(),
+        STOP_AT_CALL,
+        "native recognition must reach the stopping callback"
+    );
+    assert!(result.is_err());
+
+    let next = TesseractAPI::new().expect("create fresh engine");
+    next.init(models.path(), "eng").unwrap();
+    next.set_page_seg_mode(TessPageSegMode::PSM_SINGLE_BLOCK).unwrap();
+    next.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
+    next.recognize_with_cancel(|| false).unwrap();
+    let fresh_text = next.get_utf8_text().unwrap();
+    let fresh_tsv = next.get_tsv_text(0).unwrap();
+    assert!(fresh_text.contains("Annual calibration"));
+
+    // An engine pool keeps an engine whose recognition was stopped, so after `clear` it must
+    // read the next page as a fresh engine does.
+    api.clear().unwrap();
+    set_image();
+    api.recognize_with_cancel(|| false).unwrap();
+    assert_eq!(api.get_utf8_text().unwrap(), fresh_text);
+    assert_eq!(api.get_tsv_text(0).unwrap(), fresh_tsv);
 }

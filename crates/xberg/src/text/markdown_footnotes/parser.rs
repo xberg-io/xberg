@@ -197,11 +197,7 @@ fn is_markup_only(line: &str) -> bool {
         return true;
     }
 
-    if trimmed.starts_with('>') && trimmed.len() <= 1 {
-        return true;
-    }
-
-    false
+    trimmed.starts_with('>') && trimmed.len() <= 1
 }
 
 /// Check if a line looks like a claim (has alphabetic chars, ends with punctuation).

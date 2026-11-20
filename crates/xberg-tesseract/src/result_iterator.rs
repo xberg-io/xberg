@@ -1,9 +1,10 @@
-use crate::api::TessDeleteText;
+use crate::api::{TessDeleteText, TesseractAPI};
+use crate::choice_iterator::ChoiceIterator;
 use crate::enums::TessPageIteratorLevel;
 use crate::error::{Result, TesseractError};
+use crate::native_iterator::NativeIterator;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
-use std::sync::{Arc, Mutex};
 
 /// Font attributes detected by Tesseract for a word.
 #[derive(Debug, Clone)]
@@ -72,8 +73,35 @@ pub struct WordExtractionOutcome {
     pub skipped: usize,
 }
 
-pub struct ResultIterator {
-    pub handle: Arc<Mutex<*mut c_void>>,
+/// Owns a native Tesseract result iterator allocation.
+///
+/// The iterator borrows the [`TesseractAPI`](crate::TesseractAPI) that produced it, so it cannot
+/// outlive the engine. It also reads one recognition result: once the engine runs Init, SetImage,
+/// Recognize, Clear, End, DetectOS, layout analysis or any other operation that replaces the
+/// result, every query returns [`TesseractError::StaleIterator`] instead of reading freed data.
+///
+/// ```compile_fail,E0505
+/// use xberg_tesseract::TesseractAPI;
+///
+/// let api = TesseractAPI::new().unwrap();
+/// let words = api.get_iterator().unwrap();
+/// drop(api);
+/// let _ = words.extract_all_words();
+/// ```
+///
+/// The same code compiles once the iterator is dropped before the engine:
+///
+/// ```no_run
+/// use xberg_tesseract::TesseractAPI;
+///
+/// let api = TesseractAPI::new().unwrap();
+/// let words = api.get_iterator().unwrap();
+/// let _ = words.extract_all_words();
+/// drop(words);
+/// drop(api);
+/// ```
+pub struct ResultIterator<'api> {
+    inner: NativeIterator<'api>,
 }
 
 struct TessTextGuard<D: FnMut(*mut c_char)> {
@@ -94,7 +122,10 @@ impl<D: FnMut(*mut c_char)> Drop for TessTextGuard<D> {
 /// A non-null `pointer` must reference a valid NUL-terminated allocation that remains readable
 /// until `deleter` releases it. A null pointer represents no allocation and is rejected without
 /// calling `deleter`. `deleter` must accept a non-null allocation exactly once. ~keep
-unsafe fn copy_and_delete_tess_text(pointer: *mut c_char, deleter: impl FnMut(*mut c_char)) -> Result<String> {
+pub(crate) unsafe fn copy_and_delete_tess_text(
+    pointer: *mut c_char,
+    deleter: impl FnMut(*mut c_char),
+) -> Result<String> {
     if pointer.is_null() {
         return Err(TesseractError::NullPointerError);
     }
@@ -104,23 +135,39 @@ unsafe fn copy_and_delete_tess_text(pointer: *mut c_char, deleter: impl FnMut(*m
     Ok(c_str.to_str()?.to_owned())
 }
 
-unsafe impl Send for ResultIterator {}
-unsafe impl Sync for ResultIterator {}
-
-impl ResultIterator {
-    /// Creates a new instance of the ResultIterator.
+impl<'api> ResultIterator<'api> {
+    /// Wraps a result iterator created by `api` from the recognition result at `epoch`.
     ///
-    /// # Arguments
+    /// # Safety
     ///
-    /// * `handle` - Pointer to the ResultIterator.
-    ///
-    /// # Returns
-    ///
-    /// Returns the new instance of the ResultIterator.
-    pub fn new(handle: *mut c_void) -> Self {
+    /// `raw` must be a non-null `TessResultIterator` (or mutable iterator) that `api`'s engine
+    /// created from the result at `epoch`, owned by nothing else.
+    pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
         ResultIterator {
-            handle: Arc::new(Mutex::new(handle)),
+            // SAFETY: forwarded from this function's contract. ~keep
+            inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
+    }
+
+    /// Opens a choice iterator over the alternatives of the current word.
+    ///
+    /// The choice iterator reads the same recognition result and goes stale with it. Alternatives
+    /// are only recorded when `lstm_choice_mode` is set before recognition. Fails with
+    /// [`TesseractError::InvalidParameterError`] when the iterator has no current word.
+    pub fn choices(&self) -> Result<ChoiceIterator<'api>> {
+        let handle = self.inner.lock()?;
+        // Tesseract's choice iterator asserts that the current word is non-null before the null
+        // check below can run, so refuse a position without one. ~keep
+        handle.require_current_word()?;
+        // SAFETY: the iterator is locked, its result is current and a current word exists, so
+        // the word it points at is live. A non-null result is a new allocation owned by the
+        // caller. ~keep
+        let raw = unsafe { TessResultIteratorGetChoiceIterator(*handle) };
+        if raw.is_null() {
+            return Err(TesseractError::NullPointerError);
+        }
+        // SAFETY: `raw` is a fresh choice iterator created from this iterator's current result, owned by nothing else. ~keep
+        Ok(unsafe { ChoiceIterator::from_raw(self.inner.api(), self.inner.epoch(), raw) })
     }
 
     /// Gets the UTF-8 text of the current iterator.
@@ -133,7 +180,9 @@ impl ResultIterator {
     ///
     /// Returns the UTF-8 text as a `String` if successful, otherwise returns an error.
     pub fn get_utf8_text(&self, level: TessPageIteratorLevel) -> Result<String> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The iterator is locked and the typed level matches the C enum. A non-null result is owned.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         let text_ptr = unsafe { TessResultIteratorGetUTF8Text(*handle, level as c_int) };
         if text_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
@@ -158,7 +207,9 @@ impl ResultIterator {
     ///
     /// Returns the confidence as a `f32`.
     pub fn confidence(&self, level: TessPageIteratorLevel) -> Result<f32> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The live iterator is locked and the level is a native enum value. The result is a C float.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorConfidence(*handle, level as c_int) })
     }
 
@@ -168,11 +219,14 @@ impl ResultIterator {
     ///
     /// Returns the recognition language as a `String` if successful, otherwise returns an error.
     pub fn word_recognition_language(&self) -> Result<String> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The iterator is locked while requesting the language string borrowed from Tesseract.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         let lang_ptr = unsafe { TessResultIteratorWordRecognitionLanguage(*handle) };
         if lang_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        // SAFETY: The non-null native language string is NUL-terminated and copied under the iterator lock. ~keep
         let c_str = unsafe { CStr::from_ptr(lang_ptr) };
         Ok(c_str.to_str()?.to_owned())
     }
@@ -183,7 +237,7 @@ impl ResultIterator {
     ///
     /// Returns the font attributes as a tuple if successful, otherwise returns an error.
     pub fn word_font_attributes(&self) -> Result<(bool, bool, bool, bool, bool, bool, i32, i32)> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         let mut is_bold = 0;
         let mut is_italic = 0;
         let mut is_underlined = 0;
@@ -193,6 +247,8 @@ impl ResultIterator {
         let mut pointsize = 0;
         let mut font_id = 0;
 
+        // SAFETY: The iterator is locked and the local C int outputs match BOOL and int slots.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         let result = unsafe {
             TessResultIteratorWordFontAttributes(
                 *handle,
@@ -229,7 +285,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the current iterator is from the dictionary, otherwise returns `false`.
     pub fn word_is_from_dictionary(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the native dictionary query on the current word.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorWordIsFromDictionary(*handle) != 0 })
     }
 
@@ -239,7 +297,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the current iterator is numeric, otherwise returns `false`.
     pub fn word_is_numeric(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the native numeric query on the current word.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorWordIsNumeric(*handle) != 0 })
     }
 
@@ -249,7 +309,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the current iterator is superscript, otherwise returns `false`.
     pub fn symbol_is_superscript(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsSuperscript(*handle) != 0 })
     }
 
@@ -259,7 +321,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the current iterator is subscript, otherwise returns `false`.
     pub fn symbol_is_subscript(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsSubscript(*handle) != 0 })
     }
 
@@ -269,7 +333,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the current iterator is dropcap, otherwise returns `false`.
     pub fn symbol_is_dropcap(&self) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The guard serializes the native query at the current symbol.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorSymbolIsDropcap(*handle) != 0 })
     }
 
@@ -283,7 +349,9 @@ impl ResultIterator {
     ///
     /// Returns `true` if the next iterator exists, otherwise returns `false`.
     pub fn next(&self, level: TessPageIteratorLevel) -> Result<bool> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
+        // SAFETY: The iterator guard is held through advancement at the specified native level.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         Ok(unsafe { TessResultIteratorNext(*handle, level as c_int) != 0 })
     }
 
@@ -329,8 +397,11 @@ impl ResultIterator {
         let mut right = 0;
         let mut bottom = 0;
 
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
 
+        // The lock guard proves the handle is live and its recognition result current. ~keep
+        // SAFETY: The iterator is locked. This call assumes the PageIterator base is at the same address; its outputs
+        // are writable C ints. ~keep
         let result = unsafe {
             TessPageIteratorBoundingBox(*handle, level as c_int, &mut left, &mut top, &mut right, &mut bottom)
         };
@@ -370,12 +441,14 @@ impl ResultIterator {
     /// first word in a line cannot be extracted, the next successfully extracted word begins
     /// that line instead.
     pub fn extract_all_words_with_line_starts(&self) -> Result<(WordExtractionOutcome, Vec<bool>)> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         let raw = *handle;
         let mut words = Vec::new();
         let mut line_starts = Vec::new();
         let mut skipped = 0usize;
 
+        // SAFETY: The iterator is locked. This call assumes its PageIterator base is at the same address.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         unsafe { TessPageIteratorBegin(raw) };
 
         let mut pending_line_start = false;
@@ -393,6 +466,8 @@ impl ResultIterator {
                 Err(error) => record_word_extraction_result(Err(error), &mut words, &mut skipped)?,
             }
 
+            // SAFETY: The iterator guard is held through advancement at the specified native level.
+            // The lock guard proves the handle is live and its recognition result current. ~keep
             let has_next = unsafe { TessResultIteratorNext(raw, TessPageIteratorLevel::RIL_WORD as c_int) != 0 };
             if !has_next {
                 break;
@@ -412,18 +487,23 @@ impl ResultIterator {
     ///
     /// Returns a [`WordData`] struct if successful, otherwise returns an error.
     pub fn extract_word_data(&self) -> Result<WordData> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         extract_word_data_unlocked(*handle)
     }
 
     /// Reads the text and box of each symbol in every word that `wanted` accepts, in a single
     /// mutex lock. The iterator is reset to the beginning first. A word whose text, box or
     /// symbols cannot be read is left out, so an absent word means "unknown", not "no symbols". ~keep
+    ///
+    /// `wanted` runs while the iterator and engine locks are held: it must not call into this
+    /// iterator or its engine, or the call deadlocks.
     pub fn extract_word_symbols(&self, wanted: impl Fn(&str) -> bool) -> Result<Vec<WordSymbols>> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        let handle = self.inner.lock()?;
         let raw = *handle;
         let mut words = Vec::new();
 
+        // SAFETY: The iterator is locked. This call assumes its PageIterator base is at the same address.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         unsafe { TessPageIteratorBegin(raw) };
 
         loop {
@@ -434,6 +514,8 @@ impl ResultIterator {
                 words.push(word);
             }
 
+            // SAFETY: The iterator guard is held through advancement at the specified native level.
+            // The lock guard proves the handle is live and its recognition result current. ~keep
             let has_next = unsafe { TessResultIteratorNext(raw, TessPageIteratorLevel::RIL_WORD as c_int) != 0 };
             if !has_next {
                 break;
@@ -497,6 +579,8 @@ fn extract_word_data_unlocked(raw: *mut c_void) -> Result<WordData> {
     let text = iterator_text_unlocked(raw, TessPageIteratorLevel::RIL_WORD)?;
     let (left, top, right, bottom) = bounding_box_unlocked(raw, TessPageIteratorLevel::RIL_WORD)?;
 
+    // SAFETY: The live iterator is locked and the level is a native enum value. The result is a C float.
+    // The lock guard proves the handle is live and its recognition result current. ~keep
     let confidence = unsafe { TessResultIteratorConfidence(raw, TessPageIteratorLevel::RIL_WORD as c_int) };
     let font_attrs = extract_word_font_attributes(raw);
     let language = extract_word_recognition_language(raw);
@@ -515,11 +599,15 @@ fn extract_word_data_unlocked(raw: *mut c_void) -> Result<WordData> {
 
 /// Whether the current element begins a text line. The caller MUST hold the iterator's mutex. ~keep
 fn at_text_line_start_unlocked(raw: *mut c_void) -> bool {
+    // SAFETY: The caller holds the lock. This query assumes the PageIterator base is at the same address.
+    // The lock guard proves the handle is live and its recognition result current. ~keep
     unsafe { TessPageIteratorIsAtBeginningOf(raw, TessPageIteratorLevel::RIL_TEXTLINE as c_int) != 0 }
 }
 
 /// The text of the current element at `level`. The caller MUST hold the iterator's mutex. ~keep
 fn iterator_text_unlocked(raw: *mut c_void, level: TessPageIteratorLevel) -> Result<String> {
+    // SAFETY: The iterator is locked and the typed level matches the C enum. A non-null result is owned.
+    // The lock guard proves the handle is live and its recognition result current. ~keep
     let text_ptr = unsafe { TessResultIteratorGetUTF8Text(raw, level as c_int) };
     if text_ptr.is_null() {
         return Err(TesseractError::NullPointerError);
@@ -537,6 +625,9 @@ fn iterator_text_unlocked(raw: *mut c_void, level: TessPageIteratorLevel) -> Res
 /// the iterator's mutex. ~keep
 fn bounding_box_unlocked(raw: *mut c_void, level: TessPageIteratorLevel) -> Result<(i32, i32, i32, i32)> {
     let (mut left, mut top, mut right, mut bottom) = (0, 0, 0, 0);
+    // The lock guard proves the handle is live and its recognition result current. ~keep
+    // SAFETY: The iterator is locked. This call assumes the PageIterator base is at the same address; its outputs are
+    // writable C ints. ~keep
     let found =
         unsafe { TessPageIteratorBoundingBox(raw, level as c_int, &mut left, &mut top, &mut right, &mut bottom) };
     if found == 0 {
@@ -563,7 +654,12 @@ fn word_symbols_unlocked(raw: *mut c_void, text: String) -> Result<WordSymbols> 
             right,
             bottom,
         });
+        // SAFETY: The iterator is locked. This query assumes the PageIterator base is at the same address.
+        // The lock guard proves the handle is live and its recognition result current. ~keep
         let at_last_symbol = unsafe { TessPageIteratorIsAtFinalElement(raw, word_level, symbol_level) != 0 };
+        // The lock guard proves the handle is live and its recognition result current. ~keep
+        // SAFETY: The iterator stays locked. The symbol step is performed only when the current word has another
+        // symbol. ~keep
         if at_last_symbol || unsafe { TessResultIteratorNext(raw, symbol_level) } == 0 {
             break;
         }
@@ -591,6 +687,8 @@ fn extract_word_font_attributes(raw: *mut c_void) -> Option<FontAttributes> {
     let mut is_smallcaps = 0;
     let mut pointsize = 0;
     let mut font_id = 0;
+    // SAFETY: The iterator is locked and the local C int outputs match BOOL and int slots.
+    // The lock guard proves the handle is live and its recognition result current. ~keep
     let result = unsafe {
         TessResultIteratorWordFontAttributes(
             raw,
@@ -630,17 +728,22 @@ fn extract_word_font_attributes(raw: *mut c_void) -> Option<FontAttributes> {
 /// out of [`extract_word_data_unlocked`] to keep that function under the workspace line-count
 /// limit. ~keep
 fn extract_word_recognition_language(raw: *mut c_void) -> Option<String> {
+    // SAFETY: The iterator is locked while requesting the language string borrowed from Tesseract.
+    // The lock guard proves the handle is live and its recognition result current. ~keep
     let lang_ptr = unsafe { TessResultIteratorWordRecognitionLanguage(raw) };
     if lang_ptr.is_null() {
         None
     } else {
+        // SAFETY: The non-null native language string is NUL-terminated and copied under the iterator lock. ~keep
         unsafe { CStr::from_ptr(lang_ptr) }.to_str().ok().map(str::to_owned)
     }
 }
 
-impl Drop for ResultIterator {
+impl Drop for ResultIterator<'_> {
     fn drop(&mut self) {
-        if let Ok(handle) = self.handle.lock() {
+        if let Some(handle) = self.inner.lock_for_release() {
+            // SAFETY: The handle must be the unique owned ResultIterator pointer or its compatible base.
+            // TessResultIteratorDelete deletes through that base's virtual destructor. ~keep
             unsafe { TessResultIteratorDelete(*handle) };
         }
     }
@@ -649,6 +752,7 @@ impl Drop for ResultIterator {
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 ffi_extern! {
     pub fn TessResultIteratorDelete(handle: *mut c_void);
+    fn TessResultIteratorGetChoiceIterator(handle: *const c_void) -> *mut c_void;
     pub fn TessPageIteratorBegin(handle: *mut c_void);
     pub fn TessResultIteratorGetUTF8Text(handle: *mut c_void, level: c_int) -> *mut c_char;
     pub fn TessResultIteratorConfidence(handle: *mut c_void, level: c_int) -> c_float;

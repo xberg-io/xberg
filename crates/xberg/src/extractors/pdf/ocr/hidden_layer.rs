@@ -76,8 +76,7 @@ fn preserves_requested_projection(config: &ExtractionConfig) -> bool {
         && config.images.as_ref().is_none_or(|images| !images.include_page_rasters)
         && config.ocr_near_empty_fallback != Some(false)
         && config.pdf_options.as_ref().is_none_or(|pdf| {
-            pdf.top_margin_fraction.is_none()
-                && pdf.bottom_margin_fraction.is_none()
+            !pdf.has_nonzero_raw_margins()
                 && !pdf.reading_order
                 && pdf.backend == crate::core::config::PdfBackend::Native
                 && pdf.hierarchy.is_none()
@@ -969,6 +968,34 @@ pub(super) fn adds_text_preserving_native(native: &str, candidate: &str) -> bool
             let line: Vec<_> = line.split_whitespace().collect();
             line.is_empty() || count_sequence(&candidate, &line) <= count_sequence(&native_words, &line)
         })
+}
+
+pub(super) fn table_read_preserves_native(native: &str, text: &str, tables: &[crate::types::Table]) -> bool {
+    plain_table_transcript(text, tables)
+        .is_some_and(|plain| adds_text_preserving_native(native, &plain) && keeps_native_lines_in_order(native, &plain))
+}
+
+fn plain_table_transcript(text: &str, tables: &[crate::types::Table]) -> Option<String> {
+    use crate::rendering::common::{render_table_markdown, render_table_plain};
+
+    // Only interpret separators from typed tables that account for the entire selected read. ~keep
+    let markdown = tables
+        .iter()
+        .map(|table| render_table_markdown(&table.cells))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!tables.is_empty()
+        && markdown
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .eq(text.lines().filter(|line| !line.trim().is_empty())))
+    .then(|| {
+        tables
+            .iter()
+            .map(|table| render_table_plain(&table.cells))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    })
 }
 
 pub(super) fn keeps_native_lines_in_order(native: &str, candidate: &str) -> bool {

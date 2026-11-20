@@ -262,11 +262,7 @@ impl DocumentClassifier {
         let double_space_count = line.matches("  ").count();
         let word_count = line.split_whitespace().count();
 
-        if word_count > 5 && double_space_count > 0 {
-            return true;
-        }
-
-        false
+        word_count > 5 && double_space_count > 0
     }
 
     /// Detect form field markers (underscores, brackets, etc.)

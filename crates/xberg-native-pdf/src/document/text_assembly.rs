@@ -5,6 +5,7 @@
 //! `impl` is the same inherent impl and sees the parent's private items unchanged. ~keep
 
 use super::*;
+use crate::text::cjk_ranges::is_vertical_text_cjk;
 
 impl PdfDocument {
     /// Circular references and recursion limit errors are handled gracefully
@@ -194,17 +195,10 @@ impl PdfDocument {
     /// glyph width) and top-to-bottom within a column (Y descending), matching
     /// how the script is read.
     pub(super) fn try_assemble_vertical_cjk(spans: &[TextSpan]) -> Option<String> {
-        fn is_cjk(c: char) -> bool {
-            matches!(
-                c as u32,
-                0x3040..=0x30FF
-                | 0x3400..=0x4DBF
-                | 0x4E00..=0x9FFF
-                | 0xF900..=0xFAFF
-                | 0xFF66..=0xFF9F
-            )
-        }
-        let cjk: Vec<&TextSpan> = spans.iter().filter(|s| s.text.chars().any(is_cjk)).collect();
+        let cjk: Vec<&TextSpan> = spans
+            .iter()
+            .filter(|s| s.text.chars().any(is_vertical_text_cjk))
+            .collect();
         if cjk.len() < 8 {
             return None;
         }
@@ -212,7 +206,7 @@ impl PdfDocument {
             .iter()
             .filter(|s| {
                 let t = s.text.trim();
-                t.chars().count() == 1 && t.chars().all(is_cjk)
+                t.chars().count() == 1 && t.chars().all(is_vertical_text_cjk)
             })
             .count();
         if single_glyph_cjk * 2 < cjk.len() {
@@ -222,7 +216,10 @@ impl PdfDocument {
             .iter()
             .map(|s| s.text.chars().filter(|c| !c.is_whitespace()).count())
             .sum();
-        let cjk_chars: usize = cjk.iter().map(|s| s.text.chars().filter(|c| is_cjk(*c)).count()).sum();
+        let cjk_chars: usize = cjk
+            .iter()
+            .map(|s| s.text.chars().filter(|c| is_vertical_text_cjk(*c)).count())
+            .sum();
         if total_chars == 0 || cjk_chars * 2 < total_chars {
             return None;
         }
@@ -367,7 +364,7 @@ impl PdfDocument {
             let no_content_text = if self.page_cannot_have_text(page_dict) {
                 true
             } else {
-                match self.get_page_content_data(page_index) {
+                match self.cached_page_content(page_index) {
                     Ok(ref content_data) => !Self::may_contain_text(content_data),
                     Err(_) => false, // Can't read content stream — be conservative ~keep
                 }
@@ -938,7 +935,7 @@ impl PdfDocument {
             };
 
             let mut text = String::with_capacity(spans.len() * 20);
-            let mut prev_span: Option<TextSpan> = None;
+            let mut prev_span: Option<&TextSpan> = None;
 
             for span in &spans {
                 // Flush any tables that sit above this span in PDF
@@ -958,7 +955,7 @@ impl PdfDocument {
                     }
                 }
 
-                if let Some(prev) = &prev_span {
+                if let Some(prev) = prev_span {
                     let prev_end_x = prev.bbox.x + prev.bbox.width;
                     let span_end_x = span.bbox.x + span.bbox.width;
                     // Containment check: skip a span only if it is geometrically
@@ -1158,7 +1155,7 @@ impl PdfDocument {
                 }
 
                 Self::push_span_text(&mut text, span);
-                prev_span = Some(span.clone());
+                prev_span = Some(span);
             }
 
             // Drain any tables that sit below all flow spans (or the

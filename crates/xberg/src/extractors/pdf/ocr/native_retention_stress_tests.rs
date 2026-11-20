@@ -796,6 +796,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
         baseline_y: row as f32 * 12.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segment = |text: &str, row: usize, x: f32, width: f32| tall_segment(text, row, x, width, 1);
     let native: Vec<SegmentData> = native
@@ -820,7 +821,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
         .map(|(text, row, rows)| PdfLine {
             segments: vec![tall_segment(text, row, 0.0, 500.0, rows)],
             native_scripts: Vec::new(),
-            baseline_y: row as f32 * 12.0,
+            baseline_y: Some(row as f32 * 12.0),
             dominant_font_size: 10.0,
             is_bold: false,
             is_monospace: false,
@@ -838,6 +839,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count: 0,

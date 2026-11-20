@@ -26,6 +26,7 @@ pub(crate) struct TableSources {
     members: Vec<Vec<Run>>,
     paint_overhangs: Vec<Run>,
     recovered_lines: Vec<Run>,
+    redistributed: Vec<Vec<SegmentKey>>,
     recovered_tracks: Vec<(f32, f32)>,
     replaces_empty_ruled_route: bool,
 }
@@ -211,6 +212,67 @@ fn cell_members(cell: &TableCell, text: &str) -> Option<Vec<Run>> {
         .collect()
 }
 
+fn exact_decimal_member(cell: &TableCell, text: &str) -> Option<Run> {
+    let [span] = cell.spans.as_slice() else { return None };
+    let (whole, fraction) = text.split_once('.')?;
+    if whole.is_empty()
+        || fraction.is_empty()
+        || !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+        || span.text.trim() != text
+        || span.char_x_offsets.len() != text.len()
+        || !span.char_x_offsets.windows(2).all(|pair| pair[0] < pair[1])
+        || !span
+            .char_x_offsets
+            .iter()
+            .all(|x| (span.bbox.left()..span.bbox.right()).contains(x))
+    {
+        return None;
+    }
+    Run::capture(span)
+}
+
+// Match the whole prose span to exact glyph-bearing cells on one baseline. A
+// textual match against concatenated table cells alone can swallow short prose. ~keep
+fn joined_decimal_source_keys(members: &[(u32, u32, Run)], source: &[TextSpan]) -> Vec<Vec<SegmentKey>> {
+    if members.len() < 2 || source.len() > MAX_PAGE_SEGMENTS {
+        return Vec::new();
+    }
+    let groups = members.chunk_by(|(row_a, col_a, a), (row_b, col_b, b)| {
+        row_a == row_b
+            && *col_a + 1 == *col_b
+            && a.bounds.right < b.bounds.left
+            && a.bounds.bottom == b.bounds.bottom
+            && a.bounds.top == b.bounds.top
+            && a.font_size == b.font_size
+            && a.style == b.style
+    });
+    let mut sources = ahash::AHashMap::new();
+    for span in source.iter().filter(|span| span.mcid.is_none()) {
+        if let Some(bounds) = Edges::new(span.bbox.x, span.bbox.y, span.bbox.width, span.bbox.height) {
+            sources
+                .entry(bounds.values().map(f32::to_bits))
+                .and_modify(|entry| *entry = None)
+                .or_insert(Some(span));
+        }
+    }
+    groups
+        .filter_map(|group| {
+            let [(_, _, first), .., (_, _, last)] = group else {
+                return None;
+            };
+            let bounds = first.bounds.union(last.bounds).values().map(f32::to_bits);
+            let span = sources.get(&bounds)?.as_ref()?;
+            let text = group.iter().map(|(_, _, run)| run.text.as_str()).collect::<String>();
+            if text != span.text {
+                return None;
+            }
+            let painted = Run::capture(span)?;
+            (first.font_size == painted.font_size && first.style == painted.style)
+                .then(|| vec![redistributed_key(span)])
+        })
+        .collect()
+}
+
 fn normalized_spaces(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -287,17 +349,91 @@ fn paint_overhang(
     Run::capture(span)
 }
 
+fn redistributed_keys(original: &TextSpan, source: &[TextSpan]) -> Option<Vec<SegmentKey>> {
+    if let Some(exact) = source.iter().find(|span| {
+        span.sequence == original.sequence
+            && span.bbox == original.bbox
+            && span.text == original.text
+            && span.mcid == original.mcid
+            && span.mcid_scope == original.mcid_scope
+    }) {
+        return Some(vec![redistributed_key(exact)]);
+    }
+    let mut spans: Vec<_> = source
+        .iter()
+        .filter(|span| {
+            (span.bbox.y - original.bbox.y).abs() <= super::DECIMAL_ROW_TOLERANCE
+                && span.bbox.x >= original.bbox.x - super::DECIMAL_ROW_TOLERANCE
+                && span.bbox.right() <= original.bbox.right() + super::DECIMAL_ROW_TOLERANCE
+        })
+        .collect();
+    spans.sort_by(|left, right| left.bbox.x.total_cmp(&right.bbox.x));
+    if (spans.first()?.bbox.x - original.bbox.x).abs() > super::DECIMAL_ROW_TOLERANCE
+        || (spans.last()?.bbox.right() - original.bbox.right()).abs() > super::DECIMAL_ROW_TOLERANCE
+        || spans.windows(2).any(|pair| pair[0].bbox.x >= pair[1].bbox.x)
+        || spans
+            .iter()
+            .any(|span| span.rotation_degrees != 0.0 || span.mcid != original.mcid)
+        || spans.iter().map(|span| span.text.as_str()).collect::<String>() != original.text
+    {
+        return None;
+    }
+    Some(spans.into_iter().map(redistributed_key).collect())
+}
+
+fn redistributed_key(span: &TextSpan) -> SegmentKey {
+    SegmentKey::from(&SegmentData {
+        text: span.text.clone(),
+        x: span.bbox.x,
+        y: span.bbox.y,
+        width: span.bbox.width,
+        height: span.bbox.height,
+        font_size: span.font_size,
+        is_bold: span.font_weight == xberg_native_pdf::layout::FontWeight::Bold,
+        is_italic: span.is_italic,
+        is_monospace: span.is_monospace,
+        baseline_y: span.bbox.y,
+        rotation_degrees: span.rotation_degrees,
+        assigned_role: None,
+        ocr_heading_spans: None,
+    })
+}
+
+#[cfg(test)]
 pub(super) fn capture(
     native: &NativeTable,
     table: &Table,
     ownership: Option<&PaintedCellOwnership>,
 ) -> Option<TableSources> {
+    capture_with_redistributed_spans(native, table, ownership, &[], &Default::default(), &[])
+}
+
+pub(super) fn capture_with_redistributed_spans(
+    native: &NativeTable,
+    table: &Table,
+    ownership: Option<&PaintedCellOwnership>,
+    repaired: &[TextSpan],
+    source: &super::scripts::PageSpans,
+    recovered: &[Vec<TextSpan>],
+) -> Option<TableSources> {
+    let mut redistributed: Vec<_> = repaired
+        .iter()
+        .filter_map(|span| redistributed_keys(span, &source.spans))
+        .chain(recovered.iter().filter_map(|group| {
+            group
+                .iter()
+                .map(|span| redistributed_keys(span, &source.spans))
+                .collect::<Option<Vec<_>>>()
+                .map(|keys| keys.into_iter().flatten().collect())
+        }))
+        .collect();
     let text_bytes = table_text_size(table)?;
     let identity_work = text_bytes + table.cells.len() + table.cells.iter().map(Vec::len).sum::<usize>();
     source_size(native)?;
     let bbox = table_bounds(table.bounding_box)?;
     let rows: Vec<Vec<_>> = native.rows.iter().map(|row| row.cells.iter().collect()).collect();
     let mut members = Vec::new();
+    let mut decimal_members = Vec::new();
     let mut paint_overhangs = Vec::new();
     let mut recovered_lines = Vec::new();
     let recovered = native
@@ -315,6 +451,9 @@ pub(super) fn capture(
                     recovered_lines.extend(lines);
                 }
             } else if let Some(runs) = cell_members(cell, text) {
+                if let Some(decimal) = exact_decimal_member(cell, text) {
+                    decimal_members.push((row, col, decimal));
+                }
                 members.push(runs);
             } else if let Some(run) =
                 ownership.and_then(|ownership| paint_overhang(cell, text, ownership, row as usize, col as usize))
@@ -323,24 +462,27 @@ pub(super) fn capture(
             }
         },
     );
-    (!members.is_empty() || !paint_overhangs.is_empty() || !recovered_lines.is_empty()).then(|| TableSources {
-        page: table.page_number,
-        bbox,
-        cells: table.cells.clone(),
-        markdown: table.markdown.clone(),
-        identity_work,
-        members,
-        paint_overhangs,
-        recovered_lines,
-        replaces_empty_ruled_route: native
-            .bbox
-            .is_some_and(|bounds| ownership.is_some_and(|evidence| evidence.certifies_new_ruled_table(bounds))),
-        recovered_tracks: if recovered {
-            recovered_track_edges(native)
-        } else {
-            Vec::new()
-        },
-    })
+    redistributed.extend(joined_decimal_source_keys(&decimal_members, &source.spans));
+    (!members.is_empty() || !paint_overhangs.is_empty() || !recovered_lines.is_empty() || !redistributed.is_empty())
+        .then(|| TableSources {
+            page: table.page_number,
+            bbox,
+            cells: table.cells.clone(),
+            markdown: table.markdown.clone(),
+            identity_work,
+            members,
+            paint_overhangs,
+            recovered_lines,
+            redistributed,
+            replaces_empty_ruled_route: native
+                .bbox
+                .is_some_and(|bounds| ownership.is_some_and(|evidence| evidence.certifies_new_ruled_table(bounds))),
+            recovered_tracks: if recovered {
+                recovered_track_edges(native)
+            } else {
+                Vec::new()
+            },
+        })
 }
 
 #[cfg(test)]

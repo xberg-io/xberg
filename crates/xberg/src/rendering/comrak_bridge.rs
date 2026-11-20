@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use comrak::nodes::{
     Ast, AstNode, LineColumn, NodeAlert, NodeCode, NodeCodeBlock, NodeFootnoteDefinition, NodeFootnoteReference,
-    NodeHeading, NodeLink, NodeList, NodeMath, NodeTable, NodeValue, TableAlignment,
+    NodeHeading, NodeLink, NodeList, NodeMath, NodeTable, NodeTableRow, NodeValue, TableAlignment,
 };
 
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
@@ -20,8 +20,8 @@ use crate::types::internal::{ElementKind, InternalDocument, InternalElement, lis
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, has_tex_comment,
-    is_body_element, is_container_end, join_tex_lines, parse_metadata_entries, sorted_inline_annotations,
-    valid_math_annotation,
+    is_body_element, is_container_end, join_tex_lines, parse_metadata_entries, safe_image_url, safe_link_url,
+    sorted_inline_annotations, valid_math_annotation,
 };
 
 pub(super) fn admonition_alert_type(kind: &str) -> Option<comrak::nodes::AlertType> {
@@ -221,10 +221,10 @@ fn opens_with_text<'a>(paragraph: &'a AstNode<'a>) -> bool {
 }
 
 fn flatten_nested_strong<'a>(node: &'a AstNode<'a>) {
-    let nested = matches!(node.data.borrow().value, NodeValue::Strong)
+    let nested = matches!(node.data.borrow().value, NodeValue::Strong(..))
         && node
             .parent()
-            .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Strong));
+            .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Strong(..)));
     if !nested {
         return;
     }
@@ -260,6 +260,22 @@ fn in_tight_item(node: &AstNode<'_>) -> bool {
             .is_some_and(|list| matches!(&list.data.borrow().value, NodeValue::List(list) if list.tight))
 }
 
+/// Comrak marks its node payloads `#[non_exhaustive]`, so they are built from a constructor or default and then adjusted.
+fn configured<T>(mut value: T, adjust: impl FnOnce(&mut T)) -> T {
+    adjust(&mut value);
+    value
+}
+
+fn code_span(literal: String) -> NodeCode {
+    configured(NodeCode::new(literal), |code| code.num_backticks = 1)
+}
+
+fn footnote_definition(name: impl Into<String>) -> NodeFootnoteDefinition {
+    configured(NodeFootnoteDefinition::new(name), |definition| {
+        definition.total_references = 1
+    })
+}
+
 fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
     if math.literal.trim().is_empty() {
         node.detach();
@@ -271,10 +287,7 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
         write_backtick_math_as_code(node, math, alone);
         return;
     }
-    node.data.borrow_mut().value = NodeValue::Math(NodeMath {
-        dollar_math: true,
-        ..math
-    });
+    node.data.borrow_mut().value = NodeValue::Math(configured(math, |math| math.dollar_math = true));
 }
 
 /// Make each remaining math node safe between its dollars, once prose dollars are settled.
@@ -311,10 +324,7 @@ fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
                 write_escaped_math(node, "$$", &tex);
             }
             None => {
-                let math = NodeMath {
-                    literal: tex,
-                    ..std::mem::take(math)
-                };
+                let math = configured(std::mem::take(math), |math| math.literal = tex);
                 drop(data);
                 write_backtick_math_as_code(node, math, true);
             }
@@ -393,21 +403,11 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
         for child in paragraph.children().collect::<Vec<_>>() {
             child.detach();
         }
-        paragraph.data.borrow_mut().value = NodeValue::CodeBlock(Box::new(NodeCodeBlock {
-            fenced: true,
-            fence_char: b'`',
-            fence_length: 3,
-            fence_offset: 0,
-            info: "math".to_string(),
-            literal: unix_lines(&math.literal),
-            closed: true,
-        }));
+        paragraph.data.borrow_mut().value =
+            NodeValue::CodeBlock(Box::new(NodeCodeBlock::fenced("math", unix_lines(&math.literal))));
         return;
     }
-    node.data.borrow_mut().value = NodeValue::Code(NodeCode {
-        num_backticks: 1,
-        literal: join_tex_lines(&math.literal),
-    });
+    node.data.borrow_mut().value = NodeValue::Code(code_span(join_tex_lines(&math.literal)));
 }
 
 /// How display TeX alone in a paragraph is written.
@@ -519,10 +519,7 @@ fn escape_dollars<'a>(node: &'a AstNode<'a>, arena: &'a comrak::Arena<'a>, math_
     match &mut data.value {
         NodeValue::Math(math) if math_as_code => {
             let literal = join_tex_lines(&std::mem::take(&mut math.literal));
-            data.value = NodeValue::Code(NodeCode {
-                num_backticks: 1,
-                literal,
-            });
+            data.value = NodeValue::Code(code_span(literal));
         }
         NodeValue::Text(text) if text.contains('$') => {
             let prose = std::mem::take(text).into_owned();
@@ -550,6 +547,25 @@ fn unix_lines(text: &str) -> String {
 /// A line inside a code span can open an HTML block, which interrupts the paragraph.
 fn one_line(text: &str) -> String {
     text.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
+fn append_image_ocr<'a>(
+    arena: &'a comrak::Arena<'a>,
+    parent: &'a AstNode<'a>,
+    text: &str,
+    attributes: Option<&ahash::AHashMap<String, String>>,
+) {
+    if let Some(lines) = crate::rendering::common::marked_row_lines(text, &[], attributes) {
+        for line in lines {
+            let paragraph = mk(arena, NodeValue::Paragraph);
+            paragraph.append(mk_text(arena, line));
+            parent.append(paragraph);
+        }
+    } else {
+        let paragraph = mk(arena, NodeValue::Paragraph);
+        paragraph.append(mk_text(arena, text));
+        parent.append(paragraph);
+    }
 }
 
 fn holds_only<'a>(paragraph: &'a AstNode<'a>, node: &'a AstNode<'a>) -> bool {
@@ -829,14 +845,7 @@ fn append_annotated_span<'a>(
     inner: &[TextAnnotation],
 ) {
     if let Some((literal, display_math)) = annotated_math(span, kind) {
-        parent.append(mk(
-            arena,
-            NodeValue::Math(NodeMath {
-                dollar_math: true,
-                display_math,
-                literal: literal.to_string(),
-            }),
-        ));
+        parent.append(mk(arena, NodeValue::Math(NodeMath::new(literal, display_math))));
         return;
     }
 
@@ -889,29 +898,23 @@ fn append_annotated_span<'a>(
 
     match kind {
         AnnotationKind::Bold => {
-            let strong = mk(arena, NodeValue::Strong);
+            let strong = mk(arena, NodeValue::Strong(Default::default()));
             build_inlines(arena, strong, trimmed, inner_for_node);
             parent.append(strong);
         }
         AnnotationKind::Italic => {
-            let emph = mk(arena, NodeValue::Emph);
+            let emph = mk(arena, NodeValue::Emph(Default::default()));
             build_inlines(arena, emph, trimmed, inner_for_node);
             parent.append(emph);
         }
         AnnotationKind::Code => {
             if !trimmed.is_empty() {
-                let code = mk(
-                    arena,
-                    NodeValue::Code(NodeCode {
-                        num_backticks: 1,
-                        literal: normalize_text(trimmed),
-                    }),
-                );
+                let code = mk(arena, NodeValue::Code(code_span(normalize_text(trimmed))));
                 parent.append(code);
             }
         }
         AnnotationKind::Strikethrough => {
-            let strike = mk(arena, NodeValue::Strikethrough);
+            let strike = mk(arena, NodeValue::Strikethrough(Default::default()));
             build_inlines(arena, strike, trimmed, inner_for_node);
             parent.append(strike);
         }
@@ -935,17 +938,17 @@ fn append_annotated_span<'a>(
             build_inlines(arena, hl, trimmed, inner_for_node);
             parent.append(hl);
         }
-        AnnotationKind::Link { url, title } => {
-            let link = mk(
-                arena,
-                NodeValue::Link(Box::new(NodeLink {
-                    url: url.clone(),
-                    title: title.as_deref().unwrap_or("").to_string(),
-                })),
-            );
-            build_inlines(arena, link, trimmed, inner);
-            parent.append(link);
-        }
+        AnnotationKind::Link { url, title } => match safe_link_url(url) {
+            Some(url) => {
+                let link = mk(
+                    arena,
+                    NodeValue::Link(Box::new(NodeLink::new(url.to_owned(), title.as_deref().unwrap_or("")))),
+                );
+                build_inlines(arena, link, trimmed, inner);
+                parent.append(link);
+            }
+            None => build_inlines(arena, parent, trimmed, inner),
+        },
         AnnotationKind::Color { .. } | AnnotationKind::FontSize { .. } | AnnotationKind::Custom { .. } => {
             if inner_for_node
                 .iter()
@@ -1010,16 +1013,18 @@ fn build_table<'a>(
 
     let table_node = mk(
         arena,
-        NodeValue::Table(Box::new(NodeTable {
-            alignments: vec![TableAlignment::None; num_cols],
-            num_columns: num_cols,
-            num_rows: cells.len() + synthetic_header_rows,
-            num_nonempty_cells: cells.iter().flat_map(|r| r.iter()).filter(|c| !c.is_empty()).count(),
-        })),
+        NodeValue::Table(Box::new(configured(
+            NodeTable::new(vec![TableAlignment::None; num_cols]),
+            |table| {
+                table.num_columns = num_cols;
+                table.num_rows = cells.len() + synthetic_header_rows;
+                table.num_nonempty_cells = cells.iter().flat_map(|r| r.iter()).filter(|c| !c.is_empty()).count();
+            },
+        ))),
     );
 
     if synthetic_header_rows > 0 {
-        let header_row = mk(arena, NodeValue::TableRow(true));
+        let header_row = mk(arena, NodeValue::TableRow(NodeTableRow::new(true)));
         for _ in 0..num_cols {
             header_row.append(mk(arena, NodeValue::TableCell));
         }
@@ -1028,7 +1033,7 @@ fn build_table<'a>(
 
     for (row_idx, row) in cells.iter().enumerate() {
         let is_header = has_header && row_idx == 0;
-        let row_node = mk(arena, NodeValue::TableRow(is_header));
+        let row_node = mk(arena, NodeValue::TableRow(NodeTableRow::new(is_header)));
 
         for col in 0..num_cols {
             let cell_node = mk(arena, NodeValue::TableCell);
@@ -1055,8 +1060,8 @@ fn build_retained_grid_html<'a>(
     table: &crate::types::Table,
     attributes: Option<&ahash::AHashMap<String, String>>,
 ) -> Option<&'a AstNode<'a>> {
-    let grid = crate::types::internal::table_grid::retained_grid(table, attributes)?;
-    let occupied = validated_grid_occupancy(table, &grid)?;
+    let grid = crate::types::internal::table_grid::decode_retained_grid(attributes)?;
+    let occupied = crate::extraction::derive::validated_table_grid_occupancy(table, &grid)?;
     let anchors: ahash::AHashMap<_, _> = grid.cells.iter().map(|cell| ((cell.row, cell.col), cell)).collect();
     let mut annotations = super::table_math::read_annotations(attributes, &table.cells);
     for (position, scripts) in super::table_scripts::read_annotations(attributes, &table.cells) {
@@ -1078,42 +1083,7 @@ fn build_retained_grid_html<'a>(
         html.push_str("</tr>\n");
     }
     html.push_str("</tbody>\n</table>\n");
-    Some(mk(
-        arena,
-        NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock {
-            literal: html,
-            ..Default::default()
-        }),
-    ))
-}
-
-#[cfg(any(
-    feature = "pdf",
-    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
-))]
-fn validated_grid_occupancy(table: &crate::types::Table, grid: &crate::types::TableGrid) -> Option<Vec<Vec<bool>>> {
-    if grid.rows == 0 || grid.cols == 0 {
-        return None;
-    }
-    let mut occupied = vec![vec![false; grid.cols as usize]; grid.rows as usize];
-    for cell in &grid.cells {
-        let row_end = cell.row.checked_add(cell.row_span)?;
-        let col_end = cell.col.checked_add(cell.col_span)?;
-        if cell.row_span == 0 || cell.col_span == 0 || row_end > grid.rows || col_end > grid.cols {
-            return None;
-        }
-        for row in cell.row..row_end {
-            for col in cell.col..col_end {
-                let covered_text =
-                    (row != cell.row || col != cell.col) && !table.cells[row as usize][col as usize].is_empty();
-                if occupied[row as usize][col as usize] || covered_text {
-                    return None;
-                }
-                occupied[row as usize][col as usize] = true;
-            }
-        }
-    }
-    Some(occupied)
+    Some(mk(arena, NodeValue::HtmlBlock(comrak::nodes::NodeHtmlBlock::new(html))))
 }
 
 #[cfg(any(
@@ -1326,7 +1296,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 Some(item) => item,
                 None => {
                     let list_meta = match parent.data.borrow().value {
-                        NodeValue::List(ref m) => *m,
+                        NodeValue::List(ref m) => m.clone(),
                         // The outer `matches!(parent.data.borrow().value, NodeValue::List(..))`
                         // check above already confirmed `parent` holds `NodeValue::List`, and
                         // `parent` is not reassigned and its `data` is never mutated between
@@ -1344,14 +1314,7 @@ fn build_comrak_ast_with_table_mode<'a>(
 
         match elem_kind {
             ElementKind::Title => {
-                let heading = mk(
-                    arena,
-                    NodeValue::Heading(NodeHeading {
-                        level: 1,
-                        setext: false,
-                        closed: false,
-                    }),
-                );
+                let heading = mk(arena, NodeValue::Heading(NodeHeading::new(1)));
                 build_inlines(arena, heading, elem_text, elem_annotations);
                 parent.append(heading);
             }
@@ -1359,11 +1322,7 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::Heading { level } => {
                 let heading = mk(
                     arena,
-                    NodeValue::Heading(NodeHeading {
-                        level: level.clamp(MIN_HEADING_LEVEL, MAX_HEADING_LEVEL),
-                        setext: false,
-                        closed: false,
-                    }),
+                    NodeValue::Heading(NodeHeading::new(level.clamp(MIN_HEADING_LEVEL, MAX_HEADING_LEVEL))),
                 );
                 build_inlines(arena, heading, elem_text, elem_annotations);
                 parent.append(heading);
@@ -1394,17 +1353,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                     list_item_source_label_from_attributes(elem_attributes).filter(|label| !label.is_empty());
                 let ordinal = source_label.filter(|_| ordered).and_then(source_lists::decimal_ordinal);
                 let numbered = ordered && (source_label.is_none() || ordinal.is_some());
-                let item_list = NodeList {
-                    list_type: if numbered {
+                let item_list = configured(NodeList::default(), |list| {
+                    list.list_type = if numbered {
                         comrak::nodes::ListType::Ordered
                     } else {
                         comrak::nodes::ListType::Bullet
-                    },
-                    bullet_char: b'-',
-                    start: ordinal.unwrap_or(1),
-                    tight: true,
-                    ..Default::default()
-                };
+                    };
+                    list.bullet_char = b'-';
+                    list.start = ordinal.unwrap_or(1);
+                    list.tight = true;
+                });
                 let (item, item_para, list_parent) = if orig_idx.is_some_and(|index| paragraph_items.contains(&index)) {
                     (None, source_lists::paragraph(arena, parent, &mut container_stack), None)
                 } else {
@@ -1433,28 +1391,13 @@ fn build_comrak_ast_with_table_mode<'a>(
                     .unwrap_or("");
                 let code_block = mk(
                     arena,
-                    NodeValue::CodeBlock(Box::new(NodeCodeBlock {
-                        fenced: true,
-                        fence_char: b'`',
-                        fence_length: 3,
-                        fence_offset: 0,
-                        info: lang.to_string(),
-                        literal: elem_text.to_string(),
-                        closed: true,
-                    })),
+                    NodeValue::CodeBlock(Box::new(NodeCodeBlock::fenced(lang, elem_text))),
                 );
                 parent.append(code_block);
             }
 
             ElementKind::Formula => {
-                let math = mk(
-                    arena,
-                    NodeValue::Math(NodeMath {
-                        dollar_math: true,
-                        display_math: true,
-                        literal: elem_text.to_string(),
-                    }),
-                );
+                let math = mk(arena, NodeValue::Math(NodeMath::new(elem_text, true)));
                 let para = mk(arena, NodeValue::Paragraph);
                 para.append(math);
                 parent.append(para);
@@ -1518,8 +1461,8 @@ fn build_comrak_ast_with_table_mode<'a>(
                     Some(img) => {
                         if !img.data.is_empty() {
                             format!("image_{}.{}", image_index, img.format)
-                        } else if let Some(ref path) = img.source_path {
-                            path.clone()
+                        } else if let Some(path) = img.source_path.as_deref().and_then(safe_image_url) {
+                            path.to_owned()
                         } else {
                             format!("image_{}.bin", image_index)
                         }
@@ -1533,18 +1476,10 @@ fn build_comrak_ast_with_table_mode<'a>(
 
                 if doc.ocr_text_only && has_ocr {
                     let ocr_result = image.and_then(|img| img.ocr_result.as_ref()).unwrap();
-                    let ocr_para = mk(arena, NodeValue::Paragraph);
-                    ocr_para.append(mk_text(arena, &ocr_result.content));
-                    parent.append(ocr_para);
+                    append_image_ocr(arena, parent, &ocr_result.content, elem_attributes);
                 } else {
                     let para = mk(arena, NodeValue::Paragraph);
-                    let img_node = mk(
-                        arena,
-                        NodeValue::Image(Box::new(NodeLink {
-                            url,
-                            title: String::new(),
-                        })),
-                    );
+                    let img_node = mk(arena, NodeValue::Image(Box::new(NodeLink::new(url, ""))));
                     img_node.append(mk_text(arena, desc));
                     para.append(img_node);
                     parent.append(para);
@@ -1554,9 +1489,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                         && let Some(ocr_result) = image.and_then(|img| img.ocr_result.as_ref())
                         && !ocr_result.content.is_empty()
                     {
-                        let ocr_para = mk(arena, NodeValue::Paragraph);
-                        ocr_para.append(mk_text(arena, &ocr_result.content));
-                        parent.append(ocr_para);
+                        append_image_ocr(arena, parent, &ocr_result.content, elem_attributes);
                     }
                 }
             }
@@ -1566,12 +1499,13 @@ fn build_comrak_ast_with_table_mode<'a>(
                     let label = n.to_string();
                     let fnref = mk(
                         arena,
-                        NodeValue::FootnoteReference(Box::new(NodeFootnoteReference {
-                            name: label.clone(),
-                            texts: Vec::new(),
-                            ref_num: n,
-                            ix: n,
-                        })),
+                        NodeValue::FootnoteReference(Box::new(configured(
+                            NodeFootnoteReference::new(label.clone()),
+                            |reference| {
+                                reference.ref_num = n;
+                                reference.ix = n;
+                            },
+                        ))),
                     );
                     // A reference follows the block that cites it, so it joins that block when
                     // the block holds inline text.
@@ -1603,16 +1537,9 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::PageBreak => {}
 
             ElementKind::Slide { .. } => {
-                parent.append(mk(arena, NodeValue::ThematicBreak));
+                parent.append(mk(arena, NodeValue::ThematicBreak(Default::default())));
                 if !elem_text.is_empty() {
-                    let heading = mk(
-                        arena,
-                        NodeValue::Heading(NodeHeading {
-                            level: 2,
-                            setext: false,
-                            closed: false,
-                        }),
-                    );
+                    let heading = mk(arena, NodeValue::Heading(NodeHeading::new(2)));
                     build_inlines(arena, heading, elem_text, elem_annotations);
                     parent.append(heading);
                 }
@@ -1642,13 +1569,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 if let Some(at) = alert_type {
                     let alert = mk(
                         arena,
-                        NodeValue::Alert(Box::new(NodeAlert {
-                            alert_type: at,
-                            title: title.map(|s| s.to_string()),
-                            multiline: false,
-                            fence_length: 0,
-                            fence_offset: 0,
-                        })),
+                        NodeValue::Alert(Box::new(NodeAlert::new(at, title.map(|s| s.to_string())))),
                     );
                     if !elem_text.is_empty() {
                         let para = mk(arena, NodeValue::Paragraph);
@@ -1660,7 +1581,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                     let bq = mk(arena, NodeValue::BlockQuote);
                     let title_display = title.unwrap_or(kind_str);
                     let title_para = mk(arena, NodeValue::Paragraph);
-                    let strong = mk(arena, NodeValue::Strong);
+                    let strong = mk(arena, NodeValue::Strong(Default::default()));
                     strong.append(mk_text(arena, title_display));
                     title_para.append(strong);
                     bq.append(title_para);
@@ -1704,7 +1625,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 if !entries.is_empty() {
                     for (key, value) in &entries {
                         let para = mk(arena, NodeValue::Paragraph);
-                        let strong = mk(arena, NodeValue::Strong);
+                        let strong = mk(arena, NodeValue::Strong(Default::default()));
                         strong.append(mk_text(arena, key));
                         para.append(strong);
                         para.append(mk_text(arena, &format!(": {}", value)));
@@ -1728,18 +1649,17 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::ListStart { ordered } => {
                 state.push_container(NestingKind::List { ordered, item_count: 0 }, elem_depth);
 
-                let list_meta = NodeList {
-                    list_type: if ordered {
+                let list_meta = configured(NodeList::default(), |list| {
+                    list.list_type = if ordered {
                         comrak::nodes::ListType::Ordered
                     } else {
                         comrak::nodes::ListType::Bullet
-                    },
-                    bullet_char: b'-',
-                    start: 1,
-                    tight: true,
-                    ..Default::default()
-                };
-                let list_node = mk(arena, NodeValue::List(list_meta));
+                    };
+                    list.bullet_char = b'-';
+                    list.start = 1;
+                    list.tight = true;
+                });
+                let list_node = mk(arena, NodeValue::List(list_meta.clone()));
 
                 let target = if matches!(parent.data.borrow().value, NodeValue::List(..)) {
                     let last_item = parent
@@ -1797,13 +1717,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     let defs = footnotes.definitions();
     for entry in defs {
         let label = entry.number.to_string();
-        let fndef = mk(
-            arena,
-            NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                name: label,
-                total_references: 1,
-            }),
-        );
+        let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(label)));
         let para = mk(arena, NodeValue::Paragraph);
         build_inlines(arena, para, &entry.text, &entry.annotations);
         fndef.append(para);
@@ -1813,13 +1727,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     for elem in &doc.elements {
         if elem.kind == ElementKind::Citation {
             let key = elem.anchor.as_deref().unwrap_or("?");
-            let fndef = mk(
-                arena,
-                NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                    name: key.to_string(),
-                    total_references: 1,
-                }),
-            );
+            let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(key)));
             let para = mk(arena, NodeValue::Paragraph);
             para.append(mk_text(arena, &elem.text));
             fndef.append(para);
@@ -1833,13 +1741,7 @@ fn build_comrak_ast_with_table_mode<'a>(
     for elem in &doc.elements {
         if elem.kind == ElementKind::CommentDefinition {
             let key = elem.anchor.as_deref().unwrap_or("?");
-            let fndef = mk(
-                arena,
-                NodeValue::FootnoteDefinition(NodeFootnoteDefinition {
-                    name: key.to_string(),
-                    total_references: 1,
-                }),
-            );
+            let fndef = mk(arena, NodeValue::FootnoteDefinition(footnote_definition(key)));
             let para = mk(arena, NodeValue::Paragraph);
             build_inlines(arena, para, &elem.text, &elem.annotations);
             fndef.append(para);
@@ -1887,6 +1789,54 @@ mod tests {
         let mut output = String::new();
         format_commonmark(root, &Options::default(), &mut output).unwrap();
         output
+    }
+
+    #[test]
+    fn marked_image_ocr_keeps_rows_in_both_markdown_image_modes() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+        use crate::types::{ExtractedDocument, ExtractedImage};
+
+        for ocr_text_only in [true, false] {
+            let mut doc = InternalDocument::new("pdf");
+            doc.ocr_text_only = ocr_text_only;
+            doc.append_ocr_text = !ocr_text_only;
+            doc.images.push(ExtractedImage {
+                ocr_result: Some(Box::new(ExtractedDocument {
+                    content: "Item Count\nSnow 12\nField 34".into(),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            });
+            let mut image = InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0);
+            image
+                .attributes
+                .get_or_insert_with(Default::default)
+                .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+            doc.push_element(image);
+            let expected = if ocr_text_only {
+                "Item Count\n\nSnow 12\n\nField 34\n"
+            } else {
+                "![](image_0.bin)\n\nItem Count\n\nSnow 12\n\nField 34\n"
+            };
+            assert_eq!(render(&doc), expected);
+        }
+    }
+
+    #[test]
+    fn marked_paragraph_rows_escape_html_text_in_each_row() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        let mut paragraph = InternalElement::text(ElementKind::Paragraph, "Fees <net> 12\nA & B 7", 0);
+        paragraph
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+        let mut doc = InternalDocument::new("pdf");
+        doc.push_element(paragraph);
+        assert_eq!(
+            crate::rendering::render_html(&doc),
+            "<p>Fees &lt;net&gt; 12</p>\n<p>A &amp; B 7</p>\n"
+        );
     }
 
     #[test]
@@ -2469,8 +2419,8 @@ mod tests {
         let doc = b.build();
         let out = render(&doc);
         assert!(
-            out.contains("[***click***](https://example.com)"),
-            "bold italic link must render as [***text***](url); got: {out}"
+            out.contains("[**_click_**](https://example.com)"),
+            "bold italic link must render as [**_text_**](url); got: {out}"
         );
     }
 
@@ -2653,6 +2603,98 @@ mod tests {
             out.contains("[world](https://example.com)"),
             "link must still render; got: {out}"
         );
+    }
+
+    fn link_doc(text: &str, url: &str) -> InternalDocument {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(
+            text,
+            vec![TextAnnotation {
+                start: 0,
+                end: text.len() as u32,
+                kind: AnnotationKind::Link {
+                    url: url.to_string(),
+                    title: None,
+                },
+            }],
+            None,
+            None,
+        );
+        b.build()
+    }
+
+    #[test]
+    fn should_drop_script_link_href_and_keep_text_in_html() {
+        let doc = link_doc("click me", "javascript:alert(1)");
+        let html = crate::rendering::render_html(&doc);
+        assert!(!html.contains("javascript"), "script URL must not reach HTML: {html}");
+        assert!(!html.contains("<a "), "unsafe link must be dropped: {html}");
+        assert!(html.contains("<p>click me</p>"), "link text must survive: {html}");
+    }
+
+    #[test]
+    fn should_drop_script_link_destinations_in_markdown() {
+        for url in [
+            "javascript:alert(1)",
+            " JaVaScRiPt:alert(1)",
+            "java\tscript:alert(1)",
+            "\u{1}javascript:alert(1)",
+            "vbscript:msgbox(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "&#106;avascript:alert(1)",
+            "javascript&#58;alert(1)",
+            "javascript\\:alert(1)",
+        ] {
+            let doc = link_doc("click me", url);
+            let markdown = render(&doc);
+            assert_eq!(markdown, "click me\n", "{url:?} must lose its link");
+            let html = crate::rendering::render_html(&doc);
+            assert_eq!(html, "<p>click me</p>\n", "{url:?} must lose its link");
+        }
+    }
+
+    #[test]
+    fn should_keep_allowed_link_destinations() {
+        for url in [
+            "https://example.com",
+            "HTTP://example.com",
+            "mailto:a@example.com",
+            "tel:+15551234",
+            "ftp://example.com/f",
+            "//example.com/x",
+            "docs/page.html?a=1&b=2",
+            "#section",
+            "../up:colon",
+        ] {
+            let html = crate::rendering::render_html(&link_doc("go", url));
+            assert!(html.contains("<a href="), "{url:?} must stay a link: {html}");
+        }
+    }
+
+    fn image_doc(source_path: &str) -> InternalDocument {
+        let mut doc = InternalDocument::new("html");
+        doc.images.push(crate::types::ExtractedImage {
+            source_path: Some(source_path.to_string()),
+            description: Some("pic".into()),
+            ..Default::default()
+        });
+        doc.push_element(crate::types::internal::InternalElement::text(
+            ElementKind::Image { image_index: 0 },
+            "",
+            0,
+        ));
+        doc
+    }
+
+    #[test]
+    fn should_not_emit_script_image_sources() {
+        let html = crate::rendering::render_html(&image_doc("javascript:alert(1)"));
+        assert!(!html.contains("javascript"), "script URL must not reach HTML: {html}");
+        assert!(html.contains("image_0.bin"), "fallback reference expected: {html}");
+        let html = crate::rendering::render_html(&image_doc("data:image/png;base64,AAAA"));
+        assert!(html.contains(r#"src="data:image/png;base64,AAAA""#), "{html}");
+        let html = crate::rendering::render_html(&image_doc("media/a.png"));
+        assert!(html.contains(r#"src="media/a.png""#), "{html}");
     }
 
     /// OCR-derived structure detection reads a numbered list marker as part of
@@ -2932,7 +2974,7 @@ mod tests {
         assert_eq!(math.len(), 2);
         assert!(
             math.iter()
-                .all(|node| matches!(node.parent().unwrap().data.borrow().value, NodeValue::Strong))
+                .all(|node| matches!(node.parent().unwrap().data.borrow().value, NodeValue::Strong(..)))
         );
         assert_eq!(crate::rendering::render_markdown(&doc).matches(r"\alpha").count(), 2);
         let html = crate::rendering::render_html(&doc);
@@ -3106,7 +3148,7 @@ mod tests {
                 }
                 assert!(matches!(
                     nodes[0].parent().unwrap().data.borrow().value,
-                    NodeValue::Strong
+                    NodeValue::Strong(..)
                 ));
                 assert_eq!(
                     crate::rendering::render_markdown(&doc).trim(),
@@ -3212,6 +3254,8 @@ mod tests {
     /// Re-parse `markdown` as plain CommonMark, which must show no HTML, as xberg's own options
     /// read it, and with dollar math only, the way remark-math reads it.
     fn assert_literals(markdown: &str, expected: &[&str]) {
+        // Comrak 1.0 reads CRLF in block content as LF, so a re-read literal never holds a CR before an LF.
+        let expected: Vec<String> = expected.iter().map(|literal| literal.replace("\r\n", "\n")).collect();
         assert_no_html(markdown, &Options::default());
         assert_eq!(
             literals(markdown, &crate::rendering::markdown::comrak_options()),

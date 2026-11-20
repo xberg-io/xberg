@@ -210,6 +210,9 @@ EOF
 ################################################################################
 ################################################################################
 
+# The images bind 0.0.0.0, so the server refuses to start without a token; /health stays open.
+API_TEST_TOKEN="docker-config-test-token"
+
 run_container() {
   local container_name="$1"
   local image="$2"
@@ -242,6 +245,7 @@ run_container() {
   if ! docker run -d \
     --name "$container_name" \
     -p "$port:8000" \
+    -e "XBERG_API_TOKEN=$API_TEST_TOKEN" \
     "${docker_opts[@]}" \
     "$image" \
     "${cmd_args[@]}" >/dev/null 2>&1; then

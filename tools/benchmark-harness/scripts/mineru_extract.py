@@ -33,7 +33,7 @@ _net_timeout = float(os.environ.get("MINERU_NET_TIMEOUT", "0") or "0")
 if _net_timeout > 0:
     socket.setdefaulttimeout(_net_timeout)
 
-PINNED_MINERU_VERSION = "4.0.12"
+PINNED_MINERU_VERSION = "4.1.3"
 
 
 def _load_mineru_api():

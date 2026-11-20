@@ -135,6 +135,7 @@ pub(crate) fn render_markdown_observed(
     if !doc.escape_markdown {
         keep_text_tildes_unescaped(root, &arena);
     }
+    keep_emphasis_asterisks(root, &arena);
 
     if root.first_child().is_none() {
         tracing::debug!("markdown rendering: empty AST, returning empty string");
@@ -143,6 +144,13 @@ pub(crate) fn render_markdown_observed(
 
     let mut options = comrak_options();
     options.render.width = 0;
+    // ~keep comrak 1.0's writer escapes every `$` in Text when a math extension is on, and a line-leading `:` when
+    // description lists are. `escape_dollars` already writes the dollars a math reader could pair as raw `\$`, and
+    // these options change nothing else in the writer, so formatting without them keeps prose `$` and `:` as earlier
+    // releases wrote them.
+    options.extension.math_dollars = false;
+    options.extension.math_code = false;
+    options.extension.description_lists = false;
     let mut raw = String::new();
     format_commonmark(root, &options, &mut raw).expect("comrak formatting should not fail");
     let raw_len = raw.len();
@@ -188,6 +196,31 @@ fn filter_page_marker_comments(output: String, page_marker_format: Option<&str>)
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn is_emphasis(node: &AstNode<'_>) -> bool {
+    matches!(node.data.borrow().value, NodeValue::Emph(..) | NodeValue::Strong(..))
+}
+
+/// ~keep comrak 1.0 writes `_` for an emphasis that directly follows another, or that is the only child of
+/// another, giving `**_x_**` and `**lo**_wor_ld` where earlier releases wrote `***x***` and `**lo***wor*ld`. An `_` run
+/// cannot close before a letter, so the intraword form also reads back without its emphasis. An empty text node beside
+/// the emphasis keeps comrak on `*` and the output unchanged from earlier releases.
+fn keep_emphasis_asterisks<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+    let empty = || arena.alloc(AstNode::from(NodeValue::Text(String::new().into())));
+    for node in root.descendants().collect::<Vec<_>>() {
+        if !is_emphasis(node) {
+            continue;
+        }
+        if node.previous_sibling().is_some_and(is_emphasis) {
+            node.insert_before(empty());
+        } else if node.previous_sibling().is_none()
+            && node.next_sibling().is_none()
+            && node.parent().is_some_and(is_emphasis)
+        {
+            node.insert_after(empty());
+        }
+    }
 }
 
 /// ~keep Only constant tildes bypass escaping; code literals and every other text byte stay on their own AST paths.

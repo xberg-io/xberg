@@ -7,8 +7,14 @@
 
 mod helpers;
 
+use flate2::read::GzDecoder;
+use lopdf::dictionary;
 use sha2::{Digest, Sha256};
-use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
+use std::io::Read;
+use xberg::types::{ExtractionMethod, NodeContent, ResultFormat};
+use xberg::{
+    ExtractedDocument, ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OutputFormat, PageConfig,
+};
 
 const SOURCE_ROWS: [[&str; 3]; 12] = [
     ["97", "623,093", "(8,538)"],
@@ -51,6 +57,23 @@ fn numeric_fields(text: &str) -> impl Iterator<Item = &str> {
 }
 
 fn extract(bytes: &[u8]) -> ExtractedDocument {
+    extract_with_psm(bytes, None)
+}
+
+fn extract_with_psm(bytes: &[u8], psm: Option<i32>) -> ExtractedDocument {
+    extract_as(bytes, psm, OutputFormat::Plain)
+}
+
+fn extract_as(bytes: &[u8], psm: Option<i32>, output_format: OutputFormat) -> ExtractedDocument {
+    extract_as_with_config(bytes, psm, output_format, |_| {})
+}
+
+fn extract_as_with_config(
+    bytes: &[u8],
+    psm: Option<i32>,
+    output_format: OutputFormat,
+    configure: impl FnOnce(&mut ExtractionConfig),
+) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
     assert_eq!(
@@ -58,11 +81,15 @@ fn extract(bytes: &[u8]) -> ExtractedDocument {
         "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
     );
     std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
-    let config = ExtractionConfig {
+    let mut config = ExtractionConfig {
         use_cache: false,
-        output_format: OutputFormat::Plain,
+        output_format,
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
+            tesseract_config: psm.map(|psm| xberg::types::TesseractConfig {
+                psm: Some(psm),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         pages: Some(PageConfig {
@@ -71,6 +98,7 @@ fn extract(bytes: &[u8]) -> ExtractedDocument {
         }),
         ..Default::default()
     };
+    configure(&mut config);
     helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
 }
 
@@ -143,4 +171,283 @@ fn regular_dashes_in_place_of_leader_dots_do_not_form_a_table() {
     let result = extract(bytes);
     assert!(result.metadata.ocr_used);
     assert!(result.tables.is_empty(), "found {} tables", result.tables.len());
+}
+
+#[test]
+fn explicit_psm6_scan_publishes_each_owned_leader_row_once() {
+    let result = extract_with_psm(&tinted_scan(), Some(6));
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("one scan page");
+    };
+    for content in [&result.content, &page.content] {
+        for (label, literal) in [
+            ("Tree planting", "Tree planting .......... 97 623,093 (8,538)"),
+            ("Parks and trails", "Parks and trails ........ 83 994,034 67,217"),
+        ] {
+            let rows: Vec<_> = content.lines().filter(|line| line.starts_with(label)).collect();
+            assert_eq!(rows, [literal], "{content}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires the pinned #2432 reporter PDF"]
+fn plain_200_dpi_psm6_keeps_source_leader_occurrences_in_order() {
+    let bytes = std::fs::read(std::env::var_os("XBERG_2503_PLAIN_200_PDF").unwrap()).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "362b728c7dd8e4eabc61f0070f29a006fd43540d70116453cba66f7396b263db"
+    );
+    let result = extract_with_psm(&bytes, Some(6));
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("one scan page");
+    };
+    let [table] = result.tables.as_slice() else {
+        panic!("one accepted table");
+    };
+    assert_eq!(table.cells.len(), 13);
+    assert_eq!(page.tables[0].cells, table.cells);
+    let expected = table.cells.iter().map(|row| row.join(" ")).collect::<Vec<_>>();
+    for content in [&result.content, &page.content] {
+        let rows = content
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(rows, expected, "each accepted source row occurs once and in order");
+        assert_eq!(rows[1], "Transit passes ......... 80 344,768 (2,258)");
+        assert_eq!(rows[2], "Code review ........... 46 443,988 590.07");
+        assert_eq!(rows[3], "Tree planting .......... 77 774,883 95,023");
+        assert_eq!(rows[8], "Parks and trails ........ 56 86,301 600.09");
+        assert_eq!(rows[12], "Fleet fuel. ..........., 53 562,485 54,237");
+    }
+}
+
+fn pinned_synthetic_scan(compressed: &[u8], sha: &str) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    GzDecoder::new(compressed)
+        .read_to_end(&mut bytes)
+        .expect("decompress synthetic scan PDF");
+    assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
+    bytes
+}
+
+fn plain_scan() -> Vec<u8> {
+    pinned_synthetic_scan(
+        include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-plain.pdf.gz"),
+        "9f427df6284fe295ea131e46211844b24b0a8693b2c36da1ce004439148abc6c",
+    )
+}
+
+#[test]
+fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
+    let original = plain_scan();
+    let shifted = pinned_synthetic_scan(
+        include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-150-shifted-count-header.pdf.gz"),
+        "5d6a45358a6824f9003ead2d6bb0aed701e98a4e72826511848c38819bc56b60",
+    );
+    let plain = extract_with_psm(&original, Some(6));
+    let control_plain = extract_with_psm(&shifted, Some(6));
+    assert_eq!(
+        plain.content, control_plain.content,
+        "the geometry control has identical stock text"
+    );
+    let stock = plain
+        .content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(stock.len(), 13);
+    assert_eq!(stock[0], "Item Count Budget Change");
+    assert_eq!(stock[1], "Library hours .......... 11 481,115 (6,536)");
+    let paragraphs = stock
+        .iter()
+        .map(|line| format!("<p>{line}</p>"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let flattened = format!("<p>{}</p>", stock.join(" "));
+    for (input, expected) in [(&original, paragraphs), (&shifted, flattened)] {
+        let html = extract_as(input, Some(6), OutputFormat::Html);
+        assert!(
+            html.tables.is_empty(),
+            "the proof uses the stock lines without rebuilding a table"
+        );
+        let [page] = html.pages.as_deref().unwrap() else {
+            panic!("one source page");
+        };
+        assert_eq!(html.content.trim(), expected);
+        assert_eq!(page.content.trim(), expected);
+    }
+}
+
+#[test]
+fn psm6_markdown_keeps_scan_rows_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let rows = plain
+        .content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 13);
+    assert_eq!(rows[0], "Item Count Budget Change");
+    let flattened = rows.join(" ");
+
+    let markdown = extract_as(&original, Some(6), OutputFormat::Markdown);
+    assert!(markdown.metadata.ocr_used);
+    assert!(markdown.tables.is_empty());
+    let [page] = markdown.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(markdown.content.trim(), flattened);
+    assert_eq!(page.content.trim(), flattened);
+}
+
+const NATIVE_SENTENCE: &str = "This first page has a complete native sentence.";
+
+fn scan_with_sibling_page(bytes: &[u8], native_first_page: bool) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(bytes).expect("synthetic single-page scan");
+    let originals = pdf.get_pages();
+    assert_eq!(originals.len(), 1);
+    let original = originals[&1];
+    let mut page = pdf.get_dictionary(original).unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    if native_first_page {
+        let font = pdf.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type1",
+            "BaseFont" => "Helvetica",
+        });
+        let text = format!("BT /F1 12 Tf 24 700 Td ({NATIVE_SENTENCE}) Tj ET");
+        let contents = pdf.add_object(lopdf::Stream::new(dictionary! {}, text.into_bytes()));
+        page.set("Resources", dictionary! { "Font" => dictionary! { "F1" => font } });
+        page.set("Contents", contents);
+    }
+    let sibling = lopdf::Object::Reference(pdf.add_object(page));
+    let tree = pdf.get_dictionary_mut(parent).unwrap();
+    let kids = tree.get_mut(b"Kids").unwrap().as_array_mut().unwrap();
+    assert_eq!(kids.as_slice(), [lopdf::Object::Reference(original)]);
+    if native_first_page {
+        kids.insert(0, sibling);
+    } else {
+        kids.push(sibling);
+    }
+    tree.set("Count", 2);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).expect("serialize both synthetic pages");
+    assert_eq!(lopdf::Document::load_mem(&bytes).unwrap().get_pages().len(), 2);
+    bytes
+}
+
+#[test]
+fn psm6_html_leaves_each_page_of_a_two_page_scan_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as(&scan_with_sibling_page(&original, false), Some(6), OutputFormat::Html);
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    let [first, second] = html.pages.as_deref().unwrap() else {
+        panic!("two source pages");
+    };
+    for (page, number) in [(first, 1), (second, 2)] {
+        assert_eq!(page.page_number, number);
+        assert_eq!(page.content.trim(), flattened);
+    }
+    assert_eq!(html.content.matches(flattened.as_str()).count(), 2, "{}", html.content);
+}
+
+#[test]
+fn psm6_html_keeps_document_structure_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as_with_config(&original, Some(6), OutputFormat::Html, |config| {
+        config.include_document_structure = true;
+    });
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    assert_eq!(html.content.trim(), flattened);
+    let [page] = html.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(page.content.trim(), flattened);
+    let document = html.document.as_ref().expect("requested document structure");
+    let paragraphs: Vec<_> = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Paragraph { text } => Some((node.page, text.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(paragraphs, [(Some(1), stock.as_str())]);
+}
+
+#[test]
+fn psm6_html_keeps_element_output_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+
+    let html = extract_as_with_config(&original, Some(6), OutputFormat::Html, |config| {
+        config.result_format = ResultFormat::ElementBased;
+    });
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    assert_eq!(html.content.trim(), flattened);
+    let [page] = html.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(page.content.trim(), flattened);
+    assert!(html.elements.as_ref().is_some_and(|elements| !elements.is_empty()));
+}
+
+#[test]
+fn psm6_html_keeps_a_detached_scan_flattened_beside_native_text() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let stock = plain.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(stock.starts_with("Item Count Budget Change Library hours"), "{stock}");
+    let flattened = format!("<p>{stock}</p>");
+    let pdf = scan_with_sibling_page(&original, true);
+
+    let html = extract_as_with_config(&pdf, Some(6), OutputFormat::Html, |config| {
+        config.force_ocr_pages = Some(vec![2]);
+        let ocr = config.ocr.as_mut().unwrap();
+        #[expect(deprecated, reason = "OcrPipelineStage still requires the legacy PaddleOCR field")]
+        let stage = OcrPipelineStage {
+            backend: "tesseract".into(),
+            priority: 100,
+            language: None,
+            tesseract_config: ocr.tesseract_config.clone(),
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        // The explicit stage sends the selected raster through the detached page runner. ~keep
+        ocr.pipeline = Some(OcrPipelineConfig {
+            stages: vec![stage],
+            quality_thresholds: Default::default(),
+        });
+    });
+    assert_eq!(html.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(html.metadata.ocr_used);
+    assert!(html.tables.is_empty());
+    let [first, second] = html.pages.as_deref().unwrap() else {
+        panic!("one native page and one scan");
+    };
+    assert_eq!((first.page_number, second.page_number), (1, 2));
+    assert!(first.content.contains(NATIVE_SENTENCE), "{}", first.content);
+    assert_eq!(second.content.trim(), flattened);
+    assert_eq!(html.content.matches(NATIVE_SENTENCE).count(), 1);
+    assert_eq!(html.content.matches(flattened.as_str()).count(), 1, "{}", html.content);
 }

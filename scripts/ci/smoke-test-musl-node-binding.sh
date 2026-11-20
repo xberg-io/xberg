@@ -21,16 +21,18 @@ STAGED_DIR="${1:?usage: $0 <staged-platform-dir-containing-.node-and-.so-files>}
 # `docker -v` rejects a relative source as a volume NAME ("includes invalid
 # characters for a local volume name"), so this must be absolute before the
 # mount below. Matches smoke-test-musl-python-wheel.sh, which already does it. ~keep
-STAGED_DIR="$(cd "$STAGED_DIR" && pwd)"
+STAGED_DIR="$(cd "$STAGED_DIR" && pwd -P)"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "${2:-$(dirname "${BASH_SOURCE[0]}")/../..}" && pwd -P)"
 FIXTURE="$REPO_ROOT/scripts/ci/fixtures/musl-python-smoke.pdf"
 INDEX_JS="$REPO_ROOT/crates/xberg-node/index.js"
+BINDING_CJS="$REPO_ROOT/crates/xberg-node/binding.cjs"
 SMOKE_SCRIPT="$REPO_ROOT/scripts/ci/smoke_test_node_binding.js"
 EXPECTED_TEXT="XBERG MUSL SMOKE 490"
 
 [ -f "$FIXTURE" ] || die "smoke-test fixture missing: $FIXTURE"
 [ -f "$INDEX_JS" ] || die "napi-rs index.js missing: $INDEX_JS"
+[ -f "$BINDING_CJS" ] || die "napi-rs binding.cjs missing: $BINDING_CJS"
 [ -f "$SMOKE_SCRIPT" ] || die "smoke-test script missing: $SMOKE_SCRIPT"
 
 NODE_FILE="$(find "$STAGED_DIR" -maxdepth 1 -name '*.node' | head -n1)"
@@ -43,6 +45,7 @@ docker run --rm \
   -v "$STAGED_DIR:/native:ro" \
   -v "$FIXTURE:/fixture.pdf:ro" \
   -v "$INDEX_JS:/smoke/index.js:ro" \
+  -v "$BINDING_CJS:/smoke/binding.cjs:ro" \
   -v "$SMOKE_SCRIPT:/smoke/smoke_test_node_binding.js:ro" \
   -e NAPI_RS_NATIVE_LIBRARY_PATH="/native/${NODE_FILE_NAME}" \
   -e EXPECTED_TEXT="$EXPECTED_TEXT" \

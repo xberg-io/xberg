@@ -4,7 +4,7 @@ requires = ["hatchling>=1.32.4,<2"]
 
 [project]
 name = "surrealdb-xberg"
-version = "1.4.0"
+version = "1.4.2"
 description = """\
   Xberg-to-SurrealDB connector for document ingestion pipelines — schema management, content deduplication, \
   chunk storage, and index configuration\
@@ -56,7 +56,7 @@ classifiers = [
 ]
 dependencies = [
   "anyio>=4.15.1,<5",
-  "xberg>=1.4.0,<2",
+  "xberg>=1.4.2,<2",
   "surrealdb>=2.0.0,<3",
   "typing-extensions>=4.16.0; python_version<'3.11'",
 ]

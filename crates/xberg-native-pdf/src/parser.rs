@@ -186,7 +186,15 @@ pub fn decode_literal_string_escapes(raw: &[u8]) -> Vec<u8> {
 /// - Nested structures are malformed (unclosed arrays/dicts)
 /// - Hex strings contain invalid hex digits
 pub fn parse_object(input: &[u8]) -> IResult<&[u8], Object> {
-    parse_object_at_depth(input, 0)
+    parse_object_at_depth(input, 0, false)
+}
+
+pub(crate) fn parse_strict_object(input: &[u8]) -> IResult<&[u8], Object> {
+    parse_object_at_depth(input, 0, true)
+}
+
+fn checked_reference(id: i64, generation: i64) -> Option<ObjectRef> {
+    Some(ObjectRef::new(u32::try_from(id).ok()?, u16::try_from(generation).ok()?))
 }
 
 /// Depth-tracking implementation behind [`parse_object`].
@@ -195,7 +203,8 @@ pub fn parse_object(input: &[u8]) -> IResult<&[u8], Object> {
 /// increases by 1 each time `parse_array`/`parse_dictionary` recurse back
 /// into this function for an element/value. See [`MAX_OBJECT_NESTING_DEPTH`]
 /// for why this exists.
-fn parse_object_at_depth(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
+fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], Object> {
+    let object_input = input;
     let (input, tok) = token(input)?;
 
     match tok {
@@ -210,7 +219,14 @@ fn parse_object_at_depth(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
             if let Ok((input2, Token::Integer(generation))) = token(input)
                 && let Ok((input3, Token::R)) = token(input2)
             {
-                return Ok((input3, Object::Reference(ObjectRef::new(i as u32, generation as u16))));
+                let reference = if strict {
+                    checked_reference(i, generation).ok_or_else(|| {
+                        nom::Err::Failure(nom::error::Error::new(object_input, nom::error::ErrorKind::Verify))
+                    })?
+                } else {
+                    ObjectRef::new(i as u32, generation as u16)
+                };
+                return Ok((input3, Object::Reference(reference)));
             }
 
             Ok((input, Object::Integer(i)))
@@ -234,12 +250,12 @@ fn parse_object_at_depth(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
 
         Token::Name(name) => Ok((input, Object::Name(name))),
 
-        Token::ArrayStart => parse_array(input, depth),
+        Token::ArrayStart => parse_array(input, depth, strict),
 
         Token::DictStart => {
-            let (remaining, dict_obj) = parse_dictionary(input, depth)?;
+            let (remaining, dict_obj) = parse_dictionary(input, depth, strict)?;
 
-            if let Ok((stream_input, Token::StreamStart)) = token(remaining) {
+            if !strict && let Ok((stream_input, Token::StreamStart)) = token(remaining) {
                 let dict = match dict_obj {
                     Object::Dictionary(d) => d,
                     _ => {
@@ -273,6 +289,16 @@ fn parse_object_at_depth(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
     }
 }
 
+fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
+    let Some(remaining) = input.get(length..) else {
+        return false;
+    };
+    let Ok((remaining, _)) = crate::lexer::skip_ws(remaining.trim_ascii_start()) else {
+        return false;
+    };
+    remaining.starts_with(b"endstream") && matches!(token(remaining), Ok((_, Token::StreamEnd)))
+}
+
 /// Parse stream data after the `stream` keyword.
 ///
 /// Stream data starts after a newline following `stream` and ends with `endstream`.
@@ -287,37 +313,61 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     // We accept CR alone in lenient mode for compatibility with malformed PDFs,
     // but log a warning. In strict mode, this should be an error (requires ParserOptions). ~keep
 
-    let input = if input.starts_with(b"\r\n") {
-        &input[2..]
-    } else if input.starts_with(b"\n") {
-        &input[1..]
-    } else if input.starts_with(b"\r") {
-        let msg = "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
-            Accepting in lenient mode for compatibility. \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        // push into the process-wide structured sink
-        // so callers can retrieve via `flatten_warnings()` instead of
-        // parsing stderr from `tracing::warn`. ~keep
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        &input[1..]
-    } else {
-        let msg = "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
-            PDF Spec: ISO 32000-1:2008, Section 7.3.8.1";
-        tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
-            category: crate::extractors::warnings::WarningCategory::SpecViolation,
-            page: None,
-            message: msg.to_string(),
-            spec_section: Some("7.3.8.1"),
-        });
-        input
+    let padding = input.iter().take_while(|&&byte| matches!(byte, b' ' | b'\t')).count();
+    let after_padding = &input[padding..];
+    let payload = after_padding
+        .strip_prefix(b"\r\n")
+        .or_else(|| after_padding.strip_prefix(b"\n"));
+
+    // A nonstandard header can also be a missing EOL followed by whitespace in the payload. ~keep
+    let payload = payload.filter(|payload| {
+        if padding == 0 {
+            return true;
+        }
+        let declared_length = dict
+            .get("Length")
+            .and_then(Object::as_integer)
+            .and_then(|length| usize::try_from(length).ok());
+        !declared_length
+            .is_some_and(|length| !declared_stream_end_at(payload, length) && declared_stream_end_at(input, length))
+    });
+
+    let (input, warning) = match payload {
+        Some(payload) if padding == 0 => (payload, None),
+        Some(payload) => (
+            payload,
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by horizontal whitespace before its line ending \
+                 (should be immediate CRLF or LF). Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None if input.starts_with(b"\r") => (
+            &input[1..],
+            Some(
+                "SPEC VIOLATION: Stream keyword followed by CR alone (should be CRLF or LF). \
+                 Accepting in lenient mode for compatibility. \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
+        None => (
+            input,
+            Some(
+                "SPEC VIOLATION: No newline after stream keyword (should be CRLF or LF). \
+                 PDF Spec: ISO 32000-1:2008, Section 7.3.8.1",
+            ),
+        ),
     };
+
+    if let Some(msg) = warning {
+        tracing::warn!("{}", msg);
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
+            category: crate::extractors::warnings::WarningCategory::SpecViolation,
+            page: None,
+            message: msg.to_string(),
+            spec_section: Some("7.3.8.1"),
+        });
+    }
 
     if let Some(length_obj) = dict.get("Length")
         && let Some(length) = length_obj.as_integer()
@@ -339,7 +389,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
         // /Length was wrong — fall back to scanning for 'endstream' ~keep
         let msg = format!("Stream /Length {} is incorrect, falling back to endstream scan", length);
         tracing::warn!("{}", msg);
-        crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+        crate::extractors::warnings::record_warning(crate::extractors::warnings::Warning {
             category: crate::extractors::warnings::WarningCategory::SpecViolation,
             page: None,
             message: msg,
@@ -425,7 +475,7 @@ fn find_endstream(input: &[u8]) -> Option<usize> {
 /// - Array is not properly closed with `]`
 /// - Array contains malformed objects
 /// - Nesting depth exceeds [`MAX_OBJECT_NESTING_DEPTH`]
-fn parse_array(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
+fn parse_array(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], Object> {
     if depth >= MAX_OBJECT_NESTING_DEPTH {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -447,13 +497,13 @@ fn parse_array(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
 
                 // Otherwise, we need to parse this as an object
                 // Put the token back by re-parsing from remaining ~keep
-                match parse_object_at_depth(remaining, depth + 1) {
+                match parse_object_at_depth(remaining, depth + 1, strict) {
                     Ok((inp, obj)) => {
                         objects.push(obj);
                         remaining = inp;
                     }
                     Err(e) => {
-                        if remaining.is_empty() {
+                        if !strict && remaining.is_empty() {
                             // Unclosed array, but return what we have ~keep
                             return Ok((remaining, Object::Array(objects)));
                         }
@@ -461,13 +511,28 @@ fn parse_array(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
                     }
                 }
             }
-            Err(nom::Err::Incomplete(_)) | Err(nom::Err::Error(_)) if remaining.is_empty() => {
+            Err(nom::Err::Incomplete(_)) | Err(nom::Err::Error(_)) if !strict && remaining.is_empty() => {
                 // Hit EOF before closing array - return what we have ~keep
                 return Ok((remaining, Object::Array(objects)));
             }
             Err(e) => return Err(e),
         }
     }
+}
+
+/// Parse a stream dictionary and leave its payload in the input slice.
+pub(crate) fn parse_stream_header(input: &[u8]) -> Option<(&[u8], HashMap<String, Object>)> {
+    let (input, Token::DictStart) = token(input).ok()? else {
+        return None;
+    };
+    let (input, Object::Dictionary(dict)) = parse_dictionary(input, 0, true).ok()? else {
+        return None;
+    };
+    let (input, Token::StreamStart) = token(input).ok()? else {
+        return None;
+    };
+    let payload = input.strip_prefix(b"\r\n").or_else(|| input.strip_prefix(b"\n"))?;
+    Some((payload, dict))
 }
 
 /// Parse a PDF dictionary: `<< /Key1 value1 /Key2 value2 ... >>`
@@ -494,7 +559,7 @@ fn parse_array(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
 /// - A key is not a name
 /// - Values are malformed
 /// - Nesting depth exceeds [`MAX_OBJECT_NESTING_DEPTH`]
-fn parse_dictionary(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
+fn parse_dictionary(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], Object> {
     if depth >= MAX_OBJECT_NESTING_DEPTH {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -518,7 +583,10 @@ fn parse_dictionary(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
                     Token::Name(key) => {
                         // Parse the value; fall back to lenient token for bare words
                         // (e.g. `OBJR` without a `/` prefix in malformed PDFs) ~keep
-                        let value_result = parse_object_at_depth(inp, depth + 1).or_else(|_| {
+                        let value_result = parse_object_at_depth(inp, depth + 1, strict).or_else(|error| {
+                            if strict {
+                                return Err(error);
+                            }
                             token_lenient(inp).and_then(|(inp2, tok)| {
                                 if let Token::Name(name) = tok {
                                     Ok((inp2, Object::Name(name)))
@@ -529,11 +597,16 @@ fn parse_dictionary(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
                         });
                         match value_result {
                             Ok((inp, value)) => {
-                                dict.insert(key, value);
+                                if dict.insert(key, value).is_some() && strict {
+                                    return Err(nom::Err::Error(nom::error::Error::new(
+                                        remaining,
+                                        nom::error::ErrorKind::Verify,
+                                    )));
+                                }
                                 remaining = inp;
                             }
                             Err(e) => {
-                                if inp.is_empty() {
+                                if !strict && inp.is_empty() {
                                     // Incomplete dictionary, return what we have ~keep
                                     return Ok((inp, Object::Dictionary(dict)));
                                 }
@@ -544,7 +617,7 @@ fn parse_dictionary(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
                     _ => {
                         // Invalid dictionary - key must be a name
                         // But if we hit EOF, return what we have ~keep
-                        if remaining.is_empty() {
+                        if !strict && remaining.is_empty() {
                             return Ok((remaining, Object::Dictionary(dict)));
                         }
                         return Err(nom::Err::Error(nom::error::Error::new(
@@ -554,7 +627,7 @@ fn parse_dictionary(input: &[u8], depth: usize) -> IResult<&[u8], Object> {
                     }
                 }
             }
-            Err(nom::Err::Incomplete(_)) | Err(nom::Err::Error(_)) if remaining.is_empty() => {
+            Err(nom::Err::Incomplete(_)) | Err(nom::Err::Error(_)) if !strict && remaining.is_empty() => {
                 // Hit EOF before closing dictionary - return what we have ~keep
                 return Ok((remaining, Object::Dictionary(dict)));
             }

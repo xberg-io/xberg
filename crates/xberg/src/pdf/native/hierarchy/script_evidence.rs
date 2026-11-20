@@ -1,6 +1,6 @@
 //! Private evidence over final preserved spans, with page-local ordinals rather than PDF identities.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use xberg_native_pdf::{fonts::MappingProvenance, layout::TextSpan};
@@ -110,6 +110,8 @@ pub(crate) struct NativePageSegments {
     pub(crate) segments: Vec<SegmentData>,
     owners: Vec<ScriptOwner>,
     prose_rows: Vec<Vec<SegmentKey>>,
+    #[cfg(feature = "formula-recognition")]
+    pub(crate) inline_math_glyphs: Vec<SegmentKey>,
 }
 
 impl NativePageSegments {
@@ -153,6 +155,8 @@ impl NativePageSegments {
             .collect();
         let prose_rows = certified_prose_row_keys(&spans, &projected);
         Self {
+            #[cfg(feature = "formula-recognition")]
+            inline_math_glyphs: Vec::new(),
             segments,
             owners,
             prose_rows,
@@ -283,17 +287,62 @@ fn is_numeric_span(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan) -> bool {
+fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan, occupied_sequences: &HashSet<usize>) -> bool {
     let numeric_base = is_numeric_span(&base.text);
     let numeric_suffix = script.text.strip_prefix('−').map_or_else(
         || is_numeric_span(&script.text),
         |digits| numeric_base && (digits.is_empty() || is_numeric_span(digits)),
     );
-    (numeric_base
-        || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic())
-        || (base.text.ends_with([')', ']']) && is_numeric_span(&script.text)))
-        && numeric_suffix
-        && has_adjacent_source(base, script)
+    let simple_base = numeric_base || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic());
+    let bracket_base = base.text.ends_with([')', ']']) && is_numeric_span(&script.text);
+    let empty_source_gap =
+        base.sequence.checked_add(2) == Some(script.sequence) && !occupied_sequences.contains(&(script.sequence - 1));
+    let ordinary = (simple_base || bracket_base) && has_adjacent_source(base, script)
+        // A separately positioned numeric suffix can start at the next text object. ~keep
+        || simple_base && empty_source_gap && has_matching_source_evidence(base, script);
+    numeric_suffix && (ordinary || empty_source_gap && has_indented_variable_source(base, script))
+}
+
+fn has_indented_variable_source(base: &TextSpan, script: &TextSpan) -> bool {
+    let [b' ', variable] = base.text.as_bytes() else {
+        return false;
+    };
+    // A leading positioning space changes the left edge of this span while its right edge
+    // still belongs to the single mapped variable. Require an unsigned exponent. ~keep
+    variable.is_ascii_alphabetic()
+        && base.offset_semantic
+        && is_numeric_span(&script.text)
+        && has_matching_source_evidence_with_leading_offset(base, script, true)
+}
+
+fn has_indented_exponent_context(spans: &[TextSpan], base: &TextSpan, script: &TextSpan) -> bool {
+    if !has_indented_variable_source(base, script) || script.bbox.x >= base.bbox.right() {
+        return true;
+    }
+    let Some(label_sequence) = base.sequence.checked_sub(1) else {
+        return false;
+    };
+    let Some(operator_sequence) = script.sequence.checked_add(1) else {
+        return false;
+    };
+    let mut labels = spans.iter().filter(|span| span.sequence == label_sequence);
+    let mut operators = spans.iter().filter(|span| span.sequence == operator_sequence);
+    let (Some(label), Some(operator)) = (labels.next(), operators.next()) else {
+        return false;
+    };
+    // The raised digit must sit inside a numbered expression with a source-backed continuation. ~keep
+    labels.next().is_none()
+        && operators.next().is_none()
+        && same_context(base, label)
+        && same_context(base, operator)
+        && has_adjacent_source(script, operator)
+        && label.text.strip_suffix('.').is_some_and(is_numeric_span)
+        && matches!(operator.text.as_str(), "−" | "+" | "×" | "÷" | "=")
+        && baseline(label) == baseline(base)
+        && baseline(operator) == baseline(base)
+        && label.bbox.right().to_bits() == base.bbox.x.to_bits()
+        && operator.bbox.x >= script.bbox.right()
+        && operator.bbox.x - script.bbox.right() <= base.font_size * ROW_CANDIDATE_MAX_SHIFT_EM
 }
 
 fn has_adjacent_ordinal_source(base: &TextSpan, suffix: &TextSpan) -> bool {
@@ -316,26 +365,39 @@ fn has_adjacent_ordinal_source(base: &TextSpan, suffix: &TextSpan) -> bool {
 fn has_adjacent_source(left: &TextSpan, right: &TextSpan) -> bool {
     // Preserved-geometry extraction leaves gaps at BT and absolute Tm.
     // Relative Td remains eligible for a raised continuation. ~keep
-    left.sequence.checked_add(1) == Some(right.sequence)
-        && left.mcid_scope.is_some()
+    left.sequence.checked_add(1) == Some(right.sequence) && has_matching_source_evidence(left, right)
+}
+
+fn has_matching_source_evidence(left: &TextSpan, right: &TextSpan) -> bool {
+    has_matching_source_evidence_with_leading_offset(left, right, false)
+}
+
+fn has_matching_source_evidence_with_leading_offset(
+    left: &TextSpan,
+    right: &TextSpan,
+    allow_left_offset: bool,
+) -> bool {
+    left.mcid_scope.is_some()
         && left.mcid_scope == right.mcid_scope
         && left.mcid == right.mcid
+        && (allow_left_offset || !left.offset_semantic)
+        && !right.offset_semantic
         && [left, right].into_iter().all(|span| {
             span.provenance == Some(MappingProvenance::ToUnicode)
                 && !span.split_boundary_before
-                && !span.offset_semantic
                 // Span splitting can synthesize offsets. Do not use those to admit overlap. ~keep
                 && span.char_x_offsets.is_empty()
         })
 }
 
-fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
+fn eligible_base(base: &TextSpan, script: &TextSpan, occupied_sequences: &HashSet<usize>) -> bool {
     let shift = baseline(script) - baseline(base);
     let ratio = script.font_size / base.font_size;
     let gap = script.bbox.x - base.bbox.right();
     let supported_gap = if gap < 0.0 || script.text.starts_with('−') {
         gap >= -base.font_size * NUMERIC_SUFFIX_OVERHANG_EM
-            && (has_adjacent_numeric_source(base, script) || has_adjacent_ordinal_source(base, script))
+            && (has_adjacent_numeric_source(base, script, occupied_sequences)
+                || has_adjacent_ordinal_source(base, script))
     } else {
         true
     };
@@ -350,7 +412,13 @@ fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
         && gap <= base.font_size * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM
 }
 
-fn candidate_bases(spans: &[TextSpan], edges: &[(f32, usize)], script: usize, max_font: f32) -> Option<Vec<usize>> {
+fn candidate_bases(
+    spans: &[TextSpan],
+    edges: &[(f32, usize)],
+    script: usize,
+    max_font: f32,
+    occupied_sequences: &HashSet<usize>,
+) -> Option<Vec<usize>> {
     let x = spans[script].bbox.x;
     let start = edges.partition_point(|(right, _)| *right < x - max_font * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM);
     let end = edges.partition_point(|(right, _)| *right <= x + max_font * NUMERIC_SUFFIX_OVERHANG_EM);
@@ -360,12 +428,19 @@ fn candidate_bases(spans: &[TextSpan], edges: &[(f32, usize)], script: usize, ma
     Some(
         edges[start..end]
             .iter()
-            .filter_map(|&(_, base)| (base != script && eligible_base(&spans[base], &spans[script])).then_some(base))
+            .filter_map(|&(_, base)| {
+                (base != script && eligible_base(&spans[base], &spans[script], occupied_sequences)).then_some(base)
+            })
             .collect(),
     )
 }
 
-fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usize>> {
+fn complete_run(
+    spans: &[TextSpan],
+    base: usize,
+    first: usize,
+    occupied_sequences: &HashSet<usize>,
+) -> Option<Vec<usize>> {
     let mut row: Vec<_> = spans
         .iter()
         .enumerate()
@@ -400,19 +475,27 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
     let has_overhang = spans[first].bbox.x < spans[base].bbox.right();
     let has_minus = members.iter().any(|&index| spans[index].text.contains('−'));
     let complete_ordinal = members.len() == 1 && has_adjacent_ordinal_source(&spans[base], &spans[first]);
-    if (has_overhang || has_minus) && !complete_ordinal && !is_complete_numeric_suffix(&spans[base], spans, &members) {
+    if (has_overhang || has_minus)
+        && !complete_ordinal
+        && !is_complete_numeric_suffix(&spans[base], spans, &members, occupied_sequences)
+    {
         return None;
     }
     Some(members)
 }
 
-fn is_complete_numeric_suffix(base: &TextSpan, spans: &[TextSpan], members: &[usize]) -> bool {
+fn is_complete_numeric_suffix(
+    base: &TextSpan,
+    spans: &[TextSpan],
+    members: &[usize],
+    occupied_sequences: &HashSet<usize>,
+) -> bool {
     let Some((&first, rest)) = members.split_first() else {
         return false;
     };
     let first = &spans[first];
     let digits = first.text.strip_prefix('−').unwrap_or(&first.text);
-    has_adjacent_numeric_source(base, first)
+    has_adjacent_numeric_source(base, first, occupied_sequences)
         && (is_numeric_span(digits) || (digits.is_empty() && !rest.is_empty()))
         && rest.iter().all(|&index| is_numeric_span(&spans[index].text))
         && members
@@ -472,19 +555,23 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
         .map(|span| span.font_size)
         .fold(0.0, f32::max);
     let mut owners = Vec::new();
-    let mut claimed = std::collections::HashSet::new();
+    let mut claimed = HashSet::new();
+    let occupied_sequences = spans.iter().map(|span| span.sequence).collect();
     let notes = super::super::text::numeric_notes(spans);
     for (first, _) in spans.iter().enumerate().filter(|(_, span)| compact_marker(span)) {
         if claimed.contains(&first) {
             continue;
         }
-        let Some(candidates) = candidate_bases(spans, &edges, first, max_font) else {
+        let Some(candidates) = candidate_bases(spans, &edges, first, max_font, &occupied_sequences) else {
             continue;
         };
         let [base] = candidates.as_slice() else {
             continue;
         };
-        let Some(members) = complete_run(spans, *base, first) else {
+        if !has_indented_exponent_context(spans, &spans[*base], &spans[first]) {
+            continue;
+        }
+        let Some(members) = complete_run(spans, *base, first, &occupied_sequences) else {
             continue;
         };
         if has_stacked_counterpart(spans, *base, &members) || has_unclaimed_cohort_record(spans, *base, &members) {
@@ -494,7 +581,7 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
             projected[*base].assigned_role != projected[member].assigned_role
                 || super::super::text::needs_numeric_script_boundary(&spans[*base], &spans[member], &notes, None)
                 || claimed.contains(&member)
-                || candidate_bases(spans, &edges, member, max_font)
+                || candidate_bases(spans, &edges, member, max_font, &occupied_sequences)
                     .is_none_or(|candidates| candidates.iter().any(|candidate| candidate != base))
         }) {
             continue;
@@ -572,10 +659,23 @@ fn extract_page(
     geometry: ScriptGeometry,
 ) -> crate::pdf::error::Result<NativePageSegments> {
     let mut prime_witnesses = Vec::new();
-    let spans = super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses))?;
+    let mut cmsy = Vec::new();
+    let capture = (cfg!(feature = "formula-recognition") && matches!(doc.doc.get_page_rotation(page), Ok(0)))
+        .then_some(&mut cmsy);
+    let spans =
+        super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses), capture)?;
+    #[cfg(feature = "formula-recognition")]
+    let inline_math_glyphs = surviving_inline_math_glyphs(&cmsy, &spans, roles, geometry);
+    #[cfg(feature = "formula-recognition")]
+    tracing::trace!(target: "xberg::pdf::cmsy", page, captured = cmsy.len(), surviving = inline_math_glyphs.len(), "native span witness inventory");
+
     let decimal_authority = decimal_power::authority(&doc.doc, page, &spans);
     let mut captured =
         NativePageSegments::from_final_spans_with_primes(spans, roles, artifacts, prime_witnesses, decimal_authority);
+    #[cfg(feature = "formula-recognition")]
+    {
+        captured.inline_math_glyphs = inline_math_glyphs;
+    }
     if !captured.prose_rows.is_empty()
         && (!doc
             .doc
@@ -590,3 +690,138 @@ fn extract_page(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "formula-recognition")]
+fn surviving_inline_math_glyphs(
+    witnesses: &[TextSpan],
+    spans: &[TextSpan],
+    roles: &HashMap<u32, Option<u8>>,
+    geometry: ScriptGeometry,
+) -> Vec<SegmentKey> {
+    witnesses
+        .iter()
+        .filter_map(|witness| {
+            let mut candidates = spans.iter().filter(|span| span.sequence == witness.sequence);
+            let Some(span) = candidates.next() else {
+                tracing::trace!(target: "xberg::pdf::cmsy", sequence = witness.sequence, "source sequence missing");
+                return None;
+            };
+            if candidates.next().is_some()
+                || span.text != witness.text
+                || span.bbox != witness.bbox
+                || span.font_name != witness.font_name
+                || span.mcid_scope != witness.mcid_scope
+            {
+                tracing::trace!(target: "xberg::pdf::cmsy", sequence = witness.sequence,
+                    same_text = span.text == witness.text, same_bounds = span.bbox == witness.bbox,
+                    same_font = span.font_name == witness.font_name, same_scope = span.mcid_scope == witness.mcid_scope,
+                    "source sequence no longer identifies the glyph uniquely");
+                return None;
+            }
+            Some(SegmentKey::from(&super::project_final_span(
+                span.clone(),
+                roles,
+                geometry,
+            )))
+        })
+        .collect()
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn inline_math_witness_distinguishes_source_slots_and_occurrences() {
+    fn pdf(font_entries: &str, cmsy_cmap: &str, content: &str) -> xberg_native_pdf::PdfDocument {
+        let cmap = "1 begincodespacerange <00> <FF> endcodespacerange 1 beginbfchar <41> <D835DCB1> endbfchar";
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".into(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+            format!("<< /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+CMSY10 {font_entries} >>"),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 7 0 R >>".into(),
+            format!("<< /Length {} >>\nstream\n{cmap}\nendstream", cmap.len()),
+            format!("<< /Length {} >>\nstream\n{cmsy_cmap}\nendstream", cmsy_cmap.len()),
+        ];
+        let mut bytes = String::from("%PDF-1.4\n");
+        let mut offsets = Vec::new();
+        for (index, object) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.push_str(&format!("{} 0 obj\n{object}\nendobj\n", index + 1));
+        }
+        let xref = bytes.len();
+        bytes.push_str("xref\n0 9\n0000000000 65535 f \n");
+        for offset in offsets {
+            bytes.push_str(&format!("{offset:010} 00000 n \n"));
+        }
+        bytes.push_str(&format!(
+            "trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+        ));
+        xberg_native_pdf::PdfDocument::from_bytes(bytes.into_bytes()).unwrap()
+    }
+
+    let content = "BT /F1 12 Tf 40 700 Td (V) Tj 0 -30 Td [(V)] TJ /F2 12 Tf 0 -30 Td (A) Tj ET";
+    let codespace = "1 begincodespacerange <00> <FF> endcodespacerange";
+    let identity = format!("{codespace} 1 beginbfrange <41> <5A> <0041> endbfrange");
+    let conflicting = format!("{codespace} 1 beginbfchar <56> <0058> endbfchar");
+    let missing_slot = format!("{codespace} 1 beginbfchar <41> <0041> endbfchar");
+    for (case, font_entries, cmap, glyph, expected) in [
+        ("built-in encoding", "", "", "V", 2),
+        ("identity range", "/ToUnicode 8 0 R", identity.as_str(), "V", 2),
+        ("conflicting mapping", "/ToUnicode 8 0 R", conflicting.as_str(), "X", 0),
+        ("missing slot", "/ToUnicode 8 0 R", missing_slot.as_str(), "V", 0),
+        ("unparseable CMap", "/ToUnicode 8 0 R", "invalid cmap data", "V", 0),
+        ("named encoding", "/Encoding /WinAnsiEncoding", "", "V", 0),
+        (
+            "encoding differences",
+            "/Encoding << /Differences [86 /V] >>",
+            "",
+            "V",
+            0,
+        ),
+    ] {
+        let doc = pdf(font_entries, cmap, content);
+        let mut witnesses = Vec::new();
+        let spans = doc
+            .extract_page_text_with_cmsy_capture(0, xberg_native_pdf::ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap()
+            .spans;
+        assert!(spans.iter().any(|span| span.text == "𝒱"));
+        assert_eq!(spans.iter().filter(|span| span.text == glyph).count(), 2, "{case}");
+        assert_eq!(witnesses.len(), expected, "{case}");
+        let keys = surviving_inline_math_glyphs(&witnesses, &spans, &HashMap::new(), ScriptGeometry::Preserve);
+        assert_eq!(keys.len(), expected, "{case}");
+        if expected == 2 {
+            assert_ne!(witnesses[0].sequence, witnesses[1].sequence);
+            assert_ne!(keys[0], keys[1]);
+            assert!(witnesses.iter().all(|witness| witness.font_name == "ABCDEF+CMSY10"));
+            for other_font in ["Helvetica", "GHIJKL+CMSY10"] {
+                let mut competing = spans.clone();
+                let candidate = competing
+                    .iter_mut()
+                    .find(|span| span.sequence == witnesses[0].sequence)
+                    .unwrap();
+                candidate.font_name = other_font.into();
+                assert_eq!(
+                    surviving_inline_math_glyphs(&witnesses, &competing, &HashMap::new(), ScriptGeometry::Preserve),
+                    vec![keys[1].clone()],
+                    "{case}: {other_font}"
+                );
+            }
+            let mut ambiguous = spans.clone();
+            ambiguous.push(witnesses[0].clone());
+            assert_eq!(
+                surviving_inline_math_glyphs(&witnesses, &ambiguous, &HashMap::new(), ScriptGeometry::Preserve).len(),
+                1
+            );
+            assert!(keys.iter().all(|key| key.text == "V"));
+        }
+    }
+    let natural = pdf("", "", "BT /F2 12 Tf 40 700 Td (A) Tj ET");
+    let mut witnesses = Vec::new();
+    let spans = natural
+        .extract_page_text_with_cmsy_capture(0, xberg_native_pdf::ReadingOrder::TopToBottom, Some(&mut witnesses))
+        .unwrap()
+        .spans;
+    assert!(spans.iter().any(|span| span.text == "𝒱"));
+    assert!(witnesses.is_empty());
+}

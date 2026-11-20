@@ -8,7 +8,7 @@ mod two_tables;
 
 use std::sync::Arc;
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
 #[cfg(auto_rotate)]
 use crate::doc_orientation::detector::tesseract_detector;
@@ -32,6 +32,8 @@ pub(crate) fn recognition_retry_eligible(config: &OcrConfig) -> bool {
 #[derive(Clone, Copy)]
 pub(crate) enum RecognitionRecovery {
     Table,
+    #[cfg(feature = "layout-detection")]
+    LayoutTable,
     TableOrProse,
     MixedPage {
         allow_prose: bool,
@@ -42,7 +44,12 @@ pub(crate) enum RecognitionRecovery {
 
 impl RecognitionRecovery {
     fn allows_prose(self) -> bool {
-        !matches!(self, Self::Table | Self::MixedPage { allow_prose: false })
+        match self {
+            #[cfg(feature = "layout-detection")]
+            Self::LayoutTable => false,
+            Self::Table | Self::MixedPage { allow_prose: false } => false,
+            _ => true,
+        }
     }
 
     fn prose_only(self) -> bool {
@@ -177,6 +184,14 @@ impl OrientationRetry {
                 .after_recognition(backend, raster, config, original, cancel, recovery)
                 .await?;
             check_cancelled(cancel)?;
+            // ~keep A following TATR pass owns the effective word capture. The PDF pipeline
+            // still applies the caller's public OCR-element policy when it emits the page.
+            #[cfg(feature = "layout-detection")]
+            let requested = if matches!(recovery, RecognitionRecovery::LayoutTable) {
+                config
+            } else {
+                requested
+            };
             return Ok(recognition::restore_elements(result, requested));
         }
         #[cfg(auto_rotate)]
@@ -394,7 +409,7 @@ impl OrientationRetry {
             }
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
-                tracing::warn!(%error, "Optional recognition-orientation OCR failed; retaining primary OCR");
+                tracing::warn!(error = %error.pdf_ocr_trace_category(), "Optional recognition-orientation OCR failed; retaining primary OCR");
                 Ok(original)
             }
         }
@@ -449,7 +464,7 @@ impl OrientationRetry {
             )),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
-                tracing::warn!(%error, "Optional half-turn OCR failed; retaining primary OCR");
+                tracing::warn!(error = %error.pdf_ocr_trace_category(), "Optional half-turn OCR failed; retaining primary OCR");
                 Ok(original)
             }
         }
@@ -560,13 +575,6 @@ async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> 
 #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
 async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> T {
     read.await
-}
-
-fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 #[cfg(auto_rotate)]

@@ -73,16 +73,37 @@ export XBERG_PORT=8080
 XBERG_PORT must be a valid u16 number, got 'invalid': invalid digit found in string
 ```
 
+### XBERG_API_TOKEN
+
+**Type**: `String`
+**Default**: Unset (no authentication)
+
+Bearer token for the REST API. When set, every route except `GET /health` requires `Authorization: Bearer <token>`; the comparison is constant-time. A blank value counts as unset. The token must be ASCII. The MCP HTTP transport (`xberg mcp --transport http`) uses the same token and the same startup check. When unset, the server refuses to bind a non-loopback host unless `XBERG_ALLOW_UNAUTHENTICATED` is set.
+
+```bash title="API token"
+export XBERG_API_TOKEN="$(openssl rand -hex 32)"
+```
+
+### XBERG_ALLOW_UNAUTHENTICATED
+
+**Type**: `bool` (`1`, `true`, `yes`, `on`)
+**Default**: `false`
+
+Allows the server to start on a non-loopback host (such as `0.0.0.0`) without `XBERG_API_TOKEN`. It assumes the network in front of the server is trusted: use it only when access is already restricted, for example by a reverse proxy or a private network.
+
 ### XBERG_CORS_ORIGINS
 
 **Type**: `String` (comma-separated list)
-**Default**: Empty (allows all origins)
+**Default**: Empty (denies cross-origin requests)
 
-Whitelist of allowed CORS origins. When empty, the server accepts requests from any origin.
+Whitelist of allowed CORS origins. When empty, cross-origin browser requests are denied. The entry `*` allows every origin.
 
 ```bash title="CORS Origins Configuration"
-# Allow all origins (default)
+# Deny cross-origin requests (default)
 # unset XBERG_CORS_ORIGINS
+
+# Allow every origin
+export XBERG_CORS_ORIGINS="*"
 
 # Allow specific origins
 export XBERG_CORS_ORIGINS="https://api.example.com, https://app.example.com"
@@ -91,7 +112,7 @@ export XBERG_CORS_ORIGINS="https://api.example.com, https://app.example.com"
 export XBERG_CORS_ORIGINS="https://trusted.com"
 ```
 
-**Security Warning**: Be explicit with CORS origins in production. Allowing all origins (`*`) means any website can call your API on behalf of users. In Xberg, an empty list allows all origins - be intentional about this choice.
+**Security Warning**: Be explicit with CORS origins in production. Allowing all origins (`*`) means any website can call your API on behalf of users. In Xberg, `*` must be set explicitly - be intentional about this choice.
 
 ```bash title="CORS Security Best Practices"
 # Production: Restrict to known origins
@@ -152,6 +173,33 @@ export XBERG_API_ALLOW_LOCAL_URI_INPUTS=1
 ```
 
 **Security Warning**: Enabling this lets API clients read files from the server's local filesystem. Leave disabled unless the server is trusted and isolated.
+
+### XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS
+
+**Type**: `Boolean` (`1`, `true`, or `yes` to enable; case-insensitive)
+**Default**: Disabled (unset)
+
+Allow a REST API or MCP-over-HTTP request config to add or change an LLM stage (for example `structured_extraction.llm` or `ocr.vlm_config`) that authenticates with the server's environment credentials: provider API-key variables such as `OPENAI_API_KEY`, the AWS credential chain, or Vertex AI application default credentials. When unset, such a request is rejected with a validation error. Without it, a request may only send an LLM stage that the server config defines at the same place, unchanged in every setting, and may not change the settings that decide whether that stage runs (such as `ocr.backend`, `ocr.vlm_fallback`, `ocr.pipeline`, `disable_ocr`, `ner.backend`, `summarization.strategy`, `chunking`, `images.extract_images` or `postprocessor`); any added, changed or newly enabled stage is rejected. MCP over stdio runs as the operator and is not affected, nor are the library and CLI.
+
+```bash title="Allow Caller LLM Stages"
+# Let REST and MCP HTTP callers run LLM stages billed to the server's credentials
+export XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1
+```
+
+**Security Warning**: Enabling this lets any client that can reach the server spend the server's LLM provider quota.
+
+### XBERG_MCP_ALLOW_LOCAL_URI_INPUTS
+
+**Type**: `Boolean` (`1`, `true`, or `yes` to enable; case-insensitive)
+**Default**: Disabled (unset)
+
+Allow the MCP server's HTTP transport to accept local file paths and `file://` URIs as extraction inputs and to run `detect_mime_type`. When unset, the HTTP transport rejects them and only accepts bytes and remote (`http`/`https`) URIs. The stdio transport always accepts local paths.
+
+```bash title="Allow Local File Inputs over MCP HTTP"
+export XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1
+```
+
+**Security Warning**: Enabling this lets MCP HTTP clients read files from the server's local filesystem. Leave disabled unless every client that can reach the server is trusted.
 
 ## Extraction Configuration
 

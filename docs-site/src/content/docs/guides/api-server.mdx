@@ -57,6 +57,12 @@ Xberg runs as an HTTP REST API server (`xberg serve`) or as an MCP server (`xber
 </TabItem>
 <TabItem label="Docker">
 
+The images bind `0.0.0.0`, so export a token first: the server refuses to start without one.
+
+```bash title="Terminal"
+export XBERG_API_TOKEN="$(openssl rand -hex 32)"
+```
+
 <Snip_api_server_docker />
 
 </TabItem>
@@ -139,6 +145,10 @@ curl -F "files=@scanned.pdf" \
 Queue an extraction job and return immediately. Accepts the same multipart form
 data or JSON body as `/extract`. Returns `202 Accepted` with a job identifier.
 Returns `429 Too Many Requests` when the concurrent job limit is reached.
+At most `XBERG_MAX_CONCURRENT_REQUESTS` jobs extract at once, in slots separate
+from synchronous requests; a queued job stays `pending` until one is free. The
+limit counts running jobs: a job that times out frees its slot at once, while
+blocking work it started may still finish in the background.
 
 ```bash title="Terminal"
 curl -F "files=@document.pdf" http://localhost:8000/extract-async
@@ -240,6 +250,8 @@ curl http://localhost:8000/jobs/550e8400-e29b-41d4-a716-446655440000
 | 422    | `ParsingError`, `OcrError` | Processing failed |
 | 500    | Internal errors            | Server errors     |
 
+In `message`, and in the per-input `errors` of a batch result, file I/O and cache errors get a fixed text such as `IO error: file not found` and other errors show `<path>` in place of a server path. The server logs the full error; `5xx` errors are always logged.
+
 <Tabs syncKey="lang">
 <TabItem label="Python">
 
@@ -290,10 +302,26 @@ The server discovers `xberg.toml`, `xberg.yaml`, `xberg.yml`, or `xberg.json` in
 | --------------------------------- | ----------- | ---------------------------------- |
 | `XBERG_MAX_REQUEST_BODY_BYTES`    | `104857600` | Max request body size in bytes     |
 | `XBERG_MAX_MULTIPART_FIELD_BYTES` | `104857600` | Max multipart field size in bytes  |
-| `XBERG_CORS_ORIGINS`              | `*`         | Comma-separated allowed origins    |
+| `XBERG_API_TOKEN`                 | unset       | Bearer token required on every route except `GET /health` |
+| `XBERG_ALLOW_UNAUTHENTICATED`     | `false`     | Allow binding a non-loopback host without a token          |
+| `XBERG_CORS_ORIGINS`              | unset       | Comma-separated allowed origins (`*` allows all)           |
 
-:::caution
-Default CORS allows all origins. Set `XBERG_CORS_ORIGINS` explicitly in production.
+### Authentication and CORS
+
+Set `XBERG_API_TOKEN` and send `Authorization: Bearer <token>` with every request. `GET /health` stays unauthenticated for container and Kubernetes probes; all other routes, including `/info`, `/metrics`, `/openapi.json` and the cache routes, require the token. Requests with a missing or wrong token get `401` with a `WWW-Authenticate: Bearer` header.
+
+```bash title="Terminal"
+export XBERG_API_TOKEN="$(openssl rand -hex 32)"
+xberg serve --host 0.0.0.0
+curl -H "Authorization: Bearer $XBERG_API_TOKEN" -F "files=@document.pdf" http://localhost:8000/extract
+```
+
+Without a token the API is open, so the server refuses to start on a non-loopback host (such as `0.0.0.0`, which the Docker images use) unless `XBERG_API_TOKEN` is set. If the API is already protected elsewhere, for example by a reverse proxy or a private network, set `XBERG_ALLOW_UNAUTHENTICATED=true` to start without a token. Loopback binds (`127.0.0.1`, the default) need neither.
+
+Cross-origin browser requests are denied unless `XBERG_CORS_ORIGINS` lists the allowed origins. Set it to `*` to allow every origin.
+
+:::caution[Upgrading from 1.4]
+Since 1.5.0 the server refuses to start on a non-loopback host without `XBERG_API_TOKEN` or `XBERG_ALLOW_UNAUTHENTICATED=true`, and an unset `XBERG_CORS_ORIGINS` no longer allows all origins. Browser clients must be listed in `XBERG_CORS_ORIGINS` (or use `*`).
 :::
 
 See [Configuration Guide](/guides/configuration/) for all options.

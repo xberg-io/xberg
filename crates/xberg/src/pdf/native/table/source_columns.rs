@@ -224,9 +224,30 @@ pub(super) fn reconstruct_region_table(
 ) -> Option<crate::types::Table> {
     let original =
         super::reconstruct_region_table(region, page_height, page_number, allow_single_column, horizontal_rules)?;
+    let trim_notes = || {
+        if !page_rules.eligible {
+            return None;
+        }
+        let (start, prefix) = super::trailing_notes::certified_prefix(region, &original.cells)?;
+        let reconstruct_prefix = |words: &[HocrWord]| {
+            super::reconstruct_region_table(words, page_height, page_number, allow_single_column, horizontal_rules)
+        };
+        let retained = &original.cells[..start];
+        if let Some(words) = super::trailing_notes::certified_legend_prefix(&prefix, retained)
+            && let Some(mut trimmed) = reconstruct_prefix(&words)
+            && trimmed.cells == retained[..start - 1]
+        {
+            if words.len() <= MAX_SOURCE_PROOF_WORDS && page_rules.paths.len() <= MAX_UNIQUE_VERTICAL_RULES {
+                super::wrapped_labels::consolidate(&mut trimmed, &words, page_rules.paths, page_height);
+            }
+            return Some(trimmed);
+        }
+        let trimmed = reconstruct_prefix(&prefix)?;
+        (trimmed.cells == retained).then_some(trimmed)
+    };
     let rules = page_rules.rules();
     if rules.is_empty() {
-        return Some(original);
+        return Some(trim_notes().unwrap_or(original));
     }
     let mut work = RuleWork::default();
     let attempt = |frame, work: &mut RuleWork| {
@@ -266,7 +287,7 @@ pub(super) fn reconstruct_region_table(
         let corrected = attempt(exact, &mut work)?;
         source_boundaries::preserves_old_partitions(&original.cells, &corrected.cells).then_some(corrected)
     });
-    Some(corrected.unwrap_or(original))
+    Some(corrected.or_else(trim_notes).unwrap_or(original))
 }
 
 fn same_cell_words(original: &[Vec<String>], corrected: &[Vec<String>]) -> bool {

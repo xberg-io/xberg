@@ -19,7 +19,7 @@
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, take_till, take_while},
+    bytes::complete::{take_till, take_while},
     character::complete::{char, digit1, one_of},
     combinator::{map, opt, value},
     sequence::{delimited, preceded},
@@ -313,54 +313,63 @@ fn parse_hex_string(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 /// Name objects can contain any characters encoded as #XX where XX is a
 /// two-digit hexadecimal code. For example, /A#20B becomes "A B".
 ///
-/// # Arguments
+/// `raw` is the bytes of the name token after the `/`. A malformed escape is
+/// preserved: `A#` and `A#ZZ` decode unchanged.
 ///
-/// * `name` - The raw name string with potential #XX sequences
-///
-/// # Returns
-///
-/// The decoded name string
-///
-/// # Examples
-///
-/// ```ignore
-/// # // `lexer` is a crate-internal module (see `src/lib.rs`), so this
-/// # // example is illustrative only and does not compile as a doctest.
-/// # use xberg_native_pdf::lexer::decode_name_escapes;
-/// assert_eq!(decode_name_escapes("A#20B#23C"), "A B#C");
-/// assert_eq!(decode_name_escapes("Type"), "Type");
-/// assert_eq!(decode_name_escapes("A#"), "A#"); // Invalid sequence preserved
-/// ```
-pub fn decode_name_escapes(name: &str) -> String {
-    let mut result = String::with_capacity(name.len());
-    let mut chars = name.chars().peekable();
+/// ISO 32000-1 §7.3.5: a name is a byte sequence and `#XX` stands for the byte XX, so `/A#42`
+/// and `/AB` are the same name. Escapes are resolved to bytes first, then the bytes become UTF-8
+/// text when valid UTF-8 and one char per byte (U+0000–U+00FF) otherwise, so the raw and the
+/// escaped spelling of a name decode alike and distinct byte names stay distinct. ~keep
+pub fn decode_name_escapes(raw: &[u8]) -> String {
+    let unescaped;
+    let bytes = if memchr::memchr(b'#', raw).is_none() {
+        raw
+    } else {
+        unescaped = unescape_name(raw);
+        unescaped.as_slice()
+    };
+    match std::str::from_utf8(bytes) {
+        Ok(name) => name.to_owned(),
+        Err(_) => bytes.iter().map(|&byte| char::from(byte)).collect(),
+    }
+}
 
-    while let Some(ch) = chars.next() {
-        if ch == '#' {
-            let hex1 = chars.next();
-            let hex2 = chars.next();
-
-            if let (Some(h1), Some(h2)) = (hex1, hex2) {
-                let hex_str = format!("{}{}", h1, h2);
-                if let Ok(byte) = u8::from_str_radix(&hex_str, 16) {
-                    result.push(byte as char);
-                    continue;
+/// Resolve `#XX` escapes to their bytes; a malformed escape is kept verbatim.
+fn unescape_name(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        let byte = raw[i];
+        i += 1;
+        if byte != b'#' {
+            out.push(byte);
+            continue;
+        }
+        match (raw.get(i).copied(), raw.get(i + 1).copied()) {
+            (Some(h1), Some(h2)) => {
+                i += 2;
+                match hex_escape_byte(h1, h2) {
+                    Some(value) => out.push(value),
+                    None => out.extend_from_slice(&[b'#', h1, h2]),
                 }
-                result.push('#');
-                result.push(h1);
-                result.push(h2);
-            } else if let Some(h1) = hex1 {
-                result.push('#');
-                result.push(h1);
-            } else {
-                result.push('#');
             }
-        } else {
-            result.push(ch);
+            (Some(h1), None) => {
+                i += 1;
+                out.extend_from_slice(&[b'#', h1]);
+            }
+            _ => out.push(b'#'),
         }
     }
+    out
+}
 
-    result
+/// The byte a `#XX` name escape encodes. Matches `u8::from_str_radix(XX, 16)`,
+/// which this replaces, including its acceptance of a leading `+` (`#+F` is
+/// 0x0F). ~keep
+fn hex_escape_byte(h1: u8, h2: u8) -> Option<u8> {
+    let low = char::from(h2).to_digit(16)?;
+    let high = if h1 == b'+' { 0 } else { char::from(h1).to_digit(16)? };
+    u8::try_from(high * 16 + low).ok()
 }
 
 /// Parse a name starting with /.
@@ -397,14 +406,12 @@ fn parse_name(input: &[u8]) -> IResult<&[u8], Token<'_>> {
                 )
             }),
             |bytes| {
-                let name_str = std::str::from_utf8(bytes).unwrap_or("");
-
                 // SPEC COMPLIANCE: PDF Spec ISO 32000-1:2008, Section 7.3.5
                 // requires decoding #XX escape sequences in names.
                 //
                 // Empty names (e.g., "/ ") are technically invalid per spec but
                 // we allow them in lenient mode for compatibility with malformed PDFs. ~keep
-                Token::Name(decode_name_escapes(name_str))
+                Token::Name(decode_name_escapes(bytes))
             },
         ),
     )
@@ -419,47 +426,26 @@ fn parse_name(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 /// - Object markers: obj, endobj, stream, endstream
 /// - Delimiters: [, ], <<, >>
 /// - Reference marker: R
-///
-/// Note: Order matters! Check multi-character keywords before single characters.
-/// Also check << before < and >> before >.
 fn parse_keyword(input: &[u8]) -> IResult<&[u8], Token<'_>> {
-    alt((
-        value(Token::False, tag(&b"false"[..])),
-        value(Token::True, tag(&b"true"[..])),
-        value(Token::Null, tag(&b"null"[..])),
-        value(Token::ObjStart, tag(&b"obj"[..])),
-        value(Token::ObjEnd, tag(&b"endobj"[..])),
-        value(Token::StreamEnd, tag(&b"endstream"[..])),
-        value(Token::StreamStart, tag(&b"stream"[..])),
-        value(Token::DictStart, tag(&b"<<"[..])),
-        value(Token::DictEnd, tag(&b">>"[..])),
-        value(Token::ArrayStart, tag(&b"["[..])),
-        value(Token::ArrayEnd, tag(&b"]"[..])),
-        // Reference marker: must not be followed by alphabetic chars (to avoid matching RG, Re, etc.)
-        // ~keep
-        parse_r_token,
-    ))
-    .parse(input)
-}
-
-/// Parse the `R` reference marker token.
-///
-/// Matches a single `R` only when NOT followed by an alphabetic character,
-/// preventing false matches on operator names like `RG`, `Re`, `RI`.
-fn parse_r_token(input: &[u8]) -> IResult<&[u8], Token<'_>> {
-    if input.first() != Some(&b'R') {
-        return Err(nom::Err::Error(nom::error::Error::new(
+    match input {
+        [b'f', b'a', b'l', b's', b'e', rest @ ..] => Ok((rest, Token::False)),
+        [b't', b'r', b'u', b'e', rest @ ..] => Ok((rest, Token::True)),
+        [b'n', b'u', b'l', b'l', rest @ ..] => Ok((rest, Token::Null)),
+        [b'o', b'b', b'j', rest @ ..] => Ok((rest, Token::ObjStart)),
+        [b'e', b'n', b'd', b'o', b'b', b'j', rest @ ..] => Ok((rest, Token::ObjEnd)),
+        [b'e', b'n', b'd', b's', b't', b'r', b'e', b'a', b'm', rest @ ..] => Ok((rest, Token::StreamEnd)),
+        [b's', b't', b'r', b'e', b'a', b'm', rest @ ..] => Ok((rest, Token::StreamStart)),
+        [b'<', b'<', rest @ ..] => Ok((rest, Token::DictStart)),
+        [b'>', b'>', rest @ ..] => Ok((rest, Token::DictEnd)),
+        [b'[', rest @ ..] => Ok((rest, Token::ArrayStart)),
+        [b']', rest @ ..] => Ok((rest, Token::ArrayEnd)),
+        // Alphabetic continuations are operators such as RG, Re, and RI. ~keep
+        [b'R', rest @ ..] if !rest.first().is_some_and(u8::is_ascii_alphabetic) => Ok((rest, Token::R)),
+        _ => Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
-        )));
+        ))),
     }
-    if input.len() > 1 && input[1].is_ascii_alphabetic() {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )));
-    }
-    Ok((&input[1..], Token::R))
 }
 
 /// Parse a bare identifier as a lenient fallback.
@@ -749,12 +735,37 @@ mod tests {
 
     #[test]
     fn test_decode_name_escapes_directly() {
-        assert_eq!(decode_name_escapes("Type"), "Type");
-        assert_eq!(decode_name_escapes("A#20B"), "A B");
-        assert_eq!(decode_name_escapes("A#20B#23C"), "A B#C");
-        assert_eq!(decode_name_escapes("A#"), "A#");
-        assert_eq!(decode_name_escapes("A#2"), "A#2");
-        assert_eq!(decode_name_escapes("A#ZZ"), "A#ZZ");
+        assert_eq!(decode_name_escapes("Type".as_bytes()), "Type");
+        assert_eq!(decode_name_escapes("A#20B".as_bytes()), "A B");
+        assert_eq!(decode_name_escapes("A#20B#23C".as_bytes()), "A B#C");
+        assert_eq!(decode_name_escapes("A#".as_bytes()), "A#");
+        assert_eq!(decode_name_escapes("A#2".as_bytes()), "A#2");
+        assert_eq!(decode_name_escapes("A#ZZ".as_bytes()), "A#ZZ");
+        assert_eq!(decode_name_escapes("A#ff#Fa".as_bytes()), "A\u{ff}\u{fa}");
+        assert_eq!(decode_name_escapes("A#+F".as_bytes()), "A\u{f}");
+        assert_eq!(decode_name_escapes("A#F+".as_bytes()), "A#F+");
+        assert_eq!(decode_name_escapes("A#é1".as_bytes()), "A#é1");
+    }
+
+    #[test]
+    fn escaped_and_raw_utf8_name_bytes_are_the_same_name() {
+        let escaped = token(b"/F#C3#A9");
+        let raw = token("/Fé".as_bytes());
+        assert_eq!(escaped, Ok((&b""[..], Token::Name("Fé".to_string()))));
+        assert_eq!(raw, escaped);
+    }
+
+    #[test]
+    fn escaped_and_raw_non_utf8_name_bytes_are_the_same_name() {
+        let escaped = token(b"/A#E9#82");
+        let raw = token(b"/A\xE9\x82");
+        assert_eq!(escaped, Ok((&b""[..], Token::Name("A\u{e9}\u{82}".to_string()))));
+        assert_eq!(raw, escaped);
+    }
+
+    #[test]
+    fn distinct_non_utf8_names_stay_distinct() {
+        assert_ne!(token(b"/\xE9"), token(b"/\xE8"));
     }
 
     #[test]
@@ -827,6 +838,38 @@ mod tests {
     fn test_parse_reference_marker() {
         let result = token(b"R");
         assert_eq!(result, Ok((&b""[..], Token::R)));
+    }
+
+    #[test]
+    fn keyword_prefixes_preserve_adjacent_input() {
+        for (input, rest, expected) in [
+            (&b"falsehood"[..], &b"hood"[..], Token::False),
+            (b"true/Name", b"/Name", Token::True),
+            (b"null]", b"]", Token::Null),
+            (b"obj<<", b"<<", Token::ObjStart),
+            (b"endobj%", b"%", Token::ObjEnd),
+            (b"stream\r\n", b"\r\n", Token::StreamStart),
+            (b"endstreamendobj", b"endobj", Token::StreamEnd),
+            (b"<< /Type", b" /Type", Token::DictStart),
+            (b">>endobj", b"endobj", Token::DictEnd),
+            (b"[1", b"1", Token::ArrayStart),
+            (b"]>>", b">>", Token::ArrayEnd),
+            (b"R2", b"2", Token::R),
+        ] {
+            assert_eq!(token(input), Ok((rest, expected.clone())));
+            assert_eq!(token_lenient(input), Ok((rest, expected)));
+        }
+    }
+
+    #[test]
+    fn incomplete_keywords_and_operator_names_keep_lenient_fallback() {
+        for input in [b"RG".as_slice(), b"RI", b"Re", b"endstr", b"fal", b"n"] {
+            assert!(token(input).is_err(), "{input:?}");
+            assert_eq!(
+                token_lenient(input),
+                Ok((&b""[..], Token::Name(std::str::from_utf8(input).unwrap().to_owned())))
+            );
+        }
     }
 
     #[test]

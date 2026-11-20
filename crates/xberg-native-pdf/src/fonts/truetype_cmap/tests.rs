@@ -658,7 +658,7 @@ fn test_format4_id_range_offset_index_underflow_yields_no_glyph() {
     data.write_u32::<BigEndian>(4 + 8).unwrap();
 
     data.write_u16::<BigEndian>(4).unwrap();
-    data.write_u16::<BigEndian>(0).unwrap(); // length (unused by the parser)
+    data.write_u16::<BigEndian>(44).unwrap(); // header, three segments, two glyph IDs
     data.write_u16::<BigEndian>(0).unwrap(); // language
     data.write_u16::<BigEndian>(6).unwrap(); // segCountX2: three segments
     data.write_u16::<BigEndian>(0).unwrap();
@@ -710,7 +710,7 @@ fn test_format12_glyph_id_overflow_wraps_like_release() {
 /// Issue #3034: a crafted format-12 group spanning the whole u32 space
 /// (`0..=0xFFFFFFFF`) must not walk billions of code points. The walk is
 /// clamped to Unicode's maximum (U+10FFFF), so the group's charged width is
-/// 1,114,112 — still far beyond the 65,536-code-point iteration budget —
+/// 1,114,112 — above the 1,048,576-code-point iteration budget —
 /// and the subtable is rejected instead of being parsed with a truncated
 /// table.
 #[test]
@@ -725,6 +725,28 @@ fn test_format12_unbounded_group_rejected_by_budget() {
         started.elapsed()
     );
     assert!(err.contains("iteration budget"), "unexpected error: {err}");
+}
+
+#[test]
+fn format12_should_accept_the_exact_total_budget_and_reject_one_more_code_point() {
+    let mut groups: Vec<_> = (0..16)
+        .map(|index| {
+            let start = 0xE000 + index * 0x1_0000;
+            (start, start + 0xFFFF, 0)
+        })
+        .collect();
+    let cmap = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format12(&groups))
+        .expect("sixteen disjoint groups fit the budget");
+    assert_eq!(cmap.get_unicode(0), Some('\u{fe000}'));
+    assert_eq!(cmap.get_unicode(u16::MAX), Some('\u{10dfff}'));
+
+    groups.push((0x10_E000, 0x10_E000, 0));
+    let error = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format12(&groups))
+        .expect_err("one more code point exceeds the budget");
+    assert_eq!(
+        error,
+        "cmap format 12 group of 1 code points exceeds the remaining iteration budget (0)"
+    );
 }
 
 /// Issue #3034: a group whose startCharCode lies beyond Unicode's maximum
@@ -779,15 +801,12 @@ fn test_format12_budget_exhausted_by_next_group_rejected() {
     assert!(err.contains("iteration budget"), "unexpected error: {err}");
 }
 
-/// Issue #3034: a group that consumes the iteration budget exactly is not
-/// an off-by-one rejection — U+E000..=U+1DFFF is 65,536 valid code points
-/// (no surrogate hole) mapped onto the full u16 gid space, and must parse
-/// in full.
+/// U+E000..=U+1DFFF is 65,536 valid code points mapped onto the full u16 gid space.
 #[test]
 fn test_format12_full_gid_space_group_maps_exactly() {
     let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_DFFF, 0)]);
     let started = std::time::Instant::now();
-    let cmap = TrueTypeCMap::from_font_data(&data).expect("a group exactly filling the budget must parse");
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("a group covering the full glyph ID space must parse");
     assert!(
         started.elapsed() < std::time::Duration::from_secs(10),
         "a budget-sized group must parse without walking past it: took {:?}",
@@ -934,4 +953,65 @@ fn test_platform_priority_windows_full_over_bmp() {
 
     let cmap = TrueTypeCMap::from_font_data(&data).unwrap();
     assert_eq!(cmap.get_unicode(1), Some('A'));
+}
+
+#[test]
+fn format4_parser_accepts_exact_budget_and_rejects_one_below() {
+    let font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let mut cursor = Cursor::new(&font[40..]);
+    cursor.set_position(2);
+    assert_eq!(
+        TrueTypeCMap::parse_cmap_format4_with_budget(&mut cursor, 2).unwrap(),
+        HashMap::from([(1, 'A'), (2, 'B')])
+    );
+
+    cursor.set_position(2);
+    assert_eq!(
+        TrueTypeCMap::parse_cmap_format4_with_budget(&mut cursor, 1),
+        Err("Cmap format 4 iteration budget exhausted".into())
+    );
+}
+
+#[test]
+fn format4_subtable_slice_excludes_trailing_padding() {
+    let mut font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let end = font.len();
+    font.extend_from_slice(&[0; 8]);
+    let mut cursor = Cursor::new(font.as_slice());
+    cursor.set_position(42);
+    assert_eq!(
+        TrueTypeCMap::cmap_format4_subtable(&mut cursor).unwrap(),
+        &font[40..end]
+    );
+}
+
+#[test]
+fn format4_bounds_reads_and_preserves_delta_and_glyph_array_mappings() {
+    let mut font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let subtable = &mut font[40..];
+    subtable[2..4].copy_from_slice(&42u16.to_be_bytes());
+    subtable[36..38].copy_from_slice(&4u16.to_be_bytes());
+    font.extend_from_slice(&5u16.to_be_bytes());
+    font.extend_from_slice(b"adjacent table");
+    let cmap = TrueTypeCMap::from_font_data(&font).unwrap();
+    assert_eq!(cmap.len(), 2);
+    assert_eq!(cmap.get_unicode(1), Some('A'));
+    assert_eq!(cmap.get_unicode(5u16.wrapping_add_signed(2 - 66)), Some('B'));
+}
+
+#[test]
+fn format4_dejavu_sans_mono_maps_ascii() {
+    let font = include_bytes!("../../../tests/fixtures/fonts/DejaVuSansMono.ttf");
+    let mut directory = Cursor::new(font.as_slice());
+    let (count, search, selector, shift) = TrueTypeCMap::parse_sfnt_header(&mut directory).unwrap();
+    let cmap = TrueTypeCMap::find_cmap_table(&mut directory, count, search, selector, shift).unwrap();
+    directory.set_position(u64::from(cmap) + 4);
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 0);
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 3);
+    let offset = directory.read_u32::<BigEndian>().unwrap();
+    directory.set_position(u64::from(cmap) + u64::from(offset));
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 4);
+    let map = TrueTypeCMap::parse_cmap_format4(&mut directory).unwrap();
+    assert_eq!(map.get(&36), Some(&'A'));
+    assert_eq!(map.get(&37), Some(&'B'));
 }

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "build scripts report to cargo on stdout and stderr"
+)]
 use std::env;
 
 fn main() {

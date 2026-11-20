@@ -329,6 +329,23 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
     detect_monospace_code_blocks(paragraphs);
 }
 
+/// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the
+/// result does not depend on hash iteration order.
+fn modal_left_position(left_positions: &[f32]) -> f32 {
+    let mut freq_map: std::collections::BTreeMap<i32, usize> = std::collections::BTreeMap::new();
+    for &pos in left_positions {
+        *freq_map.entry((pos * 10.0) as i32).or_default() += 1;
+    }
+    let bucket = freq_map
+        .into_iter()
+        .fold(None, |best: Option<(i32, usize)>, (bucket, count)| match best {
+            Some((_, best_count)) if best_count >= count => best,
+            _ => Some((bucket, count)),
+        })
+        .map_or(0, |(bucket, _)| bucket);
+    bucket as f32 / 10.0
+}
+
 /// W2.B: Detect indentation-based lists (unordered by indent level).
 ///
 /// Paragraphs that are horizontally shifted right relative to surrounding paragraphs
@@ -353,15 +370,7 @@ fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
     }
 
     left_positions.sort_by(|a, b| a.total_cmp(b));
-    let modal_left = {
-        let mut freq_map: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
-        for &pos in &left_positions {
-            let bucket = (pos * 10.0) as i32;
-            *freq_map.entry(bucket).or_default() += 1;
-        }
-        let (bucket, _) = freq_map.into_iter().max_by_key(|(_, count)| *count).unwrap_or((0, 0));
-        bucket as f32 / 10.0
-    };
+    let modal_left = modal_left_position(&left_positions);
 
     for i in 0..paragraphs.len() {
         let para = &paragraphs[i];
@@ -848,7 +857,7 @@ fn combined_changelog_has_multiline_geometry(paragraph: &PdfParagraph) -> bool {
     let baseline_gap = paragraph
         .lines
         .iter()
-        .map(|line| line.baseline_y)
+        .map(|line| line.baseline_or_zero())
         .fold(None, |bounds, baseline| match bounds {
             None => Some((baseline, baseline)),
             Some((minimum, maximum)) => Some((minimum.min(baseline), maximum.max(baseline))),
@@ -2424,13 +2433,14 @@ mod tests {
                 baseline_y: 700.0,
                 rotation_degrees: 0.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             })
             .collect();
 
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: font_size,
             is_bold: false,
             is_monospace: false,
@@ -2449,6 +2459,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3058,13 +3069,14 @@ mod tests {
                 baseline_y: 700.0,
                 rotation_degrees: 0.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             })
             .collect();
 
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 18.0,
             is_bold: false,
             is_monospace: false,
@@ -3083,6 +3095,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3553,11 +3566,12 @@ mod tests {
             baseline_y: 700.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }];
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: font_size,
             is_bold,
             is_monospace: false,
@@ -3576,6 +3590,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -4098,7 +4113,7 @@ mod tests {
         let mut combined = make_text_paragraph(16.0, "Recent Change Log v0.9.1", true);
         combined.text = "Recent Change Log v0.9.1".to_string();
         let mut version_line = combined.lines[0].clone();
-        version_line.baseline_y = 680.0;
+        version_line.baseline_y = Some(680.0);
         version_line.segments[0].y = 680.0;
         version_line.segments[0].baseline_y = 680.0;
         combined.lines.push(version_line);
@@ -4393,8 +4408,9 @@ mod tests {
                     baseline_y: 700.0 - i as f32 * 12.0,
                     rotation_degrees: 0.0,
                     assigned_role: None,
+                    ocr_heading_spans: None,
                 }],
-                baseline_y: 700.0 - i as f32 * 12.0,
+                baseline_y: Some(700.0 - i as f32 * 12.0),
                 dominant_font_size: 10.0,
                 is_bold: false,
                 is_monospace,
@@ -4414,6 +4430,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -4647,5 +4664,20 @@ mod numbered_section_heading_tests {
         assert!(!ends_with_sentence_period("Impaired Glucose Tolerance ..."));
         assert!(!ends_with_sentence_period("Thermal Comfort As Related To …"));
         assert!(!ends_with_sentence_period("No period at all"));
+    }
+}
+
+#[cfg(test)]
+mod modal_left_tests {
+    use super::modal_left_position;
+
+    #[test]
+    fn should_pick_the_smallest_x_when_two_left_edges_tie() {
+        assert_eq!(modal_left_position(&[90.0, 72.0, 90.0, 72.0]), 72.0);
+    }
+
+    #[test]
+    fn should_pick_the_most_frequent_left_edge() {
+        assert_eq!(modal_left_position(&[72.0, 90.0, 90.0]), 90.0);
     }
 }

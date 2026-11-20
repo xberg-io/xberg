@@ -358,8 +358,8 @@ async fn a_gray_scan_at_150_dpi_keeps_its_strips_when_the_lines_are_not_certifie
 }
 
 #[tokio::test]
-async fn a_neutral_rgb_scan_below_150_dpi_is_refused_whatever_the_backend_returns() {
-    let document = scan_pdf_at(RGB, &neutral_rgb_samples(is_ink_row), 144.0);
+async fn a_neutral_rgb_scan_below_120_dpi_is_refused_whatever_the_backend_returns() {
+    let document = scan_pdf_at(RGB, &neutral_rgb_samples(is_ink_row), 119.0);
     for lines in [Lines::Absent, Lines::Exact] {
         let (replaced, original, asked, _) = replace_reporting(&document, RENDERED, None, lines).await;
         assert!(!replaced);
@@ -368,6 +368,17 @@ async fn a_neutral_rgb_scan_below_150_dpi_is_refused_whatever_the_backend_return
             asked.is_empty(),
             "the density floor refuses it before any strip is read"
         );
+    }
+}
+
+#[tokio::test]
+async fn neutral_rgb_between_density_floors_keeps_stock_if_source_rows_are_missing() {
+    let document = scan_pdf_at(RGB, &neutral_rgb_samples(is_ink_row), 144.0);
+    for lines in [Lines::Absent, Lines::OmitLast, Lines::Misplaced] {
+        let (replaced, original, asked, _) = replace_reporting(&document, RENDERED, None, lines).await;
+        assert!(!replaced);
+        assert_eq!(original.content, "one two three");
+        assert_eq!(asked, [true]);
     }
 }
 

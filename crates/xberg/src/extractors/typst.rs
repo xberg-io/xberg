@@ -55,6 +55,12 @@ static CITE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"#cite\(<([^>]+)>
 #[cfg(feature = "office")]
 static AT_CITE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(^|[\s(])@([A-Za-z][A-Za-z0-9_:.-]*)").unwrap());
 
+static KEYWORDS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"keywords:\s*(?:"([^"]*)"|(\([^)]*\)))"#).unwrap());
+
+static QUOTED_ITEM_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""([^"]*)""#).unwrap());
+
+static INLINE_LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"#?link\("([^"]*)"\)\[([^\]]*)\]"#).unwrap());
+
 /// `ProcessingWarning::source` for every warning this extractor emits (#171).
 #[cfg(feature = "office")]
 const TYPST_WARNING_SOURCE: &str = "typst";
@@ -1074,10 +1080,7 @@ impl TypstParser {
     }
 
     fn extract_keywords(&self) -> Option<Vec<String>> {
-        let pattern = r#"keywords:\s*(?:"([^"]*)"|(\([^)]*\)))"#;
-        if let Ok(re) = Regex::new(pattern)
-            && let Some(caps) = re.captures(&self.content)
-        {
+        if let Some(caps) = KEYWORDS_RE.captures(&self.content) {
             if let Some(m) = caps.get(1) {
                 let keywords: Vec<String> = m
                     .as_str()
@@ -1092,12 +1095,9 @@ impl TypstParser {
             if let Some(m) = caps.get(2) {
                 let array_str = m.as_str();
                 let mut keywords = Vec::new();
-                let item_pattern = r#""([^"]*)""#;
-                if let Ok(item_re) = Regex::new(item_pattern) {
-                    for item_caps in item_re.captures_iter(array_str) {
-                        if let Some(keyword) = item_caps.get(1) {
-                            keywords.push(keyword.as_str().to_string());
-                        }
+                for item_caps in QUOTED_ITEM_RE.captures_iter(array_str) {
+                    if let Some(keyword) = item_caps.get(1) {
+                        keywords.push(keyword.as_str().to_string());
                     }
                 }
                 if !keywords.is_empty() {
@@ -1395,16 +1395,12 @@ impl TypstParser {
     }
 
     fn extract_link_text(&self, line: &str) -> String {
-        let pattern = r#"#?link\("([^"]*)"\)\[([^\]]*)\]"#;
-        if let Ok(re) = Regex::new(pattern) {
-            return re
-                .replace_all(line, |caps: &regex::Captures| {
-                    let text = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-                    text.to_string()
-                })
-                .to_string();
-        }
-        line.to_string()
+        INLINE_LINK_RE
+            .replace_all(line, |caps: &regex::Captures| {
+                let text = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+                text.to_string()
+            })
+            .to_string()
     }
 
     fn extract_text_from_brackets(&self, line: &str) -> Option<String> {

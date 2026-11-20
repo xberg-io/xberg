@@ -444,8 +444,31 @@ pub(crate) fn segments_from_ocr_pages(
         .map(|paragraphs| {
             paragraphs
                 .iter()
-                .flat_map(|paragraph| paragraph.lines.iter())
-                .flat_map(|line| line.segments.iter().cloned())
+                .flat_map(|paragraph| {
+                    let mut segments = paragraph.lines.iter().flat_map(|line| &line.segments).peekable();
+                    let first = segments.next();
+                    let pending = first
+                        .filter(|segment| segments.peek().is_none() && segment.text == paragraph.text)
+                        .map(|_| paragraph.ocr_source_spans.as_slice())
+                        .filter(|spans| {
+                            (1..=2).contains(&spans.len())
+                                && spans
+                                    .iter()
+                                    .all(|span| span.replacement.as_ref().is_some_and(|(_, _, n)| *n == spans.len()))
+                        })
+                        .map(Box::from);
+                    first
+                        .into_iter()
+                        .chain(segments)
+                        .enumerate()
+                        .map(move |(index, segment)| {
+                            let mut segment = segment.clone();
+                            if index == 0 {
+                                segment.ocr_heading_spans = pending.clone();
+                            }
+                            segment
+                        })
+                })
                 .filter(|segment| !segment.text.trim().is_empty())
                 .collect()
         })
@@ -472,6 +495,13 @@ fn hocr_block_id(element: &crate::types::internal::InternalElement) -> Option<&s
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn merge_ocr_block_paragraph(current: &mut types::PdfParagraph, next: types::PdfParagraph) {
     current.text.push('\n');
+    let offset = current.text.len();
+    current
+        .ocr_source_spans
+        .extend(next.ocr_source_spans.into_iter().map(|mut span| {
+            span.destination += offset;
+            span
+        }));
     current.text.push_str(&next.text);
     current.lines.extend(next.lines);
     current.block_bbox = match (current.block_bbox, next.block_bbox) {
@@ -506,6 +536,30 @@ pub(crate) fn ocr_doc_to_layout_paragraphs(
     min_confidence: f32,
     min_containment: f32,
     font_size_scale: OcrFontSizeScale,
+) -> Vec<types::PdfParagraph> {
+    ocr_doc_to_layout_paragraphs_ordered(
+        doc,
+        page_height_px,
+        hints,
+        min_confidence,
+        min_containment,
+        font_size_scale,
+        None,
+    )
+}
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+pub(crate) type LayoutLineOrder<'a> = dyn FnMut(&[types::PdfParagraph]) -> Option<Vec<usize>> + 'a;
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+pub(crate) fn ocr_doc_to_layout_paragraphs_ordered(
+    doc: &crate::types::internal::InternalDocument,
+    page_height_px: u32,
+    hints: &[types::LayoutHint],
+    min_confidence: f32,
+    min_containment: f32,
+    font_size_scale: OcrFontSizeScale,
+    order_lines: Option<&mut LayoutLineOrder<'_>>,
 ) -> Vec<types::PdfParagraph> {
     use crate::types::internal::ElementKind;
     let page_height = page_height_px as f32;
@@ -552,9 +606,31 @@ pub(crate) fn ocr_doc_to_layout_paragraphs(
         all_hint_indices.extend(hint_indices);
     }
 
+    if let Some(order) = order_lines.and_then(|rank| rank(&all_lines)) {
+        let mut seen = vec![false; all_lines.len()];
+        let valid = order.len() == all_lines.len()
+            && order
+                .iter()
+                .all(|&index| seen.get_mut(index).is_some_and(|slot| !std::mem::replace(slot, true)));
+        if valid {
+            all_lines = permute_ocr_lines(all_lines, &order);
+            all_hint_indices = permute_ocr_lines(all_hint_indices, &order);
+            element_indices = permute_ocr_lines(element_indices, &order);
+            block_ids = permute_ocr_lines(block_ids, &order);
+        }
+    }
     let result = regroup_layout_lines_by_element(all_lines, all_hint_indices, element_indices, block_ids);
     trace_conversion("ocr_doc_to_layout_paragraphs", doc, &result);
     result
+}
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+fn permute_ocr_lines<T>(items: Vec<T>, order: &[usize]) -> Vec<T> {
+    let mut slots: Vec<_> = items.into_iter().map(Some).collect();
+    order
+        .iter()
+        .map(|&index| slots[index].take().expect("validated permutation"))
+        .collect()
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "layout-detection"))]
@@ -871,7 +947,9 @@ fn make_ocr_block_paragraphs(
         let text_line_count = element.text.split('\n').count().max(1);
         let font_size =
             resolve_ocr_font_size_pt(element, block_bbox, text_line_count, font_size_scale, block_median_pt);
-        return vec![make_ocr_paragraph(element.text.clone(), lines, block_bbox, font_size)];
+        let mut paragraph = make_ocr_paragraph(element.text.clone(), lines, block_bbox, font_size);
+        paragraph.ocr_source_spans.clone_from(&element.ocr_source_spans);
+        return vec![paragraph];
     }
 
     split_body_group_at_list_markers(line_paragraphs)
@@ -903,11 +981,23 @@ fn make_ocr_line_paragraphs(
     // are block-level averages, resolved once and applied uniformly to every line.
     let (is_bold, is_italic) = resolve_ocr_style_flags(element);
 
+    let mut offset = 0;
     text_lines
         .into_iter()
         .enumerate()
         .map(|(line_index, text)| {
-            make_ocr_line_paragraph(text, line_index, line_count, block_bbox, font_size, is_bold, is_italic)
+            let mut paragraph =
+                make_ocr_line_paragraph(text, line_index, line_count, block_bbox, font_size, is_bold, is_italic);
+            let line_end = offset + text.len();
+            for span in &element.ocr_source_spans {
+                if span.destination >= offset && span.destination + span.source.len() <= line_end {
+                    let mut span = span.clone();
+                    span.destination -= offset;
+                    paragraph.ocr_source_spans.push(span);
+                }
+            }
+            offset = line_end + 1;
+            paragraph
         })
         .collect()
 }
@@ -944,8 +1034,8 @@ fn make_ocr_line_paragraph(
         (left, line_top - line_height, right, line_top)
     });
     let (x, baseline_y, width) = line_bbox
-        .map(|(left, bottom, right, _)| (left, bottom, right - left))
-        .unwrap_or((0.0, 0.0, DEFAULT_LINE_WIDTH));
+        .map(|(left, bottom, right, _)| (left, Some(bottom), right - left))
+        .unwrap_or((0.0, None, DEFAULT_LINE_WIDTH));
     let lines = if text.trim().is_empty() {
         Vec::new()
     } else {
@@ -1308,8 +1398,23 @@ fn build_body_paragraph(lines: Vec<types::PdfParagraph>) -> Option<types::PdfPar
     } else {
         DEFAULT_OCR_FONT_SIZE_PT
     };
+    let mut spans = Vec::new();
+    if !lines
+        .first()
+        .is_some_and(|line| super::pipeline::looks_like_list_item(&line.text))
+    {
+        let mut offset = 0;
+        for line in &lines {
+            spans.extend(line.ocr_source_spans.iter().cloned().map(|mut span| {
+                span.destination += offset;
+                span
+            }));
+            offset += line.text.len() + 1;
+        }
+    }
     let pdf_lines = lines.into_iter().flat_map(|line| line.lines).collect();
     let mut paragraph = make_ocr_paragraph(text, pdf_lines, bbox, font_size);
+    paragraph.ocr_source_spans = spans;
     paragraph.layout_class = layout_class;
     Some(paragraph)
 }
@@ -1781,6 +1886,7 @@ fn make_ocr_paragraph(
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox,
     }
@@ -1791,26 +1897,28 @@ fn make_ocr_paragraph(
 fn make_ocr_pdf_line(
     text: &str,
     x: f32,
-    baseline_y: f32,
+    baseline_y: Option<f32>,
     width: f32,
     line_height: f32,
     font_size: f32,
     is_bold: bool,
     is_italic: bool,
 ) -> types::PdfLine {
+    let segment_y = baseline_y.unwrap_or(0.0);
     let segment = crate::pdf::hierarchy::SegmentData {
         text: text.to_string(),
         x,
-        y: baseline_y,
+        y: segment_y,
         width,
         height: line_height,
         font_size,
         is_bold,
         is_italic,
         is_monospace: false,
-        baseline_y,
+        baseline_y: segment_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     types::PdfLine {
         native_scripts: Vec::new(),
@@ -1828,6 +1936,35 @@ mod tests {
     use crate::types::extraction::BoundingBox;
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     use crate::types::ocr_elements::OcrElementLevel;
+
+    #[test]
+    fn boxless_ocr_line_cannot_match_a_layout_hint_at_its_placeholder_coordinates() {
+        let font_size = DEFAULT_OCR_FONT_SIZE_PT;
+        let text = "Chapter title";
+        let boxless = make_ocr_line_paragraph(text, 0, 1, None, font_size, false, false);
+        let mut measured =
+            make_ocr_line_paragraph(text, 0, 1, Some((0.0, 0.0, 100.0, font_size)), font_size, false, false);
+        measured.block_bbox = None;
+        let hint = types::LayoutHint {
+            class_name: types::LayoutHintClass::Title,
+            confidence: 0.9,
+            left: 0.0,
+            bottom: 0.0,
+            right: 100.0,
+            top: font_size,
+        };
+        let mut paragraphs = [boxless, measured];
+        let matches = super::super::layout_classify::apply_layout_overrides_with_matches(
+            &mut paragraphs,
+            &[hint],
+            0.5,
+            0.5,
+            None,
+        );
+        assert_eq!(matches, [None, Some(0)]);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+        assert_eq!(paragraphs[1].heading_level, Some(1));
+    }
 
     /// The three hOCR attribute keys this module reads are declared here as literals
     /// rather than imported, because `ocr::hocr_parser` is behind `feature = "ocr"`
@@ -2373,6 +2510,16 @@ mod tests {
         assert_eq!(paragraphs[0].text, "real content");
     }
 
+    #[test]
+    fn ocr_line_baseline_requires_a_source_box() {
+        let located = make_ocr_line_paragraph("at the origin", 0, 1, Some((8.0, 0.0, 40.0, 12.0)), 12.0, false, false);
+        let boxless = make_ocr_line_paragraph("with no box", 0, 1, None, 12.0, false, false);
+        assert_eq!(located.lines[0].baseline_y, Some(0.0));
+        assert_eq!(boxless.lines[0].baseline_y, None);
+        assert_eq!(boxless.lines[0].segments[0].baseline_y, 0.0);
+        assert_eq!(boxless.lines[0].segments[0].width, 100.0);
+    }
+
     /// Test that whitespace-only lines and their exact text remain in the OCR block.
     #[test]
     fn test_ocr_doc_whitespace_lines_text_preserved() {
@@ -2401,11 +2548,11 @@ mod tests {
         let para_1_y = 1000.0 - 10.0 - line_height;
         let para_2_y = 1000.0 - 10.0 - 3.0 * line_height;
         assert!(
-            (paragraphs[0].lines[0].baseline_y - para_1_y).abs() < 0.1,
+            (paragraphs[0].lines[0].baseline_y.unwrap() - para_1_y).abs() < 0.1,
             "Line 1 Y position incorrect"
         );
         assert!(
-            (paragraphs[0].lines[1].baseline_y - para_2_y).abs() < 0.1,
+            (paragraphs[0].lines[1].baseline_y.unwrap() - para_2_y).abs() < 0.1,
             "Line 2 Y position incorrect"
         );
     }
@@ -2440,16 +2587,16 @@ mod tests {
         let expected_line_height = 80.0 / 3.0;
 
         assert!(
-            (paragraphs[0].lines[0].baseline_y - (990.0 - expected_line_height)).abs() < 0.1,
+            (paragraphs[0].lines[0].baseline_y.unwrap() - (990.0 - expected_line_height)).abs() < 0.1,
             "Line1 baseline is incorrect: {}",
-            paragraphs[0].lines[0].baseline_y
+            paragraphs[0].lines[0].baseline_y.unwrap()
         );
         let first_segment = &paragraphs[0].lines[0].segments[0];
         assert!((first_segment.y + first_segment.height - 990.0).abs() < 0.1);
         assert!(
-            (paragraphs[0].lines[1].baseline_y - (990.0 - 3.0 * expected_line_height)).abs() < 0.1,
+            (paragraphs[0].lines[1].baseline_y.unwrap() - (990.0 - 3.0 * expected_line_height)).abs() < 0.1,
             "Line3 baseline is incorrect: {}",
-            paragraphs[0].lines[1].baseline_y
+            paragraphs[0].lines[1].baseline_y.unwrap()
         );
     }
 
@@ -3352,7 +3499,7 @@ mod tests {
         let line = make_ocr_pdf_line(
             text,
             left,
-            bottom,
+            Some(bottom),
             right - left,
             top - bottom,
             DEFAULT_OCR_FONT_SIZE_PT,
@@ -3506,7 +3653,7 @@ mod tests {
         height: f32,
         font_size: f32,
     ) -> types::PdfParagraph {
-        let line = make_ocr_pdf_line(text, x, y, width, height, font_size, false, false);
+        let line = make_ocr_pdf_line(text, x, Some(y), width, height, font_size, false, false);
         make_ocr_paragraph(
             text.to_string(),
             vec![line],
@@ -3919,4 +4066,74 @@ mod tests {
         );
         assert_eq!(result[1].text, "2. Second item");
     }
+}
+
+#[cfg(all(test, feature = "ocr"))]
+mod occurrence_provenance_tests {
+    use super::project_ocr_adapter_occurrence;
+
+    #[test]
+    fn adapter_splits_repeated_words_and_shifts_merged_provenance() {
+        use super::{OcrFontSizeScale, make_ocr_line_paragraphs, merge_ocr_block_paragraph};
+        use crate::types::internal::{ElementKind, InternalElement, OcrSourceSpan};
+        let mut owner = InternalElement::text(ElementKind::Paragraph, "wi\nwi", 0).with_index(7);
+        owner.ocr_source_spans.push(OcrSourceSpan {
+            owner: owner.id.clone(),
+            occurrence: 42,
+            replacement: None,
+            insertion: None,
+            panel_order: None,
+            source: 3..5,
+            destination: 3,
+        });
+        let mut lines = make_ocr_line_paragraphs(&owner, 100.0, OcrFontSizeScale::uniform(1.0), None);
+        assert!(lines[0].ocr_source_spans.is_empty());
+        let second = lines.pop().unwrap();
+        assert_eq!(second.ocr_source_spans[0].destination, 0);
+        merge_ocr_block_paragraph(&mut lines[0], second);
+        assert_eq!(lines[0].text, "wi\nwi");
+        assert_eq!(lines[0].ocr_source_spans, owner.ocr_source_spans);
+    }
+
+    #[test]
+    fn repeated_text_maps_only_the_emitted_owner_across_split_and_merge() {
+        let owner = "wi\nwi";
+        let paragraphs = ["wi", "prefix\nwi"];
+        let emitted = [(0..2, 0, 0..2), (3..5, 1, 7..9)];
+        assert_eq!(
+            project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &emitted),
+            Some((1, 7..9))
+        );
+        assert!(project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &emitted[..1]).is_none());
+        let duplicate = [(3..5, 0, 0..2), (3..5, 1, 7..9)];
+        assert!(project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &duplicate).is_none());
+        assert!(project_ocr_adapter_occurrence(owner, 1..4, &paragraphs, &emitted).is_none());
+    }
+}
+
+#[cfg(all(test, feature = "ocr"))]
+fn project_ocr_adapter_occurrence(
+    owner: &str,
+    occurrence: std::ops::Range<usize>,
+    paragraphs: &[&str],
+    emitted: &[(std::ops::Range<usize>, usize, std::ops::Range<usize>)],
+) -> Option<(usize, std::ops::Range<usize>)> {
+    if occurrence.is_empty() {
+        return None;
+    }
+    let mut candidates = emitted
+        .iter()
+        .filter(|(source, _, _)| occurrence.start < source.end && source.start < occurrence.end);
+    let (source, paragraph, destination) = candidates.next()?;
+    if candidates.next().is_some()
+        || occurrence.start < source.start
+        || occurrence.end > source.end
+        || owner.get(source.clone())? != paragraphs.get(*paragraph)?.get(destination.clone())?
+    {
+        return None;
+    }
+    let start = destination.start.checked_add(occurrence.start - source.start)?;
+    let end = start.checked_add(occurrence.len())?;
+    paragraphs.get(*paragraph)?.get(start..end)?;
+    Some((*paragraph, start..end))
 }

@@ -515,7 +515,7 @@ fn worker_semantics(mode: BenchmarkMode, capability: Option<BatchCapability>) ->
             "MinerU 3.4.5 do_parse pipeline; model batches span documents through doc_analyze_streaming processing windows"
         }
         (BenchmarkMode::Batch, Some(BatchEntryPoint::MineruParser)) => {
-            "MinerU 4.0.12 basic CPU parser; sequential documents sharing one parser; no cross-document model batching"
+            "MinerU 4.1.3 basic CPU parser; sequential documents sharing one parser; no cross-document model batching"
         }
         (BenchmarkMode::Batch, None) => "batch harness concurrency",
     }
@@ -850,7 +850,7 @@ mod tests {
             ),
             (
                 BatchEntryPoint::MineruParser,
-                "MinerU 4.0.12 basic CPU parser; sequential documents sharing one parser; no cross-document model batching",
+                "MinerU 4.1.3 basic CPU parser; sequential documents sharing one parser; no cross-document model batching",
             ),
         ] {
             let capability = BatchCapability {

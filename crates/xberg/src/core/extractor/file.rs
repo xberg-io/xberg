@@ -258,7 +258,13 @@ pub(crate) async fn extract_file(
         let started = std::time::Instant::now();
         let mut extraction_future = extraction_future;
         match tokio::time::timeout(std::time::Duration::from_secs(secs), &mut extraction_future).await {
-            Ok(inner) => inner,
+            Ok(inner) => {
+                if let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached()) {
+                    super::time_limit::finish_grace(Ok(inner), token, secs, started)
+                } else {
+                    inner
+                }
+            }
             Err(_elapsed) => match super::time_limit::begin_grace(config.cancel_token.as_ref(), secs, started) {
                 Ok(token) => {
                     let outcome =
@@ -368,7 +374,17 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     {
         match serialize_extraction_cache_entry(&result, lifecycle_generations_after) {
             Ok(data) => {
-                let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
+                let source = path.to_str().map(str::to_owned);
+                let namespace = namespace.map(str::to_owned);
+                let ttl = config.cache_ttl_secs;
+                publish_file_cache_when_validated(move || {
+                    if cache
+                        .set(&cache_key, data, source.as_deref(), namespace.as_deref(), ttl)
+                        .is_ok()
+                    {
+                        tracing::debug!(cache_key = %cache_key, "Extraction cache write");
+                    }
+                });
             }
             Err(error) => {
                 tracing::warn!(
@@ -383,6 +399,18 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     }
 
     Ok(result)
+}
+
+fn publish_file_cache_when_validated(write: impl FnOnce() + Send + 'static) {
+    let publish = move || {
+        if super::cacheability::can_publish_outer_result() {
+            write();
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    super::cacheability::defer_ocr_cache_write(publish);
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    publish();
 }
 
 #[derive(serde::Deserialize)]
@@ -437,8 +465,9 @@ fn deserialize_extraction_cache_entry(
 ///   format that only handles some of its own sub-variants).
 /// - [`XbergError::Plugin`] — a third-party extractor's own reported failure. That
 ///   is a property of the plugin, not necessarily of the document.
+/// - An all-page OCR failure previously reported as a plugin failure.
 ///
-/// Every other variant is treated as a hard failure and is *not* retried with a
+/// Other errors are treated as hard failures and are *not* retried with a
 /// lower-priority extractor. In particular [`XbergError::Parsing`] — the variant
 /// an encrypted file or a corrupt archive surfaces as — means the document itself
 /// is the problem: every other extractor registered for the same MIME type would
@@ -447,7 +476,7 @@ fn deserialize_extraction_cache_entry(
 /// extractor's error swallowing the specific "wrong password" message from the
 /// primary one).
 fn is_extractor_fallback_eligible(error: &XbergError) -> bool {
-    matches!(error, XbergError::UnsupportedFormat(_) | XbergError::Plugin { .. })
+    matches!(error, XbergError::UnsupportedFormat(_) | XbergError::Plugin { .. }) || error.is_all_page_ocr_failure()
 }
 
 /// Reads the head of `path` for plain-text recovery, bounded by the content budget.
@@ -599,6 +628,35 @@ pub(crate) async fn extract_with_candidates(
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod tests {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn file_cache_publication_waits_for_request_model_validation() {
+        use crate::core::extractor::cacheability;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        let directory = tempfile::tempdir().unwrap();
+        let model = directory.path().join("eng.traineddata");
+        let published = Arc::new(AtomicBool::new(false));
+        for changed in [false, true] {
+            published.store(false, Ordering::Release);
+            std::fs::write(&model, b"one").unwrap();
+            cacheability::with_ocr_cancellation(None, async {
+                cacheability::request_model_digest(&model).unwrap();
+                let flag = Arc::clone(&published);
+                super::publish_file_cache_when_validated(move || flag.store(true, Ordering::Release));
+                assert!(!published.load(Ordering::Acquire));
+                if changed {
+                    std::fs::write(&model, b"two").unwrap();
+                }
+            })
+            .await;
+            assert_eq!(published.load(Ordering::Acquire), !changed);
+        }
+    }
+
     use super::*;
     use crate::cache::GenericCache;
     use crate::types::{ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, Table, TableGrid};
@@ -1592,6 +1650,7 @@ mod issue_217_fallback_tests {
         name: &'static str,
         priority: i32,
         outcome: fn() -> Result<ExtractedDocument>,
+        mime_types: &'static [&'static str],
     }
 
     impl Plugin for ScriptedExtractor {
@@ -1616,7 +1675,7 @@ mod issue_217_fallback_tests {
         }
 
         fn supported_mime_types(&self) -> &[&str] {
-            &[FALLBACK_MIME]
+            self.mime_types
         }
 
         fn priority(&self) -> i32 {
@@ -1664,6 +1723,7 @@ mod issue_217_fallback_tests {
                 name: "picky-217",
                 priority: 100,
                 outcome: unsupported_format_error,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
         registry
@@ -1671,6 +1731,7 @@ mod issue_217_fallback_tests {
                 name: "fallback-217",
                 priority: 50,
                 outcome: ok_result,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
 
@@ -1703,6 +1764,7 @@ mod issue_217_fallback_tests {
                 name: "hard-failure-217",
                 priority: 100,
                 outcome: parsing_error,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
         registry
@@ -1710,6 +1772,7 @@ mod issue_217_fallback_tests {
                 name: "never-reached-217",
                 priority: 50,
                 outcome: ok_result,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
 
@@ -1726,6 +1789,130 @@ mod issue_217_fallback_tests {
         }
     }
 
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+        use crate::extractors::pdf::PdfExtractor;
+        use crate::extractors::pdf::ocr::build_minimal_two_page_pdf_with_sizes;
+        use crate::plugins::{OcrBackend, OcrBackendType, register_ocr_backend, unregister_ocr_backend};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        const PDF_MIME: &str = "application/pdf";
+        const BACKEND: &str = "pdf-extractor-chain-ocr-backend";
+        const FALLBACK_TEXT: &str = "The alternate PDF extractor read this document.";
+
+        static FALLBACK_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+        struct FailingBackend {
+            cancel_second_page: bool,
+            calls: Arc<AtomicUsize>,
+        }
+
+        impl Plugin for FailingBackend {
+            fn name(&self) -> &str {
+                BACKEND
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl OcrBackend for FailingBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> {
+                let call = self.calls.fetch_add(1, Ordering::SeqCst);
+                match (self.cancel_second_page, call) {
+                    (true, 0) => Ok(ExtractedDocument {
+                        content: "The OCR backend successfully read the first page.".into(),
+                        ..Default::default()
+                    }),
+                    (true, _) => Err(XbergError::Cancelled),
+                    (false, _) => Err(XbergError::ocr("the OCR backend failed")),
+                }
+            }
+        }
+
+        let mut registry = DocumentExtractorRegistry::new();
+        registry.register_internal(Arc::new(PdfExtractor::new())).unwrap();
+        registry
+            .register(Arc::new(ScriptedExtractor {
+                name: "test-alternate-pdf-extractor",
+                priority: 0,
+                outcome: || {
+                    FALLBACK_CALLS.fetch_add(1, Ordering::SeqCst);
+                    Ok(ExtractedDocument {
+                        content: FALLBACK_TEXT.to_string(),
+                        mime_type: Cow::Borrowed(PDF_MIME),
+                        ..Default::default()
+                    })
+                },
+                mime_types: &[PDF_MIME],
+            }))
+            .unwrap();
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("scanned.pdf");
+        let pdf = build_minimal_two_page_pdf_with_sizes((612.0, 792.0), (504.0, 504.0));
+        std::fs::write(&path, pdf).unwrap();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            use_cache: false,
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(1),
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: BACKEND.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        for cancel_second_page in [false, true] {
+            FALLBACK_CALLS.store(0, Ordering::SeqCst);
+            let calls = Arc::new(AtomicUsize::new(0));
+            register_ocr_backend(Arc::new(FailingBackend {
+                cancel_second_page,
+                calls: Arc::clone(&calls),
+            }))
+            .unwrap();
+            let candidates = registry.get_candidates(&path, PDF_MIME);
+            let result = extract_with_candidates(&path, PDF_MIME, &config, candidates).await;
+            unregister_ocr_backend(BACKEND).unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), 2, "both source pages were attempted");
+            if cancel_second_page {
+                assert!(matches!(result, Err(XbergError::Cancelled)), "got: {result:?}");
+                assert_eq!(FALLBACK_CALLS.load(Ordering::SeqCst), 0);
+            } else {
+                assert_eq!(FALLBACK_CALLS.load(Ordering::SeqCst), 1);
+                let result = result.expect("the alternate PDF extractor should handle the OCR failure");
+                assert_eq!(result.content, FALLBACK_TEXT);
+                assert!(
+                    result.processing_warnings.iter().any(|warning| {
+                        warning.source == "extractor-fallback"
+                            && warning.message.contains("test-alternate-pdf-extractor")
+                    }),
+                    "got: {:?}",
+                    result.processing_warnings
+                );
+            }
+        }
+    }
+
     mod time_limit_cache {
         use super::*;
         use crate::cancellation::CancellationToken;
@@ -1739,11 +1926,19 @@ mod issue_217_fallback_tests {
         const MIME: &str = "application/x-xberg-time-limit-cache-test";
         const NAME: &str = "time-limit-cache-test-extractor";
 
+        /// How a stopped run leaves its document.
+        #[derive(Clone, Copy)]
+        enum Cut {
+            Nothing,
+            PageUnread,
+            StageDropped,
+        }
+
         /// Stands in for a page loop: on every run it asks for the time-limit stop on the
-        /// extraction's token, and when `leaves_page_unread` it also reports a page it never read.
+        /// extraction's token, and `cut` says what the stop took from the document.
         struct Stopping {
             calls: Arc<AtomicUsize>,
-            leaves_page_unread: bool,
+            cut: Cut,
         }
 
         impl Plugin for Stopping {
@@ -1758,8 +1953,10 @@ mod issue_217_fallback_tests {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 let token = config.cancel_token.as_ref().expect("the test supplies a token");
                 token.request_stop();
-                if self.leaves_page_unread {
-                    token.note_unread_page(2);
+                match self.cut {
+                    Cut::Nothing => {}
+                    Cut::PageUnread => token.note_unread_page(2),
+                    Cut::StageDropped => token.note_stage_cut(),
                 }
                 Ok(ExtractedDocument {
                     content: "pages read".to_string(),
@@ -1780,12 +1977,12 @@ mod issue_217_fallback_tests {
         struct Registered;
 
         impl Registered {
-            fn new(calls: &Arc<AtomicUsize>, leaves_page_unread: bool) -> Self {
+            fn new(calls: &Arc<AtomicUsize>, cut: Cut) -> Self {
                 crate::plugins::registry::get_document_extractor_registry()
                     .write()
                     .register(Arc::new(Stopping {
                         calls: Arc::clone(calls),
-                        leaves_page_unread,
+                        cut,
                     }))
                     .unwrap();
                 Self
@@ -1802,9 +1999,9 @@ mod issue_217_fallback_tests {
 
         /// Extract the same file twice, each time on a fresh token, and return how often the
         /// extractor ran: once means the second call was served from the file cache.
-        async fn extractor_runs_for_two_calls(leaves_page_unread: bool, unique: &str) -> usize {
+        async fn extractor_runs_for_two_calls(cut: Cut, unique: &str) -> usize {
             let calls = Arc::new(AtomicUsize::new(0));
-            let _registered = Registered::new(&calls, leaves_page_unread);
+            let _registered = Registered::new(&calls, cut);
             let directory = tempdir().unwrap();
             let path = directory.path().join("input.bin");
             // The cache outlives the test process, so each run needs content no earlier run cached.
@@ -1838,7 +2035,7 @@ mod issue_217_fallback_tests {
         #[serial]
         async fn a_result_cut_short_by_the_time_limit_is_not_written_to_the_file_cache() {
             assert_eq!(
-                extractor_runs_for_two_calls(true, "unread").await,
+                extractor_runs_for_two_calls(Cut::PageUnread, "unread").await,
                 2,
                 "a partial document must be extracted again, not served from the cache"
             );
@@ -1846,12 +2043,196 @@ mod issue_217_fallback_tests {
 
         #[tokio::test]
         #[serial]
+        async fn a_result_whose_post_processing_stage_was_dropped_is_not_written_to_the_file_cache() {
+            assert_eq!(
+                extractor_runs_for_two_calls(Cut::StageDropped, "stage-dropped").await,
+                2,
+                "a document missing a stage's output must be extracted again, not served from the cache"
+            );
+        }
+
+        #[tokio::test]
+        #[serial]
         async fn a_stop_that_left_no_page_unread_still_writes_the_file_cache() {
             assert_eq!(
-                extractor_runs_for_two_calls(false, "complete").await,
+                extractor_runs_for_two_calls(Cut::Nothing, "complete").await,
                 1,
                 "a stop that cut nothing short leaves a complete document, which is cached"
             );
+        }
+    }
+
+    /// A token a caller reuses must not carry the stop an earlier timed extraction requested on it:
+    /// both routes scope the caller's token before arming the limit.
+    mod token_reuse {
+        use super::*;
+        use crate::cancellation::CancellationToken;
+        use crate::core::config::{ExtractInput, PostProcessorConfig};
+        use crate::plugins::{DocumentExtractor, Plugin};
+        use async_trait::async_trait;
+        use serial_test::serial;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        /// Aliases the xlam MIME type, which `validate_mime_type` accepts and no other test uses; the
+        /// entry points reject a MIME type that is not in the supported set before reaching the registry.
+        const MIME: &str = "application/vnd.ms-excel.addin.macroEnabled";
+        const NAME: &str = "token-reuse-test-extractor";
+        const CONTENT: &[u8] = b"token reuse test";
+
+        #[derive(Default)]
+        struct Seen {
+            calls: AtomicUsize,
+            later_call_saw_stop: AtomicBool,
+            later_call_saw_unread_page: AtomicBool,
+        }
+
+        /// The first call stops the way a page loop cut short by the time limit does; later calls
+        /// record what state their token arrived in.
+        struct Stopping {
+            seen: Arc<Seen>,
+        }
+
+        impl Plugin for Stopping {
+            fn name(&self) -> &str {
+                NAME
+            }
+        }
+
+        #[async_trait]
+        impl DocumentExtractor for Stopping {
+            async fn extract(&self, _input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+                let token = config.cancel_token.as_ref().expect("the entry point supplies a token");
+                if self.seen.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    token.request_stop();
+                    token.note_unread_page(2);
+                } else {
+                    self.seen
+                        .later_call_saw_stop
+                        .fetch_or(token.stop_requested(), Ordering::SeqCst);
+                    self.seen
+                        .later_call_saw_unread_page
+                        .fetch_or(token.first_unread_page().is_some(), Ordering::SeqCst);
+                }
+                Ok(ExtractedDocument {
+                    content: "pages read".to_string(),
+                    mime_type: Cow::Borrowed("text/plain"),
+                    ..Default::default()
+                })
+            }
+
+            fn supported_mime_types(&self) -> &[&str] {
+                &[MIME]
+            }
+
+            fn priority(&self) -> i32 {
+                100
+            }
+        }
+
+        struct Registered;
+
+        impl Registered {
+            fn new(seen: &Arc<Seen>) -> Self {
+                crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .register(Arc::new(Stopping { seen: Arc::clone(seen) }))
+                    .unwrap();
+                Self
+            }
+        }
+
+        impl Drop for Registered {
+            fn drop(&mut self) {
+                let _ = crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .remove(NAME);
+            }
+        }
+
+        #[derive(Clone, Copy)]
+        enum Route {
+            File,
+            Bytes,
+        }
+
+        fn timeout_warning(document: &ExtractedDocument) -> Option<&crate::types::ProcessingWarning> {
+            document
+                .processing_warnings
+                .iter()
+                .find(|warning| warning.source == "timeout")
+        }
+
+        async fn assert_reused_token_starts_unstopped(route: Route) {
+            let seen = Arc::new(Seen::default());
+            let _registered = Registered::new(&seen);
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("input.bin");
+            std::fs::write(&path, CONTENT).unwrap();
+
+            let caller_token = CancellationToken::new();
+            let config = ExtractionConfig {
+                // A requested stop also cuts the post-processing stages; with none enabled, only the
+                // page loop's unread page marks the result. ~keep
+                postprocessor: Some(PostProcessorConfig {
+                    enabled: false,
+                    ..Default::default()
+                }),
+                use_cache: false,
+                extraction_timeout_secs: Some(600),
+                cancel_token: Some(caller_token.clone()),
+                ..Default::default()
+            };
+
+            let mut results = Vec::new();
+            for _ in 0..2 {
+                let result = match route {
+                    Route::File => extract_file(&path, Some(MIME), &config).await,
+                    Route::Bytes => crate::core::extractor::bytes::extract_bytes(CONTENT, MIME, &config).await,
+                };
+                results.push(result.expect("the stub extractor succeeds"));
+            }
+            let [first, second] = &results[..] else {
+                unreachable!("two extractions ran");
+            };
+
+            assert_eq!(
+                seen.calls.load(Ordering::SeqCst),
+                2,
+                "each call must reach the extractor"
+            );
+            let warning = timeout_warning(first).expect("the first result reports the page it did not read");
+            assert!(warning.message.contains("page 2"), "{}", warning.message);
+            assert!(
+                !caller_token.is_cancelled(),
+                "a partial result leaves the caller's token usable"
+            );
+            assert!(
+                !caller_token.stop_requested(),
+                "the stop belongs to the extraction's scoped token, not the caller's"
+            );
+            assert_eq!(caller_token.first_unread_page(), None);
+            assert!(
+                !seen.later_call_saw_stop.load(Ordering::SeqCst),
+                "the second call's token arrived with the first call's stop"
+            );
+            assert!(
+                !seen.later_call_saw_unread_page.load(Ordering::SeqCst),
+                "the second call's token arrived with the first call's unread page"
+            );
+            assert!(timeout_warning(second).is_none(), "{:?}", second.processing_warnings);
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_token_reused_after_a_partial_file_result_starts_unstopped() {
+            assert_reused_token_starts_unstopped(Route::File).await;
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_token_reused_after_a_partial_bytes_result_starts_unstopped() {
+            assert_reused_token_starts_unstopped(Route::Bytes).await;
         }
     }
 }

@@ -20,6 +20,8 @@ pub enum HwpError {
     EncodingError(String),
     /// A requested stream was not present in the compound file.
     NotFound(String),
+    /// A configured security limit (decompressed size) was exceeded.
+    Security(crate::extractors::security::SecurityError),
 }
 
 impl fmt::Display for HwpError {
@@ -33,6 +35,7 @@ impl fmt::Display for HwpError {
             HwpError::ParseError(msg) => write!(f, "Parse error: {msg}"),
             HwpError::EncodingError(msg) => write!(f, "Encoding error: {msg}"),
             HwpError::NotFound(msg) => write!(f, "Not found: {msg}"),
+            HwpError::Security(e) => write!(f, "Security limit exceeded: {e}"),
         }
     }
 }
@@ -41,6 +44,7 @@ impl std::error::Error for HwpError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             HwpError::Io(e) => Some(e),
+            HwpError::Security(e) => Some(e),
             _ => None,
         }
     }

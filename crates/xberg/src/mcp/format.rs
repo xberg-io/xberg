@@ -3,7 +3,6 @@
 //! This module provides utilities for formatting extraction results and building configurations.
 
 use crate::ExtractionConfig;
-use crate::core::config::merge::build_config_from_json;
 
 /// Build extraction config from MCP parameters.
 ///
@@ -13,16 +12,7 @@ pub(super) fn build_config(
     default_config: &ExtractionConfig,
     config_json: Option<serde_json::Value>,
 ) -> Result<ExtractionConfig, String> {
-    if let Some(config) = config_json.as_ref() {
-        crate::core::config::request_security::validate_caller_extraction_config(config)?;
-    }
-    let json_string = config_json
-        .map(|v| serde_json::to_string(&v))
-        .transpose()
-        .map_err(|e| format!("Failed to serialize config JSON: {e}"))?;
-    let mut config = build_config_from_json(default_config, json_string.as_deref())?;
-    crate::core::config::request_security::adopt_operator_crawl_egress(&mut config, default_config);
-    Ok(config)
+    crate::core::config::request_security::resolve_caller_extraction_config(default_config, config_json.as_ref())
 }
 
 #[cfg(test)]
@@ -267,6 +257,99 @@ mod tests {
         assert_eq!(
             merged.url.crawl.custom_headers.get("x-caller").map(String::as_str),
             Some("caller-value")
+        );
+    }
+
+    fn hardened_operator() -> ExtractionConfig {
+        ExtractionConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_archive_size: 1024 * 1024,
+                max_pages: Some(50),
+                ..Default::default()
+            }),
+            max_archive_depth: 1,
+            extraction_timeout_secs: Some(30),
+            max_embedded_file_bytes: Some(1024),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn should_reject_caller_css_file_in_mcp_config() {
+        let caller_override = serde_json::json!({"html_output": {"css_file": "/proc/self/environ"}});
+
+        assert_eq!(
+            build_config(&ExtractionConfig::default(), Some(caller_override)).expect_err("css_file must be rejected"),
+            "Caller extraction config may not set html_output.css_file"
+        );
+    }
+
+    #[test]
+    fn should_keep_operator_limits_when_caller_raises_them() {
+        let caller_override = serde_json::json!({
+            "security_limits": {"max_archive_size": 4_000_000_000_u64, "max_pages": 100_000},
+            "max_archive_depth": 64,
+            "extraction_timeout_secs": 86_400,
+            "max_embedded_file_bytes": 4_000_000_000_u64
+        });
+
+        let config = build_config(&hardened_operator(), Some(caller_override)).expect("limit overrides parse");
+        let limits = config.security_limits.expect("security limits stay set");
+
+        assert_eq!(limits.max_archive_size, 1024 * 1024);
+        assert_eq!(limits.max_pages, Some(50));
+        assert_eq!(config.max_archive_depth, 1);
+        assert_eq!(config.extraction_timeout_secs, Some(30));
+        assert_eq!(config.max_embedded_file_bytes, Some(1024));
+    }
+
+    #[test]
+    fn should_keep_operator_limits_when_caller_removes_them() {
+        let caller_override = serde_json::json!({
+            "security_limits": null,
+            "extraction_timeout_secs": null,
+            "max_embedded_file_bytes": null
+        });
+
+        let config = build_config(&hardened_operator(), Some(caller_override)).expect("null overrides parse");
+
+        assert_eq!(
+            config
+                .security_limits
+                .expect("operator limits survive")
+                .max_archive_size,
+            1024 * 1024
+        );
+        assert_eq!(config.extraction_timeout_secs, Some(30));
+        assert_eq!(config.max_embedded_file_bytes, Some(1024));
+    }
+
+    #[test]
+    fn should_apply_caller_limits_stricter_than_operator() {
+        let caller_override = serde_json::json!({
+            "security_limits": {"max_archive_size": 1024, "max_pages": 2},
+            "max_archive_depth": 0,
+            "extraction_timeout_secs": 5
+        });
+
+        let config = build_config(&hardened_operator(), Some(caller_override)).expect("limit overrides parse");
+        let limits = config.security_limits.expect("security limits stay set");
+
+        assert_eq!(limits.max_archive_size, 1024);
+        assert_eq!(limits.max_pages, Some(2));
+        assert_eq!(config.max_archive_depth, 0);
+        assert_eq!(config.extraction_timeout_secs, Some(5));
+    }
+
+    #[test]
+    fn should_bound_caller_limits_by_defaults_when_operator_sets_none() {
+        let caller_override = serde_json::json!({"security_limits": {"max_archive_size": 4_000_000_000_u64}});
+
+        let config = build_config(&ExtractionConfig::default(), Some(caller_override)).expect("limit override parses");
+
+        assert_eq!(
+            config.security_limits.expect("caller limits stay set").max_archive_size,
+            crate::extractors::security::SecurityLimits::default().max_archive_size
         );
     }
 }

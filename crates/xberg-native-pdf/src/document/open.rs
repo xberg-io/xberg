@@ -18,7 +18,9 @@ impl PdfDocument {
     /// Returns an error if the PDF data is invalid, unsupported, or cannot be parsed.
     #[tracing::instrument(name = "pdf.from_bytes", skip_all, fields(bytes = data.len()))]
     pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
-        match Self::open_from_bytes_inner(data) {
+        let warning_sink = crate::extractors::warnings::WarningSink::new();
+        let _warnings = warning_sink.enter();
+        match Self::open_from_bytes_inner(data, warning_sink) {
             Ok(document) => Ok(document),
             Err(error) => {
                 trace_open_error(&error);
@@ -80,7 +82,7 @@ impl PdfDocument {
     /// Parse `data` into a document. The reader built here lives only for the
     /// header, xref and trailer parse; the finished document keeps the bytes and
     /// reads them by offset instead. ~keep
-    fn open_from_bytes_inner(data: Vec<u8>) -> Result<Self> {
+    fn open_from_bytes_inner(data: Vec<u8>, warning_sink: crate::extractors::warnings::WarningSink) -> Result<Self> {
         let mut reader = PdfReader::Memory(BufReader::new(Cursor::new(data)));
         // Parse header with lenient mode by default (handle PDFs with binary prefixes) ~keep
         let (major, minor, header_offset) = parse_header(&mut reader, true)?;
@@ -122,6 +124,7 @@ impl PdfDocument {
         let document = Self::build_document(
             (source_bytes, version, xref, trailer),
             (header_offset, xref_reconstructed, prepopulated_scan),
+            warning_sink,
         );
 
         // Seed any SYNTHETIC recovery objects (a Catalog / page-tree root rebuilt
@@ -257,6 +260,7 @@ impl PdfDocument {
     fn build_document(
         parsed: (Vec<u8>, (u8, u8), CrossRefTable, Object),
         recovery: (u64, bool, Option<HashMap<u32, u64>>),
+        warning_sink: crate::extractors::warnings::WarningSink,
     ) -> Self {
         let (source_bytes, version, xref, trailer) = parsed;
         let (header_offset, xref_reconstructed, prepopulated_scan) = recovery;
@@ -285,6 +289,8 @@ impl PdfDocument {
             donation_call_count: AtomicUsize::new(0),
             #[cfg(test)]
             donation_apply_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            cached_object_clone_count: AtomicUsize::new(0),
             font_identity_cache: Mutex::new(BoundedEntryCache::new(512)),
             font_id_hash_cache: Mutex::new(HashMap::new()),
             font_reference_hash_cache: Mutex::new(BoundedEntryCache::new(FONT_IDENTITY_MAX_RESOLVED_REFERENCES)),
@@ -309,13 +315,14 @@ impl PdfDocument {
             erase_regions: Mutex::new(HashMap::new()),
             page_content_cache: Mutex::new(BoundedEntryCache::new(64)),
             page_spans_cache: Mutex::new(BoundedEntryCache::new(8)),
+            small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
             page_chars_cache: Mutex::new(BoundedEntryCache::new(8)),
             running_artifact_signatures: Mutex::new(None),
             article_threads_cache: Mutex::new(None),
             output_intent_cmyk_profile_cache: Mutex::new(None),
             accumulated_warnings: Mutex::new(Vec::new()),
-            warning_sink: crate::extractors::warnings::WarningSink::new(),
+            warning_sink,
             recovery: std::sync::Arc::default(),
         }
     }
@@ -452,7 +459,7 @@ impl PdfDocument {
     ///
     /// ISO 32000-1:2008, Section 7.6.2 - Streams must be decrypted BEFORE applying filters.
     pub(crate) fn decode_stream_with_encryption(&self, stream_obj: &Object, obj_ref: ObjectRef) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false)
+        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false, None)
     }
 
     pub(crate) fn decode_image_stream_with_encryption(
@@ -461,7 +468,104 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         expected_filter_output_size: Option<usize>,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, expected_filter_output_size, true)
+        self.decode_stream_with_encryption_and_expected_size(
+            stream_obj,
+            obj_ref,
+            expected_filter_output_size,
+            true,
+            None,
+        )
+    }
+
+    pub(super) fn decode_form_stream_with_limit(
+        &self,
+        stream_obj: &Object,
+        obj_ref: ObjectRef,
+        byte_limit: usize,
+    ) -> Result<Vec<u8>> {
+        let resolved_stream = match stream_obj {
+            Object::Stream { dict, data } => {
+                if let Some(params) = dict.get("DecodeParms")
+                    && let Some(params) = self.resolve_form_decode_parms(params, dict.get("Filter"))?
+                {
+                    let mut dict = dict.clone();
+                    dict.insert("DecodeParms".into(), params);
+                    Some(Object::Stream {
+                        dict,
+                        data: data.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        self.decode_stream_with_encryption_and_expected_size(
+            resolved_stream.as_ref().unwrap_or(stream_obj),
+            obj_ref,
+            None,
+            false,
+            Some(byte_limit),
+        )
+    }
+
+    fn resolve_form_decode_parms(&self, params: &Object, filters: Option<&Object>) -> Result<Option<Object>> {
+        let is_lzw_stage = |index| {
+            match filters {
+                Some(Object::Name(name)) if index == 0 => Some(name.as_str()),
+                Some(Object::Array(filters)) => filters.get(index).and_then(Object::as_name),
+                _ => None,
+            }
+            .is_some_and(crate::decoders::is_lzw_filter)
+        };
+        let needs_resolution = |stage: &Object, index| {
+            stage.as_reference().is_some()
+                || (is_lzw_stage(index)
+                    && stage
+                        .as_dict()
+                        .and_then(|dict| dict.get("EarlyChange"))
+                        .is_some_and(|value| value.as_reference().is_some()))
+        };
+        let has_references = match params {
+            Object::Array(stages) => stages
+                .iter()
+                .enumerate()
+                .any(|(index, stage)| needs_resolution(stage, index)),
+            _ => needs_resolution(params, 0),
+        };
+        if !has_references {
+            return Ok(None);
+        }
+
+        let mut resolved = self.resolve_object(params)?;
+        match &mut resolved {
+            Object::Array(stages) => {
+                for (index, stage) in stages.iter_mut().enumerate() {
+                    if stage.as_reference().is_some() {
+                        *stage = self.resolve_object(stage)?;
+                    }
+                    if !matches!(stage, Object::Dictionary(_) | Object::Null) {
+                        return Err(Error::Decode("invalid Form filter-stage DecodeParms".into()));
+                    }
+                    if is_lzw_stage(index) {
+                        self.resolve_form_early_change(stage)?;
+                    }
+                }
+            }
+            Object::Dictionary(_) if is_lzw_stage(0) => self.resolve_form_early_change(&mut resolved)?,
+            Object::Dictionary(_) | Object::Null => {}
+            _ => return Err(Error::Decode("invalid indirect Form DecodeParms".into())),
+        }
+        Ok(Some(resolved))
+    }
+
+    fn resolve_form_early_change(&self, params: &mut Object) -> Result<()> {
+        if let Object::Dictionary(dict) = params
+            && let Some(value @ Object::Reference(_)) = dict.get_mut("EarlyChange")
+        {
+            *value = self.resolve_object(value)?;
+        }
+        Ok(())
     }
 
     fn decode_stream_with_encryption_and_expected_size(
@@ -470,6 +574,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         expected_filter_output_size: Option<usize>,
         image_stream: bool,
+        byte_limit: Option<usize>,
     ) -> Result<Vec<u8>> {
         if matches!(stream_obj, Object::Null) {
             return Ok(Vec::new());
@@ -501,13 +606,14 @@ impl PdfDocument {
                 obj_ref.generation as u32,
                 expected_filter_output_size,
                 image_stream,
+                byte_limit,
             );
         }
         drop(handler_ref);
         if image_stream {
             stream_obj.decode_image_stream_data(expected_filter_output_size)
         } else {
-            stream_obj.decode_stream_data()
+            stream_obj.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, None, false, byte_limit)
         }
     }
 

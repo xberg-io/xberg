@@ -461,6 +461,31 @@ fn should_keep_the_squared_parenthesized_term_on_gutenberg_36670_page_106() {
 }
 
 #[test]
+fn gutenberg_page_106_keeps_all_source_verified_exponents() {
+    let Some(markdown) = regression_page_markdown("gutenberg-36670-p106") else {
+        return;
+    };
+    for line in [
+        "Therefore (x + 3y)<sup>2</sup> − 16a<sup>2</sup> = (x + 3y + 4a)(x + 3y − 4a).",
+        "2. Resolve into factors a<sup>2</sup> − (3b − 5c)<sup>2</sup>.",
+        "Therefore a<sup>2</sup> − (3b − 5c)<sup>2</sup> = (a + 3b − 5c)(a − 3b + 5c).",
+        "14. 16c<sup>2</sup> − (a − 5b)<sup>2</sup>.",
+        "19. 16a<sup>2</sup> − (2b + 5c)<sup>2</sup>.",
+        "20. 25c<sup>2</sup> − (3a − 2x)<sup>2</sup>.",
+        "9. c<sup>2</sup> − (a − 2b)<sup>2</sup>.",
+        "16. b<sup>2</sup> − (a − 2x)<sup>2</sup>.",
+    ] {
+        assert!(
+            markdown.lines().any(|candidate| candidate == line),
+            "missing {line:?} in\n{markdown}"
+        );
+    }
+    assert_eq!(marker_only_paragraphs(&markdown), ["98"], "{markdown}");
+    let expected = include_str!("fixtures/pdf/regression_pages/gutenberg-36670-p106.md");
+    assert_eq!(markdown.trim_end(), expected.trim_end());
+}
+
+#[test]
 fn should_keep_a_footnote_mark_inside_its_sentence_on_a_real_page() {
     let Some(markdown) = regression_page_markdown("fr-2026-08190-hcbs-p2") else {
         return;

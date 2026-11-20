@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.129.1"
+alef_version = "0.130.4"
 # Alef 0.115.5 emits a redundant PathBuf conversion closure in the Dart bridge. ~keep
 # This supported allow-list applies only to generated Rust bindings. ~keep
 extra_clippy_allows = ["redundant_closure"]
@@ -260,7 +260,7 @@ manifest = "packages/elixir/mix.exs"
 cwd = "packages/java"
 manifest = "packages/java/pom.xml"
 before = [
-  "if [ -x /usr/libexec/java_home ]; then JAVA_HOME=$(/usr/libexec/java_home -v 25); else JAVA_HOME=$(java -XshowSettings:properties -version 2>&1 | sed -n 's/ *java.home = //p'); fi; export JAVA_HOME; if [ ! -d target/classes ]; then mvn -q -Dcheckstyle.skip -DskipTests compile; fi && mvn -q -DskipTests dependency:copy-dependencies",
+  "JAVA_HOME=$(java -XshowSettings:properties -version 2>&1 | sed -n 's/ *java.home = //p'); test -x \"$JAVA_HOME/bin/java\" || exit 1; export JAVA_HOME; if [ ! -d target/classes ]; then mvn -q -Dcheckstyle.skip -DskipTests compile; fi && mvn -q -DskipTests dependency:copy-dependencies",
 ]
 
 [workspace.docs.snippets.sessions.csharp]
@@ -657,7 +657,7 @@ traineddata = "traineddata"
 "tools/benchmark-harness/baselines/initial_baseline.json" = ["file-too-long"]
 "tools/benchmark-harness/guardrails.json" = ["file-too-long"]
 # --- quality-debt baseline (generated) ---
-# 423 size/complexity rule attachments across 148 files that predate these metrics, listed per file
+# 408 size/complexity rule attachments across 140 files that predate these metrics, listed per file
 # rather than switching the rules off, so the metrics still fire on every file NOT listed
 # here -- new code stays covered, and each path below is one discrete unit of work.
 #
@@ -665,9 +665,6 @@ traineddata = "traineddata"
 # Prefer a fresh TOML parse and uncached lint run over historical issue counts. ~keep
 # TODO(xberg-io/xberg#1567): pay this down file by file and delete each entry as it goes green.
 # Do not add new paths here without a very good reason. ~keep
-".github/workflows/benchmarks.yaml" = ["file-too-long"]
-".github/workflows/profiling.yaml" = ["file-too-long"]
-".github/workflows/publish.yaml" = ["file-too-long"]
 "crates/xberg-candle-ocr/src/models/deepseek_ocr/model.rs" = [
   "file-too-long",
   "function-too-long",
@@ -874,11 +871,9 @@ traineddata = "traineddata"
   "nesting-too-deep",
 ]
 "crates/xberg/src/extraction/ppt/mod.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
-"crates/xberg/src/extraction/pptx/tests.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/extractors/archive.rs" = ["function-too-long"]
 "crates/xberg/src/extractors/djot_format/extractor.rs" = [
   "cyclomatic-complexity",
-  "file-too-long",
   "function-too-long",
   "nesting-too-deep",
 ]
@@ -895,7 +890,7 @@ traineddata = "traineddata"
   "nesting-too-deep",
   "too-many-parameters",
 ]
-"crates/xberg/src/extractors/email.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
+"crates/xberg/src/extractors/email.rs" = ["cyclomatic-complexity", "function-too-long"]
 "crates/xberg/src/extractors/epub/mod.rs" = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/excel.rs" = ["file-too-long", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/fictionbook.rs" = [
@@ -914,12 +909,7 @@ traineddata = "traineddata"
 "crates/xberg/src/extractors/image.rs" = ["file-too-long", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/iwork/numbers.rs" = ["file-too-long"]
 "crates/xberg/src/extractors/jats/elements.rs" = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
-"crates/xberg/src/extractors/jats/mod.rs" = [
-  "cyclomatic-complexity",
-  "file-too-long",
-  "function-too-long",
-  "nesting-too-deep",
-]
+"crates/xberg/src/extractors/jats/mod.rs" = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/jats/parser.rs" = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 "crates/xberg/src/extractors/jupyter.rs" = [
   "file-too-long",
@@ -960,12 +950,7 @@ traineddata = "traineddata"
   "function-too-long",
   "nesting-too-deep",
 ]
-"crates/xberg/src/extractors/pdf/extraction.rs" = [
-  "cyclomatic-complexity",
-  "file-too-long",
-  "function-too-long",
-  "too-many-parameters",
-]
+"crates/xberg/src/extractors/pdf/extraction.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 "crates/xberg/src/extractors/pdf/layout_runner.rs" = ["file-too-long", "function-too-long", "too-many-parameters"]
 "crates/xberg/src/extractors/pdf/mod.rs" = [
   "cyclomatic-complexity",
@@ -982,12 +967,7 @@ traineddata = "traineddata"
   "nesting-too-deep",
   "too-many-parameters",
 ]
-"crates/xberg/src/extractors/pdf/ocr/scoring.rs" = [
-  "cyclomatic-complexity",
-  "file-too-long",
-  "function-too-long",
-  "too-many-parameters",
-]
+"crates/xberg/src/extractors/pdf/ocr/scoring.rs" = ["file-too-long", "function-too-long", "too-many-parameters"]
 "crates/xberg/src/extractors/pdf/ocr/tests.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/extractors/pdf/reading_order.rs" = ["file-too-long", "function-too-long", "too-many-parameters"]
 "crates/xberg/src/extractors/pptx.rs" = ["file-too-long", "function-too-long"]
@@ -1007,7 +987,6 @@ traineddata = "traineddata"
 "crates/xberg/src/layout/models/slanet.rs" = ["cyclomatic-complexity", "function-too-long"]
 "crates/xberg/src/mcp/server.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 "crates/xberg/src/model_download.rs" = ["file-too-long", "function-too-long"]
-"crates/xberg/src/ocr/conversion.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/ocr/hocr_parser.rs" = [
   "cyclomatic-complexity",
   "file-too-long",
@@ -1079,12 +1058,9 @@ traineddata = "traineddata"
 "crates/xberg/src/reranking/mod.rs" = ["file-too-long", "function-too-long", "too-many-parameters"]
 "crates/xberg/src/table_core.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/text/redaction/engine.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
-"crates/xberg/src/transcription/engine.rs" = ["file-too-long"]
 "crates/xberg/src/types/extraction.rs" = ["file-too-long", "type-too-long"]
 "crates/xberg/src/types/internal_builder.rs" = ["too-many-parameters"]
 "crates/xberg/src/types/metadata.rs" = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
-"docs-site/src/content/docs/cli/usage.mdx" = ["file-too-long"]
-"docs-site/src/content/docs/guides/ocr.mdx" = ["file-too-long"]
 # --- end quality-debt baseline ---
 # Quality metrics do not apply to test code. A test function's length is its assertion
 # count and a table-driven test's arity mirrors its cases; splitting either to satisfy a
@@ -1373,7 +1349,13 @@ traineddata = "traineddata"
 name = "xberg"
 core_import = "xberg"
 error_type = "XbergError"
-error_constructor = "xberg::XbergError::Other({msg})"
+# Preserve the Python exception through OCR aggregation while keeping the error category of other
+# callbacks and Rust-only conversion failures. Bridges outside Python pass no Python source. ~keep
+error_constructor = """\
+match ({trait}, {python_source}, {msg}) {
+    ("OcrBackend", Some(source), message) => xberg::XbergError::Ocr { message, source: Some(source) },
+    (_, _, message) => xberg::XbergError::Other(message),
+}"""
 version_from = "Cargo.toml"
 workspace_root = "."
 crate_attributes = ["allow(deprecated)"]
@@ -1404,6 +1386,7 @@ sources = [
   "crates/xberg/src/core/config/html_output.rs",
   "crates/xberg/src/core/config/layout.rs",
   "crates/xberg/src/core/config/acceleration.rs",
+  "crates/xberg/src/ort_options.rs",
   "crates/xberg/src/core/config/llm.rs",
   "crates/xberg/src/core/config/content_filter.rs",
   "crates/xberg/src/core/config/tree_sitter.rs",
@@ -1763,6 +1746,9 @@ default_features = false
 
 [crates.elixir]
 app_name = "xberg"
+# Applying new options drops every resident OCR/embedding engine under a pool lock, so the
+# NIF is CPU-bound rather than a quick scheduler call. ~keep
+cpu_bound_functions = ["set_ort_session_options"]
 # Intel macOS (x86_64-apple-darwin) dropped: GitHub retires the last x86_64-macOS
 # runner in 2027 and pyke ships no static ORT for it. rustler_precompiled would
 # hard-fail its checksum step hunting for an artifact CI no longer builds. ~keep
@@ -1770,12 +1756,14 @@ app_name = "xberg"
 # {:win32, _} and then rejects any triple absent from this list, so declaring the gnu triple
 # made every Windows Hex install fail with "precompiled NIF is not available for this target"
 # -- while CI built, checksummed and uploaded the msvc artifact nobody could reach. This list
-# must stay equal to the elixir-natives matrix and the generate-elixir-checksums `targets`
-# input in .github/workflows/publish.yaml. ~keep
+# must stay equal to the combined Elixir NIF build matrices and the generate-elixir-checksums
+# `targets` input in .github/workflows/publish.yaml. ~keep
 nif_targets = [
   "aarch64-apple-darwin",
   "aarch64-unknown-linux-gnu",
+  "aarch64-unknown-linux-musl",
   "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
   "x86_64-pc-windows-msvc",
 ]
 exclude_functions = [
@@ -2900,6 +2888,7 @@ default_features = false
 
 [crates.csharp]
 namespace = "Xberg"
+split_bytes_disjoint_sources = ["ExtractInput"]
 package_id = "XbergIo.Xberg"
 project_file = "packages/csharp/Xberg/Xberg.csproj"
 # Must match `[crates.ffi].features`; C# binds that exact native ABI. ~keep
@@ -3283,7 +3272,7 @@ functions = [
 [crates.test.python]
 precondition = "command -v uv >/dev/null 2>&1"
 before = "bash scripts/e2e/build-mock-server.sh && cd e2e/python && uv sync --reinstall-package xberg"
-e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ -q"
+e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ ../../packages/python/tests/test_ocr_callback_exceptions.py -q"
 
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
@@ -5776,6 +5765,12 @@ id = "adrlint"
 git = "https://github.com/Goldziher/adrlint.git"
 revision = "v0"
 hooks = ["adrlint-lint", "adrlint-format-check", "adrlint-lock-check"]
+
+[[workspace.poly.hooks-sources]]
+id = "gh-actions-updater"
+git = "https://github.com/Goldziher/gh-actions-updater.git"
+revision = "v0"
+hooks = ["gh-actions-updater-lint-pins"]
 
 [extensions.python_host_aliases.crates.xberg.traits.TokenizerBackend]
 try_count_tokens = { fallback = "count_tokens", python_only = true }

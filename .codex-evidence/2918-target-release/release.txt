@@ -1,0 +1,4 @@
+removed=/Users/naamanhirschfeld/workspace/xberg-io/.worktrees/xberg/fix-2918-retained-read-metadata/target
+bytes_before=37387632640
+bytes_after=85796573184
+net_available_bytes=48408940544

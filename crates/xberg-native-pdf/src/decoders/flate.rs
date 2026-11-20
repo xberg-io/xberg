@@ -111,9 +111,8 @@ fn looks_like_real_stream(output: &[u8]) -> bool {
 fn check_limit(output: &[u8], limit: u64) -> Result<()> {
     if output.len() as u64 >= limit {
         return Err(Error::Decode(format!(
-            "FlateDecode output reached the {} MB safety limit; \
-             stream may be a flate bomb or an unusually large image",
-            limit / (1024 * 1024)
+            "FlateDecode output reached the {limit} byte safety limit; \
+             stream may be a flate bomb or an unusually large image"
         )));
     }
     Ok(())
@@ -123,11 +122,8 @@ fn check_limit(output: &[u8], limit: u64) -> Result<()> {
 /// [`looks_like_real_stream`], after validating it against the decompression
 /// cap. Shared by every recovery strategy's "accept this partial output?" check.
 fn accept_as_partial(output: &[u8], limit: u64) -> Result<bool> {
-    if output.is_empty() || !looks_like_real_stream(output) {
-        return Ok(false);
-    }
     check_limit(output, limit)?;
-    Ok(true)
+    Ok(!output.is_empty() && looks_like_real_stream(output))
 }
 
 /// Outcome of a primary (non-fallback) decode attempt: accepted output — a
@@ -226,12 +222,46 @@ impl FlateDecoder {
     }
 }
 
+impl FlateDecoder {
+    pub(super) fn decode_complete(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        use flate2::{Decompress, FlushDecompress, Status};
+
+        let limit = self
+            .max_decompressed_bytes
+            .min((max_output_bytes as u64).saturating_add(1));
+        let mut decoder = Decompress::new(true);
+        let mut output = Vec::new();
+        let mut chunk = [0; 8192];
+        loop {
+            let offset = decoder.total_in() as usize;
+            let chunk_len = (chunk.len() as u64).min(limit - output.len() as u64) as usize;
+            let status = decoder
+                .decompress(&input[offset..], &mut chunk[..chunk_len], FlushDecompress::None)
+                .map_err(|error| Error::Decode(format!("FlateDecode: {error}")))?;
+            let count = decoder.total_out() as usize - output.len();
+            output.extend_from_slice(&chunk[..count]);
+            check_limit(&output, limit)?;
+            if status == Status::StreamEnd && decoder.total_in() as usize == input.len() {
+                return Ok(output);
+            }
+            if status == Status::StreamEnd || (count == 0 && decoder.total_in() as usize == offset) {
+                return Err(Error::Decode(
+                    "FlateDecode: incomplete zlib stream or trailing data".into(),
+                ));
+            }
+        }
+    }
+}
+
 impl StreamDecoder for FlateDecoder {
-    // `max_output_bytes` (GH#1764) is ignored here: this decoder already enforces its own,
-    // independently configured `max_decompressed_bytes` mid-decode via `.take(limit)` in
-    // every strategy below, and predates the trait-level cap. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
-        let limit = self.max_decompressed_bytes;
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        let limit = if max_output_bytes == 0 {
+            self.max_decompressed_bytes
+        } else {
+            // Read one byte past the inclusive caller budget to distinguish exact fit from truncation.
+            self.max_decompressed_bytes
+                .min((max_output_bytes as u64).saturating_add(1))
+        };
 
         let zlib_err = match try_zlib_decode(input, limit)? {
             PrimaryAttempt::Recovered(output) => return Ok(output),

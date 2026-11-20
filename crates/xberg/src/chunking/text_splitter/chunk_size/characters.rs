@@ -16,6 +16,11 @@ impl ChunkSizer for Characters {
     fn size(&self, chunk: &str) -> usize {
         chunk.chars().count()
     }
+
+    /// Every `char` takes at least one byte.
+    fn max_size_for_bytes(&self, byte_len: usize) -> Option<usize> {
+        Some(byte_len)
+    }
 }
 
 #[cfg(test)]

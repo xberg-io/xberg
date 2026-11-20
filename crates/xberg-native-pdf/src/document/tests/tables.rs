@@ -79,3 +79,64 @@ fn test_rowspan_label_promoted_to_top_of_block() {
         texts
     );
 }
+
+fn decimal_anchor_from_table_word(rotate: bool) -> (Vec<f32>, f32) {
+    use super::super::PdfDocument;
+
+    let axis_rule = "10 10 m 160 10 l S 10 30 m 160 30 l S 10 50 m 160 50 l S 10 70 m 160 70 l S\n\
+                     10 10 m 10 70 l S 60 10 m 60 70 l S 110 10 m 110 70 l S 160 10 m 160 70 l S\n";
+    let matrix = if rotate { "1 .02 -.02 1" } else { "1 0 0 1" };
+    let stream = format!(
+        "{axis_rule}BT /F1 8 Tf 1 0 0 1 15 55 Tm (Metric) Tj 1 0 0 1 65 55 Tm (Value) Tj \
+         1 0 0 1 115 55 Tm (Unit) Tj 1 0 0 1 15 35 Tm (Latency) Tj {matrix} 65 35 Tm (12.5) Tj \
+         1 0 0 1 115 35 Tm (ms) Tj 1 0 0 1 15 15 Tm (Duration) Tj 1 0 0 1 65 15 Tm (10) Tj \
+         1 0 0 1 115 15 Tm (ms) Tj ET\n"
+    );
+    let content = format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len());
+    let pdf = super::pdf_fixtures::build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
+            (4, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (5, content.as_bytes()),
+        ],
+    );
+    let document = PdfDocument::from_bytes(pdf).expect("parse the ruled table fixture");
+    let glyphs = document.extract_chars(0).expect("read raw glyph orientation");
+    let dot = glyphs
+        .iter()
+        .find(|glyph| glyph.char == '.')
+        .expect("source decimal point");
+    if rotate {
+        assert!((1.0..1.2).contains(&dot.rotation_degrees), "{dot:?}");
+    } else {
+        assert_eq!(dot.rotation_degrees, 0.0);
+    }
+    let tables = document.extract_tables(0).expect("extract native tables");
+    let [table] = tables.as_slice() else {
+        panic!("expected a single ruled table");
+    };
+    let word = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .filter(|cell| cell.text == "12.5")
+        .flat_map(|cell| &cell.spans)
+        .find(|span| span.text.trim() == "12.5")
+        .expect("decimal cell retains the table word");
+    (word.char_x_offsets.clone(), dot.origin_x)
+}
+
+#[test]
+fn shallow_rotated_table_word_does_not_supply_horizontal_decimal_anchor() {
+    let (positions, _) = decimal_anchor_from_table_word(true);
+    assert!(positions.is_empty(), "tilted raw glyphs supplied {positions:?}");
+}
+
+#[test]
+fn horizontal_table_word_retains_raw_decimal_anchor() {
+    let (positions, source_dot) = decimal_anchor_from_table_word(false);
+    assert_eq!(positions.len(), 4);
+    assert_eq!(positions[2], source_dot);
+}

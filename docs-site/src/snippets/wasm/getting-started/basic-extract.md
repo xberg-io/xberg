@@ -4,7 +4,7 @@ target: wasm
 ---
 
 ```typescript title="Wasm"
-import init, { WasmExtractInputKind, extract } from "@xberg-io/xberg-wasm";
+import init, { WasmExtractInput, extract } from "@xberg-io/xberg-wasm";
 
 async function main() {
   await init();
@@ -12,12 +12,7 @@ async function main() {
   const buffer = await fetch("document.pdf").then((r) => r.arrayBuffer());
   const bytes = new Uint8Array(buffer);
 
-  const output = await extract({
-    kind: "bytes",
-    bytes,
-    mimeType: "application/pdf",
-    filename: "document.pdf",
-  }, undefined);
+  const output = await extract(WasmExtractInput.fromBytes(bytes, "application/pdf", "document.pdf"));
 
   console.log("Extracted content:");
   console.log(output.results[0].content);

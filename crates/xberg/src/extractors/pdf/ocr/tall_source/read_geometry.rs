@@ -208,7 +208,7 @@ mod frame_tests {
             "/../../fixtures/repros/tall-scan-strips/large-text-150.pdf"
         ));
         let base = xberg_native_pdf::PdfDocument::from_bytes(bytes.to_vec()).unwrap();
-        assert!(super::super::certify(&base, 0, Some(154), 100 * 1024 * 1024).is_some());
+        assert!(super::super::certify(&base, 0, Some(154), 100 * 1024 * 1024, &mut None).is_some());
         for rotation in [90, 180, 270] {
             let mut pdf = lopdf::Document::load_mem(bytes).unwrap();
             let page = pdf.get_pages()[&1];
@@ -224,7 +224,29 @@ mod frame_tests {
                 rotated.get_page_rotation_status(0).unwrap(),
                 xberg_native_pdf::document::PageRotation::Valid(rotation)
             );
-            assert!(super::super::certify(&rotated, 0, Some(154), 100 * 1024 * 1024).is_none());
+            assert!(super::super::certify(&rotated, 0, Some(154), 100 * 1024 * 1024, &mut None).is_none());
         }
     }
+}
+
+pub(super) fn scale_only(
+    original: (u32, u32),
+    processed: (u32, u32),
+    resize: Option<&crate::types::ImagePreprocessingMetadata>,
+) -> bool {
+    if original == processed {
+        return true;
+    }
+    let Some(resize) = resize else { return false };
+    let Some(size) = resize.new_dimensions.as_ref() else {
+        return false;
+    };
+    let (width, height) = (original.0 as usize, original.1 as usize);
+    resize.resize_error.is_none()
+        && (resize.original_dimensions.width, resize.original_dimensions.height) == (width, height)
+        && (size.width, size.height) == (processed.0 as usize, processed.1 as usize)
+        && resize.scale_factor.is_finite()
+        && resize.scale_factor > 0.0
+        && (width as f64 * resize.scale_factor - size.width as f64).abs() <= 1.0
+        && (height as f64 * resize.scale_factor - size.height as f64).abs() <= 1.0
 }

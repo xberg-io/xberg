@@ -88,3 +88,72 @@ fn test_escaped_literals_stay_in_their_table_cell() {
         "cell text leaked into the body: {text:?}"
     );
 }
+
+/// #3164: `\deleted` marks tracked-change deleted text, which must not appear
+/// in the extracted content while the adjacent `\revised` insertion does.
+#[test]
+fn test_deleted_text_is_dropped_and_revised_text_kept() {
+    let rtf = r"{\rtf1\ansi Amount: {\deleted 100}{\revised 200}}";
+    for plain in [true, false] {
+        let (text, ..) = extract_text_from_rtf(rtf, plain);
+        assert_eq!(text.trim(), "Amount: 200", "plain={plain}, got: {text:?}");
+    }
+}
+
+#[test]
+fn test_deleted_zero_re_enables_text_within_the_same_group() {
+    let rtf = r"{\rtf1\ansi {\deleted gone\deleted0 kept} after}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert!(!text.contains("gone"), "got: {text:?}");
+    assert!(text.contains("kept"), "got: {text:?}");
+    assert!(text.contains("after"), "got: {text:?}");
+}
+
+#[test]
+fn test_deleted_scope_ends_at_group_close() {
+    let rtf = r"{\rtf1\ansi {\deleted old} new text}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "new text", "got: {text:?}");
+}
+
+#[test]
+fn test_deleted_scope_is_inherited_by_nested_groups() {
+    let rtf = r"{\rtf1\ansi {\deleted a{\b b}c} d}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "d", "got: {text:?}");
+}
+
+#[test]
+fn test_deleted_text_drops_unicode_and_hex_escapes() {
+    let rtf = r"{\rtf1\ansi A{\deleted \u233? \'e9 \~}B}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "AB", "got: {text:?}");
+}
+
+#[test]
+fn test_deleted_text_in_table_cell_is_dropped() {
+    let rtf = r"{\rtf1\ansi \trowd Keep {\deleted Drop}\cell Next\cell\row}";
+    let (text, tables, ..) = extract_text_from_rtf(rtf, true);
+    assert!(!text.contains("Drop"), "got: {text:?}");
+    let cells: Vec<&str> = tables
+        .iter()
+        .flat_map(|table| table.cells.iter().flatten())
+        .map(String::as_str)
+        .collect();
+    assert!(cells.iter().all(|cell| !cell.contains("Drop")), "cells: {cells:?}");
+    assert!(cells.iter().any(|cell| cell.contains("Keep")), "cells: {cells:?}");
+}
+
+#[test]
+fn test_document_without_revisions_is_unchanged() {
+    let rtf = r"{\rtf1\ansi Plain {\b bold} \insrsid123\revauth1 text}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "Plain bold text", "got: {text:?}");
+}
+
+#[test]
+fn test_deleted_paragraph_break_adds_no_break() {
+    let rtf = r"{\rtf1\ansi A{\deleted X\par Y}B}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "AB", "got: {text:?}");
+}

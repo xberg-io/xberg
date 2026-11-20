@@ -38,6 +38,72 @@ impl OcrBackend for BlankBackend {
     }
 }
 
+struct CancellingBackend;
+
+impl Plugin for CancellingBackend {
+    fn name(&self) -> &str {
+        "cancel-on-image"
+    }
+    fn version(&self) -> String {
+        "1".to_owned()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for CancellingBackend {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+        Err(crate::XbergError::Cancelled)
+    }
+}
+
+#[tokio::test]
+async fn embedded_image_retry_propagates_backend_cancellation_without_a_token() {
+    let backend: Arc<dyn OcrBackend> = Arc::new(CancellingBackend);
+    let mut budget = crate::extractors::security::SecurityBudget::from_limits(&SecurityLimits::default());
+    let outcome = super::super::rendering::recover_image_xobjects(
+        &backend,
+        &[crate::pdf::native::images::PageFallbackImage::placeholder_jpeg(0)],
+        0,
+        1,
+        &OcrConfig::default(),
+        XObjectRecoveryContext::with_budget(&mut budget, None),
+    )
+    .await;
+    assert!(matches!(outcome, Err(crate::XbergError::Cancelled)));
+}
+
+#[tokio::test]
+async fn djot_budget_probe_does_not_call_custom_backend() {
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let backend: Arc<dyn OcrBackend> = Arc::new(RecordingBackend(seen.clone()));
+    let (document, ..) = open_pdf_for_full_ocr(TALL_JPEG).unwrap();
+    let config = ExtractionConfig {
+        output_format: crate::core::config::OutputFormat::Djot,
+        ..Default::default()
+    };
+    let error = render_full_pdf_ocr_batch_with_dpi(&document, &[0], 0..1, &SecurityLimits::default(), None, None)
+        .expect_err("tall JPEG must be refused");
+    assert!(render_refused_by_source_image_budget(&error));
+    let mut budget = crate::extractors::security::SecurityBudget::from_limits(&SecurityLimits::default());
+    let refusal = diagnose_djot_budget_refusal(error, &document, &config, &backend, &OcrConfig::default(), &mut budget)
+        .await
+        .unwrap();
+    assert!(render_refused_by_source_image_budget(&refusal));
+    assert!(seen.lock().unwrap().is_empty());
+}
+
 struct BackendGuard;
 impl Drop for BackendGuard {
     fn drop(&mut self) {
@@ -88,6 +154,7 @@ async fn read_refused_page(with_pipeline: bool) -> OcrRunResult<MixedOcrRun> {
         TALL_JPEG,
         &config,
         AllPagesFailedPolicy::ReturnError,
+        #[cfg(feature = "layout-detection")]
         MixedLayoutInputs::Resolve(None),
     )
     .await

@@ -48,9 +48,13 @@ impl Drop for BackendGuard {
     }
 }
 
-/// Reads the one-page document `KHMER` with a backend that returns `read`, the page being listed in
+/// Reads the one-page native text with a backend that returns `read`, the page being listed in
 /// `native_script` or not. Returns the text and the warnings.
-async fn read_page(read: &'static str, native_script: &[u32]) -> (String, Vec<crate::types::ProcessingWarning>) {
+async fn read_page(
+    native: &str,
+    read: &'static str,
+    native_script: &[u32],
+) -> (String, Vec<crate::types::ProcessingWarning>) {
     let _guard = BackendGuard;
     register_ocr_backend(Arc::new(FixedBackend(read))).unwrap();
     let config = ExtractionConfig {
@@ -64,12 +68,12 @@ async fn read_page(read: &'static str, native_script: &[u32]) -> (String, Vec<cr
     };
     let boundaries = [crate::types::PageBoundary {
         byte_start: 0,
-        byte_end: KHMER.len(),
+        byte_end: native.len(),
         page_number: 1,
     }];
     let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(720.0, 720.0);
     let run = extract_mixed_ocr_native_with_layout_pages(
-        KHMER,
+        native,
         &boundaries,
         (&[1], &[]),
         &pdf,
@@ -85,20 +89,37 @@ async fn read_page(read: &'static str, native_script: &[u32]) -> (String, Vec<cr
 #[tokio::test]
 #[serial_test::serial]
 async fn a_read_without_the_native_script_keeps_the_native_page() {
-    let (text, warnings) = read_page(LATIN_READ, &[1]).await;
-    assert_eq!(text, KHMER);
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert!(
-        warnings[0].message.contains("Page 1 retained its native text"),
-        "{warnings:?}"
-    );
-    assert!(warnings[0].message.contains("Khmer"), "{warnings:?}");
+    let fully_mapped = KHMER.replace('\u{FFFD}', "");
+    for (native, lost) in [(fully_mapped.as_str(), 0), (KHMER, 7)] {
+        let (text, warnings) = read_page(native, LATIN_READ, &[1]).await;
+        assert_eq!(text, native);
+        assert_eq!(warnings.len(), 1 + usize::from(lost > 0), "{warnings:?}");
+        assert!(
+            warnings.iter().any(|warning| {
+                warning.source == "ocr"
+                    && warning.message.contains("Page 1 retained its native text")
+                    && warning.message.contains("Khmer")
+            }),
+            "{warnings:?}"
+        );
+        if lost > 0 {
+            assert!(
+                warnings.iter().any(|warning| {
+                    warning.source == "ocr"
+                        && warning.message.contains(&format!(
+                            "Page 1 retained native text; {lost} glyphs have no Unicode value"
+                        ))
+                }),
+                "{warnings:?}"
+            );
+        }
+    }
 }
 
 #[tokio::test]
 #[serial_test::serial]
 async fn a_read_in_the_native_script_replaces_the_native_page() {
-    let (text, warnings) = read_page(KHMER_READ, &[1]).await;
+    let (text, warnings) = read_page(KHMER, KHMER_READ, &[1]).await;
     assert_eq!(text.trim(), KHMER_READ);
     assert!(warnings.is_empty(), "{warnings:?}");
 }
@@ -106,7 +127,7 @@ async fn a_read_in_the_native_script_replaces_the_native_page() {
 #[tokio::test]
 #[serial_test::serial]
 async fn a_page_the_script_rule_did_not_mark_is_replaced_by_any_read() {
-    let (text, warnings) = read_page(LATIN_READ, &[]).await;
+    let (text, warnings) = read_page(KHMER, LATIN_READ, &[]).await;
     assert_eq!(text.trim(), LATIN_READ);
     assert!(warnings.is_empty(), "{warnings:?}");
 }

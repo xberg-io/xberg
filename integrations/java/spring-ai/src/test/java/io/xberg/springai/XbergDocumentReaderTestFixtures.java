@@ -24,31 +24,31 @@ import org.mockito.MockedStatic;
  */
 final class XbergDocumentReaderTestFixtures {
 
-  private XbergDocumentReaderTestFixtures() {}
+    private XbergDocumentReaderTestFixtures() {}
 
-  static ExtractionResult createResult(String json) {
-    return ExtractionResultFactory.fromJson(json);
-  }
+    static ExtractionResult createResult(String json) {
+        return ExtractionResultFactory.fromJson(json);
+    }
 
-  /** Stubs the single-input {@code Xberg.extract} entry point. */
-  static void mockExtract(MockedStatic<Xberg> mocked, ExtractionResult result)
+    /** Stubs the single-input {@code Xberg.extract} entry point. */
+    static void mockExtract(MockedStatic<Xberg> mocked, ExtractionResult result)
       throws XbergRsException {
-    mocked
+        mocked
         .when(()
                   -> Xberg.extract(any(ExtractInput.class),
                                    any(ExtractionConfig.class)))
         .thenReturn(result);
-  }
+    }
 
-  /** Stubs the multi-input {@code Xberg.extractBatch} entry point. */
-  @SuppressWarnings("unchecked")
-  static void mockExtractBatch(MockedStatic<Xberg> mocked,
+    /** Stubs the multi-input {@code Xberg.extractBatch} entry point. */
+    @SuppressWarnings("unchecked")
+    static void mockExtractBatch(MockedStatic<Xberg> mocked,
                                ExtractionResult result)
       throws XbergRsException {
-    mocked
+        mocked
         .when(()
                   -> Xberg.extractBatch(any(List.class),
                                         any(ExtractionConfig.class)))
         .thenReturn(result);
-  }
+    }
 }

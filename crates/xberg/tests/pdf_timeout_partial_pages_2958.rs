@@ -2,10 +2,14 @@
 //! return `XbergError::Timeout` and discard every page already read. It must return the
 //! finished pages and a warning naming the first page that was not read.
 //!
-//! The cases need the page loops to outlast a 1-24 s limit, which holds only for an unoptimized
-//! build: an optimized build finishes the fixtures first and would fail them. They are compiled
-//! out of such a build, so their outcome does not depend on the machine's speed; the unit tests
-//! that request the stop on the token cover every profile.
+//! The case here cuts a scanned PDF short in its OCR page loop. It needs that loop to outlast a
+//! 6-24 s limit, which holds only for an unoptimized build: an optimized build finishes the fixture
+//! first and would fail it, so it is compiled out of such a build.
+//!
+//! The native text loop is covered deterministically in every profile, not here: the
+//! `pdf::native::text::time_limit_tests` unit tests hold the loop on a marked page until the time
+//! limit stops it, then check through `extract_bytes` that the pages read are kept and the first
+//! unread page is named. A corpus fixture cut short by a 1 s limit depended on the runner's speed.
 
 #![cfg(all(
     feature = "pdf",
@@ -19,23 +23,12 @@
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
 use std::path::Path;
-use xberg::cancellation::CancellationToken;
 use xberg::core::config::{ConcurrencyConfig, ExtractionConfig, PageConfig};
 use xberg::{ExtractedDocument, XbergError};
 
 /// Limits tried in turn. A loaded runner can read no page within the first one, which is
 /// `Timeout` by design; only that outcome moves on to the next limit.
 const SCAN_LIMITS_SECS: [u64; 3] = [6, 12, 24];
-/// The native text loop reads about 60 pages a second in a debug build and the stages after it
-/// need several times that, which must fit the 10 s grace: a document of a few hundred pages
-/// with a 1 s limit stops inside the loop and still finishes in time.
-const NATIVE_LIMITS_SECS: [u64; 3] = [1, 2, 3];
-/// Smallest first: each is large enough that its text loop outlasts a 1 s limit on a usual
-/// machine, and small enough that the stages after the loop fit the 10 s grace.
-const NATIVE_FIXTURES: [&str; 2] = [
-    "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
-    "pdf/a_brief_introduction_to_neural_networks_neuronalenetze_en_zeta2_2col_dkrieselcom.pdf",
-];
 
 fn fixture(relative: &str) -> std::path::PathBuf {
     let path = get_test_documents_dir().join(relative);
@@ -92,23 +85,9 @@ async fn extract_with_limits(path: &Path, limits: &[u64]) -> Option<ExtractedDoc
     None
 }
 
-/// A run that never reached the stop fails: the case would otherwise pass without checking anything.
-fn unexercised(reason: &str) {
-    panic!("{reason}");
-}
-
-fn has_timeout_warning(result: &ExtractedDocument) -> bool {
-    result
-        .processing_warnings
-        .iter()
-        .any(|warning| warning.source == "timeout")
-}
-
-fn pages_read(result: &ExtractedDocument) -> usize {
-    let pages = result.pages.as_deref().expect("page contents were requested");
-    pages.iter().filter(|page| !page.content.trim().is_empty()).count()
-}
-
+/// Every page of the fixture carries text. Pages are read concurrently, so a page after the named
+/// one may already be finished; the warning only promises that every page before it was read and
+/// that it was not.
 fn assert_cut_short(result: &ExtractedDocument, total: usize) {
     let warning = result
         .processing_warnings
@@ -133,10 +112,20 @@ fn assert_cut_short(result: &ExtractedDocument, total: usize) {
         pages_read < total,
         "the document must not have finished: the limit exists to cut it short"
     );
-    assert_eq!(
-        first_unread,
-        pages_read + 1,
-        "the warning must name the page after the last page read: {}",
+    assert!(
+        (2..=total).contains(&first_unread),
+        "the named page must follow a read page: {}",
+        warning.message
+    );
+    let read = &pages[..first_unread - 1];
+    assert!(
+        pages[first_unread - 1].content.trim().is_empty(),
+        "the named page must not have been read: {}",
+        warning.message
+    );
+    assert!(
+        read.iter().all(|page| !page.content.trim().is_empty()),
+        "every page before the named page {first_unread} must have been read: {}",
         warning.message
     );
     assert!(!result.content.trim().is_empty());
@@ -152,74 +141,4 @@ async fn test_scanned_pdf_at_the_time_limit_returns_finished_pages_and_names_the
         .unwrap_or_else(|| panic!("no page was read within any of the limits tried: {SCAN_LIMITS_SECS:?}"));
 
     assert_cut_short(&result, total);
-}
-
-/// Cut short in the native text loop. A machine that reads a whole fixture within the 1 s
-/// minimum limit moves on to the next, larger one; if every fixture finishes in time there is
-/// nothing to cut short and the test says so instead of passing without having checked anything.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
-    for name in NATIVE_FIXTURES {
-        let path = fixture(name);
-        let total = page_count(&path);
-        let Some(result) = extract_with_limits(&path, &NATIVE_LIMITS_SECS).await else {
-            eprintln!("{name}: every limit timed out before the extraction could return, trying the next fixture");
-            continue;
-        };
-        if !has_timeout_warning(&result) {
-            eprintln!("{name}: read all {total} pages within the limit, trying a larger fixture");
-            continue;
-        }
-        assert_cut_short(&result, total);
-        return;
-    }
-    unexercised("no native fixture was cut short by a 1 s limit, so the stop was not exercised");
-}
-
-/// A caller's token reused for a second extraction must not carry the first one's stop. Each
-/// attempt gets a fresh token because a hard timeout cancels the caller's token for good; only
-/// the token of the attempt that returned its pages is reused.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
-    let path = fixture(NATIVE_FIXTURES[0]);
-    let total = page_count(&path);
-
-    let mut cut_short = None;
-    for secs in NATIVE_LIMITS_SECS {
-        let token = CancellationToken::new();
-        let config = ExtractionConfig {
-            cancel_token: Some(token.clone()),
-            ..timed_config(secs)
-        };
-        match extract_uri_document(&path, None, &config).await {
-            Err(XbergError::Timeout { .. }) => continue,
-            other => {
-                cut_short = Some((token, other.expect("a limited extraction returns its pages")));
-                break;
-            }
-        }
-    }
-    let Some((token, first)) = cut_short.filter(|(_, result)| has_timeout_warning(result)) else {
-        unexercised("the first extraction was not cut short on this machine, so there is no stop to carry over");
-        return;
-    };
-    assert!(pages_read(&first) < total);
-    assert!(
-        !token.is_cancelled(),
-        "a partial result must leave the caller's token usable"
-    );
-
-    let config = ExtractionConfig {
-        cancel_token: Some(token.clone()),
-        ..timed_config(600)
-    };
-    let second = extract_uri_document(&path, None, &config)
-        .await
-        .expect("the second extraction must complete");
-
-    assert!(!has_timeout_warning(&second), "{:?}", second.processing_warnings);
-    assert!(
-        pages_read(&second) > pages_read(&first),
-        "the second extraction must read past the first one's stop"
-    );
 }

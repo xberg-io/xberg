@@ -35,17 +35,15 @@ pub(super) fn begin_grace(
     secs: u64,
     started: Instant,
 ) -> std::result::Result<&CancellationToken, XbergError> {
+    if token.is_some_and(CancellationToken::is_cancelled) {
+        return Err(XbergError::Cancelled);
+    }
     match token.filter(|token| token.page_loop_running()) {
         Some(token) => {
             token.request_stop();
             Ok(token)
         }
-        None => {
-            if let Some(token) = token {
-                token.cancel();
-            }
-            Err(timed_out(secs, started))
-        }
+        None => Err(hard_timeout(token, secs, started)),
     }
 }
 
@@ -58,6 +56,9 @@ pub(super) fn finish_grace(
     secs: u64,
     started: Instant,
 ) -> Result<ExtractedDocument> {
+    if token.is_cancelled() {
+        return Err(XbergError::Cancelled);
+    }
     match outcome {
         Ok(Ok(mut document)) => {
             if token.result_is_partial() {
@@ -79,10 +80,15 @@ pub(super) fn finish_grace(
         // A stopped run that read nothing reports the limit with the caller's numbers.
         Ok(Err(XbergError::Timeout { .. })) => Err(timed_out(secs, started)),
         Ok(Err(error)) => Err(error),
-        Err(_elapsed) => {
-            token.cancel();
-            Err(timed_out(secs, started))
-        }
+        Err(_elapsed) => Err(hard_timeout(Some(token), secs, started)),
+    }
+}
+
+fn hard_timeout(token: Option<&CancellationToken>, secs: u64, started: Instant) -> XbergError {
+    if token.is_some_and(|token| !token.cancel_for_timeout()) {
+        XbergError::Cancelled
+    } else {
+        timed_out(secs, started)
     }
 }
 
@@ -101,6 +107,37 @@ mod tests {
         tokio::time::timeout(Duration::ZERO, std::future::pending::<()>())
             .await
             .expect_err("a pending future must time out")
+    }
+
+    #[test]
+    fn cancellation_at_the_deadline_takes_precedence_over_starting_grace() {
+        let token = CancellationToken::new();
+        let _guard = token.enter_page_loop();
+        token.cancel();
+
+        let result = begin_grace(Some(&token), 3, Instant::now());
+
+        assert!(matches!(result, Err(XbergError::Cancelled)));
+        assert!(!token.stop_requested());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancellation_during_grace_takes_precedence_when_extraction_never_returns() {
+        let token = CancellationToken::new();
+        let _guard = token.enter_page_loop();
+        let started = Instant::now();
+        let grace_token = begin_grace(Some(&token), 3, started).unwrap();
+        let caller = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(PARTIAL_RESULT_GRACE / 2).await;
+            caller.cancel();
+        });
+
+        let outcome = tokio::time::timeout(PARTIAL_RESULT_GRACE, std::future::pending()).await;
+        assert!(outcome.is_err());
+        let result = finish_grace(outcome, grace_token, 3, started);
+
+        assert!(matches!(result, Err(XbergError::Cancelled)));
     }
 
     #[test]
@@ -156,6 +193,32 @@ mod tests {
         assert!(!token.is_cancelled());
     }
 
+    #[tokio::test]
+    async fn finish_grace_keeps_the_operation_caches_off_when_only_a_stage_was_cut() {
+        let token = CancellationToken::new();
+        token.note_stage_cut();
+        assert!(token.first_unread_page().is_none());
+
+        super::super::cacheability::scope(async {
+            finish_grace(Ok(Ok(ExtractedDocument::default())), &token, 3, Instant::now())
+                .expect("a stage cut still returns its document");
+            assert!(!super::super::cacheability::is_cacheable());
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn finish_grace_leaves_the_operation_caches_on_when_nothing_was_cut() {
+        let token = CancellationToken::new();
+
+        super::super::cacheability::scope(async {
+            finish_grace(Ok(Ok(ExtractedDocument::default())), &token, 3, Instant::now())
+                .expect("a finished run is returned as it is");
+            assert!(super::super::cacheability::is_cacheable());
+        })
+        .await;
+    }
+
     #[test]
     fn finish_grace_adds_no_warning_when_the_run_read_every_page() {
         let token = CancellationToken::new();
@@ -190,3 +253,9 @@ mod tests {
         assert!(token.is_cancelled(), "the hard bound must cancel the token");
     }
 }
+
+#[cfg(test)]
+mod entry_point_deadline_tests;
+
+#[cfg(all(test, feature = "ocr", feature = "pdf", feature = "bundle-tessdata-eng"))]
+mod ocr_worker_deadline_tests;

@@ -1,6 +1,6 @@
 # =============================================================================
 # =============================================================================
-FROM rust:1.99.1-trixie@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137 AS builder
+FROM rust:1.100.0-trixie@sha256:e19840879045c951c905d0eaa9887f3439c62000e429963371b376bac8d38c31 AS builder
 
 ARG CARGO_BUILD_JOBS=1
 
@@ -86,37 +86,49 @@ ARG TARGETARCH
 ENV PDFIUM_VERSION=${PDFIUM_VERSION}
 ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}
 
-# Download and extract pdfium to a location that survives into the runtime stage.
-# TARGETARCH is automatically set by Docker: amd64, arm64, etc. The GitHub release
-# is tried first, then the chromium-browser-snapshots mirror -- pdfium-binaries
-# releases have gone missing/rate-limited before, and this is a published-image
-# build, not a best-effort dev one. Both legs get retries; only the combination
-# failing should fail the build.
+# The manifests bind each version override to a trusted digest for the target architecture. ~keep
+COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh scripts/pdfium-runtime-checksums.sha256 /opt/xberg-integrity/
+COPY scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh /opt/xberg-integrity/nuget-fallback.sh
+COPY scripts/ci/actions/setup-onnx-runtime/checksums.sha256 /opt/xberg-integrity/onnxruntime-checksums.sha256
+
 RUN mkdir -p /build/pdfium && \
+    case "$PDFIUM_VERSION" in ''|*[!0-9]*) echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2; exit 1 ;; esac && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         PDFIUM_ARCH="arm64"; \
     else \
         PDFIUM_ARCH="x64"; \
     fi && \
-    (curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
-        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-linux-${PDFIUM_ARCH}.tgz" \
-        -o /build/pdfium.tgz \
-        || curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
-        "https://storage.googleapis.com/chromium-browser-snapshots/Linux_${PDFIUM_ARCH}/pdfium-${PDFIUM_VERSION}.tgz" \
-        -o /build/pdfium.tgz) && \
-    tar -xzf /build/pdfium.tgz -C /build/pdfium && \
-    rm /build/pdfium.tgz
+    PDFIUM_ASSET="pdfium-linux-${PDFIUM_ARCH}.tgz" && \
+    PDFIUM_ARCHIVE="/build/${PDFIUM_VERSION}-${PDFIUM_ASSET}" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 --known && \
+    curl -fL --retry 5 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
+        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/${PDFIUM_ASSET}" \
+        -o "$PDFIUM_ARCHIVE" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$PDFIUM_ARCHIVE" /opt/xberg-integrity/pdfium-runtime-checksums.sha256 && \
+    tar -xzf "$PDFIUM_ARCHIVE" -C /build/pdfium && \
+    rm "$PDFIUM_ARCHIVE"
 
 RUN mkdir -p /build/onnxruntime && \
+    case "$ONNXRUNTIME_VERSION" in ''|*[!A-Za-z0-9._-]*) echo "Invalid ONNX Runtime version: $ONNXRUNTIME_VERSION" >&2; exit 1 ;; esac && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         ORT_ARCH="aarch64"; \
+        ORT_RID="linux-arm64"; \
     else \
         ORT_ARCH="x64"; \
+        ORT_RID="linux-x64"; \
     fi && \
-    curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" \
-        -o /build/onnxruntime.tgz && \
-    tar -xzf /build/onnxruntime.tgz -C /build/onnxruntime --strip-components=1 && \
-    rm /build/onnxruntime.tgz
+    ORT_ASSET="onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" && \
+    ORT_ARCHIVE="/build/$ORT_ASSET" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 --known && \
+    if curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ORT_ASSET}" \
+        -o "$ORT_ARCHIVE"; then \
+        bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 && \
+        tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1; \
+    else \
+        rm -f "$ORT_ARCHIVE" && \
+        RUNNER_TEMP=/tmp bash /opt/xberg-integrity/nuget-fallback.sh "$ONNXRUNTIME_VERSION" "$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256; \
+    fi && \
+    rm -f "$ORT_ARCHIVE"
 
 COPY Cargo.toml Cargo.lock ./
 COPY vendored/sysinfo/ vendored/sysinfo/
@@ -140,11 +152,14 @@ RUN sed -i '/xberg-py/d; /xberg_rb/d; /xberg-node/d; /xberg-ffi/d; /xberg-jni/d;
 # pdfium/ORT downloads. Unset is a hard failure: an empty value falls straight back through
 # build.rs's `!id.is_empty()` check and silently restores the collision. ~keep
 ARG XBERG_BUILD_ID
+# The publish workflow passes thin for arm64, where fat LTO exhausts the runner's memory.
+ARG CARGO_PROFILE_RELEASE_LTO=fat
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
     : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
+    export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO:?}" && \
     cargo build --release --package xberg-cli --features all && \
     cp target/release/xberg /build/xberg && \
     strip /build/xberg
@@ -196,7 +211,10 @@ COPY --from=builder /usr/local/lib/libheif* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libde265.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libaom.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/pkgconfig/libheif.pc /usr/local/lib/pkgconfig/libheif.pc
-RUN ldconfig && \
+# ldconfig keeps the first directory that holds a soname. aarch64-linux-gnu.conf sorts before
+# libc.conf (/usr/local/lib), so without a 00- entry the distro Leptonica from the tesseract-ocr
+# package wins on arm64 and Tesseract loads it instead of the built one.
+RUN echo /usr/local/lib >/etc/ld.so.conf.d/00-xberg-ocr.conf && ldconfig && \
     python3 /opt/xberg-ocr/verify-ocr-linux.py /usr/local && \
     tesseract --version >/tmp/ocr-version 2>&1 && grep -q '^tesseract 5\.5\.4$' /tmp/ocr-version && \
     tesseract --list-langs >/tmp/ocr-languages && grep -qx eng /tmp/ocr-languages && \

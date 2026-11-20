@@ -10,7 +10,7 @@
     }
   ],
   "name": "@xberg-io/xberg",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "description": "High-performance document intelligence library",
   "license": "MIT",
   "repository": {

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
-use super::api_pool::new_engine;
+use super::api_pool::{RetryApiPools, RetryStage};
 use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
@@ -22,6 +22,12 @@ const PAGE_FLOOR_DENOMINATOR: usize = 3;
 
 /// The traineddata model used when OSD identifies Han.
 const HAN_MODEL: &str = "chi_sim";
+pub(super) const VERTICAL_JAPANESE_MODEL: &str = "jpn_vert";
+const VERTICAL_PSM: u8 = 5;
+
+fn supports_vertical_japanese(language: &str, psm: u8) -> bool {
+    language == "eng" && matches!(psm, 3 | 11)
+}
 pub(super) const KHMER_MODEL: &str = "khm";
 pub(crate) const KHMER_SUPPLEMENT_KEY: &str = "xberg_mixed_pdf_khmer_supplement";
 
@@ -62,12 +68,11 @@ pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<
     if super::execution::is_all_languages(language) {
         return true;
     }
-    supports_retry_language(language)
-        && retry_directories(
-            &tessdata_search_dirs(override_path, env),
-            &retry_list(language, HAN_MODEL),
-        )
-        .is_some()
+    if !supports_retry_language(language) {
+        return false;
+    }
+    let directories = tessdata_search_dirs(override_path, env);
+    retry_directories(&directories, &retry_list(language, HAN_MODEL)).is_some()
 }
 
 pub(crate) fn may_retry_khmer(language: &str) -> bool {
@@ -114,27 +119,78 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
         .any(|item| item == "*" || readers.contains(&item.as_str()))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+mod model_files;
+mod vertical_japanese;
+pub(super) use crate::core::extractor::cacheability::request_model_digest as hash_model_file;
+pub(super) use model_files::RetryModelFiles;
+
+#[derive(Clone, Debug)]
 pub(super) struct ModelSet {
-    directory: String,
-    languages: String,
+    pub(super) directory: String,
+    pub(super) languages: String,
     revision: blake3::Hash,
+    implicit_osd: bool,
 }
 
+impl PartialEq for ModelSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.directory == other.directory
+            && self.languages == other.languages
+            && self.revision == other.revision
+            && self.implicit_osd == other.implicit_osd
+    }
+}
+
+impl Eq for ModelSet {}
+
 impl ModelSet {
-    fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
-        let root = Path::new(&directory);
-        let mut hash = hash_language_models(root, languages.iter().map(String::as_str))?;
+    pub(super) fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
+        let revision = Self::revision(&directory, languages.iter().map(String::as_str), implicit_osd)?;
+        Ok(Self {
+            revision,
+            directory,
+            languages: languages.join("+"),
+            implicit_osd,
+        })
+    }
+
+    pub(super) fn from_revision(
+        directory: String,
+        languages: String,
+        revision: blake3::Hash,
+        implicit_osd: bool,
+    ) -> Self {
+        Self {
+            directory,
+            languages,
+            revision,
+            implicit_osd,
+        }
+    }
+
+    pub(super) fn validate(&self) -> Result<(), OcrError> {
+        let current = Self::revision(&self.directory, self.languages.split('+'), self.implicit_osd)?;
+        if current != self.revision {
+            return Err(OcrError::ProcessingFailed(
+                "Tesseract script retry models changed during OCR".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn revision<'a>(
+        directory: &str,
+        languages: impl IntoIterator<Item = &'a str>,
+        implicit_osd: bool,
+    ) -> Result<blake3::Hash, OcrError> {
+        let root = Path::new(directory);
+        let mut hash = hash_language_models(root, languages, hash_model_file)?;
         if implicit_osd {
-            let revision = crate::core::extractor::cacheability::osd_revision(root)
+            let revision = crate::core::extractor::cacheability::osd_revision_with(root, hash_model_file)
                 .map_err(|error| engine_error("fingerprint implicit OSD model", error))?;
             hash.update(revision.as_bytes());
         }
-        Ok(Self {
-            directory,
-            languages: languages.join("+"),
-            revision: hash.finalize(),
-        })
+        Ok(hash.finalize())
     }
 
     fn hash_into(&self, hash: &mut blake3::Hasher) {
@@ -149,11 +205,12 @@ impl ModelSet {
 pub(super) fn hash_language_models<'a>(
     root: &Path,
     languages: impl IntoIterator<Item = &'a str>,
+    read_hash: impl Fn(&Path) -> crate::Result<String>,
 ) -> Result<blake3::Hasher, OcrError> {
     let mut hash = blake3::Hasher::new();
     for language in languages {
         let path = root.join(format!("{language}.traineddata"));
-        let revision = crate::cache::blake3_hash_file(&path)
+        let revision = read_hash(&path)
             .map_err(|error| engine_error(&format!("fingerprint model '{}'", path.display()), error))?;
         hash.update(revision.as_bytes());
     }
@@ -168,14 +225,132 @@ pub(super) struct RetryModels {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HanModels {
-    osd: ModelSet,
-    recognition: ModelSet,
+    pub(super) horizontal: Option<(ModelSet, ModelSet)>,
+    pub(super) vertical_japanese: Option<ModelSet>,
+}
+
+impl HanModels {
+    pub(super) fn from_snapshots(
+        horizontal: Option<(ModelSet, ModelSet)>,
+        vertical_japanese: Option<ModelSet>,
+    ) -> Option<Self> {
+        (horizontal.is_some() || vertical_japanese.is_some()).then_some(Self {
+            horizontal,
+            vertical_japanese,
+        })
+    }
 }
 
 fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
     let osd_directory = first_directory_holding(directories, &["osd".to_string()])?;
     let han_directory = first_directory_holding(directories, han)?;
     Some((osd_directory, han_directory))
+}
+
+pub(crate) fn outer_vertical_model_fingerprint(
+    language: &str,
+    override_path: Option<&Path>,
+    env: &TessdataEnv,
+) -> crate::Result<Option<blake3::Hash>> {
+    vertical_outer_model_fingerprint(language, &tessdata_search_dirs(override_path, env))
+}
+
+fn vertical_outer_model_fingerprint(language: &str, directories: &[String]) -> crate::Result<Option<blake3::Hash>> {
+    let model =
+        observe_vertical_model(directories, language).map_err(|error| crate::XbergError::cache(error.to_string()))?;
+    Ok(model.as_ref().map(vertical_model_identity))
+}
+
+fn observe_vertical_model(directories: &[String], language: &str) -> Result<Option<ModelSet>, OcrError> {
+    if language != "eng" {
+        return Ok(None);
+    }
+    let model = vertical_japanese_directory(directories)
+        .map(|directory| -> Result<ModelSet, OcrError> {
+            let revision = hash_language_models(
+                Path::new(&directory),
+                [VERTICAL_JAPANESE_MODEL],
+                crate::cache::blake3_hash_file,
+            )?
+            .finalize();
+            Ok(ModelSet::from_revision(
+                directory,
+                VERTICAL_JAPANESE_MODEL.into(),
+                revision,
+                false,
+            ))
+        })
+        .transpose()?;
+    cacheability::observe_vertical_model(directories, model.as_ref().map(vertical_model_identity));
+    Ok(model)
+}
+
+fn vertical_model_identity(model: &ModelSet) -> blake3::Hash {
+    let mut hash = blake3::Hasher::new();
+    model.hash_into(&mut hash);
+    hash.finalize()
+}
+
+#[tokio::test]
+async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().to_str().unwrap().to_owned();
+    let directories = [directory];
+    let path = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&path, b"model one").unwrap();
+
+    cacheability::scope(async {
+        let before = vertical_outer_model_fingerprint("eng", &directories).unwrap();
+        assert!(before.is_some());
+        assert!(cacheability::can_publish_outer_result());
+        cacheability::with_ocr_cancellation(None, async {
+            std::fs::write(&path, b"model two").unwrap();
+            let observed = RetryModels::resolve_vertical(&directories, "eng", 3).unwrap().unwrap();
+            assert_eq!(
+                observed.revision,
+                hash_language_models(root.path(), [VERTICAL_JAPANESE_MODEL], crate::cache::blake3_hash_file)
+                    .unwrap()
+                    .finalize()
+            );
+            // Rejected candidates produce no retry result to block outer publication. ~keep
+            std::fs::write(&path, b"model one").unwrap();
+        })
+        .await;
+
+        assert_eq!(vertical_outer_model_fingerprint("eng", &directories).unwrap(), before);
+        assert!(!cacheability::can_publish_outer_result());
+    })
+    .await;
+}
+
+#[test]
+fn outer_vertical_model_identity_tracks_path_presence_and_content() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = [root.path().to_str().unwrap().to_owned()];
+    let model = root.path().join("jpn_vert.traineddata");
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).unwrap();
+
+    assert_eq!(fingerprint(), None);
+    std::fs::write(&model, b"model one").unwrap();
+    let first = fingerprint();
+    assert!(first.is_some());
+    assert_eq!(fingerprint(), first);
+    std::fs::write(&model, b"model two").unwrap();
+    let second = fingerprint();
+    assert_ne!(second, first);
+    let other = tempfile::tempdir().unwrap();
+    std::fs::copy(&model, other.path().join("jpn_vert.traineddata")).unwrap();
+    let other_directories = [other.path().to_str().unwrap().to_owned()];
+    assert_ne!(
+        vertical_outer_model_fingerprint("eng", &other_directories).unwrap(),
+        second
+    );
+    std::fs::remove_file(model).unwrap();
+    assert_eq!(fingerprint(), None);
+}
+
+fn vertical_japanese_directory(directories: &[String]) -> Option<String> {
+    first_directory_holding(directories, &[VERTICAL_JAPANESE_MODEL.to_owned()])
 }
 
 impl RetryModels {
@@ -186,7 +361,7 @@ impl RetryModels {
     #[cfg(test)]
     fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
         Ok(Self::from_snapshots(
-            Self::resolve_han(directories, language, psm)?,
+            Self::resolve_han(directories, language, psm, |_| {})?,
             Self::resolve_requested_khmer(directories, language, psm)?,
         ))
     }
@@ -203,19 +378,48 @@ impl RetryModels {
         }
     }
 
-    pub(super) fn resolve_han(directories: &[String], language: &str, psm: u8) -> Result<Option<HanModels>, OcrError> {
+    #[cfg(test)]
+    fn resolve_han(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+        on_vertical_error: impl FnOnce(&OcrError),
+    ) -> Result<Option<HanModels>, OcrError> {
+        let horizontal = Self::resolve_horizontal(directories, language, psm)?;
+        let vertical_japanese = Self::resolve_vertical(directories, language, psm).unwrap_or_else(|error| {
+            on_vertical_error(&error);
+            None
+        });
+        Ok(HanModels::from_snapshots(horizontal, vertical_japanese))
+    }
+
+    pub(super) fn resolve_horizontal(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+    ) -> Result<Option<(ModelSet, ModelSet)>, OcrError> {
         if !supports_retry_language(language) {
             return Ok(None);
         }
-        let osd = ["osd".to_string()];
         let han = retry_list(language, HAN_MODEL);
-        let Some((osd_directory, han_directory)) = retry_directories(directories, &han) else {
+        let Some((osd, recognition)) = retry_directories(directories, &han) else {
             return Ok(None);
         };
-        Ok(Some(HanModels {
-            osd: ModelSet::snapshot(osd_directory, &osd, false)?,
-            recognition: ModelSet::snapshot(han_directory, &han, matches!(psm, 0 | 1 | 12))?,
-        }))
+        Ok(Some((
+            ModelSet::snapshot(osd, &["osd".into()], false)?,
+            ModelSet::snapshot(recognition, &han, matches!(psm, 0 | 1 | 12))?,
+        )))
+    }
+
+    pub(super) fn resolve_vertical(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+    ) -> Result<Option<ModelSet>, OcrError> {
+        if !supports_vertical_japanese(language, psm) {
+            return Ok(None);
+        }
+        observe_vertical_model(directories, language)
     }
 
     fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
@@ -233,8 +437,14 @@ impl RetryModels {
 
     pub(super) fn hash_into(&self, hash: &mut blake3::Hasher) {
         if let Some(han) = &self.han {
-            han.osd.hash_into(hash);
-            han.recognition.hash_into(hash);
+            if let Some((osd, recognition)) = &han.horizontal {
+                osd.hash_into(hash);
+                recognition.hash_into(hash);
+            }
+            if let Some(vertical) = &han.vertical_japanese {
+                hash.update(b"vertical-japanese-v1");
+                vertical.hash_into(hash);
+            }
         }
         if let Some(khmer) = &self.khmer {
             hash.update(b"khm");
@@ -253,22 +463,90 @@ fn retry_list(language: &str, model: &str) -> Vec<String> {
     languages
 }
 
+pub(super) fn first_read_suggests_vertical_japanese(
+    api: &TesseractAPI,
+    tsv: Option<&str>,
+    config: &crate::ocr::types::TesseractConfig,
+) -> bool {
+    if !supports_vertical_japanese(&config.language, config.psm) {
+        return false;
+    }
+    let check = |tsv: &str| vertical_japanese::first_read_candidate(&parse_words(tsv), config.psm);
+    tsv.map_or_else(|| api.get_tsv_text(0).is_ok_and(|tsv| check(&tsv)), check)
+}
+
+pub(super) fn first_read_suggests_han(api: &TesseractAPI, tsv: Option<&str>) -> bool {
+    if let Some(tsv) = tsv {
+        return plausible_han(
+            parse_words(tsv)
+                .iter()
+                .map(|word| (&*word.text, word.conf, word.width, word.height)),
+        );
+    }
+    match api.get_iterator().and_then(|it| it.extract_all_words()) {
+        Ok(read) => plausible_han(read.words.iter().map(|word| {
+            (
+                word.text.as_str(),
+                f64::from(word.confidence),
+                i64::from(word.right) - i64::from(word.left),
+                i64::from(word.bottom) - i64::from(word.top),
+            )
+        })),
+        Err(error) => {
+            tracing::debug!(%error, "Could not inspect first-pass words for Han script");
+            false
+        }
+    }
+}
+
+fn plausible_han<'a>(words: impl IntoIterator<Item = (&'a str, f64, i64, i64)>) -> bool {
+    const MAX_MISREAD_CONFIDENCE: f64 = 45.0;
+    const MIN_WIDE_MISREADS: usize = 3;
+    const MIN_WIDTH_TO_HEIGHT_PER_LETTER: f64 = 0.8;
+    let mut wide_misreads = 0;
+    for (text, confidence, width, height) in words {
+        if text.chars().any(|c| script_letter("Han", c)) {
+            return true;
+        }
+        if confidence >= MAX_MISREAD_CONFIDENCE || !confidence.is_finite() || height <= 0 {
+            continue;
+        }
+        // Low-confidence marks can be failed Han reads even when their boxes are narrow. ~keep
+        if width > 0 && text.chars().any(|c| !c.is_whitespace()) && !text.chars().any(char::is_alphanumeric) {
+            return true;
+        }
+        // Han glyphs often get read as Latin noise with close to a square of ink per letter. ~keep
+        let letters = text.chars().filter(|c| c.is_alphanumeric()).count() as f64;
+        if letters >= 2.0
+            && text.chars().any(is_latin)
+            && width as f64 >= MIN_WIDTH_TO_HEIGHT_PER_LETTER * height as f64 * letters
+        {
+            wide_misreads += 1;
+            if wide_misreads >= MIN_WIDE_MISREADS {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// The script OSD names on the first read's pixels.
 fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) -> Result<Option<String>, OcrError> {
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let osd = new_engine(&models.directory, &models.languages, 3)?;
-    osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
-        .map_err(|e| engine_error("OSD mode", e))?;
-    osd.set_image_2(image.as_ptr())
-        .map_err(|e| engine_error("OSD image", e))?;
-    osd.set_source_resolution(pass.source_dpi)
-        .map_err(|e| engine_error("OSD resolution", e))?;
-    retry_stage(|| {
-        osd.detect_os()
-            .map(|result| result.2)
-            .map_err(|e| engine_error("OSD", e))
+    pass.pool.with_engine(RetryStage::Osd, models, 3, |osd| {
+        osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
+            .map_err(|e| engine_error("OSD mode", e))?;
+        osd.set_image_2(image.as_ptr())
+            .map_err(|e| engine_error("OSD image", e))?;
+        osd.set_source_resolution(pass.source_dpi)
+            .map_err(|e| engine_error("OSD resolution", e))?;
+        retry_stage(|| {
+            osd.detect_os()
+                .map(|result| result.2)
+                .map_err(|e| engine_error("OSD", e))
+        })
     })
 }
 
@@ -290,6 +568,7 @@ impl Outcome {
 pub(super) struct Pass<'a> {
     pub(super) config: &'a crate::ocr::types::TesseractConfig,
     pub(super) source_dpi: i32,
+    pub(super) pool: &'a RetryApiPools,
 }
 
 fn engine_error(step: &str, error: impl std::fmt::Display) -> OcrError {
@@ -300,24 +579,24 @@ fn retry_stage<T>(action: impl FnOnce() -> Result<T, OcrError>) -> Result<Option
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let result = action()?;
-    Ok((!cacheability::ocr_stop_requested()).then_some(result))
+    let result = action();
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    result.map(Some)
 }
 
-/// Retry Han when same-page OSD identifies it. For a mixed PDF's Khmer candidate, corroborate
+/// Retry Han when same-page OSD identifies it or Japanese when the first read shows noisy
+/// vertical columns. For a mixed PDF's Khmer candidate, corroborate
 /// the supplemental read on the same pixels using a second segmentation mode.
-/// OSD and retry reads use engines built for the page and dropped with it, never
-/// on the pool: the page holds its pooled first engine the whole time, and two pages that each
-/// hold one and wait for a second pooled engine wait forever (measured: every document of a
-/// corpus hit the 600 s limit). Both models are looked up in the installed tessdata only: a model
-/// that is absent keeps the first read, and nothing is downloaded. ~keep
+/// Models come from the installed tessdata. If a model is absent, keep the first read. ~keep
 pub(super) fn run(
     first: &TesseractAPI,
     first_tsv: &str,
     pass: &Pass<'_>,
     models: &RetryModels,
     validate_khmer: impl FnOnce() -> bool,
-    validate_han: impl FnOnce() -> bool,
+    validate_han: impl Fn(&str) -> bool,
     on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     if cacheability::ocr_stop_requested() {
@@ -351,7 +630,7 @@ fn run_on_image(
     pass: &Pass<'_>,
     models: &RetryModels,
     validate_khmer: impl FnOnce() -> bool,
-    validate_han: impl FnOnce() -> bool,
+    validate_han: impl Fn(&str) -> bool,
     on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     read_script_recoveries(
@@ -361,11 +640,8 @@ fn run_on_image(
             None => Ok(None),
         },
         validate_khmer,
-        on_error,
-        || {
-            let han = read_han(image, first_tsv, pass, models)?;
-            Ok(han.filter(|_| validate_han()))
-        },
+        &on_error,
+        || read_han(image, first_tsv, pass, models, validate_han, &on_error),
     )
 }
 
@@ -420,20 +696,45 @@ fn read_han(
     first_tsv: &str,
     pass: &Pass<'_>,
     models: &RetryModels,
+    validate_han: impl Fn(&str) -> bool,
+    on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     let Some(han) = &models.han else {
         return Ok(None);
     };
-    let Some(script) = osd_script(image, pass, &han.osd)? else {
+    let first = parse_words(first_tsv);
+    if let Some(vertical) = &han.vertical_japanese {
+        match vertical_japanese::read(image, pass, vertical, &first) {
+            Ok(outcome) => {
+                if validate_han(VERTICAL_JAPANESE_MODEL) && outcome.is_some() {
+                    return Ok(outcome);
+                }
+            }
+            Err(error) => on_error(VERTICAL_JAPANESE_MODEL, error),
+        }
+    }
+    Ok(read_horizontal_han(image, pass, han.horizontal.as_ref(), first)?.filter(|_| validate_han(HAN_MODEL)))
+}
+
+fn read_horizontal_han(
+    image: &xberg_tesseract::Pix,
+    pass: &Pass<'_>,
+    horizontal: Option<&(ModelSet, ModelSet)>,
+    first: Vec<TsvWord>,
+) -> Result<Option<Outcome>, OcrError> {
+    let Some((osd, recognition)) = horizontal else {
+        return Ok(None);
+    };
+    let Some(script) = osd_script(image, pass, osd)? else {
         return Ok(None);
     };
     let Some(model) = model_for_script(&script) else {
         return Ok(None);
     };
-    let Some(retry_words) = read_retry_words(image, pass, &han.recognition, pass.config.psm)? else {
+    let Some(retry_words) = read_retry_words(image, pass, recognition, RetryStage::Han, pass.config.psm)? else {
         return Ok(None);
     };
-    let merged = merge(parse_words(first_tsv), retry_words, &script, RETRY_MIN_CONF_GAIN);
+    let merged = merge(first, retry_words, &script, RETRY_MIN_CONF_GAIN);
     Ok(Some(Outcome {
         script,
         model,
@@ -447,11 +748,11 @@ fn read_khmer_supplement(
     pass: &Pass<'_>,
     models: &ModelSet,
 ) -> Result<Option<Merged>, OcrError> {
-    let Some(retry) = read_retry_words(image, pass, models, pass.config.psm)? else {
+    let Some(retry) = read_retry_words(image, pass, models, RetryStage::Khmer, pass.config.psm)? else {
         return Ok(None);
     };
     let alternate_psm = if pass.config.psm == 6 { 11 } else { 6 };
-    let Some(alternate) = read_retry_words(image, pass, models, alternate_psm)? else {
+    let Some(alternate) = read_retry_words(image, pass, models, RetryStage::Khmer, alternate_psm)? else {
         return Ok(None);
     };
     Ok(corroborated_khmer(retry, &alternate))
@@ -461,27 +762,33 @@ fn read_retry_words(
     image: &xberg_tesseract::Pix,
     pass: &Pass<'_>,
     models: &ModelSet,
+    stage: RetryStage,
     psm: u8,
 ) -> Result<Option<Vec<TsvWord>>, OcrError> {
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let retry = new_engine(&models.directory, &models.languages, pass.config.oem)?;
-    retry
-        .set_page_seg_mode(TessPageSegMode::from_int(i32::from(psm)))
-        .map_err(|e| engine_error("retry mode", e))?;
-    super::config::apply_tesseract_variables(&retry, pass.config)?;
-    retry
-        .set_image_2(image.as_ptr())
-        .map_err(|e| engine_error("retry image", e))?;
-    retry
-        .set_source_resolution(pass.source_dpi)
-        .map_err(|e| engine_error("retry resolution", e))?;
-    if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
-        return Ok(None);
-    }
-    let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
-    Ok(Some(parse_words(&tsv)))
+    pass.pool.with_engine(stage, models, pass.config.oem, |retry| {
+        retry
+            .set_page_seg_mode(TessPageSegMode::from_int(i32::from(psm)))
+            .map_err(|e| engine_error("retry mode", e))?;
+        super::config::apply_tesseract_variables(retry, pass.config)?;
+        retry
+            .set_image_2(image.as_ptr())
+            .map_err(|e| engine_error("retry image", e))?;
+        retry
+            .set_source_resolution(pass.source_dpi)
+            .map_err(|e| engine_error("retry resolution", e))?;
+        if retry_stage(|| {
+            super::execution::recognize_until_stop(retry).map_err(|e| engine_error("retry recognize", e))
+        })?
+        .is_none()
+        {
+            return Ok(None);
+        }
+        let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
+        Ok(Some(parse_words(&tsv)))
+    })
 }
 
 /// Record the outcome in the result metadata: the merge counts and, for a page that took the
@@ -1144,6 +1451,24 @@ mod tests {
 
     const HAN_LINE: &str = "今天天气很好我们去公园散步";
 
+    #[test]
+    fn han_plausibility_requires_script_evidence() {
+        let read = |words: &[(&str, f64, i64, i64)]| plausible_han(words.iter().copied());
+        assert!(!read(&[]));
+        assert!(!read(&[
+            ("2026", 10.0, 160, 40),
+            ("Latin", 10.0, 105, 40),
+            ("noise", 12.0, 95, 40)
+        ]));
+        assert!(!read(&[("POS", 20.0, 130, 40), ("HEADS", 28.0, 175, 40)]));
+        assert!(read(&[
+            ("POS", 20.0, 130, 40),
+            ("HEADS", 28.0, 175, 40),
+            ("MHS", 0.0, 140, 40)
+        ]));
+        assert!(read(&[("中文", 70.0, 80, 40)]));
+    }
+
     /// Words of one line from (text, conf, left, width), at `top` with height 40.
     fn line(specs: &[(&str, f64, i64, i64)], key: u32, top: i64) -> Vec<TsvWord> {
         specs
@@ -1458,12 +1783,20 @@ mod tests {
 
     /// A line the first read saw as marks only takes the Han read that covers it.
     #[test]
-    fn a_line_of_marks_is_replaced_by_the_han_read() {
-        let marks = line(&[("|", 20.0, 0, 120), ("~", 25.0, 140, 160)], 1, 100);
+    fn a_line_of_marks_passes_the_gate_and_is_replaced_by_the_han_read() {
         let han = line(&[("今天天", 92.0, 0, 120), ("气", 92.0, 140, 160)], 1, 100);
-        let merged = merge_han(marks, han);
-        assert_eq!(han_count(&joined(&merged)), 4, "{}", joined(&merged));
-        assert_eq!((merged.admitted, merged.refused, merged.added), (1, 0, 0));
+        for (first_width, second_width) in [(120, 160), (3, 8)] {
+            let marks = line(&[("|", 20.0, 0, first_width), ("~", 25.0, 140, second_width)], 1, 100);
+            assert!(plausible_han(marks.iter().map(|word| (
+                &*word.text,
+                word.conf,
+                word.width,
+                word.height
+            ))));
+            let merged = merge_han(marks, han.clone());
+            assert_eq!(joined(&merged), "今天天 气");
+            assert_eq!((merged.admitted, merged.refused, merged.added), (1, 0, 0));
+        }
     }
 
     #[test]
@@ -1851,11 +2184,106 @@ mod tests {
             .unwrap()
             .han
             .unwrap();
-        assert_eq!(models.osd.directory, directories[1]);
-        assert_eq!(models.osd.languages, "osd");
-        assert_eq!(models.recognition.directory, directories[3]);
-        assert_eq!(models.recognition.languages, "eng+deu+chi_sim");
+        let (osd, recognition) = models.horizontal.unwrap();
+        assert_eq!(osd.directory, directories[1]);
+        assert_eq!(osd.languages, "osd");
+        assert_eq!(recognition.directory, directories[3]);
+        assert_eq!(recognition.languages, "eng+deu+chi_sim");
         assert!(!absent.exists());
+    }
+
+    #[test]
+    fn broken_vertical_japanese_engine_falls_through_to_working_horizontal_han() {
+        let fixture = crate::utils::read_test_fixture("images/chi_sim_image.jpeg");
+        let directories = tessdata_search_dirs(None, &TessdataEnv::from_process());
+        let horizontal = RetryModels::resolve_han(&directories, "eng", 6, |_| {})
+            .unwrap()
+            .and_then(|models| models.horizontal);
+        if std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_some() {
+            assert!(
+                horizontal.is_some() && fixture.is_some(),
+                "qualification requires eng, osd, chi_sim and the Han image"
+            );
+        }
+        let (Some(bytes), Some(horizontal)) = (fixture, horizontal) else {
+            return;
+        };
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("jpn_vert.traineddata"), b"invalid model").unwrap();
+        let vertical_japanese =
+            ModelSet::snapshot(root.path().to_str().unwrap().into(), &["jpn_vert".into()], false).unwrap();
+        let models = RetryModels {
+            han: Some(HanModels {
+                horizontal: Some(horizontal),
+                vertical_japanese: Some(vertical_japanese),
+            }),
+            khmer: None,
+        };
+        let pixels = image::load_from_memory(&bytes).unwrap().to_rgb8();
+        let pix = xberg_tesseract::Pix::from_raw_rgb(pixels.as_raw(), pixels.width(), pixels.height()).unwrap();
+        let config = crate::ocr::types::TesseractConfig {
+            psm: 11,
+            ..Default::default()
+        };
+        let pool = super::super::api_pool::TesseractApiPool::new();
+        let pass = Pass {
+            config: &config,
+            source_dpi: 300,
+            pool: pool.retry(),
+        };
+        let mut tsv = String::from("header");
+        for index in 1..=30 {
+            tsv.push_str(&format!("\n5\t1\t1\t1\t{index}\t1\t0\t0\t20\t20\t10\tt?"));
+        }
+        let failed = std::cell::Cell::new(0);
+        let result = read_han(
+            &pix,
+            &tsv,
+            &pass,
+            &models,
+            |_| true,
+            |model, _| {
+                assert_eq!(model, VERTICAL_JAPANESE_MODEL);
+                failed.set(failed.get() + 1);
+            },
+        )
+        .unwrap()
+        .expect("horizontal Han fallback succeeds");
+        assert_eq!(failed.get(), 1);
+        assert_eq!(result.model, HAN_MODEL);
+    }
+
+    #[test]
+    fn vertical_retry_models_are_independent_of_horizontal_han_and_track_revision() {
+        let root = tempfile::tempdir().unwrap();
+        let directories = [root.path().to_str().unwrap().to_owned()];
+        let model = root.path().join("jpn_vert.traineddata");
+        assert!(
+            RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+                .unwrap()
+                .is_none()
+        );
+        std::fs::write(&model, b"japanese-v1").unwrap();
+        let first = RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+            .unwrap()
+            .unwrap();
+        assert!(first.horizontal.is_none());
+        assert_eq!(first.vertical_japanese.as_ref().unwrap().languages, "jpn_vert");
+        assert!(
+            RetryModels::resolve_han(&directories, "eng", 6, |_| {})
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            RetryModels::resolve_han(&directories, "jpn_vert", 5, |_| {})
+                .unwrap()
+                .is_none()
+        );
+        std::fs::write(model, b"japanese-v2").unwrap();
+        let second = RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+            .unwrap()
+            .unwrap();
+        assert_ne!(first, second);
     }
 
     #[test]
@@ -2086,7 +2514,10 @@ mod tests {
         MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
             let missing = RetryModels::resolve(&directories, "eng", 3).unwrap().unwrap();
             assert!(missing.khmer.is_none());
-            assert_eq!(missing.han.as_ref().unwrap().recognition.languages, "eng+chi_sim");
+            assert_eq!(
+                missing.han.as_ref().unwrap().horizontal.as_ref().unwrap().1.languages,
+                "eng+chi_sim"
+            );
             std::fs::write(root.path().join("khm.traineddata"), b"khm").unwrap();
             let installed = RetryModels::resolve(&directories, "eng", 3).unwrap().unwrap();
             assert_eq!(installed.khmer.unwrap().languages, "eng+khm");

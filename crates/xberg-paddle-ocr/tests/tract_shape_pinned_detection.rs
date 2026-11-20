@@ -19,6 +19,7 @@
 //!     --test tract_shape_pinned_detection -- --ignored --nocapture
 //! ```
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 #![cfg(feature = "tract")] // ~keep: exercises the tract-only shape-pinned detection path
 
 use std::path::PathBuf;

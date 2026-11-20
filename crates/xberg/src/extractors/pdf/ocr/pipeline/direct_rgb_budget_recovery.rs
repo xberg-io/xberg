@@ -116,6 +116,7 @@ fn certified_rgb_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extractors::pdf::ocr::rendering::render_selected_pages_with_dpi;
 
     fn configuration() -> ExtractionConfig {
         crate::plugins::ensure_ocr_backends_initialized();
@@ -134,8 +135,7 @@ mod tests {
                 max_content_size: 80 * 1024 * 1024,
                 ..Default::default()
             };
-            let (_, mut failures, _) =
-                super::super::render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None, None);
+            let (_, mut failures, _) = render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None, None);
             assert_eq!(failures.len(), 1, "the actual RGB render must refuse the budget");
             return failures.pop().unwrap().1.into();
         }
@@ -197,15 +197,16 @@ mod tests {
                 assert!(!super::super::super::document::native_preservation_is_automatic(
                     &config, 1
                 ));
-                assert!(super::super::super::tall_source::supports(&config, &ocr));
+                assert!(super::super::super::tall_source::unsupported_reason(&config, &ocr).is_none());
             }
             if path == "/ocr/language" {
                 assert!(super::super::super::document::native_preservation_is_automatic(
                     &config, 1
                 ));
+                // Languages are a property of the resolved backend, not of the config. ~keep
                 assert_eq!(
                     super::super::super::tall_source::unsupported_reason(&config, &ocr),
-                    Some("the OCR language is not English only")
+                    None
                 );
             }
             if super::super::budget_retry_backend(&config, &ocr, &failed).is_some() {

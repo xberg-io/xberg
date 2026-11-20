@@ -18,10 +18,15 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::table_reconstruct::table_to_markdown;
 use crate::types::{BoundingBox, ProcessingWarning, Table};
 use std::collections::{HashMap, HashSet};
+use std::mem::size_of;
+use xberg_native_pdf::elements::{PathContent, PathOperation};
 
+pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
 pub(crate) mod source_members;
+mod trailing_notes;
+mod wrapped_labels;
 
 #[derive(Debug)]
 pub(crate) struct NativeTable {
@@ -32,7 +37,7 @@ pub(crate) struct NativeTable {
     pub source_members: Option<source_members::TableSources>,
 }
 
-fn finite_table_bounds(bounds: BoundingBox) -> bool {
+pub(crate) fn finite_table_bounds(bounds: BoundingBox) -> bool {
     [bounds.x0, bounds.y0, bounds.x1, bounds.y1]
         .into_iter()
         .all(f64::is_finite)
@@ -121,6 +126,47 @@ enum HeuristicTableRejection {
     CodeListing,
     NotWellFormed,
     EmptyMarkdown,
+    AxisTickGrid,
+}
+
+// Bound retained path geometry across the document-wide ruled and heuristic passes. ~keep
+const MAX_RETAINED_TABLE_PATH_BYTES: usize = 8 * 1024 * 1024;
+
+#[derive(Default)]
+pub(crate) struct TablePagePaths {
+    pages: HashMap<usize, Vec<PathContent>>,
+    retained_bytes: usize,
+}
+
+impl TablePagePaths {
+    fn retain(&mut self, page: usize, paths: Vec<PathContent>) {
+        let bytes = size_of::<(usize, Vec<PathContent>)>()
+            .saturating_add(paths.capacity().saturating_mul(size_of::<PathContent>()));
+        let bytes = paths.iter().fold(bytes, |bytes, path| {
+            bytes
+                .saturating_add(path.operations.capacity().saturating_mul(size_of::<PathOperation>()))
+                .saturating_add(
+                    path.dash_pattern
+                        .as_ref()
+                        .map_or(0, |(dash, _)| dash.capacity().saturating_mul(size_of::<f32>())),
+                )
+                .saturating_add(path.layer.as_ref().map_or(0, String::capacity))
+        });
+        if bytes <= MAX_RETAINED_TABLE_PATH_BYTES - self.retained_bytes {
+            self.retained_bytes += bytes;
+            self.pages.insert(page, paths);
+        }
+    }
+
+    fn take(&mut self, doc: &NativeDocument, page: usize) -> Vec<PathContent> {
+        self.pages.remove(&page).unwrap_or_else(|| {
+            super::guard_native_panic(
+                || doc.doc.extract_paths(page).map_err(|error| error.to_string()),
+                |message| message,
+            )
+            .unwrap_or_default()
+        })
+    }
 }
 
 pub(crate) struct RuledTableExtraction {
@@ -165,19 +211,11 @@ fn empty_or_certified_new_ruled_table(
     }
 }
 
-/// Run both ruled detectors on each page, then keep strict detections first
-/// and append bordered detections outside their regions.
-pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExtraction> {
+fn bordered_table_config() -> xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig {
     use xberg_native_pdf::structure::spatial_table_detector::{
         DEFAULT_MAX_TABLE_COLUMNS, TableDetectionConfig, TableStrategy,
     };
-
-    let page_count = doc
-        .doc
-        .page_count()
-        .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
-    let strict_config = TableDetectionConfig::strict();
-    let bordered_config = TableDetectionConfig {
+    TableDetectionConfig {
         enabled: true,
         horizontal_strategy: TableStrategy::Lines,
         vertical_strategy: TableStrategy::Lines,
@@ -190,7 +228,23 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
         column_merge_threshold: 12.0,
         v_split_gap: 4.0,
         text_fallback: false,
-    };
+    }
+}
+
+/// Run both ruled detectors on each page, then keep strict detections first
+/// and append bordered detections outside their regions.
+pub(crate) fn extract_ruled_tables(
+    doc: &NativeDocument,
+    page_paths: &mut TablePagePaths,
+) -> Result<RuledTableExtraction> {
+    use xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig;
+
+    let page_count = doc
+        .doc
+        .page_count()
+        .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
+    let strict_config = TableDetectionConfig::strict();
+    let bordered_config = bordered_table_config();
 
     let mut strict = Vec::new();
     let mut bordered = Vec::new();
@@ -199,21 +253,22 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
     let mut bordered_warnings = Vec::new();
     for page_idx in 0..page_count {
         let page_number = (page_idx + 1) as u32;
-        match doc
+        let extracted = doc
             .doc
-            .extract_tables_with_wide_source_recovery(page_idx, [&strict_config, &bordered_config])
-        {
-            Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
+            .extract_tables_with_wide_source_recovery_and_paths(page_idx, [&strict_config, &bordered_config]);
+        let strict_start = strict.len();
+        let bordered_start = bordered.len();
+        match extracted {
+            Ok((paths, [(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)])) => {
                 let recovered_from_empty =
                     empty_or_certified_new_ruled_table(&strict_tables, strict_ownership.as_ref())
                         && empty_or_certified_new_ruled_table(&bordered_tables, bordered_ownership.as_ref());
-                let strict_start = strict.len();
-                let bordered_start = bordered.len();
                 append_page_tables(
                     doc,
                     page_idx,
                     strict_tables,
                     strict_ownership.as_ref(),
+                    &paths,
                     &mut strict,
                     &mut strict_warnings,
                 );
@@ -222,6 +277,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
                     page_idx,
                     bordered_tables,
                     bordered_ownership.as_ref(),
+                    &paths,
                     &mut bordered,
                     &mut bordered_warnings,
                 );
@@ -234,6 +290,11 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
                     {
                         recovered_only.insert(page_number, bounds);
                     }
+                }
+                let covered = (strict.len() > strict_start || bordered.len() > bordered_start)
+                    && !recovered_only.contains_key(&page_number);
+                if !covered {
+                    page_paths.retain(page_idx, paths);
                 }
             }
             Err(error) => {
@@ -261,6 +322,7 @@ fn append_page_tables(
     page_idx: usize,
     extracted: Vec<xberg_native_pdf::structure::table_extractor::Table>,
     ownership: Option<&xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
+    source_paths: &[PathContent],
     tables: &mut Vec<NativeTable>,
     warnings: &mut Vec<ProcessingWarning>,
 ) {
@@ -269,10 +331,27 @@ fn append_page_tables(
     }
     let source_spans = scripts::page_spans(doc, page_idx, warnings);
     let capture_members = extracted.len() <= source_members::MAX_CAPTURE_TABLES;
-    for extracted_table in extracted {
+    let source_chars = std::cell::OnceCell::new();
+    for mut extracted_table in extracted {
         if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
             continue;
         }
+        let repaired = restore_ruled_decimal_rows(&mut extracted_table, || {
+            (
+                source_chars
+                    .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
+                    .as_slice(),
+                source_paths,
+            )
+        });
+        let recovered_sources = restore_open_year_columns(&mut extracted_table, &source_spans.spans, || {
+            (
+                source_chars
+                    .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
+                    .as_slice(),
+                source_paths,
+            )
+        });
         let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
         if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
             continue;
@@ -294,12 +373,408 @@ fn append_page_tables(
             scripts: scripts::capture(&extracted_table, &table.cells, &source_spans),
             complete_leading_header: complete_leading_header(&extracted_table),
             source_members: capture_members
-                .then(|| source_members::capture(&extracted_table, &table, ownership))
+                .then(|| {
+                    source_members::capture_with_redistributed_spans(
+                        &extracted_table,
+                        &table,
+                        ownership,
+                        &repaired,
+                        &source_spans,
+                        &recovered_sources,
+                    )
+                })
                 .flatten(),
             table,
             grid,
         });
     }
+}
+
+fn restore_open_year_columns<'a>(
+    table: &mut xberg_native_pdf::structure::table_extractor::Table,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    source: impl FnOnce() -> (
+        &'a [xberg_native_pdf::layout::TextChar],
+        &'a [xberg_native_pdf::elements::PathContent],
+    ),
+) -> Vec<Vec<xberg_native_pdf::layout::TextSpan>> {
+    let Some(bounds) = table.bbox else { return Vec::new() };
+    let Some(header) = table.rows.first() else {
+        return Vec::new();
+    };
+    let [first, second, third] = header.cells.as_slice() else {
+        return Vec::new();
+    };
+    let year = |cell| {
+        cell_text_in_reading_order(cell)
+            .strip_prefix("CY ")?
+            .parse::<u16>()
+            .ok()
+    };
+    let (Some(first_year), Some(second_year), Some(third_year)) = (year(first), year(second), year(third)) else {
+        return Vec::new();
+    };
+    if first_year.checked_add(1) != Some(second_year) || second_year.checked_add(1) != Some(third_year) {
+        return Vec::new();
+    }
+    let Some(next_year) = third_year.checked_add(1) else {
+        return Vec::new();
+    };
+    let (Some(left), Some(right)) = (first.bbox, third.bbox) else {
+        return Vec::new();
+    };
+    let inner_left = left.x;
+    let inner_right = right.right();
+    let outer_right = inner_right + right.width;
+    let (glyphs, rules) = source();
+    let Some(outer_left) = year_header_left_edge(rules, left, inner_right) else {
+        return Vec::new();
+    };
+    let Some(columns) = table
+        .rows
+        .iter()
+        .map(|row| open_year_row(row, spans, glyphs, [outer_left, inner_left, inner_right, outer_right]))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Vec::new();
+    };
+    if columns.len() < 3 || cell_text_in_reading_order(&columns[0].1) != format!("CY {next_year}") {
+        return Vec::new();
+    }
+    let mut sources = Vec::new();
+    for (row, (label, value, original)) in table.rows.iter_mut().zip(columns) {
+        sources.push(original);
+        row.cells.insert(0, label);
+        row.cells.push(value);
+    }
+    table.col_count += 2;
+    table.bbox = Some(xberg_native_pdf::geometry::Rect::new(
+        outer_left,
+        bounds.y,
+        outer_right - outer_left,
+        bounds.height,
+    ));
+    sources
+}
+
+fn year_header_left_edge(
+    paths: &[xberg_native_pdf::elements::PathContent],
+    header: xberg_native_pdf::geometry::Rect,
+    inner_right: f32,
+) -> Option<f32> {
+    let rule_at = |y: f32| {
+        let mut matching = paths.iter().filter(|path| {
+            let bbox = path.rendered_bbox();
+            path.stroke_color.is_some()
+                && path.is_horizontal_line(DECIMAL_ROW_TOLERANCE)
+                && (bbox.center().y - y).abs() <= DECIMAL_ROW_TOLERANCE
+                && bbox.x < header.x
+                && bbox.right() > inner_right
+        });
+        let edge = matching.next()?.rendered_bbox();
+        matching.next().is_none().then_some(edge)
+    };
+    let bottom = rule_at(header.y)?;
+    let top = rule_at(header.y + header.height)?;
+    ((bottom.x - top.x).abs() <= DECIMAL_ROW_TOLERANCE && (bottom.right() - top.right()).abs() <= DECIMAL_ROW_TOLERANCE)
+        .then_some(top.x)
+}
+
+fn open_year_row(
+    row: &xberg_native_pdf::structure::table_extractor::TableRow,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    glyphs: &[xberg_native_pdf::layout::TextChar],
+    [outer_left, inner_left, inner_right, outer_right]: [f32; 4],
+) -> Option<(
+    xberg_native_pdf::structure::table_extractor::TableCell,
+    xberg_native_pdf::structure::table_extractor::TableCell,
+    Vec<xberg_native_pdf::layout::TextSpan>,
+)> {
+    use xberg_native_pdf::{geometry::Rect, layout::TextSpan, structure::table_extractor::TableCell};
+    let [first, second, third] = row.cells.as_slice() else {
+        return None;
+    };
+    if row.cells.iter().any(|cell| cell.rowspan != 1 || cell.colspan != 1) {
+        return None;
+    }
+    let band = first.bbox?;
+    let baseline = first.spans.first()?.bbox.y;
+    if [second, third].iter().any(|cell| {
+        cell.spans
+            .first()
+            .is_none_or(|span| (span.bbox.y - baseline).abs() > DECIMAL_ROW_TOLERANCE)
+    }) {
+        return None;
+    }
+    let label_spans = spans
+        .iter()
+        .filter(|span| {
+            span.rotation_degrees == 0.0
+                && span.bbox.x >= outer_left
+                && span.bbox.right() <= inner_left
+                && span.bbox.y >= baseline - DECIMAL_ROW_TOLERANCE
+                && span.bbox.y <= baseline + DECIMAL_ROW_TOLERANCE
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let on_baseline =
+        |span: &&TextSpan| span.rotation_degrees == 0.0 && (span.bbox.y - baseline).abs() <= DECIMAL_ROW_TOLERANCE;
+    let mut values: Vec<_> = spans
+        .iter()
+        .filter(on_baseline)
+        .filter(|span| span.bbox.x >= inner_right && span.bbox.right() <= outer_right)
+        .cloned()
+        .collect();
+    values.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
+    let mut originals = values.clone();
+    if values.is_empty() {
+        let expected = [first, second, third].map(cell_text_in_reading_order);
+        let mut recovered = spans.iter().filter(on_baseline).filter_map(|span| {
+            let words: Vec<_> = span.text.split_whitespace().collect();
+            let (&value, preceding) = words.split_last()?;
+            if words.len() < 2
+                || words.len() > 4
+                || span.bbox.x < band.x
+                || span.bbox.x >= inner_right
+                || span.bbox.right() <= inner_right
+                || expected
+                    .iter()
+                    .rev()
+                    .zip(preceding.iter().rev())
+                    .any(|(cell, word)| cell.trim_start_matches(['¥', '$']) != *word)
+            {
+                return None;
+            }
+            let recovered = bounded_year_value(span, value, glyphs, inner_right, outer_right)?;
+            Some((recovered, span.clone()))
+        });
+        let (value, original) = recovered.next()?;
+        values.push(value);
+        originals.push(original);
+        if recovered.next().is_some() {
+            return None;
+        }
+    }
+    if !row.is_header {
+        let text: String = values.iter().map(|span| span.text.trim()).collect();
+        if !is_numeric_word(&text) || values.len() > 2 {
+            return None;
+        }
+        if values.len() == 2 {
+            if values[0].text.trim() != "¥" && values[0].text.trim() != "$" {
+                return None;
+            }
+            let mut sign = values.remove(0);
+            let number = values.remove(0);
+            sign.text.push_str(number.text.trim());
+            sign.bbox.width = number.bbox.right() - sign.bbox.x;
+            sign.char_widths.clear();
+            sign.char_x_offsets.clear();
+            values.push(sign);
+        }
+    }
+    let cell = |spans: Vec<TextSpan>, left, right| TableCell {
+        text: spans.iter().map(|span| span.text.trim()).collect::<Vec<_>>().join(" "),
+        mcids: spans.iter().filter_map(|span| span.mcid).collect(),
+        spans,
+        rowspan: 1,
+        colspan: 1,
+        bbox: Some(Rect::new(left, band.y, right - left, band.height)),
+        is_header: row.is_header,
+    };
+    Some((
+        cell(label_spans, outer_left, inner_left),
+        cell(values, inner_right, outer_right),
+        originals,
+    ))
+}
+
+fn bounded_year_value(
+    span: &xberg_native_pdf::layout::TextSpan,
+    value: &str,
+    glyphs: &[xberg_native_pdf::layout::TextChar],
+    left: f32,
+    right: f32,
+) -> Option<xberg_native_pdf::layout::TextSpan> {
+    let mut glyphs: Vec<_> = glyphs
+        .iter()
+        .filter(|glyph| {
+            glyph.rotation_degrees == 0.0
+                && glyph.mcid == span.mcid
+                && (glyph.origin_y - span.bbox.y).abs() <= DECIMAL_ROW_TOLERANCE
+                && glyph.origin_x >= left
+                && glyph.origin_x < right
+                && !glyph.char.is_whitespace()
+        })
+        .collect();
+    glyphs.sort_by(|a, b| a.origin_x.total_cmp(&b.origin_x));
+    if glyphs.windows(2).any(|pair| pair[0].origin_x >= pair[1].origin_x)
+        || glyphs
+            .iter()
+            .any(|glyph| glyph.bbox.x < left || glyph.bbox.right() > right)
+        || glyphs.iter().map(|glyph| glyph.char).collect::<String>() != value
+    {
+        return None;
+    }
+    decimal_cell_span(span, &glyphs)
+}
+
+fn is_unsigned_decimal(text: &str) -> bool {
+    text.split_once('.').is_some_and(|(whole, fraction)| {
+        !whole.is_empty()
+            && !fraction.is_empty()
+            && whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+    })
+}
+
+const DECIMAL_ROW_TOLERANCE: f32 = 0.5;
+
+fn restore_ruled_decimal_rows<'a>(
+    table: &mut xberg_native_pdf::structure::table_extractor::Table,
+    source: impl Fn() -> (
+        &'a [xberg_native_pdf::layout::TextChar],
+        &'a [xberg_native_pdf::elements::PathContent],
+    ),
+) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let mut repaired = Vec::new();
+    for row in table.rows.iter_mut().filter(|row| !row.is_header) {
+        let Some(index) = row.cells.iter().position(|cell| {
+            let text = cell_text_in_reading_order(cell);
+            text.bytes().filter(|byte| *byte == b'.').take(2).count() == 2
+                && text.bytes().all(|byte| byte == b'.' || byte.is_ascii_digit())
+        }) else {
+            continue;
+        };
+        let start = row.cells[..index]
+            .iter()
+            .rposition(|cell| !cell.text.trim().is_empty())
+            .map_or(0, |previous| previous + 1);
+        let end = row.cells[index + 1..]
+            .iter()
+            .position(|cell| !cell.text.trim().is_empty())
+            .map_or(row.cells.len(), |next| index + 1 + next);
+        let cells = &mut row.cells[start..end];
+        if cells.len() < 2
+            || cells
+                .iter()
+                .any(|cell| cell.colspan != 1 || cell.rowspan != 1 || cell.is_header)
+        {
+            continue;
+        }
+        let (chars, paths) = source();
+        let Some(spans) = split_ruled_decimal_span(cells, index - start, chars, paths) else {
+            continue;
+        };
+        repaired.push(cells[index - start].spans[0].clone());
+        for (cell, span) in cells.iter_mut().zip(spans) {
+            cell.text.clone_from(&span.text);
+            cell.mcids = span.mcid.into_iter().collect();
+            cell.spans = vec![span];
+        }
+    }
+    repaired
+}
+
+fn split_ruled_decimal_span(
+    cells: &[xberg_native_pdf::structure::table_extractor::TableCell],
+    index: usize,
+    chars: &[xberg_native_pdf::layout::TextChar],
+    paths: &[xberg_native_pdf::elements::PathContent],
+) -> Option<Vec<xberg_native_pdf::layout::TextSpan>> {
+    let [original] = cells[index].spans.as_slice() else {
+        return None;
+    };
+    if original.rotation_degrees != 0.0 || original.mirrored {
+        return None;
+    }
+    let bounds = cells.iter().map(|cell| cell.bbox).collect::<Option<Vec<_>>>()?;
+    let mut groups = Vec::with_capacity(bounds.len());
+    for &cell in &bounds {
+        let mut group: Vec<_> = chars
+            .iter()
+            .filter(|glyph| {
+                !glyph.char.is_whitespace()
+                    && glyph.origin_x > cell.x
+                    && glyph.origin_x < cell.right()
+                    && glyph.origin_y > cell.y
+                    && glyph.origin_y < cell.y + cell.height
+            })
+            .collect();
+        group.sort_by(|left, right| left.origin_x.total_cmp(&right.origin_x));
+        if group.windows(2).any(|pair| pair[0].origin_x >= pair[1].origin_x) {
+            return None;
+        }
+        groups.push(group);
+    }
+    let glyphs = groups.iter().flatten().copied().collect::<Vec<_>>();
+    let baseline = glyphs.first()?.origin_y;
+    if !decimal_row_has_common_baseline(&glyphs, baseline) || !decimal_row_has_dividers(&bounds, paths, baseline) {
+        return None;
+    }
+    let spans = groups
+        .iter()
+        .map(|group| decimal_cell_span(original, group))
+        .collect::<Option<Vec<_>>>()?;
+    let values: Vec<_> = spans.iter().map(|span| span.text.as_str()).collect();
+    let original_text = original.text.trim();
+    let first = glyphs.first()?;
+    let last = glyphs.last()?;
+    if (values.concat() != original_text && values.join(".") != original_text)
+        || (first.origin_x - original.bbox.x).abs() > DECIMAL_ROW_TOLERANCE
+        || (last.bbox.right() - original.bbox.right()).abs() > DECIMAL_ROW_TOLERANCE
+        || (baseline - original.bbox.y).abs() > DECIMAL_ROW_TOLERANCE
+        || glyphs.iter().any(|glyph| glyph.mcid != original.mcid)
+    {
+        return None;
+    }
+    groups
+        .into_iter()
+        .map(|group| decimal_cell_span(original, &group))
+        .collect()
+}
+
+fn decimal_row_has_common_baseline(glyphs: &[&xberg_native_pdf::layout::TextChar], baseline: f32) -> bool {
+    glyphs
+        .iter()
+        .all(|glyph| glyph.rotation_degrees == 0.0 && (glyph.origin_y - baseline).abs() <= DECIMAL_ROW_TOLERANCE)
+}
+
+fn decimal_row_has_dividers(
+    bounds: &[xberg_native_pdf::geometry::Rect],
+    paths: &[xberg_native_pdf::elements::PathContent],
+    baseline: f32,
+) -> bool {
+    bounds.windows(2).all(|pair| {
+        let x = pair[0].right();
+        (x - pair[1].x).abs() <= DECIMAL_ROW_TOLERANCE
+            && paths.iter().any(|path| {
+                let line = path.rendered_bbox();
+                path.stroke_color.is_some()
+                    && path.is_vertical_line(DECIMAL_ROW_TOLERANCE)
+                    && (line.center().x - x).abs() <= DECIMAL_ROW_TOLERANCE
+                    && line.y < baseline
+                    && baseline < line.y + line.height
+            })
+    })
+}
+
+fn decimal_cell_span(
+    original: &xberg_native_pdf::layout::TextSpan,
+    glyphs: &[&xberg_native_pdf::layout::TextChar],
+) -> Option<xberg_native_pdf::layout::TextSpan> {
+    let text: String = glyphs.iter().map(|glyph| glyph.char).collect();
+    if !is_unsigned_decimal(&text) {
+        return None;
+    }
+    let first = glyphs.first()?;
+    let last = glyphs.last()?;
+    let mut span = original.clone();
+    span.text = text;
+    span.bbox.x = first.origin_x;
+    span.bbox.width = last.bbox.right() - first.origin_x;
+    span.char_x_offsets = glyphs.iter().map(|glyph| glyph.origin_x).collect();
+    span.char_widths = glyphs.iter().map(|glyph| glyph.bbox.width).collect();
+    Some(span)
 }
 
 /// Build the `ProcessingWarning` for a page whose native (strict-mode) table detection
@@ -384,6 +859,7 @@ pub(crate) fn extract_tables_heuristic(
     allow_single_column: bool,
     skip_pages: &HashSet<u32>,
     artifacts: crate::pdf::native::hierarchy::ArtifactRetention,
+    page_paths: &mut TablePagePaths,
 ) -> Result<HeuristicTableExtraction> {
     let (per_page_segments, used_structure_tree) =
         crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
@@ -440,18 +916,8 @@ pub(crate) fn extract_tables_heuristic(
             regions.truncate(MAX_REGIONS_PER_PAGE);
         }
 
-        // Signal 1 of the #1399 admission test: a page whose producer drew
-        // ruling lines is one where a table candidate is credible on its face.
-        // One `extract_paths` call per page, reusing the layout gate's own rule
-        // counter. A page whose paths cannot be read counts as unruled, which
-        // is the conservative direction (the geometric gate still applies).
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
-        let paths = super::guard_native_panic(
-            || doc.doc.extract_paths(page_idx).map_err(|error| error.to_string()),
-            |message| message,
-        )
-        .ok()
-        .unwrap_or_default();
+        let paths = page_paths.take(doc, page_idx);
         let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
         let column_rules =
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
@@ -1789,6 +2255,10 @@ fn reconstruct_region_table_with_column_gap(
         return Err(HeuristicTableRejection::CodeListing);
     }
 
+    if is_axis_tick_grid(&cleaned) {
+        return Err(HeuristicTableRejection::AxisTickGrid);
+    }
+
     // Beyond the text-statistics gate, reject candidates that have no drawn
     // ruling lines AND whose inferred column boundaries are not actually
     // whitespace (xberg-io/xberg#1399): continuous prose bucketed into a wide
@@ -2151,6 +2621,42 @@ fn recurring_numeric_track_centers(
         .collect()
 }
 
+/// Whether a grid is the tick labels under a row of plot panels rather than a table.
+///
+/// Evenly spaced ticks sit closer together than the gap between panels, so one cell holds a
+/// whole run of them (`0.35 0.4 0.45 0.5 0.55`), and the axis-name and end-tick rows leave most
+/// cells empty. A table's cell holds one value, so a cell with an arithmetic run of three
+/// numbers, in a grid of only numbers and one-letter axis names with a mostly empty row, is not
+/// a table. ~keep
+fn is_axis_tick_grid(rows: &[Vec<String>]) -> bool {
+    let is_axis_token =
+        |token: &str| is_numeric_word(token) || (token.chars().count() == 1 && token.chars().all(char::is_alphabetic));
+    let all_axis_tokens = rows
+        .iter()
+        .flatten()
+        .flat_map(|cell| cell.split_whitespace())
+        .all(is_axis_token);
+    let has_sparse_row = rows.iter().any(|row| {
+        let filled = row.iter().filter(|cell| !cell.trim().is_empty()).count();
+        filled * 2 < row.len()
+    });
+    all_axis_tokens && has_sparse_row && rows.iter().flatten().any(|cell| has_tick_run(cell))
+}
+
+/// Whether `cell` holds three consecutive numbers with one non-zero step between them.
+fn has_tick_run(cell: &str) -> bool {
+    let values: Vec<f64> = cell
+        .split_whitespace()
+        .map_while(|token| token.replace('\u{2212}', "-").parse::<f64>().ok())
+        .collect();
+    values.windows(3).any(|run| {
+        let (first, second) = (run[1] - run[0], run[2] - run[1]);
+        let scale = run.iter().fold(1.0_f64, |scale, value| scale.max(value.abs()));
+        let tolerance = scale * 1e-6;
+        first.abs() > tolerance && (first - second).abs() <= tolerance
+    })
+}
+
 fn is_numeric_word(text: &str) -> bool {
     let digit_count = text.chars().filter(char::is_ascii_digit).count();
     if digit_count == 0 {
@@ -2404,6 +2910,97 @@ mod header_metadata_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovered_year_token_requires_glyphs_inside_the_column() {
+        use xberg_native_pdf::{
+            geometry::Rect,
+            layout::{TextChar, TextSpan},
+        };
+        let source = TextSpan {
+            text: "4.56 5.00".into(),
+            bbox: Rect::new(1.0, 2.0, 30.0, 8.0),
+            ..Default::default()
+        };
+        let mut glyphs: Vec<_> = "5.00"
+            .chars()
+            .enumerate()
+            .map(|(index, char)| {
+                let x = 12.0 + index as f32;
+                TextChar {
+                    char,
+                    origin_x: x,
+                    origin_y: 2.0,
+                    bbox: Rect::new(x, 2.0, 1.0, 8.0),
+                    ..Default::default()
+                }
+            })
+            .collect();
+        let value = bounded_year_value(&source, "5.00", &glyphs, 10.0, 16.0).unwrap();
+        assert_eq!(value.bbox, Rect::new(12.0, 2.0, 4.0, 8.0));
+        glyphs[3].bbox.width = 2.0;
+        assert!(bounded_year_value(&source, "5.00", &glyphs, 10.0, 16.0).is_none());
+    }
+
+    #[test]
+    fn ruled_decimal_repair_rejects_identical_text_on_unrelated_baselines() {
+        use xberg_native_pdf::{
+            elements::PathContent,
+            geometry::Rect,
+            layout::{TextChar, TextSpan},
+            structure::table_extractor::TableCell,
+        };
+
+        let bounds = [Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(10.0, 0.0, 10.0, 10.0)];
+        let original = TextSpan {
+            text: "0.2160.338".into(),
+            bbox: Rect::new(1.0, 2.0, 15.0, 4.0),
+            mcid: Some(7),
+            ..Default::default()
+        };
+        let cells = bounds.map(|bbox| TableCell {
+            text: String::new(),
+            spans: Vec::new(),
+            colspan: 1,
+            rowspan: 1,
+            mcids: Vec::new(),
+            bbox: Some(bbox),
+            is_header: false,
+        });
+        let mut cells = cells;
+        cells[0].spans.push(original);
+        let paths = [PathContent::line(10.0, 0.0, 10.0, 10.0)];
+        let mut glyphs: Vec<_> = ["0.216", "0.338"]
+            .into_iter()
+            .enumerate()
+            .flat_map(|(column, value)| {
+                value.chars().enumerate().map(move |(index, char)| {
+                    let x = (column * 10 + index + 1) as f32;
+                    TextChar {
+                        char,
+                        bbox: Rect::new(x, 2.0, 1.0, 4.0),
+                        origin_x: x,
+                        origin_y: 2.0,
+                        mcid: Some(7),
+                        ..Default::default()
+                    }
+                })
+            })
+            .collect();
+        let repaired = split_ruled_decimal_span(&cells, 0, &glyphs, &paths).expect("one ruled baseline");
+        assert_eq!(
+            repaired.iter().map(|span| span.text.as_str()).collect::<Vec<_>>(),
+            ["0.216", "0.338"]
+        );
+        assert!(repaired.iter().all(|span| span.mcid == Some(7)));
+        assert!(split_ruled_decimal_span(&cells, 0, &glyphs, &[]).is_none());
+
+        for glyph in &mut glyphs[5..] {
+            glyph.origin_y = 5.0;
+            glyph.bbox.y = 5.0;
+        }
+        assert!(split_ruled_decimal_span(&cells, 0, &glyphs, &paths).is_none());
+    }
 
     #[test]
     fn converted_spans_reserve_columns_without_duplicating_text() {
@@ -3359,6 +3956,92 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires the pinned public ParseBench PDF via XBERG_2332_SIDE_TABLE_PDF"]
+    fn parsebench_proposed_and_current_tables_have_independent_native_ownership() {
+        use sha2::{Digest, Sha256};
+
+        let path = std::env::var_os("XBERG_2332_SIDE_TABLE_PDF").expect("set the pinned PDF path");
+        let bytes = std::fs::read(path).expect("read public ParseBench fixture 7bc0fc8c64c67829dc21");
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            "bd5f64d7f3e329e55f6a000495169306b53e73cd99cf73476efb41e36471ef11"
+        );
+        let mut doc = NativeDocument::open_bytes(&bytes).expect("open pinned PDF");
+        let mut page_paths = TablePagePaths::default();
+        let ruled = extract_ruled_tables(&doc, &mut page_paths).expect("ruled extraction");
+        let covered = ruled.covered_pages();
+        let heuristic = extract_tables_heuristic(&mut doc, false, &covered, Default::default(), &mut page_paths)
+            .expect("heuristic extraction");
+        let (tables, segments) = (heuristic.tables, heuristic.hierarchy_segments.pages);
+        let [segments] = segments.as_slice() else {
+            panic!("expected one page of native segments");
+        };
+        let page_height = segments.iter().map(|s| s.y + s.height).fold(792.0_f32, f32::max);
+        let words = crate::pdf::table_reconstruct::project_segment_words(segments, page_height, None);
+        let regions = cluster_words_into_vertical_regions(&words);
+        let paths = page_paths.take(&doc, 0);
+        let rule_count = crate::pdf::rules::count_rules(&paths).0;
+
+        eprintln!("ruled count={} covered={covered:?}", ruled.tables.len());
+        if let [left, right] = ruled.tables.as_slice() {
+            eprintln!(
+                "ruled bounds={:?} / {:?}; equal markdown={}",
+                left.table.bounding_box,
+                right.table.bounding_box,
+                left.table.markdown == right.table.markdown
+            );
+        }
+        eprintln!(
+            "projected words={} bounds={:?}",
+            words.len(),
+            region_horizontal_bounds(&words)
+        );
+        for (index, region) in regions.iter().enumerate() {
+            let parent = reconstruct_region_table_with_reason(region, page_height, 1, false, rule_count);
+            let split = split_side_by_side_region(region).map(|(left, right)| {
+                [&left[..], &right[..]].map(|child| {
+                    let bounds = region_horizontal_bounds(child);
+                    let shape = reconstruct_side_by_side_child(child, page_height, 1, false, rule_count)
+                        .map(|table| (table.cells.len(), table.cells[0].len()));
+                    (bounds, child.len(), shape)
+                })
+            });
+            eprintln!(
+                "region {index}: bounds={:?} words={} parent={:?} split={split:?}",
+                region_horizontal_bounds(region),
+                region.len(),
+                parent.as_ref().map(|table| (table.cells.len(), table.cells[0].len()))
+            );
+        }
+
+        let mut tables: Vec<_> = tables
+            .iter()
+            .filter(|table| ruled.allows_heuristic_table(table))
+            .collect();
+        tables.extend(ruled.tables.iter().map(|entry| &entry.table));
+        tables.sort_by(|left, right| {
+            let x = |table: &Table| table.bounding_box.expect("native table bounds").x0;
+            x(left).total_cmp(&x(right))
+        });
+        let [left, right] = tables.as_slice() else {
+            panic!("expected Proposed and Current tables, got {}", tables.len());
+        };
+        assert!(left.bounding_box.unwrap().x1 < right.bounding_box.unwrap().x0);
+        for table in [left, right] {
+            assert_eq!(table.cells.len(), 51);
+            assert!(table.cells.iter().all(|row| row.len() == 8));
+            assert_eq!(
+                table.cells[0],
+                ["Model Year", "Symbol Code", "BI", "PD", "UMBI", "MP", "COMP", "COLL"]
+            );
+            assert_eq!(
+                table.cells[1],
+                ["1998", "BUPAXX", "0.924", "0.863", "0.921", "0.985", "0.728", "0.961"]
+            );
+        }
+    }
+
+    #[test]
     fn preserves_grouped_eight_column_table_without_descriptors() {
         let mut words = Vec::new();
         extend_grid_words(&mut words, &[20, 100, 180, 260]);
@@ -3383,8 +4066,14 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read tiny.pdf");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open tiny.pdf");
         let skip = HashSet::new();
-        let extraction = extract_tables_heuristic(&mut doc, false, &skip, Default::default())
-            .expect("heuristic must not error on minimal PDF");
+        let extraction = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic must not error on minimal PDF");
         assert!(
             extraction.tables.is_empty(),
             "expected no tables on minimal PDF, got: {:?}",
@@ -3406,8 +4095,14 @@ mod tests {
 
         let skip = HashSet::new();
         let page_count = doc.doc.page_count().expect("table fixture page count");
-        let extraction =
-            extract_tables_heuristic(&mut doc, false, &skip, Default::default()).expect("heuristic must not error");
+        let extraction = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic must not error");
         assert_eq!(
             extraction.hierarchy_segments.pages.len(),
             page_count,
@@ -3453,9 +4148,15 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read embedded table fixture");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open embedded table fixture");
 
-        let tables = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("heuristic extraction")
-            .tables;
+        let tables = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic extraction")
+        .tables;
         let table = tables
             .iter()
             .find(|table| table.cells[0].iter().any(|cell| cell.contains("Inhibitor")))
@@ -3496,9 +4197,15 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read ACN financial table fixture");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open ACN financial table fixture");
 
-        let tables = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("heuristic extraction")
-            .tables;
+        let tables = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic extraction")
+        .tables;
 
         assert_eq!(
             tables.len(),
@@ -3562,18 +4269,30 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read table_document.pdf");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open table_document.pdf");
 
-        let baseline = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("baseline heuristic")
-            .tables;
+        let baseline = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("baseline heuristic")
+        .tables;
         if baseline.is_empty() {
             return;
         }
         let pages_baseline_touched: HashSet<u32> = baseline.iter().map(|t| t.page_number).collect();
 
         let skip = pages_baseline_touched.clone();
-        let suppressed = extract_tables_heuristic(&mut doc, false, &skip, Default::default())
-            .expect("skip-pages heuristic")
-            .tables;
+        let suppressed = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("skip-pages heuristic")
+        .tables;
 
         for t in &suppressed {
             assert!(
@@ -3723,6 +4442,7 @@ mod tests {
                 baseline_y: y,
                 rotation_degrees: 90.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             }
         }
 
@@ -3775,6 +4495,7 @@ mod tests {
             baseline_y: y,
             rotation_degrees,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
     }
 
@@ -4277,6 +4998,73 @@ mod tests {
         );
     }
 
+    /// The tick labels under a row of plot panels (arxiv-2405.00569v2 p19): evenly spaced ticks
+    /// share a cell, and the end-tick and axis-name rows are mostly empty. The control replaces
+    /// every tick run with uneven values, so the same geometry reaches table emission.
+    #[test]
+    fn heuristic_axis_tick_grid_is_rejected_and_its_uneven_control_is_kept() {
+        let tick_region = |middle: [&str; 3], right: [&str; 4]| {
+            let mut words = vec![make_word("-2", 20, 100, 10), make_word("-2", 580, 100, 10)];
+            for (text, left, width) in [("15", 20, 10), ("0.3", 34, 12)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            for (text, left) in middle.into_iter().zip([160, 178, 192]) {
+                words.push(make_word(text, left, 112, 12));
+            }
+            for (text, left, width) in [("-10", 300, 12), ("0.6", 316, 10)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            for (text, left) in right.into_iter().zip([440, 452, 461, 470]) {
+                words.push(make_word(text, left, 112, 7));
+            }
+            for (text, left, width) in [("15", 580, 10), ("0.3", 594, 12)] {
+                words.push(make_word(text, left, 112, width));
+            }
+            words.push(make_word("x", 178, 124, 5));
+            words.push(make_word("x", 455, 124, 5));
+            words
+        };
+
+        let ticks = tick_region(["0.35", "0.4", "0.45"], ["-5", "0", "5", "10"]);
+        let uneven = tick_region(["0.35", "0.7", "0.42"], ["-5", "2", "5", "11"]);
+
+        assert_eq!(
+            reconstruct_region_table_with_reason(&ticks, 792.0, 1, false, 0).unwrap_err(),
+            HeuristicTableRejection::AxisTickGrid
+        );
+        let control = reconstruct_region_table_with_reason(&uneven, 792.0, 1, false, 0);
+        assert!(control.is_ok(), "control must reach table emission: {control:?}");
+    }
+
+    #[test]
+    fn axis_tick_grid_requires_a_tick_run_numeric_cells_and_a_sparse_row() {
+        let grid = |rows: &[&[&str]]| {
+            rows.iter()
+                .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+                .collect::<Vec<Vec<String>>>()
+        };
+        let ticks: &[&[&str]] = &[
+            &["-2", "", "", "", "-2"],
+            &["15 0.3", "0.35 0.4 0.45 0.5 0.55", "-10 0.6", "-5 0 5 10", "15 0.3"],
+            &["", "x", "", "x", ""],
+        ];
+        assert!(is_axis_tick_grid(&grid(ticks)));
+
+        let labelled: &[&[&str]] = &[
+            &["Practitioner lab", "4.56", "4.79", "4.88", "5.00"],
+            &["", "", "0.35 0.4 0.45", "", ""],
+        ];
+        let calendar: &[&[&str]] = &[
+            &["M", "T", "W", "T", "F", "S", "S"],
+            &["", "", "", "", "1", "2", "3"],
+            &["4", "5", "6", "7", "8", "9", "10"],
+        ];
+        let dense: &[&[&str]] = &[&["0.35 0.4 0.45", "1"], &["2", "3"]];
+        for rows in [labelled, calendar, dense] {
+            assert!(!is_axis_tick_grid(&grid(rows)), "{rows:?}");
+        }
+    }
+
     #[test]
     fn repairs_unmatched_header_delimiter_across_adjacent_cells() {
         let mut rows = vec![
@@ -4416,6 +5204,10 @@ mod tests {
         }
         content.push_str("ET\n");
 
+        build_table_test_pdf(&content)
+    }
+
+    fn build_table_test_pdf(content: &str) -> Vec<u8> {
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets = vec![0usize];
 
@@ -4461,10 +5253,78 @@ mod tests {
     }
 
     #[test]
+    fn heuristic_path_cache_preserves_sparse_and_background_reads_on_budget_fallback() {
+        for (content, count) in [("BT /Helvetica 10 Tf (Sparse) Tj ET", 0), ("0 0 595 842 re f", 1)] {
+            let bytes = build_table_test_pdf(content);
+            let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+            let mut cached = TablePagePaths::default();
+            let mut fallback = TablePagePaths {
+                retained_bytes: MAX_RETAINED_TABLE_PATH_BYTES,
+                ..Default::default()
+            };
+
+            for cache in [&mut cached, &mut fallback] {
+                let ruled = extract_ruled_tables(&doc, cache).expect("extract ruled tables");
+                assert!(ruled.tables.is_empty());
+                assert!(ruled.warnings.is_empty());
+            }
+            assert!(cached.pages.contains_key(&0));
+            assert!(fallback.pages.is_empty());
+            let cached = cached.take(&doc, 0);
+            let reread = fallback.take(&doc, 0);
+            assert_eq!(reread.len(), count);
+            if let [background] = reread.as_slice() {
+                assert!(background.is_table_primitive());
+                assert!(background.is_page_frame_rectangle((0., 0., 595., 842.)));
+            }
+            assert_eq!(
+                serde_json::to_value(cached).unwrap(),
+                serde_json::to_value(reread).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn ruled_path_gate_preserves_bordered_tables() {
+        let bytes = build_two_column_bordered_table_pdf();
+        let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let config = xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig::strict();
+        let bordered = bordered_table_config();
+        let (paths, [_, (tables, _)]) = doc
+            .doc
+            .extract_tables_with_wide_source_recovery_and_paths(0, [&config, &bordered])
+            .expect("detect using shared paths");
+        assert!(!paths.is_empty());
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].rows[0].cells[0].text, "Item");
+    }
+
+    #[test]
+    fn ruled_path_gate_preserves_page_errors_without_rulings() {
+        let bytes = build_table_test_pdf("");
+        let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let config = xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig::strict();
+        let bordered = bordered_table_config();
+        let configs = [&config, &bordered];
+        let page = doc.doc.page_count().expect("page count");
+        let Err(expected) = doc.doc.extract_tables_with_wide_source_recovery(page, configs) else {
+            panic!("the page after the last page must fail");
+        };
+        let Err(actual) = doc
+            .doc
+            .extract_tables_with_wide_source_recovery_from_paths(page, configs, &[])
+        else {
+            panic!("empty supplied paths must preserve the page error");
+        };
+        assert_eq!(actual.to_string(), expected.to_string());
+    }
+
+    #[test]
     fn ruled_detectors_keep_the_two_column_bordered_table() {
         let bytes = build_two_column_bordered_table_pdf();
         let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let RuledTableExtraction { tables, warnings, .. } = extract_ruled_tables(&doc).expect("extract ruled tables");
+        let RuledTableExtraction { tables, warnings, .. } =
+            extract_ruled_tables(&doc, &mut TablePagePaths::default()).expect("extract ruled tables");
         assert_eq!(tables.len(), 1);
         let table = &tables[0].table;
         assert_eq!(

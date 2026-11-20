@@ -144,7 +144,7 @@ jobs:
       - name: Setup Rust
         uses: xberg-io/actions/setup-rust@v1
         with:
-          toolchain: "1.99.1"
+          toolchain: "1.100.0"
           cache-key-prefix: candle-build-${{ matrix.model.name }}
           use-sccache: "true"
 

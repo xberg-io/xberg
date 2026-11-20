@@ -259,10 +259,11 @@ fn test_table_3x3() {
     assert_eq!(table.rows.len(), 3);
     assert_eq!(table.col_count, 3);
 
-    for row_idx in 0..3 {
-        for col_idx in 0..3 {
+    for (row_idx, row) in table.rows.iter().enumerate() {
+        assert_eq!(row.cells.len(), 3);
+        for (col_idx, cell) in row.cells.iter().enumerate() {
             let expected = format!("Cell{}", row_idx * 3 + col_idx);
-            assert_eq!(table.rows[row_idx].cells[col_idx].text, expected);
+            assert_eq!(cell.text, expected);
         }
     }
 }

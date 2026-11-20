@@ -16,7 +16,17 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class ProgressEvent:
-    """A completed OCR page."""
+    """The first completed OCR read of one page, reported once per page of an input.
+
+    Attributes:
+        stage: Always ``"ocr_page"``.
+        page: The 1-based page number.
+        total: The input's page count.
+        completed: The number of distinct pages of the input reported so far, this one included.
+        backend: The backend of the page's first OCR read. A later quality fallback may
+            replace that read in the extraction result without a second event.
+        input_index: The zero-based position in ``extract_batch``; ``None`` for ``extract``.
+    """
 
     stage: str
     page: int
@@ -52,7 +62,7 @@ async def extract(
     config: ExtractionConfig | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> _api.ExtractionResult:
-    """Extract one input, optionally reporting each completed OCR page."""
+    """Extract one input, optionally reporting each OCR page once, when its first read completes."""
     if on_progress is None:
         return await _api.extract(input=input, config=config)
     rust_input = _api._to_rust_extract_input(input) if input is not None else _rust.ExtractInput()
@@ -70,7 +80,7 @@ async def extract_batch(
     config: ExtractionConfig | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> _api.ExtractionResult:
-    """Extract multiple inputs, optionally reporting each completed OCR page."""
+    """Extract multiple inputs, optionally reporting each OCR page once, when its first read completes."""
     if on_progress is None:
         return await _api.extract_batch(inputs=inputs, config=config)
     rust_inputs = [_api._to_rust_extract_input(item) for item in inputs]

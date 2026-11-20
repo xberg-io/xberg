@@ -192,7 +192,7 @@ impl<'doc> TextExtractor<'doc> {
             None => return Ok(()),
         };
 
-        if doc.xobject_text_free_cache.lock().unwrap().contains(&xobject_ref) {
+        if doc.xobject_text_free_cache.lock_or_recover().contains(&xobject_ref) {
             return Ok(());
         }
 
@@ -295,7 +295,7 @@ impl<'doc> TextExtractor<'doc> {
                         let has_xobject = res_dict.contains_key("XObject");
                         if !has_font && !has_xobject {
                             tracing::debug!(target: LOG_TARGET, "Skipping Form XObject '{}': no Font/XObject in Resources", name);
-                            doc.xobject_text_free_cache.lock().unwrap().insert(xobject_ref);
+                            doc.xobject_text_free_cache.lock_or_recover().insert(xobject_ref);
                             return Ok(());
                         }
                     }
@@ -308,9 +308,12 @@ impl<'doc> TextExtractor<'doc> {
                 }
 
                 self.xobject_decode_count += 1;
-                let cached_stream = { doc.xobject_stream_cache.lock().unwrap().get(&xobject_ref).cloned() };
+                // Share the decoded stream: a document that invokes a heavy Form once per
+                // placement would otherwise deep-copy it on every hit (18.6 MB per call in
+                // the benchmark that motivated this), and the parse only reads it. ~keep
+                let cached_stream = { doc.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned() };
                 let stream_data = if let Some(cached) = cached_stream {
-                    cached.as_ref().clone()
+                    cached
                 } else {
                     match doc.decode_stream_with_encryption(&xobject, xobject_ref) {
                         Ok(data) => {
@@ -318,15 +321,15 @@ impl<'doc> TextExtractor<'doc> {
                             let current = doc
                                 .xobject_stream_cache_bytes
                                 .load(std::sync::atomic::Ordering::Relaxed);
-                            if current + data.len() <= MAX_STREAM_CACHE_BYTES {
+                            let shared = std::sync::Arc::new(data);
+                            if current + shared.len() <= MAX_STREAM_CACHE_BYTES {
                                 doc.xobject_stream_cache_bytes
-                                    .store(current + data.len(), std::sync::atomic::Ordering::Relaxed);
+                                    .store(current + shared.len(), std::sync::atomic::Ordering::Relaxed);
                                 doc.xobject_stream_cache
-                                    .lock()
-                                    .unwrap()
-                                    .insert(xobject_ref, std::sync::Arc::new(data.clone()));
+                                    .lock_or_recover()
+                                    .insert(xobject_ref, std::sync::Arc::clone(&shared));
                             }
-                            data
+                            shared
                         }
                         Err(error) => {
                             tracing::warn!(target: LOG_TARGET,
@@ -345,7 +348,7 @@ impl<'doc> TextExtractor<'doc> {
                         name,
                         stream_data.len()
                     );
-                    doc.xobject_text_free_cache.lock().unwrap().insert(xobject_ref);
+                    doc.xobject_text_free_cache.lock_or_recover().insert(xobject_ref);
                     return Ok(());
                 }
 

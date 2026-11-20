@@ -1177,12 +1177,14 @@ fn resolve_image_dimensions(
     let width = dict
         .get("Width")
         .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Width".to_string()))? as u32;
+        .ok_or_else(|| Error::Image("Image missing /Width".to_string()))
+        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Width {n} is out of range"))))?;
 
     let height = dict
         .get("Height")
         .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Height".to_string()))? as u32;
+        .ok_or_else(|| Error::Image("Image missing /Height".to_string()))
+        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Height {n} is out of range"))))?;
 
     let is_image_mask = dict
         .get("ImageMask")
@@ -3226,7 +3228,7 @@ fn decode_jpx_image(
     // codestream is not applied; the caller looks the indices up. (GH#1885) ~keep
     if let Some(highest_index) = indexed.map(IndexedResolution::highest_index) {
         let indices = crate::decoders::jpx::decode_jpx_indices(&codestream, highest_index)?;
-        warn_on_jpx_size_mismatch(declared_size, (indices.width, indices.height));
+        warn_on_jpx_size_mismatch(doc, declared_size, (indices.width, indices.height));
         return Ok(JpxDecoded {
             data: ImageData::Raw {
                 pixels: indices.samples,
@@ -3273,7 +3275,7 @@ fn decode_jpx_image(
     // trusts `width * height * components` either read a scrambled prefix at the wrong stride or
     // rejected the buffer outright as the wrong length, and neither recorded why (GH#1900).
     // Returning the codestream's own size keeps the two in agreement for every consumer. ~keep
-    warn_on_jpx_size_mismatch(declared_size, (img.width, img.height));
+    warn_on_jpx_size_mismatch(doc, declared_size, (img.width, img.height));
 
     let format = match img.num_components {
         1 => PixelFormat::Grayscale,
@@ -3299,7 +3301,7 @@ fn decode_jpx_image(
 
 /// Record a `JpxSizeMismatch` warning when a `/JPXDecode` image's dictionary declares a size other
 /// than its codestream's. The codestream's size is the one used (ISO 32000-1 §7.4.9, GH#1900).
-fn warn_on_jpx_size_mismatch(declared: (u32, u32), codestream: (u32, u32)) {
+fn warn_on_jpx_size_mismatch(doc: Option<&crate::document::PdfDocument>, declared: (u32, u32), codestream: (u32, u32)) {
     if declared == codestream {
         return;
     }
@@ -3310,12 +3312,17 @@ fn warn_on_jpx_size_mismatch(declared: (u32, u32), codestream: (u32, u32)) {
          treats /Width and /Height as informative for JPEG 2000, so the codestream's size is used."
     );
     tracing::warn!("{}", msg);
-    crate::extractors::warnings::push_global_warning(crate::extractors::warnings::Warning {
+    let warning = crate::extractors::warnings::Warning {
         category: crate::extractors::warnings::WarningCategory::JpxSizeMismatch,
         page: None,
         message: msg,
         spec_section: Some("7.4.9"),
-    });
+    };
+    if let Some(doc) = doc {
+        doc.push_structured_warning(warning);
+    } else {
+        crate::extractors::warnings::record_warning(warning);
+    }
 }
 
 /// A decoded `/JPXDecode` image: its samples, the codestream's own size, and its opacity channel
@@ -4128,6 +4135,7 @@ pub struct PdfImageHandle<'doc> {
     /// Zero-based index of this image among all images painted on the page,
     /// in content-stream paint order.
     pub paint_order: usize,
+    pub(crate) referenced_mask: bool,
     /// Axis-aligned bounding box of this image in PDF user space, computed
     /// during Phase 1 by applying the current transformation matrix to the
     /// unit rectangle `[0,0,1,1]`.
@@ -4144,13 +4152,27 @@ pub struct PdfImageHandle<'doc> {
     /// `/ColorSpace` (e.g. `/CS0`) the same way the renderer does. Empty when the
     /// image's colour space needs no resource lookup (the common case), which
     /// preserves the original `color_space_map=None` decode path.
-    color_space_resources: std::collections::HashMap<String, crate::object::Object>,
+    /// Shared with every handle of the same page or Form: the map can hold large ICC and
+    /// Indexed lookups, and a page with thousands of inline images cloned it per handle.
+    pub(crate) color_space_resources: std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
     /// For an Indexed image (`[/Indexed base hival lookup]`, §8.6.6.3), the
     /// resolved de-indexed *base* colour space; `None` for non-Indexed images.
     indexed_base: Option<ColorSpace>,
 }
 
 impl<'doc> PdfImageHandle<'doc> {
+    /// Identity of an image XObject in this document.
+    #[doc(hidden)]
+    pub fn painted_object_reference(&self) -> Option<ObjectRef> {
+        if self.referenced_mask {
+            return None;
+        }
+        match self.source {
+            PdfImageSource::XObject(reference) => Some(reference),
+            PdfImageSource::Inline { .. } => None,
+        }
+    }
+
     /// Width and height, in points, the image is painted at, when its placement is exactly known.
     ///
     /// Known means the transformation matrix is an unsheared quarter-turn multiple (the image
@@ -4210,7 +4232,7 @@ impl<'doc> PdfImageHandle<'doc> {
         } else {
             Some(&self.color_space_resources)
         };
-        let mut image = extract_image_from_xobject(Some(self.doc), obj, obj_ref, cs_map)?;
+        let mut image = extract_image_from_xobject(Some(self.doc), obj, obj_ref, cs_map.map(|map| &**map))?;
 
         // Use pre-computed bbox and rotation from Phase 1 — no need to call
         // back into document.rs helpers here. ~keep
@@ -4540,7 +4562,7 @@ pub(crate) fn image_handle_from_xobject<'doc>(
     xobject_dict: &std::collections::HashMap<String, crate::object::Object>,
     ctm: crate::content::Matrix,
     paint_order: usize,
-    color_space_resources: &std::collections::HashMap<String, crate::object::Object>,
+    color_space_resources: &std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
 ) -> Option<PdfImageHandle<'doc>> {
     // /Width and /Height may be indirect references (ISO 32000-1 §7.3.10);
     // resolve them the same way `extract_image_from_xobject` does. ~keep
@@ -4554,12 +4576,12 @@ pub(crate) fn image_handle_from_xobject<'doc>(
         .get("Width")
         .and_then(resolve_int)
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let h = xobject_dict
         .get("Height")
         .and_then(resolve_int)
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     // /BitsPerComponent and /Length are likewise permitted to be indirect
     // (§7.3.10); /Length in particular is routinely indirect in the wild
     // (issue #1444's fixture has `/Length 9 0 R`). ~keep
@@ -4609,12 +4631,13 @@ pub(crate) fn image_handle_from_xobject<'doc>(
         filter_chain,
         is_inline: false,
         paint_order,
+        referenced_mask: false,
         bbox,
         rotation_degrees,
         ctm,
         doc,
         source: PdfImageSource::XObject(obj_ref),
-        color_space_resources: color_space_resources.clone(),
+        color_space_resources: std::sync::Arc::clone(color_space_resources),
         indexed_base,
     })
 }
@@ -4630,12 +4653,12 @@ fn inline_image_dimensions(
         .get("Width")
         .and_then(|o| o.as_integer())
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let h = expanded
         .get("Height")
         .and_then(|o| o.as_integer())
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let bpc = expanded
         .get("BitsPerComponent")
         .and_then(|o| o.as_integer())
@@ -4650,7 +4673,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
     data: Vec<u8>,
     ctm: crate::content::Matrix,
     paint_order: usize,
-    color_space_resources: &std::collections::HashMap<String, crate::object::Object>,
+    color_space_resources: &std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
 ) -> Option<PdfImageHandle<'doc>> {
     use crate::object::Object;
 
@@ -4714,6 +4737,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
         filter_chain,
         is_inline: true,
         paint_order,
+        referenced_mask: false,
         bbox,
         rotation_degrees,
         ctm,
@@ -4722,7 +4746,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
             stream_object,
             compressed_bytes,
         },
-        color_space_resources: color_space_resources.clone(),
+        color_space_resources: std::sync::Arc::clone(color_space_resources),
         indexed_base,
     })
 }
@@ -4925,6 +4949,7 @@ mod handle_color_space_tests {
         let mut map = empty_map();
         map.insert("CS0".to_string(), Object::Name("DeviceGray".to_string()));
 
+        let map = std::sync::Arc::new(map);
         let handle = image_handle_from_xobject(&doc, obj_ref, &dict, crate::content::Matrix::identity(), 0, &map)
             .expect("handle builds");
 
@@ -4949,7 +4974,7 @@ mod handle_color_space_tests {
             &dict,
             crate::content::Matrix::identity(),
             0,
-            &empty_map(),
+            &std::sync::Arc::new(empty_map()),
         )
         .unwrap();
         assert_eq!(handle.color_space, ColorSpace::Indexed);
@@ -5610,5 +5635,43 @@ mod palette_expansion_tests {
             image.samples_are_raw(),
             "the decoded samples are the image's own samples, so a colour-key /Mask still applies"
         );
+    }
+}
+
+#[cfg(test)]
+mod dimension_range_tests {
+    use super::*;
+    use crate::object::Object;
+
+    fn dict(width: i64, height: i64) -> std::collections::HashMap<String, Object> {
+        let mut d = std::collections::HashMap::new();
+        d.insert("Width".to_string(), Object::Integer(width));
+        d.insert("Height".to_string(), Object::Integer(height));
+        d
+    }
+
+    #[test]
+    fn negative_width_or_height_is_an_error_not_a_giant_dimension() {
+        assert!(resolve_image_dimensions(None, &dict(-1, 10)).is_err());
+        assert!(resolve_image_dimensions(None, &dict(10, -1)).is_err());
+    }
+
+    #[test]
+    fn width_above_u32_is_an_error_not_truncated() {
+        assert!(resolve_image_dimensions(None, &dict(i64::from(u32::MAX) + 1 + 7, 10)).is_err());
+    }
+
+    #[test]
+    fn in_range_dimensions_resolve() {
+        let dims = resolve_image_dimensions(None, &dict(12, 34)).unwrap();
+        assert_eq!((dims.width, dims.height), (12, 34));
+    }
+
+    #[test]
+    fn inline_dimensions_above_u32_are_rejected() {
+        let mut d = std::collections::HashMap::new();
+        d.insert("Width".to_string(), Object::Integer(i64::from(u32::MAX) + 1 + 4));
+        d.insert("Height".to_string(), Object::Integer(4));
+        assert!(inline_image_dimensions(&d).is_none());
     }
 }

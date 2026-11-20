@@ -241,7 +241,7 @@ impl PdfDocument {
         // Probe content stream for text-showing operators. If we can't
         // read the content stream, be conservative and say yes (let
         // extraction try). ~keep
-        match self.get_page_content_data(page_index) {
+        match self.cached_page_content(page_index) {
             Ok(content_data) => Ok(Self::may_contain_text(&content_data)),
             Err(_) => Ok(true),
         }
@@ -924,7 +924,7 @@ impl PdfDocument {
         );
 
         let mut text = String::with_capacity(mcid_map.len() * 50);
-        let mut prev_span: Option<TextSpan> = None;
+        let mut prev_span: Option<std::borrow::Cow<'_, TextSpan>> = None;
         let mut prev_in_table = false;
         let mut consumed_mcids: HashSet<u32> = HashSet::new();
 
@@ -973,10 +973,21 @@ impl PdfDocument {
                 let rtl_run = Self::mcid_run_is_pure_rtl(spans);
                 // Repair the cross-span Arabic glyph-interleave defect (zero-width
                 // mark/consonant spans landing at word edges) before ordering. ~keep
-                let merged_rtl = Self::merge_interleaved_rtl_lines(spans);
-                let use_spans: &[crate::layout::TextSpan] = merged_rtl.as_deref().unwrap_or(spans);
-                for span in Self::order_mcid_spans(use_spans) {
-                    if let Some(prev) = &prev_span {
+                // Spans borrowed from `mcid_map` carry over to `prev_span` without a
+                // copy; only the rare merged-RTL run owns its spans. ~keep
+                let ordered: Vec<std::borrow::Cow<'_, TextSpan>> = match Self::merge_interleaved_rtl_lines(spans) {
+                    Some(merged) => Self::order_mcid_spans(&merged)
+                        .into_iter()
+                        .map(|s| std::borrow::Cow::Owned(s.clone()))
+                        .collect(),
+                    None => Self::order_mcid_spans(spans)
+                        .into_iter()
+                        .map(std::borrow::Cow::Borrowed)
+                        .collect(),
+                };
+                for current in ordered {
+                    let span: &TextSpan = &current;
+                    if let Some(prev) = prev_span.as_deref() {
                         let y_diff = (prev.bbox.y - span.bbox.y).abs();
                         if y_diff > Self::same_line_threshold(prev, span) {
                             // Suppress the break when a Hangul eojeol wrapped
@@ -997,7 +1008,7 @@ impl PdfDocument {
                     }
 
                     Self::push_span_text_bidi(&mut text, span, rtl_run);
-                    prev_span = Some(span.clone());
+                    prev_span = Some(current);
                     prev_in_table = content.in_table;
                 }
             }
@@ -1016,7 +1027,7 @@ impl PdfDocument {
             for (_mcid, spans) in &unconsumed {
                 let rtl_run = Self::mcid_run_is_pure_rtl(spans);
                 for span in *spans {
-                    if let Some(prev) = &prev_span {
+                    if let Some(prev) = prev_span.as_deref() {
                         let y_diff = (prev.bbox.y - span.bbox.y).abs();
                         if y_diff > Self::same_line_threshold(prev, span) {
                             text.push('\n');
@@ -1025,7 +1036,7 @@ impl PdfDocument {
                         }
                     }
                     Self::push_span_text_bidi(&mut text, span, rtl_run);
-                    prev_span = Some(span.clone());
+                    prev_span = Some(std::borrow::Cow::Borrowed(span));
                 }
             }
         }
@@ -1037,7 +1048,7 @@ impl PdfDocument {
             );
             crate::utils::sort_by_row_band(&mut spans_without_mcid, |s| s.bbox.y, |s| s.bbox.x);
             for span in &spans_without_mcid {
-                if let Some(prev) = &prev_span {
+                if let Some(prev) = prev_span.as_deref() {
                     let y_diff = (prev.bbox.y - span.bbox.y).abs();
                     if y_diff > Self::same_line_threshold(prev, span) {
                         text.push('\n');
@@ -1046,7 +1057,7 @@ impl PdfDocument {
                     }
                 }
                 Self::push_span_text_bidi(&mut text, span, false);
-                prev_span = Some(span.clone());
+                prev_span = Some(std::borrow::Cow::Borrowed(span));
             }
         }
 

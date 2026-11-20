@@ -283,3 +283,113 @@ fn a_native_layer_with_either_lost_glyph_marker_is_not_a_clean_ink_layer() {
     assert_eq!(clean_ink_layer_of(Some(&layers), &4), None);
     assert_eq!(clean_ink_layer_of(None, &1), None);
 }
+
+#[cfg(all(paddle_ocr, feature = "bundle-tessdata-eng"))]
+#[tokio::test]
+#[ignore = "Requires the pinned Khmer model and the implicit per-page OCR pipeline"]
+async fn recovered_number_cannot_confirm_the_native_layer() {
+    const UNPAINTED: &str = "UNPAINTEDNATIVELAYERCONTROLMARKER";
+    const MATCHING: &[u8] = include_bytes!("../../../../../tests/fixtures/pdf_khmer_number_2408/matching.pdf");
+    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    let page_id = doc.get_pages()[&1];
+    let content = doc.get_page_content(page_id);
+    let content = String::from_utf8(content).unwrap();
+    assert_eq!(content.matches(r"(\001\002\001) Tj").count(), 1);
+    // Keep the original number origin while making it a whole word in the native layer.
+    let content = content.replace(r"(\001\002\001) Tj", "[ -635 <02> ] TJ");
+    let content = format!("{content}\nBT /F1 12 Tf 3 Tr 1 0 0 1 100 320 Tm (office {UNPAINTED}) Tj ET\n");
+    doc.change_page_content(page_id, content.into_bytes()).unwrap();
+    let mut input = Vec::new();
+    doc.save_to(&mut input).unwrap();
+    let pdf = xberg_native_pdf::PdfDocument::from_bytes(input.clone()).unwrap();
+    let layer = pdf.extract_text(0).unwrap();
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    assert!(
+        super::super::document::ocr_confirms_layer(&layer, "office ០", &thresholds),
+        "{layer}"
+    );
+    assert!(
+        !super::super::document::ocr_confirms_layer(&layer, "office", &thresholds),
+        "{layer}"
+    );
+
+    let models = tempfile::tempdir().unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
+    std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    let khmer = std::env::var_os("XBERG_2408_KHM_MODEL").expect("set XBERG_2408_KHM_MODEL");
+    std::fs::copy(khmer, models.path().join("khm.traineddata")).unwrap();
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(models.path().to_owned()),
+            ..Default::default()
+        }),
+        use_cache: false,
+        ..Default::default()
+    };
+    let boundaries = [crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: 0,
+        page_number: 1,
+    }];
+    let run = extract_mixed_ocr_native_with_layout_inputs(
+        "",
+        &boundaries,
+        MixedOcrPageSelection {
+            native_layers: Some(Arc::new(ahash::AHashMap::from([(1, layer)]))),
+            ocr: &[1],
+            single_block: &[],
+            preserve_native: &[],
+            native_script: &[],
+            probe_reads: None,
+            raster_dpis: None,
+            hidden_layer_backend: None,
+            single_native_type0_page: None,
+        },
+        &input,
+        &config,
+        AllPagesFailedPolicy::ReturnError,
+        MixedLayoutInputs::Resolve(None),
+    )
+    .await
+    .unwrap_or_else(|failed| panic!("the page reads: {:?}", failed.error));
+    for text in [&run.output.0, &run.output.1[&1]] {
+        assert!(
+            text.contains("The office keeps the current monthly service records"),
+            "{text}"
+        );
+        assert_eq!(text.matches('០').count(), 1, "recover the painted number: {text}");
+        assert!(
+            !text.contains(UNPAINTED),
+            "the recovered number must not confirm the layer: {text}"
+        );
+    }
+}
+
+#[test]
+fn noise_verdict_retains_the_same_native_row_with_a_recovered_number() {
+    use super::super::document::{PlainOcrRows, text_with_layer_first};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let layer = "Reliable native source words remain available beside the OCR read.";
+    let primary = "VOU";
+    let recovered = "VOU ០";
+    assert!(!super::super::document::ocr_confirms_layer(
+        layer,
+        recovered,
+        &thresholds
+    ));
+    for read in [primary, recovered] {
+        let first = mixed_layer_lines_to_put_first(
+            layer,
+            primary,
+            read,
+            true,
+            &thresholds,
+            None,
+            PlainOcrRows::of_page(None, None),
+        )
+        .expect("the noise verdict retains the native row");
+        assert_eq!(first.lines, layer);
+        let output = text_with_layer_first(read, &first);
+        assert_eq!(output, format!("{layer}\n\n{read}"));
+    }
+}

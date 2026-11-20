@@ -125,10 +125,10 @@ fn test_simple_font_identity_encoding_works_for_valid_codes() {
         "Simple font with Identity encoding should map 0x42 to 'B'"
     );
 
-    let result = font.char_to_unicode(0x00);
-    assert!(
-        result.is_some() || result.is_none(),
-        "Simple font with Identity encoding should handle code 0x00 without panicking"
+    assert_eq!(
+        font.char_to_unicode(0x00),
+        Some("\u{0}".to_string()),
+        "Simple font with Identity encoding maps code 0x00 to U+0000"
     );
 }
 

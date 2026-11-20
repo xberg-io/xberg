@@ -29,6 +29,11 @@ No SDK, no code — just your terminal.
 curl -fsSL https://raw.githubusercontent.com/xberg-io/xberg/main/scripts/install.sh | bash
 ```
 
+The installer needs HTTPS access to GitHub release downloads and `api.github.com`, plus `awk` and
+either `sha256sum` or `shasum`. It checks the archive against GitHub's release digest before extraction.
+Set `GITHUB_TOKEN` in the environment if you need authenticated GitHub API requests.
+When `XBERG_VERSION` is unset, the script chooses the latest stable release listed by GitHub.
+
 </TabItem>
 <TabItem label="Homebrew">
 
@@ -428,6 +433,7 @@ but they do **not** bundle `libpdfium` — you supply it.
    generated against. `FPDF_*` symbols are resolved by `dlopen` at run time rather
    than at link time, so a library whose exported symbols disagree with the bindings
    can abort the process instead of returning a clean error.
+
 2. Point `PDFIUM_DYNAMIC_LIB_PATH` at the **directory** holding
    `libpdfium.so` / `libpdfium.dylib` / `pdfium.dll`:
 
@@ -436,6 +442,7 @@ but they do **not** bundle `libpdfium` — you supply it.
    ```
 
    Without it, Xberg falls back to the system library search path.
+
 3. Select the backend per request:
 
    ```python

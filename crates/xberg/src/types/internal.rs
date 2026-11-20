@@ -551,6 +551,30 @@ impl InternalDocument {
     }
 }
 
+#[cfg_attr(alef, alef(skip))]
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct OcrSourceSpan {
+    pub(crate) owner: InternalElementId,
+    pub(crate) occurrence: usize,
+    pub(crate) replacement: Option<(String, String, usize)>,
+    pub(crate) insertion: Option<OcrGapInsertion>,
+    pub(crate) panel_order: Option<OcrPanelOrder>,
+    pub(crate) source: std::ops::Range<usize>,
+    pub(crate) destination: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct OcrPanelOrder {
+    pub(crate) heading: [usize; 2],
+    pub(crate) panel: [usize; 5],
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct OcrGapInsertion {
+    pub(crate) anchors: [[usize; 2]; 2],
+    pub(crate) text: String,
+}
+
 /// A single element in the internal flat document.
 ///
 /// Elements are appended in reading order during extraction. The `depth` field
@@ -600,6 +624,9 @@ pub struct InternalElement {
     /// OCR bounding geometry (rectangle or quadrilateral).
     pub ocr_geometry: Option<OcrBoundingGeometry>,
 
+    #[serde(skip)]
+    pub(crate) ocr_source_spans: Vec<OcrSourceSpan>,
+
     /// OCR confidence scores (detection + recognition).
     pub ocr_confidence: Option<OcrConfidence>,
 
@@ -624,6 +651,7 @@ impl InternalElement {
             attributes: None,
             anchor: None,
             ocr_geometry: None,
+            ocr_source_spans: Vec::new(),
             ocr_confidence: None,
             ocr_rotation: None,
         }

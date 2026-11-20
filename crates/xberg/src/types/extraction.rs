@@ -240,6 +240,9 @@ pub struct ExtractedDocument {
     /// This field preserves all metadata that would otherwise be lost when
     /// converting to plain text or markdown output formats.
     ///
+    /// PDF OCR elements report backend recognitions, including occurrences that
+    /// document text pruning can omit from rendered content.
+    ///
     /// Only populated when `OcrElementConfig.include_elements` is true.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -486,6 +489,13 @@ pub struct ExtractedDocument {
     #[allow(dead_code)]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) raw_ocr_source_frame: Option<super::formats::RawOcrSourceFrame>,
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    #[cfg_attr(
+        not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))),
+        allow(dead_code)
+    )]
+    pub(crate) retained_hocr_read: Option<super::formats::RetainedHocrRead>,
 
     /// The original `InternalDocument` from the extractor, preserved before derivation.
     ///

@@ -271,7 +271,10 @@ impl PathContent {
     /// A path is a rectangle if it has exactly 1 operation: Rectangle,
     /// or if it has 5 operations: MoveTo, 3x LineTo, ClosePath that form a rectangle.
     pub fn is_rectangle(&self) -> bool {
-        if self.operations.len() == 1 && matches!(self.operations[0], PathOperation::Rectangle(_, _, _, _)) {
+        if matches!(
+            self.operations.as_slice(),
+            [PathOperation::Rectangle(..)] | [PathOperation::Rectangle(..), PathOperation::ClosePath]
+        ) {
             return true;
         }
 
@@ -352,11 +355,7 @@ impl PathContent {
 
         let w = self.bbox.width.abs();
         let h = self.bbox.height.abs();
-        if w > 5.0 && h > 5.0 && w < 1000.0 && h < 1000.0 {
-            return true;
-        }
-
-        false
+        w > 5.0 && h > 5.0 && w < 1000.0 && h < 1000.0
     }
 
     /// True when this path is a rectangle covering at least this fraction of

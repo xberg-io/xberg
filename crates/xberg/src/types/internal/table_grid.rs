@@ -30,9 +30,14 @@ fn identity(table: &Table) -> TableIdentity<'_> {
 }
 
 pub(crate) fn retained_grid(table: &Table, attributes: Option<&ahash::AHashMap<String, String>>) -> Option<TableGrid> {
+    let grid = decode_retained_grid(attributes)?;
+    crate::extraction::derive::native_grid_matches_table(table, &grid).then_some(grid)
+}
+
+pub(crate) fn decode_retained_grid(attributes: Option<&ahash::AHashMap<String, String>>) -> Option<TableGrid> {
     let encoded = attributes?.get(NATIVE_TABLE_GRID_ATTRIBUTE)?;
     match serde_json::from_str::<TableGrid>(encoded) {
-        Ok(grid) => crate::extraction::derive::native_grid_matches_table(table, &grid).then_some(grid),
+        Ok(grid) => Some(grid),
         Err(error) => {
             tracing::warn!(%error, "discarding invalid retained table geometry");
             None

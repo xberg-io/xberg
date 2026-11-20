@@ -15,12 +15,18 @@ if TYPE_CHECKING:
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
-EXPECTED_WORKFLOWS = 17
-EXPECTED_JOBS = 77
-EXPECTED_CHECKOUTS = 77
+EXPECTED_WORKFLOWS = 19
+EXPECTED_JOBS = 81
+EXPECTED_CHECKOUTS = 81
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
+ACTIONS_BUMP_WORKFLOW = "maintenance-actions-bump.yaml"
+PYTHON_CALLBACK_SMOKE = "python-callback-smoke"
+PYTHON_CALLBACK_SMOKE_GUARD = (
+    "github.repository == 'xberg-io/xberg' && github.event_name == 'workflow_dispatch' && inputs.python_callback_smoke"
+)
 FOCUSED_PR_GUARDS = (
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'",
     "github.repository == 'xberg-io/xberg'",
     "github.event.pull_request.head.repo.full_name == github.repository",
 )
@@ -37,11 +43,12 @@ def requires_main(expression: str) -> bool:
 
 
 def ci_workflows() -> list[Path]:
-    """Exclude publishing entrypoints, including the tagged plugin-asset publisher."""
+    """Exclude publishing, including tagged plugin assets, and separately tested workflows."""
     return sorted(
         path
         for path in WORKFLOWS.iterdir()
-        if not path.name.startswith("publish") and path.name not in {"plugin-artifacts.yaml", FOCUSED_PR_WORKFLOW}
+        if not path.name.startswith("publish")
+        and path.name not in {"plugin-artifacts.yaml", FOCUSED_PR_WORKFLOW, ACTIONS_BUMP_WORKFLOW}
     )
 
 
@@ -69,15 +76,41 @@ def focused_pr_violations(workflow: dict) -> list[str]:
     """Keep the pull-request exemption from widening into secrets, forks or superseded runs."""
     triggers = workflow.get("on", workflow.get(True))
     violations = []
-    if set(triggers) != {"pull_request", "workflow_dispatch"}:
+    if set(triggers) != {"pull_request", "push", "workflow_dispatch"}:
         violations.append(f"triggers: {sorted(triggers)}")
+    push = triggers.get("push") or {}
+    if push.get("branches") != ["main"]:
+        violations.append("push must target main only")
+    required_inputs = set(triggers.get("pull_request", {}).get("paths", [])) | {
+        ".github/workflows/ci-rust.yaml",
+        ".github/actions/setup-onnx-runtime/**",
+        "scripts/ci/actions/setup-onnx-runtime/**",
+        "mise-tasks/nli/**",
+        "tools/benchmark-harness/nli_qualification/**",
+        "vendored/**",
+        "test_documents",
+    }
+    push_paths = push.get("paths", [])
+    violations.extend(f"negated push path: {path}" for path in push_paths if path.startswith("!"))
+    missing_inputs = required_inputs - set(push_paths)
+    if missing_inputs:
+        violations.append(f"missing push inputs: {sorted(missing_inputs)}")
     if workflow.get("permissions") != {"contents": "read"}:
         violations.append("permissions must stay contents: read")
-    if not keeps_latest_ci_run(workflow.get("concurrency"), Path(FOCUSED_PR_WORKFLOW).stem):
-        violations.append("superseded runs must cancel")
+    concurrency = workflow.get("concurrency", {})
+    inputs = (triggers.get("workflow_dispatch") or {}).get("inputs", {})
+    if inputs.get("python_callback_smoke", {}).get("type") != "boolean":
+        violations.append("Python callback smoke must be a boolean dispatch input")
+    expected_group = "ci-focused-pr-${{ github.ref }}-${{ inputs.python_callback_smoke && 'python' || 'regressions' }}"
+    if concurrency.get("cancel-in-progress") is not True or concurrency.get("group") != expected_group:
+        violations.append("superseded runs must cancel within their ref and dispatch mode")
     for name, job in workflow["jobs"].items():
         condition = job.get("if", "")
-        violations.extend(f"{name}: missing {guard}" for guard in FOCUSED_PR_GUARDS if guard not in condition)
+        if name == PYTHON_CALLBACK_SMOKE:
+            if condition != PYTHON_CALLBACK_SMOKE_GUARD:
+                violations.append(f"{name}: require an explicit dispatch in the upstream repository")
+        else:
+            violations.extend(f"{name}: missing {guard}" for guard in FOCUSED_PR_GUARDS if guard not in condition)
         for step in job["steps"]:
             is_checkout = str(step.get("uses", "")).startswith("actions/checkout@")
             if is_checkout and step.get("with", {}).get("persist-credentials") is not False:
@@ -86,9 +119,33 @@ def focused_pr_violations(workflow: dict) -> list[str]:
 
 
 class MainOnlyCiTests(unittest.TestCase):
+    def test_actions_bump_is_scheduled_maintenance_on_main(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / ACTIONS_BUMP_WORKFLOW).read_text())
+        assert set(workflow[True]) == {"schedule", "workflow_dispatch"}
+        assert workflow["concurrency"]["cancel-in-progress"] is False
+        bump = workflow["jobs"]["bump"]
+        assert requires_main(bump["if"])
+        assert "github.repository == 'xberg-io/xberg'" in bump["if"]
+        assert workflow["permissions"] == {"contents": "read"}
+        assert bump["permissions"] == {"contents": "write", "pull-requests": "write"}
+        assert bump["uses"] == "xberg-io/actions/.github/workflows/reusable-actions-bump.yml@v1"
+        assert bump["with"]["mode"] == "pr"
+
     def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []
+
+    def test_python_callback_smoke_rejects_automatic_runs(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        workflow["jobs"][PYTHON_CALLBACK_SMOKE]["if"] = "github.repository == 'xberg-io/xberg'"
+        assert focused_pr_violations(workflow) == [
+            f"{PYTHON_CALLBACK_SMOKE}: require an explicit dispatch in the upstream repository"
+        ]
+
+    def test_focused_pr_check_rejects_negated_push_path(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        workflow[True]["push"]["paths"].append("!mise-tasks/nli/**")
+        assert focused_pr_violations(workflow) == ["negated push path: !mise-tasks/nli/**"]
 
     def test_focused_pr_check_rejects_each_widening(self) -> None:
         def mutated(change: Callable[[dict], None]) -> dict:
@@ -98,6 +155,12 @@ class MainOnlyCiTests(unittest.TestCase):
 
         def add_target_trigger(workflow: dict) -> None:
             workflow[True]["pull_request_target"] = None
+
+        def admit_non_main_push(workflow: dict) -> None:
+            workflow[True]["push"]["branches"].append("develop")
+
+        def omit_nli_input(workflow: dict) -> None:
+            workflow[True]["push"]["paths"].remove("mise-tasks/nli/**")
 
         def grant_write(workflow: dict) -> None:
             workflow["permissions"] = {"contents": "write"}
@@ -115,7 +178,15 @@ class MainOnlyCiTests(unittest.TestCase):
                 if str(step.get("uses", "")).startswith("actions/checkout@")
             )["with"]["persist-credentials"] = True
 
-        for change in [add_target_trigger, grant_write, stop_cancelling, admit_forks, persist_credentials]:
+        for change in [
+            add_target_trigger,
+            admit_non_main_push,
+            omit_nli_input,
+            grant_write,
+            stop_cancelling,
+            admit_forks,
+            persist_credentials,
+        ]:
             with self.subTest(change=change.__name__):
                 assert focused_pr_violations(mutated(change))
 
@@ -237,6 +308,24 @@ class MainOnlyCiTests(unittest.TestCase):
         setup = [step for step in job["steps"] if step.get("uses") == "xberg-io/actions/setup-mise@v1"]
         assert len(setup) == 1 and setup[0]["with"]["install-args"] == "cargo-deny"
         assert not any("onnx" in str(step.get("uses", "")) for step in job["steps"])
+
+    def test_windows_pdf_path_memory_requires_opt_in_and_uses_shared_onnx_default(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / "ci-pdf-path-memory-windows.yaml").read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        assert set(triggers) == {"workflow_dispatch"}
+        inputs = triggers["workflow_dispatch"]["inputs"]
+        assert set(inputs) == {"verify-pdf-path-memory"}
+        assert inputs["verify-pdf-path-memory"]["type"] == "boolean"
+        assert inputs["verify-pdf-path-memory"]["default"] is False
+        assert workflow["permissions"] == {"contents": "read"}
+        assert set(workflow["jobs"]) == {"pdf-path-memory-windows"}
+        job = workflow["jobs"]["pdf-path-memory-windows"]
+        assert " ".join(job["if"].split()) == (
+            "${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' && "
+            "github.event_name == 'workflow_dispatch' && inputs.verify-pdf-path-memory }}"
+        )
+        setup = [step for step in job["steps"] if step.get("uses") == "./.github/actions/setup-onnx-runtime"]
+        assert len(setup) == 1 and not setup[0].get("with")
 
     def test_accepts_main_guard_with_existing_job_conditions(self) -> None:
         conditions = [

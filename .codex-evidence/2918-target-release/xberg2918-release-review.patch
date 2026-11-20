@@ -1,0 +1,694 @@
+diff --git a/.github/workflows/ci-focused-pr.yaml b/.github/workflows/ci-focused-pr.yaml
+index 9ef1ff31f9..2c2b1eb22d 100644
+--- a/.github/workflows/ci-focused-pr.yaml
++++ b/.github/workflows/ci-focused-pr.yaml
+@@ -120,3 +120,13 @@ jobs:
+           else
+             mise run rust:test:focused-pr "$FOCUSED_SUITE"
+           fi
++
++      - name: Verify retained image-read metadata and small-read isolation
++        if: matrix.suite == 'pdf-ocr'
++        shell: bash
++        run: |
++          cargo test --locked --offline -p xberg --no-default-features \
++            --features pdf,ocr,tokio-runtime,bundle-tessdata-eng --lib \
++            retained_read_metadata_tests -- --test-threads=1 --color never 2>&1 | tee retained-reads.log
++          grep -Fxq 'running 10 tests' retained-reads.log
++          grep -Fq 'test result: ok. 10 passed; 0 failed; 0 ignored;' retained-reads.log
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 94ae159a0f..c5be3a8f00 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -353,6 +353,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+   During the JPEG-budget retry, an empty or whitespace-only read of a separate proven-resolution image no longer marks the page's other text as illegible. The clamp and resolution safeguards still apply to images that return text.
+ - **(ocr): Judge each scanned image's noise verdict on its own read.** (GH#2853)
+   On a page with several images, one image's clamp or low resolution no longer decides the noise verdict for the text of the other images. A clamped image that reads as legible text keeps it beside a noisy image, and a clamped image whose own read is noise is still dropped, with its tables and formulas. Several small reads on one page that are noise together are dropped as one read.
++- **(ocr): Report preprocessing and Tesseract mode only from retained embedded-image reads.** (#2918)
++  A discarded read no longer supplies the page's OCR metadata. When several small reads are rejected as noise together, a member whose own text is below the configured fragmentation threshold keeps its text, tables and formulas.
+ - **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
+   Under `OutputFormat::Plain` the per-page OCR text kept tables as markdown and its own block separators, so it never matched the plain content and `page_boundaries` was dropped with a warning. A page whose text cannot be found in the content is now rendered from its own elements with the plain renderer, so page text equals its content range. When the re-render succeeds, `pages[].content` under Plain OCR no longer carries markdown tables; the structured tables stay in `pages[].tables`.
+ - **(pdf): Honor compound glyph names at printable font codes.** (GH#2834)
+diff --git a/crates/xberg/src/extractors/pdf/ocr/rendering.rs b/crates/xberg/src/extractors/pdf/ocr/rendering.rs
+index 4969a47105..489fc08c87 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/rendering.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/rendering.rs
+@@ -14,8 +14,12 @@ pub(super) type FullPdfRenderState = (std::sync::Arc<xberg_native_pdf::PdfDocume
+ type RenderedPages = Vec<(usize, image::DynamicImage)>;
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+ type PageRenderFailures = Vec<(usize, crate::XbergError)>;
++
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+ mod raster_dpi;
++#[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
++#[path = "retained_read_metadata_tests.rs"]
++mod retained_read_metadata_tests;
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+ pub(super) use raster_dpi::PageRasterDpis;
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+@@ -389,9 +393,9 @@ pub(super) struct XObjectRecoveryOutcome {
+     pub(super) tables: Vec<crate::types::Table>,
+     /// Formulas emitted by the recovery backend.
+     pub(super) formulas: Vec<crate::types::Formula>,
+-    /// First preprocessing record in paint order, matching the per-page metadata surface.
++    /// First retained read's preprocessing record in paint order.
+     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+-    /// Producing Tesseract mode, only when one image represents the recovered page.
++    /// Producing Tesseract mode, only when the sole attempted read is retained.
+     pub(super) tesseract_psm: Option<i32>,
+     /// Why each embedded image the backend rejected yielded nothing, in paint order.
+     pub(super) failure_causes: Vec<String>,
+@@ -405,7 +409,7 @@ pub(super) async fn recover_image_xobjects(
+     page_idx: usize,
+     total_pages: usize,
+     ocr_config: &crate::core::config::OcrConfig,
+-    context: XObjectRecoveryContext<'_>,
++    mut context: XObjectRecoveryContext<'_>,
+ ) -> crate::Result<XObjectRecoveryOutcome> {
+     let mut outcome = XObjectRecoveryOutcome {
+         text: String::new(),
+@@ -421,22 +425,20 @@ pub(super) async fn recover_image_xobjects(
+         warnings: Vec::new(),
+     };
+     let mut reads = Vec::with_capacity(fallback_images.len());
++    // Candidate records live until the pool verdict, but only the published record consumes
++    // the output budget. ~keep
++    let mut candidate_preprocessing = context.budget.growth.clone();
+     for fallback in fallback_images {
+         context.check_cancelled()?;
+         context.budget.step()?;
+-        let recovery = collect_xobject_recovery_result(
+-            backend,
+-            fallback,
+-            page_idx,
+-            ocr_config,
+-            context.budget,
+-            context.proven_read,
+-            &mut outcome,
+-        )
+-        .await;
++        let recovery =
++            collect_xobject_recovery_result(backend, fallback, page_idx, ocr_config, &mut context, &mut outcome).await;
+         crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
+         context.check_cancelled()?;
+-        reads.extend(recovery?);
++        if let Some(read) = recovery? {
++            account_xobject_preprocessing(read.image_preprocessing.as_ref(), &mut candidate_preprocessing)?;
++            reads.push(read);
++        }
+         outcome.images.push(crate::types::ExtractedImage {
+             data: fallback.bytes.clone(),
+             format: std::borrow::Cow::Borrowed(fallback.format),
+@@ -456,6 +458,13 @@ pub(super) async fn recover_image_xobjects(
+         append_xobject_text(&mut outcome.text_outside_tables, text_outside_tables, context.budget)?;
+         outcome.tables.extend(read.tables);
+         outcome.formulas.extend(read.formulas);
++        if outcome.image_preprocessing.is_none() {
++            account_xobject_preprocessing(read.image_preprocessing.as_ref(), &mut context.budget.growth)?;
++            outcome.image_preprocessing = read.image_preprocessing;
++        }
++        if outcome.attempted == 1 {
++            outcome.tesseract_psm = read.tesseract_psm;
++        }
+     }
+     Ok(outcome)
+ }
+@@ -468,6 +477,8 @@ struct CollectedRead {
+     text_outside_tables: Option<String>,
+     tables: Vec<crate::types::Table>,
+     formulas: Vec<crate::types::Formula>,
++    image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
++    tesseract_psm: Option<i32>,
+     /// For a read with too few words to be judged alone: whether its preparation left it possibly
+     /// illegible. `None` for a read that was judged.
+     unjudged_small: Option<bool>,
+@@ -475,8 +486,8 @@ struct CollectedRead {
+ 
+ /// Judge again the reads that were too small to be judged alone, pooled by kind: the reads of
+ /// images whose preparation left them possibly illegible, and the others. Several small reads of
+-/// garbage cross the word minimum together, and the page's noise policy rejects them as one read
+-/// would be. A pool of one read has been judged already.
++/// garbage cross the word minimum together. If the pool is rejected, only members that meet the
++/// fragmentation threshold themselves are dropped. A singleton keeps its original verdict.
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+ fn reject_pooled_noise(
+     reads: Vec<CollectedRead>,
+@@ -500,6 +511,8 @@ fn reject_pooled_noise(
+             .map(|&index| reads[index].text.as_str())
+             .collect::<Vec<_>>()
+             .join("\n\n");
++        let mut warnings = Vec::new();
++        let mut causes = Vec::new();
+         let verdict = super::pipeline::judge_proven_read(
+             pooled,
+             super::pipeline::ProvenRead {
+@@ -509,13 +522,37 @@ fn reject_pooled_noise(
+                 warn_when_kept: policy.warn_when_kept,
+             },
+             policy.thresholds,
+-            &mut outcome.warnings,
+-            &mut outcome.failure_causes,
++            &mut warnings,
++            &mut causes,
+         );
+         if verdict.trim().is_empty() {
+-            for index in pool {
+-                rejected[index] = true;
++            let mut dropped = 0;
++            for &index in &pool {
++                rejected[index] =
++                    super::scoring::small_read_has_fragmented_words(&reads[index].text, policy.thresholds);
++                dropped += usize::from(rejected[index]);
+             }
++            if dropped == 0 {
++                continue;
++            }
++            for cause in causes {
++                if !outcome.failure_causes.contains(&cause) {
++                    outcome.failure_causes.push(cause);
++                }
++            }
++            if dropped < pool.len() {
++                for warning in &mut warnings {
++                    warning.message = format!(
++                        "Page {} produced suspected OCR recognition noise; discarded {dropped} of {} small embedded-image reads.",
++                        page_idx + 1,
++                        pool.len()
++                    )
++                    .into();
++                }
++            }
++        }
++        for warning in warnings {
++            crate::core::diagnostics::push_warning_deduped(&mut outcome.warnings, warning);
+         }
+     }
+     let mut rejected = rejected.into_iter();
+@@ -525,9 +562,8 @@ fn reject_pooled_noise(
+         .collect()
+ }
+ #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+-pub(super) fn account_xobject_structured_output(
++fn account_xobject_structured_output(
+     result: &crate::types::ExtractedDocument,
+-    retain_image_preprocessing: bool,
+     budget: &mut crate::extractors::security::SecurityBudget,
+ ) -> crate::Result<()> {
+     for table in &result.tables {
+@@ -555,10 +591,18 @@ pub(super) fn account_xobject_structured_output(
+             budget.account_text(finish_reason.len())?;
+         }
+     }
+-    if retain_image_preprocessing && let Some(metadata) = &result.metadata.image_preprocessing {
+-        budget.account_text(metadata.resample_method.len())?;
++    Ok(())
++}
++
++#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
++fn account_xobject_preprocessing(
++    metadata: Option<&crate::types::ImagePreprocessingMetadata>,
++    growth: &mut crate::extractors::security::StringGrowthValidator,
++) -> crate::Result<()> {
++    if let Some(metadata) = metadata {
++        growth.check_append(metadata.resample_method.len())?;
+         if let Some(resize_error) = &metadata.resize_error {
+-            budget.account_text(resize_error.len())?;
++            growth.check_append(resize_error.len())?;
+         }
+     }
+     Ok(())
+@@ -569,8 +613,7 @@ async fn collect_xobject_recovery_result(
+     fallback: &crate::pdf::native::images::PageFallbackImage,
+     page_idx: usize,
+     ocr_config: &crate::core::config::OcrConfig,
+-    budget: &mut crate::extractors::security::SecurityBudget,
+-    proven_read: Option<super::pipeline::ProvenReadPolicy<'_>>,
++    context: &mut XObjectRecoveryContext<'_>,
+     outcome: &mut XObjectRecoveryOutcome,
+ ) -> crate::Result<Option<CollectedRead>> {
+     let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
+@@ -590,12 +633,40 @@ async fn collect_xobject_recovery_result(
+             return Ok(None);
+         }
+     };
+-    if outcome.attempted == 1 {
+-        outcome.tesseract_psm = super::pipeline::effective_tesseract_psm(&result.metadata, backend.name());
++    account_xobject_structured_output(&result, context.budget)?;
++    account_xobject_preprocessing(
++        result.metadata.image_preprocessing.as_ref(),
++        &mut context.budget.growth.clone(),
++    )?;
++    outcome.llm_usage.extend(result.llm_usage.take().unwrap_or_default());
++    let judged = judge_xobject_read(&result, used_proven_source_dpi, page_idx, context.proven_read, outcome);
++    let rejected = judged.as_ref().is_some_and(|(verdict, _)| verdict.trim().is_empty());
++    let has_output = !result.content.trim().is_empty() || !result.tables.is_empty() || !result.formulas.is_empty();
++    if rejected || !has_output {
++        return Ok(None);
+     }
++    let tesseract_psm = (outcome.attempted == 1)
++        .then(|| super::pipeline::effective_tesseract_psm(&result.metadata, backend.name()))
++        .flatten();
++    Ok(Some(into_collected_xobject_read(
++        result,
++        judged,
++        page_idx,
++        tesseract_psm,
++    )))
++}
++
++#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
++fn judge_xobject_read(
++    result: &crate::types::ExtractedDocument,
++    used_proven_source_dpi: bool,
++    page_idx: usize,
++    proven_read: Option<super::pipeline::ProvenReadPolicy<'_>>,
++    outcome: &mut XObjectRecoveryOutcome,
++) -> Option<(String, Option<bool>)> {
+     // Each image is judged on its own read, with its own preparation evidence: another image's
+     // clamp cannot reject this image's text.
+-    let judged = proven_read
++    proven_read
+         .filter(|_| used_proven_source_dpi && !result.content.trim().is_empty())
+         .map(|policy| {
+             let possibly_illegible = read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
+@@ -615,49 +686,45 @@ async fn collect_xobject_recovery_result(
+                 && super::scoring::is_below_noise_check_minimum(&verdict, policy.thresholds))
+             .then_some(possibly_illegible);
+             (verdict, unjudged_small)
+-        });
+-    account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
+-    outcome.llm_usage.extend(result.llm_usage.take().unwrap_or_default());
+-    // A rejected read adds nothing, neither text nor the tables and formulas of the same read.
+-    let rejected = judged.as_ref().is_some_and(|(verdict, _)| verdict.trim().is_empty());
+-    let read = if rejected {
+-        None
+-    } else {
+-        let text_outside_tables = match xobject_text_outside_tables(&result) {
+-            std::borrow::Cow::Owned(text) => Some(text),
+-            std::borrow::Cow::Borrowed(_) => None,
+-        };
+-        let page_number = (page_idx + 1) as u32;
+-        let (text, unjudged_small) = match judged {
+-            Some(judged) => judged,
+-            None => (std::mem::take(&mut result.content), None),
+-        };
+-        Some(CollectedRead {
+-            text,
+-            text_outside_tables,
+-            tables: result
+-                .tables
+-                .drain(..)
+-                .map(|mut table| {
+-                    table.page_number = page_number;
+-                    table
+-                })
+-                .collect(),
+-            formulas: result
+-                .formulas
+-                .drain(..)
+-                .map(|mut formula| {
+-                    formula.page = Some(page_number);
+-                    formula
+-                })
+-                .collect(),
+-            unjudged_small,
+         })
++}
++
++#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
++fn into_collected_xobject_read(
++    result: crate::types::ExtractedDocument,
++    judged: Option<(String, Option<bool>)>,
++    page_idx: usize,
++    tesseract_psm: Option<i32>,
++) -> CollectedRead {
++    let text_outside_tables = match xobject_text_outside_tables(&result) {
++        std::borrow::Cow::Owned(text) => Some(text),
++        std::borrow::Cow::Borrowed(_) => None,
+     };
+-    if outcome.image_preprocessing.is_none() {
+-        outcome.image_preprocessing = result.metadata.image_preprocessing;
++    let page_number = (page_idx + 1) as u32;
++    let (text, unjudged_small) = judged.unwrap_or((result.content, None));
++    CollectedRead {
++        text,
++        text_outside_tables,
++        tables: result
++            .tables
++            .into_iter()
++            .map(|mut table| {
++                table.page_number = page_number;
++                table
++            })
++            .collect(),
++        formulas: result
++            .formulas
++            .into_iter()
++            .map(|mut formula| {
++                formula.page = Some(page_number);
++                formula
++            })
++            .collect(),
++        image_preprocessing: result.metadata.image_preprocessing,
++        tesseract_psm,
++        unjudged_small,
+     }
+-    Ok(read)
+ }
+ /// The effective resolution below which a shrunk read of a proven-resolution image is judged by
+ /// its output. The floor rests on two measured documents: ad9c80bf0b's clamped tall scan was read
+diff --git a/crates/xberg/src/extractors/pdf/ocr/retained_read_metadata_tests.rs b/crates/xberg/src/extractors/pdf/ocr/retained_read_metadata_tests.rs
+new file mode 100644
+index 0000000000..ee85552348
+--- /dev/null
++++ b/crates/xberg/src/extractors/pdf/ocr/retained_read_metadata_tests.rs
+@@ -0,0 +1,276 @@
++use super::super::pipeline::{ProvenReadPolicy, XObjectRecoveryContext};
++use super::{XObjectRecoveryOutcome, recover_image_xobjects};
++use crate::core::config::{OcrConfig, OcrQualityThresholds};
++use crate::extractors::security::{SecurityBudget, SecurityLimits};
++use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
++use crate::types::{ExtractedDocument, FormatMetadata, ImagePreprocessingMetadata, OcrMetadata};
++use std::sync::Arc;
++use std::sync::atomic::{AtomicUsize, Ordering};
++
++const PROSE: &str = "The farmers wait for the fields to dry";
++
++struct ScriptedBackend {
++    reads: Vec<ExtractedDocument>,
++    next: AtomicUsize,
++}
++
++impl Plugin for ScriptedBackend {
++    fn name(&self) -> &str {
++        "tesseract"
++    }
++    fn version(&self) -> String {
++        "test".to_owned()
++    }
++    fn initialize(&self) -> crate::Result<()> {
++        Ok(())
++    }
++    fn shutdown(&self) -> crate::Result<()> {
++        Ok(())
++    }
++}
++
++#[async_trait::async_trait]
++impl OcrBackend for ScriptedBackend {
++    fn backend_type(&self) -> OcrBackendType {
++        OcrBackendType::Tesseract
++    }
++    fn supports_language(&self, _: &str) -> bool {
++        true
++    }
++    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
++        Ok(self.reads[self.next.fetch_add(1, Ordering::SeqCst)].clone())
++    }
++}
++
++fn read(text: &str, marker: &str, clamped: bool) -> ExtractedDocument {
++    let mut doc = ExtractedDocument {
++        content: text.to_owned(),
++        ..Default::default()
++    };
++    doc.metadata.image_preprocessing = Some(ImagePreprocessingMetadata {
++        original_dimensions: (300, 300).into(),
++        original_dpi: (300.0, 300.0).into(),
++        target_dpi: 300,
++        scale_factor: if clamped { 0.24 } else { 1.0 },
++        auto_adjusted: clamped,
++        final_dpi: if clamped { 72 } else { 300 },
++        new_dimensions: None,
++        resample_method: marker.to_owned(),
++        dimension_clamped: clamped,
++        calculated_dpi: None,
++        skipped_resize: !clamped,
++        resize_error: None,
++    });
++    doc.metadata.format = Some(FormatMetadata::Ocr(OcrMetadata {
++        language: "eng".to_owned(),
++        psm: 6,
++        output_format: "text".to_owned(),
++        table_count: 0,
++        table_rows: None,
++        table_cols: None,
++    }));
++    doc
++}
++
++async fn recover(reads: Vec<ExtractedDocument>, discard: bool) -> XObjectRecoveryOutcome {
++    let thresholds = OcrQualityThresholds {
++        discard_suspected_ocr_noise: discard,
++        ..Default::default()
++    };
++    recover_with_limits(reads, &thresholds, &SecurityLimits::default())
++        .await
++        .expect("scripted image recovery")
++}
++
++async fn recover_with_limits(
++    reads: Vec<ExtractedDocument>,
++    thresholds: &OcrQualityThresholds,
++    limits: &SecurityLimits,
++) -> crate::Result<XObjectRecoveryOutcome> {
++    let images = (0..reads.len())
++        .map(|index| {
++            let mut image = crate::pdf::native::images::PageFallbackImage::placeholder_jpeg(index);
++            image.source_dpi = Some(300.0);
++            image
++        })
++        .collect::<Vec<_>>();
++    let backend: Arc<dyn OcrBackend> = Arc::new(ScriptedBackend {
++        reads,
++        next: AtomicUsize::new(0),
++    });
++    let mut budget = SecurityBudget::from_limits(limits);
++    let mut context = XObjectRecoveryContext::with_budget(&mut budget, None);
++    context.proven_read = Some(ProvenReadPolicy {
++        thresholds,
++        warn_when_kept: false,
++    });
++    recover_image_xobjects(&backend, &images, 0, 1, &OcrConfig::default(), context).await
++}
++
++#[tokio::test]
++async fn rejected_first_read_does_not_supply_retained_page_preprocessing() {
++    let noise = "ab ".repeat(20);
++    let outcome = recover(vec![read(&noise, "discarded", true), read(PROSE, "kept", false)], true).await;
++    assert_eq!(outcome.text, PROSE);
++    assert_eq!(outcome.image_preprocessing.unwrap().resample_method, "kept");
++    assert_eq!(outcome.tesseract_psm, None);
++}
++
++#[tokio::test]
++async fn a_rejected_single_read_sets_neither_preprocessing_nor_tesseract_mode() {
++    let outcome = recover(vec![read(&"ab ".repeat(20), "discarded", true)], true).await;
++    assert_eq!(outcome.text, "");
++    assert!(outcome.image_preprocessing.is_none());
++    assert_eq!(outcome.tesseract_psm, None);
++}
++
++#[tokio::test]
++async fn a_retained_single_read_keeps_its_preprocessing_and_tesseract_mode() {
++    let outcome = recover(vec![read(PROSE, "kept", false)], true).await;
++    assert_eq!(outcome.text, PROSE);
++    assert_eq!(outcome.image_preprocessing.unwrap().resample_method, "kept");
++    assert_eq!(outcome.tesseract_psm, Some(6));
++}
++
++#[tokio::test]
++async fn pooled_rejections_do_not_supply_page_preprocessing() {
++    let noise = "ab ".repeat(12);
++    let outcome = recover(
++        vec![read(&noise, "discarded", true), read(&noise, "discarded", true)],
++        true,
++    )
++    .await;
++    assert_eq!(outcome.text, "");
++    assert!(outcome.image_preprocessing.is_none());
++    assert_eq!(outcome.tesseract_psm, None);
++}
++
++#[tokio::test]
++async fn small_legible_read_survives_garbage_in_the_same_pool() {
++    for clamped in [true, false] {
++        for discard in [true, false] {
++            let noise = "ab ".repeat(12);
++            let outcome = recover(
++                vec![
++                    read(&noise, "first", clamped),
++                    read(PROSE, "legible", clamped),
++                    read(&noise, "last", clamped),
++                ],
++                discard,
++            )
++            .await;
++            let expected = if clamped || discard {
++                PROSE.to_owned()
++            } else {
++                format!("{noise}\n\n{PROSE}\n\n{noise}")
++            };
++            assert_eq!(outcome.text, expected, "clamped={clamped}, discard={discard}");
++            let expected_marker = if clamped || discard { "legible" } else { "first" };
++            assert_eq!(outcome.image_preprocessing.unwrap().resample_method, expected_marker);
++            if !clamped && discard {
++                assert_eq!(outcome.warnings.len(), 1);
++                assert_eq!(
++                    outcome.warnings[0].message,
++                    "Page 1 produced suspected OCR recognition noise; discarded 2 of 3 small embedded-image reads."
++                );
++            } else {
++                assert!(outcome.warnings.is_empty());
++            }
++        }
++    }
++}
++
++#[tokio::test]
++async fn tiny_garbage_reads_are_still_rejected_when_their_pool_has_enough_words() {
++    let reads = (0..4).map(|_| read("ab cd ef gh ij kl", "noise", true)).collect();
++    let outcome = recover(reads, true).await;
++    assert_eq!(outcome.text, "");
++    assert!(outcome.image_preprocessing.is_none());
++}
++
++#[tokio::test]
++async fn a_legible_small_read_keeps_its_table_and_formula_when_its_pool_is_noisy() {
++    let mut legible = read(PROSE, "legible", true);
++    legible.tables.push(crate::types::Table {
++        markdown: "| Wheat | Harvest |".to_owned(),
++        cells: vec![vec!["Wheat".to_owned(), "Harvest".to_owned()]],
++        ..Default::default()
++    });
++    legible.formulas.push(crate::types::Formula {
++        latex: "x+y".to_owned(),
++        bbox: None,
++        page: None,
++    });
++    let noise = "ab ".repeat(12);
++    let outcome = recover(
++        vec![read(&noise, "noise", true), legible, read(&noise, "noise", true)],
++        true,
++    )
++    .await;
++    assert_eq!(outcome.tables.len(), 1);
++    assert_eq!(outcome.tables[0].cells, [vec!["Wheat", "Harvest"]]);
++    assert_eq!(outcome.tables[0].page_number, 1);
++    assert_eq!(outcome.formulas.len(), 1);
++    assert_eq!(outcome.formulas[0].latex, "x+y");
++    assert_eq!(outcome.formulas[0].page, Some(1));
++}
++
++#[tokio::test]
++async fn only_reads_with_text_or_structured_content_supply_page_metadata() {
++    let outcome = recover(vec![read(" \t", "blank", true), read(PROSE, "kept", false)], true).await;
++    assert_eq!(outcome.text, PROSE);
++    assert_eq!(outcome.image_preprocessing.unwrap().resample_method, "kept");
++
++    let blank = recover(vec![read(" \t", "blank", true)], true).await;
++    assert!(blank.image_preprocessing.is_none());
++    assert_eq!(blank.tesseract_psm, None);
++
++    let mut formula_only = read("", "formula", false);
++    formula_only.formulas.push(crate::types::Formula {
++        latex: "x+y".to_owned(),
++        bbox: None,
++        page: None,
++    });
++    let structured = recover(vec![formula_only], true).await;
++    assert_eq!(structured.formulas.len(), 1);
++    assert_eq!(structured.image_preprocessing.unwrap().resample_method, "formula");
++    assert_eq!(structured.tesseract_psm, Some(6));
++}
++
++#[tokio::test]
++async fn zero_fragmentation_threshold_still_rejects_a_numeric_only_pool() {
++    let numbers = "123 ".repeat(10);
++    let thresholds = OcrQualityThresholds {
++        max_ocr_output_fragmented_word_ratio: 0.0,
++        ..Default::default()
++    };
++    let outcome = recover_with_limits(
++        vec![read(&numbers, "first", true), read(&numbers, "second", true)],
++        &thresholds,
++        &SecurityLimits::default(),
++    )
++    .await
++    .expect("scripted numeric reads");
++    assert_eq!(outcome.text, "");
++    assert!(outcome.image_preprocessing.is_none());
++}
++
++#[tokio::test]
++async fn unpublished_preprocessing_does_not_consume_the_output_budget() {
++    let text = "First\n\nSecond";
++    let marker = "first-resampling";
++    let limits = SecurityLimits {
++        max_content_size: 2 * text.len() + marker.len(),
++        ..Default::default()
++    };
++    let outcome = recover_with_limits(
++        vec![read("First", marker, false), read("Second", "second-resampling", false)],
++        &OcrQualityThresholds::default(),
++        &limits,
++    )
++    .await
++    .expect("output includes only the first read's preprocessing");
++    assert_eq!(outcome.text, text);
++    assert_eq!(outcome.text_outside_tables, text);
++    assert_eq!(outcome.image_preprocessing.unwrap().resample_method, marker);
++}
+diff --git a/crates/xberg/src/extractors/pdf/ocr/scoring.rs b/crates/xberg/src/extractors/pdf/ocr/scoring.rs
+index da415f1e43..716d588f18 100644
+--- a/crates/xberg/src/extractors/pdf/ocr/scoring.rs
++++ b/crates/xberg/src/extractors/pdf/ocr/scoring.rs
+@@ -1012,13 +1012,7 @@ pub(crate) fn page_ocr_confidence(
+ /// scanned table becomes its most likely false positive.
+ #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+ pub(super) fn ocr_output_stats(text: &str, thresholds: &OcrQualityThresholds) -> NativeTextStats {
+-    let normalized = normalize_markdown_for_scoring(text.trim());
+-    let scoring_input = if normalized.trim().is_empty() {
+-        text.trim()
+-    } else {
+-        normalized.as_str()
+-    };
+-    NativeTextStats::compute(scoring_input, thresholds)
++    NativeTextStats::compute(&scoring_input(text.trim()), thresholds)
+ }
+ /// Is this OCR result recognition noise rather than page content?
+ ///
+@@ -1054,6 +1048,20 @@ pub(crate) fn is_ocr_recognition_noise(text: &str, thresholds: &OcrQualityThresh
+ pub(super) fn is_below_noise_check_minimum(text: &str, thresholds: &OcrQualityThresholds) -> bool {
+     ocr_output_stats(text, thresholds).word_count < thresholds.min_words_for_ocr_output_check
+ }
++
++/// The pool already met the minimum sample size. Compare a member's own fragmentation
++/// without the sample size guard, so a short clean read need not share the pool's verdict.
++#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
++pub(super) fn small_read_has_fragmented_words(text: &str, thresholds: &OcrQualityThresholds) -> bool {
++    let input = scoring_input(text.trim());
++    let (words, short) = input
++        .split_whitespace()
++        .filter(|word| word.chars().any(char::is_alphabetic))
++        .fold((0, 0), |(words, short), word| {
++            (words + 1, short + usize::from(word.len() <= 2))
++        });
++    short as f64 / words.max(1) as f64 >= thresholds.max_ocr_output_fragmented_word_ratio
++}
+ /// Whether a page's Tesseract dictionary-invalid-word ratio crosses the configured
+ /// threshold, supplementing [`is_ocr_recognition_noise`] rather than replacing it.
+ ///
+diff --git a/docs-site/src/content/docs/changelog.md b/docs-site/src/content/docs/changelog.md
+index 99cda0934e..a92d945203 100644
+--- a/docs-site/src/content/docs/changelog.md
++++ b/docs-site/src/content/docs/changelog.md
+@@ -355,6 +355,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+   During the JPEG-budget retry, an empty or whitespace-only read of a separate proven-resolution image no longer marks the page's other text as illegible. The clamp and resolution safeguards still apply to images that return text.
+ - **(ocr): Judge each scanned image's noise verdict on its own read.** (GH#2853)
+   On a page with several images, one image's clamp or low resolution no longer decides the noise verdict for the text of the other images. A clamped image that reads as legible text keeps it beside a noisy image, and a clamped image whose own read is noise is still dropped, with its tables and formulas. Several small reads on one page that are noise together are dropped as one read.
++- **(ocr): Report preprocessing and Tesseract mode only from retained embedded-image reads.** (#2918)
++  A discarded read no longer supplies the page's OCR metadata. When several small reads are rejected as noise together, a member whose own text is below the configured fragmentation threshold keeps its text, tables and formulas.
+ - **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
+   Under `OutputFormat::Plain` the per-page OCR text kept tables as markdown and its own block separators, so it never matched the plain content and `page_boundaries` was dropped with a warning. A page whose text cannot be found in the content is now rendered from its own elements with the plain renderer, so page text equals its content range. When the re-render succeeds, `pages[].content` under Plain OCR no longer carries markdown tables; the structured tables stay in `pages[].tables`.
+ - **(pdf): Honor compound glyph names at printable font codes.** (GH#2834)

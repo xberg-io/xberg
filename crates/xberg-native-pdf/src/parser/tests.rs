@@ -1,4 +1,34 @@
 use super::*;
+use crate::extractors::warnings::{WarningCategory, WarningSink};
+
+#[test]
+fn strict_object_parses_an_ordinary_indirect_reference() {
+    assert_eq!(
+        parse_strict_object(b"10 2 R /Next").unwrap(),
+        (&b" /Next"[..], Object::Reference(ObjectRef::new(10, 2)))
+    );
+}
+
+#[test]
+fn strict_reference_conversion_checks_integer_boundaries() {
+    assert_eq!(checked_reference(1, 0), Some(ObjectRef::new(1, 0)));
+    assert_eq!(
+        checked_reference(i64::from(u32::MAX), i64::from(u16::MAX)),
+        Some(ObjectRef::new(u32::MAX, u16::MAX))
+    );
+    for (id, generation) in [
+        (-1, 0),
+        (i64::from(u32::MAX) + 1, 0),
+        (1, -1),
+        (1, i64::from(u16::MAX) + 1),
+    ] {
+        assert_eq!(
+            checked_reference(id, generation),
+            None,
+            "reference ({id}, {generation})"
+        );
+    }
+}
 
 #[test]
 fn test_parse_null() {
@@ -489,4 +519,98 @@ fn test_parse_dictionary_with_extra_whitespace() {
     assert_eq!(remaining, &b""[..]);
     let dict = obj.as_dict().unwrap();
     assert_eq!(dict.get("Type").unwrap().as_name(), Some("Page"));
+}
+
+#[test]
+fn stream_line_ending_preserves_declared_payload_and_reports_padding() {
+    let cases: [(&[u8], &[u8], bool); 5] = [
+        (b"<< /Length 5 >> stream\n\t ABC\nendstream /Next", b"\t ABC", false),
+        (b"<< /Length 5 >> stream\r\n\t ABC\nendstream /Next", b"\t ABC", false),
+        (b"<< /Length 5 >> stream \t\n\t ABC\nendstream /Next", b"\t ABC", true),
+        (b"<< /Length 5 >> stream\t \r\n\t ABC\nendstream /Next", b"\t ABC", true),
+        (b"<< /Length 5 >> stream \t\nAB   \nendstream /Next", b"AB   ", true),
+    ];
+    for (input, expected, padded) in cases {
+        let sink = WarningSink::new();
+        let (remaining, object) = {
+            let _scope = sink.enter();
+            parse_object(input).unwrap()
+        };
+        let Object::Stream { dict, data } = object else {
+            panic!("expected a stream");
+        };
+        assert_eq!(remaining, b" /Next");
+        assert_eq!(dict["Length"], Object::Integer(5));
+        assert_eq!(data.as_ref(), expected, "padded line {padded}, input {input:?}");
+        let warnings = sink.take();
+        if padded {
+            assert_eq!(warnings.len(), 1);
+            assert_eq!(warnings[0].category, WarningCategory::SpecViolation);
+            assert_eq!(warnings[0].spec_section, Some("7.3.8.1"));
+            assert!(
+                warnings[0]
+                    .message
+                    .contains("horizontal whitespace before its line ending")
+            );
+        } else {
+            assert!(warnings.is_empty());
+        }
+    }
+}
+
+#[test]
+fn stream_line_ending_keeps_legacy_payload_and_warnings_without_lf_or_crlf() {
+    let cases: [(&[u8], &[u8], &str); 5] = [
+        (
+            b"<< /Length 5 >> stream \tABC\nendstream",
+            b" \tABC",
+            "No newline after stream keyword",
+        ),
+        (
+            b"<< /Length 5 >> stream \t\rAB\nendstream",
+            b" \t\rAB",
+            "No newline after stream keyword",
+        ),
+        (
+            b"<< /Length 5 >> stream\r \tABC\nendstream",
+            b" \tABC",
+            "Stream keyword followed by CR alone",
+        ),
+        (
+            b"<< /Length 5 >> stream \t\nAB\nendstream",
+            b" \t\nAB",
+            "No newline after stream keyword",
+        ),
+        (
+            b"<< /Length 6 >> stream \t\r\nAB\nendstream",
+            b" \t\r\nAB",
+            "No newline after stream keyword",
+        ),
+    ];
+    for (input, expected, warning) in cases {
+        let sink = WarningSink::new();
+        let (remaining, object) = {
+            let _scope = sink.enter();
+            parse_object(input).unwrap()
+        };
+        let Object::Stream { data, .. } = object else {
+            panic!("expected a stream");
+        };
+        assert!(remaining.is_empty());
+        assert_eq!(data.as_ref(), expected);
+        let warnings = sink.take();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].category, WarningCategory::SpecViolation);
+        assert_eq!(warnings[0].spec_section, Some("7.3.8.1"));
+        assert!(warnings[0].message.contains(warning));
+    }
+}
+
+#[test]
+fn strict_stream_header_still_requires_an_unpadded_standard_line_ending() {
+    let (payload, dict) = parse_stream_header(b"<< /Length 5 >> stream\r\n\t ABC").unwrap();
+    assert_eq!(payload, b"\t ABC");
+    assert_eq!(dict["Length"], Object::Integer(5));
+    assert!(parse_stream_header(b"<< /Length 5 >> stream \t\n\t ABC").is_none());
+    assert!(parse_stream_header(b"<< /Length 5 >> stream\t \r\n\t ABC").is_none());
 }

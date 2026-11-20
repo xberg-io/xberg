@@ -1,7 +1,34 @@
+use std::cell::Cell;
+
 use super::*;
 
 const TEST_X_RESOLUTION: i32 = 240;
 const TEST_Y_RESOLUTION: i32 = 180;
+
+thread_local! {
+    static GEOMETRY_DISPATCH_BLOCKED: Cell<bool> = const { Cell::new(false) };
+}
+
+pub(super) fn check_geometry_dispatch() -> Result<()> {
+    if GEOMETRY_DISPATCH_BLOCKED.get() {
+        return Err(TesseractError::OcrError);
+    }
+    Ok(())
+}
+
+fn without_geometry_dispatch(check: impl FnOnce()) {
+    struct RestoreDispatch<'a>(&'a Cell<bool>, bool);
+    impl Drop for RestoreDispatch<'_> {
+        fn drop(&mut self) {
+            self.0.set(self.1);
+        }
+    }
+
+    GEOMETRY_DISPATCH_BLOCKED.with(|blocked| {
+        let _restore = RestoreDispatch(blocked, blocked.replace(true));
+        check();
+    });
+}
 
 fn make_rgb_pix(width: u32, height: u32, fill: u8) -> Pix {
     let data = vec![fill; (width * height * 3) as usize];
@@ -82,6 +109,9 @@ fn test_scale_up() {
     let scaled = pix.scale(2.0, 2.0).expect("scale failed");
     assert_eq!(scaled.width(), 40);
     assert_eq!(scaled.height(), 20);
+
+    let rounded = make_rgb_pix(5, 7, 100).scale(1.5, 1.5).expect("rounded scale");
+    assert_eq!((rounded.width(), rounded.height()), (8, 11));
 }
 
 #[test]
@@ -90,6 +120,203 @@ fn test_unsharp_mask_returns_same_dimensions() {
     let sharpened = pix.unsharp_mask(2, 0.4).expect("unsharp_mask failed");
     assert_eq!(sharpened.width(), 32);
     assert_eq!(sharpened.height(), 32);
+}
+
+#[test]
+fn no_op_transforms_return_independent_pixels_and_resolution() {
+    let input = Pix::from_grayscale_bytes(&[220; 64 * 64], 64, 64).expect("make a flat grayscale image");
+    let unsharp = input.unsharp_mask(0, 0.0).expect("no-op sharpening");
+    let (deskewed, rotated) = input.deskew_with_rotation().expect("deskew a flat image");
+    assert!(!rotated);
+    for mut output in [unsharp, deskewed] {
+        assert_ne!(
+            output.as_ptr(),
+            input.as_ptr(),
+            "transform result must own different pixels"
+        );
+        assert_eq!(output.grayscale_bytes().unwrap(), [220; 64 * 64]);
+        assert_eq!(output.get_resolution().unwrap(), input.get_resolution().unwrap());
+        output.set_resolution(72, 96).expect("change result resolution");
+        assert_eq!(input.get_resolution().unwrap(), (300, 300));
+    }
+}
+
+#[test]
+fn grayscale_bytes_refuses_images_that_are_not_8_bpp() {
+    let rgb = make_rgb_pix(8, 8, 200);
+    assert_eq!(rgb.depth(), 32);
+    assert!(matches!(
+        rgb.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+
+    let gray = rgb.to_grayscale().expect("to_grayscale");
+    assert_eq!(gray.grayscale_bytes().expect("8 bpp read").len(), 64);
+}
+
+ffi_extern! {
+    fn pixcmapCreate(depth: i32) -> *mut c_void;
+    fn pixSetColormap(pix: *mut c_void, colormap: *mut c_void) -> i32;
+}
+
+#[test]
+fn grayscale_bytes_refuses_a_colormapped_8_bpp_image() {
+    let pix = Pix::from_grayscale_bytes(&[7; 16], 4, 4).expect("8 bpp image");
+    assert!(pix.grayscale_bytes().is_ok());
+    // SAFETY: the new colormap is transferred to the live Pix, which owns and frees it. ~keep
+    let status = unsafe { pixSetColormap(pix.as_ptr(), pixcmapCreate(8)) };
+    assert_eq!(status, 0);
+    assert!(matches!(
+        pix.grayscale_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
+fn binary_bytes_reports_set_bits_as_ink_and_refuses_grayscale_images() {
+    const WIDTH: u32 = 16;
+    const HEIGHT: u32 = 8;
+    let mut data = Vec::with_capacity((WIDTH * HEIGHT) as usize);
+    for _ in 0..HEIGHT {
+        data.extend(std::iter::repeat_n(40u8, (WIDTH / 2) as usize));
+        data.extend(std::iter::repeat_n(210u8, (WIDTH / 2) as usize));
+    }
+    let gray = Pix::from_grayscale_bytes(&data, WIDTH, HEIGHT).expect("make grayscale image");
+    let binary = gray.otsu_threshold().expect("one-bit raster");
+    let row_width = WIDTH as usize;
+    let expected: Vec<u8> = (0..row_width * HEIGHT as usize)
+        .map(|index| u8::from(index % row_width < row_width / 2))
+        .collect();
+
+    assert_eq!(binary.binary_bytes().expect("read binary pixels"), expected);
+    assert!(matches!(
+        gray.binary_bytes(),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
+fn deskew_reports_rotation_for_slanted_rows() {
+    const WIDTH: usize = 384;
+    const HEIGHT: usize = 256;
+    let mut pixels = vec![255; WIDTH * HEIGHT];
+    for top in (18..HEIGHT - 45).step_by(25) {
+        for left in (24..WIDTH - 24).step_by(13) {
+            for row in top..top + 8 {
+                for x in left..left + 7 {
+                    pixels[(row + x / 12) * WIDTH + x] = 0;
+                }
+            }
+        }
+    }
+    let input = Pix::from_grayscale_bytes(&pixels, WIDTH as u32, HEIGHT as u32).expect("make slanted rows");
+    let (output, rotated) = input.deskew_with_rotation().expect("deskew slanted rows");
+    assert!(rotated);
+    assert_ne!(output.grayscale_bytes().unwrap(), pixels);
+}
+
+#[test]
+fn typed_thresholded_images_do_not_share_engine_metadata() {
+    let api = crate::TesseractAPI::new().expect("create engine");
+    api.init_for_analyse_page()
+        .expect("initialize without recognition data");
+    api.set_image(&[128; 64 * 64], 64, 64, 1, 64)
+        .expect("set grayscale image");
+    let mut first = api.thresholded_image().expect("copy thresholded image");
+    let source_resolution = first.get_resolution().expect("read thresholded resolution");
+    let changed_resolution = (source_resolution.0 + 1, source_resolution.1 + 1);
+    first
+        .set_resolution(changed_resolution.0, changed_resolution.1)
+        .expect("change only the copied image");
+    let second = api.thresholded_image().expect("copy the same engine image again");
+    assert_ne!(first.as_ptr(), second.as_ptr());
+    assert_eq!(second.get_resolution().unwrap(), source_resolution);
+    assert_eq!((second.width(), second.height(), second.depth()), (64, 64, 1));
+}
+
+#[test]
+fn scale_wrapper_rejects_invalid_geometry_before_native_dispatch() {
+    let pix = make_rgb_pix(4, 4, 128);
+    without_geometry_dispatch(|| {
+        // A valid request establishes that the interlock catches the dispatch path. ~keep
+        assert!(matches!(pix.scale(1.5, 1.5), Err(TesseractError::OcrError)));
+        assert!(matches!(
+            pix.scale(0.0, 1.0),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            pix.scale(1.0, f32::NAN),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    });
+    let output = pix.scale(1.5, 1.5).expect("valid scaling after the interlock");
+    assert_eq!((output.width(), output.height()), (6, 6));
+}
+
+#[test]
+fn clip_wrapper_rejects_overflow_before_native_dispatch() {
+    let pix = make_rgb_pix(4, 4, 128);
+    without_geometry_dispatch(|| {
+        // A valid request establishes that the interlock catches the dispatch path. ~keep
+        assert!(matches!(pix.clip_rectangle(1, 1, 2, 2), Err(TesseractError::OcrError)));
+        assert!(matches!(
+            pix.clip_rectangle(1, 0, i32::MAX, 1),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            pix.clip_rectangle(0, 1, 1, i32::MAX),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    });
+    let output = pix.clip_rectangle(1, 1, 2, 2).expect("valid crop after the interlock");
+    assert_eq!((output.width(), output.height()), (2, 2));
+}
+
+#[test]
+fn scale_validation_rejects_nonfinite_and_out_of_range_native_rounding() {
+    for factor in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0] {
+        assert!(matches!(
+            validate_scale(20, 20, 8, factor, 1.0),
+            Err(TesseractError::InvalidParameterError)
+        ));
+        assert!(matches!(
+            validate_scale(20, 20, 8, 1.0, factor),
+            Err(TesseractError::InvalidParameterError)
+        ));
+    }
+    let first_unrepresentable = i32::MAX as f32;
+    let last_representable_product = first_unrepresentable.next_down();
+    assert!(validate_scale(1, 1, 8, last_representable_product, 1.0).is_ok());
+    assert!(matches!(
+        validate_scale(1, 1, 8, first_unrepresentable, 1.0),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_scale(20, 20, 8, f32::MAX, 1.0),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_scale(20, 20, 8, f32::MIN_POSITIVE, 0.01),
+        Err(TesseractError::InvalidParameterError)
+    ));
+}
+
+#[test]
+fn clip_endpoint_validation_preserves_outside_clipping_and_rejects_overflow() {
+    assert!(validate_clip_endpoints(i32::MAX - 1, 0, 1, 1).is_ok());
+    assert!(validate_clip_endpoints(-2, 0, 3, 1).is_ok());
+    assert!(matches!(
+        validate_clip_endpoints(1, 0, i32::MAX, 1),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    assert!(matches!(
+        validate_clip_endpoints(0, 1, 1, i32::MAX),
+        Err(TesseractError::InvalidParameterError)
+    ));
+    let clipped = make_rgb_pix(4, 4, 128)
+        .clip_rectangle(-2, 0, 3, 1)
+        .expect("clip to positive quadrant");
+    assert_eq!((clipped.width(), clipped.height()), (1, 1));
 }
 
 #[test]

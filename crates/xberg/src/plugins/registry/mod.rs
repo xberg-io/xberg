@@ -258,7 +258,7 @@ pub(crate) mod test_support {
     /// other, so they cannot assume exclusivity: any non-`#[serial]` test in this binary may be
     /// mid-extraction and holding a lease. `.expect()`ing the refusal turned that ordinary race
     /// into a teardown failure attributed to whichever unrelated test happened to be running. ~keep
-    fn retry_registry_clear(clear: impl Fn() -> crate::Result<()>) -> crate::Result<()> {
+    pub(crate) fn retry_registry_clear(clear: impl Fn() -> crate::Result<()>) -> crate::Result<()> {
         for _ in 0..REGISTRY_CLEAR_ATTEMPTS {
             match clear() {
                 Err(crate::XbergError::Other(message)) if message.contains("retry the lifecycle mutation") => {

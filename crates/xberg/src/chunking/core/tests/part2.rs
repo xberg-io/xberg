@@ -806,6 +806,98 @@ fn test_token_count_populated_from_registered_tokenizer_backend() {
     );
 }
 
+/// Regression test for #3291: a tokenizer backend that adds special tokens to every
+/// counted text reports more tokens than the text has bytes. Every chunk, counted
+/// with that backend, must still fit `max_characters`.
+#[cfg(feature = "chunking-tokenizers")]
+#[test]
+fn test_tokenizer_backend_with_special_tokens_keeps_chunks_within_budget() {
+    use crate::plugins::registry::test_support::TokenizerRegistryGuard;
+    use crate::plugins::{Plugin, TokenizerBackend, register_tokenizer_backend};
+    use std::sync::Arc;
+
+    struct ByteCountTokenizer {
+        name: String,
+        special_tokens: usize,
+    }
+    impl Plugin for ByteCountTokenizer {
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+    impl TokenizerBackend for ByteCountTokenizer {
+        fn count_tokens(&self, text: &str) -> usize {
+            if text.is_empty() {
+                0
+            } else {
+                text.len() + self.special_tokens
+            }
+        }
+    }
+
+    const MAX_TOKENS: usize = 64;
+    let text = (0..40_usize)
+        .map(|i| {
+            let digits: String = (0..64_usize)
+                .map(|j| char::from_digit(((i * 7 + j) % 16) as u32, 16).unwrap())
+                .collect();
+            format!("{i:04x}:{digits}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let _guard = TokenizerRegistryGuard::acquire();
+    for special_tokens in [0_usize, 2, 5] {
+        let name = format!("chunking-core-byte-count-tokenizer-{special_tokens}");
+        let backend = Arc::new(ByteCountTokenizer {
+            name: name.clone(),
+            special_tokens,
+        });
+        register_tokenizer_backend(backend.clone()).unwrap();
+
+        for chunker_type in [ChunkerType::Text, ChunkerType::Markdown] {
+            let config = ChunkingConfig {
+                max_characters: MAX_TOKENS,
+                overlap: 8,
+                trim: true,
+                chunker_type,
+                sizing: crate::core::config::ChunkSizing::Tokenizer {
+                    model: name.clone(),
+                    cache_dir: None,
+                },
+                ..Default::default()
+            };
+            let result = chunk_text(&text, &config, None).unwrap();
+
+            assert!(
+                result.chunks.len() > 1,
+                "the text must be split for the budget to matter"
+            );
+            let over: Vec<(usize, &str)> = result
+                .chunks
+                .iter()
+                .map(|chunk| (backend.count_tokens(&chunk.content), chunk.content.as_str()))
+                .filter(|&(count, _)| count > MAX_TOKENS)
+                .collect();
+            assert!(
+                over.is_empty(),
+                "{special_tokens} special tokens, {chunker_type:?}: {} of {} chunks exceed {MAX_TOKENS} tokens: {over:?}",
+                over.len(),
+                result.chunks.len()
+            );
+        }
+    }
+}
+
 /// `token_count` has no meaningful value for character-based sizing (the default);
 /// it must stay `None` rather than being populated with a bogus count.
 #[test]

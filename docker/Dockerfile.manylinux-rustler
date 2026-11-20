@@ -4,7 +4,7 @@ FROM ${MANYLINUX_IMAGE} AS builder
 
 ARG CARGO_BUILD_JOBS=1
 
-ARG RUST_TOOLCHAIN=1.99.1
+ARG RUST_TOOLCHAIN=1.100.0
 ARG TARGET=x86_64-unknown-linux-gnu
 ARG ONNXRUNTIME_VERSION=1.24.2
 
@@ -12,10 +12,8 @@ ARG CMAKE_BUILD_PARALLEL_LEVEL=1
 
 WORKDIR /build
 
-# The manylinux base images ship bash, so use it with `-o pipefail`: without it
-# the `curl ... | sh` rustup bootstrap below reports only sh's status (a failed
-# or truncated download would silently install nothing) and the readelf NEEDED
-# linkage assertion reports success on an empty pipe. (hadolint DL4006)
+# The manylinux base images ship bash. Use pipefail so a failed readelf
+# cannot make the NEEDED linkage assertion succeed on an empty pipe. (hadolint DL4006)
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN dnf -y install epel-release || \
@@ -24,7 +22,7 @@ RUN dnf -y install epel-release || \
 # verifies. EPEL's tesseract-langpack-eng ships a different eng.traineddata at the same path,
 # so installing it beside the tesseract it requires fails the dnf transaction. ~keep
 RUN dnf -y install \
-        cmake make pkgconfig git file curl \
+        cmake make pkgconfig git file curl unzip \
         openssl-devel \
         libpng-devel libjpeg-turbo-devel libtiff-devel zlib-devel \
         giflib-devel libwebp-devel openjpeg2-devel libarchive-devel libcurl-devel \
@@ -94,23 +92,33 @@ RUN cd /tmp && \
     readelf -d /usr/local/lib/libheif.so.1 | grep -q libaom && \
     cd / && rm -rf /tmp/libheif*
 
-# The two ORT_SHA256 values are the GitHub-published release digests for the
-# ONNXRUNTIME_VERSION pinned above. Overriding that ARG without updating them fails the
-# checksum -- deliberately: an unverified ORT tarball is linked into every published
-# artifact this image builds. ~keep
+COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh /opt/xberg-integrity/verify-archive.sh
+COPY scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh /opt/xberg-integrity/nuget-fallback.sh
+COPY scripts/ci/actions/setup-onnx-runtime/checksums.sha256 /opt/xberg-integrity/onnxruntime-checksums.sha256
+
 RUN mkdir -p /build/onnxruntime && \
+    case "$ONNXRUNTIME_VERSION" in ''|*[!A-Za-z0-9._-]*) echo "Invalid ONNX Runtime version: $ONNXRUNTIME_VERSION" >&2; exit 1 ;; esac && \
     if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then \
-        ORT_ARCH="aarch64"; ORT_SHA256="6715b3d19965a2a6981e78ed4ba24f17a8c30d2d26420dbed10aac7ceca0085e"; \
+        ORT_ARCH="aarch64"; \
+        ORT_RID="linux-arm64"; \
     else \
-        ORT_ARCH="x64"; ORT_SHA256="43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6"; \
+        ORT_ARCH="x64"; \
+        ORT_RID="linux-x64"; \
     fi && \
-    curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" \
-        -o /build/onnxruntime.tgz && \
-    echo "${ORT_SHA256}  /build/onnxruntime.tgz" | sha256sum -c - && \
-    tar -xzf /build/onnxruntime.tgz -C /build/onnxruntime --strip-components=1 && \
+    ORT_ASSET="onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" && \
+    ORT_ARCHIVE="/build/$ORT_ASSET" && \
+    bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 --known && \
+    if curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ORT_ASSET}" \
+        -o "$ORT_ARCHIVE"; then \
+        bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 && \
+        tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1; \
+    else \
+        rm -f "$ORT_ARCHIVE" && \
+        RUNNER_TEMP=/tmp bash /opt/xberg-integrity/nuget-fallback.sh "$ONNXRUNTIME_VERSION" "$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256; \
+    fi && \
     cp /build/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ && \
     ldconfig && \
-    rm /build/onnxruntime.tgz
+    rm -f "$ORT_ARCHIVE"
 ENV ORT_LIB_LOCATION=/build/onnxruntime/lib \
     ORT_PREFER_DYNAMIC_LINK=1 \
     ORT_SKIP_DOWNLOAD=1 \
@@ -118,8 +126,20 @@ ENV ORT_LIB_LOCATION=/build/onnxruntime/lib \
     PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
     LD_LIBRARY_PATH=/usr/local/lib
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src
+# The pins come from the matching rustup-init.sha256 files in Rust's release archive. ~keep
+RUN RUSTUP_VERSION=1.29.3 && \
+    case "$TARGET" in \
+        x86_64-unknown-linux-gnu) RUSTUP_SHA256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55 ;; \
+        aarch64-unknown-linux-gnu) RUSTUP_SHA256=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282 ;; \
+        *) printf 'Unsupported Rustup target: %s\n' "$TARGET" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${TARGET}/rustup-init" \
+        -o rustup-init && \
+    printf '%s  rustup-init\n' "$RUSTUP_SHA256" | sha256sum -c - && \
+    chmod 0755 rustup-init && \
+    ./rustup-init -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+    rm rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 COPY Cargo.toml Cargo.lock ./

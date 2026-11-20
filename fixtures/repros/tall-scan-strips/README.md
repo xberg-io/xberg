@@ -63,6 +63,19 @@ uv run --no-project --with pillow==13.0.0 python generate.py . \
 
 Of these, only the Indexed scan reads back as all 440 source words; the others pin the 150 DPI floor.
 
+The German variant keeps the 1275 × 12000 source grid and draws the same shape of forty
+lines with a German phrase and the same tags. Its oracle is `expected-deu.txt`.
+Regenerate it with the bundled DejaVu Sans font:
+
+```sh
+uv run --no-project --with pillow==13.0.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --deu-only
+```
+
+`pdf_tall_scan_language_2502` is ignored unless `deu.traineddata` is installed in
+`TESSDATA_PREFIX` or a system tessdata directory. The offline qualification suite runs
+English only.
+
 ## Source geometry at different densities
 
 `large-text-150.pdf` and `large-text-300.pdf` contain the same physical scan on
@@ -91,3 +104,60 @@ the retained native render dimensions at both source densities. They exercise ra
 ASCII85+Flate page-paint streams, including separately serialized extra-paint
 controls that must report an uncertified source. The low-density geometry tests
 retain the pre-existing 80-row inclusive and 48-column exclusive limits at 120 DPI.
+
+## Integrated qualification
+
+CI does not run this check. Run it by hand before a release that changes
+tall-scan OCR.
+
+The release-feature run executes 38 synthetic tests covering encodings, DPI,
+PSM, language, cache behavior and standalone image warnings. The complete run
+adds ten tests that read `sharable_web_guide.pdf` or a page derived from it:
+the paired whole-guide, Page 5 and 8, right-column and annotation checks. One
+of the five right-column tests,
+`synthetic_singleton_flate_spelling_preserves_the_certified_right_column_and_original_table`,
+reads Page 4 with its image filter respelled rather than the unmodified page.
+
+Both modes run offline. Provision ONNX Runtime as in Rust CI, then stage the
+pinned RT-DETR model in the Hugging Face cache before invoking the task. The
+task refuses to start unless that snapshot is present with the pinned
+SHA-256. Use `-- synthetic` on the last line to run only the synthetic tests
+and skip the two corpus commands.
+
+```sh
+(
+  set -eu
+  git submodule update --init test_documents
+  python3 test_documents/scripts/fetch_corpus.py --include 'pdf/sharable_web_guide.pdf'
+
+  scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
+  export HF_HOME="$scratch/hf" HF_HUB_CACHE="$scratch/hub" HUGGINGFACE_HUB_CACHE="$scratch/hub"
+  export XDG_CACHE_HOME="$scratch/xdg"
+  revision=c6bf493e2f7b0b9a29a5870da9880c14e20ff0a3
+  model="$HF_HUB_CACHE/models--xberg-io--layout-models/snapshots/$revision/rtdetr/model.onnx"
+  mkdir -p "$(dirname "$model")"
+  curl --fail --silent --show-error --location --retry 3 --connect-timeout 30 --max-time 600 \
+    --proto '=https' --proto-redir '=https' \
+    "https://huggingface.co/xberg-io/layout-models/resolve/$revision/rtdetr/model.onnx" \
+    --output "$model"
+  test "$(wc -c <"$model")" -eq 169089059
+  printf '%s  %s\n' 3bf2fb0ee6df87435b7ae47f0f3930ec3dc97ec56fd824acc6d57bc7a6b89ef2 "$model" \
+    | shasum -a 256 -c
+  mise run rust:test:tall-scan-qualification
+)
+```
+
+The task verifies the PDF against the pinned public test corpus. Page 5 and
+Page 8 are isolated in a temporary directory from that verified source. Set
+`XBERG_2502_PAGE5_ARCHIVE` or `XBERG_2502_PAGE8_ARCHIVE` to replay an existing
+exact archive. The corresponding test verifies its archive digest; a page
+derived from the guide is checked against its own pinned digest.
+
+The annotation test writes its Page 4 and 13 extraction JSON to
+`target/tall-scan-qualification/evidence`, or to `XBERG_2502_EVIDENCE` when
+set, and the task prints that path.
+
+Separate diagnostics reproduced the Guide Page 9 typo and both Nougat 009
+misses in Xberg. The matched Nougat 010 checks passed. These cases are tracked
+in [#2502](https://github.com/xberg-io/xberg/issues/2502).

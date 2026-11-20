@@ -16,6 +16,7 @@ members = [
     "crates/xberg-py",
     "crates/xberg-tesseract",
     "crates/xberg-wasm",
+    "crates/xberg/tests/support/child-process",
     "packages/dart/rust",
     "packages/swift/rust",
     "tools/benchmark-harness",
@@ -31,7 +32,7 @@ default-members = ["crates/xberg", "crates/xberg-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "1.4.0"
+version = "1.4.2"
 edition = "2024"
 rust-version = "1.99"
 authors = [
@@ -69,22 +70,18 @@ cc = "1.11"
 cfb = "0.16"
 chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "color", "suggestions"] }
-comrak = { version = "0.59", default-features = false }
-console_error_panic_hook = "0.1"
-crawlberg = { version = "1.13.0", default-features = false }
+comrak = { version = "1.0", default-features = false }
+crawlberg = { version = "1.13.1", default-features = false }
 criterion = { version = "0.8", features = ["html_reports"] }
 dbase = "0.8"
 flate2 = "1.1"
 fs2 = "0.4.3"
 futures = "0.3"
-getrandom = { version = "0.4.3", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.22.0", default-features = false }
+html-to-markdown-rs = { version = "3.22.2", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.15"
-js-sys = "0.3"
 
-lazy_static = "1.5.1"
 libc = "0.2.191"
 # Builds a bundled zlib from source (`static`) for the target, so the vendored
 # librevenge RVNGZipStream.cpp can `#include <zlib.h>` and link zlib even under
@@ -111,13 +108,13 @@ parking_lot = "0.13.0"
 # (matches the `[lib] name = "pdfium_render"` in crates/xberg-pdfium-render/Cargo.toml),
 # so any `use pdfium_render::...` call site is unaffected. Path dependency inside the
 # workspace; needs no [patch.crates-io] entry (see the note above that block).
-pdfium-render = { package = "xberg-pdfium-render", path = "./crates/xberg-pdfium-render", version = "1.4.0" }
+pdfium-render = { package = "xberg-pdfium-render", path = "./crates/xberg-pdfium-render", version = "1.4.2" }
 rayon = "1.12.0"
 reqwest = { version = "0.13.5", default-features = false }
 # SVG rendering (resvg re-exports tiny_skia and usvg; default-features = false
 # drops text, system-fonts, memmap-fonts, raster-images — all pure-Rust, WASM-safe).
 resvg = { version = "0.50", default-features = false }
-rusqlite = { version = "0.42", default-features = false, features = ["bundled", "hooks", "serialize"] }
+rusqlite = { version = "0.43", default-features = false, features = ["bundled", "hooks", "serialize"] }
 same-file = "1.0.6"
 sceptre = { version = "0.10.1", default-features = false }
 
@@ -126,7 +123,6 @@ serde_json = { version = "1.0.154" }
 serde_toon_format = "0.2"
 sha2 = "0.11"
 similar = "3"
-sqlite-vec = "0.1"
 tar = "0.4"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
@@ -150,27 +146,17 @@ tracing = "0.1"
 # and WASM-safe; the top-level `tract` facade instead defaults to CUDA and bundles
 # GPU backends, so it is unusable here. See issue #1275.
 tract-onnx = { version = "0.23.10", default-features = false }
-tree-sitter-language-pack = { version = "1.25.0", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.25.2", default-features = false, features = ["serde"] }
 url = "2.5.8"
 # usvg (re-exported by resvg) with only the `writer` feature so `Tree::to_string`
 # / `WriteOptions` are available for SVG sanitize re-serialization. `writer` pulls
 # just xmlwriter + base64 — pure-Rust, WASM-safe, no fonts. resvg forwards no
 # `writer` feature, so usvg is enabled directly at the matching version. ~keep
 usvg = { version = "0.50", default-features = false, features = ["writer"] }
-wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [
-    "Blob",
-    "File",
-    "FileReader",
-    "console",
-    "TextDecoder",
-    "ImageData",
-    "Window",
-    "Response",
-] }
-xberg = { path = "./crates/xberg", version = "1.4.0", default-features = false }
-xberg-gliner = { path = "./crates/xberg-gliner", version = "1.4.0", default-features = false }
+xberg = { path = "./crates/xberg", version = "1.4.2", default-features = false }
+# A versionless path dev-dependency is omitted from published Cargo manifests. ~keep
+xberg-child-test = { path = "crates/xberg/tests/support/child-process" }
+xberg-gliner = { path = "./crates/xberg-gliner", version = "1.4.2", default-features = false }
 # The native PDF engine, vendored into this workspace at crates/xberg-native-pdf. It began as
 # a fork of a third-party project; see ATTRIBUTIONS.md, which is now the ONLY place in this
 # repo that names the upstream. There is deliberately no `package =` alias: the extern crate
@@ -178,7 +164,7 @@ xberg-gliner = { path = "./crates/xberg-gliner", version = "1.4.0", default-feat
 # target (`module_path!()`, rooted at `[lib] name`) matches the crate you are reading. An alias
 # hiding a different lib name is what cost twelve days of dropped font warnings in GH#697.
 # Path dependency inside the workspace; needs no [patch.crates-io] entry.
-xberg-native-pdf = { path = "./crates/xberg-native-pdf", version = "1.4.0" }
+xberg-native-pdf = { path = "./crates/xberg-native-pdf", version = "1.4.2" }
 
 [patch.crates-io]
 # Out-of-tree overrides are forbidden here: CI and standalone documentation snippets

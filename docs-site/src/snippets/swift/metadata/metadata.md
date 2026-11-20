@@ -6,7 +6,7 @@ import RustBridge
 let config = try extractionConfigFromJson("{}")
 let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
 let resultOutput = try await extract(input: input, config: config)
-let result = resultOutput.results().get(index: 0)!
+let result = resultOutput.results().first!
 
 let metadata = result.metadata()
 

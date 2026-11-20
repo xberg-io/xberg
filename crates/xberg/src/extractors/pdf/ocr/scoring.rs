@@ -928,7 +928,7 @@ pub(super) struct OcrRecognitionNoiseDecision {
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 impl OcrRecognitionNoiseDecision {
-    fn suspected(self) -> bool {
+    pub(super) fn suspected(self) -> bool {
         self.low_confidence || self.fragmented_noise
     }
 }

@@ -57,6 +57,7 @@ fn document(mut spans: Vec<TextSpan>) -> InternalDocument {
             baseline_y: span.bbox.y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         })
         .collect();
     extract_document_structure_from_segments(

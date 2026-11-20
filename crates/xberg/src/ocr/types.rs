@@ -586,6 +586,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
 
         let batch_result = BatchItemResult {

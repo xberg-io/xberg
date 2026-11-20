@@ -62,11 +62,10 @@ struct TextOutput {
 
 #[derive(Default)]
 struct TextScope {
-    group_has_text: Vec<bool>,
     uc_stack: Vec<u8>,
     ansi_codepage_stack: Vec<u32>,
-    pending_boundary_space: bool,
     hidden_stack: Vec<bool>,
+    deleted_stack: Vec<bool>,
     font_id_stack: Vec<Option<u16>>,
     // \deff is document-wide; active font and codepage inherit group scopes. ~keep
     default_font_id: Option<u16>,
@@ -200,6 +199,7 @@ impl TextParser {
                 font_charsets: parse_font_charset_table(content),
                 uc_stack: vec![1],
                 hidden_stack: vec![false],
+                deleted_stack: vec![false],
                 ansi_codepage_stack: vec![1252],
                 font_id_stack: vec![None],
                 picture_groups: vec![PictureGroupState::default()],
@@ -229,7 +229,6 @@ impl TextParser {
     fn open_group(&mut self) {
         self.scope.group_depth += 1;
         self.scope.expect_destination = true;
-        self.scope.group_has_text.push(false);
         let role = self
             .scope
             .picture_groups
@@ -244,12 +243,13 @@ impl TextParser {
         self.scope.uc_stack.push(uc);
         let hidden = self.scope.hidden_stack.last().copied().unwrap_or(false);
         self.scope.hidden_stack.push(hidden);
+        let deleted = self.scope.deleted_stack.last().copied().unwrap_or(false);
+        self.scope.deleted_stack.push(deleted);
         let codepage = self.scope.ansi_codepage_stack.last().copied().unwrap_or(1252);
         self.scope.ansi_codepage_stack.push(codepage);
         let font = self.scope.font_id_stack.last().copied().flatten();
         self.scope.font_id_stack.push(font);
         self.fmt_tracker.push();
-        self.scope.pending_boundary_space = false;
     }
 
     fn close_group(&mut self) {
@@ -267,6 +267,7 @@ impl TextParser {
         self.fmt_tracker.pop(self.output.result.len());
         pop_scope(&mut self.scope.uc_stack);
         pop_scope(&mut self.scope.hidden_stack);
+        pop_scope(&mut self.scope.deleted_stack);
         pop_scope(&mut self.scope.ansi_codepage_stack);
         pop_scope(&mut self.scope.font_id_stack);
         if self.scope.skip_depth > 0 && self.scope.group_depth < self.scope.skip_depth {
@@ -282,10 +283,6 @@ impl TextParser {
         );
         self.close_fields();
         self.close_captures();
-        let produced_text = self.scope.group_has_text.pop().unwrap_or(false);
-        if produced_text && self.scope.skip_depth == 0 {
-            self.scope.pending_boundary_space = true;
-        }
     }
 
     fn close_fields(&mut self) {
@@ -349,12 +346,21 @@ impl TextParser {
         }
     }
 
+    fn is_deleted(&self) -> bool {
+        self.scope.deleted_stack.last().copied().unwrap_or(false)
+    }
+
+    fn text_suppressed(&self) -> bool {
+        self.scope.skip_depth > 0 || self.scope.hidden_stack.last().copied().unwrap_or(false) || self.is_deleted()
+    }
+
     fn handle_whitespace(&mut self) {
         if self.fields.in_fldinst {
             self.fields.fldinst_content.push(' ');
         }
         self.capture_auxiliary_character(' ');
         if self.scope.skip_depth > 0
+            || self.is_deleted()
             || self.destinations.footnote.active
             || self.destinations.shptxt.active
             || self.destinations.annotation.active
@@ -372,9 +378,6 @@ impl TextParser {
             && !self.output.result.ends_with('\n')
         {
             self.output.result.push(' ');
-            if let Some(flag) = self.scope.group_has_text.last_mut() {
-                *flag = true;
-            }
         }
     }
 
@@ -388,7 +391,7 @@ impl TextParser {
         if self.destinations.listtext.active {
             self.destinations.listtext.buffer.push(character);
         }
-        if self.scope.skip_depth > 0 || self.scope.hidden_stack.last().copied().unwrap_or(false) {
+        if self.text_suppressed() {
             return;
         }
         if let Some(state) = self.output.table_state.as_ref()
@@ -403,19 +406,8 @@ impl TextParser {
             state.current_cell.push(character);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push(character);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn finalize_table(&mut self) {
@@ -508,7 +500,6 @@ impl TextParser {
             ensure_table: &ensure_table,
             finalize_table,
             plain: self.output.plain,
-            group_has_text: &mut self.scope.group_has_text,
             cur_heading_level: &mut self.paragraph.cur_heading_level,
             cur_list_level: &mut self.paragraph.cur_list_level,
             cur_list_id: &mut self.paragraph.cur_list_id,
@@ -518,7 +509,6 @@ impl TextParser {
             uc_stack: &mut self.scope.uc_stack,
             ansi_codepage_stack: &mut self.scope.ansi_codepage_stack,
             footnote_count: &mut self.destinations.footnote_count,
-            pending_boundary_space: &mut self.scope.pending_boundary_space,
             hidden_stack: &mut self.scope.hidden_stack,
             fmt_tracker: &mut self.fmt_tracker,
             font_id_stack: &mut self.scope.font_id_stack,
@@ -563,7 +553,7 @@ impl TextParser {
             chars.next();
         }
         self.scope.expect_destination = false;
-        if self.scope.skip_depth > 0 {
+        if self.scope.skip_depth > 0 || self.is_deleted() {
             return;
         }
         self.dispatch_control_word("par", None, chars);
@@ -577,7 +567,7 @@ impl TextParser {
             self.fields.fldinst_content.push(next_ch);
         }
         self.capture_auxiliary_character(next_ch);
-        if self.scope.skip_depth > 0 || self.scope.hidden_stack.last().copied().unwrap_or(false) {
+        if self.text_suppressed() {
             return;
         }
         // Inside a table row the character belongs to the current cell, as a
@@ -588,19 +578,8 @@ impl TextParser {
             state.current_cell.push(next_ch);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push(next_ch);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn handle_hex_escape(&mut self, chars: &mut Peekable<Chars<'_>>) {
@@ -613,7 +592,7 @@ impl TextParser {
         {
             self.append_hex_to_destinations(bytes.as_deref().unwrap_or_default());
         }
-        if self.scope.skip_depth > 0 || self.scope.hidden_stack.last().copied().unwrap_or(false) {
+        if self.text_suppressed() {
             return;
         }
         let Some(bytes) = bytes.as_deref() else {
@@ -626,19 +605,8 @@ impl TextParser {
             state.current_cell.push_str(&decoded);
             return;
         }
-        if self.scope.pending_boundary_space
-            && !self.output.result.is_empty()
-            && !self.output.result.ends_with(' ')
-            && !self.output.result.ends_with('\n')
-        {
-            self.output.result.push(' ');
-        }
-        self.scope.pending_boundary_space = false;
         self.paragraph.para_meta_emitted = false;
         self.output.result.push_str(&decoded);
-        if let Some(flag) = self.scope.group_has_text.last_mut() {
-            *flag = true;
-        }
     }
 
     fn decode_ansi(&self, bytes: &[u8]) -> String {
@@ -676,8 +644,37 @@ impl TextParser {
             self.handle_skipped_control_word(&control_word, param, chars);
             return;
         }
+        if control_word == "deleted" {
+            if let Some(deleted) = self.scope.deleted_stack.last_mut() {
+                *deleted = param.unwrap_or(1) != 0;
+            }
+            return;
+        }
+        if self.is_deleted() && self.drop_deleted_control_word(&control_word, chars) {
+            return;
+        }
         self.scope.pending_primary = None;
         self.dispatch_control_word(&control_word, param, chars);
+    }
+
+    /// Swallow the control words that would emit text inside `\deleted` text.
+    /// A `\u` escape also owns its fallback characters, which are consumed so
+    /// they are not read as ordinary text. ~keep
+    fn drop_deleted_control_word(&mut self, control_word: &str, chars: &mut Peekable<Chars<'_>>) -> bool {
+        match control_word {
+            "u" => {
+                let uc_count = self.scope.uc_stack.last().copied().unwrap_or(1);
+                for _ in 0..uc_count {
+                    if chars.peek().is_some_and(|next| !matches!(next, '\\' | '{' | '}')) {
+                        chars.next();
+                    }
+                }
+                true
+            }
+            "tab" | "line" | "par" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash"
+            | "emdash" => true,
+            _ => false,
+        }
     }
 
     fn handle_picture_destination(&mut self, word: &str) -> bool {

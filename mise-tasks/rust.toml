@@ -5,6 +5,10 @@ description = "Verify OCR links host Tesseract without touching the vendor cache
 depends = ["os:require linux"]
 run = "bash scripts/ci/rust/check-tesseract-dynamic.sh"
 
+["rust:check:packages"]
+description = "Package and verify every crates.io crate standalone with warnings denied, as cargo publish does"
+run = "python3 scripts/ci/rust/verify-crate-packages.py"
+
 ["rust:check:libheif-runtime"]
 description = "Verify real v1_19 Rust decoding against the selected system runtime"
 depends = ["os:require linux"]
@@ -16,11 +20,21 @@ run = [{ task = "rust:build", args = ["dev"] }]
 
 ["rust:build:profiling"]
 description = "Build all Rust crates with profiling features (for flamegraph generation)"
-env = { ENABLE_PROFILING = "true", RUSTFLAGS = "-g" }
+env = { ENABLE_PROFILING = "true" }
 run = [
-  "cargo build --locked --workspace --release --features full,profiling,api,mcp,otel --exclude xberg-php --exclude xberg-node --exclude xberg-wasm",
-  "cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling",
+  "cargo build --locked --workspace --profile profiling --features full,profiling,api,mcp,otel --exclude xberg-php --exclude xberg-node --exclude xberg-wasm",
+  "cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --profile profiling --features profiling",
 ]
+
+["rust:bench"]
+description = "Run one criterion benchmark of a crate"
+usage = """
+arg "<bench>" help="Benchmark target name (the [[bench]] name)"
+flag "-p --package <package>" default="xberg-native-pdf" help="The crate that owns the benchmark"
+flag "--features <features>" help="Comma-separated features the benchmark requires"
+arg "[filter...]" help="Criterion benchmark ID filter, e.g. extract_text/type0_cjk"
+"""
+run = 'cargo bench --locked -p "$usage_package" --bench "$usage_bench" ${usage_features:+--features "$usage_features"} ${usage_filter:+-- $usage_filter}'
 
 ["rust:cli:build"]
 description = "Build CLI binary"
@@ -49,10 +63,14 @@ env = { CARGO_TERM_COLOR = "always" }
 run = 'RUST_BACKTRACE="${RUST_BACKTRACE:-1}" bash scripts/ci/rust/run-unit-tests.sh'
 
 ["rust:test:focused-pr"]
-description = "Run the exact PDF/OCR, office page or API jobs checks used on pull requests"
+description = "Run the exact PDF, OCR, office page or API jobs checks used on pull requests"
 depends = ["os:require linux darwin"]
-usage = 'arg "<suite>" help="Fixed suite: pdf-ocr, office-pages or api-jobs"'
+usage = 'arg "<suite>" help="Fixed suite: pdf-ocr, pdf-sparse-paddle, office-pages, api-jobs or pdf-table-paint"'
 run = 'bash scripts/ci/rust/run-focused-pr-tests.sh "$usage_suite"'
+
+["rust:test:ort-discovery"]
+description = "Verify dynamic ONNX Runtime discovery through the Sceptre OCR and shared environment routes"
+run = "bash scripts/ci/rust/run-ort-discovery-tests.sh"
 
 ["rust:test:jpeg-recovery"]
 description = "Qualify nine real OCR recovery controls with verified English"
@@ -63,11 +81,22 @@ flag "--no-default-features" help="Disable default features for a narrow local c
 """
 run = 'bash scripts/ci/rust/run-jpeg-recovery-tests.sh "$usage_features" "${usage_no_default_features:-false}"'
 
+["rust:test:tall-scan-qualification"]
+description = "Qualify tall scan recovery with synthetic controls and the pinned public guide"
+depends = ["os:require linux darwin"]
+usage = 'arg "[mode]" help="all (default) or synthetic"'
+run = 'bash scripts/ci/rust/run-tall-scan-qualification.sh "${usage_mode:-all}"'
+
 ["rust:test:explicit-sideways"]
 description = "Qualify explicit sideways OCR with pinned offline model artifacts"
 depends = ["os:require linux darwin"]
 usage = 'arg "<profile>" help="Use warm or paddle for the classifier controls (paddle adds Paddle OCR) or native for the classifier-free controls"'
 run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
+
+["rust:test:deferred-osd"]
+description = "Qualify deferred native OSD on a warm retry engine"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-deferred-osd-test.sh"
 
 ["rust:test:khmer-native-retention"]
 description = "Qualify native Khmer preservation with the direct English OCR backend"

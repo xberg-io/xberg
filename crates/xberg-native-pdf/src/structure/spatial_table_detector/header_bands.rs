@@ -296,6 +296,22 @@ mod tests {
     }
 
     #[test]
+    fn legacy_header_fill_accepts_sub_point_corner_drift() {
+        use crate::elements::PathOperation;
+
+        let mut fill = PathContent::from_operations(vec![
+            PathOperation::MoveTo(0.0, 0.0),
+            PathOperation::LineTo(80.0, 0.05),
+            PathOperation::LineTo(80.0, 0.45),
+            PathOperation::LineTo(0.0, 0.4),
+            PathOperation::ClosePath,
+        ]);
+        fill.stroke_color = None;
+        fill.fill_color = Some(crate::layout::Color::new(0.0, 0.0, 0.0));
+        assert_eq!(drawn_interval(&fill, false, 0.2), Some((0.0, 80.0)));
+    }
+
+    #[test]
     fn filled_thin_bars_close_a_header_cell_without_strokes() {
         let mut paths = vec![
             PathContent::rect(0., 0., 80., 0.48),

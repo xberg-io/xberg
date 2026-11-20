@@ -39,17 +39,111 @@ pub fn pdf(size: u32, shift_150_pixels: u32) -> Vec<u8> {
     content_pdf(content)
 }
 
+#[allow(dead_code)] // Shared with tests that only use the phase fixtures.
+pub fn density_controls() -> [(&'static str, Vec<u8>, String); 4] {
+    let create = |name, width, height, size, count, two_pages| {
+        let mut content = format!("BT /F1 {size} Tf ");
+        let mut expected = Vec::new();
+        for index in 0..count {
+            let line = LINES[index % LINES.len()];
+            let y = f64::from(height) - 42.0 - index as f64 * 18.0;
+            content.push_str(&format!("1 0 0 1 36 {y} Tm ({line}) Tj "));
+            expected.push(line);
+        }
+        content.push_str("ET");
+        let expected = if two_pages {
+            expected.repeat(2).join(" ")
+        } else {
+            expected.join(" ")
+        };
+        (
+            name,
+            content_pdf_with_pages(content, width, height, two_pages),
+            expected,
+        )
+    };
+    [
+        create("letter-small", 612.0, 792.0, 7, 4, false),
+        create("a4-small", 595.0, 842.0, 7, 4, false),
+        create("letter-ordinary-heavy", 612.0, 792.0, 12, 32, false),
+        create("letter-multipage-small", 612.0, 792.0, 7, 4, true),
+    ]
+}
+
 pub fn content_pdf(content: String) -> Vec<u8> {
+    content_pdf_with_pages(content, 432.0, 216.0, false)
+}
+
+pub fn content_pdf_with_pages(content: String, width: f32, height: f32, two_pages: bool) -> Vec<u8> {
+    content_pdf_with_page_resources(content, width, height, two_pages, "")
+}
+
+#[allow(dead_code)] // Used by the density planner's alpha control.
+pub fn content_pdf_with_resources(content: String, extra_resources: &str) -> Vec<u8> {
+    content_pdf_with_page_resources(content, 612.0, 792.0, false, extra_resources)
+}
+
+#[allow(dead_code)]
+pub fn content_pdf_with_logo(content: String) -> Vec<u8> {
+    build_density_pdf(
+        content,
+        612.0,
+        792.0,
+        false,
+        "/XObject << /Logo 8 0 R >>",
+        Some(stream(
+            &[0],
+            "/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray",
+        )),
+    )
+}
+
+fn content_pdf_with_page_resources(
+    content: String,
+    width: f32,
+    height: f32,
+    two_pages: bool,
+    extra_resources: &str,
+) -> Vec<u8> {
+    build_density_pdf(content, width, height, two_pages, extra_resources, None)
+}
+
+fn build_density_pdf(
+    content: String,
+    width: f32,
+    height: f32,
+    two_pages: bool,
+    extra_resources: &str,
+    image: Option<Vec<u8>>,
+) -> Vec<u8> {
     assert_eq!(hex::encode(Sha256::digest(FONT)), FONT_SHA256);
+    let resources = if extra_resources.is_empty() {
+        String::new()
+    } else {
+        format!(" {extra_resources}")
+    };
+    let page = format!(
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >>{resources} >> >>"
+    )
+    .into_bytes();
+    let pages = if two_pages {
+        b"<< /Type /Pages /Kids [3 0 R 8 0 R] /Count 2 >>".to_vec()
+    } else {
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec()
+    };
     let mut objects = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 432 216] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(),
+        pages,
+        page.clone(),
         stream(&content.into_bytes(), ""),
         format!("<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths [{FONT_WIDTHS}] /FontDescriptor 6 0 R >>").into_bytes(),
         b"<< /Type /FontDescriptor /FontName /DejaVuSans /Flags 32 /FontBBox [-1021 -463 1794 1233] /ItalicAngle 0 /Ascent 928 /Descent -236 /CapHeight 729 /StemV 80 /FontFile2 7 0 R >>".to_vec(),
     ];
     objects.push(stream(FONT, &format!("/Length1 {}", FONT.len())));
+    if two_pages {
+        objects.push(page);
+    }
+    objects.extend(image);
     assemble(&objects)
 }
 

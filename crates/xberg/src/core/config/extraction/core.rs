@@ -540,6 +540,20 @@ pub struct ExtractionConfig {
     #[cfg_attr(alef, alef(skip))]
     pub cancel_token: Option<crate::cancellation::CancellationToken>,
 
+    #[doc(hidden)]
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    pub pdf_region_ocr_calls: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+
+    /// Work budget shared by every level of a nested archive extraction, installed by the
+    /// outermost archive extractor and inherited through the config each child is
+    /// extracted with, so `security_limits` bound the whole recursion rather than each
+    /// container separately. Internal state, not configuration.
+    #[doc(hidden)]
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    pub archive_budget: Option<std::sync::Arc<crate::extractors::security::ArchiveBudget>>,
+
     /// Transient source-filename hint for extension-based language detection.
     ///
     /// Set internally during extraction (from `ExtractInput::filename` or a
@@ -661,6 +675,8 @@ impl Default for ExtractionConfig {
             captioning: None,
             qr_codes: None,
             cancel_token: None,
+            pdf_region_ocr_calls: None,
+            archive_budget: None,
             source_name: None,
         }
     }

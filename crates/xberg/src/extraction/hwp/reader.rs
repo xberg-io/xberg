@@ -2,6 +2,7 @@
 ///
 /// Consolidated from hwpers reader/cfb.rs, reader/stream.rs, and utils/compression.rs.
 use super::error::{HwpError, Result};
+use crate::extractors::security::SecurityError;
 use cfb::CompoundFile;
 use flate2::read::{DeflateDecoder, ZlibDecoder};
 use std::io::{Cursor, Read, Seek};
@@ -104,26 +105,92 @@ impl StreamReader {
     }
 }
 
-/// Decompress a raw-deflate stream from an HWP section.
+/// Decompress a raw-deflate stream from an HWP section, producing at most `max_output` bytes.
 ///
 /// HWP 5.0 compresses sections with raw deflate (no zlib header). Falls back
 /// to zlib if raw deflate fails, and returns the data as-is if both fail.
-pub(crate) fn decompress_stream(data: &[u8]) -> Result<Vec<u8>> {
+///
+/// The output is bounded by the read itself (`take(max_output + 1)`), not by any size
+/// the file declares, so a deflate bomb is rejected after at most `max_output + 1`
+/// bytes have been allocated.
+pub(crate) fn decompress_stream(data: &[u8], max_output: usize) -> Result<Vec<u8>> {
     if data.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut decoder = DeflateDecoder::new(data);
-    let mut decompressed = Vec::new();
-    if decoder.read_to_end(&mut decompressed).is_ok() {
-        return Ok(decompressed);
+    if let Some(out) = inflate_bounded(DeflateDecoder::new(data), max_output)? {
+        return Ok(out);
+    }
+    if let Some(out) = inflate_bounded(ZlibDecoder::new(data), max_output)? {
+        return Ok(out);
     }
 
-    let mut decoder = ZlibDecoder::new(data);
-    let mut decompressed = Vec::new();
-    if decoder.read_to_end(&mut decompressed).is_ok() {
-        return Ok(decompressed);
+    if data.len() > max_output {
+        return Err(HwpError::Security(SecurityError::ContentTooLarge {
+            size: data.len(),
+            max: max_output,
+        }));
     }
-
     Ok(data.to_vec())
+}
+
+/// Read `decoder` to the end, `Ok(None)` if it fails, `Err` if it yields more than `max_output` bytes.
+fn inflate_bounded<R: Read>(decoder: R, max_output: usize) -> Result<Option<Vec<u8>>> {
+    let mut out = Vec::new();
+    let cap = (max_output as u64).saturating_add(1);
+    if decoder.take(cap).read_to_end(&mut out).is_err() {
+        return Ok(None);
+    }
+    if out.len() > max_output {
+        return Err(HwpError::Security(SecurityError::ContentTooLarge {
+            size: out.len(),
+            max: max_output,
+        }));
+    }
+    Ok(Some(out))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::Compression;
+    use flate2::write::DeflateEncoder;
+    use std::io::Write;
+
+    fn deflate_zeros(len: usize) -> Vec<u8> {
+        let mut enc = DeflateEncoder::new(Vec::new(), Compression::best());
+        enc.write_all(&vec![0u8; len]).expect("write zeros");
+        enc.finish().expect("finish deflate")
+    }
+
+    #[test]
+    fn decompress_stream_rejects_output_over_limit() {
+        let bomb = deflate_zeros(4 * 1024 * 1024);
+        assert!(
+            bomb.len() < 64 * 1024,
+            "fixture must be a small, highly compressed stream"
+        );
+        let err = decompress_stream(&bomb, 1024).expect_err("4 MiB of zeros must exceed a 1 KiB limit");
+        assert!(
+            matches!(
+                err,
+                HwpError::Security(SecurityError::ContentTooLarge { max: 1024, .. })
+            ),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn decompress_stream_accepts_output_within_limit() {
+        let data = deflate_zeros(4 * 1024 * 1024);
+        let out = decompress_stream(&data, 8 * 1024 * 1024).expect("within limit");
+        assert_eq!(out.len(), 4 * 1024 * 1024);
+    }
+
+    #[test]
+    fn decompress_stream_accepts_output_exactly_at_limit() {
+        let data = deflate_zeros(4096);
+        assert_eq!(decompress_stream(&data, 4096).expect("at limit").len(), 4096);
+        assert!(decompress_stream(&data, 4095).is_err());
+    }
 }

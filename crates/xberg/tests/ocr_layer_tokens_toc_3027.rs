@@ -8,6 +8,7 @@
 
 mod helpers;
 use helpers::get_test_documents_dir;
+use sha2::{Digest, Sha256};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 
 const DOCUMENT: &str = "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf";
@@ -24,15 +25,11 @@ const STABLE_ENTRIES: [&str; 4] = [
 #[tokio::test]
 async fn the_table_of_contents_page_keeps_its_clean_read_without_the_layers_question_marks() {
     let path = get_test_documents_dir().join(DOCUMENT);
-    if !path.exists() {
-        assert!(
-            std::env::var_os("CI").is_none(),
-            "{} is missing from the corpus",
-            path.display()
-        );
-        eprintln!("skipping: {} is not fetched", path.display());
-        return;
-    }
+    let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("required {}: {error}", path.display()));
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "730418d6bbd03c72583fccd8ed3896b9bef20228840cecf9cfb9b90635a311ef"
+    );
     let tessdata = tempfile::tempdir().unwrap();
     std::fs::write(
         tessdata.path().join("eng.traineddata"),
@@ -55,12 +52,9 @@ async fn the_table_of_contents_page_keeps_its_clean_read_without_the_layers_ques
         }),
         ..Default::default()
     };
-    let output = xberg::extract(
-        ExtractInput::from_bytes(std::fs::read(&path).unwrap(), "application/pdf", None),
-        &config,
-    )
-    .await
-    .expect("extract the document");
+    let output = xberg::extract(ExtractInput::from_bytes(bytes, "application/pdf", None), &config)
+        .await
+        .expect("extract the document");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     let pages = output.results[0].pages.as_ref().expect("per-page output requested");
     let text = &pages[PAGE - 1].content;
@@ -69,8 +63,16 @@ async fn the_table_of_contents_page_keeps_its_clean_read_without_the_layers_ques
         !text.contains("OF CONTENTS"),
         "a title word was added from the layer:\n{text}"
     );
-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            line.split(|character: char| character.is_whitespace() || character == '|')
+                .filter(|token| !token.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect();
     for entry in STABLE_ENTRIES {
-        assert!(lines.contains(&entry), "`{entry}` is missing:\n{text}");
+        assert!(lines.iter().any(|line| line == entry), "`{entry}` is missing:\n{text}");
     }
 }

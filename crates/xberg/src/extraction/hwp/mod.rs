@@ -24,6 +24,7 @@ pub mod reader;
 mod summary;
 
 use crate::extraction::hwp::model::HwpDocument;
+use crate::extractors::security::SecurityLimits;
 use error::{HwpError, Result};
 use parser::{FileHeader, parse_body_text, parse_doc_info};
 use reader::CfbReader;
@@ -33,7 +34,10 @@ use reader::CfbReader;
 const SUMMARY_INFO_STREAM: &str = "\u{5}HwpSummaryInformation";
 
 /// Extract the structured document model from an HWP 5.0 document.
-pub(crate) fn extract_hwp_document(bytes: &[u8]) -> Result<HwpDocument> {
+///
+/// Compressed `BodyText` sections are inflated under `limits`: each section is capped at
+/// `max_content_size` and all sections together at `max_archive_size`.
+pub(crate) fn extract_hwp_document(bytes: &[u8], limits: &SecurityLimits) -> Result<HwpDocument> {
     let mut cfb = CfbReader::from_bytes(bytes)?;
 
     let header_data = cfb.read_stream("FileHeader")?;
@@ -66,11 +70,20 @@ pub(crate) fn extract_hwp_document(bytes: &[u8]) -> Result<HwpDocument> {
     let mut streams = cfb.list_streams();
     streams.sort();
 
+    let mut decompressed_budget = limits.max_archive_size;
     for path in streams {
         if path.starts_with("BodyText/Section") {
             let section_data = cfb.read_stream(&path)?;
-            match parse_body_text(section_data, header.is_compressed(), &path, &mut doc.warnings) {
+            match parse_body_text(
+                section_data,
+                header.is_compressed(),
+                &path,
+                &mut doc.warnings,
+                limits.max_content_size,
+                &mut decompressed_budget,
+            ) {
                 Ok(sections) => doc.sections.extend(sections),
+                Err(e @ HwpError::Security(_)) => return Err(e),
                 Err(e) => doc.warnings.push(format!(
                     "HWP section stream '{path}' could not be parsed and was skipped: {e}"
                 )),
@@ -98,7 +111,7 @@ mod tests {
     #[test]
     fn test_extract_invalid_hwp() {
         let bytes = b"Not a valid HWP file";
-        assert!(extract_hwp_document(bytes).is_err());
+        assert!(extract_hwp_document(bytes, &SecurityLimits::default()).is_err());
     }
 
     #[test]
@@ -110,7 +123,7 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).expect("read file");
-        let doc = extract_hwp_document(&bytes).expect("HWP extraction should succeed");
+        let doc = extract_hwp_document(&bytes, &SecurityLimits::default()).expect("HWP extraction should succeed");
 
         let summary = doc
             .summary_info
@@ -139,7 +152,7 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).expect("read file");
-        let doc = extract_hwp_document(&bytes).expect("HWP extraction should succeed");
+        let doc = extract_hwp_document(&bytes, &SecurityLimits::default()).expect("HWP extraction should succeed");
 
         let text: String = doc
             .sections
@@ -159,5 +172,87 @@ mod tests {
                 "expected {expected:?} from the document body; got {text:?}"
             );
         }
+    }
+
+    fn synthetic_compressed_hwp(uncompressed_len: usize) -> Vec<u8> {
+        synthetic_compressed_hwp_sections(&[uncompressed_len])
+    }
+
+    fn synthetic_compressed_hwp_sections(uncompressed_lens: &[usize]) -> Vec<u8> {
+        use flate2::Compression;
+        use flate2::write::DeflateEncoder;
+        use std::io::Write;
+
+        let mut header = vec![0u8; 256];
+        header[..17].copy_from_slice(b"HWP Document File");
+        header[36..40].copy_from_slice(&1u32.to_le_bytes());
+
+        let mut cfb = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).expect("create cfb");
+        cfb.create_stream("FileHeader")
+            .expect("FileHeader stream")
+            .write_all(&header)
+            .expect("write header");
+        cfb.create_storage("BodyText").expect("BodyText storage");
+        for (index, &uncompressed_len) in uncompressed_lens.iter().enumerate() {
+            let mut enc = DeflateEncoder::new(Vec::new(), Compression::best());
+            enc.write_all(&vec![0u8; uncompressed_len]).expect("write zeros");
+            let section = enc.finish().expect("finish deflate");
+            cfb.create_stream(format!("BodyText/Section{index}"))
+                .expect("section stream")
+                .write_all(&section)
+                .expect("write section");
+        }
+        cfb.into_inner().into_inner()
+    }
+
+    #[test]
+    fn test_compressed_section_over_limit_is_rejected() {
+        let bytes = synthetic_compressed_hwp(4 * 1024 * 1024);
+        let limits = SecurityLimits {
+            max_content_size: 1024,
+            ..SecurityLimits::default()
+        };
+        let err = extract_hwp_document(&bytes, &limits).expect_err("bomb must be rejected");
+        assert!(matches!(err, HwpError::Security(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn test_compressed_sections_over_total_budget_are_rejected() {
+        let bytes = synthetic_compressed_hwp(4 * 1024 * 1024);
+        let limits = SecurityLimits {
+            max_archive_size: 1024,
+            ..SecurityLimits::default()
+        };
+        let err = extract_hwp_document(&bytes, &limits).expect_err("total budget must be enforced");
+        assert!(matches!(err, HwpError::Security(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn test_earlier_sections_are_debited_from_the_total_budget() {
+        const MIB: usize = 1024 * 1024;
+        let bytes = synthetic_compressed_hwp_sections(&[2 * MIB, 2 * MIB]);
+
+        let over = SecurityLimits {
+            max_content_size: 3 * MIB,
+            max_archive_size: 3 * MIB,
+            ..SecurityLimits::default()
+        };
+        let err = extract_hwp_document(&bytes, &over).expect_err("sum of sections exceeds the total budget");
+        assert!(matches!(err, HwpError::Security(_)), "got {err:?}");
+
+        let fits = SecurityLimits {
+            max_content_size: 3 * MIB,
+            max_archive_size: 5 * MIB,
+            ..SecurityLimits::default()
+        };
+        let doc = extract_hwp_document(&bytes, &fits).expect("sum of sections fits the total budget");
+        assert_eq!(doc.sections.len(), 2);
+    }
+
+    #[test]
+    fn test_compressed_section_within_limit_is_accepted() {
+        let bytes = synthetic_compressed_hwp(4 * 1024 * 1024);
+        let doc = extract_hwp_document(&bytes, &SecurityLimits::default()).expect("within default limits");
+        assert_eq!(doc.sections.len(), 1);
     }
 }

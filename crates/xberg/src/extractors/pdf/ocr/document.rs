@@ -1104,6 +1104,11 @@ pub(super) fn ocr_page_has_only_plain_payload_with(
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
+    automatic_tesseract_page(config, page) && config.ocr.as_ref().is_some_and(|ocr| ocr.element_config.is_none())
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn automatic_tesseract_page(config: &ExtractionConfig, page: u32) -> bool {
     #[cfg(feature = "layout-types")]
     if config.layout.is_some() {
         return false;
@@ -1116,11 +1121,7 @@ pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &Extr
         && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
         && !config.images.as_ref().is_some_and(|images| images.include_page_rasters)
         && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.enabled
-                && ocr.backend == "tesseract"
-                && ocr.pipeline.is_none()
-                && ocr.element_config.is_none()
-                && ocr.auto_rotate != Some(true)
+            ocr.enabled && ocr.backend == "tesseract" && ocr.pipeline.is_none() && ocr.auto_rotate != Some(true)
         })
 }
 
@@ -2344,6 +2345,83 @@ pub(crate) fn merge_source_strip_frames(
         })
         .collect();
     store_source_strip_frames(&mut doc.metadata, frames);
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) fn certified_scan_html_rows<'a>(
+    config: &ExtractionConfig,
+    lazy_pdf_page_count: usize,
+    builtin_tesseract: bool,
+    doc: &'a crate::types::internal::InternalDocument,
+) -> Option<&'a str> {
+    use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+    if lazy_pdf_page_count != 1
+        || config.output_format != crate::core::config::OutputFormat::Html
+        || config.result_format != crate::types::ResultFormat::Unified
+        || config.include_document_structure
+        || !builtin_tesseract
+    {
+        return None;
+    }
+    let [element] = doc.elements.as_slice() else {
+        return None;
+    };
+    element
+        .attributes
+        .as_ref()
+        .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+        .then_some(element.text.as_str())
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn certify_scan_html_paragraph(doc: &mut crate::types::internal::InternalDocument, rows: &str) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let [paragraph] = doc.elements.as_mut_slice() else {
+        return;
+    };
+    if !doc.tables.is_empty()
+        || paragraph.kind != ElementKind::Paragraph
+        || paragraph.layer != crate::types::ContentLayer::Body
+        || !paragraph.annotations.is_empty()
+        || !paragraph.ocr_source_spans.is_empty()
+        || !paragraph.text.split_whitespace().eq(rows.split_whitespace())
+    {
+        return;
+    }
+
+    paragraph.text = rows.to_owned();
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+}
+
+/// Certify `rebuilt` again when `previous`, the page document it replaces, held a certified
+/// paragraph. The mixed route rebuilds each page from its paragraphs for structured output,
+/// which drops the certificate the page read earned. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn recertify_scan_html_paragraph(
+    previous: &crate::types::internal::InternalDocument,
+    rebuilt: &mut crate::types::internal::InternalDocument,
+) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    if let [paragraph] = previous.elements.as_slice()
+        && paragraph.kind == ElementKind::Paragraph
+        && paragraph
+            .attributes
+            .as_ref()
+            .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+    {
+        certify_scan_html_paragraph(rebuilt, &paragraph.text);
+    }
 }
 
 /// Copy the payload fields that a page document already carried before the document-global
@@ -4006,6 +4084,7 @@ pub(super) fn assemble_ocr_page_paragraphs(
     // frame instead of the raw raster one (#760) -- see
     // `pdf::structure::pipeline::DetachedMarkerFrame`.
     page_rotation_degrees: u32,
+    #[cfg(feature = "ocr")] order_lines: Option<&mut crate::pdf::structure::adapters::LayoutLineOrder<'_>>,
 ) -> Vec<crate::pdf::structure::types::PdfParagraph> {
     // `doc`'s bbox AND ocr_geometry are still both raw OCR raster pixels at this point in
     // the pure-OCR route (the pixel -> point rescale runs later, in
@@ -4017,14 +4096,25 @@ pub(super) fn assemble_ocr_page_paragraphs(
     #[cfg(feature = "ocr")]
     if let Some(detection) = detection {
         let hints = super::super::layout_hints::detection_to_layout_hints_pixel_space(detection, page_height as f32);
-        let mut paragraphs = crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs(
-            doc,
-            page_height,
-            &hints,
-            0.5,
-            0.2,
-            font_size_scale,
-        );
+        let mut paragraphs = match order_lines {
+            Some(order) => crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs_ordered(
+                doc,
+                page_height,
+                &hints,
+                0.5,
+                0.2,
+                font_size_scale,
+                Some(order),
+            ),
+            None => crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs(
+                doc,
+                page_height,
+                &hints,
+                0.5,
+                0.2,
+                font_size_scale,
+            ),
+        };
         apply_ocr_text_list_fallback(&mut paragraphs);
         // #729: a bare marker no ML hint ever classified (`is_list_item` still
         // `false`) is invisible to `reattach_ocr_layout_list_markers` below, whose
@@ -4336,6 +4426,14 @@ pub(super) fn fill_unstructured_ocr_pages(
         }
     }
 }
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn ocr_paragraphs_already_structured(paragraphs: &[crate::pdf::structure::types::PdfParagraph]) -> bool {
+    paragraphs
+        .iter()
+        .any(|paragraph| paragraph.heading_level.is_some() || paragraph.is_list_item)
+}
+
 /// Run the document-global heading/list heuristic
 /// (`pdf::structure::extract_document_structure_from_segments`, the same font-clustering
 /// pass the native xberg_native_pdf path uses) over already-built OCR paragraphs.
@@ -4372,11 +4470,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
         .content_filter
         .as_ref()
         .is_some_and(|filter| filter.strip_repeating_text);
-    let already_structured = pages
-        .iter()
-        .flatten()
-        .any(|paragraph| paragraph.heading_level.is_some() || paragraph.is_list_item);
-    if already_structured {
+    if pages.iter().any(|page| ocr_paragraphs_already_structured(page)) {
         if !strip_repeating_text {
             return None;
         }
@@ -5077,11 +5171,12 @@ mod tests {
             baseline_y: 0.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         };
         let line = crate::pdf::structure::types::PdfLine {
             native_scripts: Vec::new(),
             segments: vec![segment],
-            baseline_y: 0.0,
+            baseline_y: Some(0.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -5099,6 +5194,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
         }
@@ -5108,6 +5204,90 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(text, vec![], None, None);
         builder.build()
+    }
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    fn certified_scan_html_rows_require_each_admission_condition() {
+        use crate::core::config::OutputFormat;
+        use crate::types::ResultFormat;
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        const ROWS: &str = "Item Count\nLibrary 11";
+        let mut marked = doc_with_paragraph(ROWS);
+        marked.elements[0]
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+        let html = ExtractionConfig {
+            output_format: OutputFormat::Html,
+            ..Default::default()
+        };
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &marked), Some(ROWS));
+
+        let mut markdown = html.clone();
+        markdown.output_format = OutputFormat::Markdown;
+        let mut element_based = html.clone();
+        element_based.result_format = ResultFormat::ElementBased;
+        let mut structured = html.clone();
+        structured.include_document_structure = true;
+        for (reason, config, pages, builtin) in [
+            ("detached raster", &html, 0, true),
+            ("multiple source pages", &html, 2, true),
+            ("replacement backend", &html, 1, false),
+            ("Markdown renderer", &markdown, 1, true),
+            ("element-based result", &element_based, 1, true),
+            ("document structure", &structured, 1, true),
+        ] {
+            assert_eq!(
+                certified_scan_html_rows(config, pages, builtin, &marked),
+                None,
+                "{reason}"
+            );
+        }
+
+        let unmarked = doc_with_paragraph(ROWS);
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &unmarked), None);
+        let extra = marked.elements[0].clone();
+        marked.push_element(extra);
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &marked), None);
+    }
+
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+    #[test]
+    fn rebuilt_page_keeps_the_certificate_of_the_page_it_replaces() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        const ROWS: &str = "Item Count\nLibrary 11";
+        let is_certified = |doc: &InternalDocument| {
+            doc.elements[0]
+                .attributes
+                .as_ref()
+                .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+        };
+        let mut certified = doc_with_paragraph("Item Count Library 11");
+        certify_scan_html_paragraph(&mut certified, ROWS);
+        assert!(is_certified(&certified));
+
+        let mut rebuilt = doc_with_paragraph("Item Count Library 11");
+        recertify_scan_html_paragraph(&certified, &mut rebuilt);
+        assert_eq!(rebuilt.elements[0].text, ROWS);
+        assert!(is_certified(&rebuilt));
+
+        let mut rebuilt = doc_with_paragraph("Item Count Library 11");
+        recertify_scan_html_paragraph(&doc_with_paragraph(ROWS), &mut rebuilt);
+        assert_eq!(rebuilt.elements[0].text, "Item Count Library 11");
+        assert!(!is_certified(&rebuilt));
+
+        let mut reworded = doc_with_paragraph("Item Count Library 12");
+        recertify_scan_html_paragraph(&certified, &mut reworded);
+        assert_eq!(reworded.elements[0].text, "Item Count Library 12");
+        assert!(!is_certified(&reworded));
     }
 
     /// GH#1622, direction 1: a heuristic-restructured document that dropped a word the

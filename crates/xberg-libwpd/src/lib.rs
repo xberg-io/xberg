@@ -22,6 +22,7 @@
 //! [`WpdError::UnsupportedPlatform`].
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+#![allow(unsafe_code, reason = "libwpd is reached only through its C++ shim")]
 #![cfg_attr(test, allow(clippy::print_stdout, clippy::print_stderr))]
 
 mod dto;
@@ -29,6 +30,11 @@ mod error;
 
 pub use dto::{WpdDocument, WpdEvent, WpdMetadata};
 pub use error::WpdError;
+
+// libz-sys is linked for the vendored librevenge zip stream and never named in Rust; this marks
+// it used for cargo's unused_dependencies lint. ~keep
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use libz_sys as _;
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod imp {

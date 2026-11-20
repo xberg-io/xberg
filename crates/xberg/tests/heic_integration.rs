@@ -13,33 +13,31 @@
 //! `test_documents/` is a bucket-fetched corpus (see
 //! `test_documents/scripts/fetch_corpus.py`) and is not present in a bare
 //! checkout, so fixtures are read at runtime rather than baked in via
-//! `include_bytes!`; tests skip cleanly with a greppable message when the
-//! corpus hasn't been fetched.
+//! `include_bytes!`. Local runs can skip unavailable fixtures. Runs with
+//! `XBERG_REQUIRE_TEST_FIXTURES=1` require them.
 
 #![cfg(feature = "heic")]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
 mod helpers;
-use helpers::{extract_bytes_document, get_test_file_path};
+use helpers::{extract_bytes_document, get_test_file_path, skip_if_missing};
 
 use xberg::FormatMetadata;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::mime::list_supported_formats;
 
-/// Read a `test_documents/` fixture at runtime, skipping the calling test
-/// with a greppable message when the bucket-fetched corpus is absent.
 fn load_fixture(relative: &str) -> Option<Vec<u8>> {
-    let path = get_test_file_path(relative);
-    match std::fs::read(&path) {
-        Ok(bytes) => Some(bytes),
-        Err(e) => {
-            eprintln!(
-                "SKIP: fixture {} not available ({e}); run `python3 test_documents/scripts/fetch_corpus.py` to fetch it",
-                path.display()
-            );
-            None
-        }
+    if skip_if_missing(relative) {
+        eprintln!(
+            "SKIP: fixture {relative} not available; run `python3 test_documents/scripts/fetch_corpus.py` to fetch it"
+        );
+        return None;
     }
+
+    let path = get_test_file_path(relative);
+    Some(
+        std::fs::read(&path).unwrap_or_else(|error| panic!("could not read image fixture {}: {error}", path.display())),
+    )
 }
 
 fn ocr_disabled_config() -> ExtractionConfig {

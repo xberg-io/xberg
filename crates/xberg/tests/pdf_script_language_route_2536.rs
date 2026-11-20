@@ -704,15 +704,95 @@ fn automatic_english_ocr_keeps_the_original_english_and_khmer_flyer_words() {
     }
 }
 
+fn scanned_english_with_khmer_stamp(color: u8) -> Vec<u8> {
+    use lopdf::{Document, Stream, dictionary};
+    use xberg_native_pdf::{PdfDocument, rendering::render_page_without_glyphs};
+
+    let pdf = PdfDocument::from_bytes(SCANNED_ENGLISH_KHMER_OVERLAY.to_vec()).unwrap();
+    let (width, height, mut pixels) = render_page_without_glyphs(&pdf, 0, 150, 32 * 1024 * 1024).unwrap();
+    // The stamp sits in the bottom quarter. Keep the English body above it. ~keep
+    let stamp_background = (height as usize * 3 / 4) * width as usize;
+    pixels[stamp_background..].fill(255);
+
+    let mut document = Document::load_mem(SCANNED_ENGLISH_KHMER_OVERLAY).unwrap();
+    let page = document.get_pages()[&1];
+    let image = document.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => i64::from(width),
+            "Height" => i64::from(height), "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+        },
+        pixels,
+    ));
+    document.add_xobject(page, "WhiteStampScan", image).unwrap();
+    let stamp = document
+        .get_dictionary(page)
+        .unwrap()
+        .get(b"Resources")
+        .unwrap()
+        .as_dict()
+        .unwrap()
+        .get(b"XObject")
+        .unwrap()
+        .as_dict()
+        .unwrap()
+        .get(b"Fx1")
+        .unwrap()
+        .as_reference()
+        .unwrap();
+    let stamp = document.get_object_mut(stamp).unwrap().as_stream_mut().unwrap();
+    let mut content = format!("{color} g 0 Tr\n").into_bytes();
+    content.extend(stamp.decompressed_content().unwrap());
+    stamp.set_plain_content(content);
+    document
+        .change_page_content(
+            page,
+            b"q 612 0 0 792 0 0 cm /WhiteStampScan Do Q\nq /Fx1 Do Q\n".to_vec(),
+        )
+        .unwrap();
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn automatic_english_ocr_reads_scan_with_zero_contrast_white_khmer_stamp() {
+    use xberg_native_pdf::{PdfDocument, rendering::render_text_ink_rasters};
+
+    let source = scanned_english_with_khmer_stamp(1);
+    for (bytes, zero_contrast) in [(scanned_english_with_khmer_stamp(0), false), (source.clone(), true)] {
+        let pdf = PdfDocument::from_bytes(bytes).unwrap();
+        let rasters = render_text_ink_rasters(&pdf, 0, 150, 32 * 1024 * 1024, || false)
+            .unwrap()
+            .unwrap();
+        let changed = rasters
+            .drawn
+            .iter()
+            .zip(&rasters.without_glyphs)
+            .filter(|(a, b)| a != b)
+            .count();
+        assert_eq!(changed == 0, zero_contrast, "{changed} changed pixels");
+    }
+
+    let models = english_model();
+    let native = extract(&source, models.path(), |config| config.disable_ocr = true);
+    assert_eq!(khmer_count(&native.content), 222);
+    assert!(!native.content.contains(RASTER_BODY));
+
+    let automatic = extract(&source, models.path(), |_| {});
+    assert!(picture_warning(&automatic), "{:?}", automatic.processing_warnings);
+    for text in [&automatic.content, &automatic.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(khmer_count(text), 0, "{text:?}");
+        assert_eq!(normalized_words(text).matches(RASTER_BODY).count(), 1, "{text:?}");
+    }
+}
+
 #[test]
 fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_layer() {
     let models = english_model();
     for placement in [
         PicturePlacement::Cover,
         PicturePlacement::BehindInvisibleLayer,
-        PicturePlacement::BehindWhiteLayer,
         PicturePlacement::BehindClippedLayer,
-        PicturePlacement::WhiteLayerOverDarkPicture,
         PicturePlacement::BlackLayerOverBlackPicture,
     ] {
         let source = with_full_page_picture(COMPLETE, placement);

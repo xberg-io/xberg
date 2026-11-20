@@ -357,7 +357,7 @@ mod imp {
             .filter(|&(_, &p)| p.is_finite())
             .map(|(i, &p)| (i, p))
             .collect();
-        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        indexed.sort_by(|a, b| b.1.total_cmp(&a.1));
 
         let mut cumsum = 0.0;
         let mut valid_indices = Vec::new();

@@ -419,21 +419,22 @@ fn paragraph_is_covered_and_carried_by_table(
     table: &crate::types::Table,
     table_token_counts: &std::collections::HashMap<String, usize>,
 ) -> bool {
+    let text = paragraph_text.trim();
+    !text.is_empty()
+        && table
+            .bounding_box
+            .is_some_and(|bbox| paragraph_is_covered_by_box(paragraph, bbox))
+        && table_carries_every_token(text, table_token_counts)
+}
+
+fn paragraph_is_covered_by_box(paragraph: &PdfParagraph, bbox: BoundingBox) -> bool {
     let Some((left, bottom, right, top)) = paragraph.block_bbox else {
-        return false;
-    };
-    let Some(bbox) = table.bounding_box else {
         return false;
     };
     let para_area = (right - left) * (top - bottom);
     if !(para_area.is_finite() && para_area > 0.0) {
         return false;
     }
-    let text = paragraph_text.trim();
-    if text.is_empty() {
-        return false;
-    }
-
     let inter_left = left.max(bbox.x0 as f32);
     let inter_right = right.min(bbox.x1 as f32);
     let inter_bottom = bottom.max(bbox.y0 as f32);
@@ -443,7 +444,7 @@ fn paragraph_is_covered_and_carried_by_table(
     }
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
 
-    inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
+    inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO
 }
 
 pub(super) fn reconcile_certified_table_paragraphs(
@@ -485,8 +486,7 @@ pub(super) fn reconcile_certified_table_paragraphs(
         let singletons = single_residual_members(&seen, &runs.contained);
         for (index, paragraph) in page.iter_mut().enumerate() {
             if !captions.contains(&index)
-                && let Some(repaired) =
-                    recover_mixed_table_tick(paragraph, table, table_bbox, &counts, &singletons, hyphens)
+                && let Some(repaired) = recover_mixed_table_tick(paragraph, table_bbox, &counts, &singletons, hyphens)
             {
                 *paragraph = repaired;
             }
@@ -667,7 +667,6 @@ fn isolated_painted_orphan(
 
 fn recover_mixed_table_tick(
     paragraph: &PdfParagraph,
-    table: &crate::types::Table,
     table_bbox: BoundingBox,
     counts: &std::collections::HashMap<String, usize>,
     singletons: &ahash::AHashSet<&crate::pdf::native::hierarchy::script_evidence::SegmentKey>,
@@ -686,17 +685,18 @@ fn recover_mixed_table_tick(
         return None;
     }
     let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
-    let text = paragraph_effective_text(paragraph, hyphens);
-    if !annotations.is_empty() || !paragraph_is_covered_and_carried_by_table(paragraph, &text, table, counts) {
+    if !annotations.is_empty() || !paragraph_is_covered_by_box(paragraph, table_bbox) {
         return None;
     }
+    // The certified orphan can be a fragment of a whole table token, such as a decimal. ~keep
     let bounds = outside_tick_bounds(outside, table_bbox)?;
     let mut repaired = paragraph.clone();
     repaired.lines.pop();
     repaired.block_bbox = Some(bounds);
     let (text, annotations) = extract_text_and_annotations(&repaired, hyphens);
-    if text.is_empty()
+    if table_coverage_tokens(&text).is_empty()
         || !annotations.is_empty()
+        || !table_carries_every_token(&text, counts)
         || !outside
             .segments
             .iter()
@@ -1068,7 +1068,7 @@ fn paragraph_vertical_anchor(paragraph: &PdfParagraph) -> Option<f32> {
     paragraph
         .block_bbox
         .map(|(_, _, _, top)| top)
-        .or_else(|| paragraph.lines.first().map(|line| line.baseline_y))
+        .or_else(|| paragraph.lines.first().map(|line| line.baseline_or_zero()))
         .filter(|anchor| anchor.is_finite())
 }
 
@@ -1080,6 +1080,36 @@ fn push_table_element(builder: &mut InternalDocumentBuilder, table: &crate::type
         y1: bb.y1,
     });
     builder.push_table(table.clone(), page, bbox)
+}
+
+fn segment_owned_heading_spans(
+    paragraph: &PdfParagraph,
+) -> Option<(String, Vec<crate::types::internal::OcrSourceSpan>)> {
+    let segments = || paragraph.lines.iter().flat_map(|line| &line.segments);
+    if !segments().any(|segment| segment.ocr_heading_spans.is_some()) {
+        return None;
+    }
+    let mut text = String::new();
+    let mut receipts = Vec::new();
+    for segment in segments() {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        if let Some(pair) = &segment.ocr_heading_spans {
+            for span in pair.iter() {
+                let (expected, _, _) = span.replacement.as_ref()?;
+                let end = span.destination.checked_add(span.source.len())?;
+                if segment.text.get(span.destination..end)? != expected {
+                    return None;
+                }
+                let mut span = span.clone();
+                span.destination = span.destination.checked_add(text.len())?;
+                receipts.push(span);
+            }
+        }
+        text.push_str(&segment.text);
+    }
+    Some((text, receipts))
 }
 
 /// Convert a single PdfParagraph to the appropriate InternalElement and push it,
@@ -1098,6 +1128,10 @@ fn push_paragraph_element(
 ) -> u32 {
     let element_index = push_paragraph_element_by_kind(builder, para, page, hyphen_witnesses);
     builder.set_measured_font_size(element_index, para.dominant_font_size);
+    builder.retain_ocr_source_spans(element_index, &para.text, &para.ocr_source_spans);
+    if let Some((text, receipts)) = segment_owned_heading_spans(para) {
+        builder.retain_ocr_source_spans(element_index, &text, &receipts);
+    }
     element_index
 }
 
@@ -1246,6 +1280,76 @@ fn push_paragraph_element_by_kind(
     }
 }
 
+// The caller has matched a source CMSY glyph. Require the complete bounded
+// expression and native subscript before promoting it to inline math. ~keep
+#[cfg(feature = "formula-recognition")]
+fn native_volume_limit_end(text: &str, annotations: &[TextAnnotation], start: usize) -> Option<usize> {
+    if !text.get(start..).is_some_and(|tail| tail.starts_with('V')) {
+        return None;
+    }
+    let mut chars = text[start..].char_indices().filter(|(_, ch)| !ch.is_whitespace());
+    let mut end = start;
+    let mut subscript = None;
+    for expected in "V(ψm)→+∞".chars() {
+        let (offset, ch) = chars.next()?;
+        if ch != expected {
+            return None;
+        }
+        end = start + offset + ch.len_utf8();
+        if ch == 'm' {
+            subscript = Some((end - 1, end));
+        }
+    }
+    if text[..start].chars().next_back().is_some_and(char::is_alphanumeric)
+        || text[end..].chars().next().is_some_and(char::is_alphanumeric)
+        || !annotations.iter().any(|annotation| {
+            annotation.kind == AnnotationKind::Subscript
+                && subscript == Some((annotation.start as usize, annotation.end as usize))
+        })
+        || annotations.iter().any(|annotation| {
+            let (a, b) = (annotation.start as usize, annotation.end as usize);
+            (a < start && start < b && b < end) || (start < a && a < end && end < b)
+        })
+    {
+        return None;
+    }
+
+    Some(end)
+}
+
+#[cfg(feature = "formula-recognition")]
+pub(super) fn annotate_native_volume_limit(
+    text: &mut String,
+    annotations: &mut Vec<TextAnnotation>,
+    candidate_offsets: impl IntoIterator<Item = usize>,
+) {
+    const VOLUME_LIMIT: &str = r"${\mathcal{V}}(\psi_m)\rightarrow +\infty$";
+    let mut matches = candidate_offsets
+        .into_iter()
+        .filter_map(|start| native_volume_limit_end(text, annotations, start).map(|end| (start, end)));
+    let Some((start, end)) = matches.next() else { return };
+    if matches.next().is_some() {
+        return;
+    }
+
+    annotations.retain(|annotation| (annotation.start as usize) < start || (annotation.end as usize) > end);
+    let new_end = start + VOLUME_LIMIT.len();
+    for annotation in annotations.iter_mut() {
+        if annotation.start as usize >= end {
+            annotation.start = (new_end + annotation.start as usize - end) as u32;
+        }
+        if annotation.end as usize >= end {
+            annotation.end = (new_end + annotation.end as usize - end) as u32;
+        }
+    }
+    text.replace_range(start..end, VOLUME_LIMIT);
+    annotations.push(TextAnnotation {
+        start: start as u32,
+        end: new_end as u32,
+        kind: AnnotationKind::math(false),
+    });
+}
+
 /// Emit caption elements as paragraphs with a Caption relationship to the parent.
 fn emit_caption_elements(
     builder: &mut InternalDocumentBuilder,
@@ -1388,10 +1492,19 @@ pub(super) fn extract_text_and_annotations(
     para: &PdfParagraph,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> (String, Vec<TextAnnotation>) {
+    extract_text_with_glyph_offset(para, hyphen_witnesses, None).0
+}
+
+pub(super) fn extract_text_with_glyph_offset(
+    para: &PdfParagraph,
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+    glyph_segment: Option<usize>,
+) -> ((String, Vec<TextAnnotation>), Option<usize>) {
+    let mut glyph_offset = None;
     let all_segments: Vec<&crate::pdf::hierarchy::SegmentData> = para.lines.iter().flat_map(|l| &l.segments).collect();
 
     if all_segments.is_empty() {
-        return (String::new(), Vec::new());
+        return ((String::new(), Vec::new()), None);
     }
 
     let native_scripts: Vec<_> = para.lines.iter().flat_map(|line| line.valid_native_scripts()).collect();
@@ -1498,6 +1611,9 @@ pub(super) fn extract_text_and_annotations(
             } else {
                 finish_script_span(&mut annotations, &mut script_span, previous_end);
             }
+            if glyph_segment == Some(seg_idx) && word == "V" {
+                glyph_offset = Some(text.len());
+            }
             text.push_str(word);
         }
 
@@ -1522,7 +1638,8 @@ pub(super) fn extract_text_and_annotations(
         }
     }
 
-    (text, annotations)
+    let glyph_offset = glyph_offset.filter(|&offset| text.as_bytes().get(offset) == Some(&b'V'));
+    ((text, annotations), glyph_offset)
 }
 
 /// Join line texts into a single plain string (no markup).
@@ -1767,9 +1884,9 @@ fn guess_furniture_layer(para: &PdfParagraph) -> ContentLayer {
         Some(LayoutHintClass::Footnote) => ContentLayer::Footnote,
         _ => {
             if let Some(first_line) = para.lines.first() {
-                if first_line.baseline_y > 700.0 {
+                if first_line.baseline_or_zero() > 700.0 {
                     ContentLayer::Header
-                } else if first_line.baseline_y < 100.0 {
+                } else if first_line.baseline_or_zero() < 100.0 {
                     ContentLayer::Footer
                 } else {
                     ContentLayer::Header
@@ -2033,7 +2150,51 @@ mod tests {
             baseline_y: 700.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
+    }
+
+    #[test]
+    fn discarded_ocr_heading_cannot_pass_receipts_to_an_enclosing_equal_text_node() {
+        use crate::types::internal::{InternalElement, OcrSourceSpan};
+        let owner = InternalElement::text(ElementKind::Paragraph, "POP WAcES:", 0);
+        let spans: [OcrSourceSpan; 2] = std::array::from_fn(|index| {
+            let (range, expected, replacement) = if index == 0 {
+                (0..3, "POP", "PDP")
+            } else {
+                (4..10, "WAcES:", "IMAGES")
+            };
+            OcrSourceSpan {
+                owner: owner.id.clone(),
+                occurrence: index,
+                replacement: Some((expected.to_owned(), replacement.to_owned(), 2)),
+                insertion: None,
+                panel_order: None,
+                source: range.clone(),
+                destination: range.start,
+            }
+        });
+        let mut retained = make_paragraph_in_box("— POP WAcES:", 700., 0., 100.);
+        let mut actual = plain_segment("POP WAcES:");
+        actual.x = 45.0;
+        actual.width = 40.0;
+        actual.ocr_heading_spans = Some(Box::new(spans));
+        let dash = SegmentData {
+            width: 10.0,
+            ..plain_segment("—")
+        };
+        retained.lines[0].segments = vec![dash, actual];
+        let enclosing_lookalike = make_paragraph_in_box("— POP WAcES:", 700., 0., 100.);
+
+        let assemble =
+            |paragraph| assemble_internal_document(vec![vec![paragraph]], &[], None, &[], &Default::default());
+        let positive = assemble(retained);
+        let negative = assemble(enclosing_lookalike);
+        assert_eq!(positive.elements[0].text, negative.elements[0].text);
+        assert_eq!(positive.elements[0].bbox, negative.elements[0].bbox);
+        assert_eq!(positive.elements[0].ocr_source_spans.len(), 2);
+        assert_eq!(positive.elements[0].ocr_source_spans[0].destination, "— ".len());
+        assert!(negative.elements[0].ocr_source_spans.is_empty());
     }
 
     #[test]
@@ -2066,6 +2227,37 @@ mod tests {
         make_paragraph_at(text, heading_level, 700.0)
     }
 
+    #[cfg(feature = "formula-recognition")]
+    #[test]
+    fn native_inline_math_never_reassigns_a_dropped_witness_to_a_competing_v() {
+        let mut paragraph = make_paragraph("", None);
+        paragraph.lines[0].segments = ["V", " is a label. ", "V", "(ψm) → +∞."]
+            .map(plain_segment)
+            .into_iter()
+            .collect();
+        for (witness, expected_offset) in [(None, None), (Some(1), None), (Some(0), Some(0))] {
+            let ((mut text, mut annotations), offset) =
+                extract_text_with_glyph_offset(&paragraph, &Default::default(), witness);
+            assert_eq!(offset, expected_offset);
+            let original = text.clone();
+            let subscript = text.find("m)").unwrap() as u32;
+            annotations.push(TextAnnotation {
+                start: subscript,
+                end: subscript + 1,
+                kind: AnnotationKind::Subscript,
+            });
+            if let Some(offset) = offset {
+                annotate_native_volume_limit(&mut text, &mut annotations, [offset]);
+            }
+            assert_eq!(text, original);
+            assert!(
+                annotations
+                    .iter()
+                    .all(|annotation| annotation.kind.math_display().is_none())
+            );
+        }
+    }
+
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
@@ -2073,7 +2265,7 @@ mod tests {
                 baseline_y,
                 ..plain_segment(text)
             }],
-            baseline_y,
+            baseline_y: Some(baseline_y),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -2091,6 +2283,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -2228,6 +2421,7 @@ mod tests {
             let mut members = ahash::AHashMap::from_iter([(
                 0,
                 crate::pdf::native::table::source_members::CertifiedRuns {
+                    redistributed: Vec::new(),
                     contained: vec![vec![orphan_key.clone(), sibling_key.clone()]],
                     painted_overhangs: Vec::new(),
                     recovered_lines: Vec::new(),
@@ -2264,10 +2458,12 @@ mod tests {
 
     #[test]
     fn mixed_tick_recovers_literal_source_text_regardless_of_label_and_owned_glyph_shape() {
-        for (tick, owned, expected) in [
-            ("-0.5", "0", Some("-0.5")),
-            ("1,000", "X", Some("1,000")),
-            (" 1,000", "X", None),
+        for (tick, owned, cells, expected) in [
+            ("-0.5", "0", "-0.5 0.4", Some("-0.5")),
+            ("1,000", "X", "1,000 X.4", Some("1,000")),
+            (" 1,000", "X", "1,000 X.4", None),
+            ("%", "0", "0.4", None),
+            ("-0.5", "0", "0 5 0.4", None),
         ] {
             let mut paragraph = make_paragraph_at(tick, None, 20.0);
             paragraph.lines[0].segments[0].width = 10.0;
@@ -2280,11 +2476,10 @@ mod tests {
             paragraph.lines.push(residual);
             paragraph.block_bbox = Some((0.0, 10.0, 102.0, 32.0));
 
-            let table = make_table_in_box(&format!("| {tick} {owned}.4 |"), 12.0, 110.0, 40.0);
+            let table = make_table_in_box(&format!("| {cells} |"), 12.0, 110.0, 40.0);
             let hyphens = Default::default();
             let repaired = recover_mixed_table_tick(
                 &paragraph,
-                &table,
                 table.bounding_box.unwrap(),
                 &table_coverage_token_counts(&table),
                 &ahash::AHashSet::from_iter([&key]),
@@ -2414,6 +2609,7 @@ mod tests {
         let members = ahash::AHashMap::from_iter([(
             0,
             crate::pdf::native::table::source_members::CertifiedRuns {
+                redistributed: Vec::new(),
                 contained: Vec::new(),
                 painted_overhangs: painted,
                 recovered_lines: Vec::new(),
@@ -3319,7 +3515,7 @@ mod tests {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
             segments: vec![bold_segment("• Bold item")],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: true,
             is_monospace: false,
@@ -3337,6 +3533,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3395,7 +3592,7 @@ mod tests {
         let lines = vec![PdfLine {
             native_scripts: Vec::new(),
             segments: vec![plain_segment("I."), plain_segment("Split body")],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3428,7 +3625,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3448,6 +3645,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3516,7 +3714,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3536,6 +3734,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3593,8 +3792,9 @@ mod tests {
                     baseline_y: 700.0,
                     rotation_degrees: 0.0,
                     assigned_role: None,
+                    ocr_heading_spans: None,
                 }],
-                baseline_y: 700.0,
+                baseline_y: Some(700.0),
                 dominant_font_size: 24.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3613,6 +3813,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3704,7 +3905,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3728,7 +3929,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3758,7 +3959,7 @@ mod tests {
                     baseline_y: 700.0,
                     ..plain_segment(trailing)
                 }],
-                baseline_y: 700.0,
+                baseline_y: Some(700.0),
                 dominant_font_size: 12.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3769,7 +3970,7 @@ mod tests {
                     baseline_y: 685.0,
                     ..plain_segment(leading)
                 }],
-                baseline_y: 685.0,
+                baseline_y: Some(685.0),
                 dominant_font_size: 12.0,
                 is_bold: false,
                 is_monospace: false,
@@ -3792,7 +3993,7 @@ mod tests {
                 baseline_y: 700.0,
                 ..plain_segment("adjuvant Mon-")
             }],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3803,7 +4004,7 @@ mod tests {
                 baseline_y: 685.0,
                 ..plain_segment("tanide was used")
             }],
-            baseline_y: 685.0,
+            baseline_y: Some(685.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3823,7 +4024,7 @@ mod tests {
         let line = PdfLine {
             native_scripts: Vec::new(),
             segments,
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3853,7 +4054,7 @@ mod tests {
                 baseline_y: 700.0,
                 ..plain_segment("Zie de installatie-")
             }],
-            baseline_y: 700.0,
+            baseline_y: Some(700.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3864,7 +4065,7 @@ mod tests {
                 baseline_y: 686.0,
                 ..plain_segment("handleiding voor details")
             }],
-            baseline_y: 686.0,
+            baseline_y: Some(686.0),
             dominant_font_size: 12.0,
             is_bold: false,
             is_monospace: false,
@@ -3940,6 +4141,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn should_suppress_decimal_residue_only_when_the_grid_carries_the_whole_values() {
+        for (paragraph_text, cells, suppressed) in [
+            (
+                "216.0 338.0 245.0 054.0 505",
+                &["0.216.0.338.0.245.0.054.0.505"][..],
+                false,
+            ),
+            ("4.56 4.79 4.88 5.00", &["22.40", "27.67", "32.82", "23.14"][..], false),
+            ("4.56 4.79 4.88 5.00", &["4.56", "4.79", "4.88", "5.00"][..], true),
+            (
+                "11.38 10.48 11.00 10.83",
+                &["11.38", "10.48", "11.00", "10.83"][..],
+                true,
+            ),
+        ] {
+            let markdown = format!("| {} |", cells.join(" | "));
+            let mut table = make_table_in_box(&markdown, 40.0, 560.0, 800.0);
+            table.cells = vec![cells.iter().map(|cell| (*cell).to_string()).collect()];
+            let paragraph = make_paragraph_in_box(paragraph_text, 760.0, 40.0, 560.0);
+            let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+            let labels = page_element_labels(&document);
+            assert_eq!(labels.contains(&paragraph_text), !suppressed, "{labels:?}");
+            assert!(labels.contains(&"<table>"), "{labels:?}");
+        }
+    }
+
     /// GH#1622: TATR's cell grid can reassemble the same words in a different order than the
     /// flattened source paragraph (row/column intersection is independent of OCR line order) --
     /// measured directly on `ocr1599.pdf`, where a substring match found no overlap between
@@ -3988,4 +4216,53 @@ mod tests {
         );
         assert!(labels.contains(&"<table>"));
     }
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn native_volume_limit_requires_calligraphic_glyph_and_subscript() {
+    for (glyph, subscript, expected) in [('V', true, true), ('𝒱', true, false), ('V', false, false)] {
+        let original = format!("We have {glyph}(ψm) → +∞.");
+        let mut text = original.clone();
+        let start = text.find("m)").unwrap() as u32;
+        let mut annotations = if subscript {
+            vec![TextAnnotation {
+                start,
+                end: start + 1,
+                kind: AnnotationKind::Subscript,
+            }]
+        } else {
+            Vec::new()
+        };
+        annotate_native_volume_limit(&mut text, &mut annotations, ["We have ".len()]);
+        annotate_native_volume_limit(&mut text, &mut annotations, ["We have ".len()]);
+        assert_eq!(
+            annotations
+                .iter()
+                .filter(|a| a.kind.math_display() == Some(false))
+                .count(),
+            usize::from(expected)
+        );
+        if expected {
+            assert_eq!(text, r"We have ${\mathcal{V}}(\psi_m)\rightarrow +\infty$.");
+        } else {
+            assert_eq!(text, original);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn native_volume_limit_counts_only_matching_witness_offsets() {
+    let mut text = "V is a label. V(ψm) → +∞.".to_string();
+    let subscript = text.find("m)").unwrap() as u32;
+    let mut annotations = vec![TextAnnotation {
+        start: subscript,
+        end: subscript + 1,
+        kind: AnnotationKind::Subscript,
+    }];
+    annotate_native_volume_limit(&mut text, &mut annotations, [0, "V is a label. ".len()]);
+    assert_eq!(text, r"V is a label. ${\mathcal{V}}(\psi_m)\rightarrow +\infty$.");
+    assert_eq!(annotations.len(), 1);
+    assert_eq!(annotations[0].kind.math_display(), Some(false));
 }

@@ -2,18 +2,42 @@
 //! Validates that environment variable overrides are correctly applied during configuration loading.
 
 use xberg::{EmbeddingModelType, ExtractionConfig};
+use xberg_child_test::{child_test_root, run_child_test};
+
+const OVERRIDE_CASE: &str = "XBERG_CONFIG_OVERRIDE_TEST_CASE";
+
+fn run_override_case(child: &str, variable: &str, value: &str) {
+    run_child_test(child, OVERRIDE_CASE, variable, |command| {
+        command
+            .env_clear()
+            .envs(
+                std::env::vars_os()
+                    .filter(|(key, _)| !key.to_string_lossy().to_ascii_uppercase().starts_with("XBERG_")),
+            )
+            .env(OVERRIDE_CASE, variable)
+            .env(variable, value);
+    });
+}
 
 #[test]
 fn test_regression_773_env_override_loading() {
+    run_override_case("env_override_loading_child", "XBERG_OCR_LANGUAGE", "fra");
+}
+
+#[test]
+#[ignore = "run in an isolated subprocess by the config override test"]
+fn env_override_loading_child() {
+    let Some(variable) = child_test_root(OVERRIDE_CASE) else {
+        return;
+    };
+    assert_eq!(variable.to_str(), Some("XBERG_OCR_LANGUAGE"));
     let mut config = ExtractionConfig::default();
 
     if let Some(ref ocr) = config.ocr {
         assert_ne!(ocr.language, vec!["fra".to_string()]);
     }
 
-    unsafe { std::env::set_var("XBERG_OCR_LANGUAGE", "fra") };
     config.apply_env_overrides().expect("Failed to apply overrides");
-    unsafe { std::env::remove_var("XBERG_OCR_LANGUAGE") };
 
     let ocr = config
         .ocr
@@ -23,13 +47,25 @@ fn test_regression_773_env_override_loading() {
 
 #[test]
 fn test_regression_773_vlm_embedding_env_override() {
+    run_override_case(
+        "vlm_embedding_env_override_child",
+        "XBERG_VLM_EMBEDDING_MODEL",
+        "openai/text-embedding-3-small",
+    );
+}
+
+#[test]
+#[ignore = "run in an isolated subprocess by the config override test"]
+fn vlm_embedding_env_override_child() {
+    let Some(variable) = child_test_root(OVERRIDE_CASE) else {
+        return;
+    };
+    assert_eq!(variable.to_str(), Some("XBERG_VLM_EMBEDDING_MODEL"));
     let mut config = ExtractionConfig::default();
 
-    unsafe { std::env::set_var("XBERG_VLM_EMBEDDING_MODEL", "openai/text-embedding-3-small") };
     config
         .apply_env_overrides()
         .expect("Failed to apply environment overrides");
-    unsafe { std::env::remove_var("XBERG_VLM_EMBEDDING_MODEL") };
 
     let chunking = config
         .chunking

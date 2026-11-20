@@ -1501,7 +1501,7 @@ wheels = [
 
 [[package]]
 name = "surrealdb-xberg"
-version = "1.4.0"
+version = "1.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },

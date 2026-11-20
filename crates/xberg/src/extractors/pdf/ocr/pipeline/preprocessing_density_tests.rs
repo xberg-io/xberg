@@ -136,8 +136,7 @@ fn first_page_budget_probe_accounts_for_configured_preprocessing_density() {
 }
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
-#[path = "../../../../../tests/ocr_pixel_phase_2711/fixture.rs"]
-mod fixture;
+use crate::ocr_pixel_phase_fixture as fixture;
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
 async fn read_source_dimensions(config: &ExtractionConfig, bytes: &[u8]) -> (usize, usize) {
@@ -226,7 +225,9 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
     let ocr = config.ocr.as_mut().unwrap();
     ocr.tessdata_path = Some(models.path().to_path_buf());
     ocr.tesseract_config.as_mut().unwrap().use_cache = false;
-    let bytes = fixture::localized_pdf("gap-left");
+    let bytes = fixture::pdf(12, 0);
+    let document = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert!(!document.has_small_painted_text_for_ocr());
     crate::plugins::clear_ocr_backends().unwrap();
     assert_eq!(read_public_dimensions(&config, &bytes).await, (1800, 900));
     assert_eq!(read_source_dimensions(&config, &bytes).await, (1800, 900));
@@ -268,7 +269,12 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
 fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
     let limits = crate::extractors::security::SecurityLimits::default();
     let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec()).unwrap();
-    let (rendered, _) = crate::pdf::render::render_pdf_ocr_page_with_dpi(&document, 0, None, &limits).unwrap();
+    let images = crate::core::config::ImageExtractionConfig {
+        target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
+        auto_adjust_dpi: false,
+        ..Default::default()
+    };
+    let (rendered, _) = crate::pdf::render::render_pdf_ocr_page_with_dpi(&document, 0, Some(&images), &limits).unwrap();
     let image =
         crate::extraction::image_decode::decode_standard_image_with_security_limits(&rendered.data, &limits).unwrap();
     (

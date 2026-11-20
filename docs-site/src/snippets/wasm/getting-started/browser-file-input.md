@@ -4,7 +4,7 @@ target: wasm
 ---
 
 ```typescript title="Wasm"
-import init, { WasmExtractInputKind, extract } from "@xberg-io/xberg-wasm";
+import init, { WasmExtractInput, extract } from "@xberg-io/xberg-wasm";
 
 async function setupFileInput() {
   await init();
@@ -17,12 +17,7 @@ async function setupFileInput() {
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const output = await extract({
-        kind: "bytes",
-        bytes,
-        mimeType: file.type || "application/octet-stream",
-        filename: file.name,
-      }, undefined);
+      const output = await extract(WasmExtractInput.fromBytes(bytes, file.type || "application/octet-stream", file.name));
 
       console.log("Extracted text:", output.results[0].content);
       displayResults(output.results[0]);

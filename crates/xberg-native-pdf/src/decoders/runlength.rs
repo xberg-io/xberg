@@ -15,59 +15,63 @@ pub struct RunLengthDecoder;
 
 impl StreamDecoder for RunLengthDecoder {
     fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
-        let mut output = Vec::new();
-        let mut i = 0;
-
-        while i < input.len() {
-            let length = input[i];
-            i += 1;
-
-            match length {
-                0..=127 => {
-                    let count = length as usize + 1;
-
-                    if i + count > input.len() {
-                        return Err(Error::Decode(format!(
-                            "RunLengthDecode: not enough data for literal run (need {}, have {})",
-                            count,
-                            input.len() - i
-                        )));
-                    }
-
-                    output.extend_from_slice(&input[i..i + count]);
-                    i += count;
-                }
-                128 => {
-                    // EOD marker - no-op, but we'll break to end decoding ~keep
-                    break;
-                }
-                129..=255 => {
-                    let count = 257 - length as usize;
-
-                    if i >= input.len() {
-                        return Err(Error::Decode("RunLengthDecode: missing byte for run".to_string()));
-                    }
-
-                    let byte = input[i];
-                    i += 1;
-                    output.resize(output.len() + count, byte);
-                }
-            }
-
-            // GH#1764: check after every unit rather than after the whole stream decodes, so a
-            // dense RunLength stream (max 64:1, which the ratio guard in decoders/mod.rs can
-            // never catch — see default_max_decompressed_size's doc) aborts mid-decode instead
-            // of first building its full expansion. Overshoot is bounded by one unit (<= 128
-            // bytes), not by the remainder of `input`. ~keep
-            check_output_cap("RunLengthDecode", output.len(), max_output_bytes)?;
-        }
-
-        Ok(output)
+        decode(input, max_output_bytes, false)
     }
 
     fn name(&self) -> &str {
         "RunLengthDecode"
     }
+}
+
+pub(super) fn decode(input: &[u8], max_output_bytes: usize, complete: bool) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut i = 0;
+
+    while i < input.len() {
+        let length = input[i];
+        i += 1;
+
+        match length {
+            0..=127 => {
+                let count = length as usize + 1;
+
+                if i + count > input.len() {
+                    return Err(Error::Decode(format!(
+                        "RunLengthDecode: not enough data for literal run (need {}, have {})",
+                        count,
+                        input.len() - i
+                    )));
+                }
+
+                check_output_cap("RunLengthDecode", output.len() + count, max_output_bytes)?;
+                output.extend_from_slice(&input[i..i + count]);
+                i += count;
+            }
+            128 => {
+                if complete && i != input.len() {
+                    return Err(Error::Decode("RunLengthDecode: data after end-of-data marker".into()));
+                }
+                return Ok(output);
+            }
+            129..=255 => {
+                let count = 257 - length as usize;
+
+                if i >= input.len() {
+                    return Err(Error::Decode("RunLengthDecode: missing byte for run".to_string()));
+                }
+
+                let byte = input[i];
+                i += 1;
+                check_output_cap("RunLengthDecode", output.len() + count, max_output_bytes)?;
+                output.resize(output.len() + count, byte);
+            }
+        }
+    }
+
+    if complete {
+        return Err(Error::Decode("RunLengthDecode: missing end-of-data marker".into()));
+    }
+    Ok(output)
 }
 
 #[cfg(test)]

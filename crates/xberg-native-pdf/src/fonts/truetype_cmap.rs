@@ -335,9 +335,36 @@ impl TrueTypeCMap {
 
     /// Parse cmap format 4 (BMP - supports characters U+0000 to U+FFFF)
     fn parse_cmap_format4(cursor: &mut Cursor<&[u8]>) -> Result<HashMap<u16, char>, String> {
-        let seg_count = Self::read_cmap_format4_header(cursor)?;
+        Self::parse_cmap_format4_with_budget(cursor, u16::MAX as usize)
+    }
+
+    fn cmap_format4_subtable<'a>(cursor: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], String> {
+        let start = cursor.position() as usize - 2;
+        let length = cursor
+            .read_u16::<BigEndian>()
+            .map_err(|e| format!("Failed to read format 4 length: {e}"))? as usize;
+        const HEADER_BYTES: usize = 16;
+        if length < HEADER_BYTES || !length.is_multiple_of(2) {
+            return Err("Invalid cmap format 4 subtable length".into());
+        }
+        cursor
+            .get_ref()
+            .get(start..start.saturating_add(length))
+            .ok_or_else(|| "Truncated cmap format 4 subtable".into())
+    }
+
+    fn parse_cmap_format4_with_budget(cursor: &mut Cursor<&[u8]>, budget: usize) -> Result<HashMap<u16, char>, String> {
+        const HEADER_BYTES: usize = 16;
+        const SEGMENT_BYTES: usize = 8;
+        let data = Self::cmap_format4_subtable(cursor)?;
+        let mut subtable = Cursor::new(&data[4..]);
+        let seg_count = Self::read_cmap_format4_header(&mut subtable)?;
+        if seg_count > (data.len() - HEADER_BYTES) / SEGMENT_BYTES {
+            return Err("Cmap format 4 segment arrays exceed subtable length".into());
+        }
         let (end_codes, start_codes, id_deltas, id_range_offsets, glyph_id_array) =
-            Self::read_cmap_format4_segments(cursor, seg_count)?;
+            Self::read_cmap_format4_segments(&mut subtable, seg_count)?;
+        Self::validate_cmap_format4_segments(&start_codes, &end_codes, budget)?;
         Ok(Self::build_cmap_format4_gid_map(
             seg_count,
             &end_codes,
@@ -349,13 +376,8 @@ impl TrueTypeCMap {
     }
 
     /// Read the format-4 subtable header and return `seg_count`
-    /// (`segCountX2 / 2`). Split out of `parse_cmap_format4` purely to keep
-    /// that function within the repository's line-length guideline;
-    /// behavior is unchanged. ~keep
+    /// (`segCountX2 / 2`) after the format and length fields.
     fn read_cmap_format4_header(cursor: &mut Cursor<&[u8]>) -> Result<usize, String> {
-        let _length = cursor
-            .read_u16::<BigEndian>()
-            .map_err(|e| format!("Failed to read format 4 length: {}", e))? as u32;
         let _language = cursor
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read format 4 language: {}", e))?;
@@ -363,6 +385,9 @@ impl TrueTypeCMap {
         let seg_count_x2 = cursor
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read segCountX2: {}", e))? as usize;
+        if seg_count_x2 == 0 || !seg_count_x2.is_multiple_of(2) {
+            return Err("Invalid cmap format 4 segCountX2".into());
+        }
         let seg_count = seg_count_x2 / 2;
 
         let _search_range = cursor
@@ -395,9 +420,13 @@ impl TrueTypeCMap {
                 .map_err(|e| format!("Failed to read endCode[{}]: {}", i, e))?;
         }
 
-        let _reserved = cursor
+        let reserved = cursor
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read reserved pad: {}", e))?;
+
+        if reserved != 0 {
+            return Err("Nonzero cmap format 4 reserved pad".into());
+        }
 
         let mut start_codes = vec![0u16; seg_count];
         for i in 0..seg_count {
@@ -426,6 +455,25 @@ impl TrueTypeCMap {
         }
 
         Ok((end_codes, start_codes, id_deltas, id_range_offsets, glyph_id_array))
+    }
+
+    fn validate_cmap_format4_segments(starts: &[u16], ends: &[u16], mut remaining: usize) -> Result<(), String> {
+        if ends.last() != Some(&u16::MAX) {
+            return Err("Missing cmap format 4 terminal endCode".into());
+        }
+        let mut previous_end = None;
+        for (&start, &end) in starts.iter().zip(ends) {
+            if start > end || previous_end.is_some_and(|previous| start <= previous) {
+                return Err("Cmap format 4 segments must be ordered and non-overlapping".into());
+            }
+            previous_end = Some(end);
+            // The mapping walk stops before the terminal code. ~keep
+            let width = usize::from(end) - usize::from(start) + usize::from(end != u16::MAX);
+            remaining = remaining
+                .checked_sub(width)
+                .ok_or("Cmap format 4 iteration budget exhausted")?;
+        }
+        Ok(())
     }
 
     /// Build the gid→Unicode map from a format-4 subtable's parsed

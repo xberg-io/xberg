@@ -48,21 +48,21 @@ fn assert_projection(content: &str, stock: &str) {
     }
 }
 
-fn pinned_page() -> Vec<u8> {
+fn pinned_guide_page(page: u32) -> Vec<u8> {
     let path = helpers::get_test_documents_dir().join("pdf/sharable_web_guide.pdf");
     let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("required source {}: {error}", path.display()));
     assert_eq!(
         sha(&bytes),
         "04c76db01e20d7641e886b2403bea2df5757dfe9b4be7a283ee44d1861081a06"
     );
-    let mut document = lopdf::Document::load_mem(&bytes).expect("read pinned corpus PDF");
-    let pages = document.get_pages();
-    let fourth = pages[&4];
-    document.delete_pages(&pages.into_keys().filter(|page| *page != 4).collect::<Vec<_>>());
-    assert_eq!(document.get_pages().into_values().collect::<Vec<_>>(), [fourth]);
-    document.prune_objects();
+    let (mut document, _) = helpers::isolate_pdf_page(&bytes, page);
     let mut isolated = Vec::new();
     document.save_to(&mut isolated).expect("serialize isolated source page");
+    isolated
+}
+
+fn pinned_page() -> Vec<u8> {
+    let isolated = pinned_guide_page(4);
     assert_source_image(&isolated);
     isolated
 }
@@ -261,9 +261,16 @@ impl xberg::engine::seams::CacheBackend for CountedCache {
     }
 }
 
+const CACHED_STRIPS_CASE: &str = "cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads";
+
 #[tokio::test]
 async fn cached_pdf_recovers_the_same_certified_strips_on_cold_and_warm_reads() {
     use std::sync::{Arc, atomic::Ordering};
+
+    if !helpers::is_bundled_english_tessdata_child(CACHED_STRIPS_CASE) {
+        helpers::run_with_bundled_english_tessdata_only(CACHED_STRIPS_CASE);
+        return;
+    }
 
     let tessdata = tempfile::tempdir().expect("private tessdata directory");
     write_english_model(tessdata.path());
@@ -305,4 +312,19 @@ async fn explicit_inner_ocr_cache_keeps_both_stock_projections() {
     assert!(!page.content.contains(FIRST), "the inner OCR cache skips the recovery");
     assert_eq!(doc.tables.len(), 1);
     assert_eq!(page.tables.len(), 1);
+}
+
+#[tokio::test]
+async fn indexed_rgb_guide_page_reports_general_strip_route_decline() {
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let config = pinned_config(false, false, tessdata.path());
+    let read = read_pinned(&xberg::engine::Engine::new_default(), &pinned_guide_page(8), &config).await;
+    assert!(read.tables.is_empty());
+    assert!(!read.content.trim().is_empty());
+    assert!(read.processing_warnings.iter().any(|warning| {
+        warning
+            .message
+            .contains("the general strip route declined the 8-bit Indexed RGB scan")
+    }));
 }

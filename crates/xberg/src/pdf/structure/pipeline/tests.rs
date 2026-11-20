@@ -610,6 +610,204 @@ fn identical_markdown_tables_collapse_despite_missing_bbox() {
 }
 
 #[test]
+fn identical_tables_keep_disjoint_footprints_and_collapse_same_footprint() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut tables = vec![left.clone(), left, right.clone(), right];
+    deduplicate_identical_tables(&mut tables, &[]);
+    assert_eq!(tables.len(), 2);
+    assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+    assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+}
+
+#[test]
+fn missing_or_invalid_bounds_cannot_hide_disjoint_identical_tables() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut missing = left.clone();
+    missing.bounding_box = None;
+    for unpositioned in [
+        missing,
+        ov_table(1, (f64::NAN, 0.0, 10.0, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, f64::INFINITY, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, 0.0, 10.0), "same"),
+        ov_table(1, (10.0, 0.0, 0.0, 10.0), "same"),
+    ] {
+        let mut tables = vec![unpositioned.clone(), left.clone(), right.clone(), unpositioned.clone()];
+        deduplicate_identical_tables(&mut tables, &[]);
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+        assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+
+        let mut tables = vec![unpositioned.clone(), unpositioned];
+        deduplicate_identical_tables(&mut tables, &[]);
+        assert_eq!(tables.len(), 1);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_rejects_infinite_bounds_before_overlap() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let invalid = ov_table(1, (0.0, 0.0, f64::INFINITY, 100.0), "same");
+    let valid = ov_table(1, (0.0, 0.0, 100.0, 100.0), "same");
+    for input in [[invalid.clone(), valid.clone()], [valid.clone(), invalid.clone()]] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &[]);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].bounding_box.unwrap().x1, 100.0);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_keeps_overlapping_native_occurrences_printed_twice() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut page = printed_cells(&[&left, &right]);
+    for segment in page[0].iter_mut().skip(4) {
+        segment.x += 65.0;
+    }
+    for input in [[left.clone(), right.clone()], [right.clone(), left.clone()]] {
+        assert_eq!(kept_after_dedup(input.to_vec(), &page), 2);
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_keeps_two_disjoint_copies_over_their_broad_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 40.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let broad = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&left, &right]);
+    for input in [
+        [broad.clone(), left.clone(), right.clone()],
+        [right.clone(), left.clone(), broad.clone()],
+    ] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+        assert!(emitted.iter().all(|table| {
+            let bbox = table.bounding_box.unwrap();
+            bbox.x1 - bbox.x0 == 40.0
+        }));
+    }
+}
+
+#[test]
+fn exact_dedup_second_review_counts_shared_weak_overlap_once() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 160.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut shared = printed_cells(&[&right]);
+    for segment in &mut shared[0] {
+        segment.x += 5.0;
+    }
+    let mut independent = printed_cells(&[&left, &right]);
+    for segment in independent[0].iter_mut().skip(4) {
+        segment.x += 50.0;
+    }
+    let weakly_overlapping = [left.clone(), right.clone()];
+    let disjoint_right = cell_table(1, (110.0, 0.0, 170.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    for input in [weakly_overlapping, [right, left]] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &shared);
+        assert_eq!(emitted.len(), 1, "one printed occurrence in the common strip");
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &independent);
+        assert_eq!(emitted.len(), 2, "two independently printed occurrences");
+        let disjoint = [
+            input
+                .iter()
+                .find(|table| table.bounding_box.unwrap().x0 == 0.0)
+                .unwrap()
+                .clone(),
+            disjoint_right.clone(),
+        ];
+        let emitted = prepare_emitted_tables(&disjoint, Vec::new(), TableOverlapPreference::Content, &independent);
+        assert_eq!(emitted.len(), 2, "disjoint occurrences remain independent");
+    }
+}
+
+#[test]
+fn exact_dedup_second_review_rejected_enclosing_parent_cannot_protect_layout_cohort() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let cells: &[&[&str]] = &[&["alpha", "1"], &["beta", "2"]];
+    let left = cell_table(1, (0.0, 0.0, 35.0, 100.0), cells);
+    let right = cell_table(1, (65.0, 0.0, 100.0, 100.0), cells);
+    let broad = cell_table(1, (0.0, 0.0, 100.0, 100.0), cells);
+    let layout = vec![
+        cell_table(1, (0.0, 0.0, 49.0, 100.0), &[&["L"]]),
+        cell_table(1, (51.0, 0.0, 100.0, 100.0), &[&["R"]]),
+    ];
+    let page = printed_cells(&[&left, &right]);
+    for input in [
+        [broad.clone(), left.clone(), right.clone()],
+        [right.clone(), left.clone(), broad.clone()],
+    ] {
+        let emitted = prepare_emitted_tables(&input, layout.clone(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+        assert!(
+            emitted.iter().all(|table| table.cells == left.cells),
+            "keep the two native grids"
+        );
+    }
+}
+
+fn weak_overlap_origin_fixture() -> ([crate::types::Table; 2], Vec<Vec<SegmentData>>, Vec<Vec<SegmentData>>) {
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 160.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut shared = printed_cells(&[&right]);
+    for segment in &mut shared[0] {
+        segment.x += 5.0;
+    }
+    let mut independent = printed_cells(&[&left, &right]);
+    for segment in independent[0].iter_mut().skip(4) {
+        segment.x += 50.0;
+    }
+    ([left, right], shared, independent)
+}
+
+#[test]
+fn exact_dedup_mixed_origin_weak_overlap_honors_preference() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([native, layout], shared, independent) = weak_overlap_origin_fixture();
+    for (preference, winner) in [
+        (TableOverlapPreference::Native, &native),
+        (TableOverlapPreference::Layout, &layout),
+        (TableOverlapPreference::Content, &native),
+    ] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(std::slice::from_ref(&native), vec![layout.clone()], preference, page)
+        };
+        assert_eq!(emit(&independent).len(), 2, "{preference:?}");
+        assert_eq!(emit(&[]).len(), 2, "{preference:?}: no source evidence");
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1, "{preference:?}");
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, winner.bounding_box.unwrap().x0);
+    }
+}
+
+#[test]
+fn exact_dedup_layout_origin_weak_overlap_counts_printed_occurrences() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([left, right], shared, independent) = weak_overlap_origin_fixture();
+    for layout in [vec![left.clone(), right.clone()], vec![right, left]] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(&[], layout.clone(), TableOverlapPreference::Content, page)
+        };
+        assert_eq!(emit(&independent).len(), 2);
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, layout[0].bounding_box.unwrap().x0);
+    }
+}
+
+#[test]
 fn sparse_currency_affix_columns_merge_into_financial_values() {
     use crate::core::config::layout::TableOverlapPreference;
 
@@ -2345,7 +2543,7 @@ fn stacked_native_parents_do_not_form_side_by_side_replacement_cohort() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2359,7 +2557,7 @@ fn weakly_overlapping_layout_children_do_not_replace_two_native_parents() {
         ov_table(1, (120.0, 0.0, 270.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2373,7 +2571,7 @@ fn layout_cohort_rejects_child_that_does_not_cover_corresponding_parent() {
         ov_table(1, (105.0, 0.0, 175.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2387,7 +2585,10 @@ fn layout_cohort_accepts_reciprocal_crop_within_tolerance() {
         ov_table(1, (110.0, 0.0, 210.0, 100.0), "layout right"),
     ]);
 
-    assert_eq!(side_by_side_layout_replacements(&tables, 2), [(vec![0, 1], vec![2, 3])]);
+    assert_eq!(
+        side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()),
+        [(vec![0, 1], vec![2, 3])]
+    );
 }
 
 #[test]
@@ -2401,7 +2602,7 @@ fn layout_cohort_rejects_reciprocal_crop_below_tolerance() {
         ov_table(1, (110.0, 0.0, 210.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2432,7 +2633,7 @@ fn three_native_candidates_select_one_disjoint_adjacent_cohort() {
     let mut candidates = native.clone();
     candidates.extend(layout.clone());
 
-    let replacements = side_by_side_layout_replacements(&candidates, native.len());
+    let replacements = side_by_side_layout_replacements(&candidates, native.len(), &ahash::AHashSet::new());
     assert_eq!(replacements, [(vec![2, 0], vec![4, 5])]);
 
     let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
@@ -2520,6 +2721,66 @@ fn overlapping_protected_replacement_groups_survive() {
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
         ["upper left", "upper right", "lower left", "lower right"]
     );
+}
+
+#[test]
+fn weak_shared_overlap_keeps_both_protected_layout_cohorts_atomic() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let native = [
+        ov_table(1, (0.0, 0.0, 200.0, 100.0), "first parent"),
+        ov_table(1, (0.0, 60.0, 200.0, 160.0), "second parent"),
+    ];
+    let cells: &[&[&str]] = &[&["alpha", "1"], &["beta", "2"]];
+    let first_left = cell_table(1, (0.0, 0.0, 95.0, 100.0), cells);
+    let second_left = cell_table(1, (0.0, 60.0, 95.0, 160.0), cells);
+    let page = printed_cells(&[&second_left]);
+    let layout = vec![
+        first_left,
+        ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+        second_left,
+        ov_table(1, (105.0, 60.0, 200.0, 160.0), "second right"),
+    ];
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &page);
+    let footprints = emitted
+        .iter()
+        .map(|table| {
+            let bounds = table.bounding_box.unwrap();
+            (bounds.x0, bounds.y0)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(footprints, [(0.0, 0.0), (105.0, 0.0), (0.0, 60.0), (105.0, 60.0)]);
+}
+
+#[test]
+fn protected_layout_cohorts_keep_their_duplicate_threshold_through_final_dedup() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    for (offset, parent_height, expected) in [
+        (15.0, 82.0, vec![(0.0, 0.0), (105.0, 0.0), (0.0, 15.0), (105.0, 15.0)]),
+        (9.0, 80.0, vec![(0.0, 0.0), (105.0, 9.0)]),
+    ] {
+        let bottom = offset + 100.0;
+        let native = [
+            ov_table(1, (0.0, 0.0, 200.0, parent_height), "first parent"),
+            ov_table(1, (0.0, bottom - parent_height, 200.0, bottom), "second parent"),
+        ];
+        let layout = vec![
+            ov_table(1, (0.0, 0.0, 95.0, 100.0), "identical left"),
+            ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+            ov_table(1, (0.0, offset, 95.0, bottom), "identical left"),
+            ov_table(1, (105.0, offset, 200.0, bottom), "second right"),
+        ];
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
+        let footprints = emitted
+            .iter()
+            .map(|table| {
+                let bounds = table.bounding_box.unwrap();
+                (bounds.x0, bounds.y0)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(footprints, expected, "layout child offset {offset}");
+    }
 }
 
 #[test]
@@ -2818,6 +3079,7 @@ fn role_seg(text: &str, font_size: f32, is_bold: bool, assigned_role: Option<u8>
         baseline_y: 700.0,
         rotation_degrees: 0.0,
         assigned_role,
+        ocr_heading_spans: None,
     }
 }
 
@@ -3041,6 +3303,7 @@ fn body_line_seg(text: &str, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4323,6 +4586,7 @@ fn column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4501,6 +4765,7 @@ fn ocr_raster_seg(text: &str, x: f32, y: f32, width: f32, height: f32, font_size
         baseline_y: y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4627,6 +4892,7 @@ fn a_list_item_wraps_onto_later_lines_though_its_bullet_is_set_larger() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segments = vec![
         line("\u{2022}", 60.0, 4.0, 12.0, 722.36),
@@ -4671,6 +4937,7 @@ fn a_bare_label_carries_a_script_run_but_a_bullet_glyph_does_not() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let label = run("(0)", 100.0, 14.0, 12.0, 500.0);
     let bullet = run("\u{2022}", 100.0, 14.0, 12.0, 500.0);
@@ -4697,6 +4964,7 @@ fn a_bullet_drawn_after_its_body_still_leads_that_item() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segments = vec![
         line(
@@ -4731,6 +4999,7 @@ fn seg(text: &str, x: f32, width: f32) -> SegmentData {
         baseline_y: 0.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4740,6 +5009,19 @@ fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData
     segment.y = baseline_y - segment.height;
     segment.is_bold = is_bold;
     segment
+}
+
+#[test]
+fn native_paragraphs_retain_the_measured_zero_line_baseline() {
+    let segments = vec![inline_seg("Native text at the page origin", 14.0, 0.0, false)];
+    let paragraphs = segments_to_paragraphs(segments, &[(12.0, None)], &[], &TextRepairWitnesses::default());
+    let [paragraph] = paragraphs.as_slice() else {
+        panic!("one native paragraph: {paragraphs:?}");
+    };
+    let [line] = paragraph.lines.as_slice() else {
+        panic!("one native line: {:?}", paragraph.lines);
+    };
+    assert_eq!(line.baseline_y, Some(0.0));
 }
 
 #[test]
@@ -5307,7 +5589,7 @@ fn line(segments: Vec<SegmentData>) -> PdfLine {
     PdfLine {
         native_scripts: Vec::new(),
         segments,
-        baseline_y: 0.0,
+        baseline_y: None,
         dominant_font_size: 12.0,
         is_bold: false,
         is_monospace: false,
@@ -5328,6 +5610,7 @@ fn para(lines: Vec<PdfLine>) -> PdfParagraph {
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count,
@@ -5920,6 +6203,7 @@ fn process_heuristic_segments(segments: Vec<SegmentData>) -> Vec<PdfParagraph> {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -5952,6 +6236,7 @@ fn empty_or_ineligible_layout_hints_use_legacy_page_processing() {
                 use_layout_reading_order: false,
                 hint_validations: Vec::new(),
                 page_width_pts: None,
+                isolated_folio_page_height: None,
                 needs_classify: false,
                 paragraph_gap_ys: paragraph_gap_ys.clone(),
                 include_headers: true,
@@ -6033,6 +6318,7 @@ fn page_width_reaches_layout_reading_order_graph() {
                 use_layout_reading_order: true,
                 hint_validations: Vec::new(),
                 page_width_pts,
+                isolated_folio_page_height: None,
                 needs_classify: false,
                 paragraph_gap_ys: Vec::new(),
                 include_headers: true,
@@ -6111,6 +6397,7 @@ fn stacked_layout_groups_preserve_native_paragraph_assembly() {
             use_layout_reading_order: false,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6149,6 +6436,7 @@ fn bboxless_emitted_table_page_preserves_native_semantics_and_layout_class() {
             use_layout_reading_order: true,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys,
             include_headers: true,
@@ -6188,6 +6476,7 @@ fn emitted_table_page_annotates_caption_without_overriding_native_semantics() {
             use_layout_reading_order: true,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6280,6 +6569,7 @@ fn test_structure_tree_page_runs_text_repair_before_assembly() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6328,6 +6618,7 @@ fn assigned_sal_heading_survives_merge_when_layout_confirms_it() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6752,6 +7043,7 @@ fn para_with_font_size(font_size: f32) -> PdfParagraph {
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count,
@@ -6804,6 +7096,7 @@ fn furniture_para_with_class(class: LayoutHintClass) -> PdfParagraph {
         is_page_furniture: true,
         layout_class: Some(class),
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count,
@@ -7487,10 +7780,11 @@ fn seg_with_font(text: &str, font_size: f32) -> SegmentData {
         baseline_y: 700.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
-fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
+pub(super) fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentData {
     SegmentData {
         text: text.to_string(),
         x,
@@ -7504,6 +7798,7 @@ fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentDa
         baseline_y: y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -7910,6 +8205,7 @@ fn should_classify_untagged_bold_body_size_paragraphs_on_tagged_pages() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: true,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -8719,6 +9015,7 @@ fn seg_heuristic(text: &str, font_size: f32, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -8743,6 +9040,7 @@ fn test_heuristic_path_merges_font_split_continuation() {
             hint_validations: vec![],
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: vec![],
             include_headers: true,
@@ -8799,6 +9097,7 @@ fn test_heuristic_path_does_not_merge_terminated_sentences() {
             hint_validations: vec![],
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: vec![],
             include_headers: true,
@@ -9592,6 +9891,7 @@ fn stack_seg(text: &str, x: f32, width: f32, font_size: f32, baseline: f32) -> S
         baseline_y: baseline,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -9919,4 +10219,614 @@ fn should_keep_an_exponent_before_a_subscript_that_starts_after_it() {
     let (text, runs) = marked_script_runs(segments);
     assert!(text.replace(' ', "").starts_with("EnC"), "{text:?}");
     assert_eq!(runs, [("n".to_string(), Superscript), ("C".to_string(), Subscript)]);
+}
+
+#[test]
+fn isolated_folio_header_preserves_heading_and_adjacent_prose() {
+    let mut folio = seg_at("1116", 60.0, 691.0, 11.0, false);
+    folio.width = 23.0;
+    let mut title = seg_at("A. B. Author and C. D. Writer", 106.0, 691.0, 11.0, false);
+    title.is_italic = true;
+    let header = para(vec![line(vec![folio]), line(vec![title])]);
+    let body = positioned_para(
+        "ation. The previous section continues here and develops the same argument with more examples and observations.",
+        60.0,
+        660.0,
+    );
+    let mut heading = positioned_para("Discussion", 60.0, 600.0);
+    heading.heading_level = Some(2);
+    let mut page = vec![header, body, heading];
+
+    let mut title_page = page.clone();
+    title_page[0].heading_level = Some(1);
+    classify_isolated_folio_header(&mut title_page, 738.0);
+    assert_eq!(title_page[0].layout_class, None);
+    assert_eq!(title_page[0].heading_level, Some(1));
+
+    let mut ordinary_page = page.clone();
+    ordinary_page[0].lines[1].segments[0].is_italic = false;
+    classify_isolated_folio_header(&mut ordinary_page, 738.0);
+    assert_eq!(ordinary_page[0].layout_class, None);
+
+    let mut numbered_entry = page.clone();
+    numbered_entry[0].lines[1].segments[0].text = "The Nature of Dynamic Capabilities".into();
+    classify_isolated_folio_header(&mut numbered_entry, 738.0);
+    assert_eq!(numbered_entry[0].layout_class, None);
+    assert_eq!(numbered_entry[0].heading_level, None);
+    assert_eq!(numbered_entry[0].lines[0].segments[0].text, "1116");
+    assert_eq!(
+        numbered_entry[0].lines[1].segments[0].text,
+        "The Nature of Dynamic Capabilities"
+    );
+
+    let mut without_page_geometry = page.clone();
+    merge_native_continuations(&mut without_page_geometry, &[], None);
+    assert_eq!(without_page_geometry.len(), 2);
+    assert_eq!(without_page_geometry[0].lines.len(), 3);
+
+    merge_native_continuations(&mut page, &[], Some(738.0));
+    assert_eq!(page.len(), 3);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::PageHeader));
+    assert_eq!(page[1].text, title_page[1].text);
+    assert_eq!(page[1].layout_class, None);
+    assert_eq!(page[2].heading_level, Some(2));
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn isolated_folio_header_rendering_obeys_include_headers() {
+    let body = "ation. The previous section continues here and develops the same argument with more examples and observations.";
+    let title = "A. B. Author and C. D. Writer";
+    let mut folio = seg_at("1116", 60.0, 691.0, 11.0, false);
+    folio.width = 23.0;
+    let mut author = seg_at(title, 106.0, 691.0, 11.0, false);
+    author.width = 164.0;
+    author.is_italic = true;
+    let layout = [super::super::types::PageLayoutResult {
+        page_width_pts: 564.0,
+        page_height_pts: 738.0,
+    }];
+    for include_headers in [false, true] {
+        let document = extract_document_structure_from_segments(
+            vec![vec![
+                folio.clone(),
+                author.clone(),
+                seg_at(body, 60.0, 660.0, 10.0, false),
+            ]],
+            SegmentStructureConfig {
+                k_clusters: 1,
+                tables: &[],
+                outline_entries: &[],
+                strip_repeating_text: false,
+                include_headers,
+                include_footers: false,
+                include_footnotes: false,
+                include_watermarks: false,
+                used_structure_tree: false,
+                ocr_text: false,
+                image_positions: &[],
+                images: None,
+                inject_placeholders: false,
+                layout_hints: None,
+                allow_single_column: true,
+                cancel_token: None,
+                layout_images: None,
+                layout_results: Some(&layout),
+                table_model: crate::core::config::layout::TableModel::Disabled,
+                table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+                acceleration: None,
+                session_thread_budget: 0,
+            },
+        )
+        .expect("native structure extraction succeeds");
+        let markdown = crate::rendering::render_markdown(&document);
+        assert_eq!(
+            markdown.matches(title).count(),
+            usize::from(include_headers),
+            "{markdown}"
+        );
+        assert_eq!(markdown.matches(body).count(), 1, "{markdown}");
+        assert!(
+            document
+                .elements
+                .iter()
+                .any(|element| { element.layer == crate::types::ContentLayer::Header && element.text.contains(title) })
+        );
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn isolated_folio_header_does_not_exempt_model_classified_first_paragraph() {
+    let mut page = vec![positioned_para("An ordinary first paragraph.", 60.0, 690.0)];
+    let mut hint = LayoutHint {
+        class_name: LayoutHintClass::PageHeader,
+        confidence: 0.95,
+        left: 55.0,
+        bottom: 685.0,
+        right: 270.0,
+        top: 710.0,
+    };
+    super::super::layout_classify::annotate_layout_classes(&mut page, std::slice::from_ref(&hint), 0.5, 0.2);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::PageHeader));
+
+    let accepted = merge_native_continuations(&mut page, &[], Some(738.0));
+    assert_eq!(accepted, None);
+    hint.class_name = LayoutHintClass::Text;
+    annotate_native_layout_classes(&mut page, &[hint], accepted);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::Text));
+}
+
+/// An exact 50/50 split between two heading levels at one font size must resolve to the lower
+/// level; the tally used to iterate a randomly seeded `HashMap`, so the winner changed per process.
+#[test]
+fn heading_map_breaks_a_level_tie_toward_the_lower_level() {
+    let pages = vec![vec![
+        role_seg("A", 18.0, true, Some(2)),
+        role_seg("B", 18.0, true, Some(1)),
+        role_seg("C", 18.0, true, Some(2)),
+        role_seg("D", 18.0, true, Some(1)),
+    ]];
+    let map = build_heading_map_from_assigned_roles(&pages);
+    assert_eq!(map, vec![(18.0, Some(1))]);
+}
+
+#[test]
+fn most_frequent_level_prefers_the_higher_count_then_the_lower_level() {
+    assert_eq!(most_frequent_level([3, 2, 3, 2]), Some((2, 2)));
+    assert_eq!(most_frequent_level([1, 4, 4, 1, 3, 3]), Some((1, 2)));
+    assert_eq!(most_frequent_level([2, 5, 5]), Some((5, 2)));
+    assert_eq!(most_frequent_level([]), None);
+}
+
+pub(super) fn linked_footnote_reference(number: &str, raised: bool) -> PdfParagraph {
+    let mut reference = seg_at(
+        "The cited work is described here with enough detail to identify the source",
+        70.0,
+        330.0,
+        10.0,
+        false,
+    );
+    reference.width = 128.0;
+    let mut marker = seg_at(number, 198.0, if raised { 333.0 } else { 330.0 }, 6.5, false);
+    marker.width = 3.0;
+    para(vec![line(vec![reference, marker])])
+}
+
+pub(super) fn linked_footnote_text() -> PdfParagraph {
+    let mut marker = seg_at("2", 70.0, 78.0, 6.5, false);
+    marker.width = 3.0;
+    let mut body = seg_at("A link to the cited work", 76.0, 74.0, 8.0, false);
+    body.width = 85.0;
+    para(vec![line(vec![marker, body])])
+}
+
+#[test]
+fn linked_footnote_marks_only_the_witnessed_paragraph() {
+    let mut figure = positioned_footnote_paragraph("Figure label", (230.0, 74.0, 290.0, 82.0), 8.0, false);
+    figure.layout_class = Some(LayoutHintClass::Caption);
+    let mut table = positioned_footnote_paragraph("Table cell", (230.0, 62.0, 290.0, 70.0), 8.0, false);
+    table.layout_class = Some(LayoutHintClass::Table);
+    let mut page = vec![
+        linked_footnote_reference("2", true),
+        positioned_footnote_paragraph("Ordinary low body", (70.0, 95.0, 170.0, 103.0), 8.0, false),
+        linked_footnote_text(),
+        figure,
+        table,
+    ];
+    let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+    linked_footnote::classify(
+        &mut page,
+        false,
+        || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+        || Some(vec![]),
+        linked_footnote::PageRegions {
+            page_number: 1,
+            tables: &[],
+            hints: &[],
+        },
+        &HyphenWitnesses::default(),
+    );
+    assert_eq!(page.iter().map(paragraph_text_raw).collect::<Vec<_>>(), before);
+    assert_eq!(page[2].layout_class, Some(LayoutHintClass::Footnote));
+    assert_eq!(page.iter().filter(|paragraph| paragraph.is_page_furniture).count(), 1);
+    assert!(page[2].is_page_furniture);
+}
+
+#[test]
+fn linked_footnote_preserves_opt_in_and_unproven_references() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let rule = Some(Rect::new(70.0, 90.0, 144.0, 0.5));
+    for (label, references, separator, include, hints) in [
+        (
+            "include",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            true,
+            vec![],
+        ),
+        (
+            "no rule",
+            vec![linked_footnote_reference("2", true)],
+            None,
+            false,
+            vec![],
+        ),
+        (
+            "wrong number",
+            vec![linked_footnote_reference("12", true)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "same baseline",
+            vec![linked_footnote_reference("2", false)],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "off axis",
+            vec![linked_footnote_reference("2", true)],
+            Some(Rect::new(74.0, 90.0, 144.0, 0.5)),
+            false,
+            vec![],
+        ),
+        (
+            "ambiguous reference",
+            vec![linked_footnote_reference("2", true); 2],
+            rule,
+            false,
+            vec![],
+        ),
+        (
+            "figure overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Picture,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+        (
+            "table overlap",
+            vec![linked_footnote_reference("2", true)],
+            rule,
+            false,
+            vec![LayoutHint {
+                class_name: LayoutHintClass::Table,
+                confidence: 1.0,
+                left: 60.0,
+                bottom: 65.0,
+                right: 180.0,
+                top: 90.0,
+            }],
+        ),
+    ] {
+        let mut page = references;
+        page.push(linked_footnote_text());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::classify(
+            &mut page,
+            include,
+            || {
+                assert!(!include, "include_footnotes must avoid querying the separator");
+                separator
+            },
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &hints,
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(
+            page.iter().map(paragraph_text_raw).collect::<Vec<_>>(),
+            before,
+            "{label}"
+        );
+        assert!(page.iter().all(|paragraph| !paragraph.is_page_furniture), "{label}");
+    }
+}
+
+#[test]
+fn linked_footnote_counts_references_in_a_reordered_right_column() {
+    let mut right_column = linked_footnote_reference("2", true);
+    for segment in &mut right_column.lines[0].segments {
+        segment.x += 250.0;
+        segment.y += 20.0;
+        segment.baseline_y += 20.0;
+    }
+    for also_in_left_column in [false, true] {
+        let mut page = Vec::new();
+        if also_in_left_column {
+            page.push(linked_footnote_reference("2", true));
+        }
+        page.push(linked_footnote_text());
+        page.push(right_column.clone());
+        let before = page.iter().map(paragraph_text_raw).collect::<Vec<_>>();
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || Some(xberg_native_pdf::geometry::Rect::new(70.0, 90.0, 144.0, 0.5)),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(page.iter().map(paragraph_text_raw).collect::<Vec<_>>(), before);
+        assert_eq!(
+            page[usize::from(also_in_left_column)].is_page_furniture,
+            !also_in_left_column
+        );
+    }
+}
+
+#[test]
+fn linked_footnote_requires_the_reference_body_above_the_rule() {
+    use crate::types::document_structure::AnnotationKind;
+    use xberg_native_pdf::geometry::Rect;
+
+    for (reference_baseline, marked) in [(93.0, true), (88.0, false)] {
+        let mut reference = linked_footnote_reference("2", true);
+        let shift = reference_baseline - reference.lines[0].segments[0].baseline_y;
+        for segment in &mut reference.lines[0].segments {
+            segment.y += shift;
+            segment.baseline_y += shift;
+        }
+        let hyphens = HyphenWitnesses::default();
+        let (text, annotations) = super::super::assembly::extract_text_and_annotations(&reference, &hyphens);
+        assert!(annotations.iter().any(|annotation| {
+            annotation.kind == AnnotationKind::Superscript
+                && text.get(annotation.start as usize..annotation.end as usize) == Some("2")
+        }));
+        let rule = Rect::new(70.0, 90.0, 144.0, 0.5);
+        assert!(reference.lines[0].segments[1].baseline_y > rule.bottom());
+
+        let mut page = vec![reference, linked_footnote_text()];
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || Some(rule),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &hyphens,
+        );
+        assert_eq!(
+            page[1].is_page_furniture, marked,
+            "reference baseline: {reference_baseline}"
+        );
+    }
+}
+
+pub(super) fn linked_footnote_image_pdf(page_content: &str) -> Vec<u8> {
+    use lopdf::{Document, Stream, dictionary};
+
+    let mut doc = Document::with_version("1.4");
+    let pages = doc.new_object_id();
+    let image = doc.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+            "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+        },
+        vec![127],
+    ));
+    let helvetica = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let content =
+        format!("/Artifact << /Type /Pagination /Attached [/Bottom] >> BDC 70 90 144 0.5 re f EMC\n{page_content}");
+    let contents = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+    let page = doc.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "Contents" => contents,
+        "Resources" => dictionary! {
+            "XObject" => dictionary! { "Photo" => image },
+            "Font" => dictionary! { "F1" => helvetica },
+        },
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+    });
+    doc.objects.insert(
+        pages,
+        lopdf::Object::Dictionary(
+            dictionary! { "Type" => "Pages", "Kids" => vec![lopdf::Object::Reference(page)], "Count" => 1 },
+        ),
+    );
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    doc.trailer.set("Root", catalog);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn linked_footnote_checks_native_figures_without_image_export() {
+    use xberg_native_pdf::geometry::Rect;
+
+    for (paint, expected_images, marked) in [
+        (
+            "q 100 0 0 20 68 65 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 65.0, 100.0, 20.0)]),
+            false,
+        ),
+        (
+            "q 100 0 0 20 68 150 cm /Photo Do Q",
+            Some(vec![Rect::new(68.0, 150.0, 100.0, 20.0)]),
+            true,
+        ),
+        ("q 100 0 0 20 68 150 cm /Unknown Do Q", None, false),
+    ] {
+        let pdf = xberg_native_pdf::PdfDocument::from_bytes(linked_footnote_image_pdf(paint)).unwrap();
+        assert_eq!(
+            linked_footnote::page_separator(&pdf, 0),
+            Some(Rect::new(70.0, 90.0, 144.0, 0.5))
+        );
+        assert_eq!(pdf.bounded_page_image_placements(0), expected_images, "{paint}");
+        let mut page = vec![linked_footnote_reference("2", true), linked_footnote_text()];
+        linked_footnote::classify(
+            &mut page,
+            false,
+            || linked_footnote::page_separator(&pdf, 0),
+            || pdf.bounded_page_image_placements(0),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert_eq!(page[1].is_page_furniture, marked, "{paint}");
+    }
+}
+
+#[test]
+fn linked_footnote_abstains_when_other_text_could_share_the_separator_column() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let wrapped = positioned_footnote_paragraph(
+        "A continuation beneath the first note",
+        (75.0, 62.0, 169.0, 69.0),
+        8.0,
+        false,
+    );
+    let wide = positioned_footnote_paragraph(
+        "A second note extends beyond the rule",
+        (70.0, 43.0, 270.0, 57.0),
+        8.0,
+        false,
+    );
+    let straddling = positioned_footnote_paragraph(
+        "A body line crosses the separator",
+        (68.0, 88.0, 240.0, 99.0),
+        8.0,
+        false,
+    );
+    let indented = positioned_footnote_paragraph(
+        "An indented continuation starts past the rule",
+        (220.0, 60.0, 310.0, 69.0),
+        8.0,
+        false,
+    );
+    for other in [wrapped, wide, straddling, indented, linked_footnote_text()] {
+        let mut paragraphs = [linked_footnote_reference("2", true), linked_footnote_text(), other];
+        linked_footnote::classify(
+            &mut paragraphs,
+            false,
+            || Some(Rect::new(70.0, 90.0, 144.0, 0.5)),
+            || Some(vec![]),
+            linked_footnote::PageRegions {
+                page_number: 1,
+                tables: &[],
+                hints: &[],
+            },
+            &HyphenWitnesses::default(),
+        );
+        assert!(paragraphs.iter().all(|paragraph| !paragraph.is_page_furniture));
+    }
+}
+
+#[test]
+fn linked_footnote_abstains_when_the_furniture_budget_would_be_exceeded() {
+    use xberg_native_pdf::geometry::Rect;
+
+    let mut reference = linked_footnote_reference("2", true);
+    reference.lines[0].segments[0].text = "Cited work".to_string();
+    let mut paragraphs = [reference, linked_footnote_text()];
+    linked_footnote::classify(
+        &mut paragraphs,
+        false,
+        || Some(Rect::new(70.0, 90.0, 144.0, 0.5)),
+        || Some(vec![]),
+        linked_footnote::PageRegions {
+            page_number: 1,
+            tables: &[],
+            hints: &[],
+        },
+        &HyphenWitnesses::default(),
+    );
+    assert!(paragraphs.iter().all(|paragraph| !paragraph.is_page_furniture));
+    assert!(paragraphs.iter().all(|paragraph| paragraph.layout_class.is_none()));
+}
+
+#[tokio::test]
+async fn linked_footnote_preserves_structure_and_respects_body_output_filter() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    use crate::types::{ContentLayer, ExtractionMethod};
+    use crate::{ExtractInput, ExtractionConfig, PdfBackend, PdfConfig, extract};
+
+    const NOTE: &str = "A link to the cited work";
+    let bytes = linked_footnote_image_pdf(concat!(
+        "BT /F1 10 Tf 1 0 0 1 70 480 Tm (This page has ordinary body content before the citation.) Tj ET\n",
+        "BT /F1 10 Tf 1 0 0 1 70 455 Tm (The paragraph continues with more context about the topic.) Tj ET\n",
+        "BT /F1 10 Tf 1 0 0 1 70 330 Tm (The cited work is described here) Tj /F1 6.5 Tf 3 Ts (2) Tj ET\n",
+        "BT /F1 6.5 Tf 1 0 0 1 70 74 Tm 4 Ts (2) Tj 0 Ts /F1 8 Tf 1 0 0 1 76 74 Tm (A link to the cited work) Tj ET\n",
+    ));
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        for include in [false, true] {
+            let config = ExtractionConfig {
+                output_format: format.clone(),
+                include_document_structure: true,
+                disable_ocr: true,
+                use_cache: false,
+                pdf_options: Some(PdfConfig {
+                    backend: PdfBackend::Native,
+                    ..Default::default()
+                }),
+                content_filter: include.then(|| ContentFilterConfig {
+                    include_footnotes: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let result = extract(
+                ExtractInput::from_bytes(bytes.clone(), "application/pdf", None),
+                &config,
+            )
+            .await
+            .expect("unified extraction succeeds");
+            assert!(
+                result.errors.is_empty(),
+                "{format:?}, include={include}: {:?}",
+                result.errors
+            );
+            let [document] = result.results.as_slice() else {
+                panic!("expected one extracted PDF")
+            };
+            assert_eq!(document.extraction_method, Some(ExtractionMethod::Native));
+            assert!(document.content.contains("The cited work is described here"));
+            assert_eq!(
+                document.content.contains(NOTE),
+                include,
+                "{format:?}: {}",
+                document.content
+            );
+            let structure = document.document.as_ref().expect("structured PDF output");
+            let note_nodes = structure
+                .nodes
+                .iter()
+                .filter(|node| node.content.text().is_some_and(|text| text.contains(NOTE)))
+                .collect::<Vec<_>>();
+            let [note] = note_nodes.as_slice() else {
+                panic!("wanted one retained note for {format:?}, include={include}")
+            };
+            let expected = if include {
+                ContentLayer::Body
+            } else {
+                ContentLayer::Footnote
+            };
+            assert_eq!(note.content_layer, expected, "{format:?}");
+        }
+    }
 }

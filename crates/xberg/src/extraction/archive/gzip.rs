@@ -7,12 +7,11 @@
 //! this module automatically detects the TAR format and delegates
 //! to the TAR extraction functions.
 
-use super::{ArchiveEntry, ArchiveMetadata};
+use super::{ArchiveEntry, ArchiveMetadata, DecompressedBudget};
 use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
 use flate2::read::GzDecoder;
-use std::io::Read;
 
 /// Check if data looks like a TAR archive (has "ustar" magic at offset 257).
 ///
@@ -23,28 +22,25 @@ fn is_tar_archive(data: &[u8]) -> bool {
 }
 
 /// Decompress gzip bytes with a size limit to prevent decompression bombs.
-fn decompress_gzip_limited(bytes: &[u8], max_size: u64) -> Result<Vec<u8>> {
-    let decoder = GzDecoder::new(bytes);
-    let mut limited = decoder.take(max_size + 1);
+fn decompress_gzip_limited(bytes: &[u8], budget: &mut DecompressedBudget<'_>) -> Result<(Vec<u8>, String)> {
+    let mut decoder = GzDecoder::new(bytes);
+    let filename = decoder
+        .header()
+        .and_then(|header| header.filename())
+        .and_then(|name| std::str::from_utf8(name).ok())
+        .unwrap_or("compressed_content")
+        .to_owned();
     let mut decompressed = Vec::new();
-    limited
-        .read_to_end(&mut decompressed)
-        .map_err(|e| XbergError::parsing(format!("Failed to decompress gzip: {}", e)))?;
-
-    if decompressed.len() as u64 > max_size {
-        return Err(XbergError::validation(format!(
-            "Gzip decompressed size exceeds {} byte limit",
-            max_size
-        )));
-    }
-
-    Ok(decompressed)
+    budget
+        .read_member(&mut decoder, &mut decompressed, None, &filename)?
+        .map_err(|e| XbergError::parsing(format!("Failed to decompress gzip: {e}")))?;
+    Ok((decompressed, filename))
 }
 
 /// Decompress gzip bytes, returning the raw decompressed data.
 #[cfg(test)]
 pub(crate) fn decompress_gzip(bytes: &[u8], limits: &SecurityLimits) -> Result<Vec<u8>> {
-    decompress_gzip_limited(bytes, limits.max_archive_size as u64)
+    decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64)).map(|(data, _)| data)
 }
 
 /// Extract both metadata and text content from gzip in a single decompression pass.
@@ -58,24 +54,19 @@ pub(crate) fn extract_gzip(
     bytes: &[u8],
     limits: &SecurityLimits,
 ) -> Result<(ArchiveMetadata, AHashMap<String, String>)> {
-    let decompressed = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
-        let contents = super::tar::extract_tar_text_content(&decompressed, limits)?;
+        let contents = super::tar::extract_tar_text_content(
+            &decompressed,
+            limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        )?;
         return Ok((metadata, contents));
     }
-
-    let mut decoder = GzDecoder::new(bytes);
-    let mut _discard = [0u8; 1];
-    let _ = decoder.read(&mut _discard);
-    let filename = decoder
-        .header()
-        .and_then(|h| h.filename())
-        .and_then(|f| std::str::from_utf8(f).ok())
-        .unwrap_or("compressed_content")
-        .to_string();
 
     let size = decompressed.len() as u64;
 
@@ -106,23 +97,14 @@ pub(crate) fn extract_gzip(
 /// If the decompressed data is a TAR archive, delegates to TAR extraction.
 #[cfg(test)]
 pub(crate) fn extract_gzip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Result<ArchiveMetadata> {
-    let decompressed = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
         return Ok(metadata);
     }
-
-    let mut decoder = GzDecoder::new(bytes);
-    let mut _discard = [0u8; 1];
-    let _ = decoder.read(&mut _discard);
-    let filename = decoder
-        .header()
-        .and_then(|h| h.filename())
-        .and_then(|f| std::str::from_utf8(f).ok())
-        .unwrap_or("compressed_content")
-        .to_string();
 
     let size = decompressed.len() as u64;
 
@@ -145,21 +127,16 @@ pub(crate) fn extract_gzip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Re
 /// If the decompressed data is a TAR archive, delegates to TAR extraction.
 #[cfg(test)]
 pub(crate) fn extract_gzip_text_content(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, String>> {
-    let decompressed = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
-        return super::tar::extract_tar_text_content(&decompressed, limits);
+        return super::tar::extract_tar_text_content(
+            &decompressed,
+            limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        );
     }
-
-    let mut decoder = GzDecoder::new(bytes);
-    let mut _discard = [0u8; 1];
-    let _ = decoder.read(&mut _discard);
-    let filename = decoder
-        .header()
-        .and_then(|h| h.filename())
-        .and_then(|f| std::str::from_utf8(f).ok())
-        .unwrap_or("compressed_content")
-        .to_string();
 
     let mut contents = AHashMap::new();
     if let Ok(text) = String::from_utf8(decompressed) {
@@ -176,26 +153,27 @@ type GzipWithBytesResult = (ArchiveMetadata, AHashMap<String, String>, AHashMap<
 ///
 /// Similar to `extract_gzip` but also returns the raw file bytes for recursive extraction.
 /// For TAR-within-GZIP, delegates to TAR file bytes extraction.
-pub(crate) fn extract_gzip_with_bytes(bytes: &[u8], limits: &SecurityLimits) -> Result<GzipWithBytesResult> {
-    let decompressed = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+pub(crate) fn extract_gzip_with_bytes(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<GzipWithBytesResult> {
+    let (decompressed, filename) = decompress_gzip_limited(bytes, budget)?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
-        let contents = super::tar::extract_tar_text_content(&decompressed, limits)?;
-        let file_bytes = super::tar::extract_tar_file_bytes(&decompressed, limits)?;
-        return Ok((metadata, contents, file_bytes));
+        // The inflated TAR already covers stored bytes. Charge only sparse expansion to the shared budget. ~keep
+        let mut member_budget = DecompressedBudget::new(limits.max_archive_size as u64);
+        let members = super::tar::extract_tar_members(
+            &decompressed,
+            limits,
+            &mut member_budget,
+            Some(budget),
+            Some(limits.max_content_size as u64),
+        )?;
+        return Ok((metadata, members.text, members.bytes));
     }
-
-    let mut decoder = GzDecoder::new(bytes);
-    let mut _discard = [0u8; 1];
-    let _ = decoder.read(&mut _discard);
-    let filename = decoder
-        .header()
-        .and_then(|h| h.filename())
-        .and_then(|f| std::str::from_utf8(f).ok())
-        .unwrap_or("compressed_content")
-        .to_string();
 
     let size = decompressed.len() as u64;
 
@@ -210,13 +188,13 @@ pub(crate) fn extract_gzip_with_bytes(bytes: &[u8], limits: &SecurityLimits) -> 
         total_size: size,
     };
 
-    let mut file_bytes = AHashMap::new();
-    file_bytes.insert(filename.clone(), decompressed.clone());
-
     let mut contents = AHashMap::new();
-    if let Ok(text) = String::from_utf8(decompressed) {
-        contents.insert(filename, text);
+    if let Ok(text) = std::str::from_utf8(&decompressed) {
+        contents.insert(filename.clone(), text.to_owned());
     }
+
+    let mut file_bytes = AHashMap::new();
+    file_bytes.insert(filename, decompressed);
 
     Ok((metadata, contents, file_bytes))
 }

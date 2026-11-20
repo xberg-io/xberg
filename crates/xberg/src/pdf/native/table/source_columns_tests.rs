@@ -425,6 +425,7 @@ fn segment(text: &str, rotation: f32, x: f32, y: f32) -> crate::pdf::hierarchy::
         baseline_y: y,
         rotation_degrees: rotation,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 

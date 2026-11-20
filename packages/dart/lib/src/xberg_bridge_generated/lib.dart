@@ -11,7 +11,7 @@ part 'lib.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -305,6 +305,18 @@ Future<bool> verifyExcerpt({
   excerpt: excerpt,
   sourceText: sourceText,
 );
+
+/// Set the `OrtSessionOptions` used for ONNX sessions built from now on.
+///
+/// When the options actually change, the embedding, reranking, sparse-embedding and
+/// late-interaction engine caches and the PaddleOCR engine pools are cleared, so resident
+/// engines are rebuilt with the new options on next use.
+Future<void> setOrtSessionOptions({required OrtSessionOptions options}) =>
+    RustLib.instance.api.crateSetOrtSessionOptions(options: options);
+
+/// The `OrtSessionOptions` currently in effect.
+Future<OrtSessionOptions> ortSessionOptions() =>
+    RustLib.instance.api.crateOrtSessionOptions();
 
 /// Score a query against a document using ColBERT's MaxSim operator: for each
 /// query token vector, take the maximum dot product against any document
@@ -1035,6 +1047,10 @@ Future<EmbeddedDiff> createEmbeddedDiffFromJson({required String json}) =>
 Future<RerankedDocument> createRerankedDocumentFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateRerankedDocumentFromJson(json: json);
+
+Future<OrtSessionOptions> createOrtSessionOptionsFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOrtSessionOptionsFromJson(json: json);
 
 Future<SparseEmbedding> createSparseEmbeddingFromJson({required String json}) =>
     RustLib.instance.api.crateCreateSparseEmbeddingFromJson(json: json);
@@ -4306,14 +4322,16 @@ class ContentFilterConfig {
 
   /// Include footnote bodies in extraction output.
   ///
-  /// - PDF: Prevents the layout model from treating `Footnote`-classified
-  ///   regions as furniture, so footnote bodies survive alongside the main
-  ///   text instead of being silently dropped.
-  /// - DOC: Includes footnote definitions in extracted output.
-  /// - Other formats: No effect currently.
+  /// - PDF. Includes footnotes recognized during structured extraction in
+  ///   the body, including layout-model footnotes and short native notes
+  ///   identified by a superscript reference and a tagged bottom rule. By
+  ///   default, those native notes stay on the `Footnote` content layer
+  ///   while Plain and Markdown omit them from the body. Flat Plain
+  ///   extraction does not use this classifier.
+  /// - DOC. Includes footnote definitions in extracted output.
+  /// - Other formats. No effect currently.
   ///
-  /// Default: `false` (footnotes are stripped), matching the existing
-  /// `include_headers` / `include_footers` defaults.
+  /// Defaults to `false`, like `include_headers` and `include_footers`.
   final bool includeFootnotes;
 
   /// Enable the heuristic cross-page repeating text detector.
@@ -7837,6 +7855,9 @@ class ExtractedDocument {
   ///
   /// This field preserves all metadata that would otherwise be lost when
   /// converting to plain text or markdown output formats.
+  ///
+  /// PDF OCR elements report backend recognitions, including occurrences that
+  /// document text pruning can omit from rendered content.
   ///
   /// Only populated when `OcrElementConfig.include_elements` is true.
   final List<OcrElement>? ocrElements;
@@ -14418,8 +14439,9 @@ class OcrQualityThresholds {
   /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
   ///
   /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
-  /// and at least half of them are symbol noise. A line is kept when it reads as text and is
-  /// pruned only when it is made of symbols and fragments:
+  /// and at least half of them are symbol noise. A lone capitalized 3-letter token (`Tee`) is
+  /// pruned from such a page but does not count toward that half. A line is kept when it reads
+  /// as text and is pruned only when it is made of symbols and fragments:
   ///
   /// - a line with a digit is kept, unless every token that holds a digit pairs it with a
   ///   stray quotation mark or a trailing section mark (`"9`, `5§`) and no other token is
@@ -14431,11 +14453,16 @@ class OcrQualityThresholds {
   ///   comparison/multiplication sign with operands (a word of 3 or more letters, one letter
   ///   other than `i`, `l`, `j`, `o`, or a call such as `f(x)`) on its sides (`x = y`, `X= Y`,
   ///   `x=y`, `a=`, `f(x) = x`); `oe = ie` and `i - l` are pruned;
-  /// - a single token is kept when it has 4 or more letters, is a contraction, is a
-  ///   capitalized or all-capitals trigram or a run of consecutive letters (`Yes`, `Qty`,
-  ///   `ABC`, `pqr`), or is a capitalized two-letter word ending in a full stop, `!` or `?`
-  ///   (`No.`); `mal`, `Ne` and `a` are pruned;
-  /// - a line of several tokens is kept when at least two thirds of its tokens are plausible
+  /// - a single token is kept when it has 4 or more letters, is a contraction, is a run of
+  ///   consecutive letters (`ABC`, `pqr`), is a capitalized word of 2 or 3 letters ending in a
+  ///   full stop, `!` or `?` (`No.`, `Yes.`), or is a capitalized 3-letter word with a letter
+  ///   outside ASCII (`Été`); `mal`, `Ne`, `Tee`, `CAS` and `a` are pruned;
+  /// - a line of several tokens is kept when at least two tokens and at least half of the
+  ///   line are word-like (`Annual report q z`). Latin words need 3 letters and may contain
+  ///   an apostrophe, hyphen or dot. Contractions, non-Latin word shapes, and short function
+  ///   words also qualify (`Go to q z`). A line needs a word-shaped token or a function word
+  ///   with at least two letters. `were ee` and tokens split by stray symbols fail this rule;
+  /// - a line of several tokens is also kept when at least two thirds of its tokens are plausible
   ///   text and it holds a word of 3 or more letters or two function words (`Go to Al`,
   ///   `b) to go`, `Mr X Is In`, `de la gare`, `Mairie du I`). A token is plausible text when it
   ///   is a word of 3 or more letters, an English or common Romance/German function word, a
@@ -14760,6 +14787,65 @@ class OrientationResult {
           runtimeType == other.runtimeType &&
           degrees == other.degrees &&
           confidence == other.confidence;
+}
+
+/// Process-wide memory and threading options applied to the ONNX Runtime sessions of
+/// embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
+///
+/// The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither
+/// `onnx-runtime` nor `paddle-ocr-ort` exposes them without having a session to apply them to.
+///
+/// PaddleOCR applies `memory_pattern` and `cpu_arena` only; its intra-op thread count
+/// is not changed by `max_threads`.
+///
+/// Other ORT users (layout detection, SLANet, TATR, the inference backend, Whisper,
+/// GLiNER) build their own sessions and are not affected.
+///
+/// The defaults reproduce the historical behaviour: ORT's memory-pattern planner and
+/// CPU arena stay enabled and the intra-op thread count follows the default thread
+/// budget. Both ORT features retain allocations sized by the largest batch seen, which
+/// is what makes resident memory grow with variable-length embedding batches and never
+/// shrink. Turning them off trades some throughput for a bounded footprint.
+///
+/// Options are read when a session is built. [`set_ort_session_options`] clears the
+/// engine caches when the options change, so resident engines are rebuilt on next use;
+/// a caller still holding an engine keeps its old session until it drops it. PaddleOCR
+/// engines are pooled per option set, so a changed option set builds new engines.
+class OrtSessionOptions {
+  /// Enable ORT's memory-pattern optimization. Disable for variable input sizes.
+  /// Default `true`.
+  final bool memoryPattern;
+
+  /// Enable the CPU execution provider's arena allocator. Disable so freed tensors
+  /// return to the system allocator instead of being retained. Applies to the CPU
+  /// execution provider only; CUDA/TensorRT device arenas are unaffected. Default `true`.
+  final bool cpuArena;
+
+  /// Intra-op thread count. `None` (default) uses the standard thread budget
+  /// (`min(cores, 8)` or the cgroup quota). Values below 1, negative ones included, are
+  /// raised to 1. Only the ORT intra-op pool is changed; `EMBED_SEMAPHORE` and other
+  /// `resolve_thread_budget` callers are unaffected. ONNX Runtime builds that use OpenMP
+  /// ignore this setting; configure `OMP_NUM_THREADS` for those builds.
+  final PlatformInt64? maxThreads;
+
+  const OrtSessionOptions({
+    required this.memoryPattern,
+    required this.cpuArena,
+    this.maxThreads,
+  });
+
+  @override
+  int get hashCode =>
+      memoryPattern.hashCode ^ cpuArena.hashCode ^ maxThreads.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OrtSessionOptions &&
+          runtimeType == other.runtimeType &&
+          memoryPattern == other.memoryPattern &&
+          cpuArena == other.cpuArena &&
+          maxThreads == other.maxThreads;
 }
 
 @freezed

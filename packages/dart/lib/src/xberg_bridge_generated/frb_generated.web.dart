@@ -930,6 +930,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  OrtSessionOptions dco_decode_box_autoadd_ort_session_options(dynamic raw);
+
+  @protected
   OutputFormat dco_decode_box_autoadd_output_format(dynamic raw);
 
   @protected
@@ -2561,6 +2564,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OrientationResult dco_decode_orientation_result(dynamic raw);
 
   @protected
+  OrtSessionOptions dco_decode_ort_session_options(dynamic raw);
+
+  @protected
   OutputFormat dco_decode_output_format(dynamic raw);
 
   @protected
@@ -3792,6 +3798,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrTableBoundingBox sse_decode_box_autoadd_ocr_table_bounding_box(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OrtSessionOptions sse_decode_box_autoadd_ort_session_options(
     SseDeserializer deserializer,
   );
 
@@ -5877,6 +5888,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OrientationResult sse_decode_orientation_result(SseDeserializer deserializer);
 
   @protected
+  OrtSessionOptions sse_decode_ort_session_options(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   OutputFormat sse_decode_output_format(SseDeserializer deserializer);
 
   @protected
@@ -7514,6 +7530,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ocr_table_bounding_box(
     OcrTableBoundingBox self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ort_session_options(
+    OrtSessionOptions self,
     SseSerializer serializer,
   );
 
@@ -10172,6 +10194,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_orientation_result(
     OrientationResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ort_session_options(
+    OrtSessionOptions self,
     SseSerializer serializer,
   );
 

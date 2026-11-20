@@ -7,6 +7,18 @@
 use super::*;
 
 impl PdfDocument {
+    /// Whether the catalog can be inspected without xref reconstruction or a catalog scan.
+    #[doc(hidden)]
+    pub fn has_unrecovered_catalog(&self) -> bool {
+        !self.xref_reconstructed
+            && self
+                .trailer
+                .as_dict()
+                .and_then(|trailer| trailer.get("Root"))
+                .and_then(Object::as_reference)
+                .is_some()
+    }
+
     /// Get the document catalog (root object).
     ///
     /// The catalog is the root of the document's object hierarchy.

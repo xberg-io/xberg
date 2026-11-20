@@ -224,8 +224,8 @@ impl<'s> Builder<'s> {
                 };
                 self.construct(start..self.decoder.leaf.text.len(), range, payload, true)
             }
-            NodeValue::Strong | NodeValue::Emph => {
-                let strong = matches!(data.value, NodeValue::Strong);
+            NodeValue::Strong(..) | NodeValue::Emph(..) => {
+                let strong = matches!(data.value, NodeValue::Strong(..));
                 let range = source_range(self.decoder.source, node, &self.lines)?;
                 self.delimiter(range.clone(), strong)?;
                 self.open(
@@ -255,8 +255,8 @@ impl<'s> Builder<'s> {
         let value = &node.data.borrow().value;
         let kind = match value {
             NodeValue::Paragraph => return self.frames.is_empty().then_some(()).ok_or(Error::Unsupported),
-            NodeValue::Strong => Kind::Strong,
-            NodeValue::Emph => Kind::Emphasis,
+            NodeValue::Strong(..) => Kind::Strong,
+            NodeValue::Emph(..) => Kind::Emphasis,
             _ => return Ok(()),
         };
         let range = source_range(self.decoder.source, node, &self.lines)?;

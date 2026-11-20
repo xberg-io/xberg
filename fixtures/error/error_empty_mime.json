@@ -5,10 +5,7 @@
 	"docs": {
 		"topic": "error",
 		"title": "Handle an empty MIME type",
-		"description": "Show how an empty MIME type is rejected consistently.",
-		"presentation": {
-			"files": [{ "field": "/bytes", "path": "text/plain.txt" }]
-		}
+		"description": "Show how an empty MIME type is rejected consistently."
 	},
 	"tags": ["error", "input", "mime"],
 	"call": "extract",
@@ -23,7 +20,8 @@
 	},
 	"assertions": [
 		{
-			"type": "error"
+			"type": "error",
+			"value": "Unsupported format:"
 		}
 	],
 	"config": {}

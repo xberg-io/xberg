@@ -28,7 +28,8 @@ const TOLERANCE_NUMERATOR: u32 = 1;
 const TOLERANCE_DENOMINATOR: u32 = 2;
 
 #[derive(Clone, Copy)]
-struct WordBox {
+struct WordBox<'a> {
+    text: &'a str,
     left: u32,
     right: u32,
     center: u32,
@@ -38,7 +39,7 @@ struct WordBox {
     junk: bool,
 }
 
-fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
+fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox<'_>>> {
     let elements = doc.prebuilt_ocr_elements.as_ref()?;
     let words: Vec<_> = elements
         .iter()
@@ -50,6 +51,7 @@ fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
                 width,
                 height,
             } if width > 0 && height > 0 => Some(WordBox {
+                text: &element.text,
                 left,
                 right: left.saturating_add(width),
                 center: top.saturating_add(height / 2),
@@ -64,17 +66,17 @@ fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
     (!words.is_empty()).then_some(words)
 }
 
-fn median_height(words: &[WordBox]) -> u32 {
+fn median_height(words: &[WordBox<'_>]) -> u32 {
     let mut heights: Vec<u32> = words.iter().map(|word| word.height).collect();
     heights.sort_unstable();
     heights[heights.len() / 2]
 }
 
 /// Words grouped into text rows by the vertical position of their centres.
-fn rows(words: &[WordBox], tolerance: u32) -> Vec<Vec<WordBox>> {
+fn rows<'a>(words: &[WordBox<'a>], tolerance: u32) -> Vec<Vec<WordBox<'a>>> {
     let mut sorted = words.to_vec();
     sorted.sort_unstable_by_key(|word| word.center);
-    let mut rows: Vec<Vec<WordBox>> = Vec::new();
+    let mut rows: Vec<Vec<WordBox<'_>>> = Vec::new();
     for word in sorted {
         match rows.last_mut() {
             Some(row) if word.center.abs_diff(row[row.len() - 1].center) <= tolerance => row.push(word),
@@ -87,7 +89,7 @@ fn rows(words: &[WordBox], tolerance: u32) -> Vec<Vec<WordBox>> {
 /// Column edges (left or right) shared by at least [`MIN_ROWS_PER_COLUMN`] distinct rows and
 /// by at least two thirds of all rows, so the dense ragged edges of prose never form one,
 /// as sorted `(edge, is_right)` cluster anchors.
-fn column_edges(rows: &[Vec<WordBox>], tolerance: u32) -> Vec<(u32, bool)> {
+fn column_edges(rows: &[Vec<WordBox<'_>>], tolerance: u32) -> Vec<(u32, bool)> {
     let mut edges = Vec::new();
     for is_right in [false, true] {
         let mut points: Vec<(u32, usize)> = rows
@@ -119,7 +121,7 @@ fn column_edges(rows: &[Vec<WordBox>], tolerance: u32) -> Vec<(u32, bool)> {
 
 /// Gaps between neighbouring words of a row that are at least three tolerances wide (one and a
 /// half word heights): the space between cells, not between the words of one cell.
-fn wide_gaps(row: &[WordBox], tolerance: u32) -> usize {
+fn wide_gaps(row: &[WordBox<'_>], tolerance: u32) -> usize {
     let mut sorted = row.to_vec();
     sorted.sort_unstable_by_key(|word| word.left);
     sorted
@@ -131,7 +133,7 @@ fn wide_gaps(row: &[WordBox], tolerance: u32) -> usize {
 /// Rows with words on at least [`MIN_COLUMNS_PER_ROW`] distinct shared column edges and a wide
 /// gap between each pair of columns, and how many shared edges the page has. Prose shares only
 /// its left margin, and a justified two-column page has one gutter, not a gap per column.
-fn column_structure(doc: &InternalDocument) -> (Vec<Vec<WordBox>>, usize) {
+fn column_structure(doc: &InternalDocument) -> (Vec<Vec<WordBox<'_>>>, usize) {
     let Some(words) = word_boxes(doc) else {
         return (Vec::new(), 0);
     };
@@ -158,8 +160,50 @@ fn column_structure(doc: &InternalDocument) -> (Vec<Vec<WordBox>>, usize) {
     (on_columns, edges.len())
 }
 
+pub(super) fn row_backed_paragraphs(doc: &InternalDocument) -> Vec<usize> {
+    use crate::types::internal::ElementKind;
+
+    let Some(words) = word_boxes(doc) else {
+        return Vec::new();
+    };
+    let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
+    let row_text = |mut row: Vec<WordBox<'_>>| {
+        row.sort_by_key(|word| word.left);
+        row.iter().map(|word| word.text).collect::<Vec<_>>().join(" ")
+    };
+    let (qualified, _) = column_structure(doc);
+    let mut counts: ahash::AHashMap<String, [usize; 3]> = ahash::AHashMap::new();
+    for row in rows(&words, tolerance) {
+        counts.entry(row_text(row)).or_default()[0] += 1;
+    }
+    for row in qualified {
+        counts.entry(row_text(row)).or_default()[1] += 1;
+    }
+    for line in doc.elements.iter().flat_map(|element| element.text.lines()) {
+        let key = line.split_whitespace().collect::<Vec<_>>().join(" ");
+        if let Some(count) = counts.get_mut(&key) {
+            count[2] += 1;
+        }
+    }
+    doc.elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| {
+            element.kind == ElementKind::Paragraph
+                && element.text.contains('\n')
+                && element.text.lines().all(|line| {
+                    let key = line.split_whitespace().collect::<Vec<_>>().join(" ");
+                    counts
+                        .get(&key)
+                        .is_some_and(|&[source, qualified, rendered]| source == qualified && qualified == rendered)
+                })
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
 /// The row of the first read a word belongs to, by the nearest row centre within tolerance.
-fn row_of(centers: &[u32], word: &WordBox, tolerance: u32) -> Option<usize> {
+fn row_of(centers: &[u32], word: &WordBox<'_>, tolerance: u32) -> Option<usize> {
     centers
         .iter()
         .enumerate()
@@ -171,7 +215,7 @@ fn row_of(centers: &[u32], word: &WordBox, tolerance: u32) -> Option<usize> {
 
 /// Whether the words come out row by row. A page read column by column would be reordered into
 /// interleaved rows by a block read, so it is not re-read.
-fn emits_row_by_row(words: &[WordBox], tolerance: u32) -> bool {
+fn emits_row_by_row(words: &[WordBox<'_>], tolerance: u32) -> bool {
     let table_rows = rows(words, tolerance);
     let centers: Vec<u32> = table_rows
         .iter()
@@ -266,7 +310,7 @@ fn is_junk(text: &str, recognition: f64) -> bool {
 }
 
 /// Text rows that take part in the column structure and hold a word satisfying `test`.
-fn column_rows_with(doc: &InternalDocument, test: fn(&WordBox) -> bool) -> usize {
+fn column_rows_with(doc: &InternalDocument, test: fn(&WordBox<'_>) -> bool) -> usize {
     column_structure(doc)
         .0
         .iter()
@@ -390,6 +434,50 @@ mod tests {
     }
 
     /// A read that found a table among its words.
+    #[test]
+    fn only_geometry_backed_rows_keep_hard_boundaries_in_markdown() {
+        use crate::core::config::OutputFormat;
+        use crate::types::internal::{ElementKind, InternalElement};
+
+        let prose = "This paragraph wraps\nacross two short lines.";
+        let table = ["Label 12 345,678 (9.10)"; 8].join("\n");
+        let mut document = doc(table_rows_with_wrapped_prose());
+        document.source_format = "image".into();
+        for text in [prose, &table] {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        assert!(shows_column_structure(&document));
+        super::super::mark_leader_rows(&mut document);
+        let result = crate::extraction::derive::derive_extraction_result(document, false, OutputFormat::Markdown);
+        let page = &result.pages.as_ref().expect("page output")[0];
+        for (surface, text) in [("document", &result.content), ("page", &page.content)] {
+            let prose = text.trim().split("\n\n").next().unwrap();
+            assert_eq!(
+                prose.split_whitespace().collect::<Vec<_>>().join(" "),
+                "This paragraph wraps across two short lines.",
+                "{surface}"
+            );
+            assert_eq!(
+                text.lines().filter(|line| *line == "Label 12 345,678 (9.10)").count(),
+                8
+            );
+        }
+    }
+
+    fn table_rows_with_wrapped_prose() -> Vec<OcrElement> {
+        let mut words = vec![
+            element("This", 10, 10, 35),
+            element("paragraph", 50, 10, 90),
+            element("wraps", 145, 10, 50),
+            element("across", 10, 50, 60),
+            element("two", 75, 50, 30),
+            element("short", 110, 50, 45),
+            element("lines.", 160, 50, 45),
+        ];
+        words.extend((2..10).flat_map(table_row));
+        words
+    }
+
     fn doc_with_table(elements: Vec<OcrElement>) -> InternalDocument {
         let mut read = doc(elements);
         read.tables.push(Default::default());

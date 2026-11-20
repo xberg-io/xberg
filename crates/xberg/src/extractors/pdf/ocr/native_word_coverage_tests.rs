@@ -380,7 +380,7 @@ mod glued_cells {
     fn should_not_let_a_read_leader_that_starts_inside_the_previous_word_close_a_gap() {
         let read = [
             ("ab", at(0.0, 40.0)),
-            ("-----", at(30.0, 70.0)),
+            ("-----", at(30.0, 55.0)),
             ("cd", at(60.0, 100.0)),
         ];
         assert!(glues(at(0.0, 100.0), &read));
@@ -399,6 +399,7 @@ mod glued_cells {
             ]
         };
         assert!(glues(at(0.0, 100.0), &leader(61.5)));
+        assert!(!glues(at(0.0, 100.0), &leader(61.0)));
         assert!(!glues(at(0.0, 100.0), &leader(60.5)));
     }
 

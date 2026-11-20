@@ -570,6 +570,21 @@ impl InternalDocumentBuilder {
         }
     }
 
+    #[cfg(feature = "pdf")]
+    pub(crate) fn retain_ocr_source_spans(
+        &mut self,
+        index: u32,
+        expected: &str,
+        spans: &[super::internal::OcrSourceSpan],
+    ) {
+        if !spans.is_empty()
+            && let Some(element) = self.doc.elements.get_mut(index as usize)
+            && element.text == expected
+        {
+            element.ocr_source_spans.extend_from_slice(spans);
+        }
+    }
+
     /// Set annotations on an already-pushed element.
     pub fn set_annotations(&mut self, index: u32, annotations: Vec<TextAnnotation>) {
         if let Some(elem) = self.doc.elements.get_mut(index as usize) {
@@ -719,6 +734,7 @@ impl InternalDocumentBuilder {
             attributes: None,
             anchor: anchor.map(|s| s.to_string()),
             ocr_geometry: None,
+            ocr_source_spans: Vec::new(),
             ocr_confidence: None,
             ocr_rotation: None,
         }

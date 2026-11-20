@@ -296,6 +296,69 @@ async fn test_requested_structured_extraction_without_output_does_not_score_sche
 
 #[tokio::test]
 #[serial]
+#[cfg(all(feature = "heuristics", feature = "liter-llm", not(target_arch = "wasm32")))]
+async fn structured_extraction_is_skipped_and_reported_once_the_time_limit_is_reached() {
+    let token = crate::cancellation::CancellationToken::new();
+    token.request_stop();
+    let config = ExtractionConfig {
+        structured_extraction: Some(make_failing_structured_extraction_config()),
+        cancel_token: Some(token.clone()),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(make_doc("Ordinary paragraph.", "text/plain"), &config)
+        .await
+        .unwrap();
+
+    assert!(processed.structured_output.is_none());
+    assert!(
+        processed
+            .processing_warnings
+            .iter()
+            .all(|warning| warning.source != "structured_extraction"),
+        "the LLM must not be called after the stop: {:?}",
+        processed.processing_warnings
+    );
+    assert!(
+        processed
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "time_limit"
+                && warning.message.contains("before structured extraction finished")),
+        "the skipped stage must be reported: {:?}",
+        processed.processing_warnings
+    );
+    assert!(token.result_is_partial());
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(all(feature = "heuristics", feature = "liter-llm", not(target_arch = "wasm32")))]
+async fn structured_extraction_runs_when_the_time_limit_is_not_reached() {
+    let token = crate::cancellation::CancellationToken::new();
+    let config = ExtractionConfig {
+        structured_extraction: Some(make_failing_structured_extraction_config()),
+        cancel_token: Some(token.clone()),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(make_doc("Ordinary paragraph.", "text/plain"), &config)
+        .await
+        .unwrap();
+
+    assert!(
+        processed
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "structured_extraction"),
+        "the LLM call must be attempted and fail against the closed port: {:?}",
+        processed.processing_warnings
+    );
+    assert!(!token.result_is_partial());
+}
+
+#[tokio::test]
+#[serial]
 #[cfg(feature = "heuristics")]
 async fn test_ordinary_extraction_without_structured_config_keeps_full_schema_score() {
     let doc = make_doc("Ordinary paragraph with enough text for coverage.", "text/plain");

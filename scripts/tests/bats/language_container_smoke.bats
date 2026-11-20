@@ -4,6 +4,7 @@ setup() {
 	[ -z "${XBERG_EXPECTED_BASH_MAJOR_MINOR:-}" ] || [[ "$BASH_VERSION" == "$XBERG_EXPECTED_BASH_MAJOR_MINOR".* ]]
 	bats_load_library xberg-bats
 	xberg_setup
+	export XBERG_WORK="$(cd "$XBERG_WORK" && pwd -P)"
 	REPOSITORY_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 	export FIXTURE_ROOT="$XBERG_WORK/fixture repository"
 	mkdir -p "$FIXTURE_ROOT/scripts/ci/fixtures/csharp-smoke" "$FIXTURE_ROOT/scripts/ci/fixtures/java-smoke" \
@@ -12,11 +13,14 @@ setup() {
 	cp "$REPOSITORY_ROOT"/scripts/ci/smoke-test-musl-*.sh "$REPOSITORY_ROOT/scripts/ci/smoke-test-php-debian12.sh" "$FIXTURE_ROOT/scripts/ci/"
 	for file in scripts/ci/fixtures/musl-python-smoke.pdf scripts/ci/fixtures/csharp-smoke/Smoke.csproj \
 		scripts/ci/fixtures/java-smoke/Smoke.java packages/java/pom.xml packages/elixir/lib/xberg/native.ex \
-		scripts/ci/smoke_test_elixir_nif.exs scripts/ci/smoke_test_node_binding.js scripts/ci/smoke_test_python_wheel.py crates/xberg-node/index.js; do
+		scripts/ci/smoke_test_elixir_nif.exs scripts/ci/smoke_test_node_binding.js scripts/ci/smoke_test_python_wheel.py crates/xberg-node/index.js \
+		crates/xberg-node/binding.cjs; do
 		printf 'fixture bytes\n' >"$FIXTURE_ROOT/$file"
 	done
 	printf 'native bytes\n' >"$XBERG_WORK/native/libxberg_ffi.so"
-	printf 'nif bytes\n' >"$XBERG_WORK/native/libxberg_nif.so"
+	cp "$REPOSITORY_ROOT/packages/elixir/mix.lock" "$FIXTURE_ROOT/packages/elixir/"
+	printf 'nif bytes\n' >"$XBERG_WORK/nif.tar.gz"
+	printf 'checksum bytes\n' >"$XBERG_WORK/nif.tar.gz.sha256"
 	printf 'node bytes\n' >"$XBERG_WORK/native/xberg.node"
 	printf 'wheel bytes\n' >"$XBERG_WORK/xberg.whl"
 	printf 'php bytes\n' >"$XBERG_WORK/xberg.tgz"
@@ -26,7 +30,11 @@ setup() {
 }
 
 run_native_smoke() {
-	run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-$1.sh" native
+	if [ "$1" = elixir-nif ]; then
+		run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-elixir-nif.sh" nif.tar.gz nif.tar.gz.sha256
+	else
+		run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-$1.sh" native
+	fi
 }
 
 assert_container() {
@@ -45,13 +53,14 @@ assert_container() {
 	grep -Fq 'dotnet build -c Release' "$XBERG_TRACE"
 }
 
-@test "musl Elixir smoke should mount generated native exports and the complete closure" {
-	run_native_smoke elixir-nif
+@test "musl Elixir smoke should mount the staged archive, checksum, and generated package" {
+	run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-elixir-nif.sh" nif.tar.gz nif.tar.gz.sha256
 	xberg_assert_status 0
-	assert_container alpine:3.24.3 'elixir /smoke/smoke_test_elixir_nif.exs /fixture.pdf'
-	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
-	grep -Fxq "$FIXTURE_ROOT/packages/elixir/lib/xberg/native.ex:/smoke/native.ex:ro" "$XBERG_TRACE"
-	grep -Fxq 'XBERG_NIF_PATH=/native/libxberg_nif' "$XBERG_TRACE"
+	assert_container alpine:3.24.3 '/smoke/smoke_test_elixir_nif.exs /fixture.pdf'
+	grep -Fxq "$XBERG_WORK/nif.tar.gz:/staged/nif.tar.gz:ro" "$XBERG_TRACE"
+	grep -Fxq "$XBERG_WORK/nif.tar.gz.sha256:/staged/checksum:ro" "$XBERG_TRACE"
+	grep -Fxq "$FIXTURE_ROOT/packages/elixir:/package:ro" "$XBERG_TRACE"
+	grep -Fq 'RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH=' "$XBERG_TRACE"
 	grep -Fq 'apk add --no-cache --upgrade libstdc++' "$XBERG_TRACE"
 }
 
@@ -70,6 +79,7 @@ assert_container() {
 	xberg_assert_status 0
 	assert_container alpine:3.24.3 'node /smoke/smoke_test_node_binding.js /smoke/index.js /fixture.pdf'
 	grep -Fxq 'NAPI_RS_NATIVE_LIBRARY_PATH=/native/xberg.node' "$XBERG_TRACE"
+	grep -Fxq "$FIXTURE_ROOT/crates/xberg-node/binding.cjs:/smoke/binding.cjs:ro" "$XBERG_TRACE"
 	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
 	grep -Fq 'apk add --no-cache --upgrade libstdc++' "$XBERG_TRACE"
 }
@@ -110,7 +120,7 @@ assert_container() {
 
 @test "native container smoke wrappers should reject an empty artifact directory before Docker" {
 	mkdir empty
-	for variant in csharp-ffi elixir-nif java-ffi node-binding; do
+	for variant in csharp-ffi java-ffi node-binding; do
 		run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-$variant.sh" empty
 		xberg_assert_status 1
 		xberg_assert_output_contains 'found under'
@@ -119,12 +129,23 @@ assert_container() {
 }
 
 @test "container smoke wrappers should reject absent artifacts before Docker" {
-	for variant in csharp-ffi elixir-nif java-ffi node-binding python-wheel; do
+	for variant in csharp-ffi java-ffi node-binding python-wheel; do
 		run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-musl-$variant.sh" absent
 		xberg_assert_status 1
 		xberg_assert_output_contains 'not found'
 		xberg_assert_trace_empty
 	done
+	rm nif.tar.gz.sha256
+	run_native_smoke elixir-nif
+	xberg_assert_status 1
+	xberg_assert_output_contains 'checksum not found'
+	xberg_assert_trace_empty
+	rm nif.tar.gz
+	run_native_smoke elixir-nif
+	xberg_assert_status 1
+	xberg_assert_output_contains 'archive not found'
+	xberg_assert_trace_empty
+
 	run "$BASH" "$FIXTURE_ROOT/scripts/ci/smoke-test-php-debian12.sh" absent 8.5
 	xberg_assert_status 1
 	xberg_assert_output_contains 'artifact does not exist'
@@ -166,5 +187,13 @@ assert_container() {
 	run_native_smoke node-binding
 	xberg_assert_status 1
 	xberg_assert_output_contains 'napi-rs index.js missing'
+	xberg_assert_trace_empty
+}
+
+@test "Node smoke should reject a missing CommonJS binding before invoking Docker" {
+	rm "$FIXTURE_ROOT/crates/xberg-node/binding.cjs"
+	run_native_smoke node-binding
+	xberg_assert_status 1
+	xberg_assert_output_contains 'napi-rs binding.cjs missing'
 	xberg_assert_trace_empty
 }

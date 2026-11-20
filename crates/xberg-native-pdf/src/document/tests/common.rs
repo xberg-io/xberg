@@ -494,7 +494,7 @@ pub(super) fn build_nested_xobject_do_with_orphaned_operands_pdf() -> Vec<u8> {
 
 /// Build a minimal PDF in memory with given content stream bytes.
 /// Returns the raw PDF bytes suitable for `PdfDocument::from_bytes`.
-pub(super) fn build_minimal_pdf(content: &[u8]) -> Vec<u8> {
+pub(in crate::document) fn build_minimal_pdf(content: &[u8]) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
 
     let off1 = pdf.len();

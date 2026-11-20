@@ -122,6 +122,7 @@
 //! ```
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+#![allow(unsafe_code, reason = "Tesseract and Leptonica are reached only through their C API")]
 #![cfg_attr(test, allow(clippy::print_stdout, clippy::print_stderr))]
 #![cfg_attr(
     not(any(feature = "build-tesseract", feature = "build-tesseract-wasm")),
@@ -145,6 +146,8 @@ macro_rules! ffi_extern {
             $vis:vis fn $name:ident($($arg:ident : $ty:ty),* $(,)?) $(-> $ret:ty)?;
         )*
     ) => {
+        // SAFETY: Declaration only: every symbol is a Tesseract C entry point, and each call site
+        // upholds that function's pointer contract.
         #[cfg(not(target_arch = "wasm32"))]
         unsafe extern "C-unwind" {
             $(
@@ -153,6 +156,8 @@ macro_rules! ffi_extern {
             )*
         }
 
+        // SAFETY: Declaration only, with the same contract as the native build; wasm does not
+        // unwind, so the plain C ABI is the correct one there.
         #[cfg(target_arch = "wasm32")]
         unsafe extern "C" {
             $(
@@ -168,6 +173,8 @@ mod error;
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod wasm_compat {
+    // SAFETY: The signature matches the C runtime's `__cxa_atexit`; the shim ignores its
+    // arguments and reports success, so no caller can observe an invalid pointer.
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn __cxa_atexit(
         _func: Option<unsafe extern "C" fn(*mut core::ffi::c_void)>,
@@ -177,6 +184,7 @@ mod wasm_compat {
         0
     }
 }
+mod native_iterator;
 mod page_iterator;
 pub use page_iterator::{BlockInfo, PageIterator, ParaInfo, ParagraphExtractionOutcome};
 mod result_iterator;

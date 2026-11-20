@@ -9,6 +9,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
+use crate::core::config::remote_errors::public_error_message;
 use crate::error::{ApiStatusCategory, XbergError};
 
 use super::types::ErrorResponse;
@@ -101,18 +102,42 @@ pub struct ApiError {
 
 impl ApiError {
     /// Create a new API error.
+    ///
+    /// The client gets the error kind and its public message: a fixed one for filesystem-backed
+    /// errors, otherwise the text with server paths replaced by `<path>`. The full message is
+    /// logged for server errors and for client errors whose message changed.
     pub(crate) fn new(status: StatusCode, error: XbergError) -> Self {
         let error_type = error.api_error_type();
+        let full_message = error.to_string();
+        let message = public_error_message(&error, &full_message);
+        if status.is_server_error() {
+            tracing::error!(status = status.as_u16(), error_type, error = %full_message, "API request failed");
+        } else if message != full_message {
+            tracing::warn!(status = status.as_u16(), error_type, error = %full_message, "API request rejected");
+        }
 
+        Self::with_message(status, error_type, message)
+    }
+
+    fn with_message(status: StatusCode, error_type: &str, message: String) -> Self {
         Self {
             status,
             body: ErrorResponse {
                 error_type: error_type.to_string(),
-                message: error.to_string(),
+                message,
                 traceback: None,
                 status_code: status.as_u16(),
             },
         }
+    }
+
+    /// Create a validation error (400) for a caller config rejected at the trust boundary.
+    ///
+    /// Not path-redacted: these messages name config fields, some as JSON pointers such as
+    /// `/browser/proxy`, and never carry a server value.
+    pub(crate) fn caller_config(message: String) -> Self {
+        let error = XbergError::validation(message);
+        Self::with_message(StatusCode::BAD_REQUEST, error.api_error_type(), error.to_string())
     }
 
     /// Create a validation error (400).
@@ -136,12 +161,7 @@ impl ApiError {
     /// Create a bad gateway error (502).
     ///
     /// Use when an upstream service (e.g., model download from HuggingFace) fails.
-    #[cfg(any(
-        paddle_ocr,
-        feature = "layout-detection",
-        feature = "embeddings",
-        feature = "ner-onnx"
-    ))]
+    #[cfg(paddle_ocr)]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) fn bad_gateway(error: XbergError) -> Self {
         Self::new(StatusCode::BAD_GATEWAY, error)
@@ -243,6 +263,116 @@ mod tests {
 
         assert_eq!(other.status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(other.body.error_type, "Error");
+    }
+
+    #[test]
+    fn should_redact_server_paths_but_keep_error_kind_and_message() {
+        let cases = [
+            (
+                XbergError::parsing("Failed to open /srv/xberg/models/layout.onnx: permission denied"),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "ParsingError",
+                "Parsing error: Failed to open <path>: permission denied",
+                "/srv/xberg/models",
+            ),
+            (
+                XbergError::Io(std::io::Error::other(
+                    "cannot read '/home/operator/.cache/xberg/ocr.bin'",
+                )),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "IOError",
+                "IO error: a file could not be read or written",
+                "/home/operator",
+            ),
+            (
+                XbergError::ocr("tessdata missing at C:\\xberg\\tessdata."),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "OCRError",
+                "OCR error: tessdata missing at <path>.",
+                "xberg\\tessdata",
+            ),
+            (
+                XbergError::Other("cache_dir=/var/cache/xberg is full".to_string()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error",
+                "cache_dir=<path> is full",
+                "/var/cache",
+            ),
+            (
+                XbergError::validation("Cannot read file:///etc/passwd or ~/secrets.txt (\\\\fileserver\\share)"),
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "Validation error: Cannot read <path> or <path> (<path>)",
+                "passwd",
+            ),
+        ];
+
+        for (error, status, error_type, message, leaked) in cases {
+            let api_error = ApiError::from(error);
+            assert_eq!(api_error.status, status, "{message}");
+            assert_eq!(api_error.body.error_type, error_type, "{message}");
+            assert_eq!(api_error.body.message, message);
+            assert!(!api_error.body.message.contains(leaked), "{leaked} leaked");
+        }
+    }
+
+    #[test]
+    fn should_give_filesystem_errors_a_fixed_public_message() {
+        let cases = [
+            (
+                XbergError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "File does not exist: \"/srv/my docs/a.pdf\"",
+                )),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "IOError",
+                "IO error: file not found",
+            ),
+            (
+                XbergError::cache("cannot write 'C:\\Program Files\\x\\a.pdf'"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "CacheError",
+                "Cache error: the cache could not be read or written",
+            ),
+        ];
+
+        for (error, status, error_type, message) in cases {
+            let api_error = ApiError::from(error);
+            assert_eq!(api_error.status, status);
+            assert_eq!(api_error.body.error_type, error_type);
+            assert_eq!(api_error.body.message, message);
+            for fragment in ["srv", "my docs", "a.pdf", "Program", "Files"] {
+                assert!(!api_error.body.message.contains(fragment), "{fragment} survived");
+            }
+        }
+    }
+
+    #[test]
+    fn should_keep_urls_mime_types_and_whitespace_when_redacting() {
+        for message in [
+            "Validation error: Local path and file:// URI extraction are disabled for the HTTP API.",
+            "Failed to fetch https://example.com/docs/report.pdf: HTTP 404",
+            "Unsupported format: application/x-unsupported-format",
+            "no paths here",
+        ] {
+            assert_eq!(crate::core::config::remote_errors::redact_paths(message), message);
+        }
+        assert_eq!(
+            crate::core::config::remote_errors::redact_paths("a  /srv/x\tb\n"),
+            "a  <path>\tb\n"
+        );
+    }
+
+    #[test]
+    fn should_keep_json_pointers_in_caller_config_rejections() {
+        let message = "Caller extraction config contains forbidden url.crawl setting: \
+                       invalid_config: untrusted caller may not set /browser/proxy";
+
+        let api_error = ApiError::caller_config(message.to_string());
+
+        assert_eq!(api_error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(api_error.body.error_type, "ValidationError");
+        assert_eq!(api_error.body.message, format!("Validation error: {message}"));
     }
 
     #[test]

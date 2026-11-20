@@ -3,6 +3,7 @@ use ahash::{AHashMap, AHashSet};
 
 #[derive(Default)]
 pub(crate) struct CertifiedRuns {
+    pub(crate) redistributed: Vec<SegmentKey>,
     pub(crate) contained: Vec<Vec<SegmentKey>>,
     pub(crate) painted_overhangs: Vec<Vec<SegmentKey>>,
     pub(crate) recovered_lines: Vec<SegmentKey>,
@@ -162,6 +163,40 @@ fn matches(source: &TableSources, table: &Table, work: &mut Work) -> Option<bool
     Some(source.cells == table.cells && source.markdown == table.markdown)
 }
 
+fn collect_redistributed_claims(
+    source: &TableSources,
+    segments: &[SegmentData],
+    owner: usize,
+    claims: &mut AHashMap<SegmentKey, Option<usize>>,
+    groups: &mut Vec<(usize, Vec<SegmentKey>)>,
+    work: &mut Work,
+) -> Option<()> {
+    for keys in &source.redistributed {
+        work.charge(segments.len())?;
+        let counts = segments
+            .iter()
+            .map(SegmentKey::from)
+            .fold(AHashMap::new(), |mut counts, key| {
+                *counts.entry(key).or_insert(0usize) += 1;
+                counts
+            });
+        if keys.iter().all(|key| counts.get(key) == Some(&1)) {
+            groups.push((owner, keys.clone()));
+            for key in keys {
+                claims
+                    .entry(key.clone())
+                    .and_modify(|previous| {
+                        if *previous != Some(owner) {
+                            *previous = None;
+                        }
+                    })
+                    .or_insert(Some(owner));
+            }
+        }
+    }
+    Some(())
+}
+
 fn page(
     segments: &[SegmentData],
     sources: &[&TableSources],
@@ -173,7 +208,9 @@ fn page(
     let mut work = Work::default();
     let index = SourceIndex::new(segments, &mut work)?;
     let mut owned = AHashMap::<usize, CertifiedRuns>::new();
-    let mut all_keys = AHashSet::new();
+    let mut ordinary_owners = AHashMap::new();
+    let mut redistributed_owners = AHashMap::new();
+    let mut redistributed_groups = Vec::new();
     for source in sources {
         let mut owner = None;
         for &(table_index, table) in emitted {
@@ -184,9 +221,21 @@ fn page(
         let Some((owner, bounds)) = owner else {
             continue;
         };
+        collect_redistributed_claims(
+            source,
+            segments,
+            owner,
+            &mut redistributed_owners,
+            &mut redistributed_groups,
+            &mut work,
+        )?;
         for runs in &source.members {
             if let Some(groups) = cell(&index, runs, bounds, &mut work)? {
-                if !groups.iter().flatten().all(|key| all_keys.insert(key.clone())) {
+                if !groups
+                    .iter()
+                    .flatten()
+                    .all(|key| ordinary_owners.insert(key.clone(), owner).is_none())
+                {
                     return None;
                 }
                 owned.entry(owner).or_default().contained.extend(groups);
@@ -197,7 +246,10 @@ fn page(
             if within_table(line, bounds)
                 && let Some(keys) = index.run(line, &mut work, true)?
             {
-                if !keys.iter().all(|key| all_keys.insert(key.clone())) {
+                if !keys
+                    .iter()
+                    .all(|key| ordinary_owners.insert(key.clone(), owner).is_none())
+                {
                     return None;
                 }
                 owned.entry(owner).or_default().recovered_lines.extend(keys);
@@ -211,11 +263,22 @@ fn page(
             if within_table(run, bounds)
                 && let Some(keys) = index.run(run, &mut work, false)?
             {
-                if !keys.iter().all(|key| all_keys.insert(key.clone())) {
+                if !keys
+                    .iter()
+                    .all(|key| ordinary_owners.insert(key.clone(), owner).is_none())
+                {
                     return None;
                 }
                 owned.entry(owner).or_default().painted_overhangs.push(keys);
             }
+        }
+    }
+    for (owner, keys) in redistributed_groups {
+        if keys.iter().all(|key| {
+            redistributed_owners.get(key) == Some(&Some(owner))
+                && ordinary_owners.get(key).is_none_or(|&ordinary| ordinary == owner)
+        }) {
+            owned.entry(owner).or_default().redistributed.extend(keys);
         }
     }
     Some(owned)

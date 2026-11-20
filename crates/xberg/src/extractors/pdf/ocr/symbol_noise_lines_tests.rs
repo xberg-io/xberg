@@ -28,6 +28,12 @@ fn assert_kept_exactly(real: &[&str]) {
 }
 
 #[test]
+fn a_word_with_initials_needs_two_thirds_plausible_tokens() {
+    assert!(is_symbol_noise_line("Report X q z"));
+    assert!(!is_symbol_noise_line("Report X q"));
+}
+
+#[test]
 fn keeps_word_shaped_lines_numbers_and_titles() {
     for line in [
         "SECTION TITLE",
@@ -131,6 +137,16 @@ fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accente
     for line in ["Yes.", "Qty?", "Bid!", "\u{c9}t\u{e9}", "ABC", "pqr"] {
         assert!(!is_symbol_noise_line(line), "{line}");
     }
+}
+
+#[test]
+fn noisy_page_drops_bare_tee_and_ces_but_keeps_printed_phrases() {
+    let printed = ["Tee connector", "Ces notes", "SECTION TITLE", "Yes."];
+    let noisy = page(&["Tee", "Ces"], 12) + "\n\n" + &printed.join("\n\n");
+    assert!(page_is_dominated_by_noise_lines(noisy.lines()));
+    assert_eq!(prune_text(&noisy), (printed.join("\n\n"), 14));
+    let clean = ["Tee", "Ces", "Tee connector", "Ces notes", "SECTION TITLE"];
+    assert!(!page_is_dominated_by_noise_lines(clean.into_iter()));
 }
 
 #[test]
@@ -331,6 +347,7 @@ fn paragraph_text_loses_the_same_lines_as_the_page_text() {
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count: 4,
@@ -438,6 +455,7 @@ fn the_page_level_pruners_drop_a_lone_capitalized_trigram_and_keep_a_marked_one(
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
         word_count: 4,
