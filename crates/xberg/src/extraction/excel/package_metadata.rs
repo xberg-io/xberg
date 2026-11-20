@@ -204,7 +204,7 @@ fn insert_custom_properties_metadata<R: std::io::Read + std::io::Seek>(
 }
 
 #[cfg(feature = "office")]
-fn extract_xlsx_office_metadata_from_archive<R: std::io::Read + std::io::Seek>(
+pub(super) fn extract_xlsx_office_metadata_from_archive<R: std::io::Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
 ) -> Result<HashMap<String, String>> {
     let mut metadata = HashMap::new();
@@ -223,34 +223,37 @@ fn extract_xlsx_office_metadata_from_archive<R: std::io::Read + std::io::Seek>(
 /// Returns `Some(vec![])` when the file exists but contains no `<header>`
 /// elements. On any parse error the function logs a warning and returns `None`
 /// so that the rest of extraction succeeds.
+#[cfg(test)]
 pub(super) fn extract_xlsx_revisions_from_bytes(data: &[u8]) -> Option<Vec<DocumentRevision>> {
     let cursor = Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor).ok()?;
     extract_xlsx_revisions_from_archive(&mut archive)
 }
 
-/// Extract revision headers from an `.xlsx`/`.xlsm`/`.xltm` file on disk.
-///
-/// Same semantics as [`extract_xlsx_revisions_from_bytes`].
-pub(super) fn extract_xlsx_revisions_from_file(file_path: &str) -> Option<Vec<DocumentRevision>> {
-    let file = std::fs::File::open(file_path).ok()?;
-    let mut archive = zip::ZipArchive::new(file).ok()?;
-    extract_xlsx_revisions_from_archive(&mut archive)
+const REVISION_HEADERS_PATH: &str = "xl/revisions/revisionHeaders.xml";
+
+fn is_xlsx_comments_part(name: &str) -> bool {
+    name.starts_with("xl/comments") && name.ends_with(".xml")
 }
 
-/// Core revision-header parser shared by the file and bytes paths.
-fn extract_xlsx_revisions_from_archive<R: Read + Seek>(
+pub(super) fn has_xlsx_sidecars<R: Read + Seek>(archive: &zip::ZipArchive<R>) -> bool {
+    archive.index_for_name(REVISION_HEADERS_PATH).is_some()
+        || archive
+            .file_names()
+            .filter_map(std::result::Result::ok)
+            .any(|name| is_xlsx_comments_part(&name))
+}
+
+pub(super) fn extract_xlsx_revisions_from_archive<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
 ) -> Option<Vec<DocumentRevision>> {
-    const HEADERS_PATH: &str = "xl/revisions/revisionHeaders.xml";
-
     let xml_bytes = {
-        let entry = match archive.by_name(HEADERS_PATH) {
+        let entry = match archive.by_name(REVISION_HEADERS_PATH) {
             Ok(e) => e,
             Err(zip::result::ZipError::FileNotFound) => return None,
             Err(e) => {
                 tracing::warn!(
-                    path = HEADERS_PATH,
+                    path = REVISION_HEADERS_PATH,
                     error = %e,
                     "failed to open xl/revisions/revisionHeaders.xml"
                 );
@@ -334,26 +337,18 @@ fn parse_revision_headers_xml(xml_bytes: &[u8]) -> Result<Vec<DocumentRevision>>
 /// `xl/worksheets/_rels/sheetN.xml.rels`, which is a follow-up (xberg-io/xberg#89).
 /// The cell reference in each entry is still enough to locate the comment
 /// inside the workbook.
+#[cfg(test)]
 pub(super) fn extract_xlsx_comments_from_bytes(data: &[u8]) -> Option<String> {
     let cursor = Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor).ok()?;
     extract_xlsx_comments_from_archive(&mut archive)
 }
 
-/// Extract cell comments from an `.xlsx`/`.xlsm`/`.xltm` file on disk. Same
-/// semantics as [`extract_xlsx_comments_from_bytes`].
-pub(super) fn extract_xlsx_comments_from_file(file_path: &str) -> Option<String> {
-    let file = std::fs::File::open(file_path).ok()?;
-    let mut archive = zip::ZipArchive::new(file).ok()?;
-    extract_xlsx_comments_from_archive(&mut archive)
-}
-
-/// Core comment-part scanner shared by the file and bytes paths.
-fn extract_xlsx_comments_from_archive<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Option<String> {
+pub(super) fn extract_xlsx_comments_from_archive<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Option<String> {
     let mut comment_parts: Vec<String> = Vec::new();
     for i in 0..archive.len() {
         let name = archive.by_index(i).ok()?.name().ok()?.into_owned();
-        if name.starts_with("xl/comments") && name.ends_with(".xml") {
+        if is_xlsx_comments_part(&name) {
             comment_parts.push(name);
         }
     }

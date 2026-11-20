@@ -3,6 +3,8 @@
 //! line-count limit.
 
 use super::*;
+use std::fs::File;
+use std::io::{BufReader, SeekFrom};
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
 fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &SecurityLimits) -> Result<SkippedSheets> {
@@ -279,9 +281,7 @@ fn normalize_xlsx_dimensions(data: &[u8], limits: &SecurityLimits) -> Result<Opt
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn has_row_only_xlsx_dimensions<R: Read + Seek>(reader: R, limits: &SecurityLimits) -> Result<bool> {
-    let archive =
-        zip::ZipArchive::new(reader).map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP: {error}")))?;
+fn has_row_only_xlsx_dimensions<R: Read + Seek>(archive: zip::ZipArchive<R>, limits: &SecurityLimits) -> Result<bool> {
     let mut worksheets = Vec::new();
     for index in 0..archive.len() {
         let entry = archive
@@ -389,6 +389,14 @@ fn validate_zip_container<R: Read + Seek>(
         Ok(archive) => archive,
         Err(_) => return Ok(SkippedSheets::default()),
     };
+    validate_spreadsheet_archive(&mut archive, &extension, limits)
+}
+
+fn validate_spreadsheet_archive<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    extension: &str,
+    limits: &SecurityLimits,
+) -> Result<SkippedSheets> {
     if archive.len() > limits.max_files_in_archive {
         return Err(XbergError::validation(format!(
             "Spreadsheet ZIP archive declares {} entries, which exceeds the configured limit of {} \
@@ -397,25 +405,36 @@ fn validate_zip_container<R: Read + Seek>(
             limits.max_files_in_archive
         )));
     }
-    crate::extractors::security::ZipBombValidator::new(limits.clone()).validate(&mut archive)?;
+    crate::extractors::security::ZipBombValidator::new(limits.clone()).validate(archive)?;
     archive.validate_header_consistency().map_err(|error| {
         XbergError::security_with_source(format!("Invalid spreadsheet ZIP header consistency: {error}"), error)
     })?;
     if extension == ".xlsb" {
-        super::table_budget::validate_xlsb_parts(&mut archive, limits)?;
+        super::table_budget::validate_xlsb_parts(archive, limits)?;
     }
-    if matches!(extension.as_str(), ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
-        super::table_budget::validate_xlsx_string_parts(&mut archive, limits)?;
+    if matches!(extension, ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
+        super::table_budget::validate_xlsx_string_parts(archive, limits)?;
     }
     if extension == ".ods" {
-        return super::table_budget::validate_ods(&mut archive, limits);
+        return super::table_budget::validate_ods(archive, limits);
     }
     Ok(SkippedSheets::default())
 }
 
+pub(crate) fn is_xlsx_family_path(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, extension)| {
+        ["xlsx", "xlsm", "xltm"]
+            .iter()
+            .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+    })
+}
+
 pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+    if is_xlsx_family_path(file_path) {
+        return read_xlsx_family_file(&mut BufReader::new(File::open(file_path)?), limits);
+    }
     let lower_path = file_path.to_lowercase();
-    let supported_extension = [".xlsx", ".xlsm", ".xltm", ".xlam", ".xla", ".xlsb", ".ods"]
+    let supported_extension = [".xlam", ".xla", ".xlsb", ".ods"]
         .iter()
         .any(|extension| lower_path.ends_with(extension));
     if !supported_extension {
@@ -441,11 +460,7 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     };
 
     #[cfg(feature = "office")]
-    let office_metadata = if lower_path.ends_with(".xlsx")
-        || lower_path.ends_with(".xlsm")
-        || lower_path.ends_with(".xlam")
-        || lower_path.ends_with(".xltm")
-    {
+    let office_metadata = if lower_path.ends_with(".xlam") {
         extract_xlsx_office_metadata_from_file(file_path).ok()
     } else if lower_path.ends_with(".ods") {
         extract_ods_office_metadata_from_file(file_path).ok()
@@ -456,9 +471,6 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     #[cfg(not(feature = "office"))]
     let office_metadata: Option<HashMap<String, String>> = None;
 
-    if lower_path.ends_with(".xlsx") || lower_path.ends_with(".xlsm") || lower_path.ends_with(".xltm") {
-        return read_xlsx_family_file(file_path, office_metadata, warnings, limits);
-    }
     if lower_path.ends_with(".xlam") {
         return read_xlam_file(file_path, office_metadata, warnings, limits);
     }
@@ -476,14 +488,18 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
 }
 
 fn read_bounded_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<Vec<u8>> {
-    let file = std::fs::File::open(file_path)?;
-    if file.metadata()?.len() > limits.max_archive_size as u64 {
+    read_bounded_spreadsheet(&mut BufReader::new(File::open(file_path)?), limits)
+}
+
+fn read_bounded_spreadsheet(reader: &mut BufReader<File>, limits: &SecurityLimits) -> Result<Vec<u8>> {
+    if reader.get_ref().metadata()?.len() > limits.max_archive_size as u64 {
         return Err(XbergError::validation(
             "Spreadsheet file exceeds the configured archive size".to_string(),
         ));
     }
     let mut data = Vec::new();
-    file.take((limits.max_archive_size as u64).saturating_add(1))
+    reader
+        .take((limits.max_archive_size as u64).saturating_add(1))
         .read_to_end(&mut data)?;
     if data.len() > limits.max_archive_size {
         return Err(XbergError::validation(
@@ -512,40 +528,70 @@ fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> R
     read_excel_bytes(&data, extension, limits)
 }
 
-/// Read an XLSX/XLSM/XLTM file: parse via calamine's XLSX reader, then merge sheet
-/// revisions and comments — the extra sidecar data only this primary XLSX-family format
-/// carries (XLAM shares the same reader but not this sidecar data, see [`read_xlam_file`]).
-fn read_xlsx_family_file(
-    file_path: &str,
-    office_metadata: Option<HashMap<String, String>>,
-    mut warnings: Vec<ProcessingWarning>,
+pub(crate) fn read_xlsx_family_file(reader: &mut BufReader<File>, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+    read_xlsx_family(reader, limits, |reader| {
+        // Keep the buffering and input-size limits of the correction path.
+        let bytes = read_bounded_spreadsheet(reader, limits)?;
+        normalize_xlsx_dimensions(&bytes, limits)?
+            .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))
+            .map(Some)
+    })
+}
+
+/// The OOXML sidecars come from the original archive, even if Calamine needs a
+/// corrected copy of the workbook. The ZIP directory is also used for the dimension scan.
+fn read_xlsx_family<R: Read + Seek>(
+    reader: &mut R,
     limits: &SecurityLimits,
+    normalize: impl FnOnce(&mut R) -> Result<Option<Vec<u8>>>,
 ) -> Result<ExcelReadResult> {
-    let check_file = std::fs::File::open(file_path)?;
-    if has_row_only_xlsx_dimensions(std::io::BufReader::new(check_file), limits)? {
-        let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
-        let normalized = normalize_xlsx_dimensions(&bytes, limits)?
-            .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))?;
-        let mut workbook = calamine::Xlsx::new(Cursor::new(normalized))
-            .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-        let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
-        let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
-        result.revisions = extract_xlsx_revisions_from_file(file_path);
-        if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
+    use super::package_metadata::{
+        extract_xlsx_comments_from_archive, extract_xlsx_revisions_from_archive, has_xlsx_sidecars,
+    };
+
+    let mut archive = zip::ZipArchive::new(&mut *reader)
+        .map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP: {error}")))?;
+    // XLSX, XLSM and XLTM use the same archive and string-part checks.
+    validate_spreadsheet_archive(&mut archive, ".xlsx", limits)?;
+
+    #[cfg(feature = "office")]
+    let office_metadata = super::package_metadata::extract_xlsx_office_metadata_from_archive(&mut archive).ok();
+    #[cfg(not(feature = "office"))]
+    let office_metadata = None;
+    let has_sidecars = has_xlsx_sidecars(&archive);
+    let needs_normalization = has_row_only_xlsx_dimensions(archive, limits)?;
+    reader.seek(SeekFrom::Start(0))?;
+
+    let mut warnings = Vec::new();
+    let normalized = if needs_normalization { normalize(reader)? } else { None };
+    let mut result = if let Some(normalized) = normalized {
+        parse_xlsx_workbook(Cursor::new(normalized), office_metadata, &mut warnings, limits)?
+    } else {
+        parse_xlsx_workbook(&mut *reader, office_metadata, &mut warnings, limits)?
+    };
+    // Read optional sidecars from the original input once the workbook has passed validation.
+    if has_sidecars
+        && reader.rewind().is_ok()
+        && let Ok(mut archive) = zip::ZipArchive::new(reader)
+    {
+        result.revisions = extract_xlsx_revisions_from_archive(&mut archive);
+        if let Some(comments) = extract_xlsx_comments_from_archive(&mut archive) {
             result.metadata.insert("comments".to_owned(), comments);
         }
-        return Ok((result, warnings));
-    }
-    let file = std::fs::File::open(file_path)?;
-    let mut workbook = calamine::Xlsx::new(std::io::BufReader::new(file))
-        .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
-    result.revisions = extract_xlsx_revisions_from_file(file_path);
-    if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
-        result.metadata.insert("comments".to_owned(), comments);
     }
     Ok((result, warnings))
+}
+
+fn parse_xlsx_workbook<R: Read + Seek>(
+    reader: R,
+    office_metadata: Option<HashMap<String, String>>,
+    warnings: &mut Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
+) -> Result<ExcelWorkbook> {
+    let mut workbook =
+        calamine::Xlsx::new(reader).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {e}")))?;
+    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+    process_xlsx_workbook(workbook, office_metadata, warnings, &skipped)
 }
 
 /// Read a `.xlam` add-in file via the XLSX reader; on failure return an empty workbook with
@@ -636,10 +682,16 @@ fn read_xlsb_file(
 }
 
 pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
-    let warnings: Vec<ProcessingWarning> = Vec::new();
+    let extension = file_extension.to_ascii_lowercase();
+    if matches!(extension.as_str(), ".xlsx" | ".xlsm" | ".xltm") {
+        return read_xlsx_family(&mut Cursor::new(data), limits, |_| {
+            normalize_xlsx_dimensions(data, limits)
+        });
+    }
+    let warnings = Vec::new();
 
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-    let skipped = validate_zip_container(Cursor::new(data), file_extension, limits)?;
+    let skipped = validate_zip_container(Cursor::new(data), &extension, limits)?;
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
     let skipped = {
         let _ = limits;
@@ -647,8 +699,8 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     };
 
     #[cfg(feature = "office")]
-    let office_metadata = match file_extension.to_lowercase().as_str() {
-        ".xlsx" | ".xlsm" | ".xlam" | ".xltm" => extract_xlsx_office_metadata_from_bytes(data).ok(),
+    let office_metadata = match extension.as_str() {
+        ".xlam" => extract_xlsx_office_metadata_from_bytes(data).ok(),
         ".ods" => extract_ods_office_metadata_from_bytes(data).ok(),
         _ => None,
     };
@@ -656,8 +708,7 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     #[cfg(not(feature = "office"))]
     let office_metadata: Option<HashMap<String, String>> = None;
 
-    match file_extension.to_lowercase().as_str() {
-        ".xlsx" | ".xlsm" | ".xltm" => read_xlsx_family_bytes(data, office_metadata, warnings, limits),
+    match extension.as_str() {
         ".xlam" => read_xlam_bytes(data, office_metadata, warnings, limits),
         ".xls" => read_xls_bytes(data, office_metadata, warnings, limits, &skipped),
         ".xla" => read_xla_bytes(data, office_metadata, warnings, limits, &skipped),
@@ -668,30 +719,6 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
             file_extension
         ))),
     }
-}
-
-/// Read XLSX/XLSM/XLTM bytes: the byte-slice counterpart of [`read_xlsx_family_file`].
-fn read_xlsx_family_bytes(
-    data: &[u8],
-    office_metadata: Option<HashMap<String, String>>,
-    mut warnings: Vec<ProcessingWarning>,
-    limits: &SecurityLimits,
-) -> Result<ExcelReadResult> {
-    let normalized = if has_row_only_xlsx_dimensions(Cursor::new(data), limits)? {
-        normalize_xlsx_dimensions(data, limits)?
-    } else {
-        None
-    };
-    let cursor = Cursor::new(normalized.as_deref().unwrap_or(data));
-    let mut workbook =
-        calamine::Xlsx::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
-    result.revisions = extract_xlsx_revisions_from_bytes(data);
-    if let Some(comments) = extract_xlsx_comments_from_bytes(data) {
-        result.metadata.insert("comments".to_owned(), comments);
-    }
-    Ok((result, warnings))
 }
 
 /// Read `.xlam` bytes: the byte-slice counterpart of [`read_xlam_file`].
