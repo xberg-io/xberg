@@ -541,6 +541,8 @@ impl<'a> HeifContext<'a> {
         let c_content_type_ptr = c_content_type.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
         // Both C strings and the data remain live through the call. ~keep
         // TODO(#3172): Check that the byte count fits libheif's signed int.
+        // SAFETY: `self` is exclusively borrowed, the two C strings and the caller's data keep
+        // their storage for the call, and libheif copies what it is given.
         let error = unsafe {
             lh::heif_context_add_generic_metadata(
                 self.inner,
@@ -558,7 +560,7 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn add_exif_metadata(&mut self, master_image: &ImageHandle<'_>, data: &[u8]) -> Result<()> {
         self.check_owns(master_image)?;
-        // SAFETY requirement: The context and image handle are live and data is borrowed
+        // SAFETY: The context and image handle are live and data is borrowed
         // for the copy. The conversion assumes its byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_exif_metadata(self.inner, master_image.inner, data.as_ptr() as _, data.len() as _)
@@ -570,7 +572,7 @@ impl<'a> HeifContext<'a> {
     #[allow(unsafe_code)]
     pub fn add_xmp_metadata(&mut self, master_image: &ImageHandle<'_>, data: &[u8]) -> Result<()> {
         self.check_owns(master_image)?;
-        // SAFETY requirement: The context and image handle are live and data is borrowed
+        // SAFETY: The context and image handle are live and data is borrowed
         // for the copy. The conversion assumes its byte count fits libheif's signed int.
         let error = unsafe {
             lh::heif_context_add_XMP_metadata(self.inner, master_image.inner, data.as_ptr() as _, data.len() as _)

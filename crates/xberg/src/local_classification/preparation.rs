@@ -13,7 +13,7 @@ pub(super) struct PreparedModel {
     pub(super) max_tokens: u32,
     pub(super) has_type_ids: bool,
     pub(super) identity: String,
-    pub(super) session_options: crate::onnx::OrtSessionOptions,
+    pub(super) session_options: crate::ort_options::OrtSessionOptions,
     pub(super) info: LocalClassificationModelInfo,
 }
 
@@ -157,11 +157,11 @@ pub(super) fn load_model(config: &LocalClassificationConfig, control: &WorkerCon
     } = read_artifacts(config, &inventory, control)?;
     let (tokenizer, max_tokens) = load_tokenizer_assets(config, tokenizer, metadata, tokenizer_config, special_tokens)?;
     control.check()?;
-    let session_options = crate::onnx::ort_session_options();
+    let session_options = crate::ort_options::ort_session_options();
     let session = build_memory_session(graph, external, &session_options)?;
     control.check()?;
     validate_cpu_runtime()?;
-    if session_options != crate::onnx::ort_session_options() {
+    if session_options != crate::ort_options::ort_session_options() {
         return Err(invalid(
             "ORT options changed during local NLI preparation; explicitly prepare again",
         ));
@@ -185,7 +185,7 @@ pub(super) fn load_model(config: &LocalClassificationConfig, control: &WorkerCon
 fn build_memory_session(
     graph: Vec<u8>,
     external: Vec<(String, Vec<u8>)>,
-    session_options: &crate::onnx::OrtSessionOptions,
+    session_options: &crate::ort_options::OrtSessionOptions,
 ) -> crate::Result<ort::session::Session> {
     let acceleration = crate::core::config::acceleration::AccelerationConfig {
         provider: crate::core::config::acceleration::ExecutionProviderType::Cpu,
