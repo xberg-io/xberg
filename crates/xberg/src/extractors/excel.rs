@@ -3,7 +3,7 @@
 use crate::Result;
 use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
-use crate::extraction::excel::{read_excel_bytes, read_excel_file};
+use crate::extraction::excel::{is_xlsx_family_path, read_excel_bytes, read_excel_file, read_xlsx_family_file};
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
@@ -470,21 +470,38 @@ impl InternalDocumentExtractor for ExcelExtractor {
             .to_str()
             .ok_or_else(|| crate::XbergError::validation("Invalid file path".to_string()))?;
 
+        use std::fs::File;
+        use std::io::BufReader;
+
         let security_limits = config.security_limits.clone().unwrap_or_default();
         let cancel = config.cancel_token.as_ref();
         check_cancelled(cancel)?;
-        let (workbook, read_warnings) = {
+        let path_str = path_str.to_owned();
+        let read = move || {
+            let mut reader = if is_xlsx_family_path(&path_str) {
+                Some(BufReader::new(File::open(&path_str)?))
+            } else {
+                None
+            };
+            let result = match &mut reader {
+                Some(reader) => read_xlsx_family_file(reader, &security_limits)?,
+                None => read_excel_file(&path_str, &security_limits)?,
+            };
+            Ok::<_, crate::XbergError>((result, reader))
+        };
+        let ((workbook, read_warnings), reader) = {
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             if let Some(runtime) = crate::core::runtime::current_global_runtime() {
-                let path_str = path_str.to_owned();
-                run_excel_read(&runtime, cancel, move || read_excel_file(&path_str, &security_limits)).await?
+                run_excel_read(&runtime, cancel, read).await?
             } else {
-                read_excel_file(path_str, &security_limits)?
+                read()?
             }
 
             #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-            read_excel_file(path_str, &security_limits)?
+            read()?
         };
+        #[cfg(not(feature = "office"))]
+        drop(reader);
         let mut budget = SecurityBudget::from_config(config);
         validate_workbook_budget(&workbook, &mut budget)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
@@ -493,14 +510,18 @@ impl InternalDocumentExtractor for ExcelExtractor {
 
         #[cfg(feature = "office")]
         if config.max_archive_depth > 0 && is_ooxml_zip_mime(mime_type) {
-            let file_bytes = crate::core::io::open_file_bytes(path)?;
-            let (children, embed_warnings) = crate::extraction::ooxml_embedded::extract_ooxml_embedded_objects(
-                &file_bytes,
-                "xl/embeddings/",
-                "excel",
-                config,
-            )
-            .await;
+            use crate::extraction::ooxml_embedded::{
+                extract_ooxml_embedded_objects, extract_ooxml_embedded_objects_from_reader,
+            };
+            use std::io::{Seek, SeekFrom};
+
+            let (children, embed_warnings) = if let Some(mut reader) = reader {
+                reader.seek(SeekFrom::Start(0))?;
+                extract_ooxml_embedded_objects_from_reader(reader, "xl/embeddings/", "excel", config).await
+            } else {
+                let file_bytes = crate::core::io::open_file_bytes(path)?;
+                extract_ooxml_embedded_objects(&file_bytes, "xl/embeddings/", "excel", config).await
+            };
             if !children.is_empty() {
                 doc.children = Some(children);
             }

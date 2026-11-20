@@ -44,6 +44,78 @@ fn should_extract_shared_strings_when_xlsx_dimension_omits_columns() {
     assert!(file_warnings.is_empty(), "warnings: {file_warnings:?}");
 }
 
+#[cfg(unix)]
+#[test]
+fn should_read_original_xlsx_after_path_is_replaced() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("workbook.xlsx");
+    let replacement = directory.path().join("replacement.xlsx");
+    let worksheet = br#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <dimension ref="A1"/>
+        <sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Original</t></is></c></row></sheetData>
+    </worksheet>"#;
+    let bytes = make_xlsx(
+        r#"<sheets><sheet name="Original" sheetId="1" r:id="rId1"/></sheets>"#,
+        WORKSHEET_REL,
+        &[("xl/worksheets/sheet1.xml", worksheet.to_vec())],
+    );
+    std::fs::write(&path, bytes).unwrap();
+    let mut reader = std::io::BufReader::new(std::fs::File::open(&path).unwrap());
+
+    std::fs::write(&replacement, b"not an XLSX file").unwrap();
+    std::fs::rename(&replacement, &path).unwrap();
+
+    let (workbook, _) = read_xlsx_family_file(&mut reader, &test_limits(10_000)).unwrap();
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["Original".to_owned()]]));
+}
+
+#[cfg(unix)]
+#[test]
+fn should_normalize_original_xlsx_after_path_is_replaced() {
+    let worksheet = br#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <dimension ref="1:2"/>
+        <sheetData>
+            <row r="1"><c r="A1" t="s"><v>0</v></c></row>
+            <row r="2"><c r="A2" t="s"><v>1</v></c></row>
+        </sheetData>
+    </worksheet>"#;
+    let shared_strings =
+        br#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2">
+        <si><t>Original header</t></si><si><t>Original value</t></si>
+    </sst>"#;
+    let bytes = make_xlsx(
+        r#"<sheets><sheet name="Original" sheetId="1" r:id="rId1"/></sheets>"#,
+        WORKSHEET_REL,
+        &[
+            ("xl/worksheets/sheet1.xml", worksheet.to_vec()),
+            ("xl/sharedStrings.xml", shared_strings.to_vec()),
+        ],
+    );
+
+    let directory = tempfile::tempdir().expect("create temporary directory");
+    let path = directory.path().join("row-only-dimension.xlsx");
+    let replacement = directory.path().join("replacement.xlsx");
+    std::fs::write(&path, &bytes).expect("write original XLSX");
+    let mut reader = std::io::BufReader::new(std::fs::File::open(&path).expect("open original XLSX"));
+
+    // Any attempt to reopen the path during normalization would read this invalid replacement.
+    std::fs::write(&replacement, b"not an XLSX file").expect("write replacement");
+    std::fs::rename(&replacement, &path).expect("replace the open workbook path");
+
+    let (workbook, warnings) = read_xlsx_family_file(&mut reader, &test_limits(10_000))
+        .expect("normalize the original workbook through its open handle");
+    assert!(warnings.is_empty(), "warnings: {warnings:?}");
+    assert_eq!(workbook.sheets.len(), 1);
+    assert_eq!(workbook.sheets[0].name, "Original");
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![
+            vec!["Original header".to_owned()],
+            vec!["Original value".to_owned()],
+        ])
+    );
+}
+
 fn make_ods_with_content(content_xml: &[u8]) -> Vec<u8> {
     use std::io::Write as _;
 
