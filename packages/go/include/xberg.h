@@ -1964,6 +1964,15 @@ typedef struct XBERGPageContent XBERGPageContent;
  */
 typedef struct XBERGPageDimensions XBERGPageDimensions;
 /**
+ * Vector geometry of one page.
+ *
+ * Only populated for PDF pages, and only when
+ * `PdfConfig::extract_vector_geometry` (crate::core::config::PdfConfig) is on.
+ * A dense drawing sheet can hold more than ten thousand paths, so this output is off by
+ * default.
+ */
+typedef struct XBERGPageGeometry XBERGPageGeometry;
+/**
  * Page hierarchy structure containing heading levels and block information.
  *
  * Used when PDF text hierarchy extraction is enabled. Contains hierarchical
@@ -2967,6 +2976,46 @@ typedef struct XBERGUserChunkConfig XBERGUserChunkConfig;
  * \endcode
  */
 typedef uint64_t XBERGValidator;
+/**
+ * An RGB colour with channels in `0.0..=1.0` in the page's colour space.
+ */
+typedef struct XBERGVectorColor XBERGVectorColor;
+/**
+ * Dash pattern of a `VectorStroke`.
+ */
+typedef struct XBERGVectorDashPattern XBERGVectorDashPattern;
+/**
+ * How the ends of an open stroked subpath are painted.
+ */
+typedef struct XBERGVectorLineCap XBERGVectorLineCap;
+/**
+ * How corners of a stroked subpath are painted.
+ */
+typedef struct XBERGVectorLineJoin XBERGVectorLineJoin;
+/**
+ * One painted vector path, in page coordinates.
+ *
+ * A single painting operator can carry several subpaths (for example a table rule and a
+ * rectangle drawn before one `f`), so a path is a list of `VectorSubpath`s sharing one
+ * paint style.
+ */
+typedef struct XBERGVectorPath XBERGVectorPath;
+/**
+ * A point in page coordinates.
+ */
+typedef struct XBERGVectorPoint XBERGVectorPoint;
+/**
+ * One segment of a `VectorSubpath`.
+ */
+typedef struct XBERGVectorSegment XBERGVectorSegment;
+/**
+ * Stroke style of a `VectorPath`.
+ */
+typedef struct XBERGVectorStroke XBERGVectorStroke;
+/**
+ * One continuous run of a `VectorPath`.
+ */
+typedef struct XBERGVectorSubpath XBERGVectorSubpath;
 /**
  * Policy controlling when VLM (Vision Language Model) OCR is used as a fallback.
  *
@@ -20030,6 +20079,15 @@ XBERGAlefHandle xberg_page_content_ocr_confidence(XBERGAlefHandle handle);
 char *xberg_page_content_native_content(XBERGAlefHandle handle);
 
 /**
+ * Get the `geometry` field from a `PageContent`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_page_geometry_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_page_content_geometry(XBERGAlefHandle handle);
+
+/**
  * Create a `PageDimensions` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -20065,6 +20123,38 @@ double xberg_page_dimensions_width(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 double xberg_page_dimensions_height(XBERGAlefHandle handle);
+
+/**
+ * Create a `PageGeometry` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_page_geometry_free`.
+ */
+XBERGAlefHandle xberg_page_geometry_from_json(const char *json);
+
+/**
+ * Serialize a `PageGeometry` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_page_geometry_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `PageGeometry` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_page_geometry_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `paths` field from a `PageGeometry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_page_geometry_paths(XBERGAlefHandle handle);
 
 /**
  * Create a `PageHierarchy` from a JSON string. Returns null on failure.
@@ -20902,6 +20992,15 @@ int32_t xberg_pdf_config_reading_order(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 XBERGAlefHandle xberg_pdf_config_backend(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `extract_vector_geometry` field from a `PdfConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_pdf_config_extract_vector_geometry(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_PDF)
@@ -26272,6 +26371,308 @@ int32_t xberg_user_chunk_config_disable_chunking(XBERGAlefHandle handle);
 #endif
 
 /**
+ * Create a `VectorColor` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_color_free`.
+ */
+XBERGAlefHandle xberg_vector_color_from_json(const char *json);
+
+/**
+ * Serialize a `VectorColor` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_color_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorColor` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_color_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `r` field from a `VectorColor`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_color_r(XBERGAlefHandle handle);
+
+/**
+ * Get the `g` field from a `VectorColor`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_color_g(XBERGAlefHandle handle);
+
+/**
+ * Get the `b` field from a `VectorColor`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_color_b(XBERGAlefHandle handle);
+
+/**
+ * Create a `VectorDashPattern` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_dash_pattern_free`.
+ */
+XBERGAlefHandle xberg_vector_dash_pattern_from_json(const char *json);
+
+/**
+ * Serialize a `VectorDashPattern` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_dash_pattern_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorDashPattern` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_dash_pattern_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `dashes` field from a `VectorDashPattern`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_vector_dash_pattern_dashes(XBERGAlefHandle handle);
+
+/**
+ * Get the `phase` field from a `VectorDashPattern`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_dash_pattern_phase(XBERGAlefHandle handle);
+
+/**
+ * Create a `VectorPath` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_path_free`.
+ */
+XBERGAlefHandle xberg_vector_path_from_json(const char *json);
+
+/**
+ * Serialize a `VectorPath` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_path_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorPath` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_path_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `subpaths` field from a `VectorPath`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_vector_path_subpaths(XBERGAlefHandle handle);
+
+/**
+ * Get the `bounding_box` field from a `VectorPath`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_bounding_box_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_path_bounding_box(XBERGAlefHandle handle);
+
+/**
+ * Get the `fill_color` field from a `VectorPath`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_color_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_path_fill_color(XBERGAlefHandle handle);
+
+/**
+ * Get the `stroke` field from a `VectorPath`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_stroke_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_path_stroke(XBERGAlefHandle handle);
+
+/**
+ * Get the `layer` field from a `VectorPath`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_vector_path_layer(XBERGAlefHandle handle);
+
+/**
+ * Create a `VectorPoint` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_point_free`.
+ */
+XBERGAlefHandle xberg_vector_point_from_json(const char *json);
+
+/**
+ * Serialize a `VectorPoint` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_point_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorPoint` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_point_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `x` field from a `VectorPoint`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_point_x(XBERGAlefHandle handle);
+
+/**
+ * Get the `y` field from a `VectorPoint`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_point_y(XBERGAlefHandle handle);
+
+/**
+ * Create a `VectorStroke` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_stroke_free`.
+ */
+XBERGAlefHandle xberg_vector_stroke_from_json(const char *json);
+
+/**
+ * Serialize a `VectorStroke` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_stroke_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorStroke` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_stroke_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `color` field from a `VectorStroke`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_color_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_stroke_color(XBERGAlefHandle handle);
+
+/**
+ * Get the `width` field from a `VectorStroke`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_vector_stroke_width(XBERGAlefHandle handle);
+
+/**
+ * Get the `dash_pattern` field from a `VectorStroke`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_dash_pattern_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_stroke_dash_pattern(XBERGAlefHandle handle);
+
+/**
+ * Get the `line_cap` field from a `VectorStroke`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_line_cap_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_stroke_line_cap(XBERGAlefHandle handle);
+
+/**
+ * Get the `line_join` field from a `VectorStroke`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_line_join_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_stroke_line_join(XBERGAlefHandle handle);
+
+/**
+ * Create a `VectorSubpath` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_vector_subpath_free`.
+ */
+XBERGAlefHandle xberg_vector_subpath_from_json(const char *json);
+
+/**
+ * Serialize a `VectorSubpath` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_subpath_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorSubpath` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_subpath_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `start` field from a `VectorSubpath`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_point_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_vector_subpath_start(XBERGAlefHandle handle);
+
+/**
+ * Get the `segments` field from a `VectorSubpath`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_vector_subpath_segments(XBERGAlefHandle handle);
+
+/**
+ * Get the `closed` field from a `VectorSubpath`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_vector_subpath_closed(XBERGAlefHandle handle);
+
+/**
  * Create a `XlsxAppProperties` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -28131,6 +28532,48 @@ int32_t xberg_url_extraction_mode_from_i32(int32_t value);
  * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t xberg_url_extraction_mode_from_str(const char *name);
+
+/**
+ * Convert an integer to a `VectorLineCap` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_vector_line_cap_from_i32(int32_t value);
+
+/**
+ * Convert a `VectorLineCap` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_vector_line_cap_from_str(const char *name);
+
+/**
+ * Convert an integer to a `VectorLineJoin` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_vector_line_join_from_i32(int32_t value);
+
+/**
+ * Convert a `VectorLineJoin` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_vector_line_join_from_str(const char *name);
+
+/**
+ * Convert an integer to a `VectorSegment` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_vector_segment_from_i32(int32_t value);
+
+/**
+ * Convert a `VectorSegment` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_vector_segment_from_str(const char *name);
 
 /**
  * Convert an integer to a `VlmFallbackPolicy` variant. Returns -1 on invalid input.
@@ -30376,6 +30819,56 @@ char *xberg_url_extraction_mode_to_json(XBERGAlefHandle handle);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_url_extraction_mode_to_string(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorLineCap` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_line_cap_free(XBERGAlefHandle handle);
+
+/**
+ * Serialize a `VectorLineCap` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_line_cap_to_json(XBERGAlefHandle handle);
+
+/**
+ * Render a `VectorLineCap` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_line_cap_to_string(XBERGAlefHandle handle);
+
+/**
+ * Free a `VectorLineJoin` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_vector_line_join_free(XBERGAlefHandle handle);
+
+/**
+ * Serialize a `VectorLineJoin` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_line_join_to_json(XBERGAlefHandle handle);
+
+/**
+ * Render a `VectorLineJoin` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_vector_line_join_to_string(XBERGAlefHandle handle);
 
 /**
  * Free a `VlmFallbackPolicy` handle.
