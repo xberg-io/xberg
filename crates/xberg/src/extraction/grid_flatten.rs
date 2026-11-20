@@ -19,6 +19,8 @@
 //! 3.11.3), so an untrusted `colspan`/`rowspan` can reach here unclamped from
 //! upstream even though our own parser is fixed. Clamping here catches both.
 
+use crate::types::{GridCell, TableGrid};
+
 /// Upper bound on `colspan` accepted by [`resolve_span_grid`].
 ///
 /// This is the HTML Living Standard's own ceiling ("If \[colspan\] is greater
@@ -41,12 +43,14 @@ pub(crate) const MAX_COL_SPAN: u32 = 1000;
 pub(crate) const MAX_ROW_SPAN: u32 = 65534;
 
 /// A table cell with its span, in document order within its row.
+#[cfg(any(feature = "pdf", test))]
 pub(crate) struct SpanCell {
     pub content: String,
     pub row_span: u32,
     pub col_span: u32,
 }
 
+#[cfg(any(feature = "pdf", test))]
 impl SpanCell {
     pub(crate) fn new(content: impl Into<String>, row_span: u32, col_span: u32) -> Self {
         Self {
@@ -101,6 +105,7 @@ pub(crate) fn resolve_span_grid<C>(
 /// The origin cell of a span holds the value; the columns/rows it covers are
 /// left empty. The output is rectangular: every row is padded to the widest
 /// column reached.
+#[cfg(any(feature = "pdf", test))]
 pub(crate) fn flatten_spanned_rows(rows: &[Vec<SpanCell>]) -> Vec<Vec<String>> {
     let mut placed: Vec<(u32, u32, String)> = Vec::new();
     let num_cols = resolve_span_grid(
@@ -120,6 +125,14 @@ pub(crate) fn flatten_spanned_rows(rows: &[Vec<SpanCell>]) -> Vec<Vec<String>> {
     grid
 }
 
+/// A source cell before its true grid position is known.
+struct PositionedSourceCell {
+    content: String,
+    row_span: u32,
+    col_span: u32,
+    is_header: bool,
+}
+
 /// Flatten a stream of span-carrying cells whose per-row order is known but
 /// whose column index is naive (does not reserve rowspan columns) — the shape
 /// `html_to_markdown_rs` grids arrive in. Groups by row, then re-derives true
@@ -130,8 +143,36 @@ pub(crate) fn flatten_positioned_cells(
     num_rows: usize,
     cells: impl Iterator<Item = (u32, u32, u32, String)>,
 ) -> Vec<Vec<String>> {
-    let mut rows: Vec<Vec<SpanCell>> = (0..num_rows.max(1)).map(|_| Vec::new()).collect();
-    for (row, row_span, col_span, content) in cells {
+    flatten_positioned_cells_with_roles(
+        num_rows,
+        cells.map(|(row, row_span, col_span, content)| (row, row_span, col_span, false, content)),
+    )
+    .0
+}
+
+/// Flatten a stream of span-carrying, role-carrying cells into both the dense
+/// `Vec<Vec<String>>` grid and the [`TableGrid`] that records where each source
+/// cell sits and what it is.
+///
+/// The dense grid loses cell roles and merge geometry: a `<th>` becomes
+/// indistinguishable from a `<td>`, and the columns a `colspan` covers become
+/// empty strings a renderer cannot tell apart from genuinely empty cells. The
+/// retained grid keeps them, so an HTML table reaches HTML output with its
+/// header cells and `rowspan`/`colspan` intact instead of being re-inferred
+/// from bare text (xberg-io/xberg#2332).
+///
+/// `cells` yields `(row, row_span, col_span, is_header, content)` in document
+/// order. Positions are re-derived by [`resolve_span_grid`], so a caller whose
+/// own column index ignores rowspan columns still gets true positions. Spans
+/// are clamped to the grid's own bounds, which is what a browser does with a
+/// `rowspan` that outruns the table: the retained grid must stay a valid
+/// occupancy of the published cells or it is discarded downstream.
+pub(crate) fn flatten_positioned_cells_with_roles(
+    num_rows: usize,
+    cells: impl Iterator<Item = (u32, u32, u32, bool, String)>,
+) -> (Vec<Vec<String>>, TableGrid) {
+    let mut rows: Vec<Vec<PositionedSourceCell>> = (0..num_rows.max(1)).map(|_| Vec::new()).collect();
+    for (row, row_span, col_span, is_header, content) in cells {
         let r = row as usize;
         // A cell whose reported row index falls outside the caller's declared
         // `num_rows` used to be clamped onto the last row, scrambling it in as
@@ -140,9 +181,52 @@ pub(crate) fn flatten_positioned_cells(
         if r >= rows.len() {
             rows.resize_with(r + 1, Vec::new);
         }
-        rows[r].push(SpanCell::new(content, row_span, col_span));
+        rows[r].push(PositionedSourceCell {
+            content,
+            row_span,
+            col_span,
+            is_header,
+        });
     }
-    flatten_spanned_rows(&rows)
+
+    let num_rows = rows.len();
+    let mut placed: Vec<(u32, u32)> = Vec::new();
+    let num_cols = resolve_span_grid(
+        &rows,
+        |c| c.col_span,
+        |c| c.row_span,
+        |row_idx, col, _| placed.push((row_idx, col)),
+    ) as usize;
+
+    // `resolve_span_grid` visits rows in order and each row's cells in order, so this
+    // iterator hands back the same cell that produced each placement. ~keep
+    let mut source_cells = rows.iter().flatten();
+    let mut grid_cells = Vec::with_capacity(placed.len());
+    let mut dense = vec![vec![String::new(); num_cols]; num_rows];
+    for (row, col) in placed {
+        let cell = source_cells
+            .next()
+            .expect("resolve_span_grid places every source cell exactly once");
+        dense[row as usize][col as usize] = cell.content.clone();
+        grid_cells.push(GridCell {
+            content: cell.content.clone(),
+            row,
+            col,
+            row_span: cell.row_span.clamp(1, MAX_ROW_SPAN).min(num_rows as u32 - row),
+            col_span: cell.col_span.clamp(1, MAX_COL_SPAN).min(num_cols as u32 - col),
+            is_header: cell.is_header,
+            bbox: None,
+            heading_level: None,
+            style_name: None,
+        });
+    }
+
+    let grid = TableGrid {
+        rows: num_rows as u32,
+        cols: num_cols as u32,
+        cells: grid_cells,
+    };
+    (dense, grid)
 }
 
 #[cfg(test)]
@@ -319,5 +403,89 @@ mod tests {
         ];
         let grid = flatten_spanned_rows(&rows);
         assert_eq!(grid, vec![vec!["a", "b"], vec!["c", "d"]]);
+    }
+
+    /// A `<th>` first row and a `rowspan` in the data below it must reach the
+    /// retained grid at their true positions, so HTML output can re-emit them
+    /// (GH#2332).
+    #[test]
+    fn positioned_roles_keep_header_cells_and_spans() {
+        let cells = vec![
+            (0u32, 1u32, 1u32, true, "Group".to_string()),
+            (0u32, 1u32, 1u32, true, "Name".to_string()),
+            (1u32, 2u32, 1u32, false, "Alpha".to_string()),
+            (1u32, 1u32, 1u32, false, "Alice".to_string()),
+            (2u32, 1u32, 1u32, false, "Bob".to_string()),
+        ];
+        let (dense, grid) = flatten_positioned_cells_with_roles(3, cells.into_iter());
+
+        assert_eq!(
+            dense,
+            vec![vec!["Group", "Name"], vec!["Alpha", "Alice"], vec!["", "Bob"]]
+        );
+        assert_eq!((grid.rows, grid.cols), (3, 2));
+        let roles: Vec<_> = grid
+            .cells
+            .iter()
+            .map(|cell| {
+                (
+                    cell.row,
+                    cell.col,
+                    cell.row_span,
+                    cell.col_span,
+                    cell.is_header,
+                    cell.content.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            roles,
+            vec![
+                (0, 0, 1, 1, true, "Group"),
+                (0, 1, 1, 1, true, "Name"),
+                (1, 0, 2, 1, false, "Alpha"),
+                (1, 1, 1, 1, false, "Alice"),
+                (2, 1, 1, 1, false, "Bob"),
+            ]
+        );
+    }
+
+    /// A rowspan that outruns the table must clamp to the rows actually published,
+    /// otherwise the retained grid is rejected as an invalid occupancy and every
+    /// role and span it carries is lost. (A colspan cannot outrun the grid: it is
+    /// what establishes the table's width.)
+    #[test]
+    fn outrunning_rowspan_clamps_to_the_published_grid() {
+        let cells = vec![
+            (0u32, 5u32, 1u32, false, "tall".to_string()),
+            (0u32, 1u32, 1u32, false, "next".to_string()),
+            (1u32, 1u32, 1u32, false, "last".to_string()),
+        ];
+        let (dense, grid) = flatten_positioned_cells_with_roles(2, cells.into_iter());
+
+        assert_eq!(dense, vec![vec!["tall", "next"], vec!["", "last"]]);
+        assert_eq!((grid.rows, grid.cols), (2, 2));
+        assert_eq!(grid.cells[0].row_span, 2, "two rows are all the table has");
+    }
+
+    /// The role-aware path and the plain one must place cells identically; the
+    /// only difference is the metadata carried alongside.
+    #[test]
+    fn role_aware_flattening_matches_the_plain_flattening() {
+        let cells = vec![
+            (0u32, 1u32, 2u32, false, "Fuse".to_string()),
+            (0u32, 1u32, 1u32, false, "Circuit".to_string()),
+            (1u32, 1u32, 1u32, false, "101".to_string()),
+            (1u32, 1u32, 1u32, false, "40A".to_string()),
+            (1u32, 1u32, 1u32, false, "Blower".to_string()),
+        ];
+        let (dense, _) = flatten_positioned_cells_with_roles(2, cells.clone().into_iter());
+        let plain = flatten_positioned_cells(
+            2,
+            cells
+                .into_iter()
+                .map(|(row, row_span, col_span, _, content)| (row, row_span, col_span, content)),
+        );
+        assert_eq!(dense, plain);
     }
 }

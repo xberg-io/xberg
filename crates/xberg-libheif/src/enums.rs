@@ -185,6 +185,8 @@ pub enum AlphaCompositionMode {
 #[allow(unsafe_code)]
 impl AlphaCompositionMode {
     pub(crate) fn from_libheif(cc_options_ext: *const lh::heif_color_conversion_options_ext) -> Self {
+        // SAFETY: `cc_options_ext` is null or points at the color-conversion options struct the caller
+        // keeps alive for this call, so the shared reference cannot outlive its allocation.
         let cc_options_ext = unsafe { cc_options_ext.as_ref() };
         let Some(cc_options_ext) = cc_options_ext else {
             return Self::None;
@@ -220,6 +222,8 @@ impl AlphaCompositionMode {
     }
 
     pub(crate) fn fill_libheif_cc_options_ext(&self, cc_options_ext_ptr: *mut lh::heif_color_conversion_options_ext) {
+        // SAFETY: `cc_options_ext_ptr` is null or points at writable, initialized options storage the caller
+        // owns for the duration of the call.
         if let Some(cc_options_ext) = unsafe { cc_options_ext_ptr.as_mut() } {
             match self {
                 AlphaCompositionMode::None => {

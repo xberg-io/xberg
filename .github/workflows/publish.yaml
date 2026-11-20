@@ -2099,7 +2099,6 @@ jobs:
           "$STAGE/xberg.exe" formats --format json > "$RUNNER_TEMP/xberg-formats.json"
           python .release-tools/scripts/ci/verify_no_gpl_cli_archive.py \
             --archive "${STAGE}.zip" \
-            --native-root "$STAGE" \
             --formats-json "$RUNNER_TEMP/xberg-formats.json" \
             --require-format pdf \
             --require-format docx \
