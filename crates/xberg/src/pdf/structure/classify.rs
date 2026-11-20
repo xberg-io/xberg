@@ -222,14 +222,11 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
             && !para.is_list_item
             && !para.is_code_block
             && !para.is_formula
-            && word_count <= 30
+            && word_count <= FORMULA_MAX_WORDS
+            && reads_as_formula(&para_text)
         {
-            let math_char_count = para_text.chars().filter(|c| is_math_character(*c)).count();
-            let total_chars = para_text.chars().count();
-            if total_chars > 0 && (math_char_count >= 3 || (math_char_count as f64 / total_chars as f64) >= 0.15) {
-                para.is_formula = true;
-                para.heading_level = None;
-            }
+            para.is_formula = true;
+            para.heading_level = None;
         }
 
         if para.heading_level.is_none()
@@ -327,6 +324,83 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
     detect_indentation_based_lists(paragraphs);
 
     detect_monospace_code_blocks(paragraphs);
+}
+
+/// Longest text that may read as an equation rather than as prose carrying symbols.
+const FORMULA_MAX_WORDS: usize = 30;
+/// Share of math characters above which a short line is an equation.
+const FORMULA_MIN_MATH_DENSITY: f64 = 0.15;
+/// Math characters a line needs before its length is considered.
+const FORMULA_MIN_MATH_CHARS: usize = 3;
+
+/// Mark paragraphs whose text reads as a standalone equation.
+///
+/// This is the font-independent half of `classify_paragraphs`, split out so the
+/// heuristic extraction path — which has no structure tree and therefore never
+/// runs `classify_paragraphs` — classifies an equation line the same way. Without
+/// it a born-digital equation stays an ordinary paragraph, so Markdown has no
+/// `Formula` element to write as display math.
+pub(super) fn classify_formula_paragraphs(paragraphs: &mut [PdfParagraph]) {
+    for para in paragraphs {
+        if para.is_formula
+            || para.heading_level.is_some()
+            || para.is_list_item
+            || para.is_code_block
+            || para.is_page_furniture
+        {
+            continue;
+        }
+        if para.word_count > FORMULA_MAX_WORDS {
+            continue;
+        }
+        let text = if !para.text.is_empty() {
+            std::borrow::Cow::Borrowed(para.text.as_str())
+        } else {
+            std::borrow::Cow::Owned(
+                para.lines
+                    .iter()
+                    .flat_map(|line| line.segments.iter())
+                    .map(|segment| segment.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        };
+        if reads_as_formula(&text) {
+            para.is_formula = true;
+        }
+    }
+}
+
+/// Whether `text` carries enough math characters to be an equation line.
+fn reads_as_formula(text: &str) -> bool {
+    let total_chars = text.chars().count();
+    if total_chars == 0 {
+        return false;
+    }
+    let math_char_count = text.chars().filter(|c| is_math_character(*c)).count();
+    (math_char_count >= FORMULA_MIN_MATH_CHARS
+        || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY)
+        && reads_as_equation_structure(text)
+}
+
+/// Whether `text` is structured as an equation line rather than a sentence.
+///
+/// A symbol count alone cannot separate `x = y + 1` from `We use x = y + z^2 here.`:
+/// both carry math characters. An equation line holds only operands (`x`, `H2O`,
+/// `mc^2`), function names (`sin`, `lim`) and operators, so an ordinary lowercase word
+/// keeps the line prose and lets the inline-math pass annotate the expression in place.
+fn reads_as_equation_structure(text: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|word| !word.is_empty())
+        .all(|word| {
+            let letters = word.chars().filter(|c| c.is_alphabetic()).count();
+            let digits = word.chars().filter(|c| c.is_numeric()).count();
+            // Two letters tolerate short variables (`xy`); all-caps names are variables.
+            letters <= 2
+                || digits > 0
+                || super::math_inline::is_math_name(word)
+                || !word.chars().any(char::is_lowercase)
+        })
 }
 
 /// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the
@@ -1863,8 +1937,17 @@ fn is_margin_candidate(para: &PdfParagraph, top_margin_y: f32, bottom_margin_y: 
 /// there on >50% of pages, it's running furniture. Text matches when its characters
 /// match, or when its words match in any order (see `margin_text_keys`).
 ///
+/// A line in the band `classify_running_margin_regions` treats as a header or footer is
+/// left alone when the caller asked to keep that band: this pass catches lines repeated on
+/// most but not every page, which that classifier never marks.
+///
 /// `page_heights` provides the height of each page for margin calculation.
-pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>], page_heights: &[f32]) {
+pub(super) fn mark_cross_page_repeating_text(
+    all_pages: &mut [Vec<PdfParagraph>],
+    page_heights: &[f32],
+    include_headers: bool,
+    include_footers: bool,
+) {
     if all_pages.len() < 4 {
         return;
     }
@@ -1923,6 +2006,11 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
 
         for para in page.iter_mut() {
             if !is_margin_candidate(para, top_margin_y, bottom_margin_y) {
+                continue;
+            }
+            let keeps_band = super::pipeline::running_margin_key(para, page_h, None)
+                .is_some_and(|(_, header)| if header { include_headers } else { include_footers });
+            if keeps_band {
                 continue;
             }
             let normalized = paragraph_plain_text(para).trim().to_lowercase();
@@ -3213,6 +3301,76 @@ mod tests {
         p
     }
 
+    /// Create a paragraph with bbox in the bottom margin of a 792pt page.
+    fn make_margin_footer(text: &str) -> PdfParagraph {
+        let mut p = make_paragraph(12.0, 1);
+        p.lines[0].segments[0].text = text.to_string();
+        p.block_bbox = Some((50.0, 30.0, 300.0, 50.0));
+        p
+    }
+
+    #[test]
+    fn include_headers_keeps_a_header_that_skips_a_page() {
+        let page_heights = vec![792.0; 4];
+        let build = || -> Vec<Vec<PdfParagraph>> {
+            (0..4)
+                .map(|index| {
+                    let header = if index == 2 {
+                        "A different notice"
+                    } else {
+                        "ACME Report"
+                    };
+                    vec![make_margin_body(header), make_body_center(&format!("Body {index}"))]
+                })
+                .collect()
+        };
+
+        let mut kept = build();
+        mark_cross_page_repeating_text(&mut kept, &page_heights, true, false);
+        assert!(
+            kept.iter().all(|page| !page[0].is_page_furniture),
+            "include_headers must keep a header repeated on most, not every, page"
+        );
+
+        let mut stripped = build();
+        mark_cross_page_repeating_text(&mut stripped, &page_heights, false, false);
+        assert!(
+            stripped[1][0].is_page_furniture,
+            "the default must still strip the repeated header"
+        );
+    }
+
+    #[test]
+    fn include_footers_keeps_a_footer_that_skips_a_page() {
+        let page_heights = vec![792.0; 4];
+        let build = || -> Vec<Vec<PdfParagraph>> {
+            (0..4)
+                .map(|index| {
+                    let footer = if index == 2 {
+                        "A different notice"
+                    } else {
+                        "Confidential - internal use"
+                    };
+                    vec![make_body_center(&format!("Body {index}")), make_margin_footer(footer)]
+                })
+                .collect()
+        };
+
+        let mut kept = build();
+        mark_cross_page_repeating_text(&mut kept, &page_heights, false, true);
+        assert!(
+            kept.iter().all(|page| !page[1].is_page_furniture),
+            "include_footers must keep a footer repeated on most, not every, page"
+        );
+
+        let mut stripped = build();
+        mark_cross_page_repeating_text(&mut stripped, &page_heights, false, false);
+        assert!(
+            stripped[1][1].is_page_furniture,
+            "the default must still strip the repeated footer"
+        );
+    }
+
     /// Create a paragraph with bbox in the body (not margin) area.
     fn make_body_center(text: &str) -> PdfParagraph {
         let mut p = make_paragraph(12.0, 1);
@@ -3230,7 +3388,7 @@ mod tests {
             vec![make_margin_body("Page 1 of 10"), make_body_center("Unique content C")],
             vec![make_margin_body("Page 1 of 10"), make_body_center("Unique content D")],
         ];
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
         assert!(!pages[0][0].is_page_furniture, "first occurrence must not be furniture");
         assert!(pages[1][0].is_page_furniture);
         assert!(pages[2][0].is_page_furniture);
@@ -3248,7 +3406,7 @@ mod tests {
             })
             .collect();
 
-        mark_cross_page_repeating_text(&mut pages, &[792.0; 5]);
+        mark_cross_page_repeating_text(&mut pages, &[792.0; 5], false, false);
 
         for (index, page) in pages.iter().enumerate() {
             assert!(!page[0].is_page_furniture, "vertical stamp on page {index}");
@@ -3272,7 +3430,7 @@ mod tests {
             body.block_bbox = Some((50.0, 400.0, 300.0, 420.0));
             pages.push(vec![h, body]);
         }
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
         assert!(!pages[0][0].is_page_furniture, "first occurrence must not be furniture");
         assert!(pages[1][0].is_page_furniture);
         assert!(pages[1][0].heading_level.is_none());
@@ -3308,7 +3466,7 @@ mod tests {
                 make_body_center("Section content F"),
             ],
         ];
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
         assert!(
             !pages[0][0].is_page_furniture,
             "first occurrence of copyright notice must be preserved"
@@ -3342,7 +3500,7 @@ mod tests {
                 vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
             })
             .collect();
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
 
         assert!(!pages[0][0].is_page_furniture, "first occurrence must stay");
         for (i, page) in pages.iter().enumerate().take(9).skip(1) {
@@ -3374,7 +3532,7 @@ mod tests {
                 vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
             })
             .collect();
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
 
         assert!(!pages[0][0].is_page_furniture, "the first page keeps the footer");
         for (i, page) in pages.iter().enumerate().skip(1) {
@@ -3400,7 +3558,7 @@ mod tests {
                 vec![make_margin_body(stamp), make_body_center(&format!("Body {i}"))]
             })
             .collect();
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
 
         for (i, page) in pages.iter().enumerate() {
             assert!(
@@ -3724,6 +3882,36 @@ mod tests {
         let mut paragraphs = vec![make_text_paragraph(12.0, "a2 + 8 = 12", false)];
         classify_paragraphs(&mut paragraphs, &heading_map);
         assert!(paragraphs[0].is_formula, "ASCII equation should be a formula");
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_keeps_prose_with_symbols_a_paragraph() {
+        let mut paragraphs = vec![make_text_paragraph(12.0, "We use x = y + z^2 here.", false)];
+        classify_formula_paragraphs(&mut paragraphs);
+        assert!(
+            !paragraphs[0].is_formula,
+            "a sentence carrying symbols is prose, so inline math can annotate it"
+        );
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_marks_a_standalone_equation() {
+        let mut paragraphs = vec![make_text_paragraph(12.0, "x = y + z^2", false)];
+        classify_formula_paragraphs(&mut paragraphs);
+        assert!(paragraphs[0].is_formula, "an equation line is display math");
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_keeps_standard_function_equations_display_math() {
+        let mut equations = vec![make_text_paragraph(12.0, "sqrt(x) = y^2 + 1", false)];
+        classify_formula_paragraphs(&mut equations);
+        assert!(
+            equations[0].is_formula,
+            "a standalone equation over a named function is display math"
+        );
+        let mut prose = vec![make_text_paragraph(12.0, "We use x = y + z^2 here.", false)];
+        classify_formula_paragraphs(&mut prose);
+        assert!(!prose[0].is_formula, "a sentence carrying symbols stays a paragraph");
     }
 
     #[test]
@@ -4339,7 +4527,7 @@ mod tests {
         let mut pages: Vec<Vec<PdfParagraph>> = (0..6)
             .map(|_| vec![make_margin_body(title), make_body_center("body text here")])
             .collect();
-        mark_cross_page_repeating_text(&mut pages, &page_heights);
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
 
         assert!(
             !pages[0][0].is_page_furniture,

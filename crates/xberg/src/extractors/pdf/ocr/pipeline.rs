@@ -1170,6 +1170,64 @@ fn mixed_layer_lines_to_put_first(
     super::document::layer_lines_to_put_first(layer, rendered_read, noise_verdict, thresholds, boxes, plain_rows)
 }
 
+/// Run the cross-page furniture pass over the mixed route's fallback paragraphs in one
+/// frame: page points.
+///
+/// `ocr_page_paragraphs` still carries raster-pixel geometry for every page recognition
+/// read from a raster (`ocr_raster_by_page`), while `page_heights` and the horizontal
+/// normalizer that `strip_repeating_text_from_pages` derives from the boxes are in points.
+/// Each such page is scaled into points before the strip and back afterwards, so the
+/// caller's rebuild keeps the frame it already expects.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn strip_fallback_furniture_in_page_points(
+    pages: &mut [Vec<crate::pdf::structure::types::PdfParagraph>],
+    page_numbers: &[u32],
+    raster_by_page: &ahash::AHashMap<u32, (u32, u32)>,
+    reads_sideways: impl Fn(u32) -> bool,
+    page_size_pt: impl Fn(u32) -> (f32, f32),
+    page_heights: &[f32],
+    filter: &crate::core::config::ContentFilterConfig,
+) {
+    let mut scales: Vec<(u32, (f32, f32))> = Vec::new();
+    for &page_number in page_numbers {
+        if reads_sideways(page_number) {
+            continue;
+        }
+        let Some(&(width_px, height_px)) = raster_by_page.get(&page_number) else {
+            continue;
+        };
+        if width_px == 0 || height_px == 0 {
+            continue;
+        }
+        let (width_pt, height_pt) = page_size_pt(page_number);
+        if ![width_pt, height_pt]
+            .into_iter()
+            .all(|value| value.is_finite() && value > 0.0)
+        {
+            continue;
+        }
+        let Some(slot) = pages.get_mut((page_number - 1) as usize) else {
+            continue;
+        };
+        let scale = (width_pt / width_px as f32, height_pt / height_px as f32);
+        detached_mixed_frame::scale_paragraph_geometry(slot, scale);
+        scales.push((page_number, scale));
+    }
+
+    crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+        pages,
+        page_heights,
+        filter.include_headers,
+        filter.include_footers,
+    );
+
+    for (page_number, (sx, sy)) in scales {
+        if let Some(slot) = pages.get_mut((page_number - 1) as usize) {
+            detached_mixed_frame::scale_paragraph_geometry(slot, (1.0 / sx, 1.0 / sy));
+        }
+    }
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 async fn extract_mixed_ocr_native_with_layout_inputs(
     native_text: &str,
@@ -4229,6 +4287,39 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         )
         .map(|combined_doc| split_document_global_ocr_structure_by_page(combined_doc, &ocr_page_numbers))
         .unwrap_or_default();
+        // A page the heuristic did not classify (document declined, or this page dropped)
+        // falls back to rebuilding from `ocr_page_paragraphs`, and that path never ran the
+        // native route's cross-page furniture pass. Strip the paragraph lists once,
+        // document-wide, so a running header repeating across scanned pages is detected:
+        // stripping the assembled page documents instead would miss the repetition it
+        // needs to compare. ~keep
+        let filter = config.content_filter.clone().unwrap_or_default();
+        let mut stripped_fallback_pages: Option<Vec<Vec<crate::pdf::structure::types::PdfParagraph>>> = None;
+        if split_pages.len() < ocr_page_numbers.len() && filter.strip_repeating_text {
+            let mut fallback_pages: Vec<Vec<crate::pdf::structure::types::PdfParagraph>> = vec![Vec::new(); page_count];
+            for page_number in &ocr_page_numbers {
+                if let (Some(paragraphs), Some(slot)) = (
+                    ocr_page_paragraphs.get(page_number),
+                    fallback_pages.get_mut((*page_number - 1) as usize),
+                ) {
+                    slot.extend_from_slice(paragraphs);
+                }
+            }
+            strip_fallback_furniture_in_page_points(
+                &mut fallback_pages,
+                &ocr_page_numbers,
+                &ocr_raster_by_page,
+                |page_number| {
+                    structured_ocr_pages
+                        .get(&page_number)
+                        .is_some_and(|existing| detached_mixed_frame::read_sideways(&existing.metadata))
+                },
+                |page_number| page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize),
+                &page_heights_for_heuristic,
+                &filter,
+            );
+            stripped_fallback_pages = Some(fallback_pages);
+        }
         for page_number in &ocr_page_numbers {
             let Some(existing) = structured_ocr_pages.get(page_number) else {
                 continue;
@@ -4272,7 +4363,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // cannot regress heading detection the way pre-classifying before the
                 // heuristic call would.
                 None => {
-                    let mut paragraphs = ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default();
+                    let mut paragraphs = stripped_fallback_pages
+                        .as_ref()
+                        .and_then(|pages| pages.get((*page_number - 1) as usize))
+                        .cloned()
+                        .unwrap_or_else(|| ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default());
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
@@ -8936,6 +9031,18 @@ pub(super) async fn extract_with_ocr_for_page(
                                 page_rotation_degrees,
                             );
                         }
+                        // The document-global pass declined, so nothing above marked running
+                        // furniture; the pages still need the cross-page pass the native route
+                        // always runs, or a scanned header stays in the body.
+                        let filter = config.content_filter.clone().unwrap_or_default();
+                        if filter.strip_repeating_text {
+                            crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+                                &mut fallback_pages,
+                                &ocr_page_heights,
+                                filter.include_headers,
+                                filter.include_footers,
+                            );
+                        }
                         Some(crate::pdf::structure::assemble_internal_document(
                             fallback_pages,
                             &collected_tables,
@@ -12688,4 +12795,129 @@ fn layout_orientation_retry_uses_each_siblings_frame() {
     assert!(!orientation_retry_page_eligible(false, true, frames, 1));
     assert!(!orientation_retry_page_eligible(true, true, None, 1));
     assert!(orientation_retry_page_eligible(true, false, None, 1));
+}
+
+#[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod mixed_fallback_furniture_tests {
+    use super::*;
+    use crate::core::config::ContentFilterConfig;
+    use crate::pdf::hierarchy::SegmentData;
+    use crate::pdf::structure::types::{PdfLine, PdfParagraph};
+
+    fn paragraph(text: &str, (left, bottom, right, top): (f32, f32, f32, f32)) -> PdfParagraph {
+        let segment = SegmentData {
+            text: text.to_string(),
+            x: left,
+            y: bottom,
+            width: right - left,
+            height: top - bottom,
+            font_size: 12.0,
+            is_bold: false,
+            is_italic: false,
+            is_monospace: false,
+            baseline_y: bottom,
+            rotation_degrees: 0.0,
+            assigned_role: None,
+            ocr_heading_spans: None,
+        };
+        PdfParagraph {
+            text: String::new(),
+            lines: vec![PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![segment],
+                baseline_y: Some(bottom),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            }],
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            layout_region_path: None,
+            ocr_source_spans: Vec::new(),
+            caption_for: None,
+            block_bbox: Some((left, bottom, right, top)),
+            word_count: text.split_whitespace().count(),
+        }
+    }
+
+    fn body_text(index: usize) -> &'static str {
+        match index {
+            0 => "The harbour committee recorded exactly one hundred arrivals for the southern market this evening.",
+            1 => "The orchard committee recorded exactly one hundred shipments for the northern market this morning.",
+            _ => "The railway committee recorded exactly one hundred departures for the western market this afternoon.",
+        }
+    }
+
+    fn text(paragraph: &PdfParagraph) -> String {
+        paragraph
+            .lines
+            .iter()
+            .flat_map(|line| &line.segments)
+            .map(|segment| segment.text.as_str())
+            .collect()
+    }
+
+    /// A page recognition read from a raster stores its paragraphs in raster pixels (here
+    /// 2x the 612x792pt page). The furniture pass must still see the header and the footer
+    /// in the band it knows: the header survives because it is included, the footer goes.
+    #[test]
+    fn raster_scaled_fallback_keeps_the_header_and_drops_the_footer() {
+        let page_numbers = [1u32, 2, 3];
+        let raster: ahash::AHashMap<u32, (u32, u32)> = page_numbers.iter().map(|&page| (page, (1224, 1584))).collect();
+        let mut pages: Vec<Vec<PdfParagraph>> = page_numbers
+            .iter()
+            .map(|&page_number| {
+                vec![
+                    paragraph("ACME ANNUAL REPORT 2026", (100.0, 1500.0, 800.0, 1520.0)),
+                    paragraph(body_text(page_number as usize - 1), (100.0, 700.0, 1100.0, 800.0)),
+                    paragraph(
+                        &format!("CONFIDENTIAL - PAGE {page_number}"),
+                        (100.0, 40.0, 500.0, 60.0),
+                    ),
+                ]
+            })
+            .collect();
+        let header_bbox = pages[0][0].block_bbox;
+
+        strip_fallback_furniture_in_page_points(
+            &mut pages,
+            &page_numbers,
+            &raster,
+            |_| false,
+            |_| (612.0, 792.0),
+            &[792.0; 3],
+            &ContentFilterConfig {
+                include_headers: true,
+                include_footers: false,
+                ..Default::default()
+            },
+        );
+
+        for page in &pages {
+            assert!(
+                page.iter().any(|paragraph| text(paragraph).contains("ACME")),
+                "include_headers keeps the running header: {:?}",
+                page.iter().map(text).collect::<Vec<_>>()
+            );
+            assert!(
+                !page.iter().any(|paragraph| text(paragraph).contains("CONFIDENTIAL")),
+                "the excluded footer must be stripped: {:?}",
+                page.iter().map(text).collect::<Vec<_>>()
+            );
+            assert!(
+                page.iter().any(|paragraph| text(paragraph).contains("committee")),
+                "body text must survive"
+            );
+        }
+        assert_eq!(
+            pages[0][0].block_bbox, header_bbox,
+            "the surviving header geometry must be back in the raster frame"
+        );
+    }
 }
