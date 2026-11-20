@@ -1,8 +1,10 @@
 use std::ptr;
+use std::rc::Rc;
 
 use four_cc::FourCC;
 use libheif_sys as lh;
 
+use crate::context::ContextOwner;
 use crate::decoder::get_decoding_options_ptr;
 use crate::{ColorSpace, DecodingOptions, HeifError, Image, Result};
 
@@ -23,15 +25,19 @@ pub struct ImageResolution {
     pub height: u16,
 }
 
-pub struct Track {
+pub struct Track<'a> {
     pub(crate) inner: *mut lh::heif_track,
+    _context: Rc<ContextOwner<'a>>,
 }
 
 #[allow(unsafe_code)]
-impl Track {
+impl<'a> Track<'a> {
     #[inline]
-    pub(crate) fn from_heif_track(track: *mut lh::heif_track) -> Track {
-        Track { inner: track }
+    pub(crate) fn from_heif_track(track: *mut lh::heif_track, context: &Rc<ContextOwner<'a>>) -> Track<'a> {
+        Track {
+            inner: track,
+            _context: Rc::clone(context),
+        }
     }
 
     /// Get the ID of the track.
@@ -115,9 +121,11 @@ impl Track {
 }
 
 #[allow(unsafe_code)]
-impl Drop for Track {
+impl Drop for Track<'_> {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: `inner` is the track this value owns and releases exactly once, before the
+        // context share in `_context` is dropped, so the native context is still live.
         unsafe { lh::heif_track_release(self.inner) };
     }
 }
