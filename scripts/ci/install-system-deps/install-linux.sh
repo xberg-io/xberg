@@ -160,10 +160,15 @@ libheif_runtime_links() {
     echo "::warning::$library has an embedded RPATH or RUNPATH." >&2
     return 1
   fi
-  # The CLI decodes HEIC/AVIF; it never encodes HEIC, so a libheif that links the
-  # GPL-2.0 x265 encoder is a packaging defect even when the loader resolves it. ~keep
+  # The CLI decodes HEIC/AVIF; these builds have no HEVC encoder, so a libheif that
+  # links the GPL-2.0 x265 encoder is a packaging defect even when the loader
+  # resolves it. The symbol scan also catches a statically linked x265. ~keep
   if grep -Eq '\(NEEDED\)[[:space:]]+[^[]*\[libx265[.]' <<<"$elf"; then
     echo "::warning::$library links the GPL-2.0 x265 encoder." >&2
+    return 1
+  fi
+  if LC_ALL=C grep -a -q 'x265_' "$library"; then
+    echo "::warning::$library carries x265 symbols." >&2
     return 1
   fi
   if grep -Eq '^[[:space:]]*INTERP[[:space:]]|^[[:space:]]*0x[[:xdigit:]]+[[:space:]]+\((AUDIT|DEPAUDIT|FILTER|AUXILIARY)\)' <<<"$elf" ||
@@ -281,10 +286,11 @@ else
     cd "libheif-${LIBHEIF_VERSION}"
     mkdir build
     cd build
-    # Decode-only: the shipped CLI never encodes HEIC, so keep the GPL-2.0 x265
-    # encoder (libheif's CMake default is ON when x265 headers are present), the
-    # GPL x264 encoder and the unused AV1 encoder out. HEIC decoding still comes
-    # from libde265. ~keep
+    # Decode-only: HEIF output is unsupported in these artifacts, so keep the
+    # GPL-2.0 x265 encoder (libheif's CMake default is ON when x265 headers are
+    # present), the GPL x264 encoder and the unused AV1 encoder out.
+    # ImageOutputFormat::Heif then reports EncoderUnavailable; HEIC decoding still
+    # comes from libde265. ~keep
     cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$LIBHEIF_PREFIX" \

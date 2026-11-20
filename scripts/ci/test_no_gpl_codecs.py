@@ -1,5 +1,9 @@
 """Exercise the shipped-artifact x265 gate through its public command."""
 
+# These assertions must survive `python -O`, where a bare `assert` is removed; the
+# project's ruff profile prefers bare asserts (PT009), so disable it for this file.
+# ruff: noqa: PT009
+
 from __future__ import annotations
 
 import io
@@ -18,6 +22,7 @@ SCRIPT = Path(__file__).with_name("verify_no_gpl_codecs.py").resolve()
 ELF = b"\x7fELF\x02\x01\x01\x00"
 MACHO = b"\xcf\xfa\xed\xfe\x07\x00\x00\x01"
 PE = b"MZ\x90\x00"
+AR = b"!<arch>\n"
 
 
 class NoGplCodecsTests(unittest.TestCase):
@@ -47,44 +52,57 @@ class NoGplCodecsTests(unittest.TestCase):
                 archive.writestr(member, payload)
         return path
 
+    def findings(self, result: subprocess.CompletedProcess[str]) -> list[str]:
+        return [line for line in result.stderr.splitlines() if line.startswith("error: ")]
+
+    def assert_findings(self, result: subprocess.CompletedProcess[str], expected: int, contains: str) -> None:
+        problems = self.findings(result)
+        self.assertEqual(len(problems), expected, result.stderr)
+        self.assertIn(contains, result.stderr)
+
     def test_should_reject_a_tarball_that_ships_a_fake_x265_library_name(self) -> None:
         path = self.tar("xberg-cli-test.tar.gz", {"stage/lib/libx265-fake.so.215": ELF})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "libx265-fake.so.215 is an x265-named file" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "libx265-fake.so.215 is an x265-named file")
 
     def test_should_reject_a_binary_whose_needed_entry_names_libx265(self) -> None:
         path = self.tar("xberg-cli-test.tar.gz", {"stage/xberg": ELF + b"\x00libx265.so.215\x00"})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "stage/xberg references libx265" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "stage/xberg references libx265")
+
+    def test_should_reject_a_renamed_codec_that_references_x265(self) -> None:
+        path = self.tar("xberg-cli-test.tar.gz", {"stage/lib/libcodec.so": ELF + b"\x00libx265.so.215\x00"})
+        result = self.run_gate(str(path))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "stage/lib/libcodec.so references libx265")
 
     def test_should_reject_a_macho_binary_that_references_x265_symbols(self) -> None:
         path = self.tar("xberg-cli-darwin.tar.gz", {"stage/xberg": MACHO + b"\x00_x265_encoder_open\x00"})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "stage/xberg references x265_encoder_open" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "stage/xberg references x265_encoder_open")
 
     def test_should_reject_a_static_archive_that_references_x265_symbols(self) -> None:
-        path = self.tar("xberg-ffi.tar.gz", {"stage/libxberg.a": b"!<arch>\n" + b"\x00" * 32 + b"x265_api\x00"})
+        path = self.tar("xberg-ffi.tar.gz", {"stage/libxberg.a": AR + b"\x00" * 32 + b"x265_api\x00"})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "stage/libxberg.a references x265_api" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "stage/libxberg.a references x265_api")
 
     def test_should_reject_a_windows_zip_that_references_x265_symbols(self) -> None:
         path = self.zip("xberg-cli-windows.zip", {"stage/xberg.exe": PE + b"\x00x265_api_get\x00"})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "stage/xberg.exe references x265_api_get" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "stage/xberg.exe references x265_api_get")
 
     def test_should_reject_x265_in_a_staged_directory(self) -> None:
         stage = self.root / "stage"
-        stage.mkdir()
-        (stage / "lib").mkdir()
+        (stage / "lib").mkdir(parents=True)
         (stage / "lib" / "libx265.215.dylib").write_bytes(MACHO)
         result = self.run_gate(str(stage))
-        assert result.returncode == 1, result.stdout
-        assert "libx265.215.dylib is an x265-named file" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "libx265.215.dylib is an x265-named file")
 
     def test_should_accept_a_decode_only_archive_that_names_libx265_only_in_notices(self) -> None:
         notice = b"| libx265 | HEVC encode | GPL-2.0-or-later |\n"
@@ -99,25 +117,26 @@ class NoGplCodecsTests(unittest.TestCase):
             },
         )
         result = self.run_gate(str(path))
-        assert result.returncode == 0, result.stderr
-        assert "no x265 codec" in result.stdout
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.findings(result), [])
+        self.assertIn("no x265 codec", result.stdout)
 
     def test_should_reject_an_artifact_that_yields_no_files(self) -> None:
         path = self.tar("xberg-cli-empty.tar.gz", {})
         result = self.run_gate(str(path))
-        assert result.returncode == 1, result.stdout
-        assert "yielded no files to scan" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "yielded no files to scan")
 
     def test_should_reject_fewer_artifacts_than_the_asserted_count(self) -> None:
         path = self.tar("xberg-cli-test.tar.gz", {"stage/xberg": ELF})
         result = self.run_gate("--min-artifacts", "2", str(path))
-        assert result.returncode == 1, result.stdout
-        assert "examined 1 artifacts, expected at least 2" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 1, "examined 1 artifacts, expected at least 2")
 
     def test_should_reject_an_artifact_that_does_not_exist(self) -> None:
         result = self.run_gate(str(self.root / "missing.tar.gz"))
-        assert result.returncode == 1, result.stdout
-        assert "artifact not found" in result.stderr
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assert_findings(result, 2, "artifact not found")
 
 
 if __name__ == "__main__":

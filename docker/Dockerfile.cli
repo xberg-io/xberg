@@ -103,8 +103,9 @@ RUN file /build/xberg && \
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # Remove unused ONNX/protobuf test and codegen executables in the install layer.
-# Keep the libheif decoders, not the GPL-2.0 x265 encoder: the CLI never encodes
-# HEIC (core/image_encode.rs re-encodes to PNG/JPEG only). ~keep
+# Keep the libheif decoders, not the GPL-2.0 x265 encoder: this image does not
+# support HEIF output (ImageOutputFormat::Heif reports EncoderUnavailable), while
+# HEIC/AVIF decoding still uses libde265 and libaom. ~keep
 RUN apk add --no-cache \
         libgcc libstdc++ onnxruntime \
         libheif libheif-libde265 libheif-aom libheif-dav1d && \

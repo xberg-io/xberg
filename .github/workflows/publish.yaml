@@ -1997,6 +1997,7 @@ jobs:
             scripts/ci/vendor-windows-native-closure.ps1
             scripts/ci/verify_no_gpl_cli_archive.py
             scripts/ci/verify_no_gpl_codecs.py
+            scripts/ci/verify-release-archive.sh
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
             mise.toml
@@ -2090,6 +2091,19 @@ jobs:
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 
+      # Retries of older source tags must use gate tools from this workflow revision. ~keep
+      - name: Checkout release archive gate tooling
+        if: runner.os != 'Windows'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-release-archive.sh
+            scripts/ci/verify_no_gpl_codecs.py
+
       # `cargo deny` cannot see C codecs and the macOS/Linux closures are walked by
       # filename, not by what the linked bytes reference. Open the finished artifact
       # and fail on an x265 file name, a `libx265` load command/DT_NEEDED entry or an
@@ -2100,19 +2114,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           SUFFIX: ${{ matrix.archive_suffix }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          archives=("xberg-cli-${TARGET}${SUFFIX}".*)
-          if [ "${#archives[@]}" -ne 1 ]; then
-            echo "::error::expected exactly one packaged CLI archive, found ${#archives[@]}"
-            exit 1
-          fi
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            python .release-tools/scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
-          else
-            python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
-          fi
+        run: bash .release-tools/scripts/ci/verify-release-archive.sh "xberg-cli-${TARGET}${SUFFIX}.*"
 
       - name: Setup cargo-deny for the no-GPL license audit
         if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
@@ -2233,21 +2235,23 @@ jobs:
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
 
+      # Retries of older source tags must use gate tools from this workflow revision. ~keep
+      - name: Checkout release archive gate tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-release-archive.sh
+            scripts/ci/verify_no_gpl_codecs.py
+
       # The closure copy walks whatever Alpine's libheif plugins pull in; prove the
       # packed archive carries no x265 plugin or x265-linked binary. ~keep
       - name: Verify musl CLI archive is free of the GPL x265 encoder
         shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          archives=(xberg-cli-*.tar.gz)
-          if [ "${#archives[@]}" -ne 1 ]; then
-            echo "::error::expected exactly one packaged musl CLI archive, found ${#archives[@]}"
-            exit 1
-          fi
-          python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
+        run: bash .release-tools/scripts/ci/verify-release-archive.sh 'xberg-cli-*.tar.gz'
 
       - name: Checkout Linux CLI installer verification tools
         uses: actions/checkout@v7
@@ -2345,22 +2349,24 @@ jobs:
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
 
+      # Retries of older source tags must use gate tools from this workflow revision. ~keep
+      - name: Checkout release archive gate tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/verify-release-archive.sh
+            scripts/ci/verify_no_gpl_codecs.py
+
       # The binstall profile is decode-only (`formats-no-heic`), but the artifact is
       # still a release binary: prove it carries no x265 rather than infer it from
       # the feature list. ~keep
       - name: Verify binstall CLI archive is free of the GPL x265 encoder
         shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          archives=(xberg-cli-binstall-*.tar.gz)
-          if [ "${#archives[@]}" -ne 1 ]; then
-            echo "::error::expected exactly one packaged binstall CLI archive, found ${#archives[@]}"
-            exit 1
-          fi
-          python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
+        run: bash .release-tools/scripts/ci/verify-release-archive.sh 'xberg-cli-binstall-*.tar.gz'
 
       - uses: actions/upload-artifact@v7
         with:

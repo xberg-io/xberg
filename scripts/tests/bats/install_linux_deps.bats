@@ -274,6 +274,14 @@ run_cache_promotion() {
 	xberg_assert_output_contains "rebuilding"
 }
 
+@test "install_linux should rebuild a cached libheif that carries x265 symbols" {
+	prepare_cache_candidate
+	printf '%s\n' 'x265_encoder_open' >"$CACHE_CANDIDATE/lib/libheif.so.1"
+	run_cache_check
+	xberg_assert_output_contains "carries x265 symbols"
+	xberg_assert_output_contains "rebuilding"
+}
+
 @test "install_linux should reject embedded RPATH and RUNPATH before probing cached libheif" {
 	prepare_cache_candidate
 	printf '%s\n' original >"$LIBHEIF_PREFIX/lib/libheif.so.1"

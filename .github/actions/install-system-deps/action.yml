@@ -77,7 +77,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: /tmp/libheif-cache
-        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v7
+        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v8
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'

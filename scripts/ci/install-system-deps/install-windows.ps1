@@ -105,8 +105,8 @@ if (-not $libheifCacheHit) {
   if ($LASTEXITCODE -ne 0) { throw 'Failed to bootstrap the verified vcpkg baseline' }
   # The port's default features are `hevc` (HEVC encoding via x265, GPL-2.0-or-later)
   # and `libde265`. `core` suppresses both defaults so only the AV1/HEIC decoders are
-  # linked; the CLI never encodes HEIC. Re-adding a plain `libheif` here silently
-  # restores the GPL encoder. ~keep
+  # linked; HEIF output reports EncoderUnavailable instead. Re-adding a plain
+  # `libheif` here silently restores the GPL encoder. ~keep
   if (-not (Retry-Command { & $vcpkgExe install "libheif[core,aom,libde265]:x64-windows-static-md" --recurse } -MaxAttempts 2)) {
     throw "Failed to install libheif via the verified vcpkg baseline"
   }
