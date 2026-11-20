@@ -2,7 +2,9 @@
 // alef:hash:fc597ec4bd911361246022f797e3357c0525402d762a2a223f775c68673af4ad
 package io.xberg;
 
-/** A filesystem I/O error occurred while reading a preset directory. */
+/**
+ * A filesystem I/O error occurred while reading a preset directory.
+ */
 public class IoException extends LoadErrorException implements IXbergError {
   private static final long serialVersionUID = 1L;
 

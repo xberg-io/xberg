@@ -2,7 +2,9 @@
 // alef:hash:94448223105e2089b8dc38c6f78c5015303cd6a2ef99a7abc86851a5702b51de
 package io.xberg;
 
-/** A security policy was violated (e.g. zip bomb, oversized archive). */
+/**
+ * A security policy was violated (e.g. zip bomb, oversized archive).
+ */
 public class SecurityException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

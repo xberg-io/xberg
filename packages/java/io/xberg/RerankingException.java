@@ -2,7 +2,9 @@
 // alef:hash:3d5ee1022c595ef9412da9c156d3135e6bca4061e22a0b59edb3f21b534e6de1
 package io.xberg;
 
-/** The reranker model or reranking pipeline returned an error. */
+/**
+ * The reranker model or reranking pipeline returned an error.
+ */
 public class RerankingException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

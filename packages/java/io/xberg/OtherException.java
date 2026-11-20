@@ -2,7 +2,9 @@
 // alef:hash:bf72e0d965626abba40e6c9ba62593ce0e32cb9e11fcb5b534c1fd9361588afb
 package io.xberg;
 
-/** A catch-all for uncommon errors that do not fit another variant. */
+/**
+ * A catch-all for uncommon errors that do not fit another variant.
+ */
 public class OtherException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

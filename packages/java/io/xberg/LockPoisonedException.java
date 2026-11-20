@@ -2,7 +2,9 @@
 // alef:hash:849c695c34bbdf2a7e521fe66be03daba7b21b25a80ead2668e4bb01563db0c6
 package io.xberg;
 
-/** An internal `Mutex` or `RwLock` was found in a poisoned state. */
+/**
+ * An internal `Mutex` or `RwLock` was found in a poisoned state.
+ */
 public class LockPoisonedException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

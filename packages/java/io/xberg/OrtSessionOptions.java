@@ -4,102 +4,99 @@
 // To verify freshness: alef verify
 package io.xberg;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Process-wide memory and threading options applied to the ONNX Runtime sessions of embeddings,
- * reranking, sparse embeddings, late-interaction engines and PaddleOCR.
+ * Process-wide memory and threading options applied to the ONNX Runtime sessions of
+ * embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
  *
- * <p>The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither {@code
- * onnx-runtime} nor {@code paddle-ocr-ort} exposes them without having a session to apply them to.
+ * The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither
+ * {@code onnx-runtime} nor {@code paddle-ocr-ort} exposes them without having a session to apply them to.
  *
- * <p>PaddleOCR applies {@code memory_pattern} and {@code cpu_arena} only; its intra-op thread count
+ * PaddleOCR applies {@code memory_pattern} and {@code cpu_arena} only; its intra-op thread count
  * is not changed by {@code max_threads}.
  *
- * <p>Other ORT users (layout detection, SLANet, TATR, the inference backend, Whisper, GLiNER) build
- * their own sessions and are not affected.
+ * Other ORT users (layout detection, SLANet, TATR, the inference backend, Whisper,
+ * GLiNER) build their own sessions and are not affected.
  *
- * <p>The defaults reproduce the historical behaviour: ORT's memory-pattern planner and CPU arena
- * stay enabled and the intra-op thread count follows the default thread budget. Both ORT features
- * retain allocations sized by the largest batch seen, which is what makes resident memory grow with
- * variable-length embedding batches and never shrink. Turning them off trades some throughput for a
- * bounded footprint.
+ * The defaults reproduce the historical behaviour: ORT's memory-pattern planner and
+ * CPU arena stay enabled and the intra-op thread count follows the default thread
+ * budget. Both ORT features retain allocations sized by the largest batch seen, which
+ * is what makes resident memory grow with variable-length embedding batches and never
+ * shrink. Turning them off trades some throughput for a bounded footprint.
  *
- * <p>Options are read when a session is built. set_ort_session_options clears the engine caches
- * when the options change, so resident engines are rebuilt on next use; a caller still holding an
- * engine keeps its old session until it drops it. PaddleOCR engines are pooled per option set, so a
- * changed option set builds new engines.
+ * Options are read when a session is built. set_ort_session_options clears the
+ * engine caches when the options change, so resident engines are rebuilt on next use;
+ * a caller still holding an engine keeps its old session until it drops it. PaddleOCR
+ * engines are pooled per option set, so a changed option set builds new engines.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OrtSessionOptions.Builder.class)
 public record OrtSessionOptions(
     @Nullable @JsonProperty("memory_pattern") Boolean memoryPattern,
     @Nullable @JsonProperty("cpu_arena") Boolean cpuArena,
-    @Nullable @JsonProperty("max_threads") Integer maxThreads) {
-  /** Creates a new Builder for constructing instances of this record. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public OrtSessionOptions {
-    if (memoryPattern == null) {
-      memoryPattern = true;
+    @Nullable @JsonProperty("max_threads") Integer maxThreads
+) {
+    /** Creates a new Builder for constructing instances of this record. */
+    public static Builder builder() {
+        return new Builder();
     }
-    if (cpuArena == null) {
-      cpuArena = true;
-    }
-  }
-
-  // CPD-OFF
-  /** Jackson builder for OrtSessionOptions deserialization. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-  @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
-  public static final class Builder {
-
-    @JsonProperty("memory_pattern")
-    private Boolean memoryPattern = true;
-
-    @JsonProperty("cpu_arena")
-    private Boolean cpuArena = true;
-
-    @JsonProperty("max_threads")
-    @Nullable
-    private Integer maxThreads;
-
-    /** Sets the memoryPattern field. */
-    @JsonProperty("memory_pattern")
-    public Builder withMemoryPattern(final @Nullable Boolean value) {
-      this.memoryPattern = value;
-      return this;
+    public OrtSessionOptions{
+        if (memoryPattern == null) { memoryPattern = true; }
+        if (cpuArena == null) { cpuArena = true; }
     }
 
-    /** Sets the cpuArena field. */
-    @JsonProperty("cpu_arena")
-    public Builder withCpuArena(final @Nullable Boolean value) {
-      this.cpuArena = value;
-      return this;
-    }
+    // CPD-OFF
+    /** Jackson builder for OrtSessionOptions deserialization. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonPOJOBuilder(withPrefix = "with", buildMethodName = "build")
+    public static final class Builder {
 
-    /** Sets the maxThreads field. */
-    @JsonProperty("max_threads")
-    public Builder withMaxThreads(final @Nullable Integer value) {
-      this.maxThreads = value;
-      return this;
-    }
+        @JsonProperty("memory_pattern")
+        private Boolean memoryPattern = true;
+        @JsonProperty("cpu_arena")
+        private Boolean cpuArena = true;
+        @JsonProperty("max_threads")
+        @Nullable private Integer maxThreads;
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Builder withMaxThreads(final int value) {
-      return withMaxThreads(Integer.valueOf(value));
-    }
+        /** Sets the memoryPattern field. */
+        @JsonProperty("memory_pattern")
+        public Builder withMemoryPattern(final @Nullable Boolean value) {
+            this.memoryPattern = value;
+            return this;
+        }
 
-    /** Constructs a OrtSessionOptions instance from the builder's current state. */
-    public OrtSessionOptions build() {
-      return new OrtSessionOptions(memoryPattern, cpuArena, maxThreads);
+        /** Sets the cpuArena field. */
+        @JsonProperty("cpu_arena")
+        public Builder withCpuArena(final @Nullable Boolean value) {
+            this.cpuArena = value;
+            return this;
+        }
+
+        /** Sets the maxThreads field. */
+        @JsonProperty("max_threads")
+        public Builder withMaxThreads(final @Nullable Integer value) {
+            this.maxThreads = value;
+            return this;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public Builder withMaxThreads(final int value) {
+            return withMaxThreads(Integer.valueOf(value));
+        }
+
+        /** Constructs a OrtSessionOptions instance from the builder's current state. */
+        public OrtSessionOptions build() {
+            return new OrtSessionOptions(
+                memoryPattern,
+                cpuArena,
+                maxThreads
+            );
+        }
     }
-  }
-  // CPD-ON
+    // CPD-ON
 }

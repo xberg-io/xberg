@@ -2,7 +2,9 @@
 // alef:hash:8eb8d9d787704abde67d5286597eefe776919a4402a912da10dd46ffb3d09200
 package io.xberg;
 
-/** Invalid configuration or input parameters were supplied. */
+/**
+ * Invalid configuration or input parameters were supplied.
+ */
 public class ValidationException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 

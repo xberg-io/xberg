@@ -5,9 +5,10 @@ package io.xberg;
 /**
  * The extraction stopped after a cooperative cancellation request.
  *
- * <p>Rust callers can request cancellation through `CancellationToken`. The REST async-jobs API
- * uses the same mechanism. Generated language bindings do not currently expose in-process
- * cancellation.
+ * Rust callers can request cancellation through
+ * `CancellationToken`. The REST async-jobs API uses the
+ * same mechanism. Generated language bindings do not currently expose
+ * in-process cancellation.
  */
 public class CancelledException extends XbergErrorException {
   private static final long serialVersionUID = 1L;

@@ -3,5 +3,7 @@
 // To regenerate: alef generate
 // To verify freshness: alef verify
 
-/** High-performance document intelligence library */
+/**
+ * High-performance document intelligence library
+ */
 package io.xberg;

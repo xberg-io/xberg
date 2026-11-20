@@ -2,7 +2,9 @@
 // alef:hash:300e05a77dacac1a0a81c6a01a7fea904feababaf8c7e9517fb7e4d2be0c5cd0
 package io.xberg;
 
-/** The extraction operation exceeded the configured time limit. */
+/**
+ * The extraction operation exceeded the configured time limit.
+ */
 public class TimeoutException extends XbergErrorException {
   private static final long serialVersionUID = 1L;
 
