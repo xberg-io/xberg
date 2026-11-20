@@ -17,7 +17,7 @@ use super::native_layout_readers_configured;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::picture_layer;
 use super::{
-    PageOcrLayoutContext, automatic_ocr_backend_is_registered, extraction_method_after_mixed_ocr,
+    PageOcrLayoutContext, WholePageOcrOutput, automatic_ocr_backend_is_registered, extraction_method_after_mixed_ocr,
     failed_ocr_fallback_is_total_loss, native_page_texts_for_restore, native_text_stopped_by_time_limit,
     near_empty_ocr_fallback_applies, ocr, restore_discarded_page_reads, run_ocr_with_layout_pages,
     scanned_pages_to_ocr, unmapped_glyphs,
@@ -115,29 +115,8 @@ async fn route_force_ocr(
     routing: &mut OcrRoutingState,
     native_text: &str,
 ) -> Result<(String, ExtractionMethod)> {
-    let (content, config, path, layout_pages, boundaries) = (
-        route.content,
-        route.config,
-        route.path,
-        route.layout_pages,
-        route.boundaries,
-    );
-    let (
-        mut ocr_text,
-        ocr_tbls,
-        ocr_elems,
-        mut ocr_doc,
-        llm_usage,
-        ocr_pts,
-        ocr_rstrs,
-        formulas,
-        preprocessing,
-        page_ocr_confidence,
-        gate_audit,
-        layout_warning,
-        layout_glyph_drop_warnings,
-        _,
-    ) = run_ocr_with_layout_pages(
+    let (content, config, path, layout_pages) = (route.content, route.config, route.path, route.layout_pages);
+    let run = run_ocr_with_layout_pages(
         content,
         config,
         path,
@@ -155,29 +134,40 @@ async fn route_force_ocr(
         route.layout.acceleration_override.take(),
     )
     .await?;
+    Ok(adopt_forced_ocr_run(route, routing, native_text, run))
+}
+
+/// Adopts a forced whole-document OCR run: its warnings, the native pages whose OCR text is empty,
+/// and the document it produced.
+fn adopt_forced_ocr_run(
+    route: &OcrRouteInputs<'_>,
+    routing: &mut OcrRoutingState,
+    native_text: &str,
+    run: WholePageOcrOutput,
+) -> (String, ExtractionMethod) {
+    let (
+        mut ocr_text,
+        ocr_tbls,
+        ocr_elems,
+        mut ocr_doc,
+        llm_usage,
+        ocr_pts,
+        ocr_rstrs,
+        formulas,
+        preprocessing,
+        page_ocr_confidence,
+        gate_audit,
+        layout_warning,
+        layout_glyph_drop_warnings,
+        _,
+    ) = run;
     if let Some(warning) = layout_warning {
         crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
     }
     for warning in layout_glyph_drop_warnings {
         crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
     }
-    if ocr_pts.iter().any(|page| page.trim().is_empty()) {
-        let native_pages = native_page_texts_for_restore(route.page_contents, native_text, boundaries);
-        if let Some((pages, lost_glyphs)) =
-            restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages, config)
-        {
-            routing.document_page_texts = Some(pages);
-            let total_lost = lost_glyphs.iter().map(|&(_, lost)| lost).sum();
-            if let Some(warning) = unmapped_glyphs::lost_glyph_warning(total_lost, config) {
-                crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
-            }
-            for (page, lost) in lost_glyphs {
-                if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(page, lost) {
-                    crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
-                }
-            }
-        }
-    }
+    restore_discarded_pages(route, routing, native_text, &mut ocr_text, &mut ocr_doc, &ocr_pts);
     routing.layout_gate_audit = gate_audit;
     routing.tables = ocr_tbls;
     routing.elements = ocr_elems;
@@ -188,7 +178,38 @@ async fn route_force_ocr(
     routing.formulas = formulas;
     routing.preprocessing_by_page = preprocessing;
     routing.confidence_by_page = page_ocr_confidence;
-    Ok((ocr_text, ExtractionMethod::Ocr))
+    (ocr_text, ExtractionMethod::Ocr)
+}
+
+/// Restores the native read of pages the run left with empty OCR text and warns about the glyphs
+/// the restore could not recover.
+fn restore_discarded_pages(
+    route: &OcrRouteInputs<'_>,
+    routing: &mut OcrRoutingState,
+    native_text: &str,
+    ocr_text: &mut String,
+    ocr_doc: &mut Option<InternalDocument>,
+    ocr_pts: &[String],
+) {
+    if !ocr_pts.iter().any(|page| page.trim().is_empty()) {
+        return;
+    }
+    let native_pages = native_page_texts_for_restore(route.page_contents, native_text, route.boundaries);
+    let Some((pages, lost_glyphs)) =
+        restore_discarded_page_reads(ocr_text, ocr_doc, ocr_pts, &native_pages, route.config)
+    else {
+        return;
+    };
+    routing.document_page_texts = Some(pages);
+    let total_lost = lost_glyphs.iter().map(|&(_, lost)| lost).sum();
+    if let Some(warning) = unmapped_glyphs::lost_glyph_warning(total_lost, route.config) {
+        crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
+    }
+    for (page, lost) in lost_glyphs {
+        if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(page, lost) {
+            crate::core::diagnostics::push_warning_deduped(&mut routing.fallback_warnings, warning);
+        }
+    }
 }
 
 async fn route_force_ocr_pages(
@@ -212,35 +233,7 @@ async fn route_force_ocr_pages(
                     (&[], &[]),
                 )
                 .await?;
-                #[cfg(feature = "formula-recognition")]
-                {
-                    routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
-                }
-                let (
-                    mixed,
-                    results_map,
-                    mixed_structured_pages,
-                    mixed_llm_usage,
-                    mixed_rstrs,
-                    mixed_formulas,
-                    mixed_preprocessing,
-                    mixed_ocr_confidence,
-                    mixed_warnings,
-                    mixed_page_failures,
-                ) = mixed_run.output;
-                let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-                routing.llm_usage = mixed_llm_usage;
-                routing.results_map = Some(results_map);
-                routing.structured_pages = Some(mixed_structured_pages);
-                routing.page_rasters = mixed_rstrs;
-                if !mixed_formulas.is_empty() {
-                    routing.formulas = mixed_formulas;
-                }
-                routing.preprocessing_by_page.extend(mixed_preprocessing);
-                routing.confidence_by_page.extend(mixed_ocr_confidence);
-                routing.page_failures.extend(mixed_page_failures);
-                routing.fallback_warnings.extend(mixed_warnings);
-                (mixed, extraction_method)
+                adopt_mixed_run(routing, mixed_run)
             } else {
                 tracing::warn!(
                     target: "xberg::extractors::pdf",
@@ -330,6 +323,33 @@ fn adopt_scanned_run(
     mixed_run: ocr::MixedOcrRun,
     scanned_pages: &[u32],
 ) -> (String, ExtractionMethod) {
+    let (mixed, method) = adopt_mixed_run(routing, mixed_run);
+    // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When every
+    // candidate page was rejected (blank render, failed decode, empty backend output)
+    // nothing was replaced and the result IS the native text -- reporting `Mixed` there
+    // tells a caller the document was OCR'd when it was not, which is how a silent
+    // whole-document OCR failure reads as success. ~keep
+    match method {
+        ExtractionMethod::Mixed => (mixed, method),
+        _ => {
+            tracing::warn!(
+                target: "xberg::extractors::pdf",
+                candidate_pages = scanned_pages.len(),
+                "OCR was attempted on every detected scanned page but no page produced usable \
+                text; reporting the native extraction method rather than `mixed`"
+            );
+            (mixed, ExtractionMethod::Native)
+        }
+    }
+}
+
+/// Adopts a mixed native/OCR run into `routing`, returning the text and extraction method it
+/// produced. Every route that reads a subset of pages goes through here so the adopted fields stay
+/// in one place.
+pub(super) fn adopt_mixed_run(
+    routing: &mut OcrRoutingState,
+    mixed_run: ocr::MixedOcrRun,
+) -> (String, ExtractionMethod) {
     #[cfg(feature = "formula-recognition")]
     {
         routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -346,21 +366,7 @@ fn adopt_scanned_run(
         mixed_warnings,
         mixed_page_failures,
     ) = mixed_run.output;
-    // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
-    // every candidate page was rejected (blank render, failed decode, empty
-    // backend output) nothing was replaced and the result IS the native text --
-    // reporting `Mixed` there tells a caller the document was OCR'd when it was
-    // not, which is how a silent whole-document OCR failure reads as success. ~keep
-    let mixed_method = extraction_method_after_mixed_ocr(&results_map);
-    let ocr_contributed = mixed_method == ExtractionMethod::Mixed;
-    if !ocr_contributed {
-        tracing::warn!(
-            target: "xberg::extractors::pdf",
-            candidate_pages = scanned_pages.len(),
-            "OCR was attempted on every detected scanned page but no page produced usable \
-            text; reporting the native extraction method rather than `mixed`"
-        );
-    }
+    let extraction_method = extraction_method_after_mixed_ocr(&results_map);
     routing.llm_usage = mixed_llm_usage;
     routing.results_map = Some(results_map);
     routing.structured_pages = Some(mixed_structured_pages);
@@ -372,11 +378,7 @@ fn adopt_scanned_run(
     routing.confidence_by_page.extend(mixed_ocr_confidence);
     routing.page_failures.extend(mixed_page_failures);
     routing.fallback_warnings.extend(mixed_warnings);
-    if ocr_contributed {
-        (mixed, mixed_method)
-    } else {
-        (mixed, ExtractionMethod::Native)
-    }
+    (mixed, extraction_method)
 }
 
 fn scanned_pages_failed(
@@ -413,11 +415,11 @@ fn scanned_pages_failed(
 
 // These values exist only with layout detection; keep the reuse gate in the same cfg block. ~keep
 #[cfg(feature = "layout-detection")]
-#[cfg_attr(
-    not(any(feature = "formula-recognition", feature = "liter-llm")),
-    allow(unused_variables)
-)]
 pub(super) fn withhold_unreusable_layout(
+    #[cfg_attr(
+        not(any(feature = "formula-recognition", feature = "liter-llm")),
+        allow(unused_variables)
+    )]
     config: &ExtractionConfig,
     content: &[u8],
     markdown_layout_gate_decisions: Option<&[crate::pdf::layout_gate::PageGateDecision]>,

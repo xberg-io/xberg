@@ -68,7 +68,7 @@ pub(super) fn push_link_annotation_uris(doc: &mut InternalDocument) {
 // non-zero and negative) and the page rotation together to place a page's raw-space geometry.
 // Rides in `additional` rather than a new public binding type, same as the `page_labels` key
 // (issue #66) and `ocr_page_coordinate_frames` (GH#1645). ~keep
-pub(super) fn attach_page_coordinate_frames(
+fn attach_page_coordinate_frames(
     doc: &mut InternalDocument,
     pages: &[PageContent],
     pdf_page_coordinate_frames: Vec<PdfPageCoordinateFrame>,
@@ -101,7 +101,8 @@ pub(super) fn inject_native_image_elements(
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))] extraction_method: ExtractionMethod,
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))] ocr_results_map: Option<&ahash::AHashMap<u32, String>>,
 ) {
-    // The OCR path has its own guarded injection block below (see the `#[cfg(feature = "ocr")]`
+    // The OCR path injects its own placeholders in `inject_ocr_image_placeholders`
+    // (gated on `ocr`/`ocr-pipeline`). ~keep
     let image_anchor = extraction::image_anchor(config);
     let document_has_image_elements = doc.elements.iter().any(|element| {
         #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
@@ -221,9 +222,9 @@ pub(super) fn inject_ocr_image_placeholders(doc: &mut InternalDocument, config: 
     }
 }
 
-// Record the layout gate's audit trail from whichever pass ran
-// it. Compiled whenever `pdf` is on so `ocr_layout_gate_audit` keeps
-// a reader in profiles without layout-detection (it is always
+// Record the layout gate's audit trail, read here from whichever pass ran it
+// (`OcrRoutingState::layout_gate_audit`, or the markdown gate). Compiled whenever `pdf` is on so
+// `ocr_layout_gate_audit` keeps a reader in profiles without layout-detection (it is always
 // `(None, None)` there and the fields stay `None`). ~keep
 pub(super) fn record_layout_gate_audit(
     pdf_metadata: &mut crate::pdf::metadata::PdfExtractionMetadata,

@@ -1,6 +1,8 @@
 //! The automatic OCR route of the native PDF path: the per-page quality gate and the fallbacks it selects.
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+use super::extraction_method_after_mixed_ocr;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::ink_probe;
 #[cfg(all(
     feature = "layout-detection",
@@ -12,56 +14,19 @@ use super::native_layout_readers_configured;
     any(feature = "formula-recognition", feature = "liter-llm")
 ))]
 use super::native_routing::NativeOnlyLayoutInputs;
-use super::native_routing::{OcrRouteInputs, OcrRoutingState};
+use super::native_routing::{OcrRouteInputs, OcrRoutingState, adopt_mixed_run};
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::picture_layer;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 use super::unreadable_script;
 use super::{
     PageOcrLayoutContext, WholePageOcrOutput, automatic_page_acceptance_supported, dropped_script_warnings,
-    ensure_pdf_not_cancelled, every_page_dropped_script, extraction_method_after_mixed_ocr,
-    failed_ocr_fallback_is_total_loss, loses_whole_read, ocr, pages_that_dropped_script, run_ocr_with_layout_pages,
-    unmapped_glyphs, whole_document_ocr_hints, with_native_page_acceptance,
+    ensure_pdf_not_cancelled, every_page_dropped_script, failed_ocr_fallback_is_total_loss, loses_whole_read, ocr,
+    pages_that_dropped_script, run_ocr_with_layout_pages, unmapped_glyphs, whole_document_ocr_hints,
+    with_native_page_acceptance,
 };
 use crate::Result;
 use crate::types::ExtractionMethod;
-
-// The result of a targeted per-page run, shared by the `RunFallbackOnPages` arm and the
-// whole-document arm's retry of the pages whose native script the whole read dropped. ~keep
-macro_rules! apply_targeted_mixed_run {
-    ($routing:ident, $mixed_run:expr) => {{
-        let mixed_run = $mixed_run;
-        #[cfg(feature = "formula-recognition")]
-        {
-            $routing.mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
-        }
-        let (
-            mixed,
-            results_map,
-            mixed_structured_pages,
-            mixed_llm_usage,
-            mixed_rstrs,
-            mixed_formulas,
-            mixed_preprocessing,
-            mixed_ocr_confidence,
-            mixed_warnings,
-            mixed_page_failures,
-        ) = mixed_run.output;
-        let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-        $routing.llm_usage = mixed_llm_usage;
-        $routing.results_map = Some(results_map);
-        $routing.structured_pages = Some(mixed_structured_pages);
-        $routing.page_rasters = mixed_rstrs;
-        if !mixed_formulas.is_empty() {
-            $routing.formulas = mixed_formulas;
-        }
-        $routing.preprocessing_by_page.extend(mixed_preprocessing);
-        $routing.confidence_by_page.extend(mixed_ocr_confidence);
-        $routing.page_failures.extend(mixed_page_failures);
-        $routing.fallback_warnings.extend(mixed_warnings);
-        (mixed, extraction_method)
-    }};
-}
 
 struct AutoGate {
     failing_pages: Vec<u32>,
@@ -118,9 +83,9 @@ pub(super) async fn route_auto_fallback(
     Ok(routed)
 }
 
-#[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))]
 async fn evaluate_auto_gate(
     route: &mut OcrRouteInputs<'_>,
+    #[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))]
     routing: &mut OcrRoutingState,
     native_text: &str,
 ) -> Result<(ocr::OcrGateOutcome, AutoGate)> {
@@ -400,10 +365,9 @@ fn hold_markdown_inputs(route: &mut OcrRouteInputs<'_>, gate: &AutoGate) -> Held
     }
 }
 
-#[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))]
 async fn read_whole_document(
     route: &mut OcrRouteInputs<'_>,
-    gate: &AutoGate,
+    #[cfg_attr(not(all(feature = "ocr", not(target_arch = "wasm32"))), allow(unused_variables))] gate: &AutoGate,
     native_text: &str,
 ) -> ocr::OcrRunResult<WholePageOcrOutput> {
     let (content, config, path, layout_pages, pdf_metadata, boundaries) = (
@@ -477,11 +441,9 @@ async fn retry_dropped_script_pages(
         Some(Ok(mixed_run)) => {
             // A page the retry could not read that the whole read did read would come out
             // empty, so the retry is discarded and the whole read used. ~keep
-            let whole_read_loses = loses_whole_read(
-                whole_read.as_ref().ok().map(|read| read.5.as_slice()),
-                &mixed_run.output.9,
-                &dropped_pages,
-            );
+            let whole_read_pages = whole_read.as_ref().ok().map(|read| read.5.as_slice());
+            let retry_page_failures = mixed_run.output.9.as_slice();
+            let whole_read_loses = loses_whole_read(whole_read_pages, retry_page_failures, &dropped_pages);
             if whole_read_loses {
                 tracing::warn!(
                     target: "xberg::extractors::pdf",
@@ -500,7 +462,7 @@ async fn retry_dropped_script_pages(
                 });
                 None
             } else {
-                Some(apply_targeted_mixed_run!(routing, mixed_run))
+                Some(adopt_mixed_run(routing, mixed_run))
             }
         }
         Some(Err(error @ crate::XbergError::Cancelled)) => return Err(error),
@@ -761,21 +723,33 @@ async fn run_selected_pages(
     (bounds, pages): (&[crate::types::PageBoundary], &[u32]),
     gate: &AutoGate,
 ) -> Result<(String, ExtractionMethod)> {
+    match run_targeted_pages_ocr(route, gate, &native_text, bounds, pages).await {
+        Ok(mixed_run) => Ok(adopt_mixed_run(routing, mixed_run)),
+        Err(e @ crate::XbergError::Cancelled) => Err(e),
+        Err(e) => selected_pages_failed(routing, native_text, bounds, pages, e),
+    }
+}
+
+async fn run_targeted_pages_ocr(
+    route: &OcrRouteInputs<'_>,
+    gate: &AutoGate,
+    native_text: &str,
+    bounds: &[crate::types::PageBoundary],
+    pages: &[u32],
+) -> crate::Result<ocr::MixedOcrRun> {
     let (content, config, layout_pages, pdf_metadata) =
         (route.content, route.config, route.layout_pages, route.pdf_metadata);
     let outlined_ocr_pages = &*route.outlined_ocr_pages;
+    let fabricated_text_pages = pdf_metadata
+        .pdf_specific
+        .fabricated_text_pages
+        .as_deref()
+        .unwrap_or(&[]);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let selected_run = ocr::extract_mixed_ocr_native_with_probe_reads(
-        &native_text,
+        native_text,
         bounds,
-        (
-            pages,
-            pdf_metadata
-                .pdf_specific
-                .fabricated_text_pages
-                .as_deref()
-                .unwrap_or(&[]),
-        ),
+        (pages, fabricated_text_pages),
         content,
         config,
         layout_pages,
@@ -784,49 +758,46 @@ async fn run_selected_pages(
     .await;
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
     let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
-        &native_text,
+        native_text,
         bounds,
-        (
-            pages,
-            pdf_metadata
-                .pdf_specific
-                .fabricated_text_pages
-                .as_deref()
-                .unwrap_or(&[]),
-        ),
+        (pages, fabricated_text_pages),
         content,
         config,
         layout_pages,
         (outlined_ocr_pages, &gate.native_script_pages),
     )
     .await;
-    Ok(match selected_run {
-        Ok(mixed_run) => apply_targeted_mixed_run!(routing, mixed_run),
-        Err(e @ crate::XbergError::Cancelled) => return Err(e),
-        Err(e) => {
-            tracing::warn!(
-                target: "xberg::extractors::pdf",
-                error = %e.pdf_ocr_trace_category(),
-                failing_pages = ?pages,
-                "Targeted OCR fallback failed; using native text extraction result"
-            );
-            if failed_ocr_fallback_is_total_loss(&native_text) {
-                return Err(e);
-            }
-            routing
-                .page_failures
-                .extend(ocr::route_level_ocr_page_failures(pages, &e, &native_text, bounds));
-            routing.fallback_warnings.push(crate::types::ProcessingWarning {
-                source: std::borrow::Cow::Borrowed("ocr"),
-                message: std::borrow::Cow::Owned(format!(
-                    "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
-                                         retain native text that was below the OCR-trigger quality threshold \
-                                         and may be empty or incomplete."
-                )),
-            });
-            (native_text, ExtractionMethod::Native)
-        }
-    })
+    selected_run
+}
+
+fn selected_pages_failed(
+    routing: &mut OcrRoutingState,
+    native_text: String,
+    bounds: &[crate::types::PageBoundary],
+    pages: &[u32],
+    e: crate::XbergError,
+) -> Result<(String, ExtractionMethod)> {
+    tracing::warn!(
+        target: "xberg::extractors::pdf",
+        error = %e.pdf_ocr_trace_category(),
+        failing_pages = ?pages,
+        "Targeted OCR fallback failed; using native text extraction result"
+    );
+    if failed_ocr_fallback_is_total_loss(&native_text) {
+        return Err(e);
+    }
+    routing
+        .page_failures
+        .extend(ocr::route_level_ocr_page_failures(pages, &e, &native_text, bounds));
+    routing.fallback_warnings.push(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(format!(
+            "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
+                                 retain native text that was below the OCR-trigger quality threshold \
+                                 and may be empty or incomplete."
+        )),
+    });
+    Ok((native_text, ExtractionMethod::Native))
 }
 
 fn selected_pages_without_boundaries(
