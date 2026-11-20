@@ -34,10 +34,34 @@ function Retry-Command {
 }
 
 function Assert-LibheifVersion {
-  param([string[]]$Packages)
-  $matching = @($Packages | Where-Object { $_ -match '^libheif:x64-windows-static-md\s+1\.23\.7(?:#\d+)?\s' })
-  if ($matching.Count -ne 1) { throw 'Expected exactly one installed libheif 1.23.7 x64-windows-static-md port' }
-  Write-Host "Verified $($matching[0])"
+  param([string[]]$Packages, [string[]]$X265Packages = @())
+  # vcpkg has printed either one feature-annotated row or a base row plus one row per
+  # feature across versions; accept both shapes so the assertion cannot be skipped. ~keep
+  $rows = @($Packages | Where-Object { $_ -match '^libheif(?:\[[^\]]*\])?:x64-windows-static-md\s+1\.23\.7(?:#\d+)?\s' })
+  $bases = @($rows | Where-Object { $_ -match '^libheif:x64-windows-static-md\s' })
+  if ($rows.Count -eq 0 -or $bases.Count -gt 1 -or ($bases.Count -eq 0 -and $rows.Count -ne 1)) {
+    throw 'Expected exactly one installed libheif 1.23.7 x64-windows-static-md port'
+  }
+  Write-Host "Verified $($rows[0])"
+
+  $features = @()
+  foreach ($row in $rows) {
+    if ($row -match '^libheif\[([^\]]*)\]:') {
+      $features += @($Matches[1] -split ',' | ForEach-Object { $_.Trim() })
+    }
+  }
+  if ($features -contains 'hevc' -or $features -contains 'x265') {
+    throw "libheif resolved the GPL-2.0 x265 encoder via the 'hevc' feature (features: $($features -join ','))"
+  }
+  if ($X265Packages.Count -ne 0) {
+    throw "vcpkg installed the GPL-2.0 x265 port alongside libheif: $($X265Packages[0])"
+  }
+  foreach ($required in @('aom', 'libde265')) {
+    if (-not ($features -contains $required)) {
+      throw "libheif is missing the $required feature (resolved: $($features -join ','))"
+    }
+  }
+  Write-Host "Verified decode-only libheif features: $($features -join ',')"
 }
 
 $tesseractCacheHit = $env:TESSERACT_CACHE_HIT -eq "true"
@@ -79,7 +103,11 @@ if (-not $libheifCacheHit) {
   if ($LASTEXITCODE -ne 0) { throw 'Failed to select the verified vcpkg baseline' }
   & (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics
   if ($LASTEXITCODE -ne 0) { throw 'Failed to bootstrap the verified vcpkg baseline' }
-  if (-not (Retry-Command { & $vcpkgExe install "libheif[aom]:x64-windows-static-md" --recurse } -MaxAttempts 2)) {
+  # The port's default features are `hevc` (HEVC encoding via x265, GPL-2.0-or-later)
+  # and `libde265`. `core` suppresses both defaults so only the AV1/HEIC decoders are
+  # linked; the CLI never encodes HEIC. Re-adding a plain `libheif` here silently
+  # restores the GPL encoder. ~keep
+  if (-not (Retry-Command { & $vcpkgExe install "libheif[core,aom,libde265]:x64-windows-static-md" --recurse } -MaxAttempts 2)) {
     throw "Failed to install libheif via the verified vcpkg baseline"
   }
   else {
@@ -109,9 +137,24 @@ if ($LASTEXITCODE -ne 0 -or $actualBaseline -ne '5363acb796e576328288fae60c25304
   throw 'The cached vcpkg checkout does not match its verified baseline'
 }
 $vcpkgExe = Join-Path $vcpkgRoot 'vcpkg.exe'
-$heifPackages = @(& $vcpkgExe list 'libheif:x64-windows-static-md')
+# `vcpkg list` prints one row per installed feature and filters by substring of the
+# display name, so query the bare port name: `libheif:triplet` would return only the
+# core row and the feature assertion below would see an empty set. ~keep
+$heifPackages = @(& $vcpkgExe list 'libheif')
 if ($LASTEXITCODE -ne 0) { throw 'Failed to query the installed libheif port' }
-Assert-LibheifVersion -Packages $heifPackages
+# A no-match query may print an informational line and still exit 0, so keep only
+# real package rows rather than treating any output as a hit. ~keep
+$x265Packages = @(& $vcpkgExe list 'x265:x64-windows-static-md' | Where-Object { $_ -match '^x265' })
+Assert-LibheifVersion -Packages $heifPackages -X265Packages $x265Packages
+
+# The metadata assertion above cannot see a cached tree built before the feature
+# change, so check the installed archive too: the static triplet puts libx265 in
+# the same lib directory the build links from. ~keep
+$x265Archives = @(Get-ChildItem -LiteralPath (Join-Path $vcpkgRoot 'installed\x64-windows-static-md\lib') -Filter '*x265*' -ErrorAction SilentlyContinue)
+if ($x265Archives.Count -ne 0) {
+  throw "The vcpkg tree carries a GPL-2.0 x265 archive: $($x265Archives[0].FullName)"
+}
+Write-Host "✓ libheif is decode-only (no x265 archive in the vcpkg tree)"
 
 # Neither branch above proves zlib is on disk: the install path prints its "✓" whenever the
 # vcpkg call merely does not throw, and the cache path prints one unconditionally. When the port

@@ -1897,9 +1897,11 @@ jobs:
             }
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
           # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
-          # libheif stack (libheif + libde265 + x265, GPL/LGPL), which some redistributors cannot
-          # ship (#3294). `formats-no-heic` stays in `default`, so PDF and Office extraction are
-          # unchanged; only the HEIC/HEIF codecs are compiled out. ~keep
+          # libheif stack. Until #3338 that stack carried the port's default `hevc` feature (x265,
+          # GPL-2.0-or-later); it is now installed as `libheif[core,aom,libde265]`, so the default
+          # archive is permissive too. This archive still compiles the HEIC/HEIF codecs out
+          # entirely for redistributors that will not ship libheif/libde265 at all (#3294).
+          # `formats-no-heic` stays in `default`, so PDF and Office extraction are unchanged. ~keep
           - {
               os: windows-2022,
               target: x86_64-pc-windows-msvc,
@@ -1921,6 +1923,21 @@ jobs:
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
+
+      # Homebrew's libheif bottle links the GPL-2.0 x265 encoder, and
+      # vendor-native-closure-macos.sh then bundles that dylib into the tarball.
+      # Build the decode-only stack from source at the macOS floor instead, as the
+      # Node, Python and PHP jobs already do (#1243, #3338). ~keep
+      - name: Build libheif stack for the macOS floor
+        if: contains(matrix.target, 'apple-darwin')
+        shell: bash
+        run: |
+          export MACOSX_DEPLOYMENT_TARGET=15.0
+          bash scripts/ci/build-macos-heif-deps.sh
+          {
+            echo "MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+            echo "PKG_CONFIG_PATH=/tmp/xberg-heif/lib/pkgconfig"
+          } >>"$GITHUB_ENV"
 
       - name: Setup ONNX Runtime
         if: contains(matrix.target, 'windows')
@@ -1979,6 +1996,7 @@ jobs:
             scripts/ci/verify-windows-dll-closure.ps1
             scripts/ci/vendor-windows-native-closure.ps1
             scripts/ci/verify_no_gpl_cli_archive.py
+            scripts/ci/verify_no_gpl_codecs.py
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
             mise.toml
@@ -2072,6 +2090,30 @@ jobs:
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 
+      # `cargo deny` cannot see C codecs and the macOS/Linux closures are walked by
+      # filename, not by what the linked bytes reference. Open the finished artifact
+      # and fail on an x265 file name, a `libx265` load command/DT_NEEDED entry or an
+      # `x265_*` symbol. Both Windows archives are audited: the default one links the
+      # vcpkg libheif stack, the no-GPL one compiles it out.
+      - name: Verify CLI archive is free of the GPL x265 encoder
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.archive_suffix }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=("xberg-cli-${TARGET}${SUFFIX}".*)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one packaged CLI archive, found ${#archives[@]}"
+            exit 1
+          fi
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            python .release-tools/scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
+          else
+            python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
+          fi
+
       - name: Setup cargo-deny for the no-GPL license audit
         if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
         uses: xberg-io/actions/setup-mise@v1
@@ -2079,9 +2121,9 @@ jobs:
           install: "true"
           install-args: cargo-deny
 
-      # Cargo metadata alone cannot prove this artifact is GPL-free: libheif, libde265 and x265
-      # are C libraries reached through `libheif-sys` and linked statically by the vcpkg port, so
-      # the crate license graph stays clean whether or not they are in the binary. `cargo deny`
+      # Cargo metadata alone cannot prove this artifact is GPL-free: libheif and libde265 are C
+      # libraries reached through `libheif-sys` and linked statically by the vcpkg port, so the
+      # crate license graph stays clean whether or not they are in the binary. `cargo deny`
       # covers the Rust crates of the exact shipped feature graph (no `heic`), and the archive
       # audit covers the linked/bundled codecs in xberg.exe and its sibling DLLs. ~keep
       - name: Verify no GPL/LGPL codecs in the no-GPL CLI archive
@@ -2191,6 +2233,22 @@ jobs:
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
 
+      # The closure copy walks whatever Alpine's libheif plugins pull in; prove the
+      # packed archive carries no x265 plugin or x265-linked binary. ~keep
+      - name: Verify musl CLI archive is free of the GPL x265 encoder
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(xberg-cli-*.tar.gz)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one packaged musl CLI archive, found ${#archives[@]}"
+            exit 1
+          fi
+          python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
+
       - name: Checkout Linux CLI installer verification tools
         uses: actions/checkout@v7
         with:
@@ -2286,6 +2344,23 @@ jobs:
           cp build-output/xberg "$STAGE/xberg"
           chmod +x "$STAGE/xberg"
           tar -czf "${STAGE}.tar.gz" "$STAGE"
+
+      # The binstall profile is decode-only (`formats-no-heic`), but the artifact is
+      # still a release binary: prove it carries no x265 rather than infer it from
+      # the feature list. ~keep
+      - name: Verify binstall CLI archive is free of the GPL x265 encoder
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(xberg-cli-binstall-*.tar.gz)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one packaged binstall CLI archive, found ${#archives[@]}"
+            exit 1
+          fi
+          python3 scripts/ci/verify_no_gpl_codecs.py --min-artifacts 1 "${archives[0]}"
 
       - uses: actions/upload-artifact@v7
         with:

@@ -75,6 +75,16 @@ PC
 	xberg_assert_output "0"
 }
 
+@test "install_linux should_build_libheif_without_the_gpl_x265_encoder" {
+	grep -Fq -- '-DWITH_X265=OFF' "$INSTALL_SCRIPT"
+	grep -Fq -- '-DWITH_X264=OFF' "$INSTALL_SCRIPT"
+	grep -Fq -- '-DWITH_AOM_ENCODER=OFF' "$INSTALL_SCRIPT"
+	awk '/^packages=\(/{capture=1} /^echo "Installing dependencies/{capture=0} capture' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/packages.sh"
+	run grep -cx libx265-dev "$XBERG_WORK/packages.sh"
+	xberg_assert_status 1
+}
+
 @test "install_linux should_default_to_the_current_security_release" {
 	awk '/^LIBHEIF_VERSION=/{capture=1} /^LIBHEIF_PREFIX=/{capture=0} capture' \
 		"$INSTALL_SCRIPT" >"$XBERG_WORK/select-version.sh"
@@ -253,6 +263,15 @@ run_cache_promotion() {
 	xberg_assert_output_contains "rebuilding"
 	[ ! -e "$XBERG_TRACE" ]
 	[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
+}
+
+@test "install_linux should rebuild a cached libheif that links the GPL x265 encoder" {
+	prepare_cache_candidate
+	xberg_stub readelf 'echo " Type: DYN (Shared object file)"' 'echo " (SONAME) Library soname: [libheif.so.1]"' \
+		'echo " (NEEDED) Shared library: [libx265.so.215]"'
+	run_cache_check
+	xberg_assert_output_contains "links the GPL-2.0 x265 encoder"
+	xberg_assert_output_contains "rebuilding"
 }
 
 @test "install_linux should reject embedded RPATH and RUNPATH before probing cached libheif" {

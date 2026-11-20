@@ -85,6 +85,11 @@ jobs:
             --recursive
             --print-output-on-failure
 
+      # The gate runs on the Linux and macOS release runners against real archives;
+      # prove here that it rejects an x265-bearing fixture and accepts a decode-only one. ~keep
+      - name: Run the release archive x265 gate contracts
+        run: python3 scripts/ci/test_no_gpl_codecs.py -v
+
   pester:
     if: github.ref == 'refs/heads/main'
     name: Pester on windows-latest
