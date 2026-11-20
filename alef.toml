@@ -1386,6 +1386,7 @@ sources = [
   "crates/xberg/src/core/config/html_output.rs",
   "crates/xberg/src/core/config/layout.rs",
   "crates/xberg/src/core/config/acceleration.rs",
+  "crates/xberg/src/ort_options.rs",
   "crates/xberg/src/core/config/llm.rs",
   "crates/xberg/src/core/config/content_filter.rs",
   "crates/xberg/src/core/config/tree_sitter.rs",
@@ -1745,6 +1746,9 @@ default_features = false
 
 [crates.elixir]
 app_name = "xberg"
+# Applying new options drops every resident OCR/embedding engine under a pool lock, so the
+# NIF is CPU-bound rather than a quick scheduler call. ~keep
+cpu_bound_functions = ["set_ort_session_options"]
 # Intel macOS (x86_64-apple-darwin) dropped: GitHub retires the last x86_64-macOS
 # runner in 2027 and pyke ships no static ORT for it. rustler_precompiled would
 # hard-fail its checksum step hunting for an artifact CI no longer builds. ~keep

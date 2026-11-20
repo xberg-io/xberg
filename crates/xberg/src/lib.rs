@@ -148,9 +148,13 @@ pub mod reranking;
 #[cfg(feature = "onnx-runtime")]
 pub(crate) mod onnx;
 
-#[cfg(feature = "onnx-runtime")]
-#[cfg_attr(alef, alef(skip))]
-pub use onnx::{OrtSessionOptions, ort_session_options, set_ort_session_options};
+// ~keep Feature-independent: the options are a plain DTO with no ORT dependency, and a
+// binding gate on a cfg its own crate cannot observe (the `paddle_ocr` build-script cfg)
+// would drop the type from builds that still need it. A build with no ORT-backed feature
+// exposes them without having a session to apply them to.
+mod ort_options;
+
+pub use ort_options::{OrtSessionOptions, ort_session_options, set_ort_session_options};
 
 /// Sparse (SPLADE) learned embeddings for hybrid dense+sparse retrieval.
 #[cfg(any(feature = "sparse-embedding-presets", feature = "sparse-embeddings"))]
@@ -516,7 +520,7 @@ pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -
 pub use embeddings::embed_texts_async;
 
 /// Drop every resident model engine: dense, static, sparse and late-interaction
-/// embeddings and rerankers. Returns the number of engines removed.
+/// embeddings, rerankers and PaddleOCR engines. Returns the number of engines removed.
 ///
 /// A caller that still holds an engine keeps it alive until it drops its
 /// handle. The next call that needs a model loads it again. A build without
@@ -532,6 +536,8 @@ pub fn clear_engine_caches() -> usize {
     let removed = removed + sparse_embeddings::clear_engine_cache();
     #[cfg(feature = "late-interaction")]
     let removed = removed + late_interaction::clear_engine_cache();
+    #[cfg(feature = "paddle-ocr-ort")]
+    let removed = removed + paddle_ocr::clear_paddle_engine_caches();
     removed
 }
 

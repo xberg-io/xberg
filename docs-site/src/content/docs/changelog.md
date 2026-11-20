@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **pdf:** `pdf_options.extract_vector_geometry` (default `false`) returns each PDF page's vector geometry on `pages[].geometry`: every painted path's subpaths, segments, bounding box, fill colour, stroke colour/width/dash, and Optional Content layer, in page coordinates with the content-stream and Form XObject transforms applied. The coordinate frame is the same one text bounds use, so a label can be matched to the shape it annotates. Off by default because a dense drawing sheet can hold more than ten thousand paths. (#2966)
-- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
 
 ### Changed
 

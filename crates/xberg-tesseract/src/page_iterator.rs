@@ -1,3 +1,4 @@
+use crate::TesseractError;
 use crate::api::TesseractAPI;
 use crate::enums::{
     TessOrientation, TessPageIteratorLevel, TessParagraphJustification, TessPolyBlockType, TessTextlineOrder,
@@ -5,7 +6,6 @@ use crate::enums::{
 };
 use crate::error::Result;
 use crate::native_iterator::NativeIterator;
-use crate::TesseractError;
 use std::os::raw::{c_float, c_int, c_void};
 
 /// Block-level layout information from Tesseract.
