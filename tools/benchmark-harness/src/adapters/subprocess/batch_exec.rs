@@ -489,6 +489,27 @@ impl SubprocessAdapter {
             .collect()
     }
 
+    /// Fails every otherwise-successful item whose document reports a failed layout pass.
+    fn reject_layout_failure_items(
+        &self,
+        items: &[serde_json::Value],
+        validations: &mut [(bool, Option<String>, ErrorKind)],
+    ) {
+        if !self.reject_layout_failures {
+            return;
+        }
+        for (item, validation) in items.iter().zip(validations.iter_mut()) {
+            if !validation.0 {
+                continue;
+            }
+            if let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(item) {
+                validation.0 = false;
+                validation.1 = Some(message);
+                validation.2 = ErrorKind::FrameworkError;
+            }
+        }
+    }
+
     /// For items whose own validation didn't already report a failure, attribute the batch's
     /// process-level error to them too (e.g. a non-zero exit after some items already
     /// succeeded). ~keep
@@ -724,6 +745,7 @@ impl SubprocessAdapter {
         Self::validate_parsed_batch_cardinality(file_paths, &parsed_batch)?;
         let mut batch_validations: Vec<(bool, Option<String>, ErrorKind)> =
             parsed_batch.items.iter().map(validate_batch_item).collect();
+        self.reject_layout_failure_items(&parsed_batch.items, &mut batch_validations);
         if let Some(process_error) = error.as_ref() {
             Self::apply_process_error_to_unvalidated_items(&parsed_batch.items, &mut batch_validations, process_error);
         }
