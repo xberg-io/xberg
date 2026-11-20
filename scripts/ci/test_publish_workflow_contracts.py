@@ -15,6 +15,7 @@ from pathlib import Path
 
 import yaml
 from test_macos_deployment_target import macos_floor
+from verify_no_gpl_cli_archive import parse_args as parse_no_gpl_args
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish.yaml"
@@ -1030,8 +1031,9 @@ def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
     run = gate["run"]
     assert '--features "$FEATURES"' in run
     assert "check licenses" in run
-    assert "verify_no_gpl_cli_archive.py" in run
-    assert set(re.findall(r"--require-format (\w+)", run)) == {"pdf", "docx", "xlsx"}, (
+    verifier_args = run.split("verify_no_gpl_cli_archive.py", 1)[1].replace("\\\n", " ")
+    parsed = parse_no_gpl_args(shlex.split(verifier_args))
+    assert set(parsed.required_formats) == {"pdf", "docx", "xlsx"}, (
         "the gate must prove PDF and Office extraction survived the feature removal"
     )
 
