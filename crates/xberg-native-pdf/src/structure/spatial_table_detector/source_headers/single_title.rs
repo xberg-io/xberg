@@ -61,6 +61,154 @@ pub(super) fn has_leaf_header(
         && divider_starts_at_leaf(paths, divider, upper, band)
 }
 
+/// Preserve the leaf band under one spanning title when the source draws the title as a single
+/// merged cell above it, with an empty corner cell over the first column. The title's column
+/// extent is source geometry, not a guess, so the leaf band under it names those columns
+/// (xberg-io/xberg#3347). ~keep
+pub(super) fn has_stacked_leaf_header(
+    groups: &TableRow,
+    leaves: &TableRow,
+    body: &[TableRow],
+    paths: &[&PathContent],
+    columns: usize,
+) -> bool {
+    if columns < 3 || body.is_empty() || leaves.is_header || groups.is_header {
+        return false;
+    }
+    let Some((corner, title)) = stacked_title(groups, columns) else {
+        return false;
+    };
+    let Some(tracks) = leaf_tracks(leaves, columns) else {
+        return false;
+    };
+    let Some(band) = tracks.iter().copied().reduce(|all, bounds| all.union(&bounds)) else {
+        return false;
+    };
+    title_covers_leaves(corner, title, &tracks, band)
+        && stacked_body_is_data(body, columns)
+        && body_band_aligns(body, leaves, band)
+        && [band.top(), band.bottom()]
+            .into_iter()
+            .all(|y| band_boundary_rule(paths, band.left(), band.right(), y))
+}
+
+/// An empty corner cell over column 0 and one bold title cell over every other column, with both
+/// cells sharing one drawn band. Returns their bounds.
+fn stacked_title(groups: &TableRow, columns: usize) -> Option<(Rect, Rect)> {
+    let [corner, title] = groups.cells.as_slice() else {
+        return None;
+    };
+    let corner_bounds = corner.bbox.filter(|bounds| valid(*bounds))?;
+    let title_bounds = title.bbox?;
+    let empty_corner =
+        corner.colspan == 1 && corner.rowspan == 1 && corner.text.trim().is_empty() && corner.spans.is_empty();
+    let spanning_title = title.colspan as usize + 1 == columns
+        && title.rowspan == 1
+        && contained_source_label(title, true, MAX_UPPER_FONT_METRIC_OVERHANG)
+        && alphabetic_label(title);
+    (empty_corner && spanning_title).then_some((corner_bounds, title_bounds))
+}
+
+/// The leaf band's column tracks, each contiguous with the last one.
+fn leaf_tracks(leaves: &TableRow, columns: usize) -> Option<Vec<Rect>> {
+    if leaves.cells.len() != columns
+        || !leaves.cells.iter().all(|cell| {
+            cell.colspan == 1
+                && cell.rowspan == 1
+                && !cell.is_header
+                && contained_source_label(cell, true, MAX_UPPER_FONT_METRIC_OVERHANG)
+        })
+        || !leaves.cells.iter().any(alphabetic_label)
+    {
+        return None;
+    }
+    let mut tracks: Vec<Rect> = Vec::with_capacity(columns);
+    for cell in &leaves.cells {
+        let bounds = cell.bbox.filter(|bounds| valid(*bounds))?;
+        if let Some(previous) = tracks.last()
+            && (!same_rule_position(bounds.left(), previous.right())
+                || !same_rule_position(bounds.top(), previous.top())
+                || !same_rule_position(bounds.bottom(), previous.bottom()))
+        {
+            return None;
+        }
+        tracks.push(bounds);
+    }
+    Some(tracks)
+}
+
+/// Whether the title occupies exactly the leaf columns after the corner and closes on the leaf
+/// band's upper edge.
+fn title_covers_leaves(corner: Rect, title: Rect, tracks: &[Rect], band: Rect) -> bool {
+    same_rule_position(title.left(), tracks[1].left())
+        && same_rule_position(title.right(), tracks[tracks.len() - 1].right())
+        && same_track(corner, tracks[0])
+        && same_rule_position(corner.top(), title.top())
+        && same_rule_position(corner.bottom(), title.bottom())
+        && same_rule_position(title.top(), band.bottom())
+}
+
+/// A body band under the leaves: complete rows of contained cells, the first two holding values
+/// with at least one of them regular-weight. A body's first column may be a bold row-label track,
+/// so only the band as a whole has to contrast with the bold header. ~keep
+fn stacked_body_is_data(body: &[TableRow], columns: usize) -> bool {
+    let contained = |cell: &TableCell| {
+        contained_source_label(cell, true, MAX_UPPER_FONT_METRIC_OVERHANG)
+            || contained_source_label(cell, false, MAX_UPPER_FONT_METRIC_OVERHANG)
+    };
+    body.iter().all(|row| {
+        row.cells.len() == columns
+            && !row.is_header
+            && row.cells.iter().all(|cell| {
+                cell.colspan == 1
+                    && cell.rowspan == 1
+                    && !cell.is_header
+                    && (cell.text.trim().is_empty() || contained(cell))
+            })
+    }) && body.iter().take(2).any(|row| {
+        row.cells
+            .iter()
+            .filter(|cell| super::super::is_data_value(cell.text.trim()))
+            .count()
+            >= 2
+            && row
+                .cells
+                .iter()
+                .any(|cell| !cell.text.trim().is_empty() && cell.spans.iter().all(|span| !span.font_weight.is_bold()))
+    })
+}
+
+/// The first body band closes on the leaf band and repeats its column tracks.
+fn body_band_aligns(body: &[TableRow], leaves: &TableRow, band: Rect) -> bool {
+    let Some(body_band) = body[0]
+        .cells
+        .iter()
+        .filter_map(|cell| cell.bbox)
+        .reduce(|all, bounds| all.union(&bounds))
+    else {
+        return false;
+    };
+    same_rule_position(body_band.bottom(), band.top())
+        && body[0].cells.iter().zip(&leaves.cells).all(
+            |(value, leaf)| matches!((leaf.bbox, value.bbox), (Some(leaf), Some(value)) if same_track(leaf, value)),
+        )
+}
+
+/// A painted rule can be a filled bar a full point tall, which `is_horizontal_line` does not accept
+/// as a line at the snap tolerance; accept a thin filled rectangle spanning the band as well. ~keep
+fn band_boundary_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
+    visible_rule_styles(paths, left, right, y, true).is_some()
+        || paths.iter().any(|path| {
+            path.is_rectangle()
+                && fill_only_bar(path)
+                && dark_fill(path)
+                && path.bbox.height <= 2.0 * HEADER_RULE_TOLERANCE
+                && same_rule_position(path.bbox.center().y, y)
+                && path.bbox.left() <= left + HEADER_RULE_TOLERANCE
+                && path.bbox.right() >= right - HEADER_RULE_TOLERANCE
+        })
+}
+
 fn title_ink_crosses_divider(title: &TableCell, divider: f32) -> bool {
     title
         .spans

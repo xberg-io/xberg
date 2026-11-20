@@ -3887,13 +3887,16 @@ fn rotate_table_rows(rows: &[TableRow], rotation_degrees: f32) -> Option<(Vec<Ta
 /// Row splitting, form-artifact stripping, empty-row splitting, and bbox
 /// computation. Produces the final `Table` entries for one table group.
 fn finalize_intersection_tables(
-    table_rows: Vec<TableRow>,
+    mut table_rows: Vec<TableRow>,
     row_cell_span_indices: &[Vec<Vec<usize>>],
     spans: &[TextSpan],
     config: &TableDetectionConfig,
     num_cols: usize,
     source_header_paths: Option<&[crate::elements::PathContent]>,
 ) -> Vec<Table> {
+    if let Some(paths) = source_header_paths {
+        source_headers::retain_wrapped_leading_header(&mut table_rows, paths, config.row_tolerance);
+    }
     let mut table_rows = split_rows_by_text_positions(table_rows, row_cell_span_indices, spans, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_rows_split", || {

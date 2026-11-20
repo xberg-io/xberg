@@ -102,6 +102,112 @@ pub(super) fn infer_complete_leading_header(table: &mut Table, paths: &[PathCont
     }
 }
 
+/// Minimum distinct text baselines a leading band needs before its cells can read as wrapped.
+const MIN_WRAPPED_HEADER_LINES: usize = 2;
+
+/// Minimum populated cells a wrapped band and a body band need for either to prove the other.
+const MIN_WRAPPED_HEADER_CELLS: usize = 2;
+
+/// Keep a leading ruled band whose cells wrap over several lines as ONE header row.
+///
+/// A header band is often the only band in a table with no rule between its lines: the labels of
+/// adjacent columns wrap independently, so their baselines interleave while every body band holds
+/// a single line. `split_rows_by_text_positions` reads those baselines as separate rows and the
+/// header then loses its role. This fires only when the source says all of that: the table is
+/// ruled, its first band is drawn as one row, every other band is single-line, no line of the band
+/// is a data value, and the first body band holds values (xberg-io/xberg#3346). ~keep
+pub(super) fn retain_wrapped_leading_header(rows: &mut [TableRow], paths: &[PathContent], tolerance: f32) -> bool {
+    if rows.len() < MIN_WRAPPED_HEADER_LINES + 1 || !tolerance.is_finite() || tolerance < 0.0 {
+        return false;
+    }
+    let Some(lead) = rows.first() else {
+        return false;
+    };
+    if lead.is_header || lead.cells.is_empty() || lead.cells.iter().any(|cell| cell.colspan != 1 || cell.rowspan != 1) {
+        return false;
+    }
+    if band_line_count(lead, tolerance) < MIN_WRAPPED_HEADER_LINES
+        || rows[1..].iter().any(|row| band_line_count(row, tolerance) > 1)
+    {
+        return false;
+    }
+    let populated: Vec<&TableCell> = lead.cells.iter().filter(|cell| !cell.text.trim().is_empty()).collect();
+    if populated.len() < MIN_WRAPPED_HEADER_CELLS
+        || populated.iter().any(|cell| {
+            !cell.text.chars().any(char::is_alphabetic)
+                || cell.text.split('\n').any(|line| super::is_data_value(line.trim()))
+        })
+    {
+        return false;
+    }
+    let Some(body) = rows.get(1) else {
+        return false;
+    };
+    if body
+        .cells
+        .iter()
+        .filter(|cell| super::is_data_value(cell.text.trim()))
+        .count()
+        < MIN_WRAPPED_HEADER_CELLS
+    {
+        return false;
+    }
+    let Some(bounds) = populated
+        .iter()
+        .filter_map(|cell| cell.bbox)
+        .reduce(|all, cell| all.union(&cell))
+    else {
+        return false;
+    };
+    if !one_drawn_band(bounds, paths) {
+        return false;
+    }
+    let lead = &mut rows[0];
+    lead.is_header = true;
+    for cell in &mut lead.cells {
+        cell.is_header = true;
+    }
+    true
+}
+
+/// Distinct text baselines in one band, counted to `tolerance`.
+fn band_line_count(row: &TableRow, tolerance: f32) -> usize {
+    let mut baselines: Vec<f32> = Vec::new();
+    for span in row.cells.iter().flat_map(|cell| &cell.spans) {
+        let y = span.bbox.center().y;
+        if !y.is_finite() {
+            continue;
+        }
+        if !baselines.iter().any(|line| (line - y).abs() <= tolerance) {
+            baselines.push(y);
+        }
+    }
+    baselines.len()
+}
+
+/// Whether `bounds` is one source-drawn band: a visible rule on each side and none inside, and the
+/// band's own cells split by rules rather than by text.
+fn one_drawn_band(bounds: Rect, paths: &[PathContent]) -> bool {
+    if bounds.width <= 0.0 || bounds.height <= 0.0 {
+        return false;
+    }
+    let drawn: Vec<&PathContent> = paths.iter().collect();
+    let horizontal_edges = [bounds.top(), bounds.bottom()]
+        .into_iter()
+        .all(|y| visible_rule_styles(&drawn, bounds.left(), bounds.right(), y, true).is_some());
+    if !horizontal_edges {
+        return false;
+    }
+    !drawn.iter().any(|path| {
+        let rule = path.rendered_bbox();
+        path.is_horizontal_line(HEADER_RULE_TOLERANCE)
+            && rule.right() > bounds.left()
+            && rule.left() < bounds.right()
+            && rule.center().y > bounds.top() + HEADER_RULE_TOLERANCE
+            && rule.center().y < bounds.bottom() - HEADER_RULE_TOLERANCE
+    })
+}
+
 fn cell_has_visible_shading(cell: &TableCell, paths: &[&PathContent]) -> bool {
     let Some(cell) = cell.bbox.filter(|cell| cell.area().is_finite() && cell.area() > 0.0) else {
         return false;
@@ -163,25 +269,38 @@ type RuleStyle = ([u32; 3], u32);
 /// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
 /// Regular decimal leaves under matching rules require a painted header background. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
-    let [groups, leaves, first_body, ..] = rows else {
+    if !leaf_bands_are_headers(rows, paths, columns) {
+        return;
+    }
+    let (head, _) = rows.split_at_mut(2);
+    let [groups, leaves] = head else {
         return;
     };
+    mark_header_bands(groups, leaves);
+}
+
+fn leaf_bands_are_headers(rows: &[TableRow], paths: &[PathContent], columns: usize) -> bool {
+    let [groups, leaves, first_body, ..] = rows else {
+        return false;
+    };
     let Some(bounds) = rows_bounds([groups, leaves, first_body]) else {
-        return;
+        return false;
     };
     let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
     if nearby.len() > MAX_GROUPED_HEADER_PATHS || leaves.is_header || first_body.is_header {
-        return;
+        return false;
+    }
+    if single_title::has_stacked_leaf_header(groups, leaves, &rows[2..], &nearby, columns) {
+        return true;
     }
     if single_title::has_leaf_header(groups, leaves, first_body, &nearby, columns) {
-        mark_header_bands(groups, leaves);
-        return;
+        return true;
     }
     if groups.is_header || !complete_source_band(first_body, columns, false) {
-        return;
+        return false;
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
-    let proven = if repeating_rules {
+    if repeating_rules {
         centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
             && rows_bounds([groups, leaves])
                 .is_some_and(|bounds| has_painted_header_background(bounds, nearby.iter().copied()))
@@ -189,9 +308,6 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
         complete_source_band(leaves, columns, true)
             && (grouped_header_rules(groups, leaves, &nearby)
                 || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
-    };
-    if proven {
-        mark_header_bands(groups, leaves);
     }
 }
 
