@@ -121,7 +121,7 @@ impl SharedModelDirectories {
         entries.get(key).and_then(|entry| entry.directory.upgrade())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "bundle-tessdata-eng"))]
     fn directory(&self, key: &ModelKey) -> Option<std::path::PathBuf> {
         let entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
         entries.get(key).map(|entry| entry.path.clone())
@@ -137,7 +137,7 @@ impl SharedModelDirectories {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "bundle-tessdata-eng"))]
     fn live_count(&self) -> usize {
         let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
         entries.retain(|_, entry| entry.directory.strong_count() > 0);
@@ -153,7 +153,7 @@ fn shared_model_directories() -> &'static SharedModelDirectories {
 
 /// The registered path for `models`, live or already removed, for tests that must observe
 /// whether a failed construction left a directory behind.
-#[cfg(test)]
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(in crate::ocr::processor) fn live_directory(models: &ModelSet) -> Option<std::path::PathBuf> {
     shared_model_directories().directory(&ModelKey::new(models))
 }
