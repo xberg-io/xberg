@@ -115,6 +115,8 @@ pub(super) use tall_source::with_document_region_ocr_budget;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) use pipeline::probe_incomplete_hidden_layers;
 
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) use pipeline::MixedOcrRun;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use plausibility::scan_text_plausibility;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

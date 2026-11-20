@@ -111,7 +111,7 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn decode(
         &self,
-        image_handle: &ImageHandle,
+        image_handle: &ImageHandle<'_>,
         color_space: ColorSpace,
         decoding_options: Option<DecodingOptions>,
     ) -> Result<Image> {

@@ -236,19 +236,12 @@ pub fn ensure_models() -> Result<FormulaModelPaths, String> {
     ensure_models_in(None)
 }
 
-/// Pool state: the loaded recognizer plus the acceleration it was built with,
-/// so a changed acceleration config rebuilds the sessions, like the layout
-/// engine's `matches_config`.
-struct PooledRecognizer {
-    recognizer: FormulaRecognizer,
-    acceleration: Option<AccelerationConfig>,
-}
-
-/// Process-wide recognizer pool and the failure cooldown timestamp. Lock
-/// poisoning recovers via `into_inner`: the recognizer holds no cross-call
-/// state, so a panic mid-recognition leaves nothing inconsistent behind.
-static RECOGNIZER: std::sync::Mutex<Option<PooledRecognizer>> = std::sync::Mutex::new(None);
+/// Failure cooldown shared with the pool: after one initialization failure,
+/// later calls fail fast for this long instead of re-paying the download
+/// deadline per region.
 static LAST_INIT_FAILURE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+use pool::acquire_recognizer;
 
 /// Answers every crop in place of the model while set, so tests can drive the PDF routes
 /// without the model weights.
@@ -262,8 +255,9 @@ pub(crate) type StubRecognizer = fn(&RgbImage) -> Option<String>;
 /// download included) or rebuilding it as needed. Errors are strings so
 /// callers can degrade to plain OCR text with a warning.
 ///
-/// The pool lock is held for the whole recognition; callers on an async
-/// runtime must wrap this in `spawn_blocking`.
+/// The recognizer is borrowed out of the process-wide pool for the decode, so
+/// the pool lock never spans inference. Callers on an async runtime must still
+/// wrap this in `spawn_blocking`.
 pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>) -> Result<Option<String>, String> {
     #[cfg(test)]
     if let Some(stub) = *STUB_RECOGNIZER
@@ -283,36 +277,9 @@ pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>
         }
     }
 
-    let mut pool = RECOGNIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let rebuild = match pool.as_ref() {
-        None => true,
-        Some(pooled) => pooled.acceleration.as_ref() != accel,
-    };
-    if rebuild {
-        let init = ensure_models().and_then(|paths| {
-            FormulaRecognizer::load(&paths, accel).map_err(|e| format!("formula model load failed: {e}"))
-        });
-        match init {
-            Ok(recognizer) => {
-                *pool = Some(PooledRecognizer {
-                    recognizer,
-                    acceleration: accel.cloned(),
-                });
-                *LAST_INIT_FAILURE
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-            }
-            Err(e) => {
-                *LAST_INIT_FAILURE
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::time::Instant::now());
-                return Err(e);
-            }
-        }
-    }
-    let pooled = pool.as_mut().expect("initialized above");
-    pooled
-        .recognizer
+    let mut lease = acquire_recognizer(accel)?;
+    lease
+        .recognizer()
         .recognize(crop)
         .map_err(|e| format!("formula recognition failed: {e}"))
 }
@@ -337,7 +304,7 @@ pub(crate) async fn recognize_crop_blocking(
     {
         use std::sync::{Arc, LazyLock};
         use tokio::sync::Semaphore;
-        // One permit matches the single recognizer guarded by RECOGNIZER. ~keep
+        // One permit matches the single recognizer slot in RECOGNIZERS. ~keep
         static SLOT: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(1)));
 
         run_with_formula_slot(Arc::clone(&SLOT), move || recognize_crop(&crop, accel.as_ref())).await?
@@ -389,6 +356,8 @@ async fn run_with_formula_slot<T: Send + 'static>(
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod worker_tests;
+
+mod pool;
 
 /// Test-only public entry: the integration test exercises the full
 /// download-load-recognize pipeline through this.

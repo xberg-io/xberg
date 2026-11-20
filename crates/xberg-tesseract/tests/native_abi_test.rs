@@ -4,20 +4,10 @@
 //! resolved from `TESSDATA_PREFIX`.
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test binaries print by design; org logging policy exempts tests
-#![allow(
-    unsafe_code,
-    reason = "the test calls a Tesseract C entry point the crate does not wrap"
-)]
-use std::ffi::c_void;
 use std::path::PathBuf;
 use xberg_tesseract::{
-    ChoiceIterator, TessOrientation, TessParagraphJustification, TessTextlineOrder, TessWritingDirection, TesseractAPI,
-    TesseractError,
+    TessOrientation, TessParagraphJustification, TessTextlineOrder, TessWritingDirection, TesseractAPI, TesseractError,
 };
-
-unsafe extern "C-unwind" {
-    fn TessResultIteratorGetChoiceIterator(handle: *const c_void) -> *mut c_void;
-}
 
 fn tessdata_dir() -> PathBuf {
     let prefix =
@@ -194,10 +184,7 @@ fn choice_text_can_be_read_repeatedly_without_being_freed() {
     set_image(&api, "test_hello_world.png");
     api.recognize().expect("recognize");
     let words = api.get_iterator().expect("result iterator");
-    let handle = *words.handle.lock().expect("lock iterator");
-    let raw = unsafe { TessResultIteratorGetChoiceIterator(handle) };
-    assert!(!raw.is_null());
-    let choices = ChoiceIterator::new(raw);
+    let choices = words.choices().expect("choice iterator");
 
     let first = choices.get_utf8_text().expect("choice text");
     assert_eq!(first, "H");
@@ -205,4 +192,140 @@ fn choice_text_can_be_read_repeatedly_without_being_freed() {
         assert_eq!(choices.get_utf8_text().expect("choice text"), first);
     }
     assert!(choices.confidence().expect("confidence") > 0.0);
+}
+
+/// Tesseract's choice iterator asserts that the current word is non-null and aborts the process
+/// without a pre-check, so an exhausted iterator must be refused before the native call.
+#[test]
+fn choice_iterator_is_refused_after_the_last_word() {
+    let api = new_engine();
+    api.set_variable("lstm_choice_mode", "1").expect("choice mode");
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+    assert!(words.extract_all_words().expect("words").words.len() > 1);
+    while words.next_word().expect("advance") {}
+
+    assert!(matches!(words.choices(), Err(TesseractError::InvalidParameterError)));
+}
+
+#[test]
+fn choice_iterator_is_refused_on_an_empty_page() {
+    let api = new_engine();
+    api.set_variable("lstm_choice_mode", "1").expect("choice mode");
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.get_utf8_text().expect("recognize the blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    assert!(matches!(words.choices(), Err(TesseractError::InvalidParameterError)));
+}
+
+#[test]
+fn iterator_fails_once_the_engine_recognizes_again() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+    assert!(!words.extract_all_words().expect("current result").words.is_empty());
+
+    api.recognize().expect("recognize again");
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+    assert!(matches!(
+        words.get_utf8_text(xberg_tesseract::TessPageIteratorLevel::RIL_WORD),
+        Err(TesseractError::StaleIterator)
+    ));
+}
+
+#[test]
+fn iterator_fails_once_the_image_is_replaced() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let page = api.get_page_iterator().expect("page iterator");
+    assert!(page.begin().is_ok());
+
+    set_image(&api, "invoice_image.png");
+
+    assert!(matches!(page.begin(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_stays_valid_across_reads_of_the_same_result() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+
+    let text = api.get_utf8_text().expect("text");
+    let _ = api.get_tsv_text(0).expect("tsv");
+
+    assert!(!text.trim().is_empty());
+    assert!(!words.extract_all_words().expect("same result").words.is_empty());
+}
+
+#[test]
+fn choice_iterator_fails_once_the_result_is_replaced() {
+    let api = new_engine();
+    api.set_variable("lstm_choice_mode", "1").expect("choice mode");
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+    let choices = words.choices().expect("choice iterator");
+    assert!(choices.get_utf8_text().is_ok());
+
+    api.clear().expect("clear");
+
+    assert!(matches!(choices.get_utf8_text(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_fails_once_text_direction_reruns_layout_analysis() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.get_text_direction();
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_fails_once_the_engine_adapts_to_a_word() {
+    let api = new_engine();
+    set_image(&api, "test_hello_world.png");
+    api.recognize().expect("recognize");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.adapt_to_word_str(0, "Hello");
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+#[test]
+fn iterator_over_a_blank_page_fails_once_a_getter_recognizes_again() {
+    let api = new_engine();
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.recognize().expect("recognize blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    let _ = api.get_utf8_text();
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
+}
+
+/// Tesseract never marks an empty recognition final, so every text getter on a blank page
+/// recognizes again and replaces `PAGE_RES`. The second getter must also end the iterators the
+/// first one left valid.
+#[test]
+fn iterator_over_a_blank_page_fails_once_a_lazy_getter_recognizes_again() {
+    let api = new_engine();
+    api.set_image(&[255; 64 * 64], 64, 64, 1, 64).expect("set blank image");
+    api.get_utf8_text().expect("recognize the blank page");
+    let words = api.get_iterator().expect("result iterator");
+
+    api.get_utf8_text().expect("recognize the blank page again");
+
+    assert!(matches!(words.extract_all_words(), Err(TesseractError::StaleIterator)));
 }

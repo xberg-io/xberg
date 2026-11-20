@@ -451,6 +451,7 @@ tensorrt = ["ort?/tensorrt"]
 auto-rotate = [
     "auto-rotate-types",
     "tokio-runtime",
+    "dep:fast_image_resize",
     "dep:ort",
     "dep:ndarray",
     "dep:hf-hub",
@@ -490,6 +491,7 @@ formula-recognition = ["layout-detection", "ocr-pipeline", "dep:tokenizers", "de
 layout-tract = [
     "layout-types",
     "tract",
+    "dep:fast_image_resize",
     "dep:fs2",
     "dep:ndarray",
     "dep:hf-hub",
@@ -507,6 +509,7 @@ layout-tract = [
 auto-rotate-tract = [
     "auto-rotate-types",
     "tract",
+    "dep:fast_image_resize",
     "dep:ndarray",
     "dep:hf-hub",
     "dep:reqwest",

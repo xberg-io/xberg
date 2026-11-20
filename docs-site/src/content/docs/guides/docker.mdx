@@ -74,20 +74,24 @@ All published Docker images (Core, Full, and CLI) run ONNX Runtime on CPU. There
 ### API Server (Default)
 
 ```bash title="Terminal"
-docker run -p 8000:8000 ghcr.io/xberg-io/xberg:latest
+docker run -p 8000:8000 -e XBERG_API_TOKEN="$XBERG_API_TOKEN" ghcr.io/xberg-io/xberg:latest
 
 # Custom port and CORS
 docker run -p 9000:9000 \
+  -e XBERG_API_TOKEN="$XBERG_API_TOKEN" \
   -e XBERG_CORS_ORIGINS="https://myapp.com" \
   ghcr.io/xberg-io/xberg:latest \
   serve --host 0.0.0.0 --port 9000
 
 # With config file
 docker run -p 8000:8000 \
+  -e XBERG_API_TOKEN="$XBERG_API_TOKEN" \
   -v $(pwd)/xberg.toml:/config/xberg.toml \
   ghcr.io/xberg-io/xberg:latest \
   serve --config /config/xberg.toml
 ```
+
+The images bind `0.0.0.0`, so the server refuses to start unless `XBERG_API_TOKEN` is set. To run without a token (for example behind a trusted reverse proxy), set `XBERG_ALLOW_UNAUTHENTICATED=true` instead.
 
 See [API Server Guide](/guides/api-server/) for endpoint documentation.
 
@@ -131,7 +135,9 @@ See [API Server Guide - MCP Section](/guides/api-server/#mcp-server) for integra
 | ---------------------------------- | ------------- | ------------------------------------------------------------------------------------------------ |
 | `XBERG_MAX_REQUEST_BODY_BYTES`     | `104857600`   | Max request body size in bytes                                                                   |
 | `XBERG_MAX_MULTIPART_FIELD_BYTES`  | `104857600`   | Max multipart field (upload) size in bytes                                                       |
-| `XBERG_CORS_ORIGINS`               | `*`           | Comma-separated allowed origins                                                                  |
+| `XBERG_API_TOKEN`                  | unset         | Bearer token required on every route except `GET /health`; required when binding `0.0.0.0`       |
+| `XBERG_ALLOW_UNAUTHENTICATED`      | `false`       | Start on a non-loopback host without a token                                                     |
+| `XBERG_CORS_ORIGINS`               | unset         | Comma-separated allowed origins (`*` allows all); cross-origin requests are denied when unset    |
 | `RUST_LOG`                         | `info`        | Log level: `error`, `warn`, `info`, `debug`, `trace`                                             |
 | `XBERG_CACHE_DIR`                  | `/app/.xberg` | Cache directory (set explicitly in Docker; outside containers defaults to platform global cache) |
 | `HF_HOME`                          | `/app/.xberg/huggingface` | HuggingFace model cache                                                              |
@@ -171,6 +177,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - XBERG_API_TOKEN=${XBERG_API_TOKEN:?set XBERG_API_TOKEN}
       - XBERG_CORS_ORIGINS=https://myapp.com
       - XBERG_MAX_REQUEST_BODY_BYTES=524288000
       - RUST_LOG=info

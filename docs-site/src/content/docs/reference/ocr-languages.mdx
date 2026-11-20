@@ -382,7 +382,9 @@ Vision-language model combining SAM vision encoder, ViT/Qwen2, CLIP, and languag
 Language selection follows the configuration cascade (highest to lowest priority):
 
 1. **CLI flag:** `--ocr-language eng` or `--ocr-language eng+deu`
+
 2. **Inline JSON config:** `--config-json '{"ocr": {"language": ["eng", "deu"]}}'`
+
 3. **Config file:** `xberg.toml` or `xberg.yaml`:
 
    ```toml

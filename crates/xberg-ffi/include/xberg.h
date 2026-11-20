@@ -273,8 +273,7 @@ typedef struct XBERGChunkClassificationConfig XBERGChunkClassificationConfig;
  * label carries its own semantic description, letting the LLM disambiguate
  * similarly named labels without relying on the label string alone.
  */
-typedef struct XBERGChunkClassificationDefinition
-    XBERGChunkClassificationDefinition;
+typedef struct XBERGChunkClassificationDefinition XBERGChunkClassificationDefinition;
 /**
  * Chunk-classification enrichment knob: how to multi-label individual chunks.
  *
@@ -282,8 +281,7 @@ typedef struct XBERGChunkClassificationDefinition
  * already produced chunks (e.g. via `ExtractionConfig::chunking`) for this
  * stage to have any effect; a document with no chunks is a no-op.
  */
-typedef struct XBERGChunkClassificationEnrichmentConfig
-    XBERGChunkClassificationEnrichmentConfig;
+typedef struct XBERGChunkClassificationEnrichmentConfig XBERGChunkClassificationEnrichmentConfig;
 /**
  * Information about a single chunk.
  */
@@ -1321,8 +1319,7 @@ typedef struct XBERGHtmlTheme XBERGHtmlTheme;
  *
  * Specifies the target markup language format for the conversion output.
  */
-typedef struct XBERGHtmlToMarkdownRsOutputFormat
-    XBERGHtmlToMarkdownRsOutputFormat;
+typedef struct XBERGHtmlToMarkdownRsOutputFormat XBERGHtmlToMarkdownRsOutputFormat;
 /**
  * Image dimensions in pixels.
  */
@@ -3113,39 +3110,39 @@ enum XBERGAlefFfiErrorCode
     : int32_t
 #endif // __STDC_VERSION__ >= 202311L
 {
-  XbergAlefNone = 0,
-  XbergAlefConversion = 1,
-  XbergAlefUnknown = 2,
-  XbergAlefPanic = 3,
-  XbergAlefInvalidHandle = 4,
-  XbergAlefCancelled = 5,
-  XbergHeuristicsErrorConfigError = 1100,
-  XbergHeuristicsErrorPdfAnalysisError = 1101,
-  XbergLoadErrorParse = 1200,
-  XbergLoadErrorSchemaValidation = 1201,
-  XbergLoadErrorDeserialize = 1202,
-  XbergLoadErrorIdMismatch = 1203,
-  XbergLoadErrorBadMetaSchema = 1204,
-  XbergLoadErrorIo = 1205,
-  XbergResolveErrorSchemaNotObject = 1300,
-  XbergErrorIo = 1000,
-  XbergErrorParsing = 1001,
-  XbergErrorOcr = 1002,
-  XbergErrorValidation = 1003,
-  XbergErrorCache = 1004,
-  XbergErrorImageProcessing = 1005,
-  XbergErrorSerialization = 1006,
-  XbergErrorMissingDependency = 1007,
-  XbergErrorPlugin = 1008,
-  XbergErrorLockPoisoned = 1009,
-  XbergErrorUnsupportedFormat = 1010,
-  XbergErrorEmbedding = 1011,
-  XbergErrorReranking = 1012,
-  XbergErrorTranscription = 1013,
-  XbergErrorTimeout = 1014,
-  XbergErrorCancelled = 1015,
-  XbergErrorSecurity = 1016,
-  XbergErrorOther = 1017,
+    XbergAlefNone = 0,
+    XbergAlefConversion = 1,
+    XbergAlefUnknown = 2,
+    XbergAlefPanic = 3,
+    XbergAlefInvalidHandle = 4,
+    XbergAlefCancelled = 5,
+    XbergHeuristicsErrorConfigError = 1100,
+    XbergHeuristicsErrorPdfAnalysisError = 1101,
+    XbergLoadErrorParse = 1200,
+    XbergLoadErrorSchemaValidation = 1201,
+    XbergLoadErrorDeserialize = 1202,
+    XbergLoadErrorIdMismatch = 1203,
+    XbergLoadErrorBadMetaSchema = 1204,
+    XbergLoadErrorIo = 1205,
+    XbergResolveErrorSchemaNotObject = 1300,
+    XbergErrorIo = 1000,
+    XbergErrorParsing = 1001,
+    XbergErrorOcr = 1002,
+    XbergErrorValidation = 1003,
+    XbergErrorCache = 1004,
+    XbergErrorImageProcessing = 1005,
+    XbergErrorSerialization = 1006,
+    XbergErrorMissingDependency = 1007,
+    XbergErrorPlugin = 1008,
+    XbergErrorLockPoisoned = 1009,
+    XbergErrorUnsupportedFormat = 1010,
+    XbergErrorEmbedding = 1011,
+    XbergErrorReranking = 1012,
+    XbergErrorTranscription = 1013,
+    XbergErrorTimeout = 1014,
+    XbergErrorCancelled = 1015,
+    XbergErrorSecurity = 1016,
+    XbergErrorOther = 1017,
 };
 #if __STDC_VERSION__ >= 202311L
 typedef enum XBERGAlefFfiErrorCode XBERGAlefFfiErrorCode;
@@ -3165,273 +3162,267 @@ typedef uint64_t XBERGAlefHandle;
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergOcrBackendVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Process an image and extract text via OCR.
-   *
-   * # Arguments
-   *
-   * * `image_bytes` - Raw image data (JPEG, PNG, TIFF, etc.)
-   * * `config` - OCR configuration (language, PSM mode, etc.)
-   *
-   * # Returns
-   *
-   * An `ExtractedDocument` containing the extracted text and metadata.
-   *
-   * Image and PDF page OCR also accept an explicit `document` contribution:
-   * a flat, ordered list of `Title`, `Heading` (levels 1–6), `Paragraph`,
-   * `Code`, `Formula`, `Footnote`, `Comment`, `Citation` and HTML `RawBlock`
-   * nodes. Keep `content` as the page transcript: the existing quality and
-   * whole-page replacement decisions still use it. Literal markup in ordinary
-   * paragraph text is not promoted to raw HTML.
-   * HTML raw blocks are emitted verbatim: supply trusted markup, not an
-   * ordinary OCR transcript relabeled as HTML.
-   * Unsupported nested/container, table-grid and image nodes fail with
-   * `Validation`, rather than flattening.
-   * For string-only output leave `document` unset; a nonempty transcript with
-   * an empty explicit structure is invalid, not a request to flatten it.
-   *
-   * Node annotation ranges must be UTF-8 byte boundaries; relationship indices
-   * must reference nodes in this contribution. Optional boxes are top-left OCR
-   * raster coordinates (the processed dimensions in backend metadata, when
-   * supplied); absent boxes/confidence are not fabricated. PDF owners convert
-   * the boxes to their page coordinate frame. The image extractor retains its
-   * own source format and source-image reference, not `document.source_format`.
-   * Node IDs, node types and result counts are derived by the host extractor.
-   *
-   * Structured contributions do not accept backend table/image/URI inventories,
-   * document-level annotations, pre-rendered output or derived enrichment/page
-   * fields. Leave those fields unset; they fail explicitly instead of being
-   * discarded. Inline node annotations, `metadata`, `processing_warnings`,
-   * `ocr_elements`, `formulas` and `llm_usage` remain subject to their existing
-   * extractor aggregation/selection policies. A selected whole-page
-   * contribution replaces superseded native flow, not retained native asset
-   * inventories. Security limits bound serialized payload size, recursive
-   * metadata nesting and node/annotation/reference work. These checks apply
-   * only when `document` is present; string-only results and built-in private
-   * hOCR results retain their existing contract.
-   *
-   * # Errors
-   *
-   * - `XbergError::Ocr` - OCR processing failed
-   * - `XbergError::Validation` - Invalid image format or configuration
-   * - `XbergError::Io` - I/O errors (these always bubble up)
-   *
-   * # Reading `backend_options`
-   *
-   * Backends that support runtime tuning can read `config.backend_options` and
-   * deserialize only the keys they care about. Unknown keys are silently
-   * ignored, so multiple backends can coexist in a pipeline without key
-   * conflicts.
-   *
-   * ```rust
-   * async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) ->
-   * Result<ExtractedDocument> {
-   * // Read backend-specific options; unknown keys are silently ignored.
-   * let fast_mode = config.backend_options
-   * .as_ref()
-   * .and_then(|v| v.get("mode"))
-   * .and_then(|v| v.as_str())
-   * .map(|s| s == "fast")
-   * .unwrap_or(false);
-   *
-   * if image_bytes.is_empty() {
-   * return Err(xberg::XbergError::Validation {
-   * message: "Empty image data".to_string(),
-   * source: None,
-   * });
-   * }
-   *
-   * let text = if fast_mode {
-   * "Fast OCR result".to_string()
-   * } else {
-   * format!("Extracted text in language: {:?}", config.language)
-   * };
-   *
-   * let mut document = ExtractedDocument::default();
-   * document.content = text;
-   * document.mime_type = Cow::Borrowed("text/plain");
-   * Ok(document)
-   * }
-   * ```
-   */
-  int32_t (*process_image)(const void *user_data, const uint8_t *image_bytes,
-                           uintptr_t image_bytes_len, const char *config,
-                           char **out_result, char **out_error);
-  /**
-   * Process a file and extract text via OCR.
-   *
-   * Default implementation reads the file and calls `process_image`.
-   * Override for custom file handling or optimizations.
-   *
-   * # Arguments
-   *
-   * * `path` - Path to the image file
-   * * `config` - OCR configuration
-   *
-   * # Errors
-   *
-   * Same as `process_image`, plus file I/O errors.
-   */
-  int32_t (*process_image_file)(const void *user_data, const char *path,
-                                const char *config, char **out_result,
-                                char **out_error);
-  /**
-   * Check if this backend supports a given language code.
-   *
-   * # Arguments
-   *
-   * * `lang` - ISO 639-2/3 language code (e.g., "eng", "deu", "fra")
-   *
-   * # Returns
-   *
-   * `true` if the language is supported, `false` otherwise.
-   *
-   * # Example
-   *
-   * ```rust
-   * fn supports_language(&self, lang: &str) -> bool {
-   * self.languages.contains(&lang.to_string())
-   * }
-   * ```
-   */
-  int32_t (*supports_language)(const void *user_data, const char *lang);
-  /**
-   * Get the backend type identifier.
-   *
-   * # Returns
-   *
-   * The backend type enum value.
-   *
-   * # Example
-   *
-   * ```rust
-   * fn backend_type(&self) -> OcrBackendType {
-   * OcrBackendType::Tesseract
-   * }
-   * ```
-   */
-  int32_t (*backend_type)(const void *user_data, char **out_result,
-                          char **out_error);
-  /**
-   * Optional: Get a list of all supported languages.
-   *
-   * Defaults to empty list. Override to provide comprehensive language support
-   * info.
-   */
-  int32_t (*supported_languages)(const void *user_data, char **out_result,
-                                 char **out_error);
-  /**
-   * Optional: languages usable under `config`, defaulting to ignoring it.
-   * GH#1857.
-   */
-  int32_t (*supported_languages_for)(const void *user_data, const char *config,
-                                     char **out_result, char **out_error);
-  /**
-   * Optional: whether `language` is supported under `config`. GH#1857.
-   */
-  int32_t (*supports_language_for)(const void *user_data, const char *config,
-                                   const char *language);
-  /**
-   * Optional: Check if the backend supports table detection.
-   *
-   * Defaults to `false`. Override if your backend can detect and extract
-   * tables.
-   */
-  int32_t (*supports_table_detection)(const void *user_data);
-  /**
-   * Check if the backend supports direct document-level processing (e.g. for
-   * PDFs).
-   *
-   * Defaults to `false`. Override if the backend has optimized document
-   * processing. PDF extraction uses this optimized path only when both
-   * effective page margins are zero; nonzero margins require per-page image
-   * processing so geometry can be filtered correctly.
-   */
-  int32_t (*supports_document_processing)(const void *user_data);
-  /**
-   * Declare that this backend emits structured markdown directly (tables,
-   * headings, lists) and downstream layout reconstruction should be skipped.
-   *
-   * Defaults to `false` — classical OCR backends (Tesseract, PaddleOCR
-   * classical) return plain text per detected region. End-to-end VLM backends
-   * (PaddleOCR-VL, GOT-OCR 2.0) emit markdown in one forward pass and should
-   * override this to `true`.
-   */
-  int32_t (*emits_structured_markdown)(const void *user_data);
-  /**
-   * Declare how this backend's reported page-level confidence must be
-   * interpreted.
-   *
-   * Defaults to [`ConfidenceSemantics::Uncalibrated`]. This default is
-   * deliberately the least trusting option, not
-   * [`ConfidenceSemantics::Legibility`]: a new backend that reports *some*
-   * confidence number is not thereby safe to gate on, and defaulting to
-   * `Legibility` would let the next backend silently inherit a threshold
-   * calibrated for a different backend's scale — exactly the failure this type
-   * exists to prevent (see the type's doc comment). Override this only after
-   * validating that the reported number tracks legibility on a known scale.
-   */
-  int32_t (*confidence_semantics)(const void *user_data, char **out_result,
-                                  char **out_error);
-  /**
-   * Declare how this backend copes with a page raster whose text is not
-   * upright.
-   *
-   * Defaults to [`PageOrientationHandling::RequiresUpright`]. This default is
-   * deliberately the least capable option, not
-   * [`PageOrientationHandling::SelfCorrecting`]: a new backend must not
-   * silently inherit Tesseract's ability to reconstruct reading order on a
-   * rotated raster and then quietly emit garbage the first time it faces one
-   * (see the type's doc comment for the measured A/B behind this). Override
-   * this only after validating the backend's actual behaviour on a rotated
-   * page.
-   */
-  int32_t (*page_orientation_handling)(const void *user_data, char **out_result,
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Process an image and extract text via OCR.
+     *
+     * # Arguments
+     *
+     * * `image_bytes` - Raw image data (JPEG, PNG, TIFF, etc.)
+     * * `config` - OCR configuration (language, PSM mode, etc.)
+     *
+     * # Returns
+     *
+     * An `ExtractedDocument` containing the extracted text and metadata.
+     *
+     * Image and PDF page OCR also accept an explicit `document` contribution:
+     * a flat, ordered list of `Title`, `Heading` (levels 1–6), `Paragraph`,
+     * `Code`, `Formula`, `Footnote`, `Comment`, `Citation` and HTML `RawBlock`
+     * nodes. Keep `content` as the page transcript: the existing quality and
+     * whole-page replacement decisions still use it. Literal markup in ordinary
+     * paragraph text is not promoted to raw HTML.
+     * HTML raw blocks are emitted verbatim: supply trusted markup, not an
+     * ordinary OCR transcript relabeled as HTML.
+     * Unsupported nested/container, table-grid and image nodes fail with
+     * `Validation`, rather than flattening.
+     * For string-only output leave `document` unset; a nonempty transcript with
+     * an empty explicit structure is invalid, not a request to flatten it.
+     *
+     * Node annotation ranges must be UTF-8 byte boundaries; relationship indices
+     * must reference nodes in this contribution. Optional boxes are top-left OCR
+     * raster coordinates (the processed dimensions in backend metadata, when
+     * supplied); absent boxes/confidence are not fabricated. PDF owners convert
+     * the boxes to their page coordinate frame. The image extractor retains its
+     * own source format and source-image reference, not `document.source_format`.
+     * Node IDs, node types and result counts are derived by the host extractor.
+     *
+     * Structured contributions do not accept backend table/image/URI inventories,
+     * document-level annotations, pre-rendered output or derived enrichment/page
+     * fields. Leave those fields unset; they fail explicitly instead of being
+     * discarded. Inline node annotations, `metadata`, `processing_warnings`,
+     * `ocr_elements`, `formulas` and `llm_usage` remain subject to their existing
+     * extractor aggregation/selection policies. A selected whole-page
+     * contribution replaces superseded native flow, not retained native asset
+     * inventories. Security limits bound serialized payload size, recursive
+     * metadata nesting and node/annotation/reference work. These checks apply
+     * only when `document` is present; string-only results and built-in private
+     * hOCR results retain their existing contract.
+     *
+     * # Errors
+     *
+     * - `XbergError::Ocr` - OCR processing failed
+     * - `XbergError::Validation` - Invalid image format or configuration
+     * - `XbergError::Io` - I/O errors (these always bubble up)
+     *
+     * # Reading `backend_options`
+     *
+     * Backends that support runtime tuning can read `config.backend_options` and
+     * deserialize only the keys they care about. Unknown keys are silently
+     * ignored, so multiple backends can coexist in a pipeline without key
+     * conflicts.
+     *
+     * ```rust
+     * async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) ->
+     * Result<ExtractedDocument> {
+     * // Read backend-specific options; unknown keys are silently ignored.
+     * let fast_mode = config.backend_options
+     * .as_ref()
+     * .and_then(|v| v.get("mode"))
+     * .and_then(|v| v.as_str())
+     * .map(|s| s == "fast")
+     * .unwrap_or(false);
+     *
+     * if image_bytes.is_empty() {
+     * return Err(xberg::XbergError::Validation {
+     * message: "Empty image data".to_string(),
+     * source: None,
+     * });
+     * }
+     *
+     * let text = if fast_mode {
+     * "Fast OCR result".to_string()
+     * } else {
+     * format!("Extracted text in language: {:?}", config.language)
+     * };
+     *
+     * let mut document = ExtractedDocument::default();
+     * document.content = text;
+     * document.mime_type = Cow::Borrowed("text/plain");
+     * Ok(document)
+     * }
+     * ```
+     */
+    int32_t (*process_image)(const void *user_data, const uint8_t *image_bytes,
+                             uintptr_t image_bytes_len, const char *config, char **out_result,
+                             char **out_error);
+    /**
+     * Process a file and extract text via OCR.
+     *
+     * Default implementation reads the file and calls `process_image`.
+     * Override for custom file handling or optimizations.
+     *
+     * # Arguments
+     *
+     * * `path` - Path to the image file
+     * * `config` - OCR configuration
+     *
+     * # Errors
+     *
+     * Same as `process_image`, plus file I/O errors.
+     */
+    int32_t (*process_image_file)(const void *user_data, const char *path, const char *config,
+                                  char **out_result, char **out_error);
+    /**
+     * Check if this backend supports a given language code.
+     *
+     * # Arguments
+     *
+     * * `lang` - ISO 639-2/3 language code (e.g., "eng", "deu", "fra")
+     *
+     * # Returns
+     *
+     * `true` if the language is supported, `false` otherwise.
+     *
+     * # Example
+     *
+     * ```rust
+     * fn supports_language(&self, lang: &str) -> bool {
+     * self.languages.contains(&lang.to_string())
+     * }
+     * ```
+     */
+    int32_t (*supports_language)(const void *user_data, const char *lang);
+    /**
+     * Get the backend type identifier.
+     *
+     * # Returns
+     *
+     * The backend type enum value.
+     *
+     * # Example
+     *
+     * ```rust
+     * fn backend_type(&self) -> OcrBackendType {
+     * OcrBackendType::Tesseract
+     * }
+     * ```
+     */
+    int32_t (*backend_type)(const void *user_data, char **out_result, char **out_error);
+    /**
+     * Optional: Get a list of all supported languages.
+     *
+     * Defaults to empty list. Override to provide comprehensive language support
+     * info.
+     */
+    int32_t (*supported_languages)(const void *user_data, char **out_result, char **out_error);
+    /**
+     * Optional: languages usable under `config`, defaulting to ignoring it.
+     * GH#1857.
+     */
+    int32_t (*supported_languages_for)(const void *user_data, const char *config, char **out_result,
                                        char **out_error);
-  /**
-   * Process a document file directly via OCR.
-   *
-   * Only called if `supports_document_processing` returns `true`.
-   *
-   * # Arguments
-   *
-   * * `path` - Path to the document file (e.g. .pdf)
-   * * `config` - OCR configuration
-   */
-  int32_t (*process_document)(const void *user_data, const char *_path,
-                              const char *_config, char **out_result,
-                              char **out_error);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Optional: whether `language` is supported under `config`. GH#1857.
+     */
+    int32_t (*supports_language_for)(const void *user_data, const char *config,
+                                     const char *language);
+    /**
+     * Optional: Check if the backend supports table detection.
+     *
+     * Defaults to `false`. Override if your backend can detect and extract
+     * tables.
+     */
+    int32_t (*supports_table_detection)(const void *user_data);
+    /**
+     * Check if the backend supports direct document-level processing (e.g. for
+     * PDFs).
+     *
+     * Defaults to `false`. Override if the backend has optimized document
+     * processing. PDF extraction uses this optimized path only when both
+     * effective page margins are zero; nonzero margins require per-page image
+     * processing so geometry can be filtered correctly.
+     */
+    int32_t (*supports_document_processing)(const void *user_data);
+    /**
+     * Declare that this backend emits structured markdown directly (tables,
+     * headings, lists) and downstream layout reconstruction should be skipped.
+     *
+     * Defaults to `false` — classical OCR backends (Tesseract, PaddleOCR
+     * classical) return plain text per detected region. End-to-end VLM backends
+     * (PaddleOCR-VL, GOT-OCR 2.0) emit markdown in one forward pass and should
+     * override this to `true`.
+     */
+    int32_t (*emits_structured_markdown)(const void *user_data);
+    /**
+     * Declare how this backend's reported page-level confidence must be
+     * interpreted.
+     *
+     * Defaults to [`ConfidenceSemantics::Uncalibrated`]. This default is
+     * deliberately the least trusting option, not
+     * [`ConfidenceSemantics::Legibility`]: a new backend that reports *some*
+     * confidence number is not thereby safe to gate on, and defaulting to
+     * `Legibility` would let the next backend silently inherit a threshold
+     * calibrated for a different backend's scale — exactly the failure this type
+     * exists to prevent (see the type's doc comment). Override this only after
+     * validating that the reported number tracks legibility on a known scale.
+     */
+    int32_t (*confidence_semantics)(const void *user_data, char **out_result, char **out_error);
+    /**
+     * Declare how this backend copes with a page raster whose text is not
+     * upright.
+     *
+     * Defaults to [`PageOrientationHandling::RequiresUpright`]. This default is
+     * deliberately the least capable option, not
+     * [`PageOrientationHandling::SelfCorrecting`]: a new backend must not
+     * silently inherit Tesseract's ability to reconstruct reading order on a
+     * rotated raster and then quietly emit garbage the first time it faces one
+     * (see the type's doc comment for the measured A/B behind this). Override
+     * this only after validating the backend's actual behaviour on a rotated
+     * page.
+     */
+    int32_t (*page_orientation_handling)(const void *user_data, char **out_result,
+                                         char **out_error);
+    /**
+     * Process a document file directly via OCR.
+     *
+     * Only called if `supports_document_processing` returns `true`.
+     *
+     * # Arguments
+     *
+     * * `path` - Path to the document file (e.g. .pdf)
+     * * `config` - OCR configuration
+     */
+    int32_t (*process_document)(const void *user_data, const char *_path, const char *_config,
+                                char **out_result, char **out_error);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergOcrBackendVTable;
 
 /**
@@ -3444,168 +3435,165 @@ typedef struct XBERGXbergOcrBackendVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergPostProcessorVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Process an extraction result.
-   *
-   * Transform or enrich the extraction result. Can modify:
-   * - `content` - The extracted text
-   * - `metadata` - Add or update metadata fields
-   * - `tables` - Modify or enhance table data
-   *
-   * # Arguments
-   *
-   * * `result` - Mutable reference to the extraction result to process
-   * * `config` - Extraction configuration
-   *
-   * # Returns
-   *
-   * `Ok(())` if processing succeeded, `Err(...)` for fatal failures.
-   *
-   * # Errors
-   *
-   * Return errors for fatal processing failures. Non-fatal errors should be
-   * captured in metadata directly on the result.
-   *
-   * # Performance
-   *
-   * This signature avoids unnecessary cloning of large extraction results by
-   * taking a mutable reference instead of ownership. Processors modify the
-   * result in place.
-   *
-   * # Example - Language Detection
-   *
-   * ```rust
-   * async fn process(&self, result: &mut ExtractedDocument, config:
-   * &ExtractionConfig)
-   * -> Result<()> {
-   * // Detect language (simplified - use real detection library in practice)
-   * let language = "en"; // Placeholder detection
-   *
-   * // Add to metadata
-   * result.metadata.additional.insert("detected_language".to_string().into(),
-   * serde_json::json!(language));
-   *
-   * Ok(())
-   * }
-   * ```
-   *
-   * # Example - Text Cleaning
-   *
-   * ```rust
-   * async fn process(&self, result: &mut ExtractedDocument, config:
-   * &ExtractionConfig)
-   * -> Result<()> {
-   * // Remove excessive whitespace
-   * result.content = result
-   * .content
-   * .split_whitespace()
-   * .collect::<Vec<_>>()
-   * .join(" ");
-   *
-   * Ok(())
-   * }
-   * ```
-   */
-  int32_t (*process)(const void *user_data, const char *result,
-                     const char *config, char **out_error);
-  /**
-   * Get the processing stage for this post-processor.
-   *
-   * Determines when this processor runs in the pipeline.
-   *
-   * # Returns
-   *
-   * The `ProcessingStage` (Early, Middle, or Late).
-   *
-   * # Example
-   *
-   * ```rust
-   * fn processing_stage(&self) -> ProcessingStage {
-   * ProcessingStage::Early  // Run before other processors
-   * }
-   * ```
-   */
-  int32_t (*processing_stage)(const void *user_data, char **out_result,
-                              char **out_error);
-  /**
-   * Optional: Check if this processor should run for a given result.
-   *
-   * Allows conditional processing based on MIME type, metadata, or content.
-   * Defaults to `true` (always run).
-   *
-   * # Arguments
-   *
-   * * `result` - The extraction result to check
-   * * `config` - Extraction configuration
-   *
-   * # Returns
-   *
-   * `true` if the processor should run, `false` to skip.
-   *
-   * # Example
-   *
-   * ```rust
-   * Only process PDF documents
-   * fn should_process(&self, result: &ExtractedDocument, config:
-   * &ExtractionConfig) -> bool { result.mime_type == "application/pdf"
-   * }
-   * ```
-   */
-  int32_t (*should_process)(const void *user_data, const char *_result,
-                            const char *_config);
-  /**
-   * Optional: Estimate processing time in milliseconds.
-   *
-   * Used for logging and debugging. Defaults to 0 (unknown).
-   *
-   * # Arguments
-   *
-   * * `result` - The extraction result to estimate for
-   *
-   * # Returns
-   *
-   * Estimated processing time in milliseconds.
-   */
-  uint64_t (*estimated_duration_ms)(const void *user_data, const char *_result);
-  /**
-   * Execution priority within the processing stage.
-   *
-   * Higher values run first within the same `ProcessingStage`. Defaults to 50.
-   * Use 0-49 for fallback processors, 50 for normal processors, and 51-255
-   * for high-priority processors that should run early in their stage.
-   */
-  int32_t (*priority)(const void *user_data);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Process an extraction result.
+     *
+     * Transform or enrich the extraction result. Can modify:
+     * - `content` - The extracted text
+     * - `metadata` - Add or update metadata fields
+     * - `tables` - Modify or enhance table data
+     *
+     * # Arguments
+     *
+     * * `result` - Mutable reference to the extraction result to process
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * `Ok(())` if processing succeeded, `Err(...)` for fatal failures.
+     *
+     * # Errors
+     *
+     * Return errors for fatal processing failures. Non-fatal errors should be
+     * captured in metadata directly on the result.
+     *
+     * # Performance
+     *
+     * This signature avoids unnecessary cloning of large extraction results by
+     * taking a mutable reference instead of ownership. Processors modify the
+     * result in place.
+     *
+     * # Example - Language Detection
+     *
+     * ```rust
+     * async fn process(&self, result: &mut ExtractedDocument, config:
+     * &ExtractionConfig)
+     * -> Result<()> {
+     * // Detect language (simplified - use real detection library in practice)
+     * let language = "en"; // Placeholder detection
+     *
+     * // Add to metadata
+     * result.metadata.additional.insert("detected_language".to_string().into(),
+     * serde_json::json!(language));
+     *
+     * Ok(())
+     * }
+     * ```
+     *
+     * # Example - Text Cleaning
+     *
+     * ```rust
+     * async fn process(&self, result: &mut ExtractedDocument, config:
+     * &ExtractionConfig)
+     * -> Result<()> {
+     * // Remove excessive whitespace
+     * result.content = result
+     * .content
+     * .split_whitespace()
+     * .collect::<Vec<_>>()
+     * .join(" ");
+     *
+     * Ok(())
+     * }
+     * ```
+     */
+    int32_t (*process)(const void *user_data, const char *result, const char *config,
+                       char **out_error);
+    /**
+     * Get the processing stage for this post-processor.
+     *
+     * Determines when this processor runs in the pipeline.
+     *
+     * # Returns
+     *
+     * The `ProcessingStage` (Early, Middle, or Late).
+     *
+     * # Example
+     *
+     * ```rust
+     * fn processing_stage(&self) -> ProcessingStage {
+     * ProcessingStage::Early  // Run before other processors
+     * }
+     * ```
+     */
+    int32_t (*processing_stage)(const void *user_data, char **out_result, char **out_error);
+    /**
+     * Optional: Check if this processor should run for a given result.
+     *
+     * Allows conditional processing based on MIME type, metadata, or content.
+     * Defaults to `true` (always run).
+     *
+     * # Arguments
+     *
+     * * `result` - The extraction result to check
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * `true` if the processor should run, `false` to skip.
+     *
+     * # Example
+     *
+     * ```rust
+     * Only process PDF documents
+     * fn should_process(&self, result: &ExtractedDocument, config:
+     * &ExtractionConfig) -> bool { result.mime_type == "application/pdf"
+     * }
+     * ```
+     */
+    int32_t (*should_process)(const void *user_data, const char *_result, const char *_config);
+    /**
+     * Optional: Estimate processing time in milliseconds.
+     *
+     * Used for logging and debugging. Defaults to 0 (unknown).
+     *
+     * # Arguments
+     *
+     * * `result` - The extraction result to estimate for
+     *
+     * # Returns
+     *
+     * Estimated processing time in milliseconds.
+     */
+    uint64_t (*estimated_duration_ms)(const void *user_data, const char *_result);
+    /**
+     * Execution priority within the processing stage.
+     *
+     * Higher values run first within the same `ProcessingStage`. Defaults to 50.
+     * Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+     * for high-priority processors that should run early in their stage.
+     */
+    int32_t (*priority)(const void *user_data);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergPostProcessorVTable;
 
 /**
@@ -3618,178 +3606,176 @@ typedef struct XBERGXbergPostProcessorVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergValidatorVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Validate an extraction result.
+     *
+     * Check the extraction result and return `Ok(())` if valid, or an error
+     * if validation fails.
+     *
+     * # Arguments
+     *
+     * * `result` - The extraction result to validate
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * - `Ok(())` if validation passes
+     * - `Err(...)` if validation fails (extraction will fail)
+     *
+     * # Errors
+     *
+     * - `XbergError::Validation` - Validation failed
+     * - Any other error type appropriate for the failure
+     *
+     * # Example - Content Length Validation
+     *
+     * ```rust
+     * async fn validate(&self, result: &ExtractedDocument, config:
+     * &ExtractionConfig)
+     * -> Result<()> {
+     * let length = result.content.len();
+     *
+     * if length < self.min {
+     * return Err(XbergError::validation(format!(
+     * "Content too short: {} < {} characters",
+     * length, self.min
+     * )));
+     * }
+     *
+     * if length > self.max {
+     * return Err(XbergError::validation(format!(
+     * "Content too long: {} > {} characters",
+     * length, self.max
+     * )));
+     * }
+     *
+     * Ok(())
+     * }
+     * ```
+     *
+     * # Example - Quality Score Validation
+     *
+     * ```rust
+     * async fn validate(&self, result: &ExtractedDocument, config:
+     * &ExtractionConfig)
+     * -> Result<()> {
+     * // Check if quality_score exists in metadata
+     * let score = result.metadata
+     * .additional
+     * .get("quality_score")
+     * .and_then(|v| v.as_f64())
+     * .unwrap_or(0.0);
+     *
+     * if score < self.min_score {
+     * return Err(XbergError::validation(format!(
+     * "Quality score too low: {} < {}",
+     * score, self.min_score
+     * )));
+     * }
+     *
+     * Ok(())
+     * }
+     * ```
+     *
+     * # Example - Security Validation
+     *
+     * ```rust
+     * async fn validate(&self, result: &ExtractedDocument, config:
+     * &ExtractionConfig)
+     * -> Result<()> {
+     * // Check for blocked patterns
+     * for pattern in &self.blocked_patterns {
+     * if result.content.contains(pattern) {
+     * return Err(XbergError::validation(format!(
+     * "Content contains blocked pattern: {}",
+     * pattern
+     * )));
+     * }
+     * }
+     *
+     * Ok(())
+     * }
+     * ```
+     */
+    int32_t (*validate)(const void *user_data, const char *result, const char *config,
                         char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Validate an extraction result.
-   *
-   * Check the extraction result and return `Ok(())` if valid, or an error
-   * if validation fails.
-   *
-   * # Arguments
-   *
-   * * `result` - The extraction result to validate
-   * * `config` - Extraction configuration
-   *
-   * # Returns
-   *
-   * - `Ok(())` if validation passes
-   * - `Err(...)` if validation fails (extraction will fail)
-   *
-   * # Errors
-   *
-   * - `XbergError::Validation` - Validation failed
-   * - Any other error type appropriate for the failure
-   *
-   * # Example - Content Length Validation
-   *
-   * ```rust
-   * async fn validate(&self, result: &ExtractedDocument, config:
-   * &ExtractionConfig)
-   * -> Result<()> {
-   * let length = result.content.len();
-   *
-   * if length < self.min {
-   * return Err(XbergError::validation(format!(
-   * "Content too short: {} < {} characters",
-   * length, self.min
-   * )));
-   * }
-   *
-   * if length > self.max {
-   * return Err(XbergError::validation(format!(
-   * "Content too long: {} > {} characters",
-   * length, self.max
-   * )));
-   * }
-   *
-   * Ok(())
-   * }
-   * ```
-   *
-   * # Example - Quality Score Validation
-   *
-   * ```rust
-   * async fn validate(&self, result: &ExtractedDocument, config:
-   * &ExtractionConfig)
-   * -> Result<()> {
-   * // Check if quality_score exists in metadata
-   * let score = result.metadata
-   * .additional
-   * .get("quality_score")
-   * .and_then(|v| v.as_f64())
-   * .unwrap_or(0.0);
-   *
-   * if score < self.min_score {
-   * return Err(XbergError::validation(format!(
-   * "Quality score too low: {} < {}",
-   * score, self.min_score
-   * )));
-   * }
-   *
-   * Ok(())
-   * }
-   * ```
-   *
-   * # Example - Security Validation
-   *
-   * ```rust
-   * async fn validate(&self, result: &ExtractedDocument, config:
-   * &ExtractionConfig)
-   * -> Result<()> {
-   * // Check for blocked patterns
-   * for pattern in &self.blocked_patterns {
-   * if result.content.contains(pattern) {
-   * return Err(XbergError::validation(format!(
-   * "Content contains blocked pattern: {}",
-   * pattern
-   * )));
-   * }
-   * }
-   *
-   * Ok(())
-   * }
-   * ```
-   */
-  int32_t (*validate)(const void *user_data, const char *result,
-                      const char *config, char **out_error);
-  /**
-   * Optional: Check if this validator should run for a given result.
-   *
-   * Allows conditional validation based on MIME type, metadata, or content.
-   * Defaults to `true` (always run).
-   *
-   * # Arguments
-   *
-   * * `result` - The extraction result to check
-   * * `config` - Extraction configuration
-   *
-   * # Returns
-   *
-   * `true` if the validator should run, `false` to skip.
-   *
-   * # Example
-   *
-   * ```rust
-   * Only validate PDF documents
-   * fn should_validate(&self, result: &ExtractedDocument, config:
-   * &ExtractionConfig) -> bool { result.mime_type == "application/pdf"
-   * }
-   * ```
-   */
-  int32_t (*should_validate)(const void *user_data, const char *_result,
-                             const char *_config);
-  /**
-   * Optional: Get the validation priority.
-   *
-   * Higher priority validators run first. Useful for ordering validation checks
-   * (e.g., run cheap validations before expensive ones).
-   *
-   * Default priority is 50.
-   *
-   * # Returns
-   *
-   * Priority value (higher = runs earlier).
-   *
-   * # Example
-   *
-   * ```rust
-   * Run this validator first (it's fast)
-   * fn priority(&self) -> i32 {
-   * 100
-   * }
-   * ```
-   */
-  int32_t (*priority)(const void *user_data);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Optional: Check if this validator should run for a given result.
+     *
+     * Allows conditional validation based on MIME type, metadata, or content.
+     * Defaults to `true` (always run).
+     *
+     * # Arguments
+     *
+     * * `result` - The extraction result to check
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * `true` if the validator should run, `false` to skip.
+     *
+     * # Example
+     *
+     * ```rust
+     * Only validate PDF documents
+     * fn should_validate(&self, result: &ExtractedDocument, config:
+     * &ExtractionConfig) -> bool { result.mime_type == "application/pdf"
+     * }
+     * ```
+     */
+    int32_t (*should_validate)(const void *user_data, const char *_result, const char *_config);
+    /**
+     * Optional: Get the validation priority.
+     *
+     * Higher priority validators run first. Useful for ordering validation checks
+     * (e.g., run cheap validations before expensive ones).
+     *
+     * Default priority is 50.
+     *
+     * # Returns
+     *
+     * Priority value (higher = runs earlier).
+     *
+     * # Example
+     *
+     * ```rust
+     * Run this validator first (it's fast)
+     * fn priority(&self) -> i32 {
+     * 100
+     * }
+     * ```
+     */
+    int32_t (*priority)(const void *user_data);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergValidatorVTable;
 
 /**
@@ -3802,94 +3788,91 @@ typedef struct XBERGXbergValidatorVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergDocumentExtractorVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Binding-safe extraction entry point for foreign-language plugin bridges.
-   *
-   * Accepts the same unified input shape as the public extraction API and
-   * returns one extracted document result.
-   */
-  int32_t (*extract)(const void *user_data, const char *input,
-                     const char *config, char **out_result, char **out_error);
-  /**
-   * Get the list of MIME types supported by this extractor.
-   *
-   * Can include exact MIME types and prefix patterns:
-   * - Exact: `"application/pdf"`, `"text/plain"`
-   * - Prefix: `"image/*"` (matches any image type)
-   *
-   * # Returns
-   *
-   * A slice of MIME type strings.
-   */
-  int32_t (*supported_mime_types)(const void *user_data, char **out_result,
-                                  char **out_error);
-  /**
-   * Get the priority of this extractor.
-   *
-   * Higher priority extractors are preferred when multiple extractors
-   * support the same MIME type.
-   *
-   * # Priority Guidelines
-   *
-   * - **0-25**: Fallback/low-quality extractors
-   * - **26-49**: Alternative extractors
-   * - **50**: Default priority (built-in extractors)
-   * - **51-75**: Premium/enhanced extractors
-   * - **76-100**: Specialized/high-priority extractors
-   *
-   * # Returns
-   *
-   * Priority value (default: 50)
-   */
-  int32_t (*priority)(const void *user_data);
-  /**
-   * Optional: Check if this extractor can handle a specific file.
-   *
-   * Allows for more sophisticated detection beyond MIME types.
-   * Defaults to `true` (rely on MIME type matching).
-   *
-   * # Arguments
-   *
-   * * `path` - Path to the file to check
-   * * `mime_type` - Detected MIME type
-   *
-   * # Returns
-   *
-   * `true` if the extractor can handle this file, `false` otherwise.
-   */
-  int32_t (*can_handle)(const void *user_data, const char *_path,
-                        const char *_mime_type);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Binding-safe extraction entry point for foreign-language plugin bridges.
+     *
+     * Accepts the same unified input shape as the public extraction API and
+     * returns one extracted document result.
+     */
+    int32_t (*extract)(const void *user_data, const char *input, const char *config,
+                       char **out_result, char **out_error);
+    /**
+     * Get the list of MIME types supported by this extractor.
+     *
+     * Can include exact MIME types and prefix patterns:
+     * - Exact: `"application/pdf"`, `"text/plain"`
+     * - Prefix: `"image/*"` (matches any image type)
+     *
+     * # Returns
+     *
+     * A slice of MIME type strings.
+     */
+    int32_t (*supported_mime_types)(const void *user_data, char **out_result, char **out_error);
+    /**
+     * Get the priority of this extractor.
+     *
+     * Higher priority extractors are preferred when multiple extractors
+     * support the same MIME type.
+     *
+     * # Priority Guidelines
+     *
+     * - **0-25**: Fallback/low-quality extractors
+     * - **26-49**: Alternative extractors
+     * - **50**: Default priority (built-in extractors)
+     * - **51-75**: Premium/enhanced extractors
+     * - **76-100**: Specialized/high-priority extractors
+     *
+     * # Returns
+     *
+     * Priority value (default: 50)
+     */
+    int32_t (*priority)(const void *user_data);
+    /**
+     * Optional: Check if this extractor can handle a specific file.
+     *
+     * Allows for more sophisticated detection beyond MIME types.
+     * Defaults to `true` (rely on MIME type matching).
+     *
+     * # Arguments
+     *
+     * * `path` - Path to the file to check
+     * * `mime_type` - Detected MIME type
+     *
+     * # Returns
+     *
+     * `true` if the extractor can handle this file, `false` otherwise.
+     */
+    int32_t (*can_handle)(const void *user_data, const char *_path, const char *_mime_type);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergDocumentExtractorVTable;
 
 /**
@@ -3902,53 +3885,51 @@ typedef struct XBERGXbergDocumentExtractorVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergEmbeddingBackendVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Embedding vector dimension. Must be `> 0` and must match the length of
-   * every vector returned by `embed`.
-   */
-  uintptr_t (*dimensions)(const void *user_data);
-  /**
-   * Embed a batch of texts, returning one vector per input in order.
-   *
-   * # Errors
-   *
-   * Implementations should return `Plugin` for
-   * backend-specific failures. The dispatcher layers its own validation
-   * (length, per-vector dimension) on top.
-   */
-  int32_t (*embed)(const void *user_data, const char *texts, char **out_result,
-                   char **out_error);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Embedding vector dimension. Must be `> 0` and must match the length of
+     * every vector returned by `embed`.
+     */
+    uintptr_t (*dimensions)(const void *user_data);
+    /**
+     * Embed a batch of texts, returning one vector per input in order.
+     *
+     * # Errors
+     *
+     * Implementations should return `Plugin` for
+     * backend-specific failures. The dispatcher layers its own validation
+     * (length, per-vector dimension) on top.
+     */
+    int32_t (*embed)(const void *user_data, const char *texts, char **out_result, char **out_error);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergEmbeddingBackendVTable;
 
 /**
@@ -3961,44 +3942,43 @@ typedef struct XBERGXbergEmbeddingBackendVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergRendererVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Binding-safe rendering entry point for foreign-language plugin bridges.
-   *
-   * Accepts one public extraction result and returns the rendered output.
-   */
-  int32_t (*render_result)(const void *user_data, const char *result,
-                           char **out_result, char **out_error);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Binding-safe rendering entry point for foreign-language plugin bridges.
+     *
+     * Accepts one public extraction result and returns the rendered output.
+     */
+    int32_t (*render_result)(const void *user_data, const char *result, char **out_result,
+                             char **out_error);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergRendererVTable;
 
 /**
@@ -4011,51 +3991,50 @@ typedef struct XBERGXbergRendererVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergRerankerBackendVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Score a list of documents against a query.
-   *
-   * Returns one raw logit per document in the same order as the input.
-   * The dispatcher applies sigmoid to convert to `[0, 1]` scores.
-   *
-   * # Errors
-   *
-   * Implementations should return `Plugin` for
-   * backend-specific failures. The dispatcher validates the returned length
-   * against `documents.len()` before sorting.
-   */
-  int32_t (*rerank)(const void *user_data, const char *query,
-                    const char *documents, char **out_result, char **out_error);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Score a list of documents against a query.
+     *
+     * Returns one raw logit per document in the same order as the input.
+     * The dispatcher applies sigmoid to convert to `[0, 1]` scores.
+     *
+     * # Errors
+     *
+     * Implementations should return `Plugin` for
+     * backend-specific failures. The dispatcher validates the returned length
+     * against `documents.len()` before sorting.
+     */
+    int32_t (*rerank)(const void *user_data, const char *query, const char *documents,
+                      char **out_result, char **out_error);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergRerankerBackendVTable;
 
 /**
@@ -4068,41 +4047,40 @@ typedef struct XBERGXbergRerankerBackendVTable {
  * `user_data` when the bridge is dropped.
  */
 typedef struct XBERGXbergTokenizerBackendVTable {
-  /**
-   * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
-   * success.
-   */
-  int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
-  /**
-   * Return a null-terminated UTF-8 version string into `out_version`; return 0
-   * on success.
-   */
-  int32_t (*version_fn)(const void *user_data, char **out_version,
-                        char **out_error);
-  /**
-   * Initialise the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*initialize_fn)(const void *user_data, char **out_error);
-  /**
-   * Shut down the plugin; return 0 on success, non-zero on failure (error text
-   * in `out_error`).
-   */
-  int32_t (*shutdown_fn)(const void *user_data, char **out_error);
-  /**
-   * Count the tokens in `text` according to this backend's tokenizer.
-   */
-  uintptr_t (*count_tokens)(const void *user_data, const char *text);
-  /**
-   * Optional string destructor: called for strings returned by vtable
-   * callbacks.
-   */
-  void (*free_string)(char *);
-  /**
-   * Optional destructor: called once with `user_data` when the bridge is
-   * dropped.
-   */
-  void (*free_user_data)(void *);
+    /**
+     * Return a null-terminated UTF-8 name string into `out_name`; return 0 on
+     * success.
+     */
+    int32_t (*name_fn)(const void *user_data, char **out_name, char **out_error);
+    /**
+     * Return a null-terminated UTF-8 version string into `out_version`; return 0
+     * on success.
+     */
+    int32_t (*version_fn)(const void *user_data, char **out_version, char **out_error);
+    /**
+     * Initialise the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*initialize_fn)(const void *user_data, char **out_error);
+    /**
+     * Shut down the plugin; return 0 on success, non-zero on failure (error text
+     * in `out_error`).
+     */
+    int32_t (*shutdown_fn)(const void *user_data, char **out_error);
+    /**
+     * Count the tokens in `text` according to this backend's tokenizer.
+     */
+    uintptr_t (*count_tokens)(const void *user_data, const char *text);
+    /**
+     * Optional string destructor: called for strings returned by vtable
+     * callbacks.
+     */
+    void (*free_string)(char *);
+    /**
+     * Optional destructor: called once with `user_data` when the bridge is
+     * dropped.
+     */
+    void (*free_user_data)(void *);
 } XBERGXbergTokenizerBackendVTable;
 
 /**
@@ -5281,8 +5259,7 @@ uintptr_t xberg_chunk_classification_config_batch_size(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_chunk_classification_config_max_concurrency(XBERGAlefHandle handle);
+uintptr_t xberg_chunk_classification_config_max_concurrency(XBERGAlefHandle handle);
 
 /**
  * Default `Self.batch_size`: `DEFAULT_BATCH_SIZE`.
@@ -5312,8 +5289,7 @@ uintptr_t xberg_chunk_classification_config_default_max_concurrency(void);
  * Returned handle must be freed with
  * `xberg_chunk_classification_definition_free`.
  */
-XBERGAlefHandle
-xberg_chunk_classification_definition_from_json(const char *json);
+XBERGAlefHandle xberg_chunk_classification_definition_from_json(const char *json);
 
 /**
  * Serialize a `ChunkClassificationDefinition` to a JSON string. Returns null on
@@ -5364,8 +5340,7 @@ void xberg_chunk_classification_enrichment_config_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_chunk_classification_enrichment_config_config(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_chunk_classification_enrichment_config_config(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -6559,8 +6534,7 @@ int32_t xberg_content_filter_config_include_footnotes(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_content_filter_config_strip_repeating_text(XBERGAlefHandle handle);
+int32_t xberg_content_filter_config_strip_repeating_text(XBERGAlefHandle handle);
 
 /**
  * Get the `include_watermarks` field from a `ContentFilterConfig`.
@@ -6655,8 +6629,7 @@ XBERGAlefHandle xberg_conversion_options_heading_style(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_list_indent_type(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_list_indent_type(XBERGAlefHandle handle);
 
 /**
  * Get the `list_indent_width` field from a `ConversionOptions`.
@@ -6739,8 +6712,7 @@ int32_t xberg_conversion_options_expand_abbreviations(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_conversion_options_include_blockquote_citations(XBERGAlefHandle handle);
+int32_t xberg_conversion_options_include_blockquote_citations(XBERGAlefHandle handle);
 
 /**
  * Get the `default_title` field from a `ConversionOptions`.
@@ -6770,8 +6742,7 @@ int32_t xberg_conversion_options_compact_tables(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_highlight_style(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_highlight_style(XBERGAlefHandle handle);
 
 /**
  * Get the `extract_metadata` field from a `ConversionOptions`.
@@ -6787,8 +6758,7 @@ int32_t xberg_conversion_options_extract_metadata(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_whitespace_mode(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_whitespace_mode(XBERGAlefHandle handle);
 
 /**
  * Get the `strip_newlines` field from a `ConversionOptions`.
@@ -6852,8 +6822,7 @@ XBERGAlefHandle xberg_conversion_options_newline_style(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_code_block_style(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_code_block_style(XBERGAlefHandle handle);
 
 /**
  * Get the `keep_inline_images_in` field from a `ConversionOptions`.
@@ -6921,8 +6890,7 @@ int32_t xberg_conversion_options_skip_images(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_inline_data_media(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_inline_data_media(XBERGAlefHandle handle);
 
 /**
  * Get the `hidden_content` field from a `ConversionOptions`.
@@ -6940,8 +6908,7 @@ XBERGAlefHandle xberg_conversion_options_hidden_content(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_conversion_options_url_escape_style(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_conversion_options_url_escape_style(XBERGAlefHandle handle);
 
 /**
  * Get the `link_style` field from a `ConversionOptions`.
@@ -6966,8 +6933,7 @@ XBERGAlefHandle xberg_conversion_options_output_format(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_conversion_options_include_document_structure(XBERGAlefHandle handle);
+int32_t xberg_conversion_options_include_document_structure(XBERGAlefHandle handle);
 
 /**
  * Get the `extract_images` field from a `ConversionOptions`.
@@ -7812,8 +7778,7 @@ char *xberg_crawl_config_document_output_dir(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_crawl_config_document_content_encoding(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_crawl_config_document_content_encoding(XBERGAlefHandle handle);
 
 /**
  * Get the `warc_output` field from a `CrawlConfig`.
@@ -7868,8 +7833,7 @@ int32_t xberg_crawl_config_ssrf_deny_private_explicit(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_crawl_config_has_ssrf_deny_private_explicit(XBERGAlefHandle handle);
+int32_t xberg_crawl_config_has_ssrf_deny_private_explicit(XBERGAlefHandle handle);
 
 /**
  * Get the `danger_accept_invalid_certs` field from a `CrawlConfig`.
@@ -8156,8 +8120,7 @@ char *xberg_deepseek_ocr_backend_options_cache_dir(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_deepseek_ocr_backend_options_device(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_deepseek_ocr_backend_options_device(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
@@ -8193,8 +8156,7 @@ int32_t xberg_deepseek_ocr_backend_options_has_version(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_deepseek_ocr_backend_options_dtype(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_deepseek_ocr_backend_options_dtype(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_API)
@@ -9038,8 +9000,7 @@ int32_t xberg_document_metadata_force_ocr(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_document_metadata_user_chunk_config(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_document_metadata_user_chunk_config(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -9651,8 +9612,7 @@ int32_t xberg_docx_app_properties_has_characters(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_docx_app_properties_characters_with_spaces(XBERGAlefHandle handle);
+int32_t xberg_docx_app_properties_characters_with_spaces(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_OFFICE)
@@ -9669,8 +9629,7 @@ xberg_docx_app_properties_characters_with_spaces(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t
-xberg_docx_app_properties_has_characters_with_spaces(XBERGAlefHandle handle);
+int32_t xberg_docx_app_properties_has_characters_with_spaces(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_OFFICE)
@@ -9851,8 +9810,7 @@ int32_t xberg_docx_app_properties_hyperlinks_changed(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_docx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
+int32_t xberg_docx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_OFFICE)
@@ -10150,8 +10108,7 @@ int32_t xberg_email_attachment_is_image(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint8_t *xberg_email_attachment_data(XBERGAlefHandle handle,
-                                     uintptr_t *out_len);
+uint8_t *xberg_email_attachment_data(XBERGAlefHandle handle, uintptr_t *out_len);
 
 /**
  * Create a `EmailConfig` from a JSON string. Returns null on failure.
@@ -10687,8 +10644,7 @@ uint64_t xberg_embedding_config_max_embed_duration_secs(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_embedding_config_has_max_embed_duration_secs(XBERGAlefHandle handle);
+int32_t xberg_embedding_config_has_max_embed_duration_secs(XBERGAlefHandle handle);
 
 /**
  * Get the `max_sequence_length` field from a `EmbeddingConfig`.
@@ -11195,8 +11151,7 @@ char *xberg_extract_input_to_json(XBERGAlefHandle handle);
  * owns the handle slot and must free a returned string and byte buffer with the
  * corresponding library functions.
  */
-char *xberg_extract_input_alef_take_factory_bytes(XBERGAlefHandle *handle,
-                                                  uint8_t **out_bytes,
+char *xberg_extract_input_alef_take_factory_bytes(XBERGAlefHandle *handle, uint8_t **out_bytes,
                                                   uintptr_t *out_len);
 
 /**
@@ -11271,10 +11226,8 @@ XBERGAlefHandle xberg_extract_input_default(void);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_input_from_bytes(const uint8_t *bytes,
-                                               uintptr_t bytes_len,
-                                               const char *mime_type,
-                                               const char *filename);
+XBERGAlefHandle xberg_extract_input_from_bytes(const uint8_t *bytes, uintptr_t bytes_len,
+                                               const char *mime_type, const char *filename);
 
 /**
  * Reconstruct an extraction input from metadata and out-of-band bytes for
@@ -11282,8 +11235,8 @@ XBERGAlefHandle xberg_extract_input_from_bytes(const uint8_t *bytes,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_input_from_json_with_bytes(
-    const uint8_t *bytes, uintptr_t bytes_len, const char *metadata_json);
+XBERGAlefHandle xberg_extract_input_from_json_with_bytes(const uint8_t *bytes, uintptr_t bytes_len,
+                                                         const char *metadata_json);
 
 /**
  * Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
@@ -11327,8 +11280,7 @@ XBERGAlefHandle xberg_extract_input_with_options_input(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_extract_input_with_options_use_layout_for_markdown(
-    XBERGAlefHandle handle);
+int32_t xberg_extract_input_with_options_use_layout_for_markdown(XBERGAlefHandle handle);
 
 /**
  * Report whether the `use_layout_for_markdown` field on a
@@ -11343,8 +11295,7 @@ int32_t xberg_extract_input_with_options_use_layout_for_markdown(
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_extract_input_with_options_has_use_layout_for_markdown(
-    XBERGAlefHandle handle);
+int32_t xberg_extract_input_with_options_has_use_layout_for_markdown(XBERGAlefHandle handle);
 
 /**
  * Create a `ExtractedDocument` from a JSON string. Returns null on failure.
@@ -11403,8 +11354,7 @@ XBERGAlefHandle xberg_extracted_document_metadata(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extracted_document_extraction_method(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extracted_document_extraction_method(XBERGAlefHandle handle);
 
 /**
  * Get the `tables` field from a `ExtractedDocument`.
@@ -11440,8 +11390,7 @@ char *xberg_extracted_document_detected_languages(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_extracted_document_detected_language_confidences(XBERGAlefHandle handle);
+char *xberg_extracted_document_detected_language_confidences(XBERGAlefHandle handle);
 
 /**
  * Get the `chunks` field from a `ExtractedDocument`.
@@ -11632,8 +11581,7 @@ XBERGAlefHandle xberg_extracted_document_summary(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extracted_document_extraction_confidence(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extracted_document_extraction_confidence(XBERGAlefHandle handle);
 
 /**
  * Get the `translation` field from a `ExtractedDocument`.
@@ -11660,8 +11608,7 @@ char *xberg_extracted_document_page_classifications(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extracted_document_redaction_report(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extracted_document_redaction_report(XBERGAlefHandle handle);
 
 /**
  * Get the `formulas` field from a `ExtractedDocument`.
@@ -12088,8 +12035,7 @@ int32_t xberg_extraction_confidence_has_ocr_aggregate(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_confidence_schema_compliance(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_confidence_schema_compliance(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -12131,8 +12077,7 @@ void xberg_extraction_config_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_mime_detection_policy(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_mime_detection_policy(XBERGAlefHandle handle);
 
 /**
  * Get the `use_cache` field from a `ExtractionConfig`.
@@ -12146,8 +12091,7 @@ int32_t xberg_extraction_config_use_cache(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_enable_quality_processing(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_enable_quality_processing(XBERGAlefHandle handle);
 
 /**
  * Get the `ocr` field from a `ExtractionConfig`.
@@ -12209,16 +12153,14 @@ int32_t xberg_extraction_config_ocr_near_empty_fallback(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_has_ocr_near_empty_fallback(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_has_ocr_near_empty_fallback(XBERGAlefHandle handle);
 
 /**
  * Get the `ocr_scanned_page_quality_gate` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_ocr_scanned_page_quality_gate(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_ocr_scanned_page_quality_gate(XBERGAlefHandle handle);
 
 /**
  * Report whether the `ocr_scanned_page_quality_gate` field on a
@@ -12233,8 +12175,7 @@ xberg_extraction_config_ocr_scanned_page_quality_gate(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_extraction_config_has_ocr_scanned_page_quality_gate(
-    XBERGAlefHandle handle);
+int32_t xberg_extraction_config_has_ocr_scanned_page_quality_gate(XBERGAlefHandle handle);
 
 /**
  * Get the `ocr_embedded_images` field from a `ExtractionConfig`.
@@ -12309,8 +12250,7 @@ XBERGAlefHandle xberg_extraction_config_token_reduction(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_language_detection(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_language_detection(XBERGAlefHandle handle);
 
 /**
  * Get the `pages` field from a `ExtractionConfig`.
@@ -12362,8 +12302,7 @@ XBERGAlefHandle xberg_extraction_config_html_output(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_extraction_config_extraction_timeout_secs(XBERGAlefHandle handle);
+uint64_t xberg_extraction_config_extraction_timeout_secs(XBERGAlefHandle handle);
 
 /**
  * Report whether the `extraction_timeout_secs` field on a `ExtractionConfig` is
@@ -12377,16 +12316,14 @@ xberg_extraction_config_extraction_timeout_secs(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_has_extraction_timeout_secs(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_has_extraction_timeout_secs(XBERGAlefHandle handle);
 
 /**
  * Get the `max_concurrent_extractions` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_extraction_config_max_concurrent_extractions(XBERGAlefHandle handle);
+uintptr_t xberg_extraction_config_max_concurrent_extractions(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_concurrent_extractions` field on a `ExtractionConfig`
@@ -12401,8 +12338,7 @@ xberg_extraction_config_max_concurrent_extractions(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t
-xberg_extraction_config_has_max_concurrent_extractions(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_has_max_concurrent_extractions(XBERGAlefHandle handle);
 
 /**
  * Get the `result_format` field from a `ExtractionConfig`.
@@ -12427,8 +12363,7 @@ XBERGAlefHandle xberg_extraction_config_security_limits(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_extraction_config_max_embedded_file_bytes(XBERGAlefHandle handle);
+uint64_t xberg_extraction_config_max_embedded_file_bytes(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_embedded_file_bytes` field on a `ExtractionConfig` is
@@ -12442,8 +12377,7 @@ xberg_extraction_config_max_embedded_file_bytes(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_has_max_embedded_file_bytes(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_has_max_embedded_file_bytes(XBERGAlefHandle handle);
 
 /**
  * Get the `output_format` field from a `ExtractionConfig`.
@@ -12475,16 +12409,14 @@ int32_t xberg_extraction_config_table_anchors(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_jupyter_cell_rendering(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_jupyter_cell_rendering(XBERGAlefHandle handle);
 
 /**
  * Get the `apply_notebook_cell_tags` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_apply_notebook_cell_tags(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_apply_notebook_cell_tags(XBERGAlefHandle handle);
 
 /**
  * Get the `layout` field from a `ExtractionConfig`.
@@ -12516,8 +12448,7 @@ int32_t xberg_extraction_config_use_layout_for_markdown(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_extraction_config_include_document_structure(XBERGAlefHandle handle);
+int32_t xberg_extraction_config_include_document_structure(XBERGAlefHandle handle);
 
 /**
  * Get the `strict_parse` field from a `ExtractionConfig`.
@@ -12632,8 +12563,7 @@ XBERGAlefHandle xberg_extraction_config_tree_sitter(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_structured_extraction(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_structured_extraction(XBERGAlefHandle handle);
 
 /**
  * Get the `ner` field from a `ExtractionConfig`.
@@ -12678,8 +12608,7 @@ XBERGAlefHandle xberg_extraction_config_translation(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_page_classification(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_page_classification(XBERGAlefHandle handle);
 
 /**
  * Get the `chunk_classification` field from a `ExtractionConfig`.
@@ -12688,8 +12617,7 @@ xberg_extraction_config_page_classification(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_extraction_config_chunk_classification(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_extraction_config_chunk_classification(XBERGAlefHandle handle);
 
 /**
  * Get the `captioning` field from a `ExtractionConfig`.
@@ -12759,8 +12687,7 @@ uint64_t xberg_extraction_config_default_max_embedded_file_bytes(void);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t
-xberg_extraction_config_default_max_embedded_file_bytes_has_result(void);
+int32_t xberg_extraction_config_default_max_embedded_file_bytes_has_result(void);
 
 /**
  * Default extraction timeout: 600 seconds (10 minutes).
@@ -12898,8 +12825,7 @@ int32_t xberg_extraction_config_needs_image_data(XBERGAlefHandle this_);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t
-xberg_extraction_config_runs_ocr_on_embedded_images(XBERGAlefHandle this_);
+int32_t xberg_extraction_config_runs_ocr_on_embedded_images(XBERGAlefHandle this_);
 
 /**
  * Returns `true` when a standalone image extraction (the whole input document
@@ -12918,8 +12844,7 @@ xberg_extraction_config_runs_ocr_on_embedded_images(XBERGAlefHandle this_);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t
-xberg_extraction_config_wants_own_bytes_in_result(XBERGAlefHandle this_);
+int32_t xberg_extraction_config_wants_own_bytes_in_result(XBERGAlefHandle this_);
 
 /**
  * Returns `true` when any image processing is needed during extraction.
@@ -13166,8 +13091,7 @@ uintptr_t xberg_extraction_result_crawl_redirect_count(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_extraction_result_crawl_unique_normalized_urls(XBERGAlefHandle handle);
+char *xberg_extraction_result_crawl_unique_normalized_urls(XBERGAlefHandle handle);
 
 /**
  * Build an output containing one successful result.
@@ -13321,16 +13245,14 @@ void xberg_file_extraction_config_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_mime_detection_policy(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_mime_detection_policy(XBERGAlefHandle handle);
 
 /**
  * Get the `enable_quality_processing` field from a `FileExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_file_extraction_config_enable_quality_processing(XBERGAlefHandle handle);
+int32_t xberg_file_extraction_config_enable_quality_processing(XBERGAlefHandle handle);
 
 /**
  * Report whether the `enable_quality_processing` field on a
@@ -13345,8 +13267,7 @@ xberg_file_extraction_config_enable_quality_processing(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_file_extraction_config_has_enable_quality_processing(
-    XBERGAlefHandle handle);
+int32_t xberg_file_extraction_config_has_enable_quality_processing(XBERGAlefHandle handle);
 
 /**
  * Get the `ocr` field from a `FileExtractionConfig`.
@@ -13384,8 +13305,7 @@ int32_t xberg_file_extraction_config_has_force_ocr(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_ocr_strategy(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_ocr_strategy(XBERGAlefHandle handle);
 
 /**
  * Get the `force_ocr_pages` field from a `FileExtractionConfig`.
@@ -13432,8 +13352,7 @@ XBERGAlefHandle xberg_file_extraction_config_chunking(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_content_filter(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_content_filter(XBERGAlefHandle handle);
 
 /**
  * Get the `images` field from a `FileExtractionConfig`.
@@ -13451,8 +13370,7 @@ XBERGAlefHandle xberg_file_extraction_config_images(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_pdf_options(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_pdf_options(XBERGAlefHandle handle);
 
 /**
  * Get the `token_reduction` field from a `FileExtractionConfig`.
@@ -13461,8 +13379,7 @@ xberg_file_extraction_config_pdf_options(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_token_reduction(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_token_reduction(XBERGAlefHandle handle);
 
 /**
  * Get the `language_detection` field from a `FileExtractionConfig`.
@@ -13471,8 +13388,7 @@ xberg_file_extraction_config_token_reduction(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_language_detection(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_language_detection(XBERGAlefHandle handle);
 
 /**
  * Get the `pages` field from a `FileExtractionConfig`.
@@ -13499,8 +13415,7 @@ XBERGAlefHandle xberg_file_extraction_config_keywords(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_postprocessor(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_postprocessor(XBERGAlefHandle handle);
 
 /**
  * Get the `html_options` field from a `FileExtractionConfig`.
@@ -13509,8 +13424,7 @@ xberg_file_extraction_config_postprocessor(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_html_options(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_html_options(XBERGAlefHandle handle);
 
 /**
  * Get the `html_output` field from a `FileExtractionConfig`.
@@ -13519,8 +13433,7 @@ xberg_file_extraction_config_html_options(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_html_output(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_html_output(XBERGAlefHandle handle);
 
 /**
  * Get the `result_format` field from a `FileExtractionConfig`.
@@ -13529,8 +13442,7 @@ xberg_file_extraction_config_html_output(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_result_format(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_result_format(XBERGAlefHandle handle);
 
 /**
  * Get the `output_format` field from a `FileExtractionConfig`.
@@ -13539,16 +13451,14 @@ xberg_file_extraction_config_result_format(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_output_format(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_output_format(XBERGAlefHandle handle);
 
 /**
  * Get the `include_document_structure` field from a `FileExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_file_extraction_config_include_document_structure(XBERGAlefHandle handle);
+int32_t xberg_file_extraction_config_include_document_structure(XBERGAlefHandle handle);
 
 /**
  * Report whether the `include_document_structure` field on a
@@ -13563,8 +13473,7 @@ xberg_file_extraction_config_include_document_structure(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_file_extraction_config_has_include_document_structure(
-    XBERGAlefHandle handle);
+int32_t xberg_file_extraction_config_has_include_document_structure(XBERGAlefHandle handle);
 
 /**
  * Get the `strict_parse` field from a `FileExtractionConfig`.
@@ -13603,8 +13512,7 @@ XBERGAlefHandle xberg_file_extraction_config_layout(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_transcription(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_transcription(XBERGAlefHandle handle);
 
 /**
  * Get the `timeout_secs` field from a `FileExtractionConfig`.
@@ -13634,8 +13542,7 @@ int32_t xberg_file_extraction_config_has_timeout_secs(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_tree_sitter(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_tree_sitter(XBERGAlefHandle handle);
 
 /**
  * Get the `structured_extraction` field from a `FileExtractionConfig`.
@@ -13644,8 +13551,7 @@ xberg_file_extraction_config_tree_sitter(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_structured_extraction(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_structured_extraction(XBERGAlefHandle handle);
 
 /**
  * Get the `url` field from a `FileExtractionConfig`.
@@ -13681,8 +13587,7 @@ XBERGAlefHandle xberg_file_extraction_config_redaction(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_summarization(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_summarization(XBERGAlefHandle handle);
 
 /**
  * Get the `translation` field from a `FileExtractionConfig`.
@@ -13691,8 +13596,7 @@ xberg_file_extraction_config_summarization(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_translation(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_translation(XBERGAlefHandle handle);
 
 /**
  * Get the `page_classification` field from a `FileExtractionConfig`.
@@ -13701,8 +13605,7 @@ xberg_file_extraction_config_translation(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_page_classification(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_page_classification(XBERGAlefHandle handle);
 
 /**
  * Get the `chunk_classification` field from a `FileExtractionConfig`.
@@ -13711,8 +13614,7 @@ xberg_file_extraction_config_page_classification(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_file_extraction_config_chunk_classification(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_file_extraction_config_chunk_classification(XBERGAlefHandle handle);
 
 /**
  * Get the `captioning` field from a `FileExtractionConfig`.
@@ -13885,9 +13787,7 @@ XBERGAlefHandle xberg_footnote_config_default(void);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_footnote_config_with_parse_citations(XBERGAlefHandle this_,
-                                           int32_t enabled);
+XBERGAlefHandle xberg_footnote_config_with_parse_citations(XBERGAlefHandle this_, int32_t enabled);
 #endif
 
 #if defined(XBERG_FEATURE_MARKDOWN_FOOTNOTES)
@@ -14134,8 +14034,7 @@ void xberg_geo_json_extraction_config_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_geo_json_extraction_config_include_full_coordinates(
-    XBERGAlefHandle handle);
+int32_t xberg_geo_json_extraction_config_include_full_coordinates(XBERGAlefHandle handle);
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
 /**
@@ -14196,8 +14095,7 @@ XBERGAlefHandle xberg_glm_ocr_backend_options_device(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_glm_ocr_backend_options_layout_mode(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_glm_ocr_backend_options_layout_mode(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
@@ -14206,8 +14104,7 @@ xberg_glm_ocr_backend_options_layout_mode(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_glm_ocr_backend_options_enable_chart_understanding(
-    XBERGAlefHandle handle);
+int32_t xberg_glm_ocr_backend_options_enable_chart_understanding(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
@@ -14224,8 +14121,7 @@ int32_t xberg_glm_ocr_backend_options_enable_chart_understanding(
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_glm_ocr_backend_options_has_enable_chart_understanding(
-    XBERGAlefHandle handle);
+int32_t xberg_glm_ocr_backend_options_has_enable_chart_understanding(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
@@ -14512,8 +14408,7 @@ void xberg_heuristics_config_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_heuristics_config_enable_pdf_text_heuristics(XBERGAlefHandle handle);
+int32_t xberg_heuristics_config_enable_pdf_text_heuristics(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -14531,8 +14426,7 @@ float xberg_heuristics_config_text_layer_threshold(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_heuristics_config_file_size_threshold_bytes(XBERGAlefHandle handle);
+uint64_t xberg_heuristics_config_file_size_threshold_bytes(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -14568,8 +14462,7 @@ uint32_t xberg_heuristics_config_max_pages_per_chunk(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_heuristics_config_disk_processing_threshold_bytes(XBERGAlefHandle handle);
+uint64_t xberg_heuristics_config_disk_processing_threshold_bytes(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -14596,8 +14489,7 @@ uint32_t xberg_heuristics_config_max_xlsx_sheet_count(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_heuristics_config_max_xlsx_workbook_cells(XBERGAlefHandle handle);
+uint64_t xberg_heuristics_config_max_xlsx_workbook_cells(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -14606,8 +14498,7 @@ xberg_heuristics_config_max_xlsx_workbook_cells(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint32_t
-xberg_heuristics_config_max_pptx_embedded_count(XBERGAlefHandle handle);
+uint32_t xberg_heuristics_config_max_pptx_embedded_count(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_HEURISTICS)
@@ -15164,16 +15055,14 @@ int32_t xberg_image_extraction_config_target_dpi(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_extraction_config_max_image_dimension(XBERGAlefHandle handle);
+int32_t xberg_image_extraction_config_max_image_dimension(XBERGAlefHandle handle);
 
 /**
  * Get the `inject_placeholders` field from a `ImageExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_extraction_config_inject_placeholders(XBERGAlefHandle handle);
+int32_t xberg_image_extraction_config_inject_placeholders(XBERGAlefHandle handle);
 
 /**
  * Get the `auto_adjust_dpi` field from a `ImageExtractionConfig`.
@@ -15201,8 +15090,7 @@ int32_t xberg_image_extraction_config_max_dpi(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint32_t
-xberg_image_extraction_config_max_images_per_page(XBERGAlefHandle handle);
+uint32_t xberg_image_extraction_config_max_images_per_page(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_images_per_page` field on a `ImageExtractionConfig`
@@ -15217,8 +15105,7 @@ xberg_image_extraction_config_max_images_per_page(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t
-xberg_image_extraction_config_has_max_images_per_page(XBERGAlefHandle handle);
+int32_t xberg_image_extraction_config_has_max_images_per_page(XBERGAlefHandle handle);
 
 /**
  * Get the `classify` field from a `ImageExtractionConfig`.
@@ -15232,8 +15119,7 @@ int32_t xberg_image_extraction_config_classify(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_extraction_config_include_page_rasters(XBERGAlefHandle handle);
+int32_t xberg_image_extraction_config_include_page_rasters(XBERGAlefHandle handle);
 
 /**
  * Get the `run_ocr_on_images` field from a `ImageExtractionConfig`.
@@ -15263,8 +15149,7 @@ int32_t xberg_image_extraction_config_append_ocr_text(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_image_extraction_config_output_format(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_image_extraction_config_output_format(XBERGAlefHandle handle);
 
 /**
  * Get the `svg` field from a `ImageExtractionConfig`.
@@ -15280,8 +15165,7 @@ XBERGAlefHandle xberg_image_extraction_config_svg(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_extraction_config_include_data_base64(XBERGAlefHandle handle);
+int32_t xberg_image_extraction_config_include_data_base64(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -15475,8 +15359,7 @@ int32_t xberg_image_preprocessing_config_denoise(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_config_contrast_enhance(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_config_contrast_enhance(XBERGAlefHandle handle);
 
 /**
  * Get the `binarization_method` field from a `ImagePreprocessingConfig`.
@@ -15485,8 +15368,7 @@ xberg_image_preprocessing_config_contrast_enhance(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_image_preprocessing_config_binarization_method(XBERGAlefHandle handle);
+char *xberg_image_preprocessing_config_binarization_method(XBERGAlefHandle handle);
 
 /**
  * Get the `invert_colors` field from a `ImagePreprocessingConfig`.
@@ -15500,8 +15382,7 @@ int32_t xberg_image_preprocessing_config_invert_colors(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_config_normalize_shaded_rows(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_config_normalize_shaded_rows(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -15537,8 +15418,7 @@ void xberg_image_preprocessing_metadata_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_image_preprocessing_metadata_original_dimensions(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_image_preprocessing_metadata_original_dimensions(XBERGAlefHandle handle);
 
 /**
  * Get the `original_dpi` field from a `ImagePreprocessingMetadata`.
@@ -15547,8 +15427,7 @@ xberg_image_preprocessing_metadata_original_dimensions(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_image_preprocessing_metadata_original_dpi(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_image_preprocessing_metadata_original_dpi(XBERGAlefHandle handle);
 
 /**
  * Get the `target_dpi` field from a `ImagePreprocessingMetadata`.
@@ -15569,8 +15448,7 @@ double xberg_image_preprocessing_metadata_scale_factor(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_metadata_auto_adjusted(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_metadata_auto_adjusted(XBERGAlefHandle handle);
 
 /**
  * Get the `final_dpi` field from a `ImagePreprocessingMetadata`.
@@ -15586,8 +15464,7 @@ int32_t xberg_image_preprocessing_metadata_final_dpi(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_image_preprocessing_metadata_new_dimensions(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_image_preprocessing_metadata_new_dimensions(XBERGAlefHandle handle);
 
 /**
  * Get the `resample_method` field from a `ImagePreprocessingMetadata`.
@@ -15596,24 +15473,21 @@ xberg_image_preprocessing_metadata_new_dimensions(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_image_preprocessing_metadata_resample_method(XBERGAlefHandle handle);
+char *xberg_image_preprocessing_metadata_resample_method(XBERGAlefHandle handle);
 
 /**
  * Get the `dimension_clamped` field from a `ImagePreprocessingMetadata`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_metadata_dimension_clamped(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_metadata_dimension_clamped(XBERGAlefHandle handle);
 
 /**
  * Get the `calculated_dpi` field from a `ImagePreprocessingMetadata`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_metadata_calculated_dpi(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_metadata_calculated_dpi(XBERGAlefHandle handle);
 
 /**
  * Report whether the `calculated_dpi` field on a `ImagePreprocessingMetadata`
@@ -15628,16 +15502,14 @@ xberg_image_preprocessing_metadata_calculated_dpi(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t
-xberg_image_preprocessing_metadata_has_calculated_dpi(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_metadata_has_calculated_dpi(XBERGAlefHandle handle);
 
 /**
  * Get the `skipped_resize` field from a `ImagePreprocessingMetadata`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_image_preprocessing_metadata_skipped_resize(XBERGAlefHandle handle);
+int32_t xberg_image_preprocessing_metadata_skipped_resize(XBERGAlefHandle handle);
 
 /**
  * Get the `resize_error` field from a `ImagePreprocessingMetadata`.
@@ -15807,8 +15679,7 @@ char *xberg_key_value_attribute_key(XBERGAlefHandle handle);
  */
 char *xberg_key_value_attribute_value(XBERGAlefHandle handle);
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Create a `Keyword` from a JSON string. Returns null on failure.
  * # Safety
@@ -15818,8 +15689,7 @@ char *xberg_key_value_attribute_value(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Serialize a `Keyword` to a JSON string. Returns null on failure.
  * # Safety
@@ -15829,8 +15699,7 @@ XBERGAlefHandle xberg_keyword_from_json(const char *json);
 char *xberg_keyword_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Free a `Keyword` handle.
  * # Safety
@@ -15839,8 +15708,7 @@ char *xberg_keyword_to_json(XBERGAlefHandle handle);
 void xberg_keyword_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `text` field from a `Keyword`.
  * A non-null returned pointer is owned by the caller.
@@ -15851,8 +15719,7 @@ void xberg_keyword_free(XBERGAlefHandle handle);
 char *xberg_keyword_text(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `score` field from a `Keyword`.
  * # Safety
@@ -15861,8 +15728,7 @@ char *xberg_keyword_text(XBERGAlefHandle handle);
 float xberg_keyword_score(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `algorithm` field from a `Keyword`.
  * A non-null returned handle is owned by the caller.
@@ -15873,8 +15739,7 @@ float xberg_keyword_score(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_algorithm(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `positions` field from a `Keyword`.
  * A non-null returned pointer is owned by the caller.
@@ -15885,8 +15750,7 @@ XBERGAlefHandle xberg_keyword_algorithm(XBERGAlefHandle handle);
 char *xberg_keyword_positions(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Create a `KeywordConfig` from a JSON string. Returns null on failure.
  * # Safety
@@ -15896,8 +15760,7 @@ char *xberg_keyword_positions(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_config_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Serialize a `KeywordConfig` to a JSON string. Returns null on failure.
  * # Safety
@@ -15907,8 +15770,7 @@ XBERGAlefHandle xberg_keyword_config_from_json(const char *json);
 char *xberg_keyword_config_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Free a `KeywordConfig` handle.
  * # Safety
@@ -15917,8 +15779,7 @@ char *xberg_keyword_config_to_json(XBERGAlefHandle handle);
 void xberg_keyword_config_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `algorithm` field from a `KeywordConfig`.
  * A non-null returned handle is owned by the caller.
@@ -15929,8 +15790,7 @@ void xberg_keyword_config_free(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_config_algorithm(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `max_keywords` field from a `KeywordConfig`.
  * # Safety
@@ -15939,8 +15799,7 @@ XBERGAlefHandle xberg_keyword_config_algorithm(XBERGAlefHandle handle);
 uintptr_t xberg_keyword_config_max_keywords(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `min_score` field from a `KeywordConfig`.
  * # Safety
@@ -15949,8 +15808,7 @@ uintptr_t xberg_keyword_config_max_keywords(XBERGAlefHandle handle);
 float xberg_keyword_config_min_score(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `ngram_range` field from a `KeywordConfig`.
  * A non-null returned handle is owned by the caller.
@@ -15961,8 +15819,7 @@ float xberg_keyword_config_min_score(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_config_ngram_range(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `language` field from a `KeywordConfig`.
  * A non-null returned pointer is owned by the caller.
@@ -15973,8 +15830,7 @@ XBERGAlefHandle xberg_keyword_config_ngram_range(XBERGAlefHandle handle);
 char *xberg_keyword_config_language(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `yake_params` field from a `KeywordConfig`.
  * A non-null returned handle is owned by the caller.
@@ -15985,8 +15841,7 @@ char *xberg_keyword_config_language(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_config_yake_params(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `rake_params` field from a `KeywordConfig`.
  * A non-null returned handle is owned by the caller.
@@ -15997,8 +15852,7 @@ XBERGAlefHandle xberg_keyword_config_yake_params(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_keyword_config_rake_params(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -16166,16 +16020,14 @@ uintptr_t xberg_late_interaction_config_max_length(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_late_interaction_config_query_max_length(XBERGAlefHandle handle);
+uintptr_t xberg_late_interaction_config_query_max_length(XBERGAlefHandle handle);
 
 /**
  * Get the `show_download_progress` field from a `LateInteractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_late_interaction_config_show_download_progress(XBERGAlefHandle handle);
+int32_t xberg_late_interaction_config_show_download_progress(XBERGAlefHandle handle);
 
 /**
  * Get the `cache_dir` field from a `LateInteractionConfig`.
@@ -16193,16 +16045,14 @@ char *xberg_late_interaction_config_cache_dir(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_late_interaction_config_acceleration(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_late_interaction_config_acceleration(XBERGAlefHandle handle);
 
 /**
  * Get the `max_embed_duration_secs` field from a `LateInteractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_late_interaction_config_max_embed_duration_secs(XBERGAlefHandle handle);
+uint64_t xberg_late_interaction_config_max_embed_duration_secs(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_embed_duration_secs` field on a
@@ -16217,8 +16067,7 @@ xberg_late_interaction_config_max_embed_duration_secs(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_late_interaction_config_has_max_embed_duration_secs(
-    XBERGAlefHandle handle);
+int32_t xberg_late_interaction_config_has_max_embed_duration_secs(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -16226,7 +16075,7 @@ int32_t xberg_late_interaction_config_has_max_embed_duration_secs(
  */
 XBERGAlefHandle xberg_late_interaction_config_default(void);
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Create a `LateInteractionMatch` from a JSON string. Returns null on failure.
@@ -16237,7 +16086,7 @@ XBERGAlefHandle xberg_late_interaction_config_default(void);
 XBERGAlefHandle xberg_late_interaction_match_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Serialize a `LateInteractionMatch` to a JSON string. Returns null on failure.
@@ -16248,7 +16097,7 @@ XBERGAlefHandle xberg_late_interaction_match_from_json(const char *json);
 char *xberg_late_interaction_match_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Free a `LateInteractionMatch` handle.
@@ -16258,7 +16107,7 @@ char *xberg_late_interaction_match_to_json(XBERGAlefHandle handle);
 void xberg_late_interaction_match_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `index` field from a `LateInteractionMatch`.
@@ -16268,7 +16117,7 @@ void xberg_late_interaction_match_free(XBERGAlefHandle handle);
 uintptr_t xberg_late_interaction_match_index(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `score` field from a `LateInteractionMatch`.
@@ -16278,7 +16127,7 @@ uintptr_t xberg_late_interaction_match_index(XBERGAlefHandle handle);
 float xberg_late_interaction_match_score(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Create a `LateInteractionPreset` from a JSON string. Returns null on failure.
@@ -16289,7 +16138,7 @@ float xberg_late_interaction_match_score(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_late_interaction_preset_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Serialize a `LateInteractionPreset` to a JSON string. Returns null on
@@ -16299,7 +16148,7 @@ XBERGAlefHandle xberg_late_interaction_preset_from_json(const char *json);
 char *xberg_late_interaction_preset_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Free a `LateInteractionPreset` handle.
@@ -16309,7 +16158,7 @@ char *xberg_late_interaction_preset_to_json(XBERGAlefHandle handle);
 void xberg_late_interaction_preset_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `name` field from a `LateInteractionPreset`.
@@ -16321,7 +16170,7 @@ void xberg_late_interaction_preset_free(XBERGAlefHandle handle);
 char *xberg_late_interaction_preset_name(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `model_repo` field from a `LateInteractionPreset`.
@@ -16333,7 +16182,7 @@ char *xberg_late_interaction_preset_name(XBERGAlefHandle handle);
 char *xberg_late_interaction_preset_model_repo(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `model_file` field from a `LateInteractionPreset`.
@@ -16345,7 +16194,7 @@ char *xberg_late_interaction_preset_model_repo(XBERGAlefHandle handle);
 char *xberg_late_interaction_preset_model_file(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `additional_files` field from a `LateInteractionPreset`.
@@ -16357,7 +16206,7 @@ char *xberg_late_interaction_preset_model_file(XBERGAlefHandle handle);
 char *xberg_late_interaction_preset_additional_files(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `max_length` field from a `LateInteractionPreset`.
@@ -16367,18 +16216,17 @@ char *xberg_late_interaction_preset_additional_files(XBERGAlefHandle handle);
 uintptr_t xberg_late_interaction_preset_max_length(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `query_max_length` field from a `LateInteractionPreset`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_late_interaction_preset_query_max_length(XBERGAlefHandle handle);
+uintptr_t xberg_late_interaction_preset_query_max_length(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `dim` field from a `LateInteractionPreset`.
@@ -16388,7 +16236,7 @@ xberg_late_interaction_preset_query_max_length(XBERGAlefHandle handle);
 uintptr_t xberg_late_interaction_preset_dim(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `description` field from a `LateInteractionPreset`.
@@ -16505,8 +16353,7 @@ XBERGAlefHandle xberg_layout_detection_config_strategy(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-float xberg_layout_detection_config_confidence_threshold(
-    XBERGAlefHandle handle);
+float xberg_layout_detection_config_confidence_threshold(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16523,8 +16370,7 @@ float xberg_layout_detection_config_confidence_threshold(
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t
-xberg_layout_detection_config_has_confidence_threshold(XBERGAlefHandle handle);
+int32_t xberg_layout_detection_config_has_confidence_threshold(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16544,8 +16390,7 @@ int32_t xberg_layout_detection_config_apply_heuristics(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_layout_detection_config_table_model(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_layout_detection_config_table_model(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16556,8 +16401,7 @@ xberg_layout_detection_config_table_model(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_layout_detection_config_formula_model(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_layout_detection_config_formula_model(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16568,8 +16412,7 @@ xberg_layout_detection_config_formula_model(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_layout_detection_config_table_overlap_preference(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_layout_detection_config_table_overlap_preference(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16580,8 +16423,7 @@ xberg_layout_detection_config_table_overlap_preference(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_layout_detection_config_acceleration(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_layout_detection_config_acceleration(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -16590,8 +16432,7 @@ xberg_layout_detection_config_acceleration(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_layout_detection_config_enable_chart_understanding(
-    XBERGAlefHandle handle);
+int32_t xberg_layout_detection_config_enable_chart_understanding(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
@@ -17748,10 +17589,8 @@ XBERGAlefHandle xberg_meta_schema_compile(const char *meta_schema_json);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_meta_schema_parse_preset(XBERGAlefHandle this_,
-                                               const char *path,
-                                               const uint8_t *raw,
-                                               uintptr_t raw_len);
+XBERGAlefHandle xberg_meta_schema_parse_preset(XBERGAlefHandle this_, const char *path,
+                                               const uint8_t *raw, uintptr_t raw_len);
 #endif
 
 /**
@@ -18051,7 +17890,7 @@ char *xberg_model_paths_rec_model(XBERGAlefHandle handle);
  */
 char *xberg_model_paths_dict_file(XBERGAlefHandle handle);
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Create a `MultiVectorEmbedding` from a JSON string. Returns null on failure.
@@ -18062,7 +17901,7 @@ char *xberg_model_paths_dict_file(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_multi_vector_embedding_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Serialize a `MultiVectorEmbedding` to a JSON string. Returns null on failure.
@@ -18073,7 +17912,7 @@ XBERGAlefHandle xberg_multi_vector_embedding_from_json(const char *json);
 char *xberg_multi_vector_embedding_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Free a `MultiVectorEmbedding` handle.
@@ -18083,7 +17922,7 @@ char *xberg_multi_vector_embedding_to_json(XBERGAlefHandle handle);
 void xberg_multi_vector_embedding_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `num_tokens` field from a `MultiVectorEmbedding`.
@@ -18093,7 +17932,7 @@ void xberg_multi_vector_embedding_free(XBERGAlefHandle handle);
 uint32_t xberg_multi_vector_embedding_num_tokens(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `dim` field from a `MultiVectorEmbedding`.
@@ -18103,7 +17942,7 @@ uint32_t xberg_multi_vector_embedding_num_tokens(XBERGAlefHandle handle);
 uint32_t xberg_multi_vector_embedding_dim(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Get the `data` field from a `MultiVectorEmbedding`.
@@ -18115,7 +17954,7 @@ uint32_t xberg_multi_vector_embedding_dim(XBERGAlefHandle handle);
 char *xberg_multi_vector_embedding_data(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Returns `true` if `data` holds exactly `num_tokens * dim` values â i.e.
@@ -18306,8 +18145,7 @@ XBERGAlefHandle xberg_ner_config_llm(XBERGAlefHandle handle);
  */
 char *xberg_ner_config_custom_labels(XBERGAlefHandle handle);
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Create a `NgramRange` from a JSON string. Returns null on failure.
  * # Safety
@@ -18317,8 +18155,7 @@ char *xberg_ner_config_custom_labels(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_ngram_range_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Serialize a `NgramRange` to a JSON string. Returns null on failure.
  * # Safety
@@ -18328,8 +18165,7 @@ XBERGAlefHandle xberg_ngram_range_from_json(const char *json);
 char *xberg_ngram_range_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Free a `NgramRange` handle.
  * # Safety
@@ -18338,8 +18174,7 @@ char *xberg_ngram_range_to_json(XBERGAlefHandle handle);
 void xberg_ngram_range_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `min` field from a `NgramRange`.
  * # Safety
@@ -18348,8 +18183,7 @@ void xberg_ngram_range_free(XBERGAlefHandle handle);
 uintptr_t xberg_ngram_range_min(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Get the `max` field from a `NgramRange`.
  * # Safety
@@ -18358,8 +18192,7 @@ uintptr_t xberg_ngram_range_min(XBERGAlefHandle handle);
 uintptr_t xberg_ngram_range_max(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -18404,8 +18237,7 @@ char *xberg_ocr_backend_capabilities_name(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_ocr_backend_capabilities_supported_languages(XBERGAlefHandle handle);
+char *xberg_ocr_backend_capabilities_supported_languages(XBERGAlefHandle handle);
 
 /**
  * Create a `OcrConfidence` from a JSON string. Returns null on failure.
@@ -19040,8 +18872,7 @@ char *xberg_ocr_pipeline_config_stages(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_ocr_pipeline_config_quality_thresholds(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_ocr_pipeline_config_quality_thresholds(XBERGAlefHandle handle);
 
 /**
  * Create a `OcrPipelineStage` from a JSON string. Returns null on failure.
@@ -19098,8 +18929,7 @@ char *xberg_ocr_pipeline_stage_language(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_ocr_pipeline_stage_tesseract_config(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_ocr_pipeline_stage_tesseract_config(XBERGAlefHandle handle);
 
 /**
  * Get the `paddle_ocr_config` field from a `OcrPipelineStage`.
@@ -19117,8 +18947,7 @@ char *xberg_ocr_pipeline_stage_paddle_ocr_config(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_ocr_pipeline_stage_paddle_ocr_settings(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_ocr_pipeline_stage_paddle_ocr_settings(XBERGAlefHandle handle);
 
 /**
  * Get the `vlm_config` field from a `OcrPipelineStage`.
@@ -19203,32 +19032,28 @@ void xberg_ocr_quality_thresholds_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_min_total_non_whitespace(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_total_non_whitespace(XBERGAlefHandle handle);
 
 /**
  * Get the `min_non_whitespace_per_page` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double xberg_ocr_quality_thresholds_min_non_whitespace_per_page(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_non_whitespace_per_page(XBERGAlefHandle handle);
 
 /**
  * Get the `min_meaningful_word_len` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_min_meaningful_word_len(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_meaningful_word_len(XBERGAlefHandle handle);
 
 /**
  * Get the `min_meaningful_words` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_min_meaningful_words(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_meaningful_words(XBERGAlefHandle handle);
 
 /**
  * Get the `min_alnum_ratio` field from a `OcrQualityThresholds`.
@@ -19242,72 +19067,63 @@ double xberg_ocr_quality_thresholds_min_alnum_ratio(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_min_garbage_chars(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_garbage_chars(XBERGAlefHandle handle);
 
 /**
  * Get the `max_fragmented_word_ratio` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double
-xberg_ocr_quality_thresholds_max_fragmented_word_ratio(XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_max_fragmented_word_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `critical_fragmented_word_ratio` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double xberg_ocr_quality_thresholds_critical_fragmented_word_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_critical_fragmented_word_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `max_ocr_output_fragmented_word_ratio` field from a
  * `OcrQualityThresholds`. # Safety Pointer must be a valid handle returned by
  * this library.
  */
-double xberg_ocr_quality_thresholds_max_ocr_output_fragmented_word_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_max_ocr_output_fragmented_word_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `min_ocr_mean_confidence` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double
-xberg_ocr_quality_thresholds_min_ocr_mean_confidence(XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_ocr_mean_confidence(XBERGAlefHandle handle);
 
 /**
  * Get the `min_words_for_ocr_output_check` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t xberg_ocr_quality_thresholds_min_words_for_ocr_output_check(
-    XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_words_for_ocr_output_check(XBERGAlefHandle handle);
 
 /**
  * Get the `max_ocr_output_dict_invalid_word_ratio` field from a
  * `OcrQualityThresholds`. # Safety Pointer must be a valid handle returned by
  * this library.
  */
-double xberg_ocr_quality_thresholds_max_ocr_output_dict_invalid_word_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_max_ocr_output_dict_invalid_word_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `discard_suspected_ocr_noise` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_ocr_quality_thresholds_discard_suspected_ocr_noise(
-    XBERGAlefHandle handle);
+int32_t xberg_ocr_quality_thresholds_discard_suspected_ocr_noise(XBERGAlefHandle handle);
 
 /**
  * Get the `prune_symbol_noise_lines` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_ocr_quality_thresholds_prune_symbol_noise_lines(XBERGAlefHandle handle);
+int32_t xberg_ocr_quality_thresholds_prune_symbol_noise_lines(XBERGAlefHandle handle);
 
 /**
  * Get the `min_avg_word_length` field from a `OcrQualityThresholds`.
@@ -19321,96 +19137,84 @@ double xberg_ocr_quality_thresholds_min_avg_word_length(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t xberg_ocr_quality_thresholds_min_words_for_avg_length_check(
-    XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_words_for_avg_length_check(XBERGAlefHandle handle);
 
 /**
  * Get the `min_consecutive_repeat_ratio` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double xberg_ocr_quality_thresholds_min_consecutive_repeat_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_consecutive_repeat_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `min_words_for_repeat_check` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_min_words_for_repeat_check(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_min_words_for_repeat_check(XBERGAlefHandle handle);
 
 /**
  * Get the `substantive_min_chars` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_substantive_min_chars(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_substantive_min_chars(XBERGAlefHandle handle);
 
 /**
  * Get the `non_text_min_chars` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_ocr_quality_thresholds_non_text_min_chars(XBERGAlefHandle handle);
+uintptr_t xberg_ocr_quality_thresholds_non_text_min_chars(XBERGAlefHandle handle);
 
 /**
  * Get the `alnum_ws_ratio_threshold` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double
-xberg_ocr_quality_thresholds_alnum_ws_ratio_threshold(XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_alnum_ws_ratio_threshold(XBERGAlefHandle handle);
 
 /**
  * Get the `pipeline_min_quality` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double
-xberg_ocr_quality_thresholds_pipeline_min_quality(XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_pipeline_min_quality(XBERGAlefHandle handle);
 
 /**
  * Get the `min_undecodable_ratio` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double
-xberg_ocr_quality_thresholds_min_undecodable_ratio(XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_undecodable_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `enable_provenance_ocr_routing` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_ocr_quality_thresholds_enable_provenance_ocr_routing(
-    XBERGAlefHandle handle);
+int32_t xberg_ocr_quality_thresholds_enable_provenance_ocr_routing(XBERGAlefHandle handle);
 
 /**
  * Get the `min_provenance_fallback_ratio` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-double xberg_ocr_quality_thresholds_min_provenance_fallback_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_provenance_fallback_ratio(XBERGAlefHandle handle);
 
 /**
  * Get the `enable_plausibility_ocr_routing` field from a
  * `OcrQualityThresholds`. # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_ocr_quality_thresholds_enable_plausibility_ocr_routing(
-    XBERGAlefHandle handle);
+int32_t xberg_ocr_quality_thresholds_enable_plausibility_ocr_routing(XBERGAlefHandle handle);
 
 /**
  * Get the `min_reliable_language_chunk_ratio` field from a
  * `OcrQualityThresholds`. # Safety Pointer must be a valid handle returned by
  * this library.
  */
-double xberg_ocr_quality_thresholds_min_reliable_language_chunk_ratio(
-    XBERGAlefHandle handle);
+double xberg_ocr_quality_thresholds_min_reliable_language_chunk_ratio(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -19752,8 +19556,7 @@ char *xberg_paddle_ocr_config_model_version(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_inference_backend(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_paddle_ocr_config_inference_backend(XBERGAlefHandle handle);
 
 /**
  * Sets a custom Hugging Face Hub cache root for model files.
@@ -19768,8 +19571,7 @@ xberg_paddle_ocr_config_inference_backend(XBERGAlefHandle handle);
  *     .with_cache_dir(PathBuf::from("/tmp/paddle-cache"));
  * \endcode
  */
-XBERGAlefHandle xberg_paddle_ocr_config_with_cache_dir(XBERGAlefHandle this_,
-                                                       const char *path);
+XBERGAlefHandle xberg_paddle_ocr_config_with_cache_dir(XBERGAlefHandle this_, const char *path);
 
 /**
  * Enables or disables table structure detection.
@@ -19783,9 +19585,7 @@ XBERGAlefHandle xberg_paddle_ocr_config_with_cache_dir(XBERGAlefHandle this_,
  *     .with_table_detection(true);
  * \endcode
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_table_detection(XBERGAlefHandle this_,
-                                             int32_t enable);
+XBERGAlefHandle xberg_paddle_ocr_config_with_table_detection(XBERGAlefHandle this_, int32_t enable);
 
 /**
  * Enables or disables angle classification for rotated text.
@@ -19793,8 +19593,7 @@ xberg_paddle_ocr_config_with_table_detection(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_paddle_ocr_config_with_angle_cls(XBERGAlefHandle this_,
-                                                       int32_t enable);
+XBERGAlefHandle xberg_paddle_ocr_config_with_angle_cls(XBERGAlefHandle this_, int32_t enable);
 
 /**
  * Sets the database threshold for text detection.
@@ -19802,9 +19601,7 @@ XBERGAlefHandle xberg_paddle_ocr_config_with_angle_cls(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_det_db_thresh(XBERGAlefHandle this_,
-                                           float threshold);
+XBERGAlefHandle xberg_paddle_ocr_config_with_det_db_thresh(XBERGAlefHandle this_, float threshold);
 
 /**
  * Sets the box threshold for text bounding box refinement.
@@ -19812,9 +19609,8 @@ xberg_paddle_ocr_config_with_det_db_thresh(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_det_db_box_thresh(XBERGAlefHandle this_,
-                                               float threshold);
+XBERGAlefHandle xberg_paddle_ocr_config_with_det_db_box_thresh(XBERGAlefHandle this_,
+                                                               float threshold);
 
 /**
  * Sets the unclip ratio for expanding text bounding boxes.
@@ -19822,9 +19618,8 @@ xberg_paddle_ocr_config_with_det_db_box_thresh(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_det_db_unclip_ratio(XBERGAlefHandle this_,
-                                                 float ratio);
+XBERGAlefHandle xberg_paddle_ocr_config_with_det_db_unclip_ratio(XBERGAlefHandle this_,
+                                                                 float ratio);
 
 /**
  * Sets the maximum side length for detection images.
@@ -19832,9 +19627,8 @@ xberg_paddle_ocr_config_with_det_db_unclip_ratio(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_det_limit_side_len(XBERGAlefHandle this_,
-                                                uint32_t length);
+XBERGAlefHandle xberg_paddle_ocr_config_with_det_limit_side_len(XBERGAlefHandle this_,
+                                                                uint32_t length);
 
 /**
  * Sets the batch size for recognition inference.
@@ -19842,9 +19636,8 @@ xberg_paddle_ocr_config_with_det_limit_side_len(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_rec_batch_num(XBERGAlefHandle this_,
-                                           uint32_t batch_size);
+XBERGAlefHandle xberg_paddle_ocr_config_with_rec_batch_num(XBERGAlefHandle this_,
+                                                           uint32_t batch_size);
 
 /**
  * Sets the minimum recognition confidence threshold.
@@ -19852,8 +19645,7 @@ xberg_paddle_ocr_config_with_rec_batch_num(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_paddle_ocr_config_with_drop_score(XBERGAlefHandle this_,
-                                                        float score);
+XBERGAlefHandle xberg_paddle_ocr_config_with_drop_score(XBERGAlefHandle this_, float score);
 
 /**
  * Sets padding in pixels added around images before detection.
@@ -19861,8 +19653,7 @@ XBERGAlefHandle xberg_paddle_ocr_config_with_drop_score(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_paddle_ocr_config_with_padding(XBERGAlefHandle this_,
-                                                     uint32_t padding);
+XBERGAlefHandle xberg_paddle_ocr_config_with_padding(XBERGAlefHandle this_, uint32_t padding);
 
 /**
  * Sets the model tier controlling detection/recognition model size.
@@ -19871,8 +19662,7 @@ XBERGAlefHandle xberg_paddle_ocr_config_with_padding(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_paddle_ocr_config_with_model_tier(XBERGAlefHandle this_,
-                                                        const char *tier);
+XBERGAlefHandle xberg_paddle_ocr_config_with_model_tier(XBERGAlefHandle this_, const char *tier);
 
 /**
  * Sets the model generation.
@@ -19881,9 +19671,8 @@ XBERGAlefHandle xberg_paddle_ocr_config_with_model_tier(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_config_with_model_version(XBERGAlefHandle this_,
-                                           const char *version);
+XBERGAlefHandle xberg_paddle_ocr_config_with_model_version(XBERGAlefHandle this_,
+                                                           const char *version);
 
 /**
  * Creates a default configuration with English language support.
@@ -19928,8 +19717,7 @@ void xberg_paddle_ocr_vl_backend_options_free(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_vl_backend_options_task(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_paddle_ocr_vl_backend_options_task(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_CANDLE_OCR)
@@ -19984,8 +19772,7 @@ char *xberg_paddle_ocr_vl_backend_options_cache_dir(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_paddle_ocr_vl_backend_options_device(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_paddle_ocr_vl_backend_options_device(XBERGAlefHandle handle);
 #endif
 
 /**
@@ -20763,8 +20550,7 @@ float xberg_page_signals_layout_text_density(XBERGAlefHandle handle);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_page_signals_from_page_text(uint32_t page_number,
-                                                  const char *text,
+XBERGAlefHandle xberg_page_signals_from_page_text(uint32_t page_number, const char *text,
                                                   float layout_text_density);
 #endif
 
@@ -21853,8 +21639,7 @@ int32_t xberg_pptx_app_properties_hyperlinks_changed(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_pptx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
+int32_t xberg_pptx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
 
 /**
  * Get the `slides` field from a `PptxAppProperties`.
@@ -22033,8 +21818,7 @@ char *xberg_pptx_extraction_result_images(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_pptx_extraction_result_page_structure(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_pptx_extraction_result_page_structure(XBERGAlefHandle handle);
 
 /**
  * Get the `page_contents` field from a `PptxExtractionResult`.
@@ -22588,8 +22372,7 @@ char *xberg_preset_summary_tags(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_preset_summary_preferred_call_mode(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_preset_summary_preferred_call_mode(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_PRESETS)
@@ -23132,8 +22915,7 @@ char *xberg_redaction_config_findings_path(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_redaction_config_findings_offset_encoding(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_redaction_config_findings_offset_encoding(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -23271,8 +23053,7 @@ int32_t xberg_redaction_pattern_case_sensitive(XBERGAlefHandle handle);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_redaction_pattern_labeled(const char *label,
-                                                const char *pattern);
+XBERGAlefHandle xberg_redaction_pattern_labeled(const char *label, const char *pattern);
 
 /**
  * Create a `RedactionReport` from a JSON string. Returns null on failure.
@@ -23373,8 +23154,7 @@ XBERGAlefHandle xberg_redaction_term_literal(const char *value);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_redaction_term_labeled(const char *label,
-                                             const char *value);
+XBERGAlefHandle xberg_redaction_term_labeled(const char *label, const char *value);
 
 #if defined(XBERG_FEATURE_PRESETS)
 /**
@@ -23432,10 +23212,8 @@ int32_t xberg_registry_is_empty(XBERGAlefHandle this_);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t xberg_registry_sample_bytes(XBERGAlefHandle this_,
-                                    const char *preset_id, const char *name,
-                                    uint8_t **out_ptr, uintptr_t *out_len,
-                                    uintptr_t *out_cap);
+int32_t xberg_registry_sample_bytes(XBERGAlefHandle this_, const char *preset_id, const char *name,
+                                    uint8_t **out_ptr, uintptr_t *out_len, uintptr_t *out_cap);
 #endif
 
 #if defined(XBERG_FEATURE_PRESETS)
@@ -23458,12 +23236,10 @@ int32_t xberg_registry_sample_bytes(XBERGAlefHandle this_,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-uintptr_t xberg_registry_extend_from_dir(XBERGAlefHandle this_,
-                                         const char *dir);
+uintptr_t xberg_registry_extend_from_dir(XBERGAlefHandle this_, const char *dir);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Create a `RerankedDocument` from a JSON string. Returns null on failure.
@@ -23474,8 +23250,7 @@ uintptr_t xberg_registry_extend_from_dir(XBERGAlefHandle this_,
 XBERGAlefHandle xberg_reranked_document_from_json(const char *json);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Serialize a `RerankedDocument` to a JSON string. Returns null on failure.
@@ -23486,8 +23261,7 @@ XBERGAlefHandle xberg_reranked_document_from_json(const char *json);
 char *xberg_reranked_document_to_json(XBERGAlefHandle handle);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Free a `RerankedDocument` handle.
@@ -23497,8 +23271,7 @@ char *xberg_reranked_document_to_json(XBERGAlefHandle handle);
 void xberg_reranked_document_free(XBERGAlefHandle handle);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Get the `index` field from a `RerankedDocument`.
@@ -23508,8 +23281,7 @@ void xberg_reranked_document_free(XBERGAlefHandle handle);
 uintptr_t xberg_reranked_document_index(XBERGAlefHandle handle);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Get the `score` field from a `RerankedDocument`.
@@ -23519,8 +23291,7 @@ uintptr_t xberg_reranked_document_index(XBERGAlefHandle handle);
 float xberg_reranked_document_score(XBERGAlefHandle handle);
 #endif
 
-#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) ||                               \
-      defined(XBERG_FEATURE_RERANKER)) ||                                      \
+#if ((defined(XBERG_FEATURE_RERANKER_PRESETS) || defined(XBERG_FEATURE_RERANKER)) ||               \
      !defined(XBERG_FEATURE_RERANKER_PRESETS))
 /**
  * Get the `document` field from a `RerankedDocument`.
@@ -23635,8 +23406,7 @@ uint64_t xberg_reranker_config_max_rerank_duration_secs(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_reranker_config_has_max_rerank_duration_secs(XBERGAlefHandle handle);
+int32_t xberg_reranker_config_has_max_rerank_duration_secs(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -23758,8 +23528,7 @@ XBERGAlefHandle xberg_resolved_preset_merge_mode(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_resolved_preset_preferred_call_mode(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_resolved_preset_preferred_call_mode(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_PRESETS)
@@ -24085,8 +23854,7 @@ int32_t xberg_server_config_cors_allows_all(XBERGAlefHandle this_);
  * assert!(!config.is_origin_allowed("https://denied.com"));
  * \endcode
  */
-int32_t xberg_server_config_is_origin_allowed(XBERGAlefHandle this_,
-                                              const char *origin);
+int32_t xberg_server_config_is_origin_allowed(XBERGAlefHandle this_, const char *origin);
 #endif
 
 #if defined(XBERG_FEATURE_API_TYPES)
@@ -24178,7 +23946,7 @@ char *xberg_sitemap_url_changefreq(XBERGAlefHandle handle);
  */
 char *xberg_sitemap_url_priority(XBERGAlefHandle handle);
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Create a `SparseEmbedding` from a JSON string. Returns null on failure.
@@ -24189,7 +23957,7 @@ char *xberg_sitemap_url_priority(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_sparse_embedding_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Serialize a `SparseEmbedding` to a JSON string. Returns null on failure.
@@ -24200,7 +23968,7 @@ XBERGAlefHandle xberg_sparse_embedding_from_json(const char *json);
 char *xberg_sparse_embedding_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Free a `SparseEmbedding` handle.
@@ -24210,7 +23978,7 @@ char *xberg_sparse_embedding_to_json(XBERGAlefHandle handle);
 void xberg_sparse_embedding_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `indices` field from a `SparseEmbedding`.
@@ -24222,7 +23990,7 @@ void xberg_sparse_embedding_free(XBERGAlefHandle handle);
 char *xberg_sparse_embedding_indices(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `values` field from a `SparseEmbedding`.
@@ -24284,8 +24052,7 @@ uintptr_t xberg_sparse_embedding_config_max_length(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_sparse_embedding_config_show_download_progress(XBERGAlefHandle handle);
+int32_t xberg_sparse_embedding_config_show_download_progress(XBERGAlefHandle handle);
 
 /**
  * Get the `cache_dir` field from a `SparseEmbeddingConfig`.
@@ -24303,16 +24070,14 @@ char *xberg_sparse_embedding_config_cache_dir(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_sparse_embedding_config_acceleration(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_sparse_embedding_config_acceleration(XBERGAlefHandle handle);
 
 /**
  * Get the `max_embed_duration_secs` field from a `SparseEmbeddingConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-xberg_sparse_embedding_config_max_embed_duration_secs(XBERGAlefHandle handle);
+uint64_t xberg_sparse_embedding_config_max_embed_duration_secs(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_embed_duration_secs` field on a
@@ -24327,8 +24092,7 @@ xberg_sparse_embedding_config_max_embed_duration_secs(XBERGAlefHandle handle);
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_sparse_embedding_config_has_max_embed_duration_secs(
-    XBERGAlefHandle handle);
+int32_t xberg_sparse_embedding_config_has_max_embed_duration_secs(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -24336,7 +24100,7 @@ int32_t xberg_sparse_embedding_config_has_max_embed_duration_secs(
  */
 XBERGAlefHandle xberg_sparse_embedding_config_default(void);
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Create a `SparseEmbeddingPreset` from a JSON string. Returns null on failure.
@@ -24347,7 +24111,7 @@ XBERGAlefHandle xberg_sparse_embedding_config_default(void);
 XBERGAlefHandle xberg_sparse_embedding_preset_from_json(const char *json);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Serialize a `SparseEmbeddingPreset` to a JSON string. Returns null on
@@ -24357,7 +24121,7 @@ XBERGAlefHandle xberg_sparse_embedding_preset_from_json(const char *json);
 char *xberg_sparse_embedding_preset_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Free a `SparseEmbeddingPreset` handle.
@@ -24367,7 +24131,7 @@ char *xberg_sparse_embedding_preset_to_json(XBERGAlefHandle handle);
 void xberg_sparse_embedding_preset_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `name` field from a `SparseEmbeddingPreset`.
@@ -24379,7 +24143,7 @@ void xberg_sparse_embedding_preset_free(XBERGAlefHandle handle);
 char *xberg_sparse_embedding_preset_name(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `model_repo` field from a `SparseEmbeddingPreset`.
@@ -24391,7 +24155,7 @@ char *xberg_sparse_embedding_preset_name(XBERGAlefHandle handle);
 char *xberg_sparse_embedding_preset_model_repo(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `model_file` field from a `SparseEmbeddingPreset`.
@@ -24403,7 +24167,7 @@ char *xberg_sparse_embedding_preset_model_repo(XBERGAlefHandle handle);
 char *xberg_sparse_embedding_preset_model_file(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `additional_files` field from a `SparseEmbeddingPreset`.
@@ -24415,7 +24179,7 @@ char *xberg_sparse_embedding_preset_model_file(XBERGAlefHandle handle);
 char *xberg_sparse_embedding_preset_additional_files(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `max_length` field from a `SparseEmbeddingPreset`.
@@ -24425,7 +24189,7 @@ char *xberg_sparse_embedding_preset_additional_files(XBERGAlefHandle handle);
 uintptr_t xberg_sparse_embedding_preset_max_length(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                        \
+#if (defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS) ||                                            \
      !defined(XBERG_FEATURE_SPARSE_EMBEDDING_PRESETS))
 /**
  * Get the `description` field from a `SparseEmbeddingPreset`.
@@ -24674,8 +24438,7 @@ char *xberg_structured_extraction_config_schema_name(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-xberg_structured_extraction_config_schema_description(XBERGAlefHandle handle);
+char *xberg_structured_extraction_config_schema_description(XBERGAlefHandle handle);
 
 /**
  * Get the `strict` field from a `StructuredExtractionConfig`.
@@ -25301,8 +25064,7 @@ int32_t xberg_tesseract_config_use_cache(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_tesseract_config_classify_use_pre_adapted_templates(
-    XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_classify_use_pre_adapted_templates(XBERGAlefHandle handle);
 
 /**
  * Get the `language_model_ngram_on` field from a `TesseractConfig`.
@@ -25316,24 +25078,21 @@ int32_t xberg_tesseract_config_language_model_ngram_on(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tesseract_config_tessedit_dont_blkrej_good_wds(XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_tessedit_dont_blkrej_good_wds(XBERGAlefHandle handle);
 
 /**
  * Get the `tessedit_dont_rowrej_good_wds` field from a `TesseractConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tesseract_config_tessedit_dont_rowrej_good_wds(XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_tessedit_dont_rowrej_good_wds(XBERGAlefHandle handle);
 
 /**
  * Get the `tessedit_enable_dict_correction` field from a `TesseractConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tesseract_config_tessedit_enable_dict_correction(XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_tessedit_enable_dict_correction(XBERGAlefHandle handle);
 
 /**
  * Get the `tessedit_char_whitelist` field from a `TesseractConfig`.
@@ -25358,16 +25117,14 @@ char *xberg_tesseract_config_tessedit_char_blacklist(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_tesseract_config_tessedit_use_primary_params_model(
-    XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_tessedit_use_primary_params_model(XBERGAlefHandle handle);
 
 /**
  * Get the `textord_space_size_is_variable` field from a `TesseractConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tesseract_config_textord_space_size_is_variable(XBERGAlefHandle handle);
+int32_t xberg_tesseract_config_textord_space_size_is_variable(XBERGAlefHandle handle);
 
 /**
  * Get the `thresholding_method` field from a `TesseractConfig`.
@@ -25732,8 +25489,7 @@ float xberg_token_reduction_config_target_reduction(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_token_reduction_config_has_target_reduction(XBERGAlefHandle handle);
+int32_t xberg_token_reduction_config_has_target_reduction(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_QUALITY)
@@ -25742,8 +25498,7 @@ xberg_token_reduction_config_has_target_reduction(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_token_reduction_config_enable_semantic_clustering(XBERGAlefHandle handle);
+int32_t xberg_token_reduction_config_enable_semantic_clustering(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_QUALITY)
@@ -25752,8 +25507,7 @@ xberg_token_reduction_config_enable_semantic_clustering(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_token_reduction_config_preserve_important_words(XBERGAlefHandle handle);
+int32_t xberg_token_reduction_config_preserve_important_words(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_QUALITY)
@@ -25800,8 +25554,7 @@ char *xberg_token_reduction_options_mode(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_token_reduction_options_preserve_important_words(XBERGAlefHandle handle);
+int32_t xberg_token_reduction_options_preserve_important_words(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
@@ -26290,8 +26043,7 @@ int32_t xberg_tree_sitter_process_config_diagnostics(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tree_sitter_process_config_data_extraction(XBERGAlefHandle handle);
+int32_t xberg_tree_sitter_process_config_data_extraction(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_TREE_SITTER)
@@ -26300,8 +26052,7 @@ xberg_tree_sitter_process_config_data_extraction(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-xberg_tree_sitter_process_config_chunk_max_size(XBERGAlefHandle handle);
+uintptr_t xberg_tree_sitter_process_config_chunk_max_size(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_TREE_SITTER)
@@ -26317,8 +26068,7 @@ xberg_tree_sitter_process_config_chunk_max_size(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_tree_sitter_process_config_has_chunk_max_size(XBERGAlefHandle handle);
+int32_t xberg_tree_sitter_process_config_has_chunk_max_size(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_TREE_SITTER)
@@ -26329,8 +26079,7 @@ xberg_tree_sitter_process_config_has_chunk_max_size(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-XBERGAlefHandle
-xberg_tree_sitter_process_config_content_mode(XBERGAlefHandle handle);
+XBERGAlefHandle xberg_tree_sitter_process_config_content_mode(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_TREE_SITTER)
@@ -26469,8 +26218,7 @@ char *xberg_url_extraction_config_document_url_pattern(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint32_t xberg_url_extraction_config_max_document_urls_per_result(
-    XBERGAlefHandle handle);
+uint32_t xberg_url_extraction_config_max_document_urls_per_result(XBERGAlefHandle handle);
 
 /**
  * Report whether the `max_document_urls_per_result` field on a
@@ -26485,8 +26233,7 @@ uint32_t xberg_url_extraction_config_max_document_urls_per_result(
  * `xberg_last_error_code`). # Safety Pointer must be a valid handle returned by
  * this library.
  */
-int32_t xberg_url_extraction_config_has_max_document_urls_per_result(
-    XBERGAlefHandle handle);
+int32_t xberg_url_extraction_config_has_max_document_urls_per_result(XBERGAlefHandle handle);
 
 /**
  * Get the `max_total_urls` field from a `UrlExtractionConfig`.
@@ -26514,8 +26261,7 @@ int32_t xberg_url_extraction_config_has_max_total_urls(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_url_extraction_config_allow_local_file_inputs(XBERGAlefHandle handle);
+int32_t xberg_url_extraction_config_allow_local_file_inputs(XBERGAlefHandle handle);
 
 /**
  * Get the `allow_file_uris` field from a `UrlExtractionConfig`.
@@ -26530,8 +26276,7 @@ int32_t xberg_url_extraction_config_allow_file_uris(XBERGAlefHandle handle);
  */
 XBERGAlefHandle xberg_url_extraction_config_default(void);
 
-#if (defined(XBERG_FEATURE_URL_INGESTION) ||                                   \
-     defined(XBERG_FEATURE_URL_CONFIG_TYPES))
+#if (defined(XBERG_FEATURE_URL_INGESTION) || defined(XBERG_FEATURE_URL_CONFIG_TYPES))
 /**
  * Default `Self.crawl` policy.
  *
@@ -26767,8 +26512,7 @@ int32_t xberg_xlsx_app_properties_hyperlinks_changed(XBERGAlefHandle handle);
  * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
  * Safety Pointer must be a valid handle returned by this library.
  */
-int32_t
-xberg_xlsx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
+int32_t xberg_xlsx_app_properties_has_hyperlinks_changed(XBERGAlefHandle handle);
 
 /**
  * Get the `company` field from a `XlsxAppProperties`.
@@ -29635,8 +29379,7 @@ char *xberg_jupyter_cell_rendering_to_json(XBERGAlefHandle handle);
  */
 char *xberg_jupyter_cell_rendering_to_string(XBERGAlefHandle handle);
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Free a `KeywordAlgorithm` handle.
  * # Safety
@@ -29645,8 +29388,7 @@ char *xberg_jupyter_cell_rendering_to_string(XBERGAlefHandle handle);
 void xberg_keyword_algorithm_free(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Serialize a `KeywordAlgorithm` to a JSON string. Returns null on failure.
  * # Safety
@@ -29656,8 +29398,7 @@ void xberg_keyword_algorithm_free(XBERGAlefHandle handle);
 char *xberg_keyword_algorithm_to_json(XBERGAlefHandle handle);
 #endif
 
-#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) ||                                   \
-     defined(XBERG_FEATURE_KEYWORDS_RAKE))
+#if (defined(XBERG_FEATURE_KEYWORDS_YAKE) || defined(XBERG_FEATURE_KEYWORDS_RAKE))
 /**
  * Render a `KeywordAlgorithm` as its string representation
  * (the unit-variant name as serialized by serde — e.g. `"completed"`,
@@ -30878,8 +30619,7 @@ void xberg_cancel_token_free(XBERGAlefHandle token);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_classify_chunks_owned(XBERGAlefHandle result,
-                                            XBERGAlefHandle config);
+XBERGAlefHandle xberg_classify_chunks_owned(XBERGAlefHandle result, XBERGAlefHandle config);
 
 /**
  * Cancellable variant of `xberg_classify_chunks_owned`.
@@ -30898,10 +30638,9 @@ XBERGAlefHandle xberg_classify_chunks_owned(XBERGAlefHandle result,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_classify_chunks_owned_cancellable(XBERGAlefHandle result,
-                                        XBERGAlefHandle config,
-                                        XBERGAlefHandle alef_cancel_token);
+XBERGAlefHandle xberg_classify_chunks_owned_cancellable(XBERGAlefHandle result,
+                                                        XBERGAlefHandle config,
+                                                        XBERGAlefHandle alef_cancel_token);
 
 /**
  * Probe the backends and settings in `config` and report what will actually
@@ -30930,8 +30669,7 @@ XBERGAlefHandle xberg_extract(XBERGAlefHandle input, XBERGAlefHandle config);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_owned(XBERGAlefHandle *input,
-                                    XBERGAlefHandle config);
+XBERGAlefHandle xberg_extract_owned(XBERGAlefHandle *input, XBERGAlefHandle config);
 
 /**
  * Cancellable variant of `xberg_extract`.
@@ -30945,8 +30683,7 @@ XBERGAlefHandle xberg_extract_owned(XBERGAlefHandle *input,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_cancellable(XBERGAlefHandle input,
-                                          XBERGAlefHandle config,
+XBERGAlefHandle xberg_extract_cancellable(XBERGAlefHandle input, XBERGAlefHandle config,
                                           XBERGAlefHandle alef_cancel_token);
 
 /**
@@ -30968,17 +30705,15 @@ XBERGAlefHandle xberg_extract_batch(const char *inputs, XBERGAlefHandle config);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle
-xberg_extract_batch_cancellable(const char *inputs, XBERGAlefHandle config,
-                                XBERGAlefHandle alef_cancel_token);
+XBERGAlefHandle xberg_extract_batch_cancellable(const char *inputs, XBERGAlefHandle config,
+                                                XBERGAlefHandle alef_cancel_token);
 
 /**
  * Extract a batch whose inputs carry additional per-input options.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_batch_with_input_options(const char *inputs,
-                                                       XBERGAlefHandle config);
+XBERGAlefHandle xberg_extract_batch_with_input_options(const char *inputs, XBERGAlefHandle config);
 
 /**
  * Cancellable variant of `xberg_extract_batch_with_input_options`.
@@ -30992,9 +30727,9 @@ XBERGAlefHandle xberg_extract_batch_with_input_options(const char *inputs,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_batch_with_input_options_cancellable(
-    const char *inputs, XBERGAlefHandle config,
-    XBERGAlefHandle alef_cancel_token);
+XBERGAlefHandle
+xberg_extract_batch_with_input_options_cancellable(const char *inputs, XBERGAlefHandle config,
+                                                   XBERGAlefHandle alef_cancel_token);
 
 /**
  * Extract a batch from a JSON array of per-input objects.
@@ -31028,9 +30763,8 @@ XBERGAlefHandle xberg_extract_batch_with_input_options_cancellable(
  * ExtractionConfig());
  * \endcode
  */
-XBERGAlefHandle
-xberg_extract_batch_with_input_options_json(const char *inputs_json,
-                                            XBERGAlefHandle config);
+XBERGAlefHandle xberg_extract_batch_with_input_options_json(const char *inputs_json,
+                                                            XBERGAlefHandle config);
 
 /**
  * Cancellable variant of `xberg_extract_batch_with_input_options_json`.
@@ -31072,8 +30806,7 @@ xberg_extract_batch_with_input_options_json(const char *inputs_json,
  * \endcode
  */
 XBERGAlefHandle xberg_extract_batch_with_input_options_json_cancellable(
-    const char *inputs_json, XBERGAlefHandle config,
-    XBERGAlefHandle alef_cancel_token);
+    const char *inputs_json, XBERGAlefHandle config, XBERGAlefHandle alef_cancel_token);
 
 #if defined(XBERG_FEATURE_REDACTION)
 /**
@@ -31087,9 +30820,10 @@ XBERGAlefHandle xberg_extract_batch_with_input_options_json_cancellable(
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_with_external_redaction(
-    XBERGAlefHandle input, XBERGAlefHandle config, const char *findings_json,
-    const char *offset_encoding, uint32_t max_findings);
+XBERGAlefHandle xberg_extract_with_external_redaction(XBERGAlefHandle input, XBERGAlefHandle config,
+                                                      const char *findings_json,
+                                                      const char *offset_encoding,
+                                                      uint32_t max_findings);
 #endif
 
 #if defined(XBERG_FEATURE_REDACTION)
@@ -31108,9 +30842,11 @@ XBERGAlefHandle xberg_extract_with_external_redaction(
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_with_external_redaction_owned(
-    XBERGAlefHandle *input, XBERGAlefHandle config, const char *findings_json,
-    const char *offset_encoding, uint32_t max_findings);
+XBERGAlefHandle xberg_extract_with_external_redaction_owned(XBERGAlefHandle *input,
+                                                            XBERGAlefHandle config,
+                                                            const char *findings_json,
+                                                            const char *offset_encoding,
+                                                            uint32_t max_findings);
 #endif
 
 #if defined(XBERG_FEATURE_REDACTION)
@@ -31134,8 +30870,7 @@ XBERGAlefHandle xberg_extract_with_external_redaction_owned(
  */
 XBERGAlefHandle xberg_extract_with_external_redaction_cancellable(
     XBERGAlefHandle input, XBERGAlefHandle config, const char *findings_json,
-    const char *offset_encoding, uint32_t max_findings,
-    XBERGAlefHandle alef_cancel_token);
+    const char *offset_encoding, uint32_t max_findings, XBERGAlefHandle alef_cancel_token);
 #endif
 
 #if (defined(XBERG_FEATURE_PDF) && defined(XBERG_FEATURE_LAYOUT_DETECTION))
@@ -31151,8 +30886,7 @@ XBERGAlefHandle xberg_extract_with_external_redaction_cancellable(
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_with_layout_pages(XBERGAlefHandle input,
-                                                XBERGAlefHandle config,
+XBERGAlefHandle xberg_extract_with_layout_pages(XBERGAlefHandle input, XBERGAlefHandle config,
                                                 const char *pages);
 #endif
 
@@ -31174,8 +30908,7 @@ XBERGAlefHandle xberg_extract_with_layout_pages(XBERGAlefHandle input,
  * Returned pointers must be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_extract_with_layout_pages_owned(XBERGAlefHandle *input,
-                                                      XBERGAlefHandle config,
-                                                      const char *pages);
+                                                      XBERGAlefHandle config, const char *pages);
 #endif
 
 #if (defined(XBERG_FEATURE_PDF) && defined(XBERG_FEATURE_LAYOUT_DETECTION))
@@ -31198,9 +30931,10 @@ XBERGAlefHandle xberg_extract_with_layout_pages_owned(XBERGAlefHandle *input,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_extract_with_layout_pages_cancellable(
-    XBERGAlefHandle input, XBERGAlefHandle config, const char *pages,
-    XBERGAlefHandle alef_cancel_token);
+XBERGAlefHandle xberg_extract_with_layout_pages_cancellable(XBERGAlefHandle input,
+                                                            XBERGAlefHandle config,
+                                                            const char *pages,
+                                                            XBERGAlefHandle alef_cancel_token);
 #endif
 
 #if defined(XBERG_FEATURE_MARKDOWN_FOOTNOTES)
@@ -31571,13 +31305,12 @@ XBERGAlefHandle xberg_map_url(const char *uri, XBERGAlefHandle config);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_map_url_cancellable(const char *uri,
-                                          XBERGAlefHandle config,
+XBERGAlefHandle xberg_map_url_cancellable(const char *uri, XBERGAlefHandle config,
                                           XBERGAlefHandle alef_cancel_token);
 #endif
 
-#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                       \
-      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                              \
+#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                           \
+      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                                                  \
      defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Rank a set of documents against a query by MaxSim score, descending.
@@ -31592,8 +31325,8 @@ XBERGAlefHandle xberg_map_url_cancellable(const char *uri,
 char *xberg_max_sim_rank(XBERGAlefHandle query, const char *docs);
 #endif
 
-#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                       \
-      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                              \
+#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                           \
+      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                                                  \
      defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Return the byte length of the C string most recently returned by
@@ -31606,8 +31339,8 @@ char *xberg_max_sim_rank(XBERGAlefHandle query, const char *docs);
 uintptr_t xberg_max_sim_rank_len(XBERGAlefHandle _query, const char *_docs);
 #endif
 
-#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                       \
-      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                              \
+#if ((defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS) ||                                           \
+      defined(XBERG_FEATURE_LATE_INTERACTION)) ||                                                  \
      defined(XBERG_FEATURE_LATE_INTERACTION_PRESETS))
 /**
  * Score a query against a document using ColBERT's MaxSim operator: for each
@@ -31649,8 +31382,7 @@ double xberg_max_sim_score(XBERGAlefHandle query, XBERGAlefHandle doc);
  * let supported = ocr_backend_supports_language("tesseract", "eng")?;
  * \endcode
  */
-int32_t xberg_ocr_backend_supports_language(const char *backend,
-                                            const char *language);
+int32_t xberg_ocr_backend_supports_language(const char *backend, const char *language);
 
 /**
  * `ocr_backend_supports_language`, answering under `config`.
@@ -31662,8 +31394,7 @@ int32_t xberg_ocr_backend_supports_language(const char *backend,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t xberg_ocr_backend_supports_language_for(const char *backend,
-                                                const char *language,
+int32_t xberg_ocr_backend_supports_language_for(const char *backend, const char *language,
                                                 XBERGAlefHandle config);
 
 #if defined(XBERG_FEATURE_PDF)
@@ -31681,8 +31412,8 @@ int32_t xberg_ocr_backend_supports_language_for(const char *backend,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-uintptr_t xberg_pdf_page_count(const uint8_t *pdf_bytes,
-                               uintptr_t pdf_bytes_len, const char *password);
+uintptr_t xberg_pdf_page_count(const uint8_t *pdf_bytes, uintptr_t pdf_bytes_len,
+                               const char *password);
 #endif
 
 #if defined(XBERG_FEATURE_REDACTION)
@@ -31697,10 +31428,8 @@ uintptr_t xberg_pdf_page_count(const uint8_t *pdf_bytes,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_redact_external(XBERGAlefHandle document,
-                                      XBERGAlefHandle config,
-                                      const char *findings_json,
-                                      const char *offset_encoding,
+XBERGAlefHandle xberg_redact_external(XBERGAlefHandle document, XBERGAlefHandle config,
+                                      const char *findings_json, const char *offset_encoding,
                                       uint32_t max_findings);
 #endif
 
@@ -31723,10 +31452,11 @@ XBERGAlefHandle xberg_redact_external(XBERGAlefHandle document,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-XBERGAlefHandle xberg_redact_external_cancellable(
-    XBERGAlefHandle document, XBERGAlefHandle config, const char *findings_json,
-    const char *offset_encoding, uint32_t max_findings,
-    XBERGAlefHandle alef_cancel_token);
+XBERGAlefHandle xberg_redact_external_cancellable(XBERGAlefHandle document, XBERGAlefHandle config,
+                                                  const char *findings_json,
+                                                  const char *offset_encoding,
+                                                  uint32_t max_findings,
+                                                  XBERGAlefHandle alef_cancel_token);
 #endif
 
 #if defined(XBERG_FEATURE_MARKDOWN_FOOTNOTES)
@@ -31772,10 +31502,9 @@ int32_t xberg_verify_excerpt(const char *excerpt, const char *source_text);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t
-xberg_register_ocr_backend(const char *name,
-                           const struct XBERGXbergOcrBackendVTable *vtable,
-                           const void *user_data, char **out_error);
+int32_t xberg_register_ocr_backend(const char *name,
+                                   const struct XBERGXbergOcrBackendVTable *vtable,
+                                   const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.
@@ -31821,9 +31550,9 @@ int32_t xberg_clear_ocr_backend(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_post_processor(
-    const char *name, const struct XBERGXbergPostProcessorVTable *vtable,
-    const void *user_data, char **out_error);
+int32_t xberg_register_post_processor(const char *name,
+                                      const struct XBERGXbergPostProcessorVTable *vtable,
+                                      const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.
@@ -31869,8 +31598,7 @@ int32_t xberg_clear_post_processor(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_validator(const char *name,
-                                 const struct XBERGXbergValidatorVTable *vtable,
+int32_t xberg_register_validator(const char *name, const struct XBERGXbergValidatorVTable *vtable,
                                  const void *user_data, char **out_error);
 
 /**
@@ -31917,9 +31645,9 @@ int32_t xberg_clear_validator(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_document_extractor(
-    const char *name, const struct XBERGXbergDocumentExtractorVTable *vtable,
-    const void *user_data, char **out_error);
+int32_t xberg_register_document_extractor(const char *name,
+                                          const struct XBERGXbergDocumentExtractorVTable *vtable,
+                                          const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.
@@ -31965,9 +31693,9 @@ int32_t xberg_clear_document_extractor(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_embedding_backend(
-    const char *name, const struct XBERGXbergEmbeddingBackendVTable *vtable,
-    const void *user_data, char **out_error);
+int32_t xberg_register_embedding_backend(const char *name,
+                                         const struct XBERGXbergEmbeddingBackendVTable *vtable,
+                                         const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.
@@ -32013,8 +31741,7 @@ int32_t xberg_clear_embedding_backend(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_renderer(const char *name,
-                                const struct XBERGXbergRendererVTable *vtable,
+int32_t xberg_register_renderer(const char *name, const struct XBERGXbergRendererVTable *vtable,
                                 const void *user_data, char **out_error);
 
 /**
@@ -32061,9 +31788,9 @@ int32_t xberg_clear_renderer(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_reranker_backend(
-    const char *name, const struct XBERGXbergRerankerBackendVTable *vtable,
-    const void *user_data, char **out_error);
+int32_t xberg_register_reranker_backend(const char *name,
+                                        const struct XBERGXbergRerankerBackendVTable *vtable,
+                                        const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.
@@ -32109,9 +31836,9 @@ int32_t xberg_clear_reranker_backend(char **out_error);
  * unregistered. `user_data` must be safe to use from any thread that calls
  * into the plugin.
  */
-int32_t xberg_register_tokenizer_backend(
-    const char *name, const struct XBERGXbergTokenizerBackendVTable *vtable,
-    const void *user_data, char **out_error);
+int32_t xberg_register_tokenizer_backend(const char *name,
+                                         const struct XBERGXbergTokenizerBackendVTable *vtable,
+                                         const void *user_data, char **out_error);
 
 /**
  * Unregister a previously registered C plugin by name.

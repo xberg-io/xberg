@@ -8,6 +8,12 @@
   <suppress checks="ConstantName" files=".*FFI\.java" />
   <suppress checks="MagicNumber" files=".*FFI\.java" />
 
+  <!-- The whole io/xberg package is alef output. Its record constructor
+       delegations list every field on one line, which the generator emits and
+       its formatter keeps, so the hand-written-code length limit does not
+       apply. ~keep -->
+  <suppress checks="LineLength" files="io/xberg/.*\.java" />
+
   <!-- Allow star imports and magic numbers in test files -->
   <suppress checks="AvoidStarImport" files=".*Test\.java" />
   <suppress checks="MagicNumber" files=".*Test\.java" />

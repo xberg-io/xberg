@@ -433,6 +433,7 @@ but they do **not** bundle `libpdfium` — you supply it.
    generated against. `FPDF_*` symbols are resolved by `dlopen` at run time rather
    than at link time, so a library whose exported symbols disagree with the bindings
    can abort the process instead of returning a clean error.
+
 2. Point `PDFIUM_DYNAMIC_LIB_PATH` at the **directory** holding
    `libpdfium.so` / `libpdfium.dylib` / `pdfium.dll`:
 
@@ -441,6 +442,7 @@ but they do **not** bundle `libpdfium` — you supply it.
    ```
 
    Without it, Xberg falls back to the system library search path.
+
 3. Select the backend per request:
 
    ```python

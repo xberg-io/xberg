@@ -409,12 +409,7 @@ pub(crate) fn resolve_cache_dir() -> PathBuf {
 fn preprocess_crops(image: &RgbImage) -> Result<[RgbImage; 3]> {
     let (width, height) = image.dimensions();
     let (resized_width, resized_height) = orientation_resize_dimensions(width, height)?;
-    let resized = image::imageops::resize(
-        image,
-        resized_width,
-        resized_height,
-        image::imageops::FilterType::Triangle,
-    );
+    let resized = crate::image::resize::resize_rgb_triangle(image, resized_width, resized_height);
 
     if resized_width >= resized_height {
         let cross_axis_offset = (resized_height - INPUT_SIZE) / 2;

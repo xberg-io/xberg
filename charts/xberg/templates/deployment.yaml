@@ -70,6 +70,19 @@ spec:
               value: "/app/.xberg"
             - name: HF_HOME
               value: "/app/.xberg/huggingface"
+            {{- with .Values.xberg.apiTokenSecret }}
+            {{- if .name }}
+            - name: XBERG_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ .key | default "token" | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.xberg.allowUnauthenticated }}
+            - name: XBERG_ALLOW_UNAUTHENTICATED
+              value: "true"
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

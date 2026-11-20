@@ -345,7 +345,7 @@ fn preprocess_detr(img: &RgbImage) -> (Array4<f32>, u32, u32) {
     let (orig_w, orig_h) = (img.width(), img.height());
     let (new_w, new_h) = compute_detr_resize(orig_w, orig_h);
 
-    let resized = image::imageops::resize(img, new_w, new_h, image::imageops::FilterType::Triangle);
+    let resized = crate::image::resize::resize_rgb_triangle(img, new_w, new_h);
 
     let w = new_w as usize;
     let h = new_h as usize;

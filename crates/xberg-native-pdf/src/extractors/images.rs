@@ -4152,7 +4152,9 @@ pub struct PdfImageHandle<'doc> {
     /// `/ColorSpace` (e.g. `/CS0`) the same way the renderer does. Empty when the
     /// image's colour space needs no resource lookup (the common case), which
     /// preserves the original `color_space_map=None` decode path.
-    color_space_resources: std::collections::HashMap<String, crate::object::Object>,
+    /// Shared with every handle of the same page or Form: the map can hold large ICC and
+    /// Indexed lookups, and a page with thousands of inline images cloned it per handle.
+    pub(crate) color_space_resources: std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
     /// For an Indexed image (`[/Indexed base hival lookup]`, §8.6.6.3), the
     /// resolved de-indexed *base* colour space; `None` for non-Indexed images.
     indexed_base: Option<ColorSpace>,
@@ -4230,7 +4232,7 @@ impl<'doc> PdfImageHandle<'doc> {
         } else {
             Some(&self.color_space_resources)
         };
-        let mut image = extract_image_from_xobject(Some(self.doc), obj, obj_ref, cs_map)?;
+        let mut image = extract_image_from_xobject(Some(self.doc), obj, obj_ref, cs_map.map(|map| &**map))?;
 
         // Use pre-computed bbox and rotation from Phase 1 — no need to call
         // back into document.rs helpers here. ~keep
@@ -4560,7 +4562,7 @@ pub(crate) fn image_handle_from_xobject<'doc>(
     xobject_dict: &std::collections::HashMap<String, crate::object::Object>,
     ctm: crate::content::Matrix,
     paint_order: usize,
-    color_space_resources: &std::collections::HashMap<String, crate::object::Object>,
+    color_space_resources: &std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
 ) -> Option<PdfImageHandle<'doc>> {
     // /Width and /Height may be indirect references (ISO 32000-1 §7.3.10);
     // resolve them the same way `extract_image_from_xobject` does. ~keep
@@ -4635,7 +4637,7 @@ pub(crate) fn image_handle_from_xobject<'doc>(
         ctm,
         doc,
         source: PdfImageSource::XObject(obj_ref),
-        color_space_resources: color_space_resources.clone(),
+        color_space_resources: std::sync::Arc::clone(color_space_resources),
         indexed_base,
     })
 }
@@ -4671,7 +4673,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
     data: Vec<u8>,
     ctm: crate::content::Matrix,
     paint_order: usize,
-    color_space_resources: &std::collections::HashMap<String, crate::object::Object>,
+    color_space_resources: &std::sync::Arc<std::collections::HashMap<String, crate::object::Object>>,
 ) -> Option<PdfImageHandle<'doc>> {
     use crate::object::Object;
 
@@ -4744,7 +4746,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
             stream_object,
             compressed_bytes,
         },
-        color_space_resources: color_space_resources.clone(),
+        color_space_resources: std::sync::Arc::clone(color_space_resources),
         indexed_base,
     })
 }
@@ -4947,6 +4949,7 @@ mod handle_color_space_tests {
         let mut map = empty_map();
         map.insert("CS0".to_string(), Object::Name("DeviceGray".to_string()));
 
+        let map = std::sync::Arc::new(map);
         let handle = image_handle_from_xobject(&doc, obj_ref, &dict, crate::content::Matrix::identity(), 0, &map)
             .expect("handle builds");
 
@@ -4971,7 +4974,7 @@ mod handle_color_space_tests {
             &dict,
             crate::content::Matrix::identity(),
             0,
-            &empty_map(),
+            &std::sync::Arc::new(empty_map()),
         )
         .unwrap();
         assert_eq!(handle.color_space, ColorSpace::Indexed);
