@@ -4453,7 +4453,12 @@ fn build_document_structure_with_native(
         );
     }
     if strip_repeating_text {
-        mark_cross_page_repeating_text(&mut all_page_paragraphs, &page_heights);
+        mark_cross_page_repeating_text(
+            &mut all_page_paragraphs,
+            &page_heights,
+            include_headers,
+            include_footers,
+        );
         mark_cross_page_repeating_short_text(&mut all_page_paragraphs);
     }
     if !include_watermarks {
@@ -7547,7 +7552,27 @@ const RUNNING_MARGIN_BODY_CHARS: usize = 80;
 const RUNNING_MARGIN_MAX_WORDS: usize = 20;
 const RUNNING_MARGIN_MAX_CHARS: usize = 120;
 
-fn running_margin_key(paragraph: &PdfParagraph, height: f32, hints: Option<&[LayoutHint]>) -> Option<(String, bool)> {
+/// Which margin band a paragraph's box sits in: `Some(true)` for the top band a running
+/// header occupies, `Some(false)` for the bottom footer band, `None` for body text.
+///
+/// The classifier and the cross-page repetition marker both read this band, so they cannot
+/// disagree about which lines are headers and footers.
+pub(super) fn running_margin_band(paragraph: &PdfParagraph, height: f32) -> Option<bool> {
+    let (_, bottom, _, top) = finite_paragraph_bbox(paragraph)?;
+    if bottom >= height * (1.0 - RUNNING_MARGIN_FRACTION) {
+        Some(true)
+    } else if top <= height * RUNNING_MARGIN_FRACTION {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+pub(super) fn running_margin_key(
+    paragraph: &PdfParagraph,
+    height: f32,
+    hints: Option<&[LayoutHint]>,
+) -> Option<(String, bool)> {
     if paragraph.layout_class.is_some()
         || paragraph.heading_level.is_some()
         || paragraph.is_list_item
@@ -7559,14 +7584,7 @@ fn running_margin_key(paragraph: &PdfParagraph, height: f32, hints: Option<&[Lay
     {
         return None;
     }
-    let (_, bottom, _, top) = finite_paragraph_bbox(paragraph)?;
-    let header = if bottom >= height * (1.0 - RUNNING_MARGIN_FRACTION) {
-        true
-    } else if top <= height * RUNNING_MARGIN_FRACTION {
-        false
-    } else {
-        return None;
-    };
+    let header = running_margin_band(paragraph, height)?;
     let text = paragraph_text_whitespace_collapsed(paragraph);
     if text.is_empty() || text.chars().count() > RUNNING_MARGIN_MAX_CHARS || has_deferred_layout_class(paragraph, hints)
     {
@@ -7807,7 +7825,7 @@ pub(crate) fn strip_repeating_text_from_pages(
     // of running-header/footer semantics. It runs first because it matches a margin
     // line on every page, including the first, where the tier passes keep one copy.
     classify_running_margin_regions(pages, page_heights, include_headers, include_footers, None);
-    mark_cross_page_repeating_text(pages, page_heights);
+    mark_cross_page_repeating_text(pages, page_heights, include_headers, include_footers);
     mark_cross_page_repeating_short_text(pages);
     for page in pages.iter_mut() {
         retain_page_furniture_safely(page);

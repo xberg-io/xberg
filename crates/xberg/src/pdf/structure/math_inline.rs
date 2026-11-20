@@ -15,7 +15,8 @@ const MAX_RUN_TOKENS: usize = 12;
 /// Multi-letter names that are operands or functions rather than prose.
 const MATH_NAMES: &[&str] = &[
     "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "lim", "exp", "max", "min", "sup", "inf", "det", "arcsin",
-    "arccos", "arctan", "sinh", "cosh", "tanh", "pi",
+    "arccos", "arctan", "sinh", "cosh", "tanh", "pi", "sqrt", "cbrt", "abs", "gcd", "lcm", "mod", "sgn", "deg", "arg",
+    "dim", "ker", "erf",
 ];
 
 /// What a token contributes to a math run.
@@ -49,15 +50,15 @@ pub(crate) fn inline_math_annotations(text: &str) -> Vec<(u32, u32)> {
     for token in tokenize(text) {
         match token {
             Some(token) => run.push(token),
-            None => flush_run(&mut run, &mut spans),
+            None => flush_run(text, &mut run, &mut spans),
         }
     }
-    flush_run(&mut run, &mut spans);
+    flush_run(text, &mut run, &mut spans);
     spans
 }
 
 /// Emit one run when it reads as an equation, then clear it.
-fn flush_run(run: &mut Vec<Token>, spans: &mut Vec<(u32, u32)>) {
+fn flush_run(text: &str, run: &mut Vec<Token>, spans: &mut Vec<(u32, u32)>) {
     let leading = run.iter().take_while(|token| token.role == Role::Operator).count();
     run.drain(..leading);
     while run.last().is_some_and(|token| token.role == Role::Operator) {
@@ -65,13 +66,24 @@ fn flush_run(run: &mut Vec<Token>, spans: &mut Vec<(u32, u32)>) {
     }
     let qualifies = match run.len() {
         0 => false,
-        1 => run[0].superscript || run[0].relation,
-        count => count <= MAX_RUN_TOKENS && run.iter().any(|token| token.relation),
+        1 => run[0].superscript || (run[0].relation && run_reads_as_equation(text, run)),
+        count => count <= MAX_RUN_TOKENS && run.iter().any(|token| token.relation) && run_reads_as_equation(text, run),
     };
     if qualifies && let (Some(first), Some(last)) = (run.first(), run.last()) {
         spans.push((first.start as u32, last.end as u32));
     }
     run.clear();
+}
+
+/// Whether the source text covered by a run places every relation between two operands.
+///
+/// A relation token can hold only one of its sides (`x= 5`, `x =5`), so the check spans
+/// token boundaries instead of judging each token on its own.
+fn run_reads_as_equation(text: &str, run: &[Token]) -> bool {
+    match (run.first(), run.last()) {
+        (Some(first), Some(last)) => text.get(first.start..last.end).is_some_and(relation_run_reads_as_math),
+        _ => false,
+    }
 }
 
 /// Classify every whitespace-separated token of `text`; `None` is prose or a line break
@@ -140,7 +152,7 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
     // pair of English words because neither side is a single-letter, numeric or named
     // operand.
     if relation {
-        return relation_operands_are_math(body).then_some(Token {
+        return relation_token_candidate(body).then_some(Token {
             start,
             end,
             role: Role::Operand,
@@ -168,29 +180,69 @@ pub(super) fn is_math_name(body: &str) -> bool {
     MATH_NAMES.contains(&lower.as_str())
 }
 
-/// Whether the text on both sides of every relation reads as math.
-///
-/// Each side is split on operators and grouping characters, so `a+b=c` is judged as the
-/// operands `a`, `b` and `c` rather than as one three-letter word.
-fn relation_operands_are_math(body: &str) -> bool {
-    let mut sides = 0usize;
-    for side in body.split(is_math_relation) {
-        sides += 1;
-        let mut operands = 0usize;
-        for piece in side.split(|ch: char| is_math_punctuation(ch) || ch == '_' || ch.is_whitespace()) {
-            if piece.is_empty() {
-                continue;
+/// Operand sides of `body`, grouping a run of relation characters (`==`, `<=`, `>=`,
+/// `!=`) as one relation rather than as several.
+fn relation_sides(body: &str) -> Vec<&str> {
+    let mut sides = Vec::new();
+    let mut side_start = 0usize;
+    let mut in_relation = false;
+    for (index, ch) in body.char_indices() {
+        if is_math_relation(ch) {
+            if !in_relation {
+                sides.push(&body[side_start..index]);
+                in_relation = true;
             }
-            operands += 1;
-            if !reads_as_operand(piece) {
-                return false;
-            }
-        }
-        if operands == 0 {
-            return false;
+        } else if in_relation {
+            in_relation = false;
+            side_start = index;
         }
     }
-    sides > 1
+    if in_relation {
+        // The token ends inside the relation, so its trailing side was never written.
+        sides.push("");
+    } else {
+        sides.push(&body[side_start..]);
+    }
+    sides
+}
+
+/// Number of operand pieces on one side of a relation, or `None` when a piece is prose.
+fn relation_side_operands(side: &str) -> Option<usize> {
+    let mut operands = 0usize;
+    for piece in side.split(|ch: char| is_math_punctuation(ch) || ch == '_' || ch.is_whitespace()) {
+        if piece.is_empty() {
+            continue;
+        }
+        if !reads_as_operand(piece) {
+            return None;
+        }
+        operands += 1;
+    }
+    Some(operands)
+}
+
+/// Whether a token holding a relation may join an inline-math run.
+///
+/// One side may be empty because an adjacent token supplies it (`x= 5`, `x =5`); the run
+/// as a whole is validated by [`relation_run_reads_as_math`].
+fn relation_token_candidate(body: &str) -> bool {
+    let sides = relation_sides(body);
+    sides.len() > 1
+        && sides
+            .into_iter()
+            .try_fold(0usize, |operands, side| {
+                relation_side_operands(side).map(|count| operands + count)
+            })
+            .is_some_and(|operands| operands > 0)
+}
+
+/// Whether every relation in a candidate run has an operand on both sides.
+fn relation_run_reads_as_math(run: &str) -> bool {
+    let sides = relation_sides(run);
+    sides.len() > 1
+        && sides
+            .iter()
+            .all(|side| relation_side_operands(side).is_some_and(|operands| operands > 0))
 }
 
 /// Whether one side of a relation reads as an operand: a variable, a number, a product
@@ -215,7 +267,8 @@ fn reads_as_operand(piece: &str) -> bool {
 fn is_math_relation(ch: char) -> bool {
     matches!(
         ch,
-        '=' | '<'
+        '=' | '!'
+            | '<'
             | '>'
             | '\u{2264}'
             | '\u{2265}'
@@ -313,6 +366,24 @@ mod tests {
     fn should_keep_a_compact_equation_between_words_as_prose() {
         assert_eq!(spans("The revenue=growth claim is wrong."), Vec::<&str>::new());
         assert_eq!(spans("Call full_join=group_by here."), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn should_wrap_an_equation_split_at_the_relation() {
+        assert_eq!(spans("The identity x= 5 holds here."), ["x= 5"]);
+        assert_eq!(spans("The identity x =5 holds here."), ["x =5"]);
+    }
+
+    #[test]
+    fn should_treat_a_compound_relation_as_one_operator() {
+        assert_eq!(spans("Both x==y and a<=b hold."), ["x==y", "a<=b"]);
+        assert_eq!(spans("Both x!=y and x\u{2264}y hold."), ["x!=y", "x\u{2264}y"]);
+    }
+
+    #[test]
+    fn should_reject_a_comparison_with_a_missing_operand() {
+        assert_eq!(spans("The guards x== and ==y fail."), Vec::<&str>::new());
+        assert_eq!(spans("The guard ==5 fails."), Vec::<&str>::new());
     }
 
     #[test]
