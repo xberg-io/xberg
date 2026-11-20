@@ -168,6 +168,31 @@ fn consecutive_header_rows_share_the_leading_header_group() {
 }
 
 #[test]
+fn a_table_caption_is_published_once() {
+    let document = html_document(
+        r#"<table>
+<caption>Results</caption>
+<tr><th>Name</th><th>Score</th></tr>
+<tr><td>Alice</td><td>10</td></tr>
+</table>"#,
+    );
+
+    assert_eq!(
+        document.content.matches("Results").count(),
+        1,
+        "the caption must not be published on both sides of its table: {}",
+        document.content
+    );
+    assert_eq!(
+        first_table(&document.content),
+        concat!(
+            "<table>\n<thead>\n<tr><th>Name</th><th>Score</th></tr>\n</thead>\n",
+            "<tbody>\n<tr><td>Alice</td><td>10</td></tr>\n</tbody>\n</table>"
+        )
+    );
+}
+
+#[test]
 fn sibling_tables_stay_separate_tables() {
     let document = html_document(
         r#"<table><tr><th>A</th></tr><tr><td>1</td></tr></table>

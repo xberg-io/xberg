@@ -706,11 +706,26 @@ fn recover_table_captions(html: &str, doc: &mut InternalDocument) {
         .into_iter()
         .rev()
     {
+        // The conversion already emits a `<caption>` as a paragraph beside the table on the
+        // document-structure route; inserting it again publishes the same line on both sides of
+        // the table (GH#2332).
+        if table_has_adjacent_caption(doc, *pos, caption) {
+            continue;
+        }
         doc.elements.insert(
             *pos,
             crate::types::internal::InternalElement::text(crate::types::internal::ElementKind::Paragraph, caption, 0),
         );
     }
+}
+
+/// Whether the element immediately before or after the table already carries `caption`.
+fn table_has_adjacent_caption(doc: &InternalDocument, table_position: usize, caption: &str) -> bool {
+    let before = table_position.checked_sub(1).and_then(|index| doc.elements.get(index));
+    [before, doc.elements.get(table_position + 1)]
+        .into_iter()
+        .flatten()
+        .any(|element| element.text.trim() == caption)
 }
 
 /// Splits a CommonMark fence line into (fence char, run length, text after the run).
