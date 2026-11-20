@@ -1278,12 +1278,13 @@ mod hocr_occurrence_tests;
 /// hOCR before table detection runs, and `build_content_with_inline_tables` repairs only the `content`
 /// string (and is skipped for Plain/Djot output), so the element tree needs this regardless of
 /// `output_format`. ~keep
-fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable]) {
+fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable], ignore_marks: bool) {
     drop_document_elements_claimed_by_tables(
         document,
         tables
             .iter()
             .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
+        ignore_marks,
     )
 }
 
@@ -1296,14 +1297,13 @@ fn publish_hocr_table_rows(
     policy: ImageOcrPolicy,
     limits: &SecurityLimits,
 ) {
+    let leader_aware = matches!(
+        policy,
+        ImageOcrPolicy::StandaloneAutoTableRows | ImageOcrPolicy::StandaloneDotLeaderRows
+    ) || (config.known_full_page_scan && config.psm == TessPageSegMode::PSM_SINGLE_BLOCK as u8);
     if let Some(leaders) = hocr
         .zip(tsv)
-        .filter(|_| {
-            matches!(
-                policy,
-                ImageOcrPolicy::StandaloneAutoTableRows | ImageOcrPolicy::StandaloneDotLeaderRows
-            ) || (config.known_full_page_scan && config.psm == TessPageSegMode::PSM_SINGLE_BLOCK as u8)
-        })
+        .filter(|_| leader_aware)
         .and_then(|(hocr, tsv)| reconcile_retained_table_leaders(hocr, document, tables, tsv, config, limits))
     {
         // An exact-only match cannot resolve which physical row owned the table slot.
@@ -1335,8 +1335,15 @@ fn publish_hocr_table_rows(
     });
     if let Some((reconciled, bounds)) = reconciled {
         apply_fragmented_reconciliation(document, tables, reconciled, bounds);
+        // A leader-aware proof can leave the line whose leader artifacts it could not match
+        // against the source words, while the table still carries that row (#2503). The sparse
+        // and ordinary routes keep their own reconciliation result.
+        let has_unclaimed_text = document.elements.iter().any(|element| !element.text.trim().is_empty());
+        if leader_aware && has_unclaimed_text {
+            filter_elements_covered_by_tables(document, tables, true);
+        }
     } else {
-        filter_elements_covered_by_tables(document, tables);
+        filter_elements_covered_by_tables(document, tables, leader_aware);
     }
 }
 
@@ -5279,7 +5286,7 @@ mod tests {
         ];
         let tables = vec![table_at_with_cells(0, 40, 100, 140, cells_of("Apple 50 10 00"))];
 
-        filter_elements_covered_by_tables(&mut document, &tables);
+        filter_elements_covered_by_tables(&mut document, &tables, false);
 
         assert_eq!(
             document.elements.len(),
