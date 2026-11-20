@@ -4229,6 +4229,32 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         )
         .map(|combined_doc| split_document_global_ocr_structure_by_page(combined_doc, &ocr_page_numbers))
         .unwrap_or_default();
+        // A page the heuristic did not classify (document declined, or this page dropped)
+        // falls back to rebuilding from `ocr_page_paragraphs`, and that path never ran the
+        // native route's cross-page furniture pass. Strip the paragraph lists once,
+        // document-wide, so a running header repeating across scanned pages is detected:
+        // stripping the assembled page documents instead would miss the repetition it
+        // needs to compare. ~keep
+        let filter = config.content_filter.clone().unwrap_or_default();
+        let mut stripped_fallback_pages: Option<Vec<Vec<crate::pdf::structure::types::PdfParagraph>>> = None;
+        if split_pages.len() < ocr_page_numbers.len() && filter.strip_repeating_text {
+            let mut fallback_pages: Vec<Vec<crate::pdf::structure::types::PdfParagraph>> = vec![Vec::new(); page_count];
+            for page_number in &ocr_page_numbers {
+                if let (Some(paragraphs), Some(slot)) = (
+                    ocr_page_paragraphs.get(page_number),
+                    fallback_pages.get_mut((*page_number - 1) as usize),
+                ) {
+                    slot.extend_from_slice(paragraphs);
+                }
+            }
+            crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+                &mut fallback_pages,
+                &page_heights_for_heuristic,
+                filter.include_headers,
+                filter.include_footers,
+            );
+            stripped_fallback_pages = Some(fallback_pages);
+        }
         for page_number in &ocr_page_numbers {
             let Some(existing) = structured_ocr_pages.get(page_number) else {
                 continue;
@@ -4272,7 +4298,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // cannot regress heading detection the way pre-classifying before the
                 // heuristic call would.
                 None => {
-                    let mut paragraphs = ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default();
+                    let mut paragraphs = stripped_fallback_pages
+                        .as_ref()
+                        .and_then(|pages| pages.get((*page_number - 1) as usize))
+                        .cloned()
+                        .unwrap_or_else(|| ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default());
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
