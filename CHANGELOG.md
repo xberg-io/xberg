@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ocr:** A recognized dot-leader table row is no longer printed beside the row the detected table already carries. The row claim now compares rows without the leader artifacts a recognizer adds between a label and its values, including a leader that picked up a stray dash, while letters, digits, signs and currency still have to match in order. (#2503)
 - **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
 
 ## [1.4.2] - 2026-11-19
