@@ -43,7 +43,6 @@ latest = ["v1_21"]
 image = ["dep:image"]
 
 [dependencies]
-cfg-if = "1.0"
 enumn = "0.1.14"
 four-cc = "0.4"
 image = { workspace = true, optional = true }

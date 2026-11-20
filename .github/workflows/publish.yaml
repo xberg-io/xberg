@@ -1874,7 +1874,7 @@ jobs:
           retention-days: 14
 
   cli-binaries:
-    name: Build CLI binary (${{ matrix.target }})
+    name: Build CLI binary (${{ matrix.target }}${{ matrix.archive_suffix }})
     needs: [prepare, check-cli]
     if: >-
       ${{ !inputs.plugins-only && (needs.prepare.outputs.release_cli == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
@@ -1896,6 +1896,16 @@ jobs:
               extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
             }
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
+          # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
+          # libheif stack (libheif + libde265 + x265, GPL/LGPL), which some redistributors cannot
+          # ship (#3294). `formats-no-heic` stays in `default`, so PDF and Office extraction are
+          # unchanged; only the HEIC/HEIF codecs are compiled out. ~keep
+          - {
+              os: windows-2022,
+              target: x86_64-pc-windows-msvc,
+              archive_suffix: "-no-gpl-lgpl",
+              cargo_features: "mcp,mcp-http,api",
+            }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1931,8 +1941,9 @@ jobs:
           target: ${{ matrix.target }}
           # `heic` re-adds HEIC/HEIF to the prebuilt binaries — the CLI default
           # dropped it so `cargo install` works on stock Windows (#1361); CI has
-          # libheif so the official binaries keep HEIC. ~keep
-          extra-cargo-args: ${{ matrix.extra_cargo_args || '--features mcp,mcp-http,api,heic' }}
+          # libheif so the official binaries keep HEIC. The no-GPL archive names its
+          # features in `cargo_features`, which the license gate below also audits. ~keep
+          extra-cargo-args: ${{ matrix.cargo_features && format('--features {0}', matrix.cargo_features) || matrix.extra_cargo_args || '--features mcp,mcp-http,api,heic' }}
 
       # Stage ONNX Runtime for Intel macOS after the build so the ort-dynamic
       # compile is unaffected; this exports ORT_DYLIB_PATH for the vendor step.
@@ -1967,6 +1978,7 @@ jobs:
           sparse-checkout: |
             scripts/ci/verify-windows-dll-closure.ps1
             scripts/ci/vendor-windows-native-closure.ps1
+            scripts/ci/verify_no_gpl_cli_archive.py
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
             mise.toml
@@ -1983,9 +1995,10 @@ jobs:
         env:
           BINARY_PATH: ${{ steps.build.outputs.binary-path }}
           TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.archive_suffix }}
         shell: bash
         run: |
-          STAGE="xberg-cli-${TARGET}"
+          STAGE="xberg-cli-${TARGET}${SUFFIX}"
           mkdir -p "$STAGE"
           cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -2059,6 +2072,39 @@ jobs:
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 
+      - name: Setup cargo-deny for the no-GPL license audit
+        if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "true"
+          install-args: cargo-deny
+
+      # Cargo metadata alone cannot prove this artifact is GPL-free: libheif, libde265 and x265
+      # are C libraries reached through `libheif-sys` and linked statically by the vcpkg port, so
+      # the crate license graph stays clean whether or not they are in the binary. `cargo deny`
+      # covers the Rust crates of the exact shipped feature graph (no `heic`), and the archive
+      # audit covers the linked/bundled codecs in xberg.exe and its sibling DLLs. ~keep
+      - name: Verify no GPL/LGPL codecs in the no-GPL CLI archive
+        if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.archive_suffix }}
+          FEATURES: ${{ matrix.cargo_features }}
+        run: |
+          set -euo pipefail
+          STAGE="xberg-cli-${TARGET}${SUFFIX}"
+          mise exec -- cargo deny --manifest-path crates/xberg-cli/Cargo.toml --locked \
+            --features "$FEATURES" --target "$TARGET" check licenses
+          "$STAGE/xberg.exe" formats --format json > "$RUNNER_TEMP/xberg-formats.json"
+          python .release-tools/scripts/ci/verify_no_gpl_cli_archive.py \
+            --archive "${STAGE}.zip" \
+            --native-root "$STAGE" \
+            --formats-json "$RUNNER_TEMP/xberg-formats.json" \
+            --require-format pdf \
+            --require-format docx \
+            --require-format xlsx
+
       - name: Checkout Linux CLI installer verification tools
         if: endsWith(matrix.target, '-unknown-linux-gnu')
         uses: actions/checkout@v7
@@ -2088,10 +2134,10 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: cli-${{ matrix.target }}
+          name: cli-${{ matrix.target }}${{ matrix.archive_suffix }}
           path: |
-            xberg-cli-${{ matrix.target }}.tar.gz
-            xberg-cli-${{ matrix.target }}.zip
+            xberg-cli-${{ matrix.target }}${{ matrix.archive_suffix }}.tar.gz
+            xberg-cli-${{ matrix.target }}${{ matrix.archive_suffix }}.zip
           if-no-files-found: ignore
           retention-days: 14
 
@@ -4019,6 +4065,7 @@ jobs:
           xberg-cli-aarch64-unknown-linux-musl.tar.gz
           xberg-cli-x86_64-unknown-linux-musl.tar.gz
           xberg-cli-x86_64-pc-windows-msvc.zip
+          xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip
           xberg-cli-binstall-aarch64-unknown-linux-musl.tar.gz
           xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz"
           total=0
@@ -4032,8 +4079,8 @@ jobs:
             fi
           done <<<"$(echo "$expected" | tr -d ' ')"
           echo "expected=${total} missing=${missing} present=$((total - missing))"
-          if [ "$total" -ne 9 ]; then
-            echo "::error::the expected-asset list did not parse (counted ${total}, want 9)"
+          if [ "$total" -ne 10 ]; then
+            echo "::error::the expected-asset list did not parse (counted ${total}, want 10)"
             exit 1
           fi
           [ "$missing" -eq 0 ] || exit 1

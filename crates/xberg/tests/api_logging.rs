@@ -14,7 +14,7 @@ use axum::{
 use tower::ServiceExt;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _};
 
-use xberg::{ExtractionConfig, api::create_router};
+use xberg::ExtractionConfig;
 
 /// A tracing `Layer` that records the target + level of every emitted event.
 #[derive(Clone, Default)]
@@ -142,4 +142,13 @@ async fn health_route_works_without_subscriber() {
     let router = create_router(ExtractionConfig::default());
     let status = get_health(router).await;
     assert_eq!(status, StatusCode::OK);
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router(config: ExtractionConfig) -> axum::Router {
+    xberg::api::create_router_with_auth(
+        config,
+        xberg::api::ApiSizeLimits::default(),
+        xberg::api::ApiAuth::new(None, false),
+    )
 }

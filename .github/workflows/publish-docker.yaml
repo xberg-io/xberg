@@ -260,9 +260,28 @@ jobs:
         if: ${{ steps.gate.outputs.go == 'true' }}
         uses: docker/setup-buildx-action@v4
 
+      # The one compile. Built with buildx and loaded into the local daemon so the tests run
+      # against it; the push step below repeats these exact inputs, so BuildKit resolves every
+      # layer from this builder's cache instead of recompiling (#3297). Keep build-args, file,
+      # context and platforms identical between the two steps. ~keep
       - name: Build test image
         if: ${{ steps.gate.outputs.go == 'true' }}
-        run: docker build -f ${{ matrix.dockerfile }} --platform ${{ matrix.platform.docker }} --build-arg ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }} --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }} -t xberg-publish:${{ matrix.variant }}-test .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform.docker }}
+          build-args: |
+            ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
+            XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
+            CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }}
+          load: true
+          provenance: false
+          tags: xberg-publish:${{ matrix.variant }}-test
+          cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+          # ignore-error: a transient GitHub Actions cache-export failure (buildx `not_found`)
+          # must not fail the build. ~keep
+          cache-to: type=gha,mode=max,ignore-error=true,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
 
       - name: Run Docker tests
         if: ${{ steps.gate.outputs.go == 'true' }}
@@ -276,6 +295,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Same inputs as "Build test image": a pure cache hit that only exports and pushes, no
+      # recompilation. Pushing by digest needs a build-push-action output, which a loaded local
+      # image cannot provide. ~keep
       - name: Build and push by digest
         id: build
         if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
@@ -294,10 +316,6 @@ jobs:
             org.opencontainers.image.licenses=MIT
           outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
-          # ignore-error: the image is already pushed by digest above; a transient
-          # GitHub Actions cache-export failure (buildx `not_found`) must not fail the
-          # whole build/publish. ~keep
-          cache-to: type=gha,mode=max,ignore-error=true,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
 
       - name: Export digest
         if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
@@ -336,7 +354,8 @@ jobs:
     # always(): a cancelled/failed sibling build leg (e.g. cli hitting the timeout) must NOT
     # skip the whole merge — the core/full digests that DID build still need their manifests
     # pushed (rc.36 #1299: one cancelled cli/amd64 leg suppressed the -core image entirely).
-    # A per-variant leg with no digests skips cleanly below, so this matrix stays green.
+    # A due variant with no digests fails its own leg below (#3297); fail-fast is off, so the
+    # other variants still publish.
     # That is necessary but NOT sufficient for publish-helm to run — a downstream job with an
     # implicit success() still sees the failed build-docker ancestor through this job. See the
     # condition on publish-helm, which is what actually keeps the chart shipping. ~keep
@@ -388,10 +407,8 @@ jobs:
           pattern: digest-${{ matrix.variant }}-*
           merge-multiple: true
 
-      # Only push this variant's manifest if its build legs actually produced digests. A
-      # variant whose build was cancelled/failed (e.g. cli on timeout) has none — skip it
-      # cleanly (leg still succeeds) so the core/full manifests publish and the matrix stays
-      # green for publish-helm. ~keep
+      # Only push this variant's manifest if both build legs produced digests; a variant that
+      # is due but has none fails its leg while the other variants still publish. ~keep
       - name: Verify digests present
         id: check
         if: ${{ steps.gate.outputs.go == 'true' }}
@@ -399,8 +416,9 @@ jobs:
         # leg produced a digest, publishing would silently ship a single-arch manifest
         # (#1315: -core alternated amd64-only / arm64-only whenever one leg's gha cache
         # export failed and took the whole build leg down). Fail loudly instead. Zero
-        # digests means the entire variant build was cancelled (rc.36 #1299) — skip it
-        # cleanly so the other variants still publish. ~keep
+        # digests also fails (#3297): a legitimately skipped variant never reaches this step
+        # because the gate above is false, and the other matrix legs still publish
+        # (fail-fast is off). ~keep
         run: |
           count=$(find /tmp/digests -type f 2>/dev/null | wc -l | tr -d ' ')
           if [ "$count" -ge 2 ]; then
@@ -409,8 +427,8 @@ jobs:
             echo "::error::variant '${{ matrix.variant }}' produced only 1 platform digest (expected 2: amd64+arm64) — refusing to publish a single-arch manifest (#1315). A build-docker leg failed; inspect the build jobs."
             exit 1
           else
-            echo "::warning::no digests for variant '${{ matrix.variant }}' — its build leg did not complete; skipping its manifest publish (other variants unaffected)"
-            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::error::no digests for variant '${{ matrix.variant }}' — both build-docker legs produced none although this variant was due to publish; failing so the release cannot look green without its image (#3293). Inspect the build jobs."
+            exit 1
           fi
 
       - name: Log in to GitHub Container Registry

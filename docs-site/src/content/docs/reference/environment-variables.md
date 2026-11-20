@@ -73,16 +73,37 @@ export XBERG_PORT=8080
 XBERG_PORT must be a valid u16 number, got 'invalid': invalid digit found in string
 ```
 
+### XBERG_API_TOKEN
+
+**Type**: `String`
+**Default**: Unset (no authentication)
+
+Bearer token for the REST API. When set, every route except `GET /health` requires `Authorization: Bearer <token>`; the comparison is constant-time. A blank value counts as unset. The token must be ASCII. The MCP HTTP transport (`xberg mcp --transport http`) uses the same token and the same startup check. When unset, the server refuses to bind a non-loopback host unless `XBERG_ALLOW_UNAUTHENTICATED` is set.
+
+```bash title="API token"
+export XBERG_API_TOKEN="$(openssl rand -hex 32)"
+```
+
+### XBERG_ALLOW_UNAUTHENTICATED
+
+**Type**: `bool` (`1`, `true`, `yes`, `on`)
+**Default**: `false`
+
+Allows the server to start on a non-loopback host (such as `0.0.0.0`) without `XBERG_API_TOKEN`. It assumes the network in front of the server is trusted: use it only when access is already restricted, for example by a reverse proxy or a private network.
+
 ### XBERG_CORS_ORIGINS
 
 **Type**: `String` (comma-separated list)
-**Default**: Empty (allows all origins)
+**Default**: Empty (denies cross-origin requests)
 
-Whitelist of allowed CORS origins. When empty, the server accepts requests from any origin.
+Whitelist of allowed CORS origins. When empty, cross-origin browser requests are denied. The entry `*` allows every origin.
 
 ```bash title="CORS Origins Configuration"
-# Allow all origins (default)
+# Deny cross-origin requests (default)
 # unset XBERG_CORS_ORIGINS
+
+# Allow every origin
+export XBERG_CORS_ORIGINS="*"
 
 # Allow specific origins
 export XBERG_CORS_ORIGINS="https://api.example.com, https://app.example.com"
@@ -91,7 +112,7 @@ export XBERG_CORS_ORIGINS="https://api.example.com, https://app.example.com"
 export XBERG_CORS_ORIGINS="https://trusted.com"
 ```
 
-**Security Warning**: Be explicit with CORS origins in production. Allowing all origins (`*`) means any website can call your API on behalf of users. In Xberg, an empty list allows all origins - be intentional about this choice.
+**Security Warning**: Be explicit with CORS origins in production. Allowing all origins (`*`) means any website can call your API on behalf of users. In Xberg, `*` must be set explicitly - be intentional about this choice.
 
 ```bash title="CORS Security Best Practices"
 # Production: Restrict to known origins

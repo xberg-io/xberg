@@ -19,7 +19,7 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use serial_test::serial;
 use tower::ServiceExt;
-use xberg::api::{ApiSizeLimits, create_router_with_limits};
+use xberg::api::ApiSizeLimits;
 
 /// Body text that has never been extracted on this machine before, so this test's
 /// `/extract` call is never served from a warm cache entry left by a previous run.
@@ -161,4 +161,9 @@ async fn metrics_endpoint_reports_extraction_total_after_a_real_extraction() {
         "expected metric {EXPECTED_EXTRACTION_TOTAL_METRIC_NAME} to be non-zero after a real \
          extraction; full /metrics body follows:\n{metrics_body}"
     );
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router_with_limits(config: xberg::ExtractionConfig, limits: ApiSizeLimits) -> axum::Router {
+    xberg::api::create_router_with_auth(config, limits, xberg::api::ApiAuth::new(None, false))
 }

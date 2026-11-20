@@ -1,13 +1,39 @@
 use libheif_sys as lh;
 use std::ptr;
 
+use std::rc::Rc;
+
+use crate::context::ContextOwner;
 use crate::utils::get_non_null_ptr;
 use crate::{HeifError, Image, ItemId, Result};
 
-pub struct PointRegion(ptr::NonNull<lh::heif_region>);
+/// A native region together with a share of the context it was parsed from.
+///
+/// libheif resolves the transformed getters against the image properties of that context, so a
+/// region keeps the context alive and, through the context's shared owner, keeps a new image
+/// from being read under it until the region is dropped.
+struct OwnedRegion<'a> {
+    ptr: ptr::NonNull<lh::heif_region>,
+    _context: Rc<ContextOwner<'a>>,
+}
+
+impl<'a> OwnedRegion<'a> {
+    fn new(ptr: ptr::NonNull<lh::heif_region>, context: &Rc<ContextOwner<'a>>) -> Self {
+        Self {
+            ptr,
+            _context: Rc::clone(context),
+        }
+    }
+
+    fn as_ptr(&self) -> *mut lh::heif_region {
+        self.ptr.as_ptr()
+    }
+}
+
+pub struct PointRegion<'a>(OwnedRegion<'a>);
 
 #[allow(unsafe_code)]
-impl PointRegion {
+impl PointRegion<'_> {
     /// Get the values for a point region.
     ///
     /// This returns the coordinates in the reference coordinate space
@@ -37,7 +63,7 @@ impl PointRegion {
     }
 }
 
-pub struct RectangleRegion(ptr::NonNull<lh::heif_region>);
+pub struct RectangleRegion<'a>(OwnedRegion<'a>);
 
 /// Rectangle geometry.
 ///
@@ -61,7 +87,7 @@ pub struct RectangleTransformed {
 }
 
 #[allow(unsafe_code)]
-impl RectangleRegion {
+impl RectangleRegion<'_> {
     /// Get the values for a rectangle region.
     ///
     /// This returns the values in the reference coordinate space
@@ -102,7 +128,7 @@ impl RectangleRegion {
     }
 }
 
-pub struct EllipseRegion(ptr::NonNull<lh::heif_region>);
+pub struct EllipseRegion<'a>(OwnedRegion<'a>);
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub struct Ellipse {
@@ -121,7 +147,7 @@ pub struct EllipseTransformed {
 }
 
 #[allow(unsafe_code)]
-impl EllipseRegion {
+impl EllipseRegion<'_> {
     /// Get the values for an ellipse region.
     ///
     /// This returns the values in the reference coordinate space (from
@@ -168,10 +194,10 @@ impl EllipseRegion {
     }
 }
 
-pub struct PolygonRegion(ptr::NonNull<lh::heif_region>);
+pub struct PolygonRegion<'a>(OwnedRegion<'a>);
 
 #[allow(unsafe_code)]
-impl PolygonRegion {
+impl PolygonRegion<'_> {
     /// Get the points in a polygon region.
     ///
     /// This returns the values in the reference coordinate space (from
@@ -219,10 +245,10 @@ impl PolygonRegion {
     }
 }
 
-pub struct PolylineRegion(ptr::NonNull<lh::heif_region>);
+pub struct PolylineRegion<'a>(OwnedRegion<'a>);
 
 #[allow(unsafe_code)]
-impl PolylineRegion {
+impl PolylineRegion<'_> {
     /// Get the points in a polyline region.
     ///
     /// This returns the values in the reference coordinate space (from
@@ -272,10 +298,10 @@ impl PolylineRegion {
     }
 }
 
-pub struct ReferencedMaskRegion(ptr::NonNull<lh::heif_region>);
+pub struct ReferencedMaskRegion<'a>(OwnedRegion<'a>);
 
 #[allow(unsafe_code)]
-impl ReferencedMaskRegion {
+impl ReferencedMaskRegion<'_> {
     /// Get a referenced item mask region.
     #[allow(unsafe_code)]
     pub fn referenced_mask(&self) -> (Rectangle, ItemId) {
@@ -295,10 +321,10 @@ impl ReferencedMaskRegion {
     }
 }
 
-pub struct InlineMaskRegion(ptr::NonNull<lh::heif_region>);
+pub struct InlineMaskRegion<'a>(OwnedRegion<'a>);
 
 #[allow(unsafe_code)]
-impl InlineMaskRegion {
+impl InlineMaskRegion<'_> {
     /// Get data for an inline mask region.
     ///
     /// This returns the values in the reference coordinate space
@@ -330,37 +356,42 @@ impl InlineMaskRegion {
     }
 }
 
+/// A region of a [`RegionItem`].
+///
+/// Holds a share of the context the region was parsed from, because libheif's transformed
+/// getters read that context's current image properties. A context therefore refuses to read
+/// another image while any of its regions is alive.
 #[non_exhaustive]
-pub enum Region {
+pub enum Region<'a> {
     /// Point geometry.
     ///
     /// The region is represented by a single point.
-    Point(PointRegion),
+    Point(PointRegion<'a>),
     /// Rectangle geometry.
     ///
     /// The region is represented by a top left position,
     /// and a size defined by a width and height.
     /// All the interior points and the edge are
     /// part of the region.
-    Rectangle(RectangleRegion),
+    Rectangle(RectangleRegion<'a>),
     /// Ellipse geometry.
     ///
     /// The region is represented by a center point,
     /// and radii in the X and Y directions.
     /// All the interior points and the edge are part of the region.
-    Ellipse(EllipseRegion),
+    Ellipse(EllipseRegion<'a>),
     /// Polygon geometry.
     ///
     /// The region is represented by a sequence of points,
     /// which is considered implicitly closed.
     /// All the interior points and the edge are part of the region.
-    Polygon(PolygonRegion),
+    Polygon(PolygonRegion<'a>),
     /// Polyline geometry.
     ///
     /// The region is represented by a sequence of points, which are not
     /// considered to form a closed surface. Only the edge is part of
     /// the region.
-    Polyline(PolylineRegion),
+    Polyline(PolylineRegion<'a>),
     /// Referenced mask.
     ///
     /// The mask location is represented by a left-top corner position,
@@ -388,31 +419,32 @@ pub enum Region {
     /// an (application defined) probability that the pixel is part of
     /// the region, where higher pixel values correspond to higher
     /// probability values.
-    ReferencedMask(ReferencedMaskRegion),
+    ReferencedMask(ReferencedMaskRegion<'a>),
     /// Inline mask.
     ///
     /// The region geometry is described by a sequence of bits stored in inline
     /// in the region, one bit per pixel. If the bit value is `1`, the pixel is
     /// part of the region. If the bit value is `0`, the pixel is not part of
     /// the region.
-    InlineMask(InlineMaskRegion),
+    InlineMask(InlineMaskRegion<'a>),
 }
 
 #[allow(unsafe_code)]
-impl Region {
+impl<'a> Region<'a> {
     #[allow(unsafe_code)]
-    fn new(region_ptr: ptr::NonNull<lh::heif_region>) -> Option<Self> {
+    fn new(region_ptr: ptr::NonNull<lh::heif_region>, context: &Rc<ContextOwner<'a>>) -> Option<Self> {
         let region_type = unsafe { lh::heif_region_get_type(region_ptr.as_ref()) };
+        let region = OwnedRegion::new(region_ptr, context);
         match region_type {
-            lh::heif_region_type_heif_region_type_point => Some(Region::Point(PointRegion(region_ptr))),
-            lh::heif_region_type_heif_region_type_rectangle => Some(Region::Rectangle(RectangleRegion(region_ptr))),
-            lh::heif_region_type_heif_region_type_ellipse => Some(Region::Ellipse(EllipseRegion(region_ptr))),
-            lh::heif_region_type_heif_region_type_polygon => Some(Region::Polygon(PolygonRegion(region_ptr))),
-            lh::heif_region_type_heif_region_type_polyline => Some(Region::Polyline(PolylineRegion(region_ptr))),
+            lh::heif_region_type_heif_region_type_point => Some(Region::Point(PointRegion(region))),
+            lh::heif_region_type_heif_region_type_rectangle => Some(Region::Rectangle(RectangleRegion(region))),
+            lh::heif_region_type_heif_region_type_ellipse => Some(Region::Ellipse(EllipseRegion(region))),
+            lh::heif_region_type_heif_region_type_polygon => Some(Region::Polygon(PolygonRegion(region))),
+            lh::heif_region_type_heif_region_type_polyline => Some(Region::Polyline(PolylineRegion(region))),
             lh::heif_region_type_heif_region_type_referenced_mask => {
-                Some(Region::ReferencedMask(ReferencedMaskRegion(region_ptr)))
+                Some(Region::ReferencedMask(ReferencedMaskRegion(region)))
             }
-            lh::heif_region_type_heif_region_type_inline_mask => Some(Region::InlineMask(InlineMaskRegion(region_ptr))),
+            lh::heif_region_type_heif_region_type_inline_mask => Some(Region::InlineMask(InlineMaskRegion(region))),
             _ => None,
         }
     }
@@ -432,9 +464,11 @@ impl Region {
 }
 
 #[allow(unsafe_code)]
-impl Drop for Region {
+impl Drop for Region<'_> {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: `inner` is the region this value acquired and releases exactly once, before
+        // the context share inside the variant is dropped, so the native context is still live.
         unsafe { lh::heif_region_release(self.inner()) }
     }
 }
@@ -442,14 +476,21 @@ impl Drop for Region {
 /// Region item.
 ///
 /// See ISO/IEC 23008-12:2022 Section 6.10 "Region items and region annotations"
-pub struct RegionItem {
+///
+/// Shares ownership of the context's native state and input backing like [`crate::ImageHandle`].
+/// The [`Region`] values it returns carry a share of that same owner, because libheif resolves
+/// their transformed getters against the context's image properties.
+pub struct RegionItem<'a> {
     pub(crate) inner: *mut lh::heif_region_item,
+    _context: Rc<ContextOwner<'a>>,
 }
 
 #[allow(unsafe_code)]
-impl Drop for RegionItem {
+impl Drop for RegionItem<'_> {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // SAFETY: `inner` is the region item this value owns and releases exactly once, before
+        // the context share in `_context` is dropped, so the native context is still live.
         unsafe {
             lh::heif_region_item_release(self.inner);
         }
@@ -457,9 +498,17 @@ impl Drop for RegionItem {
 }
 
 #[allow(unsafe_code)]
-impl RegionItem {
-    pub(crate) fn new(inner: ptr::NonNull<lh::heif_region_item>) -> Self {
-        Self { inner: inner.as_ptr() }
+impl<'a> RegionItem<'a> {
+    pub(crate) fn new(inner: ptr::NonNull<lh::heif_region_item>, context: &Rc<ContextOwner<'a>>) -> Self {
+        Self {
+            inner: inner.as_ptr(),
+            _context: Rc::clone(context),
+        }
+    }
+
+    /// Take ownership of a native region created from this item, sharing this item's context.
+    fn own(&self, region: ptr::NonNull<lh::heif_region>) -> OwnedRegion<'a> {
+        OwnedRegion::new(region, &self._context)
     }
 
     #[allow(unsafe_code)]
@@ -485,18 +534,18 @@ impl RegionItem {
 
     /// Get the regions that are part of a region item.
     #[allow(unsafe_code)]
-    pub fn regions(&self) -> Vec<Region> {
+    pub fn regions(&self) -> Vec<Region<'a>> {
         let num_regions = unsafe { lh::heif_region_item_get_number_of_regions(self.inner) };
         let size = num_regions.max(0) as usize;
         let mut region_ptrs: Vec<*mut lh::heif_region> = Vec::with_capacity(size);
-        let mut regions: Vec<Region> = Vec::with_capacity(size);
+        let mut regions: Vec<Region<'a>> = Vec::with_capacity(size);
         if size > 0 {
             unsafe {
                 lh::heif_region_item_get_list_of_regions(self.inner, region_ptrs.as_mut_ptr(), num_regions);
                 region_ptrs.set_len(size);
             }
             for region_ptr in region_ptrs.into_iter().filter_map(ptr::NonNull::new) {
-                if let Some(region) = Region::new(region_ptr) {
+                if let Some(region) = Region::new(region_ptr, &self._context) {
                     regions.push(region);
                 }
             }
@@ -506,16 +555,16 @@ impl RegionItem {
 
     /// Add a point region to the region item.
     #[allow(unsafe_code)]
-    pub fn add_point(&mut self, x: i32, y: i32) -> Result<Region> {
+    pub fn add_point(&mut self, x: i32, y: i32) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe { lh::heif_region_item_add_region_point(self.inner, x, y, &mut region_ptr) };
         HeifError::from_heif_error(err)?;
-        Ok(Region::Point(PointRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::Point(PointRegion(self.own(get_non_null_ptr(region_ptr)?))))
     }
 
     /// Add a rectangle region to the region item.
     #[allow(unsafe_code)]
-    pub fn add_rectangle(&mut self, rectangle: Rectangle) -> Result<Region> {
+    pub fn add_rectangle(&mut self, rectangle: Rectangle) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_rectangle(
@@ -528,18 +577,20 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::Rectangle(RectangleRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::Rectangle(RectangleRegion(
+            self.own(get_non_null_ptr(region_ptr)?),
+        )))
     }
 
     /// Add an ellipse region to the region item.
     #[allow(unsafe_code)]
-    pub fn add_ellipse(&mut self, center_x: i32, center_y: i32, radius_x: u32, radius_y: u32) -> Result<Region> {
+    pub fn add_ellipse(&mut self, center_x: i32, center_y: i32, radius_x: u32, radius_y: u32) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_ellipse(self.inner, center_x, center_y, radius_x, radius_y, &mut region_ptr)
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::Ellipse(EllipseRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::Ellipse(EllipseRegion(self.own(get_non_null_ptr(region_ptr)?))))
     }
 
     /// Add a polygon region to the region item.
@@ -548,7 +599,7 @@ impl RegionItem {
     /// The first point does not need to be repeated as the last point.
     /// The points are provided as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
-    pub fn add_polygon(&mut self, points: &[(i32, i32)]) -> Result<Region> {
+    pub fn add_polygon(&mut self, points: &[(i32, i32)]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_polygon(
@@ -559,7 +610,7 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::Polygon(PolygonRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::Polygon(PolygonRegion(self.own(get_non_null_ptr(region_ptr)?))))
     }
 
     /// Add a polyline region to the region item.
@@ -570,7 +621,7 @@ impl RegionItem {
     /// line drawn along the polyline.
     /// The points are provided as pairs of (X, Y) coordinates.
     #[allow(unsafe_code)]
-    pub fn add_polyline(&mut self, points: &[(i32, i32)]) -> Result<Region> {
+    pub fn add_polyline(&mut self, points: &[(i32, i32)]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_polyline(
@@ -581,12 +632,14 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::Polyline(PolylineRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::Polyline(PolylineRegion(
+            self.own(get_non_null_ptr(region_ptr)?),
+        )))
     }
 
     /// Add a referenced mask region to the region item.
     #[allow(unsafe_code)]
-    pub fn add_referenced_mask(&mut self, rectangle: Rectangle, mask_item_id: ItemId) -> Result<Region> {
+    pub fn add_referenced_mask(&mut self, rectangle: Rectangle, mask_item_id: ItemId) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_referenced_mask(
@@ -600,9 +653,9 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::ReferencedMask(ReferencedMaskRegion(get_non_null_ptr(
-            region_ptr,
-        )?)))
+        Ok(Region::ReferencedMask(ReferencedMaskRegion(
+            self.own(get_non_null_ptr(region_ptr)?),
+        )))
     }
 
     /// Add an inline mask region to the region item.
@@ -615,7 +668,7 @@ impl RegionItem {
     /// is `1`, the corresponding pixel is part of the region. If the bit
     /// value is `0`, the corresponding pixel is not part of the region.
     #[allow(unsafe_code)]
-    pub fn add_inline_mask_data(&mut self, rectangle: Rectangle, mask_data: &[u8]) -> Result<Region> {
+    pub fn add_inline_mask_data(&mut self, rectangle: Rectangle, mask_data: &[u8]) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_inline_mask_data(
@@ -630,7 +683,9 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::InlineMask(InlineMaskRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::InlineMask(InlineMaskRegion(
+            self.own(get_non_null_ptr(region_ptr)?),
+        )))
     }
 
     /// Add an inline mask region image to the region item.
@@ -649,7 +704,7 @@ impl RegionItem {
     /// than the `rectangle.width` or `rectangle.height` (correspondingly)
     /// of the region, the image is cropped.
     #[allow(unsafe_code)]
-    pub fn add_inline_mask(&mut self, rectangle: Rectangle, image: &Image) -> Result<Region> {
+    pub fn add_inline_mask(&mut self, rectangle: Rectangle, image: &Image) -> Result<Region<'a>> {
         let mut region_ptr: *mut lh::heif_region = ptr::null_mut();
         let err = unsafe {
             lh::heif_region_item_add_region_inline_mask(
@@ -663,6 +718,8 @@ impl RegionItem {
             )
         };
         HeifError::from_heif_error(err)?;
-        Ok(Region::InlineMask(InlineMaskRegion(get_non_null_ptr(region_ptr)?)))
+        Ok(Region::InlineMask(InlineMaskRegion(
+            self.own(get_non_null_ptr(region_ptr)?),
+        )))
     }
 }

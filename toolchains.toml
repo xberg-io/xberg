@@ -1,4 +1,4 @@
-baseline = "v1.20.0"
+baseline = "v1.21.0"
 task_sets = [
   "alef-bindings",
   "alef-version",
@@ -17,6 +17,4 @@ task_sets = [
 "plugin:generate" = "Refresh plugin source and root served-skill pins after Xberg public skill export"
 "plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
 
-[overrides."github:xberg-io/alef"]
-version = "0.130.4"
-reason = "Match alef.toml and CI so generated PyO3 bindings can preserve Python exceptions from OCR callbacks"
+

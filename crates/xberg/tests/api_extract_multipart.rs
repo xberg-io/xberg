@@ -8,10 +8,7 @@ use axum::{
 };
 use serde_json::Value;
 use tower::ServiceExt;
-use xberg::{
-    ExtractionConfig, ExtractionResult,
-    api::{ApiSizeLimits, create_router_with_limits},
-};
+use xberg::{ExtractionConfig, ExtractionResult, api::ApiSizeLimits};
 
 #[tokio::test]
 async fn test_extract_accepts_single_file_multipart() {
@@ -76,4 +73,9 @@ Hello world\r\n\
     assert_eq!(envelope.summary.inputs, 1);
     assert_eq!(envelope.summary.results, 1);
     assert_eq!(envelope.summary.errors, 0);
+}
+
+/// Router with authentication pinned off, so the test does not depend on `XBERG_API_TOKEN`.
+fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits) -> axum::Router {
+    xberg::api::create_router_with_auth(config, limits, xberg::api::ApiAuth::new(None, false))
 }

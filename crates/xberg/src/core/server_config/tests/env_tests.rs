@@ -161,3 +161,42 @@ isolated_env_test! {
         assert_eq!(config.cors_origins[0], "https://api.example.com");
     }
 }
+
+isolated_env_test! {
+    fn test_scoped_overrides_ignore_bind_and_limits [
+        "XBERG_HOST" => "192.0.2.10",
+        "XBERG_PORT" => "not_a_number",
+        "XBERG_MAX_REQUEST_BODY_BYTES" => "not_a_number",
+        "XBERG_MAX_MULTIPART_FIELD_BYTES" => "not_a_number",
+        "XBERG_CORS_ORIGINS" => "https://example.com, https://other.com",
+        "XBERG_JOB_TIMEOUT_SECS" => "120",
+    ] {
+        let mut config = ServerConfig::default();
+        config.apply_cors_and_job_timeout_env_overrides().unwrap();
+
+        let defaults = ServerConfig::default();
+        assert_eq!(
+            config.cors_origins,
+            vec!["https://example.com".to_string(), "https://other.com".to_string()]
+        );
+        assert_eq!(config.job_timeout_secs, 120);
+        assert_eq!(config.host, defaults.host);
+        assert_eq!(config.port, defaults.port);
+        assert_eq!(config.max_request_body_bytes, defaults.max_request_body_bytes);
+        assert_eq!(config.max_multipart_field_bytes, defaults.max_multipart_field_bytes);
+    }
+}
+
+isolated_env_test! {
+    fn test_scoped_overrides_reject_invalid_job_timeout [
+        "XBERG_JOB_TIMEOUT_SECS" => "not_a_number",
+    ] {
+        let mut config = ServerConfig::default();
+        let err = config
+            .apply_cors_and_job_timeout_env_overrides()
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("XBERG_JOB_TIMEOUT_SECS must be a valid u64"), "{err}");
+    }
+}
