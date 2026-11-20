@@ -506,9 +506,12 @@ pub(crate) fn load_tokenizer(
 }
 
 /// Intra-op thread count for `options`: the explicit cap, else the default budget.
+///
+/// A value below 1 — including a negative one a binding handed over as-is — is raised to
+/// 1 rather than rejected or let through as a cast-wrapped `usize`.
 fn intra_thread_count(options: &OrtSessionOptions) -> usize {
     match options.max_threads {
-        Some(n) => n.max(1),
+        Some(n) => usize::try_from(n.max(1)).unwrap_or(1),
         None => crate::core::config::concurrency::resolve_thread_budget(None),
     }
 }
@@ -606,6 +609,11 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(intra_thread_count(&zero), 1);
+        let negative = OrtSessionOptions {
+            max_threads: Some(-4),
+            ..Default::default()
+        };
+        assert_eq!(intra_thread_count(&negative), 1);
     }
 
     #[test]

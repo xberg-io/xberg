@@ -7687,7 +7687,6 @@ fn wire__crate__create_orientation_result_from_json_impl(
         },
     )
 }
-#[cfg(any(feature = "onnx-runtime", paddle_ocr))]
 fn wire__crate__create_ort_session_options_from_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -12003,7 +12002,6 @@ fn wire__crate__ocr_backend_supports_language_for_impl(
         },
     )
 }
-#[cfg(any(feature = "onnx-runtime", paddle_ocr))]
 fn wire__crate__ort_session_options_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -12328,7 +12326,6 @@ fn wire__crate__register_validator_impl(
         },
     )
 }
-#[cfg(any(feature = "onnx-runtime", paddle_ocr))]
 fn wire__crate__set_ort_session_options_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -27095,7 +27092,6 @@ fn pde_ffi_dispatcher_primary_impl(
         257 => wire__crate__create_ocr_table_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "auto-rotate-types")]
         258 => wire__crate__create_orientation_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        #[cfg(any(feature = "onnx-runtime", paddle_ocr))]
         259 => wire__crate__create_ort_session_options_from_json_impl(port, ptr, rust_vec_len, data_len),
         260 => wire__crate__create_output_format_from_json_impl(port, ptr, rust_vec_len, data_len),
         261 => wire__crate__create_paddle_inference_backend_from_json_impl(port, ptr, rust_vec_len, data_len),
@@ -27292,7 +27288,6 @@ fn pde_ffi_dispatcher_primary_impl(
         405 => wire__crate__max_sim_score_impl(port, ptr, rust_vec_len, data_len),
         406 => wire__crate__ocr_backend_supports_language_impl(port, ptr, rust_vec_len, data_len),
         407 => wire__crate__ocr_backend_supports_language_for_impl(port, ptr, rust_vec_len, data_len),
-        #[cfg(any(feature = "onnx-runtime", paddle_ocr))]
         408 => wire__crate__ort_session_options_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "pdf")]
         409 => wire__crate__pdf_page_count_impl(port, ptr, rust_vec_len, data_len),
@@ -27306,7 +27301,6 @@ fn pde_ffi_dispatcher_primary_impl(
         416 => wire__crate__register_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
         417 => wire__crate__register_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
         418 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
-        #[cfg(any(feature = "onnx-runtime", paddle_ocr))]
         419 => wire__crate__set_ort_session_options_impl(port, ptr, rust_vec_len, data_len),
         420 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
         421 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),

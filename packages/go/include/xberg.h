@@ -41,7 +41,6 @@
 #define XBERG_FEATURE_NER_ONNX 1
 #define XBERG_FEATURE_OCR 1
 #define XBERG_FEATURE_OFFICE 1
-#define XBERG_FEATURE_ONNX_RUNTIME 1
 #define XBERG_FEATURE_PADDLE_OCR 1
 #define XBERG_FEATURE_PADDLE_OCR_TYPES 1
 #define XBERG_FEATURE_PDF 1
@@ -1835,7 +1834,8 @@ typedef struct XBERGOrientationResult XBERGOrientationResult;
  * Process-wide memory and threading options applied to the ONNX Runtime sessions of
  * embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
  *
- * The pure-Rust tract PaddleOCR backend ignores these options.
+ * The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither
+ * `onnx-runtime` nor `paddle-ocr-ort` exposes them without having a session to apply them to.
  *
  * PaddleOCR applies `memory_pattern` and `cpu_arena` only; its intra-op thread count
  * is not changed by `max_threads`.
@@ -19269,7 +19269,6 @@ uint32_t xberg_orientation_result_degrees(XBERGAlefHandle handle);
 float xberg_orientation_result_confidence(XBERGAlefHandle handle);
 #endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Create a `OrtSessionOptions` from a JSON string. Returns null on failure.
  * # Safety
@@ -19277,9 +19276,7 @@ float xberg_orientation_result_confidence(XBERGAlefHandle handle);
  * Returned handle must be freed with `xberg_ort_session_options_free`.
  */
 XBERGAlefHandle xberg_ort_session_options_from_json(const char *json);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Serialize a `OrtSessionOptions` to a JSON string. Returns null on failure.
  * # Safety
@@ -19287,45 +19284,35 @@ XBERGAlefHandle xberg_ort_session_options_from_json(const char *json);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_ort_session_options_to_json(XBERGAlefHandle handle);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Free a `OrtSessionOptions` handle.
  * # Safety
  * Handle must have been returned by this library, or be zero.
  */
 void xberg_ort_session_options_free(XBERGAlefHandle handle);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Get the `memory_pattern` field from a `OrtSessionOptions`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_ort_session_options_memory_pattern(XBERGAlefHandle handle);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Get the `cpu_arena` field from a `OrtSessionOptions`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_ort_session_options_cpu_arena(XBERGAlefHandle handle);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Get the `max_threads` field from a `OrtSessionOptions`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t xberg_ort_session_options_max_threads(XBERGAlefHandle handle);
-#endif
+int32_t xberg_ort_session_options_max_threads(XBERGAlefHandle handle);
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Report whether the `max_threads` field on a `OrtSessionOptions` is `Some`.
  *
@@ -19338,15 +19325,12 @@ uintptr_t xberg_ort_session_options_max_threads(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_ort_session_options_has_max_threads(XBERGAlefHandle handle);
-#endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
  * be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_ort_session_options_default(void);
-#endif
 
 /**
  * Create a `PaddleOcrConfig` from a JSON string. Returns null on failure.
@@ -31242,14 +31226,12 @@ int32_t xberg_ocr_backend_supports_language(const char *backend, const char *lan
 int32_t xberg_ocr_backend_supports_language_for(const char *backend, const char *language,
                                                 XBERGAlefHandle config);
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * The `OrtSessionOptions` currently in effect.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
  * be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_ort_session_options(void);
-#endif
 
 #if defined(XBERG_FEATURE_PDF)
 /**
@@ -31313,7 +31295,6 @@ XBERGAlefHandle xberg_redact_external_cancellable(XBERGAlefHandle document, XBER
                                                   XBERGAlefHandle alef_cancel_token);
 #endif
 
-#if defined(XBERG_FEATURE_ONNX_RUNTIME)
 /**
  * Set the `OrtSessionOptions` used for ONNX sessions built from now on.
  *
@@ -31324,7 +31305,6 @@ XBERGAlefHandle xberg_redact_external_cancellable(XBERGAlefHandle document, XBER
  * be freed with the appropriate free function.
  */
 void xberg_set_ort_session_options(XBERGAlefHandle options);
-#endif
 
 #if defined(XBERG_FEATURE_MARKDOWN_FOOTNOTES)
 /**

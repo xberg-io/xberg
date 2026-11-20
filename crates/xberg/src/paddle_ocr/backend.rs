@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "paddle-ocr-ort")]
 thread_local! {
     static PADDLE_TL_ACCEL: RefCell<Option<crate::core::config::acceleration::AccelerationConfig>> = const { RefCell::new(None) };
-    static PADDLE_TL_OPTIONS: std::cell::Cell<crate::ort_options::OrtSessionOptions> =
-        const { std::cell::Cell::new(crate::ort_options::OrtSessionOptions::DEFAULT) };
+    static PADDLE_TL_OPTIONS: RefCell<crate::ort_options::OrtSessionOptions> =
+        const { RefCell::new(crate::ort_options::OrtSessionOptions::DEFAULT) };
 }
 
 /// Carries the option snapshot taken for the engine pool key to every session the
@@ -38,7 +38,7 @@ struct PaddleOptionsGuard {
 impl PaddleOptionsGuard {
     fn set(options: crate::ort_options::OrtSessionOptions) -> Self {
         Self {
-            previous: PADDLE_TL_OPTIONS.with(|cell| cell.replace(options)),
+            previous: PADDLE_TL_OPTIONS.with(|cell| std::mem::replace(&mut *cell.borrow_mut(), options)),
         }
     }
 }
@@ -46,7 +46,7 @@ impl PaddleOptionsGuard {
 #[cfg(feature = "paddle-ocr-ort")]
 impl Drop for PaddleOptionsGuard {
     fn drop(&mut self) {
-        PADDLE_TL_OPTIONS.with(|cell| cell.set(self.previous));
+        PADDLE_TL_OPTIONS.with(|cell| *cell.borrow_mut() = std::mem::take(&mut self.previous));
     }
 }
 
@@ -74,7 +74,7 @@ fn paddle_accel_builder_fn(
     } else {
         builder
     };
-    apply_paddle_session_options(builder, &PADDLE_TL_OPTIONS.with(|cell| cell.get()))
+    apply_paddle_session_options(builder, &PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()))
 }
 
 /// Apply the process-wide memory options to a PaddleOCR session builder; a default
@@ -277,10 +277,13 @@ impl PaddleModelContextCache {
         let cache_dir = cache_dir.to_path_buf();
         let context = Arc::new(PaddleModelContext::new(cache_dir.clone()));
         #[cfg(feature = "paddle-ocr-ort")]
-        LIVE_MODEL_CONTEXTS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(Arc::downgrade(&context));
+        {
+            // Drop the references of evicted contexts before appending, so the registry is
+            // bounded by the live contexts rather than by every admission since startup.
+            let mut live = LIVE_MODEL_CONTEXTS.lock().unwrap_or_else(|e| e.into_inner());
+            live.retain(|weak| weak.strong_count() > 0);
+            live.push(Arc::downgrade(&context));
+        }
         self.entries.insert(cache_dir.clone(), Arc::clone(&context));
         self.recency.push_back(cache_dir);
         Some(context)
@@ -1002,7 +1005,7 @@ impl PaddleOcrBackend {
 
         let builder_fn = paddle_builder_hook(
             PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()),
-            &PADDLE_TL_OPTIONS.with(|cell| cell.get()),
+            &PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()),
         );
 
         ocr_engine.init_models_with_dict_custom(
@@ -2459,10 +2462,13 @@ mod tests {
             max_threads: None,
         };
         {
-            let _guard = PaddleOptionsGuard::set(off);
-            assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.get()), off);
+            let _guard = PaddleOptionsGuard::set(off.clone());
+            assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()), off);
         }
-        assert_eq!(PADDLE_TL_OPTIONS.with(|cell| cell.get()), OrtSessionOptions::default());
+        assert_eq!(
+            PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()),
+            OrtSessionOptions::default()
+        );
     }
 
     #[cfg(feature = "paddle-ocr-ort")]

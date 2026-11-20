@@ -14792,7 +14792,8 @@ class OrientationResult {
 /// Process-wide memory and threading options applied to the ONNX Runtime sessions of
 /// embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
 ///
-/// The pure-Rust tract PaddleOCR backend ignores these options.
+/// The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither
+/// `onnx-runtime` nor `paddle-ocr-ort` exposes them without having a session to apply them to.
 ///
 /// PaddleOCR applies `memory_pattern` and `cpu_arena` only; its intra-op thread count
 /// is not changed by `max_threads`.
@@ -14821,10 +14822,10 @@ class OrtSessionOptions {
   final bool cpuArena;
 
   /// Intra-op thread count. `None` (default) uses the standard thread budget
-  /// (`min(cores, 8)` or the cgroup quota). Values below 1 are raised to 1. Only the
-  /// ORT intra-op pool is changed; `EMBED_SEMAPHORE` and other `resolve_thread_budget`
-  /// callers are unaffected. ONNX Runtime builds that use OpenMP ignore this setting;
-  /// configure `OMP_NUM_THREADS` for those builds.
+  /// (`min(cores, 8)` or the cgroup quota). Values below 1, negative ones included, are
+  /// raised to 1. Only the ORT intra-op pool is changed; `EMBED_SEMAPHORE` and other
+  /// `resolve_thread_budget` callers are unaffected. ONNX Runtime builds that use OpenMP
+  /// ignore this setting; configure `OMP_NUM_THREADS` for those builds.
   final PlatformInt64? maxThreads;
 
   const OrtSessionOptions({

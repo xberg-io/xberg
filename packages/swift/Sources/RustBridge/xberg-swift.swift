@@ -2193,6 +2193,9 @@ public func __alef_phantom_vec_ocr_table() -> RustVec<OcrTable> {
 public func __alef_phantom_vec_ocr_table_bounding_box() -> RustVec<OcrTableBoundingBox> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ocr_table_bounding_box())
 }
+public func __alef_phantom_vec_ort_session_options() -> RustVec<OrtSessionOptions> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ort_session_options())
+}
 public func __alef_phantom_vec_paddle_ocr_config() -> RustVec<PaddleOcrConfig> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_paddle_ocr_config())
 }
@@ -2750,9 +2753,6 @@ public func __alef_phantom_vec_ngram_range() -> RustVec<NgramRange> {
 }
 public func __alef_phantom_vec_orientation_result() -> RustVec<OrientationResult> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_orientation_result())
-}
-public func __alef_phantom_vec_ort_session_options() -> RustVec<OrtSessionOptions> {
-    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ort_session_options())
 }
 public func __alef_phantom_vec_paddle_ocr_vl_backend_options() -> RustVec<PaddleOcrVlBackendOptions> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_paddle_ocr_vl_backend_options())
@@ -19855,7 +19855,7 @@ public class OrtSessionOptions: OrtSessionOptionsRefMut {
     }
 }
 extension OrtSessionOptions {
-    public convenience init(_ memory_pattern: Bool, _ cpu_arena: Bool, _ max_threads: Optional<UInt>) {
+    public convenience init(_ memory_pattern: Bool, _ cpu_arena: Bool, _ max_threads: Optional<Int32>) {
         self.init(ptr: __swift_bridge__$OrtSessionOptions$new(memory_pattern, cpu_arena, max_threads.intoFfiRepr()))
     }
 }
@@ -19880,7 +19880,7 @@ extension OrtSessionOptionsRef {
         __swift_bridge__$OrtSessionOptions$cpu_arena(ptr)
     }
 
-    public func maxThreads() -> Optional<UInt> {
+    public func maxThreads() -> Optional<Int32> {
         __swift_bridge__$OrtSessionOptions$max_threads(ptr).intoSwiftRepr()
     }
 }

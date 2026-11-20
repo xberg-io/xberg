@@ -148,10 +148,12 @@ pub mod reranking;
 #[cfg(feature = "onnx-runtime")]
 pub(crate) mod onnx;
 
-#[cfg(any(feature = "onnx-runtime", paddle_ocr))]
+// ~keep Feature-independent: the options are a plain DTO with no ORT dependency, and a
+// binding gate on a cfg its own crate cannot observe (the `paddle_ocr` build-script cfg)
+// would drop the type from builds that still need it. A build with no ORT-backed feature
+// exposes them without having a session to apply them to.
 mod ort_options;
 
-#[cfg(any(feature = "onnx-runtime", paddle_ocr))]
 pub use ort_options::{OrtSessionOptions, ort_session_options, set_ort_session_options};
 
 /// Sparse (SPLADE) learned embeddings for hybrid dense+sparse retrieval.

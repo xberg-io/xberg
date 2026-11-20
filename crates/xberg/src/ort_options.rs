@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 /// Process-wide memory and threading options applied to the ONNX Runtime sessions of
 /// embeddings, reranking, sparse embeddings, late-interaction engines and PaddleOCR.
 ///
-/// The pure-Rust tract PaddleOCR backend ignores these options.
+/// The pure-Rust tract PaddleOCR backend ignores these options, and a build with neither
+/// `onnx-runtime` nor `paddle-ocr-ort` exposes them without having a session to apply them to.
 ///
 /// PaddleOCR applies `memory_pattern` and `cpu_arena` only; its intra-op thread count
 /// is not changed by `max_threads`.
@@ -23,7 +24,7 @@ use serde::{Deserialize, Serialize};
 /// engine caches when the options change, so resident engines are rebuilt on next use;
 /// a caller still holding an engine keeps its old session until it drops it. PaddleOCR
 /// engines are pooled per option set, so a changed option set builds new engines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OrtSessionOptions {
     /// Enable ORT's memory-pattern optimization. Disable for variable input sizes.
@@ -34,11 +35,14 @@ pub struct OrtSessionOptions {
     /// execution provider only; CUDA/TensorRT device arenas are unaffected. Default `true`.
     pub cpu_arena: bool,
     /// Intra-op thread count. `None` (default) uses the standard thread budget
-    /// (`min(cores, 8)` or the cgroup quota). Values below 1 are raised to 1. Only the
-    /// ORT intra-op pool is changed; `EMBED_SEMAPHORE` and other `resolve_thread_budget`
-    /// callers are unaffected. ONNX Runtime builds that use OpenMP ignore this setting;
-    /// configure `OMP_NUM_THREADS` for those builds.
-    pub max_threads: Option<usize>,
+    /// (`min(cores, 8)` or the cgroup quota). Values below 1, negative ones included, are
+    /// raised to 1. Only the ORT intra-op pool is changed; `EMBED_SEMAPHORE` and other
+    /// `resolve_thread_budget` callers are unaffected. ONNX Runtime builds that use OpenMP
+    /// ignore this setting; configure `OMP_NUM_THREADS` for those builds.
+    // ~keep Signed rather than `usize`: every language binding hands over a signed integer,
+    // and the core has to see a negative value to raise it to 1 instead of letting the cast
+    // wrap to `usize::MAX` at the binding boundary.
+    pub max_threads: Option<i32>,
 }
 
 impl OrtSessionOptions {
@@ -67,11 +71,11 @@ static SESSION_OPTIONS: std::sync::RwLock<OrtSessionOptions> = std::sync::RwLock
 /// When the options actually change, the embedding, reranking, sparse-embedding and
 /// late-interaction engine caches and the PaddleOCR engine pools are cleared, so resident
 /// engines are rebuilt with the new options on next use.
-pub fn set_ort_session_options(options: OrtSessionOptions) {
+pub fn set_ort_session_options(options: &OrtSessionOptions) {
     let changed = {
         let mut guard = SESSION_OPTIONS.write().unwrap_or_else(|e| e.into_inner());
-        let changed = *guard != options;
-        *guard = options;
+        let changed = *guard != *options;
+        guard.clone_from(options);
         changed
     };
     if changed {
@@ -84,7 +88,7 @@ pub fn set_ort_session_options(options: OrtSessionOptions) {
 
 /// The [`OrtSessionOptions`] currently in effect.
 pub fn ort_session_options() -> OrtSessionOptions {
-    *SESSION_OPTIONS.read().unwrap_or_else(|e| e.into_inner())
+    SESSION_OPTIONS.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 #[cfg(test)]
@@ -94,7 +98,7 @@ mod tests {
     struct RestoreOptions(OrtSessionOptions);
     impl Drop for RestoreOptions {
         fn drop(&mut self) {
-            set_ort_session_options(self.0);
+            set_ort_session_options(&self.0);
         }
     }
 
@@ -107,7 +111,7 @@ mod tests {
             cpu_arena: false,
             max_threads: Some(3),
         };
-        set_ort_session_options(bounded);
+        set_ort_session_options(&bounded);
         assert_eq!(ort_session_options(), bounded);
     }
 
