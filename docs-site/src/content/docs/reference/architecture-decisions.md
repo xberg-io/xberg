@@ -27,4 +27,4 @@ same change as a new record.
 | [0012](https://github.com/xberg-io/xberg/blob/main/adrs/0012-expose-source-proven-pdf-layout-text-through-an-opt-in-rust-result.md) | Expose source-proven PDF layout text through an opt-in Rust result | accepted | 2026-11-05 |
 | [0013](https://github.com/xberg-io/xberg/blob/main/adrs/0013-scope-pdf-image-placement-evidence-to-one-extraction.md) | Scope PDF image placement evidence to one extraction | accepted | 2026-11-06 |
 | [0014](https://github.com/xberg-io/xberg/blob/main/adrs/0014-gate-khmer-numeric-recovery-on-locally-provisioned-models.md) | Gate Khmer numeric recovery on locally provisioned models | accepted | 2026-11-10 |
-| [0015](https://github.com/xberg-io/xberg/blob/main/adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-2-0-or-later.md) | Publish the encoder-enabled Elixir NIF under GPL-2.0-or-later | accepted | 2026-11-20 |
+| [0015](https://github.com/xberg-io/xberg/blob/main/adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-3-0-or-later.md) | Publish the encoder-enabled Elixir NIF under GPL-3.0-or-later with a written source offer | accepted | 2026-11-21 |

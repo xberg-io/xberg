@@ -58,6 +58,19 @@ run_coverage() {
 	xberg_assert_output_contains "COPY names 'crates/xberg', which .dockerignore excludes"
 }
 
+@test "Docker crate guard should reject a scripts COPY excluded from the build context" {
+	mkdir -p scripts/ci
+	touch scripts/ci/x265-gate.py
+	printf 'COPY scripts/ci/x265-gate.py /gate.py\n' >>docker/Dockerfile.second
+	run_coverage
+	xberg_assert_status 1
+	xberg_assert_output_contains "COPY names 'scripts/ci/x265-gate.py', which .dockerignore excludes"
+	printf '!scripts/ci/x265-gate.py\n' >>.dockerignore
+	run_coverage
+	xberg_assert_status 0
+	xberg_assert_output_contains 'every COPYd path survives .dockerignore'
+}
+
 @test "Docker crate guard should reject stale allowlist entries even when every COPY is covered" {
 	printf '!crates/deleted/\n' >>.dockerignore
 	run_coverage

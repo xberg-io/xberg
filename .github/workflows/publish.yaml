@@ -3048,6 +3048,7 @@ jobs:
             scripts/ci/vendor-native-closure-macos.sh
             scripts/lib/retry.sh
             scripts/lib/macho.sh
+            GPL-SOURCE-OFFER.txt
             mise.toml
             mise.lock
 
@@ -3115,9 +3116,11 @@ jobs:
           mkdir "$work/final" "$work/positive" "$work/negative" "$work/home" "$work/cache"
           tools=.release-tools/scripts/ci
           python3 "$tools/macos_elixir_archive.py" stage "$raw" \
-            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE" --output-dir "$work/final"
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE" \
+            --source-offer .release-tools/GPL-SOURCE-OFFER.txt --output-dir "$work/final"
           python3 "$tools/macos_elixir_archive.py" verify "$work/final/$name" \
-            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE"
+            --codec-prefix "$XBERG_HEIF_PREFIX" --project-source "$GITHUB_WORKSPACE" \
+            --source-offer .release-tools/GPL-SOURCE-OFFER.txt
           beam_path="$(dirname "$(command -v elixir)"):$(dirname "$(command -v erl)"):/usr/bin:/bin:/usr/sbin:/sbin"
           probe=(env -i "PATH=$beam_path" "HOME=$work/home" "XBERG_CACHE_DIR=$work/cache"
             XBERG_EXPECT_HOSTED_BEAM=1 elixir "$tools/smoke_macos_elixir_archive.exs")

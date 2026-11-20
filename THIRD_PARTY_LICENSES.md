@@ -58,10 +58,15 @@ libheif 1.23.7, libde265 1.1.3, libaom 3.15.3 (encoder enabled) and x265 4.3.
 tarball <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz>
 (SHA-256 `83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121`),
 also listed in `sources.tsv` inside the archive with its `COPYING`. The macOS PHP
-extension does not contain it. Because that archive links `libx265`, the
-encoder-enabled macOS Elixir NIF is distributed as a GPL-2.0-or-later combined
-work; its Rust and Elixir sources remain MIT-licensed, which is GPL-compatible
-(`adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-2-0-or-later.md`).
+extension does not contain it. Because that archive combines LGPL-3.0-or-later
+libheif/libde265 with GPL-2.0-or-later x265, the encoder-enabled macOS Elixir NIF
+is conveyed as a GPL-3.0-or-later combined work; its Rust and Elixir sources
+remain MIT-licensed, which is GPL-compatible. `GPL-SOURCE-OFFER.txt` ships in the
+archive beside those notices and makes the complete-corresponding-source offer
+required by GPL-3.0 section 6(b), valid for three years from distribution and
+answered at `contact@xberg.io`; `scripts/ci/macos_elixir_archive.py` refuses to
+stage or verify the archive without it. The decision is recorded in
+`adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-3-0-or-later.md`.
 
 ## PHP macOS extension: static HEIF stack
 
