@@ -1002,6 +1002,44 @@ def test_cli_release_enables_metal_only_for_macos_arm64() -> None:
     assert block.count("candle-metal") == 1
 
 
+def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    variants = [entry for entry in matrix_entries(block) if entry.get("archive_suffix")]
+    assert [entry["archive_suffix"] for entry in variants] == ["-no-gpl-lgpl"], (
+        "expected exactly one suffixed CLI archive, the no-GPL Windows ZIP"
+    )
+    [variant] = variants
+    assert variant["target"] == "x86_64-pc-windows-msvc"
+    features = variant["cargo_features"].split(",")
+    assert "heic" not in features, "the no-GPL archive must not compile the HEIC/HEIF codecs in"
+    assert {"mcp", "mcp-http", "api"} <= set(features), "it must keep the capabilities the standard Windows ZIP ships"
+
+    [build] = [
+        step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    ]
+    assert "matrix.cargo_features" in build["with"]["extra-cargo-args"], (
+        "the build must consume the same feature list the license audit checks"
+    )
+    [upload] = [step for step in block["steps"] if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+    assert upload["with"]["name"] == "cli-${{ matrix.target }}${{ matrix.archive_suffix }}"
+
+    [gate] = [
+        step for step in block["steps"] if step.get("name") == "Verify no GPL/LGPL codecs in the no-GPL CLI archive"
+    ]
+    assert gate["if"] == "runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'"
+    run = gate["run"]
+    assert '--features "$FEATURES"' in run
+    assert "check licenses" in run
+    assert "verify_no_gpl_cli_archive.py" in run
+    assert set(re.findall(r"--require-format (\w+)", run)) == {"pdf", "docx", "xlsx"}, (
+        "the gate must prove PDF and Office extraction survived the feature removal"
+    )
+
+    release = job_block(WORKFLOW.read_text(), "upload-cli-release")
+    assert "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip" in release
+    assert '"$total" -ne 10' in release, "the completeness gate must count the new archive"
+
+
 def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
     block = job_block(WORKFLOW.read_text(), "python-wheels")
     [matrix] = re.findall(r"(?m)^        os: \[([^\]]+)\]$", block)

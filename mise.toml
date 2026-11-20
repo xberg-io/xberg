@@ -138,6 +138,7 @@ run = [
 description = "Verify release workflow and packaging contracts"
 run = [
   "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_publish_workflow_contracts.py",
+  "python3 scripts/ci/test_verify_no_gpl_cli_archive.py",
   "python3 scripts/ci/test_android_jni_guard.py",
   "python3 scripts/ci/test_macos_deployment_target.py",
   "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_php_release_contracts.py",
