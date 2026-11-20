@@ -15,9 +15,14 @@ variants.add_argument("--jpeg-only", action="store_true")
 variants.add_argument("--jpeg-mixed-only", action="store_true")
 variants.add_argument("--predictor-indexed-only", action="store_true")
 variants.add_argument("--lower-density-only", action="store_true")
+variants.add_argument("--deu-only", action="store_true")
 args = parser.parse_args()
 target, font_path = args.target, args.font.resolve(strict=True)
-phrase = "Source scan keeps all words from this repeated line safely today"
+phrase = (
+    "Der Quellscan behaelt heute sicher alle Woerter aus dieser Zeile"
+    if args.deu_only
+    else "Source scan keeps all words from this repeated line safely today"
+)
 tags = [
     "apple",
     "orange",
@@ -61,7 +66,8 @@ tags = [
     "date",
 ]
 lines = [phrase.rsplit(" ", 1)[0] + " " + tag for tag in tags]
-target.joinpath("expected.txt").write_text("\n".join(lines) + "\n")
+expected_name = "expected-deu.txt" if args.deu_only else "expected.txt"
+target.joinpath(expected_name).write_text("\n".join(lines) + "\n")
 
 
 def _stream(data: bytes, fields: str = "") -> bytes:
@@ -170,6 +176,8 @@ elif args.jpeg_mixed_only:
 elif args.predictor_indexed_only:
     _pdf("predictor-mixed.pdf", 12000, packing="predictor")
     _pdf("indexed-inverted.pdf", 12000, packing="indexed")
+elif args.deu_only:
+    _pdf("strict-tall-deu.pdf", 12000)
 elif args.lower_density_only:
     for name, packing in [("bilevel-120.pdf", "bilevel"), ("neutral-rgb-120.pdf", "neutral-rgb"), ("indexed-120.pdf", "indexed"), ("jpeg-120.pdf", "jpeg")]:
         _pdf(name, 9600, packing=packing, width=1020)

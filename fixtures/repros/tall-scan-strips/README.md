@@ -63,6 +63,19 @@ uv run --no-project --with pillow==13.0.0 python generate.py . \
 
 Of these, only the Indexed scan reads back as all 440 source words; the others pin the 150 DPI floor.
 
+The German variant keeps the 1275 × 12000 source grid and draws the same shape of forty
+lines with a German phrase and the same tags. Its oracle is `expected-deu.txt`.
+Regenerate it with the bundled DejaVu Sans font:
+
+```sh
+uv run --no-project --with pillow==13.0.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --deu-only
+```
+
+`pdf_tall_scan_language_2502` is ignored unless `deu.traineddata` is installed in
+`TESSDATA_PREFIX` or a system tessdata directory. The offline qualification suite runs
+English only.
+
 ## Source geometry at different densities
 
 `large-text-150.pdf` and `large-text-300.pdf` contain the same physical scan on

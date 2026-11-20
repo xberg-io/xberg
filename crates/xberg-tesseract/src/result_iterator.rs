@@ -143,8 +143,8 @@ impl<'api> ResultIterator<'api> {
     /// `raw` must be a non-null `TessResultIterator` (or mutable iterator) that `api`'s engine
     /// created from the result at `epoch`, owned by nothing else.
     pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
-        // SAFETY: forwarded from this function's contract. ~keep
         ResultIterator {
+            // SAFETY: forwarded from this function's contract. ~keep
             inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
     }
