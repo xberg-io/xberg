@@ -1416,6 +1416,9 @@ const _: () = assert!(MIN_ORIENTATION_CONFIDENCE == crate::doc_orientation::MIN_
 /// Bytes per pixel of the RGB raster handed to Tesseract.
 const RGB_BYTES_PER_PIXEL: u32 = 3;
 
+/// Lowest source resolution Tesseract accepts; lower reported values are clamped up.
+const MIN_SOURCE_DPI: i32 = 70;
+
 /// Source resolution assumed when OCR receives the original image unchanged and the caller did
 /// not tell us what resolution it really is.
 ///
@@ -2675,6 +2678,7 @@ pub(super) fn perform_ocr(
     let leader_raster = request.set_page_image(&api, &mut image)?;
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
     request.set_page_image(&api, &mut image)?;
+    drop(std::mem::take(&mut image.data));
 
     let recognition = request.recognize(&api, image.source_dpi)?;
     let merged_read = recognition.merged_read();
@@ -2723,28 +2727,20 @@ pub(super) fn perform_ocr(
         observe_hyphens,
     })?;
 
-    let mut page = PageAssembly {
-        content: String::new(),
-        mime_type,
-        metadata: primary_read_metadata::build(primary_read_metadata::PrimaryRead {
-            config,
-            dimensions: (ocr_image_width, ocr_image_height),
-            image_preprocessing: image.image_preprocessing,
-            auto_rotate_unavailable,
-            dictionary_line_counts: (dictionary_filtered_line_count, dictionary_kept_numeral_line_count),
-            retained_hocr_confidence_stats: retained_hocr_confidence_stats.as_ref(),
-            mean_text_conf: recognition.mean_text_conf,
-            word_confidence_stats: recognition.word_confidence_stats,
-            detected_orientation,
-        })?,
-        tables: Vec::new(),
-        ocr_elements: None,
-        hocr_document,
-        retained_hocr_read,
-    };
+    let mut metadata = primary_read_metadata::build(primary_read_metadata::PrimaryRead {
+        config,
+        dimensions: (ocr_image_width, ocr_image_height),
+        image_preprocessing: image.image_preprocessing,
+        auto_rotate_unavailable,
+        dictionary_line_counts: (dictionary_filtered_line_count, dictionary_kept_numeral_line_count),
+        retained_hocr_confidence_stats: retained_hocr_confidence_stats.as_ref(),
+        mean_text_conf: recognition.mean_text_conf,
+        word_confidence_stats: recognition.word_confidence_stats,
+        detected_orientation,
+    })?;
     if let Some(outcome) = recognition.script_retry.as_ref() {
         // After the first read's confidence metadata, so the merged page reports its own. ~keep
-        script_retry::record(&mut page.metadata, outcome);
+        script_retry::record(&mut metadata, outcome);
     }
 
     let (content, ocr_elements) = request.read_primary_text(
@@ -2753,27 +2749,40 @@ pub(super) fn perform_ocr(
         &raw_content,
         merged_read,
         tsv_data_for_tables,
-        &mut page.metadata,
+        &mut metadata,
     );
-    page.content = content;
-    page.ocr_elements = ocr_elements;
-
-    let detection = TableDetection {
-        api: &api,
-        tsv_data: tsv_data_for_tables,
-        table_mark_symbols: &table_mark_symbols,
-        dimensions: (ocr_image_width, ocr_image_height),
-        apply_pix_preprocessing: image.apply_pix_preprocessing,
-        #[cfg(feature = "pdf")]
-        content: &page.content,
-        hocr_for_tables: hocr_for_tables.as_deref(),
-        #[cfg(feature = "pdf")]
-        hocr_document: page.hocr_document.as_ref(),
-        dictionary_filtered_line_count,
-        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-        leader_raster: leader_raster.as_ref(),
+    let mut page = PageAssembly {
+        content,
+        mime_type,
+        metadata,
+        tables: Vec::new(),
+        ocr_elements,
+        hocr_document,
+        retained_hocr_read,
     };
-    let detected = request.detect_tables(detection, &mut page.metadata)?;
+
+    let detected = if config.enable_table_detection {
+        request.detect_tables(
+            TableDetection {
+                api: &api,
+                tsv_data: tsv_data_for_tables.expect("table detection requires the first read's word table"),
+                table_mark_symbols: &table_mark_symbols,
+                dimensions: (ocr_image_width, ocr_image_height),
+                apply_pix_preprocessing: image.apply_pix_preprocessing,
+                #[cfg(feature = "pdf")]
+                content: &page.content,
+                hocr_for_tables: hocr_for_tables.as_deref(),
+                #[cfg(feature = "pdf")]
+                hocr_document: page.hocr_document.as_ref(),
+                dictionary_filtered_line_count,
+                #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+                leader_raster: leader_raster.as_ref(),
+            },
+            &mut page.metadata,
+        )?
+    } else {
+        DetectedTables::empty()
+    };
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     drop(leader_raster);
 
@@ -2842,6 +2851,10 @@ impl OcrRequest<'_> {
             self.ci_debug_enabled,
             self.policy == ImageOcrPolicy::BoundedInferredUpscale,
         )
+        .map(|mut image| {
+            image.source_dpi = image.source_dpi.max(MIN_SOURCE_DPI);
+            image
+        })
         .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))
     }
 
@@ -3009,8 +3022,6 @@ impl OcrRequest<'_> {
         api: &TesseractAPI,
         image: &mut PreparedOcrImage,
     ) -> Result<Option<xberg_tesseract::Pix>, OcrError> {
-        image.source_dpi = image.source_dpi.max(70);
-
         let processed_pix = self.process_pix(image);
         if let Some(ref pix) = processed_pix {
             api.set_image_2(pix.as_ptr())
@@ -3067,7 +3078,6 @@ impl OcrRequest<'_> {
             )
         });
 
-        drop(std::mem::take(&mut image.data));
         Ok(leader_raster)
     }
 
@@ -3243,15 +3253,8 @@ impl OcrRequest<'_> {
         metadata: &mut HashMap<String, serde_json::Value>,
     ) -> Result<DetectedTables, OcrError> {
         let config = self.config;
-        let mut detected = DetectedTables {
-            tables: Vec::new(),
-            rejected_regions: Vec::new(),
-            fully_claimed: false,
-        };
-        if !config.enable_table_detection {
-            return Ok(detected);
-        }
-        let tsv_data = detection.tsv_data.unwrap();
+        let mut detected = DetectedTables::empty();
+        let tsv_data = detection.tsv_data;
 
         let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, detection.table_mark_symbols)?;
 
@@ -3319,17 +3322,58 @@ impl OcrRequest<'_> {
         detection: &TableDetection<'_>,
         single_region: bool,
     ) -> RegionOutcome {
-        let config = self.config;
-        let (width, height) = detection.dimensions;
-        let mut outcome = RegionOutcome {
-            table: None,
-            rejected_boxes: None,
-            claims_page: false,
-        };
+        #[cfg(not(feature = "pdf"))]
+        let _ = single_region;
+        let mut outcome = RegionOutcome::default();
         if !self.keep_region_candidate(region_index, &mut region) {
             return outcome;
         }
+        let Some(table) = self.reconstruct_region_table(region_index, &mut region, detection) else {
+            return outcome;
+        };
 
+        #[cfg(feature = "pdf")]
+        let grid = self.prove_region_grid(table, &region, detection, single_region);
+        #[cfg(not(feature = "pdf"))]
+        let grid = RegionGrid {
+            cells: Some(table),
+            claims_page: false,
+        };
+        outcome.claims_page = grid.claims_page;
+        let Some(cleaned) = grid.cells else {
+            return outcome;
+        };
+        if !has_table_grid(&cleaned) {
+            tracing::debug!(
+                target: "xberg::ocr::tables",
+                region_index,
+                "OCR table region has no row or column that relates two cells; keeping it as text"
+            );
+            if detection.dictionary_filtered_line_count > 0 && detection.hocr_for_tables.is_some() {
+                outcome.rejected_boxes = Some(region.read_boxes);
+            }
+            return outcome;
+        }
+
+        let markdown_table = table_to_markdown(&cleaned);
+        outcome.table = Some(OcrTable {
+            cells: cleaned,
+            markdown: markdown_table,
+            page_number: self.config.page_number,
+            bounding_box: Some(region.bounding_box()),
+        });
+        outcome
+    }
+
+    /// Reconstruct a region's words into its oriented table, or `None` when it reads as no cells.
+    fn reconstruct_region_table(
+        &self,
+        region_index: usize,
+        region: &mut TableRegion,
+        detection: &TableDetection<'_>,
+    ) -> Option<Vec<Vec<String>>> {
+        let config = self.config;
+        let (width, height) = detection.dimensions;
         let region_left = region.words.iter().map(|w| w.left).min().unwrap_or(0);
         let region_top = region.words.iter().map(|w| w.top).min().unwrap_or(0);
         let region_right = region.words.iter().map(|w| w.left + w.width).max().unwrap_or(0);
@@ -3366,40 +3410,7 @@ impl OcrRequest<'_> {
             "OCR table region reconstructed"
         );
 
-        if table.is_empty() || table[0].is_empty() {
-            return outcome;
-        }
-
-        #[cfg(feature = "pdf")]
-        let cleaned = self.prove_region_grid(table, &region, detection, single_region, &mut outcome.claims_page);
-        #[cfg(not(feature = "pdf"))]
-        let cleaned = {
-            let _ = single_region;
-            Some(table)
-        };
-        let Some(cleaned) = cleaned else {
-            return outcome;
-        };
-        if !has_table_grid(&cleaned) {
-            tracing::debug!(
-                target: "xberg::ocr::tables",
-                region_index,
-                "OCR table region has no row or column that relates two cells; keeping it as text"
-            );
-            if detection.dictionary_filtered_line_count > 0 && detection.hocr_for_tables.is_some() {
-                outcome.rejected_boxes = Some(region.read_boxes);
-            }
-            return outcome;
-        }
-
-        let markdown_table = table_to_markdown(&cleaned);
-        outcome.table = Some(OcrTable {
-            cells: cleaned,
-            markdown: markdown_table,
-            page_number: config.page_number,
-            bounding_box: Some(region.bounding_box()),
-        });
-        outcome
+        (!table.is_empty() && !table[0].is_empty()).then_some(table)
     }
 
     /// Apply the region's size and semantic gates, keeping only regions worth reconstructing.
@@ -3463,7 +3474,7 @@ impl OcrRequest<'_> {
     }
 
     /// Prove a reconstructed table's grid from its words, keeping the post-processed cells when no
-    /// proof holds. Sets `claims_page` when the proof accounts for the whole page's text.
+    /// proof holds.
     #[cfg(feature = "pdf")]
     fn prove_region_grid(
         &self,
@@ -3471,18 +3482,32 @@ impl OcrRequest<'_> {
         region: &TableRegion,
         detection: &TableDetection<'_>,
         single_region: bool,
-        claims_page: &mut bool,
-    ) -> Option<Vec<Vec<String>>> {
-        let config = self.config;
-        let tsv_data = detection.tsv_data.unwrap();
+    ) -> RegionGrid {
         let bbox = region.bounding_box();
         let cleaned = post_process_table(table, false, false);
-        let can_prove_scan_grid = config.known_full_page_scan
-            && single_region
-            && detection.dictionary_filtered_line_count == 0
-            && detection.hocr_for_tables.is_some()
-            && full_scan_table::uses_default_table_thresholds(config);
-        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        #[cfg(not(target_arch = "wasm32"))]
+        let sparse = self.prove_sparse_region_grid(cleaned, &bbox, detection, single_region);
+        #[cfg(target_arch = "wasm32")]
+        let sparse = RegionGrid {
+            cells: cleaned,
+            claims_page: false,
+        };
+        if sparse.cells.is_some() {
+            return sparse;
+        }
+        self.prove_scan_region_grid(&bbox, detection, single_region)
+    }
+
+    /// Prove a sparse-row grid from the first read's hOCR, when the page policy admits one.
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    fn prove_sparse_region_grid(
+        &self,
+        cleaned: Option<Vec<Vec<String>>>,
+        bbox: &OcrTableBoundingBox,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionGrid {
+        let config = self.config;
         let can_prove_sparse_grid = matches!(
             self.policy,
             ImageOcrPolicy::StandaloneSparseRows | ImageOcrPolicy::ImplicitStandaloneSparseRows
@@ -3490,9 +3515,8 @@ impl OcrRequest<'_> {
             && single_region
             && detection.dictionary_filtered_line_count == 0
             && full_scan_table::uses_default_table_thresholds(config);
-        #[cfg(not(target_arch = "wasm32"))]
-        let cleaned = if can_prove_sparse_grid {
-            let recovered = detection
+        let recovered = if can_prove_sparse_grid {
+            detection
                 .hocr_for_tables
                 .zip(detection.hocr_document)
                 .and_then(|source| {
@@ -3506,43 +3530,69 @@ impl OcrRequest<'_> {
                         None => GridProof::Strict,
                     };
                     full_scan_table::recover_standalone(
-                        tsv_data,
+                        detection.tsv_data,
                         detection.content,
-                        &bbox,
+                        bbox,
                         &self.security_limits,
                         source,
                         proof,
                     )
-                });
-            *claims_page |= recovered.is_some();
-            recovered.or(cleaned)
+                })
         } else {
-            cleaned
+            None
         };
-        cleaned.or_else(|| {
-            if !can_prove_scan_grid {
-                return None;
-            }
-            let stock = full_scan_table::recover(tsv_data, detection.content, &bbox, &self.security_limits);
-            #[cfg(not(target_arch = "wasm32"))]
-            if stock.is_none()
-                && let Some(raster) = detection.leader_raster
-                && let Some(source) = detection.hocr_for_tables.zip(detection.hocr_document)
-                && let Some(cells) = full_scan_table::recover_dot_leader_rows(
-                    tsv_data,
-                    detection.content,
-                    &bbox,
-                    &self.security_limits,
-                    source,
-                    raster,
-                )
-            {
-                *claims_page = true;
-                return Some(cells);
-            }
-            stock
-        })
+        RegionGrid {
+            claims_page: recovered.is_some(),
+            cells: recovered.or(cleaned),
+        }
     }
+
+    /// Prove a whole-page grid from the word table and hOCR, including a dot-leader row.
+    #[cfg(feature = "pdf")]
+    fn prove_scan_region_grid(
+        &self,
+        bbox: &OcrTableBoundingBox,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionGrid {
+        let config = self.config;
+        let can_prove_scan_grid = config.known_full_page_scan
+            && single_region
+            && detection.dictionary_filtered_line_count == 0
+            && detection.hocr_for_tables.is_some()
+            && full_scan_table::uses_default_table_thresholds(config);
+        if !can_prove_scan_grid {
+            return RegionGrid {
+                cells: None,
+                claims_page: false,
+            };
+        }
+        let tsv_data = detection.tsv_data;
+        let stock = full_scan_table::recover(tsv_data, detection.content, bbox, &self.security_limits);
+        #[cfg(not(target_arch = "wasm32"))]
+        if stock.is_none()
+            && let Some(raster) = detection.leader_raster
+            && let Some(source) = detection.hocr_for_tables.zip(detection.hocr_document)
+            && let Some(cells) = full_scan_table::recover_dot_leader_rows(
+                tsv_data,
+                detection.content,
+                bbox,
+                &self.security_limits,
+                source,
+                raster,
+            )
+        {
+            return RegionGrid {
+                cells: Some(cells),
+                claims_page: true,
+            };
+        }
+        RegionGrid {
+            cells: stock,
+            claims_page: false,
+        }
+    }
+
     /// Restore lines the dictionary filter rejected inside a table region when the region stayed
     /// text, since the filter has no say over them.
     fn restore_rejected_regions(
@@ -3747,7 +3797,7 @@ struct PageAssembly {
 /// The page and receipts the table phase reads while reconstructing its regions.
 struct TableDetection<'a> {
     api: &'a TesseractAPI,
-    tsv_data: Option<&'a str>,
+    tsv_data: &'a str,
     table_mark_symbols: &'a [xberg_tesseract::WordSymbols],
     dimensions: (u32, u32),
     apply_pix_preprocessing: bool,
@@ -3768,8 +3818,25 @@ struct DetectedTables {
     fully_claimed: bool,
 }
 
+impl DetectedTables {
+    fn empty() -> Self {
+        Self {
+            tables: Vec::new(),
+            rejected_regions: Vec::new(),
+            fully_claimed: false,
+        }
+    }
+}
+
+/// The cells a region's grid proof accepted, and whether it accounts for the whole page's text.
+struct RegionGrid {
+    cells: Option<Vec<Vec<String>>>,
+    claims_page: bool,
+}
+
 /// What one candidate table region produced: a table, the words whose restoration it rejected, and
 /// whether its grid proof claimed the whole page.
+#[derive(Default)]
 struct RegionOutcome {
     table: Option<OcrTable>,
     rejected_boxes: Option<Vec<HocrWord>>,
@@ -5747,6 +5814,52 @@ mod tests {
         assert_eq!(region.column, 1);
         assert_eq!((region.left, region.top), (1_659, 380));
         assert_eq!((region.width, region.height), (170, 80));
+    }
+
+    #[test]
+    fn quantity_retry_candidate_requires_one_detected_row_per_table_row() {
+        let words = vec![
+            invoice_word("DESCRIPTION", 279, 100, 250),
+            invoice_word("QTY", 1_699, 100, 90),
+            invoice_word("Espresso Beans", 279, 200, 400),
+            invoice_word("10", 1_740, 200, 48),
+            invoice_word("Cups", 279, 300, 100),
+            invoice_word("200", 1_709, 300, 75),
+            invoice_word("Cleaning Tablets", 279, 400, 360),
+        ];
+        let table = vec![
+            vec!["DESCRIPTION", "QTY"],
+            vec!["Espresso Beans", "10"],
+            vec!["Cups", "200"],
+            vec!["Cleaning Tablets", ""],
+        ]
+        .into_iter()
+        .map(|row| row.into_iter().map(str::to_string).collect())
+        .collect::<Vec<Vec<String>>>();
+        let column_positions = [279, 1_709];
+        let config = TesseractConfig::default();
+
+        let region = quantity_retry_candidate(&words, &table, &column_positions, &config, (3_200, 4_089))
+            .expect("four detected word rows match four table rows");
+        assert_eq!((region.row, region.column), (3, 1));
+
+        let mut extra_row = words.clone();
+        extra_row.push(invoice_word("Total", 279, 500, 100));
+        assert!(
+            quantity_retry_candidate(&extra_row, &table, &column_positions, &config, (3_200, 4_089)).is_none(),
+            "a fifth detected row must not retry a four-row table"
+        );
+        assert!(
+            quantity_retry_candidate(
+                &words[..words.len() - 1],
+                &table,
+                &column_positions,
+                &config,
+                (3_200, 4_089)
+            )
+            .is_none(),
+            "a table row with no detected words must not retry"
+        );
     }
 
     #[test]
