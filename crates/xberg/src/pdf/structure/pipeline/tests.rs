@@ -4946,6 +4946,44 @@ fn a_bare_label_carries_a_script_run_but_a_bullet_glyph_does_not() {
     assert!(!ParagraphVisualRow::new(&bullet).carries_script(&script));
 }
 
+/// A producer may draw a raised mark before the run it annotates. The reach a mark earns is
+/// measured on the mark itself, so a lone digit must not borrow the base's advance -- a base is
+/// always wide, and the wider 0.5em reach would let in a lone mark set for the 0.35em one.
+#[test]
+fn a_raised_mark_drawn_before_its_base_is_measured_by_its_own_advance() {
+    let run = |text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32| SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline_y - font_size,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+        ocr_heading_spans: None,
+    };
+    // Word's ordinal rise: 0.38em, past a lone mark's 0.35em reach and inside the row's 0.5em.
+    let base = run("Item", 100.0, 30.0, 12.0, 700.0);
+    let mark = run("1", 130.0, 4.02, 8.04, 704.56);
+    let early_mark = run("1", 100.0, 4.02, 8.04, 704.56);
+    let early_base = run("Item", 104.0, 30.0, 12.0, 700.0);
+    let suffix = run("nd", 100.0, 8.16, 8.04, 704.56);
+
+    assert!(!is_script_run_of(&base, &mark), "a lone mark keeps the narrower reach");
+    assert!(
+        !is_script_run_of(&early_mark, &early_base),
+        "the base's own advance must not buy the lone mark the wider reach"
+    );
+    assert!(
+        is_script_run_of(&suffix, &early_base),
+        "a multi-glyph run keeps the wider reach from either side of the pair"
+    );
+}
+
 /// A producer may draw an item's body before its bullet. The bullet then follows the body's
 /// first line in segment order, was taken for the start of the next printed line, and made the
 /// item's wrapped line a separate paragraph.

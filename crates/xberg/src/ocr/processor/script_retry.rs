@@ -123,7 +123,9 @@ mod model_files;
 mod vertical_japanese;
 pub(super) use crate::core::extractor::cacheability::request_model_digest as hash_model_file;
 pub(super) use model_files::RetryModelFiles;
-#[cfg(test)]
+// The tests that observe shared model directories only build with the bundled English models,
+// so the re-export is gated on the same feature; otherwise `ocr` alone sees it as unused. ~keep
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) use model_files::{live_directory, remove_shared_model_directories};
 
 #[derive(Clone, Debug)]

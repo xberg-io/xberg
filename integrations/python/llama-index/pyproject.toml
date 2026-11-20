@@ -22,6 +22,9 @@ dev = [
   "pytest-cov>=7.1.0",
 ]
 
+[tool.uv.sources]
+xberg = { path = "../../../packages/python", editable = true }
+
 [tool.pyrefly]
 python-version = "3.11"
 preset = "strict"
