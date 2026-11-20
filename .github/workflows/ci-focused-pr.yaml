@@ -16,6 +16,10 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "deny.toml"
+      # cargo-deny merges these even when --config is passed; a commit here changes the policy. ~keep
+      - "deny.exceptions.toml"
+      - ".deny.exceptions.toml"
+      - ".config/deny.exceptions.toml"
       - "scripts/ci/check-licenses.sh"
       - "rust-toolchain.toml"
       - "mise.toml"
@@ -39,6 +43,10 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "deny.toml"
+      # cargo-deny merges these even when --config is passed; a commit here changes the policy. ~keep
+      - "deny.exceptions.toml"
+      - ".deny.exceptions.toml"
+      - ".config/deny.exceptions.toml"
       - "scripts/ci/check-licenses.sh"
       - "rust-toolchain.toml"
       - "mise.toml"

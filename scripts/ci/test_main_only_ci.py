@@ -146,6 +146,7 @@ class MainOnlyCiTests(unittest.TestCase):
         triggers = workflow.get("on", workflow.get(True))
         for event in ("pull_request", "push"):
             assert "packages/**" in triggers[event]["paths"]
+            assert "deny.exceptions.toml" in triggers[event]["paths"]
 
     def test_python_callback_smoke_rejects_automatic_runs(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())

@@ -64,10 +64,33 @@ config="${XBERG_DENY_CONFIG:-deny.toml}"
   echo "error: license config $config does not exist" >&2
   exit 1
 }
-config_args=()
-if [ -n "${XBERG_DENY_CONFIG:-}" ]; then
-  config_args=(--config "$XBERG_DENY_CONFIG")
-fi
+# Always pass the config explicitly. Expanding an empty array is an unbound-variable error under
+# the bash 3.2 that macOS still ships with `set -u`, and naming the file makes the policy every
+# graph is checked against unambiguous.
+config_args=(--config "$config")
+
+# cargo-deny 0.21.0 merges a project-local exceptions file it discovers by walking up from the
+# audited manifest, unconditionally and even when `--config` is passed (see
+# KrateContext::get_local_exceptions_path and ValidConfig::load). Those entries extend the allow
+# list, so a committed `deny.exceptions.toml` would silently excuse a license this policy rejects
+# and would never be reported as an unmatched exception. Refuse any file the graphs would load.
+reject_local_exceptions() {
+  local label=$1 manifest=$2 dir candidate
+  dir="$(cd "$(dirname "$manifest")" && pwd -P)"
+  while :; do
+    for candidate in deny.exceptions.toml .deny.exceptions.toml .cargo/deny.exceptions.toml .config/deny.exceptions.toml; do
+      if [ -e "$dir/$candidate" ]; then
+        echo "error: $label: cargo-deny would load local license exceptions from $dir/$candidate;" \
+          "remove it and declare the exception in $config" >&2
+        exit 1
+      fi
+    done
+    if [ "$dir" = "/" ]; then
+      break
+    fi
+    dir="$(dirname "$dir")"
+  done
+}
 
 # Crates that ship a license file but no `license` field in their manifest. cargo-deny detects
 # the license from the file and only warns, so these would pass unexamined; `-D no-license-field`
@@ -94,6 +117,7 @@ for row in "${graphs[@]}"; do
     echo "error: $label: manifest $manifest does not exist" >&2
     exit 1
   }
+  reject_local_exceptions "$label" "$manifest"
 
   args=(--manifest-path "$manifest" --locked "${config_args[@]}")
   if [ -n "$features" ]; then

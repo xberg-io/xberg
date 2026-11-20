@@ -80,6 +80,29 @@ EOF
 	xberg_assert_output_contains "not-a-real-crate"
 }
 
+@test "license gate should reject a local exceptions file that cargo-deny would merge" {
+	make_package gpl-only GPL-3.0-only
+	make_root "$SCRATCH/gpl" gpl-only
+	printf '[licenses]\nallow = ["MIT"]\n' >"$SCRATCH/deny.toml"
+	printf 'exceptions = [{ allow = ["GPL-3.0-only"], crate = "gpl-only" }]\n' \
+		>"$SCRATCH/gpl/deny.exceptions.toml"
+
+	# The claim the guard exists for: passing --config does not stop cargo-deny from merging the
+	# project-local exceptions file, and the merged entry turns the rejected GPL dependency into
+	# a pass. If this assertion ever fails, cargo-deny stopped discovering these files.
+	run cargo deny --config "$SCRATCH/deny.toml" --manifest-path "$SCRATCH/gpl/Cargo.toml" --locked check licenses
+	xberg_assert_status 0
+
+	export XBERG_DENY_CONFIG="$SCRATCH/deny.toml"
+	export XBERG_LICENSE_GRAPHS="gpl control|$SCRATCH/gpl/Cargo.toml||"
+
+	run bash "$REPOSITORY_ROOT/scripts/ci/check-licenses.sh"
+
+	xberg_assert_status 1
+	xberg_assert_output_contains "gpl control: cargo-deny would load local license exceptions"
+	xberg_assert_output_contains "deny.exceptions.toml"
+}
+
 @test "license gate should pass a clean graph that declares no exceptions" {
 	make_package mit-only MIT
 	make_root "$SCRATCH/mit" mit-only
