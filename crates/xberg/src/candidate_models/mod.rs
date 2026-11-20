@@ -2,10 +2,15 @@
 //! owned by `xberg-io`.
 //!
 //! Every entry is an unmodified copy of a pinned upstream export, pinned here by the immutable
-//! commit of the owned repository plus the SHA-256 of every file. No entry is a default,
+//! commit of the owned repository plus the SHA-256 and size of every file. No entry is a default,
 //! a supported preset or a bundling decision: each stays experimental until the qualification in
 //! xberg-io/xberg#2334 passes. The inventory only names and pins artifacts; consumers acquire
 //! them through the shared model download and cache infrastructure.
+//!
+//! [`inventory.json`](inventory.json) is the canonical record: model-level repository, revision,
+//! license and provenance, and per-file path, SHA-256 and size. [`CandidateTask::models`] selects
+//! one task's models and [`CandidateModel::task_files`] the files a task actually needs, so a
+//! consumer never downloads the graphs or presets of another task.
 //!
 //! The NLI-MiniLM2 candidate carries a license caveat: the cross-encoder declares Apache-2.0, but
 //! its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license on
@@ -13,7 +18,9 @@
 //!
 //! The module is crate-private: the inventory is not a stable public API.
 
-use std::path::Path;
+use std::path::{Component, Path};
+
+use serde::Deserialize;
 
 /// Commit of `xberg-io/classification-models` every classification candidate is pinned to.
 pub const CLASSIFICATION_MODELS_REVISION: &str = "a29f2096c723fd39c45b7c21690ea0318866bd0b";
@@ -25,8 +32,13 @@ pub(crate) const CLASSIFICATION_SHA256_MANIFEST: &str = include_str!("classifica
 /// `<sha256>  <repo-relative path>` lines for `xberg-io/captioning-models`.
 pub(crate) const CAPTIONING_SHA256_MANIFEST: &str = include_str!("captioning.sha256sum");
 
+/// Canonical per-file inventory, including the sizes the SHA-256 manifests cannot express.
+const INVENTORY_JSON: &str = include_str!("inventory.json");
+const INVENTORY_SCHEMA_VERSION: u32 = 1;
+
 /// Task a candidate model is evaluated for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[cfg_attr(alef, alef(skip))]
 pub enum CandidateTask {
     /// Zero-shot classification through natural-language inference.
@@ -36,7 +48,8 @@ pub enum CandidateTask {
 }
 
 /// Qualification state of a candidate. There is deliberately no supported variant yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[cfg_attr(alef, alef(skip))]
 pub enum CandidateStatus {
     /// Staged for evaluation only; not qualified, not a default, not bundled.
@@ -51,6 +64,151 @@ pub struct CandidateFile {
     pub path: String,
     /// Lowercase hexadecimal SHA-256 of the file.
     pub sha256: String,
+    /// Exact size of the file in bytes.
+    pub size_bytes: u64,
+    /// Owned repository the file is fetched from.
+    pub repository: String,
+    /// Immutable commit the file is fetched at.
+    pub revision: String,
+    /// SPDX license identifier of the bytes in this file.
+    pub license: String,
+}
+
+impl CandidateFile {
+    /// Stable `repository@revision:path` label used in every verification error.
+    pub fn label(&self) -> String {
+        format!("{}@{}:{}", self.repository, self.revision, self.path)
+    }
+
+    /// Verifies a local copy of this file: size first, then SHA-256. A missing, truncated,
+    /// corrupted or other-revision file fails with an error naming the pinned source.
+    pub fn verify(&self, local: &Path) -> Result<(), String> {
+        let metadata = match std::fs::metadata(local) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!(
+                    "Missing pinned artifact {} at {}",
+                    self.label(),
+                    local.display()
+                ));
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Failed to inspect pinned artifact {} at {}: {error}",
+                    self.label(),
+                    local.display()
+                ));
+            }
+        };
+        if !metadata.is_file() {
+            return Err(format!(
+                "Pinned artifact {} at {} is not a regular file",
+                self.label(),
+                local.display()
+            ));
+        }
+        if metadata.len() != self.size_bytes {
+            return Err(format!(
+                "Size mismatch for {}: expected {} bytes, got {}",
+                self.label(),
+                self.size_bytes,
+                metadata.len()
+            ));
+        }
+        crate::model_download::verify_sha256(local, &self.sha256, &self.label())
+    }
+}
+
+/// One model of the checked-in inventory document.
+#[derive(Debug, Deserialize)]
+struct InventoryModel {
+    id: String,
+    task: CandidateTask,
+    status: CandidateStatus,
+    repository: String,
+    revision: String,
+    upstream_repository: String,
+    upstream_revision: String,
+    license: String,
+    #[serde(default)]
+    license_caveat: Option<String>,
+    #[serde(default)]
+    provenance: String,
+    files: Vec<InventoryFile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct InventoryFile {
+    path: String,
+    sha256: String,
+    size_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct InventoryDocument {
+    schema_version: u32,
+    models: Vec<InventoryModel>,
+}
+
+/// Parses and validates the checked-in inventory. Fails closed on a malformed document so a
+/// corrupted or hand-edited pin cannot silently become an unpinned artifact.
+fn inventory() -> Result<InventoryDocument, String> {
+    let document: InventoryDocument =
+        serde_json::from_str(INVENTORY_JSON).map_err(|error| format!("candidate inventory is malformed: {error}"))?;
+    validate_inventory(&document)?;
+    Ok(document)
+}
+
+fn validate_inventory(document: &InventoryDocument) -> Result<(), String> {
+    if document.schema_version != INVENTORY_SCHEMA_VERSION {
+        return Err(format!(
+            "candidate inventory schema {} is unsupported; expected {}",
+            document.schema_version, INVENTORY_SCHEMA_VERSION
+        ));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for model in &document.models {
+        if model.id.is_empty() || !seen.insert(model.id.as_str()) {
+            return Err(format!(
+                "candidate inventory has an empty or duplicate model id: {:?}",
+                model.id
+            ));
+        }
+        if model.files.is_empty() {
+            return Err(format!("candidate inventory model {} has no files", model.id));
+        }
+        for file in &model.files {
+            if !file.path.starts_with(&format!("{}/", model.id)) || !is_relative_artifact_path(&file.path) {
+                return Err(format!(
+                    "candidate inventory file {} does not belong to model {}",
+                    file.path, model.id
+                ));
+            }
+            if !is_sha256(&file.sha256) {
+                return Err(format!(
+                    "candidate inventory file {} has no lowercase SHA-256",
+                    file.path
+                ));
+            }
+            if file.size_bytes == 0 {
+                return Err(format!("candidate inventory file {} has no size", file.path));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn is_relative_artifact_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains(['\\', ':'])
+        && !Path::new(path).is_absolute()
+        && Path::new(path)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
 /// A candidate model staged on an owned Hugging Face repository.
@@ -173,6 +331,14 @@ fn is_commit_hash(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
+impl CandidateTask {
+    /// Every staged candidate for this task, in inventory order. Selecting a task never returns
+    /// another task's models, so a consumer downloads only what it can run.
+    pub fn models(self) -> Vec<&'static CandidateModel> {
+        CANDIDATE_MODELS.iter().filter(|model| model.task == self).collect()
+    }
+}
+
 impl CandidateModel {
     /// Looks a candidate up by its identifier.
     pub fn find(id: &str) -> Option<&'static CandidateModel> {
@@ -192,13 +358,58 @@ impl CandidateModel {
         Ok(())
     }
 
-    /// Every pinned file of this model, with its SHA-256, sorted by path.
-    pub fn files(&self) -> Result<Vec<CandidateFile>, String> {
-        let prefix = format!("{}/", self.id);
-        let mut files: Vec<CandidateFile> = crate::model_download::parse_sha256_manifest(self.sha256_manifest)?
+    /// The inventory record for this model, validated against the descriptor above. A record that
+    /// names a different repository, revision, task, status, license or upstream fails closed.
+    fn inventory_model(&self) -> Result<InventoryModel, String> {
+        let document = inventory()?;
+        let entry = document
+            .models
             .into_iter()
-            .filter(|(path, _)| path.starts_with(&prefix))
-            .map(|(path, sha256)| CandidateFile { path, sha256 })
+            .find(|entry| entry.id == self.id)
+            .ok_or_else(|| format!("{} is not recorded in the candidate inventory", self.id))?;
+        let mismatches = [
+            ("task", format!("{:?}", entry.task), format!("{:?}", self.task)),
+            ("status", format!("{:?}", entry.status), format!("{:?}", self.status)),
+            ("repository", entry.repository.clone(), self.repository.to_owned()),
+            ("revision", entry.revision.clone(), self.revision.to_owned()),
+            (
+                "upstream repository",
+                entry.upstream_repository.clone(),
+                self.upstream_repository.to_owned(),
+            ),
+            (
+                "upstream revision",
+                entry.upstream_revision.clone(),
+                self.upstream_revision.to_owned(),
+            ),
+            ("license", entry.license.clone(), self.license.to_owned()),
+        ];
+        for (field, recorded, expected) in mismatches {
+            if recorded != expected {
+                return Err(format!(
+                    "{} inventory {field} {recorded:?} does not match the descriptor's {expected:?}",
+                    self.id
+                ));
+            }
+        }
+        Ok(entry)
+    }
+
+    /// Every pinned file of this model, with its SHA-256, size, repository, revision and license,
+    /// sorted by path.
+    pub fn files(&self) -> Result<Vec<CandidateFile>, String> {
+        let entry = self.inventory_model()?;
+        let mut files: Vec<CandidateFile> = entry
+            .files
+            .into_iter()
+            .map(|file| CandidateFile {
+                path: file.path,
+                sha256: file.sha256,
+                size_bytes: file.size_bytes,
+                repository: entry.repository.clone(),
+                revision: entry.revision.clone(),
+                license: entry.license.clone(),
+            })
             .collect();
         if files.is_empty() {
             return Err(format!("{} has no pinned files", self.id));
@@ -207,23 +418,109 @@ impl CandidateModel {
         Ok(files)
     }
 
-    /// Verifies `local` against the SHA-256 pin for `relative` (a path inside the model directory)
-    /// with the shared download check. A corrupted, truncated or other-revision file is rejected.
+    /// The recorded export and quantization provenance: upstream export origin and the concrete
+    /// graph variants staged in the owned repository.
+    pub fn provenance(&self) -> Result<String, String> {
+        Ok(self.inventory_model()?.provenance)
+    }
+
+    /// The subset of pinned files this task needs: the host's quantized NLI graph, or the
+    /// captioning graphs, plus the tokenizer/processor/configuration companions and the upstream
+    /// `LICENSE` and model card. Quantized alternatives and oversized graphs stay optional.
+    pub fn task_files(&self) -> Result<Vec<CandidateFile>, String> {
+        let mut wanted: Vec<String> = Vec::new();
+        if self.task == CandidateTask::ZeroShotClassification {
+            let graph = nli_minilm2_l6_h768_graph().ok_or_else(|| {
+                format!(
+                    "{} has no quantized graph for {} and the fp32 graph exceeds the adapter's cap",
+                    self.id,
+                    std::env::consts::ARCH
+                )
+            })?;
+            if !self.required_files.contains(&graph) {
+                wanted.push(graph.to_owned());
+            }
+        }
+        wanted.extend(self.required_files.iter().map(|file| (*file).to_owned()));
+        wanted.extend(["LICENSE".to_owned(), "UPSTREAM_README.md".to_owned()]);
+        let files = self.files()?;
+        wanted.sort_unstable();
+        wanted.dedup();
+        wanted
+            .into_iter()
+            .map(|relative| {
+                let path = format!("{}/{relative}", self.id);
+                files
+                    .iter()
+                    .find(|file| file.path == path)
+                    .cloned()
+                    .ok_or_else(|| format!("{path} is not pinned for {}", self.id))
+            })
+            .collect()
+    }
+
+    /// Pinned files that are not part of [`Self::task_files`]: alternative quantizations and
+    /// graphs a consumer only needs when it deliberately selects them.
+    pub fn optional_files(&self) -> Result<Vec<CandidateFile>, String> {
+        let required: std::collections::BTreeSet<String> =
+            self.task_files()?.into_iter().map(|file| file.path).collect();
+        Ok(self
+            .files()?
+            .into_iter()
+            .filter(|file| !required.contains(&file.path))
+            .collect())
+    }
+
+    /// Verifies `local` against the size and SHA-256 pin for `relative` (a path inside the model
+    /// directory). A corrupted, truncated or missing file is rejected.
     pub fn verify_file(&self, relative: &str, local: &Path) -> Result<(), String> {
+        self.verify_downloaded_at(self.repository, self.revision, relative, local)
+    }
+
+    /// Verifies a file that a download claims to have fetched from `repository` at `revision`.
+    /// A wrong repository or revision fails before any byte is read, so a floating or stale
+    /// revision cannot masquerade as the pin.
+    pub fn verify_downloaded_at(
+        &self,
+        repository: &str,
+        revision: &str,
+        relative: &str,
+        local: &Path,
+    ) -> Result<(), String> {
+        if repository != self.repository {
+            return Err(format!(
+                "{} was fetched from {repository}, but the inventory pins {}",
+                self.id, self.repository
+            ));
+        }
+        if revision != self.revision {
+            return Err(format!(
+                "{} revision {revision:?} is not the pinned immutable revision {}",
+                self.id, self.revision
+            ));
+        }
         let path = format!("{}/{relative}", self.id);
         let pin = self
             .files()?
             .into_iter()
             .find(|file| file.path == path)
             .ok_or_else(|| format!("{path} is not pinned for {}", self.id))?;
-        crate::model_download::verify_sha256(local, &pin.sha256, &pin.path)
+        pin.verify(local)
+    }
+
+    /// Verifies a downloaded snapshot root (`{root}/{id}/...`) against every file the task needs.
+    /// The first missing, truncated or corrupted artifact fails with its pinned source.
+    pub fn verify_downloaded_set(&self, root: &Path) -> Result<(), String> {
+        for file in self.task_files()? {
+            file.verify(&root.join(&file.path))?;
+        }
+        Ok(())
     }
 }
 
 /// Graph the NLI descriptor selects on this architecture. The fp32 graph (328,649,957 bytes) exceeds
 /// the adapter's graph size cap, so only the dynamically quantized graph for the host ISA is usable.
 /// x86_64 selects the AVX2 graph without checking the CPU for AVX2 support.
-#[cfg(feature = "classification-onnx")]
 pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
     if cfg!(target_arch = "aarch64") {
         Some("model_qint8_arm64.onnx")
@@ -262,15 +559,15 @@ pub(crate) fn nli_classifier_for(
     model: &CandidateModel,
     graph: &str,
 ) -> Result<crate::local_classification::LocalNliModel, String> {
-    let files = model.files()?;
+    let pins: std::collections::BTreeMap<String, String> =
+        crate::model_download::parse_sha256_manifest(model.sha256_manifest)?
+            .into_iter()
+            .collect();
     let mut manifest = String::new();
     for required in std::iter::once(graph).chain(model.required_files.iter().copied()) {
         let path = format!("{}/{required}", model.id);
-        let pin = files
-            .iter()
-            .find(|file| file.path == path)
-            .ok_or_else(|| format!("{path} is not pinned"))?;
-        manifest.push_str(&format!("{}  {path}\n", pin.sha256));
+        let sha256 = pins.get(&path).ok_or_else(|| format!("{path} is not pinned"))?;
+        manifest.push_str(&format!("{sha256}  {path}\n"));
     }
     Ok(crate::local_classification::LocalNliModel {
         repository: model.repository.to_owned(),
