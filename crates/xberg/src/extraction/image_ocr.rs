@@ -38,14 +38,33 @@ pub(crate) mod embedded_rows;
 ))]
 pub(crate) mod pdf_gap;
 
-/// One image queued for OCR: its index into `images`, its raw bytes, and the per-image
-/// `OcrConfig` clone (output format/acceleration/security limits applied) to hand the backend.
+/// Images queued for one OCR read: every occurrence of the same image bytes, the bytes
+/// themselves, and the per-image `OcrConfig` clone (output format/acceleration/security limits
+/// applied) to hand the backend.
+///
+/// A PDF paints the same image XObject on every page it appears on, and extraction yields one
+/// `ExtractedImage` per occurrence. Reading each occurrence again returns the same text for the
+/// same bytes, so identical data shares one read (issue #3260).
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-type PendingOcrTask = (usize, bytes::Bytes, crate::core::config::OcrConfig);
+struct PendingOcrTask {
+    indices: Vec<usize>,
+    data: bytes::Bytes,
+    config: crate::core::config::OcrConfig,
+}
 
-/// The image index, OCR outcome, and whether the task assembled table rows.
+/// The image indices that share the read, OCR outcome, and whether the task assembled table rows.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-type OcrTaskResult = (usize, crate::Result<ExtractedDocument>, bool);
+type OcrTaskResult = (Vec<usize>, crate::Result<ExtractedDocument>, bool);
+
+/// A stable-within-the-process key for image bytes: length plus a fast hash. Callers verify the
+/// bytes before sharing a read, so a collision costs an extra read instead of wrong text.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_bytes_key(data: &[u8]) -> (usize, u64) {
+    use std::hash::Hasher;
+    let mut hasher = ahash::AHasher::default();
+    hasher.write(data);
+    (data.len(), hasher.finish())
+}
 
 /// Process extracted images with OCR if configured.
 ///
@@ -105,15 +124,15 @@ pub(crate) async fn process_images_with_ocr(
     }
 
     while let Some(join_result) = join_set.join_next().await {
-        let (idx, ocr_result, assembled) = join_result.map_err(|e| crate::XbergError::Ocr {
+        let (indices, ocr_result, assembled) = join_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("OCR task panicked: {}", e),
             source: None,
         })?;
 
         if assembled && let Some(repaired) = repaired_rows.as_deref_mut() {
-            repaired.push(idx);
+            repaired.extend(indices.iter().copied());
         }
-        apply_ocr_result(&mut images, idx, ocr_result, ocr_config, warnings);
+        apply_ocr_result(&mut images, &indices, ocr_result, ocr_config, warnings);
 
         if let Some(task) = pending.pop_front() {
             spawn_ocr_task(&mut join_set, task, repaired_rows.is_some());
@@ -181,12 +200,24 @@ fn build_pending_ocr_tasks(
     let acceleration = ocr_config.acceleration.clone();
     let security_limits = config.security_limits.clone();
 
-    let mut pending = std::collections::VecDeque::with_capacity(images.len());
+    let mut pending: std::collections::VecDeque<PendingOcrTask> =
+        std::collections::VecDeque::with_capacity(images.len());
+    let mut groups: ahash::AHashMap<(usize, u64), Vec<usize>> = ahash::AHashMap::new();
     for (idx, image) in images.iter().enumerate() {
         if crate::extraction::metafile::kind(&image.data, &image.format).is_some() {
             continue;
         }
-        let image_data = image.data.clone();
+        let key = image_bytes_key(&image.data);
+        let existing = groups.get(&key).and_then(|candidates| {
+            candidates
+                .iter()
+                .copied()
+                .find(|&group| pending[group].data == image.data)
+        });
+        if let Some(group) = existing {
+            pending[group].indices.push(idx);
+            continue;
+        }
         let mut ocr_config_clone = ocr_config.clone();
         ocr_config_clone.output_format = Some(output_format.clone());
         ocr_config_clone.acceleration = acceleration.clone();
@@ -195,7 +226,12 @@ fn build_pending_ocr_tasks(
         if let Some(limits) = security_limits.clone() {
             ocr_config_clone.security_limits = Some(limits);
         }
-        pending.push_back((idx, image_data, ocr_config_clone));
+        groups.entry(key).or_default().push(pending.len());
+        pending.push_back(PendingOcrTask {
+            indices: vec![idx],
+            data: image.data.clone(),
+            config: ocr_config_clone,
+        });
     }
     pending
 }
@@ -203,7 +239,11 @@ fn build_pending_ocr_tasks(
 /// Spawn one OCR task onto `join_set`, resolving the backend from the registry at spawn time.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: PendingOcrTask, repair_rows: bool) {
-    let (idx, image_data, ocr_config) = task;
+    let PendingOcrTask {
+        indices,
+        data: image_data,
+        config: ocr_config,
+    } = task;
     let worker = async move {
         let (backend, row_backend) = {
             let registry = crate::plugins::registry::get_ocr_backend_registry();
@@ -212,7 +252,7 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
                 Ok(b) => b.clone(),
                 Err(e) => {
                     return (
-                        idx,
+                        indices,
                         Err(crate::XbergError::Ocr {
                             message: format!("OCR backend '{}' not found: {}", ocr_config.backend, e),
                             source: None,
@@ -254,7 +294,7 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
         } else {
             false
         };
-        (idx, ocr_result, assembled)
+        (indices, ocr_result, assembled)
     };
     #[cfg(not(target_arch = "wasm32"))]
     let worker = crate::core::extractor::cacheability::inherit(worker);
@@ -265,32 +305,36 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn apply_ocr_result(
     images: &mut [ExtractedImage],
-    idx: usize,
+    indices: &[usize],
     ocr_result: crate::Result<ExtractedDocument>,
     ocr_config: &crate::core::config::OcrConfig,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) {
     match ocr_result {
         Ok(extraction_result) => {
-            // Keep the backend's result whole. Rebuilding it field-by-field silently
-            // dropped everything the backend populated besides content/mime_type/
-            // ocr_elements — tables, metadata (OCR language, PSM, confidence),
-            // formulas, llm_usage (VLM cost accounting), detected_languages and
-            // processing_warnings. The PDF inline-image path already stores the
-            // backend result unmodified; mirror it here. ~keep
-            let mut ocr_document = extraction_result;
-            // Recursion guard: OCR output must never carry nested images, or an
-            // archive/recursive consumer would extract images out of OCR output. ~keep
-            ocr_document.images = None;
-            ocr_config.apply_public_element_policy(&mut ocr_document);
-            images[idx].ocr_result = Some(Box::new(ocr_document));
+            for &idx in indices {
+                // Keep the backend's result whole. Rebuilding it field-by-field silently
+                // dropped everything the backend populated besides content/mime_type/
+                // ocr_elements — tables, metadata (OCR language, PSM, confidence),
+                // formulas, llm_usage (VLM cost accounting), detected_languages and
+                // processing_warnings. The PDF inline-image path already stores the
+                // backend result unmodified; mirror it here. ~keep
+                let mut ocr_document = extraction_result.clone();
+                // Recursion guard: OCR output must never carry nested images, or an
+                // archive/recursive consumer would extract images out of OCR output. ~keep
+                ocr_document.images = None;
+                ocr_config.apply_public_element_policy(&mut ocr_document);
+                images[idx].ocr_result = Some(Box::new(ocr_document));
+            }
         }
         Err(e) => {
-            warnings.push(crate::types::ProcessingWarning {
-                source: std::borrow::Cow::Borrowed("image_ocr"),
-                message: std::borrow::Cow::Owned(format!("Image {} OCR failed: {}", idx, e)),
-            });
-            images[idx].ocr_result = None;
+            for &idx in indices {
+                warnings.push(crate::types::ProcessingWarning {
+                    source: std::borrow::Cow::Borrowed("image_ocr"),
+                    message: std::borrow::Cow::Owned(format!("Image {} OCR failed: {}", idx, e)),
+                });
+                images[idx].ocr_result = None;
+            }
         }
     }
 }
@@ -550,9 +594,11 @@ mod tests {
             }),
             ..Default::default()
         };
-        let images = (0..6)
-            .map(|_| ExtractedImage {
-                data: Bytes::from_static(b"image"),
+        // Distinct bytes per image: identical bytes share one read (issue #3260), so a
+        // repeated placeholder would count one task instead of the spawned batch size.
+        let images = (0..6u8)
+            .map(|index| ExtractedImage {
+                data: Bytes::from(vec![index]),
                 ..Default::default()
             })
             .collect();
@@ -574,6 +620,107 @@ mod tests {
             "expected the general thread budget (2), not the larger VLM max_concurrency (6), \
              to bound the number of image OCR tasks started concurrently"
         );
+    }
+
+    const SHARED_BYTES_BACKEND_NAME: &str = "shared-image-bytes-ocr-test-backend";
+
+    struct SharedBytesBackend {
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl Plugin for SharedBytesBackend {
+        fn name(&self) -> &str {
+            SHARED_BYTES_BACKEND_NAME
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl OcrBackend for SharedBytesBackend {
+        async fn process_image(&self, image_bytes: &[u8], _config: &OcrConfig) -> crate::Result<ExtractedDocument> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ExtractedDocument {
+                content: String::from_utf8_lossy(image_bytes).into_owned(),
+                ..Default::default()
+            })
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        fn backend_type(&self) -> OcrBackendType {
+            OcrBackendType::Custom
+        }
+    }
+
+    /// Issue #3260: a PDF paints one image XObject on every page, and extraction yields one
+    /// `ExtractedImage` per occurrence. Identical bytes must share one backend read, and every
+    /// occurrence must still carry the result.
+    #[tokio::test]
+    async fn identical_image_bytes_share_one_ocr_read() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        crate::plugins::register_ocr_backend(Arc::new(SharedBytesBackend {
+            calls: Arc::clone(&calls),
+        }))
+        .expect("register shared-bytes OCR backend");
+        let _registration = RegistrationGuard(SHARED_BYTES_BACKEND_NAME);
+
+        let config = crate::core::config::ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: SHARED_BYTES_BACKEND_NAME.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        // The two byte strings have the same length, so only their content can keep them apart.
+        let images = [
+            b"first image".as_slice(),
+            b"first image",
+            b"second imag",
+            b"first image",
+        ]
+        .into_iter()
+        .map(|data| ExtractedImage {
+            data: Bytes::copy_from_slice(data),
+            ..Default::default()
+        })
+        .collect();
+        let mut warnings = Vec::new();
+
+        let images = process_images_with_ocr(images, &config, &mut warnings, None)
+            .await
+            .expect("embedded-image OCR must succeed");
+
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "identical image bytes must be read once, distinct bytes once each"
+        );
+        let contents: Vec<&str> = images
+            .iter()
+            .map(|image| {
+                image
+                    .ocr_result
+                    .as_ref()
+                    .expect("every occurrence keeps the shared read")
+                    .content
+                    .as_str()
+            })
+            .collect();
+        assert_eq!(contents, ["first image", "first image", "second imag", "first image"]);
+        assert!(warnings.is_empty());
     }
 
     #[tokio::test]
