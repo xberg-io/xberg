@@ -809,6 +809,23 @@ jobs:
           "$venv_python" scripts/ci/smoke_test_python_wheel.py \
             scripts/ci/fixtures/musl-python-smoke.pdf "XBERG MUSL SMOKE 490"
 
+      # The wheel bundles the libheif/libde265/libaom closure and links libwpd; PEP 639 puts
+      # license files under .dist-info/licenses, which is also where the shared
+      # verify-package-contents allowlist expects them. `inject` rewrites RECORD, then
+      # `check` reopens the final bytes. ~keep
+      - name: Inject and verify canonical notices (wheel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(wheelhouse/*.whl)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one wheel in wheelhouse, found ${#archives[@]}"; exit 1;
+          }
+          python="${{ runner.os == 'Windows' && 'python' || 'python3' }}"
+          "$python" scripts/ci/package-notices.py inject --format wheel --expected-count 1 "${archives[@]}"
+          "$python" scripts/ci/package-notices.py check --format wheel --expected-count 1 "${archives[@]}"
+
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
@@ -878,6 +895,20 @@ jobs:
           wheel="$(find build-output -name '*.whl' | head -n1)"
           bash scripts/ci/smoke-test-musl-python-wheel.sh "$wheel"
 
+      - name: Inject and verify canonical notices (wheel)
+        run: |
+          set -euo pipefail
+          # The local buildx exporter writes build-output as root; the injection rewrites the
+          # wheel in place, so hand the tree to the runner first.
+          sudo chown -R "$(id -u):$(id -g)" build-output
+          shopt -s nullglob
+          archives=(build-output/*.whl)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one musl wheel, found ${#archives[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format wheel --expected-count 1 "${archives[@]}"
+          python3 scripts/ci/package-notices.py check --format wheel --expected-count 1 "${archives[@]}"
+
       - uses: actions/upload-artifact@v7
         with:
           name: python-wheels-musl-${{ matrix.arch }}
@@ -916,6 +947,17 @@ jobs:
         with:
           output-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+
+      - name: Inject and verify canonical notices (sdist)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/*.tar.gz)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one sdist, found ${#archives[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format sdist --expected-count 1 "${archives[@]}"
+          python3 scripts/ci/package-notices.py check --format sdist --expected-count 1 "${archives[@]}"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1461,8 +1503,13 @@ jobs:
             # of the bundle -- native `ocr` is used instead) and `reranker`/`late-interaction`
             # (the ORT-backed engines; `windows-gnu-target` keeps only their ORT-free
             # `reranker-presets`/`late-interaction-presets` siblings, since MinGW has no ORT
-            # prebuilt). `heic` is already excluded from xberg-rb's default via alef.toml's
-            # `excluded_default_features`. Adding a new xberg-rb feature later means adding it
+            # prebuilt). `excluded_default_features = ["heic"]` in alef.toml only keeps `heic`
+            # out of xberg-rb's own default list; it does not make the released gems heic-free.
+            # The native crate's non-Windows, non-macOS-x86_64 `xberg` dependency requests
+            # `full`, which includes `heic` and `wordperfect`, so the Linux and macOS arm64 gems
+            # link libheif (LGPL) and libwpd/librevenge (MPL-2.0) and ship their notices. Only
+            # this Windows leg and the macOS x86_64 leg (macos-intel-target = full-no-heic) are
+            # heic-free. Adding a new xberg-rb feature later means adding it
             # here too whenever `windows-gnu-target` (or its core feature) also carries it. ~keep
             ruby_cargo_args: --no-default-features --features api,api-types,auto-rotate-types,captioning,chunking,chunking-tokenizers,classification,diff,embedding-presets,heuristics,html,keywords-rake,keywords-yake,late-interaction-presets,layout-types,liter-llm,markdown-footnotes,mcp,ocr,office,paddle-ocr-types,pdf,presets,quality,redaction,redaction-rehydrate,reranker-presets,sparse-embedding-presets,svg,tokio-runtime,transcription-types,tree-sitter,url-config-types,url-ingestion,xml
     steps:
@@ -4761,7 +4808,8 @@ jobs:
             check-cratesio
             publish-crates
 
-      # Only the mise config, so setup-mise installs the locked Ruby. ~keep
+      # Only the mise config plus the notice tooling, so setup-mise installs the locked Ruby and
+      # the gem injection step has its script and canonical files. ~keep
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
@@ -4771,6 +4819,9 @@ jobs:
             mise.toml
             mise*.lock
             mise-tasks
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+            scripts/ci/package-notices.py
 
       - uses: actions/download-artifact@v8
         with:
@@ -4785,6 +4836,21 @@ jobs:
         run: gem update --system
 
       - uses: rubygems/configure-rubygems-credentials@v2.1.0
+
+      # The gem's extension asks the core crate for `full` on Linux/macOS, so the binary
+      # links libheif (LGPL) and libwpd/librevenge (MPL-2.0). Ship the canonical notice set
+      # inside data.tar.gz and refresh checksums.yaml.gz, which RubyGems verifies on install.
+      - name: Inject and verify canonical notices (gem)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/rubygems-*/*.gem)
+          [ "${#archives[@]}" -eq 4 ] || {
+            echo "::error::expected 4 platform gems, found ${#archives[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format gem --expected-count 4 "${archives[@]}"
+          python3 scripts/ci/package-notices.py check --format gem --expected-count 4 "${archives[@]}"
 
       - name: Verify Ruby gem package contents
         uses: xberg-io/actions/verify-package-contents@v1
@@ -5217,8 +5283,41 @@ jobs:
 
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          tools: maven
+          tools: java maven
           config-ref: ${{ github.sha }}
+
+      # Maven packs src/main/resources verbatim into the main JAR, so the notice set ships under
+      # META-INF without editing the alef-generated pom. The sources JAR is not covered: its
+      # generated includes filter admits only *.java, so the guarded publication mode in
+      # publish-maven@v1 (which also requires notices in the sources JAR) stays unavailable
+      # until alef can emit the notice files into that archive.
+      - name: Stage canonical notices into the Maven resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packages/java/src/main/resources/META-INF
+          cp LICENSE THIRD_PARTY_LICENSES.md packages/java/src/main/resources/META-INF/
+
+      # The publish action runs `mvn clean deploy` itself, so the uploaded JARs are rebuilt from
+      # these same sources. Build that JAR here first to gate its notice bytes before deploy.
+      - name: Build jar and verify canonical notices before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B --no-transfer-progress -f packages/java/pom.xml -P publish \
+            -DskipTests -Dgpg.skip=true -Djacoco.skip=true package
+          shopt -s nullglob
+          main=()
+          for jar in packages/java/target/xberg-*.jar; do
+            case "$jar" in
+              *-sources.jar | *-javadoc.jar) ;;
+              *) main+=("$jar") ;;
+            esac
+          done
+          [ "${#main[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one main jar, found ${#main[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py check --format jar --expected-count 1 "${main[@]}"
 
       - uses: xberg-io/actions/publish-maven@v1
         with:
@@ -5376,6 +5475,23 @@ jobs:
               -o dist/nuget
           done
         shell: bash
+
+      # A nupkg is a zip; the notice set goes at the package root, beside the LICENSE
+      # dotnet already packs. One meta package plus one runtime package per RID.
+      - name: Inject and verify canonical notices (NuGet)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/nuget/*.nupkg)
+          runtimes=(packages/csharp/Xberg/runtimes/*/)
+          expected=$(( ${#runtimes[@]} + 1 ))
+          [ "${#archives[@]}" -eq "$expected" ] || {
+            echo "::error::expected ${expected} nupkg files (meta + ${#runtimes[@]} runtime packages), found ${#archives[@]}"
+            exit 1
+          }
+          python3 scripts/ci/package-notices.py inject --format nuget --expected-count "$expected" "${archives[@]}"
+          python3 scripts/ci/package-notices.py check --format nuget --expected-count "$expected" "${archives[@]}"
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
@@ -5673,6 +5789,16 @@ jobs:
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
+      - name: Stage canonical notices into the Zig package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/package-notices.py stage packages/zig
+          # Zig materializes only the entries listed in .paths, so asserting the files exist is
+          # not enough: the manifest must expose them to `zig fetch` consumers.
+          grep -q '"LICENSE"' packages/zig/build.zig.zon
+          grep -q '"THIRD_PARTY_LICENSES.md"' packages/zig/build.zig.zon
+
       - uses: xberg-io/actions/publish-zig@v1
         with:
           working-directory: packages/zig
@@ -5700,6 +5826,19 @@ jobs:
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      # The tarball is assembled and uploaded inside the external action, so there is no
+      # pre-upload hook: the action leaves its tarball in RUNNER_TEMP and this reopens those
+      # exact bytes. The stage step above is what puts them in the tarball.
+      - name: Verify canonical notices in the Zig tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/xberg-zig-${{ needs.prepare.outputs.tag }}.tar.gz"
+          [ -f "$tarball" ] || {
+            echo "::error::Zig tarball not found at $tarball"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py check --format zig --expected-count 1 "$tarball"
 
   publish-homebrew-formula:
     name: Update Homebrew formula
