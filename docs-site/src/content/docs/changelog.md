@@ -82,8 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)
-- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+- **pdf:** `pdf_options.extract_vector_geometry` (default `false`) returns each PDF page's vector geometry on `pages[].geometry`: every painted path's subpaths, segments, bounding box, fill colour, stroke colour/width/dash, and Optional Content layer, in page coordinates with the content-stream and Form XObject transforms applied. The coordinate frame is the same one text bounds use, so a label can be matched to the shape it annotates. Off by default because a dense drawing sheet can hold more than ten thousand paths. (#2966)
+- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
 
 ### Changed
 
@@ -91,10 +91,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking (libheif):** In the Rust-only `xberg-libheif` crate, `ImageHandle`, `Track`, `RegionItem` and the `Region` geometry types carry the input lifetime (`ImageHandle<'a>`, `Region<'a>`) and share ownership of the context's native state and input, so they stay valid after the `HeifContext` is dropped but cannot outlive a borrowed input; a live region also keeps the context from loading another image, since libheif resolves its transformed getters against that context's image properties. `Reader` now requires `Send` and is called under a lock, since libheif may read from worker threads. `HeifContext` is no longer `Send`. `read_file`, `read_reader` and `read_bytes` return a usage error while handles derived from the context are alive, and methods that take an `ImageHandle` reject one from another context. The `image` integration buffers its input in memory (up to 512 MiB). The removed internal `ImageHandle::context()` wrapped the shared native context without carrying its source. (#3229)
 - **Breaking (tesseract):** `xberg-tesseract` iterators are tied to the engine and its current recognition result. `PageIterator`, `ResultIterator`, `ChoiceIterator` and `MutableIterator` gain an `<'api>` lifetime and cannot outlive the `TesseractAPI` that produced them. Their `new` constructors and public `handle` fields are removed, and `TesseractAPI::handle` is `pub(crate)`. `ResultIterator::choices()` replaces raw `ChoiceIterator` construction, and `get_mutable_iterator` returns `MutableIterator`. An iterator call made after Init, `set_image`, `recognize`, `clear`, layout analysis or another call that replaces the result fails with the new `TesseractError::StaleIterator`. `TesseractError` is now `#[non_exhaustive]`. (#3228)
 - **Breaking (tesseract):** `Pix::grayscale_bytes` returns `InvalidParameterError` for an image that is not 8 bpp or has a colormap, instead of narrowing raw pixel values. (#3228)
+- **pdf/ocr:** Embedded-image OCR reads identical image bytes once and shares the result with every occurrence, so a native PDF that paints one image on every page no longer pays an OCR read per page. (#3260)
 
 ### Fixed
 
-- **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
+- **layout:** `serve` and `extract` read layout models from the Xberg cache (`XBERG_CACHE_DIR/layout`, the platform cache directory by default) before the Hugging Face cache, so the models the Docker image warms at build time are used instead of downloaded again; a warmed model now resolves with `HF_HUB_OFFLINE=1` and no Hub request. `cache warm` defaults to the same root as the runtime instead of `.xberg` in the current directory, and `xberg::cache::resolve_cache_base_dir()` exposes the resolved root. (#3320)
+- **pdf:** Native extraction keeps a raised ordinal suffix (`2nd`, `24th`) in its sentence when the mark is a multi-glyph run set up to 0.5em above its base, while a lone raised mark keeps the narrower reach. (#3317)- **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
 
 ## [1.4.2] - 2026-11-19
 
@@ -121,7 +123,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **pdf:** Native extraction keeps a raised ordinal suffix (`2nd`, `24th`) in its sentence when the mark is a multi-glyph run set up to 0.5em above its base, while a lone raised mark keeps the narrower reach. (#3317)
 - **chunking:** `ChunkSizing::Tokenizer` with a registered tokenizer backend whose `count_tokens` includes special tokens keeps every chunk within `max_characters` tokens; chunks were over by up to the special-token count. (#3291)
 - **pdf:** Native extraction keeps two separately outlined ruled tables with a blank gap between them apart and in page order in Plain and Markdown, unless they share both width and column count. (#3286)
 - **ocr:** A process no longer crashes at exit when a page abandoned by the extraction time limit releases its Tesseract engine after `exit()` has begun. Recognitions still in flight at exit are stopped and get up to 2 seconds to return. (#3290)

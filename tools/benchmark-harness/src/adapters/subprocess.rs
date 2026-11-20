@@ -44,6 +44,9 @@ pub struct SubprocessAdapter {
     /// report whether OCR ran. Xberg adapters leave this unset and use their
     /// emitted per-document metadata.
     configured_ocr_status: Option<OcrStatus>,
+    /// Reject an item whose extraction reports a failed layout pass, so a benchmark row can
+    /// never be scored as a layout-pipeline result when the requested detector never ran. ~keep
+    reject_layout_failures: bool,
     /// Worker limit passed to native batch implementations.
     batch_workers: usize,
     /// Resolved executable used by a specialized native batch path.
@@ -95,6 +98,7 @@ impl SubprocessAdapter {
             supported_output_formats: vec![OutputFormat::Markdown],
             single_file_args: None,
             configured_ocr_status: None,
+            reject_layout_failures: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
@@ -137,6 +141,7 @@ impl SubprocessAdapter {
             supported_output_formats: vec![OutputFormat::Markdown],
             single_file_args: None,
             configured_ocr_status: None,
+            reject_layout_failures: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
@@ -148,6 +153,12 @@ impl SubprocessAdapter {
     }
     /// Set a maximum timeout for this adapter, overriding the global config timeout
     /// if the adapter's max is lower.
+    /// Rejects any item whose `processing_warnings` report a failed layout pass.
+    pub fn with_layout_failure_rejection(mut self) -> Self {
+        self.reject_layout_failures = true;
+        self
+    }
+
     pub fn with_max_timeout(mut self, timeout: Duration) -> Self {
         self.max_timeout = Some(timeout);
         self

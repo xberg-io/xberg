@@ -144,6 +144,12 @@ See [API Server Guide - MCP Section](/guides/api-server/#mcp-server) for integra
 
 Host and port are set via CLI args: `serve --host 0.0.0.0 --port 8000`.
 
+The image warms its models at build time into `/app/.xberg`, and `serve` reads the layout models from
+that root, so layout detection uses the bundled files without a Hub request. On an offline or
+egress-restricted host set `HF_HUB_OFFLINE=1` so a missing model reports the offline error instead of
+retrying the Hub; for a fully air-gapped deployment, warm and run with one cache root as described in
+[Model Sources](/reference/model-sources/#offline-and-air-gapped-use).
+
 ## Volume Mounts
 
 ```bash title="Terminal"

@@ -78,6 +78,14 @@ fn push_layout_args(args: &mut Vec<String>) {
     ]);
 }
 
+fn push_layout_v3_args(args: &mut Vec<String>) {
+    push_layout_args(args);
+    args.extend([
+        "--layout-model".to_string(),
+        xberg::LayoutDetectionModel::PpDocLayoutV3.to_string(),
+    ]);
+}
+
 fn push_ocr_args(args: &mut Vec<String>, backend: &str) {
     args.extend([
         "--ocr".to_string(),
@@ -95,7 +103,10 @@ fn push_sceptre_args(args: &mut Vec<String>, engine_options: &str) {
 }
 
 fn pipeline_requires_ocr(pipeline: XbergPipeline) -> bool {
-    !matches!(pipeline, XbergPipeline::Baseline | XbergPipeline::Layout)
+    !matches!(
+        pipeline,
+        XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
+    )
 }
 
 /// Builds the framework name for a pipeline/format/batch/pdf-backend combination.
@@ -144,6 +155,7 @@ fn push_pipeline_args(args: &mut Vec<String>, pipeline: XbergPipeline) {
     match pipeline {
         XbergPipeline::Baseline => {}
         XbergPipeline::Layout => push_layout_args(args),
+        XbergPipeline::LayoutV3 => push_layout_v3_args(args),
         XbergPipeline::PaddleOcr | XbergPipeline::BaselinePaddle => push_forced_ocr_args(args, "paddle-ocr"),
         XbergPipeline::LayoutPaddle => {
             push_layout_args(args);
@@ -207,7 +219,11 @@ pub fn create_xberg_adapter(
         OutputFormat::Plaintext => "plain",
     };
 
-    let tesseract_ocr_enabled = ocr_enabled && matches!(pipeline, XbergPipeline::Baseline | XbergPipeline::Layout);
+    let tesseract_ocr_enabled = ocr_enabled
+        && matches!(
+            pipeline,
+            XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
+        );
     let mut args = benchmark_base_args(batch, content_format, tesseract_ocr_enabled);
 
     push_pipeline_args(&mut args, pipeline);
@@ -232,7 +248,7 @@ pub fn create_xberg_adapter(
         single_args
     });
 
-    let mut adapter = if batch {
+    let adapter = if batch {
         SubprocessAdapter::with_batch_capability(
             &framework_name,
             cli_path,
@@ -251,6 +267,13 @@ pub fn create_xberg_adapter(
     .with_supported_output_formats(vec![output_format])
     .with_ocr_language_policy(declared_ocr_language_policy(&framework_name))
     .with_executable_build_identity(build_identity);
+    // A V3 row must prove the V3 detector ran: a failed layout pass otherwise yields plausible
+    // text that the harness would score as PP-DocLayoutV3 output. ~keep
+    let mut adapter = if pipeline == XbergPipeline::LayoutV3 {
+        adapter.with_layout_failure_rejection()
+    } else {
+        adapter
+    };
     if let Some(single_args) = single_file_args {
         adapter = adapter.with_single_file_args(single_args);
     }
@@ -260,7 +283,7 @@ pub fn create_xberg_adapter(
 
 /// Creates an in-process Xberg adapter for steady-state latency measurements. ~keep
 ///
-/// Only baseline and layout are exposed initially. Single-file mode retains a paired subprocess
+/// Only baseline and the two layout pipelines are exposed initially. Single-file mode retains a paired subprocess
 /// adapter solely for its cold CLI probe. Batch mode has no truthful equivalent probe and retains
 /// only one Rust [`xberg::Engine`] across discarded warmups and measured invocations. ~keep
 pub fn create_xberg_steady_adapter(
@@ -271,7 +294,10 @@ pub fn create_xberg_steady_adapter(
     pdf_backend: XbergPdfBackend,
     max_threads: Option<usize>,
 ) -> Result<NativeAdapter> {
-    if !matches!(pipeline, XbergPipeline::Baseline | XbergPipeline::Layout) {
+    if !matches!(
+        pipeline,
+        XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
+    ) {
         return Err(crate::Error::Config(format!(
             "steady-state Xberg adapter does not yet support pipeline '{}'",
             pipeline.as_str()
@@ -284,19 +310,26 @@ pub fn create_xberg_steady_adapter(
         xberg_framework_name(pipeline, output_format, false, pdf_backend),
         if batch { "-batch" } else { "" }
     );
+    let reject_layout_failures = pipeline == XbergPipeline::LayoutV3;
     if batch {
-        return Ok(NativeAdapter::with_identity(name, config));
+        let adapter = NativeAdapter::with_identity(name, config);
+        return Ok(if reject_layout_failures {
+            adapter.reject_layout_failures()
+        } else {
+            adapter
+        });
     }
     let cold_adapter = match max_threads {
         Some(max_threads) => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?
             .with_xberg_max_threads(max_threads),
         None => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?,
     };
-    Ok(NativeAdapter::with_identity_and_cold_adapter(
-        name,
-        config,
-        cold_adapter,
-    ))
+    let adapter = NativeAdapter::with_identity_and_cold_adapter(name, config, cold_adapter);
+    Ok(if reject_layout_failures {
+        adapter.reject_layout_failures()
+    } else {
+        adapter
+    })
 }
 
 fn steady_extraction_config(
@@ -325,9 +358,19 @@ fn steady_extraction_config(
     if let Some(max_threads) = max_threads {
         config.concurrency.get_or_insert_with(Default::default).max_threads = Some(max_threads);
     }
-    if pipeline == XbergPipeline::Layout {
-        config.layout = Some(xberg::LayoutDetectionConfig::default());
-        config.use_layout_for_markdown = true;
+    match pipeline {
+        XbergPipeline::Layout => {
+            config.layout = Some(xberg::LayoutDetectionConfig::default());
+            config.use_layout_for_markdown = true;
+        }
+        XbergPipeline::LayoutV3 => {
+            config.layout = Some(xberg::LayoutDetectionConfig {
+                model: xberg::LayoutDetectionModel::PpDocLayoutV3,
+                ..Default::default()
+            });
+            config.use_layout_for_markdown = true;
+        }
+        _ => {}
     }
 
     Ok(config)
@@ -729,6 +772,67 @@ mod tests {
         assert!(layout.force_ocr);
         assert_eq!(layout.concurrency.as_ref().and_then(|value| value.max_threads), Some(3));
         assert_eq!(layout.ocr.as_ref().map(|ocr| ocr.backend.as_str()), Some("tesseract"));
+    }
+
+    #[test]
+    fn layout_pipelines_differ_only_in_the_selected_model() {
+        let mut layout = Vec::new();
+        push_pipeline_args(&mut layout, XbergPipeline::Layout);
+        let mut layout_v3 = Vec::new();
+        push_pipeline_args(&mut layout_v3, XbergPipeline::LayoutV3);
+
+        assert!(!layout.iter().any(|arg| arg == "--layout-model"));
+        assert_eq!(layout_v3[..layout.len()], layout[..]);
+        assert_eq!(layout_v3[layout.len()..], ["--layout-model", "pp_doc_layout_v3"]);
+    }
+
+    #[test]
+    fn steady_layout_configs_select_their_detector() {
+        let model = |pipeline| {
+            steady_extraction_config(pipeline, OutputFormat::Markdown, true, XbergPdfBackend::Native, None)
+                .unwrap()
+                .layout
+                .map(|layout| layout.model)
+        };
+        assert_eq!(model(XbergPipeline::Layout), Some(xberg::LayoutDetectionModel::RtDetr));
+        assert_eq!(
+            model(XbergPipeline::LayoutV3),
+            Some(xberg::LayoutDetectionModel::PpDocLayoutV3)
+        );
+
+        let layout_v3 = steady_extraction_config(
+            XbergPipeline::LayoutV3,
+            OutputFormat::Markdown,
+            true,
+            XbergPdfBackend::Native,
+            None,
+        )
+        .unwrap();
+        assert!(layout_v3.use_layout_for_markdown);
+        assert_eq!(
+            layout_v3.ocr.as_ref().map(|ocr| ocr.backend.as_str()),
+            Some("tesseract")
+        );
+    }
+
+    /// Negative control: the V3 adapters must refuse a document whose layout pass failed, so a
+    /// fallback read is never scored as PP-DocLayoutV3 output. ~keep
+    #[test]
+    fn only_the_layout_v3_adapter_rejects_a_failed_layout_pass() {
+        let adapter = |pipeline| {
+            create_xberg_steady_adapter(
+                pipeline,
+                OutputFormat::Markdown,
+                true,
+                true,
+                XbergPdfBackend::Native,
+                None,
+            )
+            .unwrap()
+        };
+        assert!(adapter(XbergPipeline::LayoutV3).rejects_layout_failures());
+        assert!(!adapter(XbergPipeline::Layout).rejects_layout_failures());
+        assert!(!adapter(XbergPipeline::Baseline).rejects_layout_failures());
     }
 
     #[test]

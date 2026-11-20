@@ -790,6 +790,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: native_content.map(str::to_string),
+            geometry: None,
         };
         let expected = ExtractedDocument {
             content: "page 1 text\n\npage 2 text".to_string(),
@@ -826,6 +827,30 @@ mod tests {
             "a result with the kept text must not be served for a config without it"
         );
         assert_eq!(off, hash_extraction_config(&pages(false), "application/pdf"));
+    }
+
+    /// A result carrying page geometry must never be served for a config that did not ask
+    /// for it, nor the reverse. The key hashes the whole config, so this pins that the new
+    /// option reaches it.
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn extract_vector_geometry_changes_the_cache_key() {
+        let config = |extract_vector_geometry: bool| ExtractionConfig {
+            pdf_options: Some(crate::core::config::PdfConfig {
+                extract_vector_geometry,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let off = hash_extraction_config(&config(false), "application/pdf");
+        let on = hash_extraction_config(&config(true), "application/pdf");
+
+        assert_ne!(
+            off, on,
+            "a result with page geometry must not be served for a config without it"
+        );
+        assert_eq!(off, hash_extraction_config(&config(false), "application/pdf"));
     }
 
     #[tokio::test]

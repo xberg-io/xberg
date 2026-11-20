@@ -153,37 +153,9 @@ impl OcmdPolicy {
 
 /// Decode a PDF text string per ISO 32000-1 §7.9.2.
 ///
-/// Handles:
-///  - UTF-16BE with `FE FF` BOM
-///  - UTF-16LE with `FF FE` BOM
-///  - UTF-8 (lenient — non-spec PDFs sometimes embed raw UTF-8)
-///  - PDFDocEncoding fallback (the spec default for non-BOM strings)
-pub fn decode_pdf_text_string(bytes: &[u8]) -> String {
-    if bytes.len() >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF {
-        let utf16_pairs: Vec<u16> = bytes[2..]
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
-            .collect();
-        String::from_utf16(&utf16_pairs).unwrap_or_else(|_| String::from_utf8_lossy(bytes).to_string())
-    } else if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-        let utf16_pairs: Vec<u16> = bytes[2..]
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .collect();
-        String::from_utf16(&utf16_pairs).unwrap_or_else(|_| String::from_utf8_lossy(bytes).to_string())
-    } else {
-        String::from_utf8(bytes.to_vec()).unwrap_or_else(|_| {
-            bytes
-                .iter()
-                .filter_map(|&b| crate::fonts::font_dict::pdfdoc_encoding_lookup(b))
-                .collect()
-        })
-    }
-}
+/// Kept here as a re-export for callers of this module; the canonical
+/// implementation lives in [`crate::object::decode_pdf_text_string`].
+pub use crate::object::decode_pdf_text_string;
 
 /// Check if a `Name` value (which can be either a `/Name` token or a PDF string)
 /// matches any entry in `excluded`.

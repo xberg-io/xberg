@@ -123,6 +123,8 @@ mod model_files;
 mod vertical_japanese;
 pub(super) use crate::core::extractor::cacheability::request_model_digest as hash_model_file;
 pub(super) use model_files::RetryModelFiles;
+#[cfg(test)]
+pub(super) use model_files::{live_directory, remove_shared_model_directories};
 
 #[derive(Clone, Debug)]
 pub(super) struct ModelSet {

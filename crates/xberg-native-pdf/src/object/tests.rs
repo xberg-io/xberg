@@ -853,3 +853,52 @@ fn generic_stream_keeps_legacy_predictor_placement() {
     assert_eq!(object.decode_stream_data().unwrap(), b"A");
     assert_eq!(object.decode_image_stream_data(None).unwrap(), b"\0A");
 }
+
+#[test]
+fn decode_text_string_utf16be_with_bom() {
+    let bytes = [0xFE, 0xFF, 0x00, 0x31, 0x00, 0x2E, 0x00, 0x20, 0x00, 0x41];
+    assert_eq!(decode_pdf_text_string(&bytes), "1. A");
+}
+
+#[test]
+fn decode_text_string_utf16le_with_bom() {
+    let bytes = [0xFF, 0xFE, 0x41, 0x00, 0x42, 0x00];
+    assert_eq!(decode_pdf_text_string(&bytes), "AB");
+}
+
+#[test]
+fn decode_text_string_utf8_with_bom() {
+    let bytes = [0xEF, 0xBB, 0xBF, b'W', b'h', b'a', b't', 0xE2, 0x80, 0x99, b's'];
+    assert_eq!(decode_pdf_text_string(&bytes), "What\u{2019}s");
+}
+
+#[test]
+fn decode_text_string_pdfdocencoding_quoteright() {
+    assert_eq!(decode_pdf_text_string(b"What\x90s New"), "What\u{2019}s New");
+}
+
+#[test]
+fn decode_text_string_pdfdocencoding_documented_range() {
+    assert_eq!(decode_pdf_text_string(&[0x80]), "\u{2022}");
+    assert_eq!(decode_pdf_text_string(&[0xA0]), "\u{20AC}");
+    assert_eq!(decode_pdf_text_string(&[0xE9]), "\u{00E9}");
+}
+
+#[test]
+fn decode_text_string_strips_trailing_nul() {
+    assert_eq!(decode_pdf_text_string(b"Link to page 143\0"), "Link to page 143");
+    let utf16 = [0xFE, 0xFF, 0x00, 0x41, 0x00, 0x00];
+    assert_eq!(decode_pdf_text_string(&utf16), "A");
+}
+
+#[test]
+fn decode_text_string_plain_ascii() {
+    assert_eq!(decode_pdf_text_string(b"Plain ASCII"), "Plain ASCII");
+    assert_eq!(decode_pdf_text_string(b""), "");
+}
+
+#[test]
+fn decode_text_string_strips_language_tag_escape() {
+    let bytes = b"\x1Ben-US\x1BWhat's New";
+    assert_eq!(decode_pdf_text_string(bytes), "What's New");
+}

@@ -407,30 +407,45 @@ where
     Ok(model_file.to_path_buf())
 }
 
+/// Where a manager looks for a model file before downloading it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CacheMode {
+    /// `<cache_dir>/<model_type>/` is authoritative: a verified file is used as-is and a
+    /// download is published into the same directory.
+    Staged,
+    /// The Xberg layout cache (`cache_dir`) is read first, then the standard Hugging Face
+    /// cache. Only the Hugging Face cache receives downloads, so a model is never stored
+    /// twice; files other managers stage there (table models warmed by PaddleOCR) stay
+    /// reachable.
+    XbergFirst,
+}
+
 /// Manages layout model downloading, caching, and path resolution.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone)]
 pub struct LayoutModelManager {
     cache_dir: PathBuf,
-    stage_in_xberg_cache: bool,
+    mode: CacheMode,
 }
 
 impl LayoutModelManager {
     /// Creates a new model manager.
     ///
-    /// If `cache_dir` is None, uses the default cache directory:
-    /// the standard Hugging Face cache is used directly, without duplicating
-    /// model files in Xberg's cache. Passing an explicit directory preserves
-    /// the standalone Xberg cache layout for callers that need it.
+    /// If `cache_dir` is `None`, reads the Xberg layout cache
+    /// (`$XBERG_CACHE_DIR/layout` or the platform cache directory), the root
+    /// `xberg cache warm` populates. A miss falls back to the standard Hugging
+    /// Face cache, which remains the download destination. Passing an explicit
+    /// directory stages downloads in the standalone Xberg cache layout at
+    /// `<cache_dir>/<model_type>/`.
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
         match cache_dir {
             Some(cache_dir) => Self {
                 cache_dir,
-                stage_in_xberg_cache: true,
+                mode: CacheMode::Staged,
             },
             None => Self {
-                cache_dir: hf_hub::resolve_cache_dir(),
-                stage_in_xberg_cache: false,
+                cache_dir: crate::cache_dir::resolve_cache_dir("layout"),
+                mode: CacheMode::XbergFirst,
             },
         }
     }
@@ -445,19 +460,57 @@ impl LayoutModelManager {
             .iter()
             .find(|m| m.model_type == model_type)
             .ok_or_else(|| LayoutError::ModelDownload(format!("Unknown model type: {model_type}")))?;
+        self.resolve_model(definition)
+    }
 
-        if !self.stage_in_xberg_cache {
+    fn resolve_model(&self, definition: &ModelDefinition) -> Result<PathBuf, LayoutError> {
+        if self.mode == CacheMode::XbergFirst
+            && let Some(path) = self.verified_staged_model(definition)
+        {
+            tracing::debug!(
+                model_type = definition.model_type,
+                path = %path.display(),
+                "Using layout model staged in the Xberg cache"
+            );
+            return Ok(path);
+        }
+        self.stage_model(definition)
+    }
+
+    /// The path a verified model is staged at by `xberg cache warm`.
+    fn staged_model_path(&self, definition: &ModelDefinition) -> PathBuf {
+        self.cache_dir
+            .join(definition.model_type)
+            .join(definition.local_filename)
+    }
+
+    fn verified_staged_model(&self, definition: &ModelDefinition) -> Option<PathBuf> {
+        let path = self.staged_model_path(definition);
+        verify_model_file(
+            &path,
+            definition.size_bytes,
+            definition.sha256_checksum,
+            definition.model_type,
+        )
+        .is_ok()
+        .then_some(path)
+    }
+
+    /// Resolve through the Hugging Face cache, publishing into `cache_dir` when this manager
+    /// owns a standalone Xberg cache.
+    fn stage_model(&self, definition: &ModelDefinition) -> Result<PathBuf, LayoutError> {
+        if self.mode == CacheMode::XbergFirst {
             return resolve_verified_hf_model(definition);
         }
 
-        let model_dir = self.cache_dir.join(model_type);
+        let model_dir = self.cache_dir.join(definition.model_type);
         let model_file = model_dir.join(definition.local_filename);
         ensure_staged_model(
             &model_file,
             &model_dir,
             definition.size_bytes,
             definition.sha256_checksum,
-            model_type,
+            definition.model_type,
             || resolve_verified_hf_model(definition),
         )
     }
@@ -510,16 +563,11 @@ impl LayoutModelManager {
 
     pub(crate) fn verified_model_path(&self, model_type: &str) -> Option<PathBuf> {
         let definition = MODELS.iter().find(|model| model.model_type == model_type)?;
-        if self.stage_in_xberg_cache {
-            let path = self.cache_dir.join(model_type).join(definition.local_filename);
-            return verify_model_file(
-                &path,
-                definition.size_bytes,
-                definition.sha256_checksum,
-                definition.model_type,
-            )
-            .is_ok()
-            .then_some(path);
+        if let Some(path) = self.verified_staged_model(definition) {
+            return Some(path);
+        }
+        if self.mode == CacheMode::Staged {
+            return None;
         }
         model_download::hf_cached_revision(
             definition.hf_repo_id,
@@ -557,9 +605,13 @@ impl LayoutModelManager {
         let Some(definition) = MODELS.iter().find(|model| model.model_type == model_type) else {
             return ModelCacheProbe::Invalid(format!("unknown model type: {model_type}"));
         };
-        if self.stage_in_xberg_cache {
-            let path = self.cache_dir.join(model_type).join(definition.local_filename);
-            return probe_model_file(&path, definition.size_bytes, definition.model_type);
+        let staged = probe_model_file(
+            &self.staged_model_path(definition),
+            definition.size_bytes,
+            definition.model_type,
+        );
+        if staged == ModelCacheProbe::Present || self.mode == CacheMode::Staged {
+            return staged;
         }
         let path = match model_download::hf_cached_revision(
             definition.hf_repo_id,
@@ -567,7 +619,7 @@ impl LayoutModelManager {
             definition.hf_revision,
         ) {
             Ok(Some(path)) => path,
-            Ok(None) => return ModelCacheProbe::Missing,
+            Ok(None) => return staged,
             Err(error) => return ModelCacheProbe::Invalid(error),
         };
         probe_model_file(&path, definition.size_bytes, definition.model_type)
@@ -575,9 +627,10 @@ impl LayoutModelManager {
 
     /// Returns the manifest of all layout model files with checksums and sizes.
     ///
-    /// Paths are relative to the standard Hugging Face cache root returned by
-    /// [`Self::cache_dir`] on a default manager. Explicit-cache managers stage
-    /// the same artifacts under their documented standalone layout instead.
+    /// Paths are relative to the standard Hugging Face cache root, the destination
+    /// for every download. A default manager additionally reads the Xberg layout
+    /// cache first (see [`Self::cache_dir`]); an explicit-cache manager stages the
+    /// same artifacts under its standalone `<cache_dir>/<model_type>/` layout.
     pub fn manifest() -> Vec<ModelManifestEntry> {
         MODELS
             .iter()
@@ -677,6 +730,10 @@ mod tests {
             |command| {
                 command
                     .env("HF_HUB_CACHE", cache.path())
+                    // The default manager reads `XBERG_CACHE_DIR/layout` first; pin it to the
+                    // empty temp root so a warmed developer cache cannot satisfy the offline
+                    // miss asserted below. ~keep
+                    .env("XBERG_CACHE_DIR", cache.path())
                     .env("HF_HUB_OFFLINE", "1")
                     .env_remove("HUGGINGFACE_HUB_OFFLINE");
             },
@@ -932,11 +989,79 @@ mod tests {
         assert_eq!(manager.cache_dir(), temp_dir.path());
     }
 
+    /// The default manager reads the root `xberg cache warm` populates, not the Hugging
+    /// Face cache, so a warmed layout model needs no Hub request at request time (#3320).
     #[test]
-    fn default_manager_reports_standard_hugging_face_cache() {
+    fn default_manager_reads_the_xberg_layout_cache() {
         let manager = LayoutModelManager::new(None);
-        assert_eq!(manager.cache_dir(), hf_hub::resolve_cache_dir());
-        assert!(!manager.stage_in_xberg_cache);
+        assert_eq!(manager.cache_dir(), crate::cache_dir::resolve_cache_dir("layout"));
+        assert_eq!(manager.mode, CacheMode::XbergFirst);
+    }
+
+    const STAGED_LAYOUT_ROOT: &str = "XBERG_STAGED_LAYOUT_ROOT";
+    const OFFLINE_PROBE_MODEL_TYPE: &str = "offline_probe";
+    const OFFLINE_PROBE_FILENAME: &str = "model.onnx";
+    const OFFLINE_PROBE_PAYLOAD: &[u8] = b"layout weights staged by cache warm";
+
+    fn offline_probe_definition() -> ModelDefinition {
+        use sha2::{Digest, Sha256};
+        let checksum = hex::encode(Sha256::digest(OFFLINE_PROBE_PAYLOAD));
+        ModelDefinition {
+            model_type: OFFLINE_PROBE_MODEL_TYPE,
+            hf_repo_id: "xberg-io/offline-probe-does-not-exist",
+            hf_revision: "0000000000000000000000000000000000000000",
+            remote_filename: "offline_probe/model.onnx",
+            local_filename: OFFLINE_PROBE_FILENAME,
+            sha256_checksum: Box::leak(checksum.into_boxed_str()),
+            size_bytes: OFFLINE_PROBE_PAYLOAD.len() as u64,
+        }
+    }
+
+    /// A model staged where `cache warm` puts it resolves with `HF_HUB_OFFLINE=1` and no Hub
+    /// lookup: the fabricated repository does not exist, so any Hugging Face resolution
+    /// attempt fails instead of returning the staged path.
+    #[test]
+    fn staged_xberg_layout_model_resolves_offline_without_a_hugging_face_lookup() {
+        let cache = TempDir::new().unwrap();
+        let model_dir = cache.path().join("layout").join(OFFLINE_PROBE_MODEL_TYPE);
+        fs::create_dir_all(&model_dir).unwrap();
+        fs::write(model_dir.join(OFFLINE_PROBE_FILENAME), OFFLINE_PROBE_PAYLOAD).unwrap();
+
+        crate::utils::test_support::run_child_test(
+            "layout::model_manager::tests::staged_xberg_layout_model_child",
+            STAGED_LAYOUT_ROOT,
+            cache.path(),
+            |command| {
+                command
+                    .env("XBERG_CACHE_DIR", cache.path())
+                    .env("HF_HUB_CACHE", cache.path().join("huggingface"))
+                    .env("HF_HUB_OFFLINE", "1")
+                    .env_remove("HUGGINGFACE_HUB_OFFLINE");
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "run in an isolated subprocess by staged_xberg_layout_model_resolves_offline_without_a_hugging_face_lookup"]
+    fn staged_xberg_layout_model_child() {
+        let Some(root) = crate::utils::test_support::child_test_root(STAGED_LAYOUT_ROOT) else {
+            return;
+        };
+        let manager = LayoutModelManager::new(None);
+        assert_eq!(manager.cache_dir(), root.join("layout"));
+
+        let definition = offline_probe_definition();
+        let expected = root
+            .join("layout")
+            .join(OFFLINE_PROBE_MODEL_TYPE)
+            .join(OFFLINE_PROBE_FILENAME);
+        assert_eq!(manager.verified_staged_model(&definition), Some(expected.clone()));
+        assert_eq!(
+            manager
+                .resolve_model(&definition)
+                .expect("the staged model resolves offline"),
+            expected
+        );
     }
 
     #[test]

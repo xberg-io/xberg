@@ -3,6 +3,8 @@
 //! This adapter measures same-process Xberg extraction latency after a configured warmup.
 //! Its rows are reported separately from cold-process competitive rankings.
 
+use super::layout_failures::layout_failure_in_document;
+
 use crate::adapter::FrameworkAdapter;
 use crate::adapters::subprocess::SubprocessAdapter;
 use crate::extract_xberg_file;
@@ -226,6 +228,7 @@ fn assemble_batch_rows(
     context: &BatchRowContext<'_>,
     file_paths: &[&Path],
     output: &xberg::ExtractionResult,
+    reject_layout_failures: bool,
     config: &ExtractionConfig,
 ) -> Result<Vec<BenchmarkResult>> {
     let mut results_by_input: Vec<Vec<&ExtractedDocument>> = vec![Vec::new(); file_paths.len()];
@@ -282,9 +285,15 @@ fn assemble_batch_rows(
                     message.to_string(),
                     ErrorKind::FrameworkError,
                 )),
-                (false, None) if documents.len() == 1 => {
-                    Ok(batch_success_result(context, file_path, documents[0], config))
-                }
+                (false, None) if documents.len() == 1 => match (reject_layout_failures, layout_failure_in_document(documents[0])) {
+                    (true, Some(message)) => Ok(batch_failure_result(
+                        context,
+                        file_path,
+                        message,
+                        ErrorKind::FrameworkError,
+                    )),
+                    _ => Ok(batch_success_result(context, file_path, documents[0], config)),
+                },
                 (false, None) => Err(Error::Benchmark(format!(
                     "native batch returned multiple results for input index {input_index}; cannot aggregate per-child timing and metadata truthfully"
                 ))),
@@ -473,6 +482,9 @@ pub struct NativeAdapter {
     config: ExtractionConfig,
     cold_adapter: Option<SubprocessAdapter>,
     engine: xberg::engine::Engine,
+    /// Reject an extraction whose layout pass failed, so a row can never be scored as a
+    /// layout-pipeline result when the requested detector never ran. ~keep
+    reject_layout_failures: bool,
 }
 
 fn apply_ocr_language(ocr: &mut xberg::OcrConfig, language: &str) {
@@ -498,6 +510,7 @@ impl NativeAdapter {
             config,
             cold_adapter: None,
             engine: xberg::engine::Engine::new_default(),
+            reject_layout_failures: false,
         }
     }
 
@@ -539,6 +552,7 @@ impl NativeAdapter {
             config,
             cold_adapter: None,
             engine: xberg::engine::Engine::new_default(),
+            reject_layout_failures: false,
         }
     }
 
@@ -552,6 +566,7 @@ impl NativeAdapter {
             config,
             cold_adapter: Some(cold_adapter),
             engine: xberg::engine::Engine::new_default(),
+            reject_layout_failures: false,
         }
     }
 
@@ -561,7 +576,20 @@ impl NativeAdapter {
             config,
             cold_adapter: None,
             engine: xberg::engine::Engine::new_default(),
+            reject_layout_failures: false,
         }
+    }
+
+    /// Fails any extraction whose layout pass reported a failure. Set by the LayoutV3
+    /// adapter, whose rows must never carry a fallback read as a V3 result. ~keep
+    pub(crate) fn reject_layout_failures(mut self) -> Self {
+        self.reject_layout_failures = true;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn rejects_layout_failures(&self) -> bool {
+        self.reject_layout_failures
     }
 
     #[cfg(test)]
@@ -668,6 +696,23 @@ impl FrameworkAdapter for NativeAdapter {
         }
 
         let extraction_result = extraction_result.unwrap();
+        if self.reject_layout_failures
+            && let Some(message) = layout_failure_in_document(&extraction_result)
+        {
+            return Ok(single_failure_result(
+                SingleResultContext {
+                    framework: self.name(),
+                    output_format,
+                    file_path,
+                    file_size,
+                    duration,
+                    extraction_duration,
+                    resource_stats: &resource_stats,
+                },
+                &Error::FrameworkError(message),
+                false,
+            ));
+        }
         let ocr_status = determine_ocr_status(&extraction_result, &config);
 
         Ok(single_success_result(
@@ -760,7 +805,7 @@ impl FrameworkAdapter for NativeAdapter {
         }
 
         let output = batch_result.unwrap();
-        let results = assemble_batch_rows(&row_context, file_paths, &output, &config)?;
+        let results = assemble_batch_rows(&row_context, file_paths, &output, self.reject_layout_failures, &config)?;
         Ok(finalize_batch_rows(self, results, total_duration, &resource_stats))
     }
 

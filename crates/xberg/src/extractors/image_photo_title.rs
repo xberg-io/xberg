@@ -655,6 +655,7 @@ fn place_alone(
         sheet_name: None,
         ocr_confidence,
         native_content: None,
+        geometry: None,
     }]);
 }
 

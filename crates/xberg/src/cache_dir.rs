@@ -30,7 +30,6 @@ fn ocr_model_cache_override_for(
 ///
 /// Uses the same resolution order as [`resolve_cache_dir`] but returns
 /// the top-level xberg cache directory.
-#[allow(dead_code)]
 pub(crate) fn resolve_cache_base() -> PathBuf {
     cache_base_for(std::env::var("XBERG_CACHE_DIR").ok().as_deref().map(Path::new))
 }

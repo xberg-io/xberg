@@ -230,6 +230,12 @@ impl SubprocessAdapter {
             return Err(Error::EmptyContent("Framework returned empty content".to_string()));
         }
 
+        if self.reject_layout_failures
+            && let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(&parsed)
+        {
+            return Err(Error::FrameworkError(message));
+        }
+
         Ok(parsed)
     }
 

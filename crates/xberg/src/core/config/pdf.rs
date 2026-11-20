@@ -163,6 +163,25 @@ pub struct PdfConfig {
     /// see [`PdfBackend`] and `extractors::pdf::pdfium_engine` for details.
     #[serde(default)]
     pub backend: PdfBackend,
+
+    /// Return each page's vector geometry (lines, curves and filled shapes).
+    ///
+    /// When `true`, every `PageContent` of a PDF carries a `geometry` value: each
+    /// painted path's subpaths, fill colour, stroke colour/width/dash and Optional
+    /// Content layer, in page coordinates with the content-stream and Form XObject
+    /// transforms already applied. Text bounds use the same coordinate frame, so a
+    /// label's box and the shape it annotates are directly comparable.
+    ///
+    /// Off by default because a dense drawing sheet can hold more than ten thousand
+    /// paths and this output reports every one of them. Asking for it also turns on
+    /// per-page tracking (`pages.extract_pages`) because that is where the geometry is
+    /// returned.
+    ///
+    /// PDF only, and only on the native backend. Geometry is `None` on non-PDF
+    /// documents, on a page with no drawn path, and when the page's content stream cannot
+    /// be parsed.
+    #[serde(default)]
+    pub extract_vector_geometry: bool,
 }
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
@@ -206,6 +225,7 @@ impl Default for PdfConfig {
             extract_form_fields: true,
             reading_order: false,
             backend: PdfBackend::default(),
+            extract_vector_geometry: false,
         }
     }
 }
@@ -427,6 +447,23 @@ mod tests {
 
     #[test]
     #[cfg(feature = "pdf")]
+    fn extract_vector_geometry_is_off_by_default_and_read_from_its_key() {
+        assert!(
+            !PdfConfig::default().extract_vector_geometry,
+            "a dense sheet's paths are an opt-in output"
+        );
+
+        let with_key: PdfConfig =
+            serde_json::from_str(r#"{"extract_vector_geometry": true}"#).expect("a config with the key parses");
+        assert!(with_key.extract_vector_geometry);
+
+        let without_key: PdfConfig =
+            serde_json::from_str(r#"{"extract_tables": true}"#).expect("a config without the key parses");
+        assert!(!without_key.extract_vector_geometry);
+    }
+
+    #[test]
+    #[cfg(feature = "pdf")]
     fn test_pdf_config_custom_margins() {
         let config = PdfConfig {
             extract_images: false,
@@ -442,6 +479,7 @@ mod tests {
             extract_form_fields: true,
             reading_order: false,
             backend: PdfBackend::Native,
+            extract_vector_geometry: false,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));
