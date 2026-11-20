@@ -110,31 +110,67 @@ fn standalone_gray_png(pdf: &[u8], height: u32) -> Vec<u8> {
 }
 
 #[test]
-fn clamped_standalone_tall_png_explains_source_strip_abstention() {
+fn clamped_standalone_tall_png_recovers_every_source_word() {
     let config = extraction_config();
     let tall = extract_mime(&standalone_gray_png(TALL, 12000), "image/png", &config);
     assert!(tall.metadata.ocr_used);
-    let metadata = tall.metadata.image_preprocessing.as_ref().unwrap();
-    assert!(metadata.dimension_clamped);
-    assert_eq!(metadata.original_dimensions.height, 12000);
-    assert_eq!(metadata.new_dimensions.as_ref().unwrap().height, 4096);
-    let message = "Standalone image OCR reduced 1275 × 12000 pixels to 435 × 4096 pixels. Source-image strip recovery requires PDF input. The text may be incomplete.";
-    assert_eq!(
-        tall.processing_warnings
-            .iter()
-            .filter(|warning| warning.message == message)
-            .count(),
-        1,
-        "{:?}",
-        tall.processing_warnings
-    );
+    assert_image_text(&tall, true);
+    assert!(tall.metadata.image_preprocessing.is_none());
     let short = extract_mime(&standalone_gray_png(SHORT, 3600), "image/png", &config);
     assert!(short.metadata.ocr_used);
-    assert!(!short.processing_warnings.iter().any(|warning| {
-        warning
-            .message
-            .contains("Source-image strip recovery requires PDF input")
-    }));
+    assert!(!strip_warning(&short));
+    assert!(
+        !short
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("source-image strips were not used"))
+    );
+}
+
+#[test]
+fn a_standalone_tall_png_without_certified_blank_rows_names_the_skip() {
+    let config = extraction_config();
+    let two_columns = two_column_gray_png(TALL, 12000);
+    let document = extract_mime(&two_columns, "image/png", &config);
+    assert!(document.metadata.ocr_used);
+    assert!(!strip_warning(&document));
+    let warnings = document
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.contains("source-image strips were not used"))
+        .map(|warning| warning.message.as_ref())
+        .collect::<Vec<_>>();
+    let [warning] = warnings.as_slice() else {
+        panic!("expected one skip warning, got {warnings:?}");
+    };
+    assert!(warning.starts_with("Standalone image OCR reduced "), "{warning}");
+    assert!(warning.ends_with("The text may be incomplete."), "{warning}");
+    assert!(!warning.contains("requires PDF input"), "{warning}");
+}
+
+/// Two 900 px columns separated by a 100 px gap exceed the certified column gap, so the
+/// source rows cannot be certified and recovery must say so rather than guess. ~keep
+fn two_column_gray_png(pdf: &[u8], height: u32) -> Vec<u8> {
+    use image::ImageEncoder;
+    let source = standalone_gray_png(pdf, height);
+    let decoded = image::load_from_memory(&source).unwrap().into_luma8();
+    let (width, _) = decoded.dimensions();
+    let column = 900;
+    let output_width = 1900;
+    let mut pixels = vec![255; (output_width * height) as usize];
+    for row in 0..height {
+        for x in 0..column {
+            let sample = decoded.get_pixel(x, row)[0];
+            pixels[(row * output_width + x) as usize] = sample;
+            pixels[(row * output_width + column + 100 + x) as usize] = sample;
+        }
+    }
+    assert_eq!(width, 1275);
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(&pixels, output_width, height, image::ExtendedColorType::L8)
+        .unwrap();
+    png
 }
 
 #[test]

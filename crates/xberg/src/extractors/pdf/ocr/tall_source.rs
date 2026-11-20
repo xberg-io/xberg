@@ -19,7 +19,11 @@ use xberg_native_pdf::object::Object;
 
 pub(super) mod augmentation;
 mod policy;
-pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports, unsupported_reason};
+// The pipeline budget-retry test reads the config-only verdict; that module is excluded
+// under `paddle_ocr`, which is when this re-export has no user. ~keep
+#[cfg(all(test, not(paddle_ocr)))]
+pub(super) use policy::unsupported_reason;
+pub(super) use policy::{Unrecovered, note_flat_structure, note_unrecovered, supports_for, unsupported_reason_for};
 #[cfg(test)]
 #[path = "tall_source/geometry_tests.rs"]
 mod geometry_tests;
@@ -36,6 +40,8 @@ mod region_reconciliation;
 pub(super) mod region_replay;
 mod row_reread;
 mod samples;
+mod standalone;
+pub(crate) use standalone::try_replace_standalone;
 #[cfg(test)]
 #[path = "tall_source/strip_certificate_tests.rs"]
 mod strip_certificate_tests;
@@ -144,9 +150,16 @@ pub(super) async fn try_replace(
     attempt.read_width = Some(read_width);
     let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
     let mut source_refusal = None;
-    let why = match recover(attempt, backend, ocr, &mut source_refusal).await? {
+    let recovered = recover(attempt, backend, ocr, &mut source_refusal).await?;
+    let why = match recovered {
         Some((recovered, strips))
-            if should_replace_with_source_evidence(&original.content, quality, &recovered, &thresholds) =>
+            if should_replace_with_source_evidence(
+                &original.content,
+                quality,
+                &recovered,
+                &thresholds,
+                dictionary_ratio_is_diagnostic(ocr),
+            ) =>
         {
             read_geometry::record_original_frame(original, raster, page);
             apply_recovery(original, recovered, page, strips);
@@ -352,7 +365,20 @@ pub(super) async fn probe_anchored_occurrences(
 
 #[cfg(test)]
 fn should_replace(original_text: &str, quality: RecognitionQuality, recovered: &TextAccumulator) -> bool {
-    should_replace_with_source_evidence(original_text, quality, recovered, &Default::default())
+    should_replace_with_source_evidence(original_text, quality, recovered, &Default::default(), true)
+}
+
+/// Whether the dictionary-invalid ratio can judge this read at all.
+///
+/// The ratio looks words up in the DAWG of the loaded language. That separates a clean read
+/// from garbage only when every requested language is English: a correct German read scores as
+/// mostly invalid against a German word list that carries the same English tag nouns, while the
+/// garbled downscaled read scores better because its short tokens are skipped. Comparing the two
+/// ratios then rejects the better read. ~keep
+fn dictionary_ratio_is_diagnostic(ocr: &OcrConfig) -> bool {
+    ocr.effective_tesseract_language()
+        .iter()
+        .all(|language| language == "eng")
 }
 
 fn should_replace_with_source_evidence(
@@ -360,12 +386,14 @@ fn should_replace_with_source_evidence(
     quality: RecognitionQuality,
     recovered: &TextAccumulator,
     thresholds: &crate::core::config::OcrQualityThresholds,
+    dictionary_diagnostic: bool,
 ) -> bool {
     recovered.psm == Some(quality.psm)
         && recovered.words > quality.words
         && recovered.text.split_whitespace().count() > original_text.split_whitespace().count()
         && recovered.confidence_sum > quality.mean_confidence * f64::from(recovered.words)
-        && (recovered.worst_dictionary_invalid <= quality.dictionary_invalid
+        && (!dictionary_diagnostic
+            || recovered.worst_dictionary_invalid <= quality.dictionary_invalid
             || recovered_bilevel_lines_are_clean(original_text, &quality, recovered, thresholds))
         && u64::from(recovered.low_confidence_words) * u64::from(quality.words)
             <= u64::from(quality.low_confidence_words) * u64::from(recovered.words)
@@ -928,12 +956,38 @@ struct RecognitionQuality {
 impl RecognitionQuality {
     fn from_result(result: &ExtractedDocument) -> Option<Self> {
         let metadata = &result.metadata.additional;
-        let words = super::word_count_of(metadata).filter(|&words| words > 0)?;
-        let crate::types::FormatMetadata::Ocr(format) = result.metadata.format.as_ref()? else {
-            return None;
+        let words = super::word_count_of(metadata)?;
+        // A standalone picture keeps an `Image` format record and reports the OCR PSM in
+        // its additional metadata; a PDF page carries it in `FormatMetadata::Ocr`. ~keep
+        let additional_psm = || {
+            metadata.get("psm").and_then(|value| {
+                value
+                    .as_str()
+                    .and_then(|text| text.parse().ok())
+                    .or_else(|| value.as_i64().and_then(|number| i32::try_from(number).ok()))
+            })
         };
+        let psm = match result.metadata.format.as_ref() {
+            Some(crate::types::FormatMetadata::Ocr(format)) => format.psm,
+            // A standalone picture records its format after the OCR read and keeps the
+            // PSM in additional metadata. ~keep
+            Some(crate::types::FormatMetadata::Image(_)) | None => additional_psm()?,
+            _ => return None,
+        };
+        // A page read may return no words at all. The strips still need its PSM, and an
+        // empty baseline cannot be beaten on confidence, dictionary or low-confidence
+        // ratios, so only a clean strip read can replace it. ~keep
+        if words == 0 {
+            return Some(Self {
+                psm,
+                words: 0,
+                mean_confidence: 0.0,
+                low_confidence_words: 0,
+                dictionary_invalid: 1.0,
+            });
+        }
         Some(Self {
-            psm: format.psm,
+            psm,
             words,
             mean_confidence: super::mean_text_conf_of(metadata).filter(|mean| (0.0..=100.0).contains(mean))?,
             low_confidence_words: metadata

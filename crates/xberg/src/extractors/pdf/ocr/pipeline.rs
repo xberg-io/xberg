@@ -2599,7 +2599,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             not(target_arch = "wasm32")
         ))]
         let tall_source_unsupported = tall_source_candidate
-            .then(|| super::tall_source::unsupported_reason(config, &ocr_config_resolved))
+            .then(|| super::tall_source::unsupported_reason_for(config, &ocr_config_resolved, backend.as_ref()))
             .flatten();
         #[cfg(all(
             feature = "ocr",
@@ -5040,17 +5040,17 @@ fn budget_retry_backend(
         || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
         || !super::document::native_preservation_is_automatic(config, 1)
         || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
-        || !super::tall_source::supports(config, ocr)
         || !uses_default_ocr_pipeline(ocr)
     {
         return None;
     }
     let registry = crate::plugins::registry::get_ocr_backend_registry();
     let registry = registry.read();
-    registry
+    let backend = registry
         .get(&ocr.backend)
         .ok()
-        .filter(|backend| registry.is_builtin_tesseract(backend))
+        .filter(|backend| registry.is_builtin_tesseract(backend))?;
+    super::tall_source::supports_for(config, ocr, backend.as_ref()).then_some(backend)
 }
 
 #[cfg(all(
@@ -5633,7 +5633,7 @@ pub(super) async fn extract_with_ocr_for_page(
         not(target_arch = "wasm32")
     ))]
     let tall_source_unsupported = tall_source_candidate
-        .then(|| super::tall_source::unsupported_reason(config, base_ocr_config))
+        .then(|| super::tall_source::unsupported_reason_for(config, base_ocr_config, backend.as_ref()))
         .flatten();
     #[cfg(all(
         feature = "ocr",
