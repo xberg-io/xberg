@@ -857,5 +857,4 @@ fn overlapping_overpaint_counts_shared_area_once() {
 
 mod single_title;
 
-#[path = "wrapped_header_tests.rs"]
-mod wrapped_header_tests;
+mod wrapped_header;

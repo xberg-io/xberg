@@ -108,69 +108,91 @@ const MIN_WRAPPED_HEADER_LINES: usize = 2;
 /// Minimum populated cells a wrapped band and a body band need for either to prove the other.
 const MIN_WRAPPED_HEADER_CELLS: usize = 2;
 
+/// Thickest paint that still reads as a rule bar rather than a filled cell. This is a paint
+/// property: `row_tolerance` clusters text baselines and says nothing about how a producer styles
+/// a rule, so the two are deliberately unrelated. ~keep
+const MAX_RULE_BAR_THICKNESS: f32 = 2.0 * HEADER_RULE_TOLERANCE;
+
 /// Keep a leading ruled band whose cells wrap over several lines as ONE header row.
 ///
 /// A header band is often the only band in a table with no rule between its lines: the labels of
 /// adjacent columns wrap independently, so their baselines interleave while every body band holds
 /// a single line. `split_rows_by_text_positions` reads those baselines as separate rows and the
 /// header then loses its role. This fires only when the source says all of that: the table is
-/// ruled, its first band is drawn as one row, every other band is single-line, no line of the band
-/// is a data value, and the first body band holds values (xberg-io/xberg#3346). ~keep
-pub(super) fn retain_wrapped_leading_header(rows: &mut [TableRow], paths: &[PathContent], tolerance: f32) -> bool {
-    if rows.len() < MIN_WRAPPED_HEADER_LINES + 1 || !tolerance.is_finite() || tolerance < 0.0 {
-        return false;
+/// ruled, its first non-numbering band is drawn as one row, every band below is single-line, no
+/// line of the band is a data value, and the band below it holds values (xberg-io/xberg#3346).
+/// The strip that removes form-numbering bands runs later, so a leading run of blank or lone-digit
+/// bands is skipped here instead of being mistaken for the header. ~keep
+pub(super) fn retain_wrapped_leading_header(rows: &mut [TableRow], paths: &[PathContent], tolerance: f32) {
+    if rows.len() < 2 || !tolerance.is_finite() || tolerance < 0.0 {
+        return;
     }
-    let Some(lead) = rows.first() else {
-        return false;
+    let Some(lead) = rows
+        .iter()
+        .position(|row| !form_numbering_band(row) && row.cells.iter().any(|cell| !cell.text.trim().is_empty()))
+    else {
+        return;
     };
-    if lead.is_header || lead.cells.is_empty() || lead.cells.iter().any(|cell| cell.colspan != 1 || cell.rowspan != 1) {
-        return false;
-    }
-    if band_line_count(lead, tolerance) < MIN_WRAPPED_HEADER_LINES
-        || rows[1..].iter().any(|row| band_line_count(row, tolerance) > 1)
+    let (Some(header), Some(body)) = (rows.get(lead), rows.get(lead + 1)) else {
+        return;
+    };
+    if header.is_header
+        || header.cells.iter().any(|cell| cell.colspan != 1 || cell.rowspan != 1)
+        || band_line_count(header, tolerance) < MIN_WRAPPED_HEADER_LINES
+        || rows[lead + 1..].iter().any(|row| band_line_count(row, tolerance) > 1)
     {
-        return false;
+        return;
     }
-    let populated: Vec<&TableCell> = lead.cells.iter().filter(|cell| !cell.text.trim().is_empty()).collect();
+    let populated: Vec<&TableCell> = header
+        .cells
+        .iter()
+        .filter(|cell| !cell.text.trim().is_empty())
+        .collect();
     if populated.len() < MIN_WRAPPED_HEADER_CELLS
         || populated.iter().any(|cell| {
             !cell.text.chars().any(char::is_alphabetic)
                 || cell.text.split('\n').any(|line| super::is_data_value(line.trim()))
         })
+        || body
+            .cells
+            .iter()
+            .filter(|cell| super::is_data_value(cell.text.trim()))
+            .count()
+            < MIN_WRAPPED_HEADER_CELLS
     {
-        return false;
-    }
-    let Some(body) = rows.get(1) else {
-        return false;
-    };
-    if body
-        .cells
-        .iter()
-        .filter(|cell| super::is_data_value(cell.text.trim()))
-        .count()
-        < MIN_WRAPPED_HEADER_CELLS
-    {
-        return false;
+        return;
     }
     let Some(bounds) = populated
         .iter()
         .filter_map(|cell| cell.bbox)
         .reduce(|all, cell| all.union(&cell))
     else {
-        return false;
+        return;
     };
     if !one_drawn_band(bounds, paths) {
-        return false;
+        return;
     }
-    let lead = &mut rows[0];
-    lead.is_header = true;
-    for cell in &mut lead.cells {
+    let header = &mut rows[lead];
+    header.is_header = true;
+    for cell in &mut header.cells {
         cell.is_header = true;
     }
-    true
 }
 
-/// Distinct text baselines in one band, counted to `tolerance`.
+/// A band `strip_form_numbering_artifacts` removes: every cell empty or one digit 1-9, with at
+/// least one such digit. ~keep
+fn form_numbering_band(row: &TableRow) -> bool {
+    let lone_digit = |text: &str| {
+        let text = text.trim();
+        text.len() == 1 && text.as_bytes()[0].is_ascii_digit() && text.as_bytes()[0] != b'0'
+    };
+    row.cells
+        .iter()
+        .all(|cell| cell.text.trim().is_empty() || lone_digit(&cell.text))
+        && row.cells.iter().any(|cell| lone_digit(&cell.text))
+}
+
+/// Distinct text baselines in one band, counted to the caller's text-clustering `tolerance`.
 fn band_line_count(row: &TableRow, tolerance: f32) -> usize {
     let mut baselines: Vec<f32> = Vec::new();
     for span in row.cells.iter().flat_map(|cell| &cell.spans) {
@@ -185,27 +207,62 @@ fn band_line_count(row: &TableRow, tolerance: f32) -> usize {
     baselines.len()
 }
 
-/// Whether `bounds` is one source-drawn band: a visible rule on each side and none inside, and the
-/// band's own cells split by rules rather than by text.
+/// Whether `bounds` is one source-drawn band: a visible rule on each side and no spanning rule
+/// inside, so its cells are split by rules rather than by text.
 fn one_drawn_band(bounds: Rect, paths: &[PathContent]) -> bool {
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
         return false;
     }
     let drawn: Vec<&PathContent> = paths.iter().collect();
-    let horizontal_edges = [bounds.top(), bounds.bottom()]
+    if ![bounds.top(), bounds.bottom()]
         .into_iter()
-        .all(|y| visible_rule_styles(&drawn, bounds.left(), bounds.right(), y, true).is_some());
-    if !horizontal_edges {
+        .all(|y| band_rule(&drawn, bounds.left(), bounds.right(), y))
+    {
         return false;
     }
-    !drawn.iter().any(|path| {
-        let rule = path.rendered_bbox();
-        path.is_horizontal_line(HEADER_RULE_TOLERANCE)
-            && rule.right() > bounds.left()
-            && rule.left() < bounds.right()
-            && rule.center().y > bounds.top() + HEADER_RULE_TOLERANCE
-            && rule.center().y < bounds.bottom() - HEADER_RULE_TOLERANCE
+    !rule_axis_positions(paths).into_iter().any(|y| {
+        y > bounds.top() + HEADER_RULE_TOLERANCE
+            && y < bounds.bottom() - HEADER_RULE_TOLERANCE
+            && band_rule(&drawn, bounds.left(), bounds.right(), y)
     })
+}
+
+/// Whether the source painted a rule across `left..right` at `y`: a stroked line, or a filled bar
+/// thin enough to be a rule rather than a cell background. Both go through
+/// [`visible_rule_styles`], so a later fill crossing the rule hides it the same way for either.
+pub(super) fn band_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
+    visible_rule_styles(paths, left, right, y, true).is_some()
+}
+
+/// A filled bar thin enough to be a painted rule rather than a cell background. Visible-region
+/// accounting for the bar is the same one `visible_rule_styles` applies to a stroked rule; only the
+/// axis acceptance differs.
+fn is_rule_bar(path: &PathContent) -> bool {
+    path.is_rectangle() && fill_only_bar(path) && path.bbox.height.abs() <= MAX_RULE_BAR_THICKNESS
+}
+
+/// Whether `path` lies on the horizontal rule axis at `y`.
+///
+/// `is_horizontal_line` tests thinness strictly, so a one-point filled bar — a common producer
+/// style — needs its own acceptance on the same axis. A bar is judged by its painted geometry only:
+/// fill alpha, soft masks and blend modes are unmodelled here as everywhere in this file, so a fully
+/// transparent bar still reads as a rule. ~keep
+fn on_rule_axis(path: &PathContent, y: f32) -> bool {
+    (path.is_horizontal_line(HEADER_RULE_TOLERANCE) || is_rule_bar(path)) && same_rule_position(path.bbox.center().y, y)
+}
+
+/// Axis positions of every horizontal rule candidate: a stroked line or a thin filled bar.
+fn rule_axis_positions<'a>(paths: impl IntoIterator<Item = &'a PathContent>) -> Vec<f32> {
+    let mut positions: Vec<f32> = Vec::new();
+    for path in paths {
+        let candidate = (path.is_horizontal_line(HEADER_RULE_TOLERANCE) && path.stroke_color.is_some())
+            || (is_rule_bar(path) && dark_fill(path));
+        let y = path.bbox.center().y;
+        if candidate && !positions.iter().any(|seen| same_rule_position(*seen, y)) {
+            positions.push(y);
+        }
+    }
+    positions
 }
 
 fn cell_has_visible_shading(cell: &TableCell, paths: &[&PathContent]) -> bool {
@@ -575,7 +632,7 @@ fn visible_rule_styles(
     for path in paths {
         let drawn = path.rendered_bbox();
         let (low, high) = (drawn.left(), drawn.right());
-        let on_axis = path.is_horizontal_line(HEADER_RULE_TOLERANCE) && same_rule_position(path.bbox.center().y, y);
+        let on_axis = on_rule_axis(path, y);
         let stroked_rule = on_axis && path.stroke_color.is_some();
         let filled_rule = on_axis && accept_filled_bars && fill_only_bar(path);
         if stroked_rule && dark_solid_stroke(path) {

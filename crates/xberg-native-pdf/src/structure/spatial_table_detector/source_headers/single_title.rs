@@ -1,8 +1,8 @@
 //! Preserve the leaf roles under one leading merged title in a fully ruled native table.
 
 use super::{
-    HEADER_RULE_TOLERANCE, contained_source_label, dark_fill, dark_solid_stroke, fill_only_bar, same_rule_position,
-    visible_rule_styles,
+    HEADER_RULE_TOLERANCE, band_rule, contained_source_label, dark_fill, dark_solid_stroke, fill_only_bar,
+    same_rule_position,
 };
 use crate::elements::PathContent;
 use crate::geometry::Rect;
@@ -57,7 +57,7 @@ pub(super) fn has_leaf_header(
     title_ink_crosses_divider(title, divider)
         && [band.top(), band.bottom()]
             .into_iter()
-            .all(|y| visible_rule_styles(paths, band.left(), band.right(), y, true).is_some())
+            .all(|y| band_rule(paths, band.left(), band.right(), y))
         && divider_starts_at_leaf(paths, divider, upper, band)
 }
 
@@ -89,7 +89,7 @@ pub(super) fn has_stacked_leaf_header(
         && body_band_aligns(body, leaves, band)
         && [band.top(), band.bottom()]
             .into_iter()
-            .all(|y| band_boundary_rule(paths, band.left(), band.right(), y))
+            .all(|y| band_rule(paths, band.left(), band.right(), y))
 }
 
 /// An empty corner cell over column 0 and one bold title cell over every other column, with both
@@ -118,23 +118,11 @@ fn leaf_tracks(leaves: &TableRow, columns: usize) -> Option<Vec<Rect>> {
                 && !cell.is_header
                 && contained_source_label(cell, true, MAX_UPPER_FONT_METRIC_OVERHANG)
         })
-        || !leaves.cells.iter().any(alphabetic_label)
+        || !alphabetic_label(&leaves.cells[0])
     {
         return None;
     }
-    let mut tracks: Vec<Rect> = Vec::with_capacity(columns);
-    for cell in &leaves.cells {
-        let bounds = cell.bbox.filter(|bounds| valid(*bounds))?;
-        if let Some(previous) = tracks.last()
-            && (!same_rule_position(bounds.left(), previous.right())
-                || !same_rule_position(bounds.top(), previous.top())
-                || !same_rule_position(bounds.bottom(), previous.bottom()))
-        {
-            return None;
-        }
-        tracks.push(bounds);
-    }
-    Some(tracks)
+    row_tracks(&leaves.cells)
 }
 
 /// Whether the title occupies exactly the leaf columns after the corner and closes on the leaf
@@ -148,9 +136,9 @@ fn title_covers_leaves(corner: Rect, title: Rect, tracks: &[Rect], band: Rect) -
         && same_rule_position(title.top(), band.bottom())
 }
 
-/// A body band under the leaves: complete rows of contained cells, the first two holding values
-/// with at least one of them regular-weight. A body's first column may be a bold row-label track,
-/// so only the band as a whole has to contrast with the bold header. ~keep
+/// A body band under the leaves: complete rows of contained cells, of which at least one of the
+/// first two holds two values and a regular-weight cell. A body's first column may be a bold
+/// row-label track, so only the band as a whole has to contrast with the bold header. ~keep
 fn stacked_body_is_data(body: &[TableRow], columns: usize) -> bool {
     let contained = |cell: &TableCell| {
         contained_source_label(cell, true, MAX_UPPER_FONT_METRIC_OVERHANG)
@@ -192,21 +180,6 @@ fn body_band_aligns(body: &[TableRow], leaves: &TableRow, band: Rect) -> bool {
         && body[0].cells.iter().zip(&leaves.cells).all(
             |(value, leaf)| matches!((leaf.bbox, value.bbox), (Some(leaf), Some(value)) if same_track(leaf, value)),
         )
-}
-
-/// A painted rule can be a filled bar a full point tall, which `is_horizontal_line` does not accept
-/// as a line at the snap tolerance; accept a thin filled rectangle spanning the band as well. ~keep
-fn band_boundary_rule(paths: &[&PathContent], left: f32, right: f32, y: f32) -> bool {
-    visible_rule_styles(paths, left, right, y, true).is_some()
-        || paths.iter().any(|path| {
-            path.is_rectangle()
-                && fill_only_bar(path)
-                && dark_fill(path)
-                && path.bbox.height <= 2.0 * HEADER_RULE_TOLERANCE
-                && same_rule_position(path.bbox.center().y, y)
-                && path.bbox.left() <= left + HEADER_RULE_TOLERANCE
-                && path.bbox.right() >= right - HEADER_RULE_TOLERANCE
-        })
 }
 
 fn title_ink_crosses_divider(title: &TableCell, divider: f32) -> bool {
@@ -258,20 +231,25 @@ fn aligned_bands(title: &TableCell, peers: &[TableCell], leaves: &TableRow, body
     .then_some((upper, band))
 }
 
-fn row_band(cells: &[TableCell]) -> Option<Rect> {
-    let first = cells.first()?.bbox.filter(|bounds| valid(*bounds))?;
-    let mut band = first;
-    for cell in &cells[1..] {
+/// The band's cells as contiguous column tracks, left to right.
+fn row_tracks(cells: &[TableCell]) -> Option<Vec<Rect>> {
+    let mut tracks: Vec<Rect> = Vec::with_capacity(cells.len());
+    for cell in cells {
         let bounds = cell.bbox.filter(|bounds| valid(*bounds))?;
-        if !same_rule_position(bounds.left(), band.right())
-            || !same_rule_position(bounds.top(), first.top())
-            || !same_rule_position(bounds.bottom(), first.bottom())
+        if let Some(previous) = tracks.last()
+            && (!same_rule_position(bounds.left(), previous.right())
+                || !same_rule_position(bounds.top(), previous.top())
+                || !same_rule_position(bounds.bottom(), previous.bottom()))
         {
             return None;
         }
-        band = band.union(&bounds);
+        tracks.push(bounds);
     }
-    Some(band)
+    (!tracks.is_empty()).then_some(tracks)
+}
+
+fn row_band(cells: &[TableCell]) -> Option<Rect> {
+    row_tracks(cells)?.into_iter().reduce(|all, bounds| all.union(&bounds))
 }
 
 fn valid(bounds: Rect) -> bool {
