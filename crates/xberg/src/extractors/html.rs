@@ -15,7 +15,7 @@ use crate::types::extraction::ExtractedImage;
 use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::uri::{ExtractedUri, classify_uri};
-use crate::types::{HtmlMetadata, Metadata};
+use crate::types::{HtmlMetadata, Metadata, TableGrid};
 use async_trait::async_trait;
 use bytes::Bytes;
 use encoding::declared_html_encoding;
@@ -43,6 +43,185 @@ impl HtmlExtractor {
     }
 }
 
+/// An HTML `<table>` resolved onto xberg's dense grid, with the source cell
+/// roles and merge geometry kept alongside it.
+struct SourceTable {
+    cells: Vec<Vec<String>>,
+    /// Positions, spans and `<th>` roles of the source cells.
+    grid: TableGrid,
+    /// Column labels the source itself declares, i.e. a first row made only of
+    /// header cells. `None` when the first row mixes header and data cells or
+    /// declares no header at all: a label list the source does not show would
+    /// be inferred structure, not preserved structure.
+    columns: Option<Vec<String>>,
+}
+
+impl SourceTable {
+    /// `roles` is the same table read from the source markup, where a cell is a
+    /// header exactly when it is a `<th>`; see [`source_table_roles`]. It is
+    /// ignored when it does not describe this table's cells, and a table whose
+    /// header roles cannot be proved keeps none rather than a guessed one.
+    fn from_grid(grid: &html_to_markdown_rs::types::TableGrid, roles: Option<&TableGrid>) -> Self {
+        let header_positions: std::collections::HashSet<(u32, u32)> = roles
+            .filter(|roles| roles_describe(grid, roles))
+            .into_iter()
+            .flat_map(|roles| roles.cells.iter())
+            .filter(|role| role.is_header)
+            .map(|role| (role.row, role.col))
+            .collect();
+        let (cells, grid) = crate::extraction::grid_flatten::flatten_positioned_cells_with_roles(
+            grid.rows as usize,
+            grid.cells.iter().map(|cell| {
+                (
+                    cell.row,
+                    cell.row_span,
+                    cell.col_span,
+                    header_positions.contains(&(cell.row, cell.col)),
+                    cell.content.clone(),
+                )
+            }),
+        );
+        let columns = first_row_labels(&cells, &grid);
+        Self { cells, grid, columns }
+    }
+
+    /// Whether the source grid carries structure the dense cell grid cannot:
+    /// a header role or a merge. Without one the cheap text-only path renders
+    /// the same table, so no retained grid is attached.
+    fn carries_structure(&self) -> bool {
+        self.grid
+            .cells
+            .iter()
+            .any(|cell| cell.is_header || cell.row_span > 1 || cell.col_span > 1)
+    }
+
+    /// Push the table and, when it carries structure, the retained grid that
+    /// lets HTML output emit the source roles and spans.
+    fn push(self, b: &mut InternalDocumentBuilder) -> u32 {
+        let carries_structure = self.carries_structure();
+        let SourceTable { cells, grid, columns } = self;
+        let element = b.push_table_from_cells_with_columns(&cells, columns, None, None);
+        if carries_structure {
+            let encoded = serde_json::to_string(&grid).expect("a table grid is always serialisable");
+            b.merge_attribute(element, crate::types::internal::NATIVE_TABLE_GRID_ATTRIBUTE, encoded);
+        }
+        element
+    }
+}
+
+/// Whether `roles` describes the same cells as the converted `grid`, so its
+/// per-cell header flags can be trusted for it.
+///
+/// The two readings come from separate walks of the same markup, so they are
+/// joined cell by cell and only used when both place every cell at the same
+/// position. Only the positions are compared: the conversion renders a cell's
+/// inline markup to markdown (`[Name](/x)`), which the structure reading keeps as
+/// text (`Name`), and those two spellings are still the same cell.
+fn roles_describe(grid: &html_to_markdown_rs::types::TableGrid, roles: &TableGrid) -> bool {
+    grid.cells.len() == roles.cells.len()
+        && grid
+            .cells
+            .iter()
+            .zip(&roles.cells)
+            .all(|(cell, role)| cell.row == role.row && cell.col == role.col)
+}
+
+/// The `<th>` roles of every table in `html`, in document order.
+///
+/// The conversion's own table grid cannot answer this: `html_to_markdown_rs`
+/// marks the first row of every table as a header, so a table with no `<th>` at
+/// all arrives looking exactly like a headed one. This reads the source markup
+/// through `html_to_markdown_rs`'s document-structure builder instead, which sets
+/// a cell's header flag from its `<th>` tag alone. It parses the document a second
+/// time, so callers must only reach for it when [`declares_header_cells`] says
+/// there is a header cell to read.
+fn source_table_roles(html: &str) -> Vec<TableGrid> {
+    use html_to_markdown_rs::types::NodeContent;
+
+    let Ok(dom) = html_to_markdown_rs::dom::parse(html, html_to_markdown_rs::dom::ParserOptions::new()) else {
+        return Vec::new();
+    };
+    let structure = html_to_markdown_rs::types::build_document_structure(&dom);
+    structure
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Table { grid } => Some(TableGrid {
+                rows: grid.rows,
+                cols: grid.cols,
+                cells: grid
+                    .cells
+                    .iter()
+                    .map(|cell| crate::types::GridCell {
+                        content: cell.content.clone(),
+                        row: cell.row,
+                        col: cell.col,
+                        row_span: cell.row_span,
+                        col_span: cell.col_span,
+                        is_header: cell.is_header,
+                        bbox: None,
+                        heading_level: None,
+                        style_name: None,
+                    })
+                    .collect(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Number of table nodes the conversion's structure holds.
+fn table_count(structure: &html_to_markdown_rs::types::DocumentStructure) -> usize {
+    structure
+        .nodes
+        .iter()
+        .filter(|node| matches!(node.content, html_to_markdown_rs::types::NodeContent::Table { .. }))
+        .count()
+}
+
+/// Whether `html` contains a `<th>` or `<thead>` start tag, in any case.
+///
+/// A document without one has no header cell to preserve, so the tables keep
+/// their data roles without paying for [`source_table_roles`]' second read.
+fn declares_header_cells(html: &str) -> bool {
+    let bytes = html.as_bytes();
+    bytes.windows(3).any(|window| {
+        window[0] == b'<' && window[1].eq_ignore_ascii_case(&b't') && window[2].eq_ignore_ascii_case(&b'h')
+    })
+}
+
+/// Column labels the source shows as its first row, or `None` when the row is
+/// not entirely header cells.
+///
+/// A `<th>` row is a declaration the source makes; treating any other first row
+/// as column labels would invent a header over data that has none.
+fn first_row_labels(cells: &[Vec<String>], grid: &TableGrid) -> Option<Vec<String>> {
+    let mut saw_header_cell = false;
+    for cell in grid.cells.iter().filter(|cell| cell.row == 0) {
+        if !cell.is_header {
+            return None;
+        }
+        saw_header_cell = true;
+    }
+    saw_header_cell.then(|| cells.first().cloned().unwrap_or_default())
+}
+
+/// Cursor over the source-declared table roles, in the order tables are visited.
+struct TableRoles<'a> {
+    roles: &'a [TableGrid],
+    cursor: usize,
+}
+
+impl<'a> TableRoles<'a> {
+    /// The roles of the next table in document order, when the source reading
+    /// reached this table at all.
+    fn next(&mut self) -> Option<&'a TableGrid> {
+        let index = self.cursor;
+        self.cursor = index + 1;
+        self.roles.get(index)
+    }
+}
+
 impl HtmlExtractor {
     /// Map html-to-markdown's `DocumentStructure` into xberg's `InternalDocument`.
     ///
@@ -55,10 +234,15 @@ impl HtmlExtractor {
     /// into a `XbergError::Security` via the `?` operator.
     fn map_document_structure(
         doc_structure: &html_to_markdown_rs::types::DocumentStructure,
+        table_roles: &[TableGrid],
         inject_placeholders: bool,
         budget: &mut SecurityBudget,
     ) -> crate::Result<InternalDocument> {
         let mut b = InternalDocumentBuilder::new("html");
+        let mut table_roles = TableRoles {
+            roles: table_roles,
+            cursor: 0,
+        };
 
         let root_indices: Vec<usize> = doc_structure
             .nodes
@@ -68,7 +252,14 @@ impl HtmlExtractor {
             .map(|(i, _)| i)
             .collect();
 
-        Self::walk_nodes(doc_structure, &root_indices, &mut b, inject_placeholders, budget)?;
+        Self::walk_nodes(
+            doc_structure,
+            &root_indices,
+            &mut b,
+            &mut table_roles,
+            inject_placeholders,
+            budget,
+        )?;
 
         Ok(b.build())
     }
@@ -80,6 +271,7 @@ impl HtmlExtractor {
         doc: &html_to_markdown_rs::types::DocumentStructure,
         indices: &[usize],
         b: &mut InternalDocumentBuilder,
+        table_roles: &mut TableRoles<'_>,
         inject_placeholders: bool,
         budget: &mut SecurityBudget,
     ) -> crate::Result<()> {
@@ -112,7 +304,7 @@ impl HtmlExtractor {
                     budget.enter()?;
                     b.push_list(*ordered);
                     let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
-                    Self::walk_nodes(doc, &child_indices, b, inject_placeholders, budget)?;
+                    Self::walk_nodes(doc, &child_indices, b, table_roles, inject_placeholders, budget)?;
                     b.end_list();
                     budget.leave();
                 }
@@ -130,20 +322,15 @@ impl HtmlExtractor {
 
                     if !node.children.is_empty() {
                         let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
-                        Self::walk_nodes(doc, &child_indices, b, inject_placeholders, budget)?;
+                        Self::walk_nodes(doc, &child_indices, b, table_roles, inject_placeholders, budget)?;
                     }
                     budget.leave();
                 }
                 HC::Table { grid } => {
                     let cell_count = grid.cells.len();
                     budget.add_cells(cell_count)?;
-                    let cells = crate::extraction::grid_flatten::flatten_positioned_cells(
-                        grid.rows as usize,
-                        grid.cells
-                            .iter()
-                            .map(|c| (c.row, c.row_span, c.col_span, c.content.clone())),
-                    );
-                    b.push_table_from_cells(&cells, None, None);
+                    let roles = table_roles.next();
+                    SourceTable::from_grid(grid, roles).push(b);
                 }
                 HC::Image { description, src, .. } => {
                     let text = description.as_deref().unwrap_or("");
@@ -172,14 +359,14 @@ impl HtmlExtractor {
                     budget.enter()?;
                     b.push_quote_start();
                     let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
-                    Self::walk_nodes(doc, &child_indices, b, inject_placeholders, budget)?;
+                    Self::walk_nodes(doc, &child_indices, b, table_roles, inject_placeholders, budget)?;
                     b.push_quote_end();
                     budget.leave();
                 }
                 HC::DefinitionList => {
                     budget.enter()?;
                     let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
-                    Self::walk_nodes(doc, &child_indices, b, inject_placeholders, budget)?;
+                    Self::walk_nodes(doc, &child_indices, b, table_roles, inject_placeholders, budget)?;
                     budget.leave();
                 }
                 HC::DefinitionItem { term, definition } => {
@@ -192,7 +379,7 @@ impl HtmlExtractor {
                     budget.enter()?;
                     b.push_group_start(label.as_deref(), None);
                     let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
-                    Self::walk_nodes(doc, &child_indices, b, inject_placeholders, budget)?;
+                    Self::walk_nodes(doc, &child_indices, b, table_roles, inject_placeholders, budget)?;
                     b.push_group_end();
                     budget.leave();
                 }
@@ -784,7 +971,15 @@ impl SyncExtractor for HtmlExtractor {
             .unwrap_or(true);
 
         let mut doc = if let Some(ref structure) = doc_structure {
-            let mapped = Self::map_document_structure(structure, inject_placeholders, &mut budget)?;
+            let tables = table_count(structure);
+            let table_roles = (tables > 0 && declares_header_cells(&html))
+                .then(|| source_table_roles(&html))
+                // A second reading that reaches a different set of tables cannot label
+                // them; a table nested in another is emitted as its own table by the
+                // conversion, so the two readings disagree there. ~keep
+                .filter(|roles| roles.len() == tables)
+                .unwrap_or_default();
+            let mapped = Self::map_document_structure(structure, &table_roles, inject_placeholders, &mut budget)?;
             if mapped.elements.is_empty() && !content_text.is_empty() {
                 let mut b = InternalDocumentBuilder::new("html");
                 b.push_paragraph(&content_text, vec![], None, None);
@@ -975,26 +1170,38 @@ mod tests {
     fn extract_tables(html: &str) -> Vec<Table> {
         let (_, _, table_data, _): (String, _, Vec<html_to_markdown_rs::types::TableData>, _) =
             crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
+        let roles = if declares_header_cells(html) {
+            source_table_roles(html)
+        } else {
+            Vec::new()
+        };
         table_data
             .into_iter()
             .enumerate()
             .map(|(i, t)| {
-                let grid = &t.grid;
-                let cells = crate::extraction::grid_flatten::flatten_positioned_cells(
-                    grid.rows as usize,
-                    grid.cells
-                        .iter()
-                        .map(|c| (c.row, c.row_span, c.col_span, c.content.clone())),
-                );
+                let source = SourceTable::from_grid(&t.grid, roles.get(i));
                 Table {
-                    cells,
+                    cells: source.cells,
                     markdown: t.markdown,
                     page_number: (i + 1) as u32,
+                    columns: source.columns,
                     bounding_box: None,
                     ..Default::default()
                 }
             })
             .collect()
+    }
+
+    /// A `<th>` row is the source declaring its column labels; a data row is not,
+    /// even though the conversion's own grid marks the first row of every table as
+    /// a header (GH#2332).
+    #[test]
+    fn source_header_roles_come_from_the_markup_not_the_row_index() {
+        let headed = extract_tables("<table><tr><th>Name</th><th>Score</th></tr><tr><td>A</td><td>1</td></tr></table>");
+        assert_eq!(headed[0].columns, Some(vec!["Name".to_string(), "Score".to_string()]));
+
+        let headerless = extract_tables("<table><tr><td>A</td><td>1</td></tr><tr><td>B</td><td>2</td></tr></table>");
+        assert_eq!(headerless[0].columns, None);
     }
 
     #[test]
@@ -1433,7 +1640,7 @@ mod tests {
             crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
         let doc_structure = doc_structure.expect("should have document structure");
         let mut budget = SecurityBudget::from_limits(&SecurityLimits::default());
-        let doc = HtmlExtractor::map_document_structure(&doc_structure, true, &mut budget).unwrap();
+        let doc = HtmlExtractor::map_document_structure(&doc_structure, &[], true, &mut budget).unwrap();
         assert!(!doc.elements.is_empty(), "Should have elements");
     }
 
@@ -1481,7 +1688,7 @@ mod tests {
             ds.expect("should have document structure")
         };
         let mut budget = SecurityBudget::from_limits(&SecurityLimits::default());
-        let doc = HtmlExtractor::map_document_structure(&doc_structure, true, &mut budget).unwrap();
+        let doc = HtmlExtractor::map_document_structure(&doc_structure, &[], true, &mut budget).unwrap();
 
         for elem in &doc.elements {
             let text = elem.text.as_str();
@@ -1510,7 +1717,7 @@ mod tests {
             crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
         let doc_structure = doc_structure.expect("should have document structure");
         let mut budget = SecurityBudget::from_limits(&SecurityLimits::default());
-        let doc = HtmlExtractor::map_document_structure(&doc_structure, true, &mut budget).unwrap();
+        let doc = HtmlExtractor::map_document_structure(&doc_structure, &[], true, &mut budget).unwrap();
         let content = doc.content();
         assert!(
             content.contains("!["),
@@ -1526,7 +1733,7 @@ mod tests {
             crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
         let doc_structure = doc_structure.expect("should have document structure");
         let mut budget = SecurityBudget::from_limits(&SecurityLimits::default());
-        let doc = HtmlExtractor::map_document_structure(&doc_structure, false, &mut budget).unwrap();
+        let doc = HtmlExtractor::map_document_structure(&doc_structure, &[], false, &mut budget).unwrap();
         let content = doc.content();
         assert!(
             !content.contains("!["),
