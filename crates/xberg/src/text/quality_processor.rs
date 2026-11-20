@@ -193,6 +193,7 @@ mod tests {
                 backend: "tesseract".to_string(),
             }),
             native_content: None,
+            geometry: None,
         }
     }
 

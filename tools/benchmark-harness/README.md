@@ -204,7 +204,9 @@ CLI `batch` entry point for throughput:
 The current CI matrix contains `xberg-markdown-baseline`, `xberg-markdown-layout`,
 `xberg-markdown-baseline-paddle`, and `xberg-markdown-layout-paddle`. The legacy
 `xberg-markdown-paddle-ocr` adapter remains available for explicit compatibility runs,
-but is not included in current matrix counts. Append `-batch` in native-batch mode.
+but is not included in current matrix counts. `xberg-markdown-layout-v3` runs the layout
+pipeline with the experimental PP-DocLayoutV3 detector instead of RT-DETR; it is registered only
+when selected explicitly and is not in the matrix. Append `-batch` in native-batch mode.
 
 ### Reference Frameworks (7)
 

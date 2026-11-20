@@ -388,6 +388,7 @@ mod tests {
             sheet_name: None,
             ocr_confidence: None,
             native_content: None,
+            geometry: None,
         };
 
         assert_eq!(strip_page(&mut page), 3);

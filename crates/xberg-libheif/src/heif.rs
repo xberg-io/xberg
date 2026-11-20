@@ -54,7 +54,7 @@ impl LibHeif {
 impl Drop for LibHeif {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
-        // SAFETY requirement: Deinitialization balances a successful initialization.
+        // SAFETY: Deinitialization balances a successful initialization.
         // new_checked enforces success before constructing a guard; new ignores the result.
         unsafe {
             lh::heif_deinit();

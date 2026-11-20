@@ -3,12 +3,14 @@
 use super::{MAX_TILE_SIDE, MIN_STANDARD_SOURCE_DPI, read_geometry};
 use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PdfBackend, PdfConfig};
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
+use crate::plugins::OcrBackend;
 use crate::types::{ExtractedDocument, ProcessingWarning};
 use std::borrow::Cow;
 use xberg_native_pdf::{PdfDocument, document::PageRotation};
 
-pub(in super::super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
-    unsupported_reason(config, ocr).is_none()
+/// [`unsupported_reason`] including the languages the resolved backend actually offers.
+pub(in super::super) fn supports_for(config: &ExtractionConfig, ocr: &OcrConfig, backend: &dyn OcrBackend) -> bool {
+    unsupported_reason_for(config, ocr, backend).is_none()
 }
 
 /// Names the first configuration choice that keeps strip recovery from running. Callers
@@ -29,6 +31,37 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
     {
         return Some("image, PDF or content-filter options are set");
     }
+    unsupported_ocr_options(ocr)
+}
+
+/// [`unsupported_reason`] including the languages the resolved backend actually offers.
+pub(in super::super) fn unsupported_reason_for(
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+    backend: &dyn OcrBackend,
+) -> Option<&'static str> {
+    unsupported_reason(config, ocr).or_else(|| unsupported_language(ocr, backend))
+}
+
+/// The picture route has no page geometry or PDF options; only OCR-facing choices decide it.
+pub(in super::super) fn standalone_unsupported_reason(
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+    backend: &dyn OcrBackend,
+) -> Option<&'static str> {
+    if !matches!(config.output_format, OutputFormat::Plain | OutputFormat::Markdown) {
+        return Some("the output format is not plain text or Markdown");
+    }
+    if config.result_format != crate::types::ResultFormat::Unified || config.include_document_structure {
+        return Some("per-element results or document structure were requested");
+    }
+    if config.content_filter.is_some() {
+        return Some("content-filter options are set");
+    }
+    unsupported_ocr_options(ocr).or_else(|| unsupported_language(ocr, backend))
+}
+
+fn unsupported_ocr_options(ocr: &OcrConfig) -> Option<&'static str> {
     if ocr
         .tesseract_config
         .as_ref()
@@ -40,9 +73,6 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
     {
         return Some("OCR preprocessing, element, pipeline or rotation options are set");
     }
-    if ocr.effective_tesseract_language().as_slice() != ["eng"] {
-        return Some("the OCR language is not English only");
-    }
     if !ocr.backend_options.as_ref().is_none_or(|options| {
         options
             .as_object()
@@ -51,6 +81,13 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
         return Some("custom OCR backend options are set");
     }
     None
+}
+
+fn unsupported_language(ocr: &OcrConfig, backend: &dyn OcrBackend) -> Option<&'static str> {
+    ocr.effective_tesseract_language()
+        .iter()
+        .any(|language| !backend.supports_language_for(ocr, language))
+        .then_some("the OCR backend does not support every requested language")
 }
 
 // Annotation extraction is a separate projection. The source certificate still rejects
@@ -72,6 +109,7 @@ fn annotation_only_options(pdf: &PdfConfig) -> bool {
             extract_form_fields: true,
             reading_order: false,
             backend: PdfBackend::Native,
+            extract_vector_geometry: false,
         }
     )
 }
@@ -458,25 +496,97 @@ mod tests {
             ..Default::default()
         };
         assert!(allowed(&structured, &ocr).is_some_and(|reason| reason.contains("document structure")));
+        // A language is refused only when the resolved backend does not offer it. ~keep
         let german = OcrConfig {
             language: vec!["deu".into()],
             ..ocr.clone()
         };
-        assert!(allowed(&ExtractionConfig::default(), &german).is_some_and(|reason| reason.contains("language")));
+        assert_eq!(allowed(&ExtractionConfig::default(), &german), None);
         let mut tesseract_language = ocr.clone();
         tesseract_language.tesseract_config = Some(crate::types::TesseractConfig {
             language: vec!["deu".into()],
             ..Default::default()
         });
-        assert!(
-            allowed(&ExtractionConfig::default(), &tesseract_language)
-                .is_some_and(|reason| reason.contains("language"))
-        );
+        assert_eq!(allowed(&ExtractionConfig::default(), &tesseract_language), None);
         let mut preprocessed = ocr.clone();
         preprocessed.tesseract_config = Some(crate::types::TesseractConfig {
             preprocessing: Some(Default::default()),
             ..Default::default()
         });
         assert!(allowed(&ExtractionConfig::default(), &preprocessed).is_some());
+    }
+
+    struct Languages(&'static [&'static str]);
+
+    impl crate::plugins::Plugin for Languages {
+        fn name(&self) -> &str {
+            "languages"
+        }
+
+        fn version(&self) -> String {
+            "0".to_owned()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for Languages {
+        async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+            Ok(ExtractedDocument::default())
+        }
+
+        fn supports_language(&self, language: &str) -> bool {
+            self.0.contains(&language)
+        }
+
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+    }
+
+    #[test]
+    fn a_language_is_admitted_only_when_the_backend_offers_it() {
+        let german = OcrConfig {
+            language: vec!["deu".into()],
+            ..Default::default()
+        };
+        let english_only = Languages(&["eng"]);
+        let bilingual = Languages(&["eng", "deu"]);
+        assert_eq!(
+            unsupported_reason_for(&ExtractionConfig::default(), &german, &english_only),
+            Some("the OCR backend does not support every requested language")
+        );
+        assert_eq!(
+            unsupported_reason_for(&ExtractionConfig::default(), &german, &bilingual),
+            None
+        );
+        assert!(supports_for(&ExtractionConfig::default(), &german, &bilingual));
+        assert!(!supports_for(&ExtractionConfig::default(), &german, &english_only));
+
+        let mut preprocessed = german.clone();
+        preprocessed.tesseract_config = Some(crate::types::TesseractConfig {
+            preprocessing: Some(Default::default()),
+            ..Default::default()
+        });
+        assert_eq!(
+            unsupported_reason_for(&ExtractionConfig::default(), &preprocessed, &bilingual),
+            Some("OCR preprocessing, element, pipeline or rotation options are set")
+        );
+
+        let html = ExtractionConfig {
+            output_format: OutputFormat::Html,
+            ..Default::default()
+        };
+        assert_eq!(
+            standalone_unsupported_reason(&html, &german, &bilingual),
+            Some("the output format is not plain text or Markdown")
+        );
+        assert_eq!(
+            standalone_unsupported_reason(&ExtractionConfig::default(), &german, &english_only),
+            Some("the OCR backend does not support every requested language")
+        );
+        assert_eq!(
+            standalone_unsupported_reason(&ExtractionConfig::default(), &german, &bilingual),
+            None
+        );
     }
 }
