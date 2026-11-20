@@ -2605,8 +2605,21 @@ fn is_inline_style_transition(
 /// `INLINE_STYLE_BASELINE_TOLERANCE`, so this predicate only ever relaxes a comparison the existing
 /// gate rejects outright -- it cannot change the outcome of any pair that passes today. ~keep
 fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_delta: f32, font_size: f32) -> bool {
-    let smaller_font_size = previous.font_size.min(next.font_size);
-    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+    // The raised run is the smaller-font segment, whichever side of the pair the stream put it on.
+    // Measuring `next` would read the base's advance as the run's whenever the mark arrived first,
+    // and a base is always wide, so a lone mark would buy the wider reach it does not earn.
+    let raised = if previous.font_size <= next.font_size {
+        previous
+    } else {
+        next
+    };
+    crate::script_run::is_script_run_baseline_offset_for_width(
+        baseline_delta,
+        font_size,
+        raised.font_size,
+        raised.width,
+        raised.font_size,
+    )
 }
 
 /// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,

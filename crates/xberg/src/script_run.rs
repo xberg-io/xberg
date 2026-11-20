@@ -43,6 +43,13 @@ pub(crate) const SCRIPT_RUN_MAX_FONT_SIZE_RATIO: f32 = 0.85;
 /// their base, so this stays far below the ordinary inline-style forward-gap allowance.
 pub(crate) const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 
+/// Smallest advance width of a raised run, in ems of its own font, that carries more than one
+/// glyph. A lone digit advances under 0.6em, while a word-processor ordinal suffix (`2nd`, `24th`)
+/// spans about one em and is set 0.38em up -- inside [`SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR`] but
+/// past [`SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR`]. The run is measured, not matched against its text.
+/// ~keep
+pub(crate) const SCRIPT_RUN_MIN_WIDE_WIDTH_EM: f32 = 0.6;
+
 /// Whether a non-zero baseline offset paired with a materially smaller font reads as a
 /// sub/superscript relationship.
 ///
@@ -67,6 +74,24 @@ pub(crate) fn is_script_row_baseline_offset(baseline_delta: f32, font_size: f32,
         smaller_font_size,
         SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR,
     )
+}
+
+/// [`is_script_run_baseline_offset`] for a raised run measured by its advance width: a run wider
+/// than [`SCRIPT_RUN_MIN_WIDE_WIDTH_EM`] carries more than one glyph and keeps the wider row reach,
+/// because an ordinal suffix is set higher than a lone mark but still continues its line.
+pub(crate) fn is_script_run_baseline_offset_for_width(
+    baseline_delta: f32,
+    font_size: f32,
+    smaller_font_size: f32,
+    run_width: f32,
+    run_font_size: f32,
+) -> bool {
+    let reach = if run_font_size > 0.0 && run_width > run_font_size * SCRIPT_RUN_MIN_WIDE_WIDTH_EM {
+        SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR
+    } else {
+        SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+    };
+    is_script_offset_within(baseline_delta, font_size, smaller_font_size, reach)
 }
 
 fn is_script_offset_within(baseline_delta: f32, font_size: f32, smaller_font_size: f32, reach: f32) -> bool {
@@ -101,6 +126,13 @@ mod tests {
         assert!(!is_script_run_baseline_offset(4.2, 9.96, 7.57));
         assert!(is_script_row_baseline_offset(4.2, 9.96, 7.57));
         assert!(!is_script_row_baseline_offset(5.5, 9.96, 7.57));
+    }
+
+    #[test]
+    fn should_accept_a_wide_run_at_an_ordinal_rise_and_reject_a_lone_mark() {
+        // Word sets `2nd` 0.38em up in a run about one em wide; a lone digit is half an em.
+        assert!(is_script_run_baseline_offset_for_width(4.56, 12.0, 8.04, 8.16, 8.04));
+        assert!(!is_script_run_baseline_offset_for_width(4.56, 12.0, 8.04, 4.02, 8.04));
     }
 
     #[test]

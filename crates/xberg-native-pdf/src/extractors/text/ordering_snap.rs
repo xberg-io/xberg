@@ -1,5 +1,5 @@
 use super::script_stack::{StackSpan, script_stack};
-use super::span_ordering::{SnapReach, snapped_script_baselines};
+use super::span_ordering::{SnapReach, snapped_script_bases};
 
 /// One span as the reading-order snap sees it: text, x, y, width, font size.
 pub(crate) type OrderingSpan<'a> = (&'a str, f32, f32, f32, f32);
@@ -14,36 +14,69 @@ pub(super) fn is_list_marker(text: &str) -> bool {
 /// Largest rise of a phrase above its base line, in ems of the phrase: a phrase is a line of text, not a mark.
 const PHRASE_MAX_RISE_EM: f32 = 0.25;
 
+/// Smallest advance width of a raised run, in ems of its own font, that carries more than one
+/// glyph. A lone digit advances under 0.6em; a word-processor ordinal suffix (`2nd`, `24th`) spans
+/// about one em and is set 0.38em up, past `SnapReach::ORDERING` but inside the extractor's own
+/// snap. The run is measured, not matched against its text. ~keep
+const RUN_MIN_WIDTH_EM: f32 = 0.6;
+
+/// The reach for a multi-glyph raised run that continues the line it abuts: the extractor's own
+/// rise at the ordering snap's tighter sideways reach. ~keep
+const ORDERING_RUN: SnapReach = SnapReach {
+    max_shift_em: 0.5,
+    min_base_size_factor: 1.25,
+    max_gap_em: 0.25,
+};
+
 pub(super) fn is_phrase(text: &str) -> bool {
     let trimmed = text.trim();
     trimmed.chars().count() > 3 || trimmed.contains(char::is_whitespace)
 }
 
+/// Whether a raised span is wide enough to carry more than one glyph.
+fn is_multi_glyph_run(text: &str, width: f32, font_size: f32) -> bool {
+    !text.trim().is_empty() && font_size > 0.0 && width > font_size * RUN_MIN_WIDTH_EM
+}
+
 /// Base-line Y each span snaps to for reading order, or `None` when it stays on its own line.
+pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Option<f32>> {
+    ordering_script_bases(spans)
+        .into_iter()
+        .map(|base| base.map(|(y, _)| y))
+        .collect()
+}
+
+/// Base line and base span index each span snaps to for reading order, or `None` when it stays on
+/// its own line.
 ///
 /// Raised glyphs that touch on one baseline form a cluster. The cluster snaps whole when its
 /// first glyph abuts the base, so `(\u{2217})` and `1/t` are never split between two rows. List
 /// markers never count as marks, and a phrase snaps only when it abuts its base on its own line.
-pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Option<f32>> {
+/// A multi-glyph run continues its line up to the extractor's rise, because an ordinal suffix
+/// (`2nd`) is set higher than a lone mark but still belongs to the sentence it follows.
+pub(crate) fn ordering_script_bases(spans: &[OrderingSpan<'_>]) -> Vec<Option<(f32, usize)>> {
     let snapshot: Vec<_> = spans.iter().map(|&(_, x, y, w, fs)| (x, y, w, fs)).collect();
-    let single = snapped_script_baselines(&snapshot, SnapReach::ORDERING);
-    let phrase = snapped_script_baselines(&snapshot, SnapReach::ORDERING_PHRASE);
-    let raised = snapped_script_baselines(&snapshot, SnapReach::RAISED);
-    let own: Vec<Option<f32>> = spans
+    let single = snapped_script_bases(&snapshot, SnapReach::ORDERING);
+    let phrase = snapped_script_bases(&snapshot, SnapReach::ORDERING_PHRASE);
+    let run = snapped_script_bases(&snapshot, ORDERING_RUN);
+    let raised = snapped_script_bases(&snapshot, SnapReach::RAISED);
+    let own: Vec<Option<(f32, usize)>> = spans
         .iter()
         .enumerate()
-        .map(|(i, &(text, _, y, _, fs))| {
+        .map(|(i, &(text, _, y, width, fs))| {
             if is_list_marker(text) {
                 None
             } else if is_phrase(text) {
-                phrase[i].filter(|&base_y| y - base_y <= fs * PHRASE_MAX_RISE_EM)
+                phrase[i].filter(|&(base_y, _)| y - base_y <= fs * PHRASE_MAX_RISE_EM)
             } else {
-                single[i]
+                single[i].or_else(|| is_multi_glyph_run(text, width, fs).then_some(run[i]).flatten())
             }
         })
         .collect();
 
-    let mut members: Vec<usize> = (0..spans.len()).filter(|&i| raised[i].is_some()).collect();
+    let mut members: Vec<usize> = (0..spans.len())
+        .filter(|&i| raised[i].is_some() || own[i].is_some())
+        .collect();
     members.sort_by(|&a, &b| {
         crate::utils::safe_float_cmp(spans[a].2, spans[b].2).then(crate::utils::safe_float_cmp(spans[a].1, spans[b].1))
     });
@@ -61,11 +94,11 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
             end += 1;
         }
         let cluster = &members[start..end];
-        if let Some(base_y) = own[cluster[0]]
+        if let Some(base) = own[cluster[0]]
             && !cluster.iter().any(|&i| is_list_marker(spans[i].0))
         {
             for &i in cluster {
-                result[i] = Some(base_y);
+                result[i] = Some(base);
             }
         }
         start = end;
@@ -138,6 +171,16 @@ pub fn script_stacks(spans: &[StackSpan<'_>]) -> Vec<(usize, Vec<usize>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_snap_a_wide_ordinal_run_at_038em_and_leave_a_lone_mark_raw() {
+        let ordinal: Vec<OrderingSpan<'_>> =
+            vec![("on 2", 100.0, 700.0, 40.0, 12.0), ("nd", 140.0, 704.56, 8.16, 8.04)];
+        assert_eq!(ordering_script_baselines(&ordinal), [None, Some(700.0)]);
+
+        let lone: Vec<OrderingSpan<'_>> = vec![("base", 100.0, 700.0, 20.0, 12.0), ("f", 120.0, 704.56, 4.0, 8.0)];
+        assert_eq!(ordering_script_baselines(&lone), [None, None]);
+    }
 
     #[test]
     fn should_report_a_stack_of_two_sizes_on_its_base_without_snapping_it() {

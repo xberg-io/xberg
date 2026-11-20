@@ -540,3 +540,56 @@ fn should_keep_the_plus_of_a_subscripted_base_out_of_the_exponent_of_the_base() 
     let content = markdown(&script_pdf(SUBSCRIPTED_BASE_WITH_EXPONENT));
     assert!(content.contains("g<sup>j</sup> ~K~<sup>+</sup>"), "{content}");
 }
+
+fn inline_superscript_pdf(prefix: &str, mark: &str, tail: &str, overhang: f32) -> Vec<u8> {
+    let metrics = script_pdf(&format!(
+        "BT /F1 12 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET\n\
+         BT /F1 8.04 Tf 1 0 0 1 72 600 Tm ({mark}) Tj ET"
+    ));
+    let native = xberg_native_pdf::PdfDocument::from_bytes(metrics).expect("native parses script metrics");
+    let chars = native.extract_chars(0).expect("script advances");
+    let prefix_width: f32 = chars
+        .iter()
+        .filter(|glyph| (glyph.font_size - 12.0).abs() < 0.01)
+        .map(|glyph| glyph.advance_width)
+        .sum();
+    let mark_width: f32 = chars
+        .iter()
+        .filter(|glyph| (glyph.font_size - 8.04).abs() < 0.01)
+        .map(|glyph| glyph.advance_width)
+        .sum();
+    // The producer's advance can end a hair past the mark's origin, as on the reported PDF; a
+    // negative gap inside `SnapReach`'s kerning slack must still read as attached. ~keep
+    let mark_x = 72.0 + prefix_width - overhang;
+    let tail_x = mark_x + mark_width;
+    script_pdf(&format!(
+        "BT /F1 12 Tf 1 0 0 1 72 700 Tm ({prefix}) Tj ET\n\
+         BT /F1 8.04 Tf 1 0 0 1 {mark_x} 704.56 Tm ({mark}) Tj ET\n\
+         BT /F1 12 Tf 1 0 0 1 {tail_x} 700 Tm ({tail}) Tj ET"
+    ))
+}
+
+#[test]
+fn should_keep_an_inline_superscript_ordinal_in_its_sentence() {
+    let bytes = inline_superscript_pdf(
+        "The appeal was refused on 2",
+        "nd",
+        " June, 2021 of an application.",
+        0.02,
+    );
+    let output = markdown(&bytes);
+    assert_eq!(
+        output.trim(),
+        "The appeal was refused on 2<sup>nd</sup> June, 2021 of an application.",
+        "{output:?}"
+    );
+    assert_eq!(output.matches("<sup>").count(), 1, "one ordinal annotation: {output:?}");
+}
+
+#[test]
+fn should_keep_a_lone_raised_footnote_mark_as_it_was() {
+    // A single glyph is below the ordinal run's measured width, so the wider reach leaves it
+    // exactly as it was: an inline superscript, not a suffix joined onto the preceding line.
+    let bytes = inline_superscript_pdf("Clause 123", "1", " continues.", 0.0);
+    assert_eq!(markdown(&bytes).trim(), "Clause 123<sup>1</sup> continues.");
+}
