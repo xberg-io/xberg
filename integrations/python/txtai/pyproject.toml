@@ -72,3 +72,6 @@ ini_options.markers = ["slow: marks tests that hit the OCR path or other slow Xb
 [tool.coverage]
 run.source = ["txtai_xberg"]
 report.fail_under = 80
+
+[tool.uv.sources]
+xberg = { path = "../../../packages/python", editable = true }
