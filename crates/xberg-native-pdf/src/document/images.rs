@@ -350,7 +350,7 @@ impl PdfDocument {
         };
 
         // Resource-name colour-space map for this page scope (§8.6.6 / §8.9.7). ~keep
-        let cs_map = self.build_color_space_map(resources.as_ref());
+        let cs_map = std::sync::Arc::new(self.build_color_space_map(resources.as_ref()));
 
         let xobject_dict = if let Some(ref res) = resources {
             if let Some(res_dict) = res.as_dict() {
@@ -467,7 +467,7 @@ impl PdfDocument {
         match subtype {
             "Image" => {
                 if let Some(ref_obj) = xobject_ref_opt {
-                    let cs_map = self.build_color_space_map(resources);
+                    let cs_map = std::sync::Arc::new(self.build_color_space_map(resources));
                     match image_handle_from_xobject(self, ref_obj, xobj_dict, ctm, *paint_order, &cs_map) {
                         Some(h) => {
                             *paint_order += 1;
@@ -522,9 +522,14 @@ impl PdfDocument {
             if mask_dict.get("Subtype").and_then(Object::as_name) != Some("Image") {
                 continue;
             }
-            if let Some(mut handle) =
-                image_handle_from_xobject(self, mask_ref, mask_dict, ctm, *paint_order, color_spaces)
-            {
+            if let Some(mut handle) = image_handle_from_xobject(
+                self,
+                mask_ref,
+                mask_dict,
+                ctm,
+                *paint_order,
+                &std::sync::Arc::new(color_spaces.clone()),
+            ) {
                 handle.referenced_mask = true;
                 handles.push(handle);
                 *paint_order += 1;
@@ -574,29 +579,34 @@ impl PdfDocument {
             }
         };
 
-        let form_resources = if let Some(form_res) = xobj_dict.get("Resources") {
+        // Borrow the Form's resources instead of cloning them: a page that invokes a Form
+        // under thousands of nested `Do` operators cloned the shared (165-entry) resource and
+        // XObject dictionaries on every traversal, which is what made one document peak at
+        // 13 GB in `page_image_handles`. ~keep
+        let form_resources_loaded;
+        let form_resources: &Object = if let Some(form_res) = xobj_dict.get("Resources") {
             if let Some(ref_obj) = form_res.as_reference() {
-                self.load_object(ref_obj)?
+                form_resources_loaded = self.load_object(ref_obj)?;
+                &form_resources_loaded
             } else {
-                form_res.clone()
+                form_res
             }
         } else {
-            parent_resources.clone()
+            parent_resources
         };
 
-        let form_xobject_dict = if let Some(res_dict) = form_resources.as_dict() {
-            if let Some(xobj_entry) = res_dict.get("XObject") {
-                let resolved = if let Some(ref_obj) = xobj_entry.as_reference() {
-                    self.load_object(ref_obj)?
+        let form_xobject_loaded;
+        let form_xobject_dict = match form_resources.as_dict().and_then(|res| res.get("XObject")) {
+            Some(xobj_entry) => {
+                let resolved: &Object = if let Some(ref_obj) = xobj_entry.as_reference() {
+                    form_xobject_loaded = self.load_object(ref_obj)?;
+                    &form_xobject_loaded
                 } else {
-                    xobj_entry.clone()
+                    xobj_entry
                 };
-                resolved.as_dict().cloned()
-            } else {
-                None
+                resolved.as_dict()
             }
-        } else {
-            None
+            None => None,
         };
 
         let form_matrix = if let Some(matrix_obj) = xobj_dict.get("Matrix") {
@@ -607,21 +617,26 @@ impl PdfDocument {
         };
 
         let cached_stream = self.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned();
+        // Share the decoded stream instead of deep-copying it on every traversal: a page
+        // that places a heavy Form under many nested `Do` operators would copy its whole
+        // decoded content per invocation, which is what made one 165-page document peak at
+        // 13 GB. The parser only reads the bytes. ~keep
         let stream_data = if let Some(cached) = cached_stream {
-            cached.as_ref().clone()
+            cached
         } else {
             match self.decode_stream_with_encryption(xobject, xobject_ref) {
                 Ok(data) => {
                     const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
                     let current_bytes = self.xobject_stream_cache_bytes.load(Ordering::Relaxed);
-                    if current_bytes + data.len() <= MAX_STREAM_CACHE_BYTES {
+                    let shared = std::sync::Arc::new(data);
+                    if current_bytes + shared.len() <= MAX_STREAM_CACHE_BYTES {
                         self.xobject_stream_cache_bytes
-                            .store(current_bytes + data.len(), Ordering::Relaxed);
+                            .store(current_bytes + shared.len(), Ordering::Relaxed);
                         self.xobject_stream_cache
                             .lock_or_recover()
-                            .insert(xobject_ref, std::sync::Arc::new(data.clone()));
+                            .insert(xobject_ref, std::sync::Arc::clone(&shared));
                     }
-                    data
+                    shared
                 }
                 Err(error) => {
                     tracing::warn!(target: LOG_TARGET,
@@ -654,6 +669,7 @@ impl PdfDocument {
         let start_ctm = form_matrix.multiply(&parent_ctm);
         let mut ctm_stack = vec![start_ctm];
         let mut handles = Vec::new();
+        let cs_map = std::sync::Arc::new(self.build_color_space_map(Some(form_resources)));
 
         for op in operators {
             match op {
@@ -675,7 +691,7 @@ impl PdfDocument {
                 }
 
                 Operator::Do { name } => {
-                    if let Some(ref xobj_d) = form_xobject_dict {
+                    if let Some(xobj_d) = form_xobject_dict {
                         let current_ctm = ctm_stack
                             .last()
                             .copied()
@@ -683,7 +699,7 @@ impl PdfDocument {
                         if let Ok(mut more) = self.collect_handles_from_do(
                             &name,
                             xobj_d,
-                            Some(&form_resources),
+                            Some(form_resources),
                             current_ctm,
                             paint_order,
                             xobject_stack,
@@ -698,7 +714,6 @@ impl PdfDocument {
                         .last()
                         .copied()
                         .unwrap_or_else(crate::content::Matrix::identity);
-                    let cs_map = self.build_color_space_map(Some(&form_resources));
                     if let Some(h) = image_handle_from_inline(self, &dict, data, current_ctm, *paint_order, &cs_map) {
                         handles.push(h);
                         *paint_order += 1;
@@ -1014,29 +1029,34 @@ impl PdfDocument {
             reason: "Form XObject is not a dictionary".to_string(),
         })?;
 
-        let form_resources = if let Some(form_res) = xobj_dict.get("Resources") {
+        // Borrow the Form's resources instead of cloning them: a page that invokes a Form
+        // under thousands of nested `Do` operators cloned the shared (165-entry) resource and
+        // XObject dictionaries on every traversal, which is what made one document peak at
+        // 13 GB in `page_image_handles`. ~keep
+        let form_resources_loaded;
+        let form_resources: &Object = if let Some(form_res) = xobj_dict.get("Resources") {
             if let Some(ref_obj) = form_res.as_reference() {
-                self.load_object(ref_obj)?
+                form_resources_loaded = self.load_object(ref_obj)?;
+                &form_resources_loaded
             } else {
-                form_res.clone()
+                form_res
             }
         } else {
-            parent_resources.clone()
+            parent_resources
         };
 
-        let form_xobject_dict = if let Some(res_dict) = form_resources.as_dict() {
-            if let Some(xobj_entry) = res_dict.get("XObject") {
-                let resolved = if let Some(ref_obj) = xobj_entry.as_reference() {
-                    self.load_object(ref_obj)?
+        let form_xobject_loaded;
+        let form_xobject_dict = match form_resources.as_dict().and_then(|res| res.get("XObject")) {
+            Some(xobj_entry) => {
+                let resolved: &Object = if let Some(ref_obj) = xobj_entry.as_reference() {
+                    form_xobject_loaded = self.load_object(ref_obj)?;
+                    &form_xobject_loaded
                 } else {
-                    xobj_entry.clone()
+                    xobj_entry
                 };
-                resolved.as_dict().cloned()
-            } else {
-                None
+                resolved.as_dict()
             }
-        } else {
-            None
+            None => None,
         };
 
         let form_matrix = if let Some(matrix_obj) = xobj_dict.get("Matrix") {
@@ -1047,21 +1067,26 @@ impl PdfDocument {
         };
 
         let cached_stream = self.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned();
+        // Share the decoded stream instead of deep-copying it on every traversal: a page
+        // that places a heavy Form under many nested `Do` operators would copy its whole
+        // decoded content per invocation, which is what made one 165-page document peak at
+        // 13 GB. The parser only reads the bytes. ~keep
         let stream_data = if let Some(cached) = cached_stream {
-            cached.as_ref().clone()
+            cached
         } else {
             match self.decode_stream_with_encryption(xobject, xobject_ref) {
                 Ok(data) => {
                     const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
                     let current_bytes = self.xobject_stream_cache_bytes.load(Ordering::Relaxed);
-                    if current_bytes + data.len() <= MAX_STREAM_CACHE_BYTES {
+                    let shared = std::sync::Arc::new(data);
+                    if current_bytes + shared.len() <= MAX_STREAM_CACHE_BYTES {
                         self.xobject_stream_cache_bytes
-                            .store(current_bytes + data.len(), Ordering::Relaxed);
+                            .store(current_bytes + shared.len(), Ordering::Relaxed);
                         self.xobject_stream_cache
                             .lock_or_recover()
-                            .insert(xobject_ref, std::sync::Arc::new(data.clone()));
+                            .insert(xobject_ref, std::sync::Arc::clone(&shared));
                     }
-                    data
+                    shared
                 }
                 Err(error) => {
                     tracing::warn!(target: LOG_TARGET,
@@ -1110,7 +1135,7 @@ impl PdfDocument {
                 }
 
                 Operator::Do { name } => {
-                    if let Some(ref xobj_d) = form_xobject_dict {
+                    if let Some(xobj_d) = form_xobject_dict {
                         let current_ctm = ctm_stack
                             .last()
                             .copied()
@@ -1120,7 +1145,7 @@ impl PdfDocument {
                         if let Ok(mut xobj_images) = self.extract_images_from_xobject_do(
                             &name,
                             xobj_d,
-                            Some(&form_resources),
+                            Some(form_resources),
                             current_ctm,
                             xobject_stack,
                             filter,
@@ -1332,5 +1357,59 @@ impl PdfDocument {
     /// Returns true if the content stream might contain text operators (BT or Do).
     pub fn may_contain_text_public(data: &[u8]) -> bool {
         Self::may_contain_text(data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal one-page PDF whose content stream paints two inline images.
+    fn pdf_with_two_inline_images() -> Vec<u8> {
+        let content = b"q 10 0 0 10 0 0 cm BI /W 1 /H 1 /BPC 8 /CS /G ID \x00 EI Q\n\
+                        q 10 0 0 10 20 0 cm BI /W 1 /H 1 /BPC 8 /CS /G ID \x00 EI Q\n";
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = vec![0usize];
+
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>\nendobj\n",
+        );
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        let xref_pos = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n", offsets.len()).as_bytes());
+        pdf.extend_from_slice(b"0000000000 65535 f\r\n");
+        for &offset in &offsets[1..] {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n\r\n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n",
+                offsets.len()
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    /// Every handle of a page shares one color-space resource map. Cloning it per handle made a
+    /// page with 20k inline images retain hundreds of kilobytes each (issue #3310).
+    #[test]
+    fn handles_of_a_page_share_the_color_space_resources() {
+        let document = PdfDocument::from_bytes(pdf_with_two_inline_images()).expect("open");
+        let handles = document.page_image_handles(0).expect("handles");
+        assert_eq!(handles.len(), 2, "both inline images must be enumerated");
+        assert!(
+            std::sync::Arc::ptr_eq(&handles[0].color_space_resources, &handles[1].color_space_resources),
+            "each handle must share the page's color-space map instead of cloning it"
+        );
     }
 }
