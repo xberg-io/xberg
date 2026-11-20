@@ -8936,6 +8936,18 @@ pub(super) async fn extract_with_ocr_for_page(
                                 page_rotation_degrees,
                             );
                         }
+                        // The document-global pass declined, so nothing above marked running
+                        // furniture; the pages still need the cross-page pass the native route
+                        // always runs, or a scanned header stays in the body.
+                        let filter = config.content_filter.clone().unwrap_or_default();
+                        if filter.strip_repeating_text {
+                            crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+                                &mut fallback_pages,
+                                &ocr_page_heights,
+                                filter.include_headers,
+                                filter.include_footers,
+                            );
+                        }
                         Some(crate::pdf::structure::assemble_internal_document(
                             fallback_pages,
                             &collected_tables,

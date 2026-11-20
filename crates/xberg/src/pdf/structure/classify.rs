@@ -222,14 +222,11 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
             && !para.is_list_item
             && !para.is_code_block
             && !para.is_formula
-            && word_count <= 30
+            && word_count <= FORMULA_MAX_WORDS
+            && reads_as_formula(&para_text)
         {
-            let math_char_count = para_text.chars().filter(|c| is_math_character(*c)).count();
-            let total_chars = para_text.chars().count();
-            if total_chars > 0 && (math_char_count >= 3 || (math_char_count as f64 / total_chars as f64) >= 0.15) {
-                para.is_formula = true;
-                para.heading_level = None;
-            }
+            para.is_formula = true;
+            para.heading_level = None;
         }
 
         if para.heading_level.is_none()
@@ -327,6 +324,62 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
     detect_indentation_based_lists(paragraphs);
 
     detect_monospace_code_blocks(paragraphs);
+}
+
+/// Longest text that may read as an equation rather than as prose carrying symbols.
+const FORMULA_MAX_WORDS: usize = 30;
+/// Share of math characters above which a short line is an equation.
+const FORMULA_MIN_MATH_DENSITY: f64 = 0.15;
+/// Math characters a line needs before its length is considered.
+const FORMULA_MIN_MATH_CHARS: usize = 3;
+
+/// Mark paragraphs whose text reads as a standalone equation.
+///
+/// This is the font-independent half of `classify_paragraphs`, split out so the
+/// heuristic extraction path — which has no structure tree and therefore never
+/// runs `classify_paragraphs` — classifies an equation line the same way. Without
+/// it a born-digital equation stays an ordinary paragraph, so Markdown has no
+/// `Formula` element to write as display math.
+pub(super) fn classify_formula_paragraphs(paragraphs: &mut [PdfParagraph]) {
+    for para in paragraphs {
+        if para.is_formula
+            || para.heading_level.is_some()
+            || para.is_list_item
+            || para.is_code_block
+            || para.is_page_furniture
+        {
+            continue;
+        }
+        if para.word_count > FORMULA_MAX_WORDS {
+            continue;
+        }
+        let text = if !para.text.is_empty() {
+            std::borrow::Cow::Borrowed(para.text.as_str())
+        } else {
+            std::borrow::Cow::Owned(
+                para.lines
+                    .iter()
+                    .flat_map(|line| line.segments.iter())
+                    .map(|segment| segment.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        };
+        if reads_as_formula(&text) {
+            para.is_formula = true;
+        }
+    }
+}
+
+/// Whether `text` carries enough math characters to be an equation line.
+fn reads_as_formula(text: &str) -> bool {
+    let total_chars = text.chars().count();
+    if total_chars == 0 {
+        return false;
+    }
+    let math_char_count = text.chars().filter(|c| is_math_character(*c)).count();
+    math_char_count >= FORMULA_MIN_MATH_CHARS
+        || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY
 }
 
 /// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the

@@ -12,6 +12,7 @@ pub(crate) mod layout_classify;
 pub(crate) mod layout_debug;
 pub(crate) mod lines;
 mod list_marker;
+mod math_inline;
 pub(crate) mod page_number;
 mod paragraphs;
 pub(crate) mod pipeline;
@@ -21,6 +22,7 @@ mod text_repair;
 pub(crate) mod types;
 
 #[allow(unused_imports)]
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use assembly::assemble_internal_document;
 pub(crate) use list_marker::is_bullet_glyph;
 pub(crate) use pipeline::SegmentStructureConfig;

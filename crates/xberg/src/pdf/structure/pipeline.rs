@@ -13,11 +13,13 @@ use crate::pdf::hierarchy::{BoundingBox, SegmentData, TextBlock, assign_heading_
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 
+#[cfg(test)]
 use super::assembly::assemble_internal_document;
 use super::classify::{
-    classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings, demote_unnumbered_subsections,
-    is_body_size_bold_heading_candidate, is_body_size_bold_signal, is_numbered_section_heading, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
+    classify_formula_paragraphs, classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings,
+    demote_unnumbered_subsections, is_body_size_bold_heading_candidate, is_body_size_bold_signal,
+    is_numbered_section_heading, mark_arxiv_noise, mark_cross_page_repeating_short_text,
+    mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
@@ -884,6 +886,7 @@ fn process_single_page_with_folio(
         }
         demote_structure_annotation_headings(&mut paragraphs);
         merge_spatial_footnote_markers(&mut paragraphs);
+        classify_formula_paragraphs(&mut paragraphs);
         retain_page_furniture_safely(&mut paragraphs);
         paragraphs
     }
@@ -4595,12 +4598,13 @@ fn build_document_structure_with_native(
     );
 
     let effective_image_positions = if inject_placeholders { image_positions } else { &[] };
-    let mut doc = assemble_internal_document(
+    let mut doc = crate::pdf::structure::assembly::assemble_internal_document_with_inline_math(
         all_page_paragraphs,
         &emitted_tables,
         images,
         effective_image_positions,
         &witnesses.hyphens,
+        !ocr_text,
     );
     #[cfg(feature = "formula-recognition")]
     for element in &mut doc.elements {
@@ -7568,7 +7572,29 @@ fn running_margin_key(paragraph: &PdfParagraph, height: f32, hints: Option<&[Lay
     {
         return None;
     }
-    Some((text, header))
+    Some((running_margin_key_text(&text), header))
+}
+
+/// Comparison key for a margin line, blind to the folio.
+///
+/// A running header or footer repeats its words on every page and changes only the
+/// page number it carries, so `ACME REPORT - PAGE 3` and `ACME REPORT - PAGE 4` are one
+/// running line. Two running lines that differ in their words still differ in the key.
+fn running_margin_key_text(text: &str) -> String {
+    let mut key = String::with_capacity(text.len());
+    let mut in_digits = false;
+    for ch in text.chars() {
+        if ch.is_ascii_digit() {
+            if !in_digits {
+                key.push('#');
+                in_digits = true;
+            }
+        } else {
+            in_digits = false;
+            key.push(ch);
+        }
+    }
+    key
 }
 
 fn has_deferred_layout_class(paragraph: &PdfParagraph, hints: Option<&[LayoutHint]>) -> bool {
@@ -7771,7 +7797,16 @@ fn document_content_width(all_pages: &[Vec<PdfParagraph>]) -> f32 {
 /// preserved. Consecutive rendering artifacts still require coincident valid
 /// geometry; unpositioned OCR text is never collapsed by that pass. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) fn strip_repeating_text_from_pages(pages: &mut [Vec<PdfParagraph>], page_heights: &[f32]) {
+pub(crate) fn strip_repeating_text_from_pages(
+    pages: &mut [Vec<PdfParagraph>],
+    page_heights: &[f32],
+    include_headers: bool,
+    include_footers: bool,
+) {
+    // OCR pages carry no layout hints here, so the repetition pass is the only source
+    // of running-header/footer semantics. It runs first because it matches a margin
+    // line on every page, including the first, where the tier passes keep one copy.
+    classify_running_margin_regions(pages, page_heights, include_headers, include_footers, None);
     mark_cross_page_repeating_text(pages, page_heights);
     mark_cross_page_repeating_short_text(pages);
     for page in pages.iter_mut() {
