@@ -1689,40 +1689,62 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     }
 
     // Dense dark glyphs can lower the page mean on a light background. Confirm text structure. ~keep
-    // Sparse ink is all ink: on a tinted page the paper is no longer foreground, so there is no
-    // second tone above the ink for the lower mode to separate, and 9 px digits ink too few pixels
-    // for the lower mode's population floor (#3337). The ink-colour and text-structure checks
-    // below still decide, exactly as they do for the lower mode. ~keep
-    let sparse_foreground = foreground_pixels as f64 <= CLEAN_PAGE_SPARSE_FOREGROUND_FRACTION * pixel_count_f64;
-    let significant_lower_mode = foreground_lower_mode(&foreground_histogram).filter(|(_, lower_mode_pixels)| {
-        *lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
-            && *lower_mode_pixels as f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD * pixel_count_f64
-    });
-    let ink_split = match significant_lower_mode {
-        Some(split) => Some(split),
-        None if !bright_mean && sparse_foreground => {
-            let paper_luminance_floor = (light_channel_floor / RGB_CHANNEL_COUNT as u16) as u8;
-            Some((paper_luminance_floor.saturating_sub(1), foreground_pixels))
-        }
-        None => None,
-    };
-    let Some((lower_mode_max, lower_mode_pixels)) = ink_split else {
+    let paper_luminance_floor = (light_channel_floor / RGB_CHANNEL_COUNT as u16) as u8;
+    let Some((lower_mode_max, ink_pixels)) = ink_split(
+        &foreground_histogram,
+        foreground_pixels,
+        pixel_count,
+        bright_mean,
+        paper_luminance_floor,
+    ) else {
         return false;
     };
     // A dark mean from mostly coloured ink is a graphic, not dense text; it keeps its raw pixels. ~keep
     if !bright_mean && ink_is_coloured(&foreground_by_darkest, &coloured_by_darkest, lower_mode_max) {
         return false;
     }
-    lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
-        && lower_mode_pixels as f64 / pixel_count_f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD
-        && lower_mode_has_text_structure(
-            rgb_data,
-            width as usize,
-            height as usize,
-            lower_mode_max,
-            lower_mode_pixels,
-            (!bright_mean).then_some(foreground_pixels),
-        )
+    lower_mode_has_text_structure(
+        rgb_data,
+        width as usize,
+        height as usize,
+        lower_mode_max,
+        ink_pixels,
+        (!bright_mean).then_some(foreground_pixels),
+    )
+}
+
+/// The dark-mean lane's ink/shading split: the highest foreground luminance that is ink, and the
+/// number of pixels the split covers.
+///
+/// The lower mode separates ink from pale shading *inside* the foreground. A tinted page has no
+/// shading — its paper is no longer foreground (#3337) — so the whole foreground is ink, and
+/// sparse ink (a heading, a half-filled form, 9 px digits) can miss both the lower mode's share of
+/// the page and its population. That substitute arm is bounded by [`CLEAN_PAGE_SPARSE_FOREGROUND_FRACTION`]
+/// and by the caller's ink-colour and text-structure checks, so it needs only a minimal ink count.
+///
+/// The returned count is the population of the mask
+/// [`lower_mode_has_text_structure`] builds for this split, not the foreground count: the mask
+/// selects foreground pixels by luminance bin, and the bins at the paper edge are narrower.
+fn ink_split(
+    foreground_histogram: &[usize; 256],
+    foreground_pixels: usize,
+    pixel_count: usize,
+    bright_mean: bool,
+    paper_luminance_floor: u8,
+) -> Option<(u8, usize)> {
+    let lower_mode = foreground_lower_mode(foreground_histogram).filter(|(_, lower_mode_pixels)| {
+        *lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
+            && *lower_mode_pixels as f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD * pixel_count as f64
+    });
+    if lower_mode.is_some() {
+        return lower_mode;
+    }
+    let sparse_foreground = foreground_pixels as f64 <= CLEAN_PAGE_SPARSE_FOREGROUND_FRACTION * pixel_count as f64;
+    if bright_mean || !sparse_foreground {
+        return None;
+    }
+    let ink_pixels: usize = foreground_histogram[..=usize::from(paper_luminance_floor)].iter().sum();
+    (ink_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD).then_some((paper_luminance_floor, ink_pixels))
 }
 
 /// More than half of the ink is coloured. Ink is every foreground pixel whose darkest channel is in the lower mode.
@@ -1739,6 +1761,13 @@ fn ink_is_coloured(
     coloured_ink * 2 > ink
 }
 
+/// The lower foreground mode of a raster with a light ground, or `None`.
+///
+/// The fixed near-white split here is deliberate and is not the paper level
+/// [`should_apply_default_preprocessing`] measures. This asks whether a raster has a light ground
+/// at all, because the hidden-text-layer check compares OCR words against a visibly light page;
+/// the preprocessing decision must also accept tinted paper, which answers `None` here and keeps
+/// the hidden-layer route it had.
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) fn light_page_foreground_mode(histogram: &[usize; 256]) -> Option<u8> {
     let light_threshold = (CLEAN_PAGE_LIGHT_PIXEL_THRESHOLD * RGB_CHANNEL_MAX).ceil() as usize;
@@ -7396,15 +7425,15 @@ mod tests {
         }
     }
 
-    /// A six-column by twelve-row table of small glyph blocks on `paper`: the shape that loses its
-    /// numbers when a low-ppi tinted raster skips the 300 DPI resample (#3337).
-    fn low_ppi_table_raster(glyph_height: u32, paper: [u8; 3], ink: [u8; 3]) -> image::RgbImage {
+    /// A six-column table of small glyph blocks on `paper`: the shape that loses its numbers when
+    /// a low-ppi tinted raster skips the 300 DPI resample (#3337).
+    fn low_ppi_table_raster(glyph_height: u32, rows: u32, paper: [u8; 3], ink: [u8; 3]) -> image::RgbImage {
         let column_pitch = glyph_height * 4;
         let row_pitch = glyph_height * 2;
         let width = glyph_height * 3 + 5 * column_pitch + glyph_height * 4;
-        let height = glyph_height * 3 + 11 * row_pitch + glyph_height * 3;
+        let height = glyph_height * 6 + rows.saturating_sub(1) * row_pitch;
         let mut raster = image::RgbImage::from_pixel(width, height, image::Rgb(paper));
-        for row in 0..12 {
+        for row in 0..rows {
             for column in 0..6 {
                 let left = glyph_height * 3 + column * column_pitch;
                 let top = glyph_height * 3 + row * row_pitch;
@@ -7436,7 +7465,7 @@ mod tests {
     /// the tint covers 98% of the pixels and every one of them sits below the fixed near-white cut.
     #[test]
     fn tinted_100_dpi_table_takes_the_default_preprocessing_and_resamples() {
-        let raster = low_ppi_table_raster(9, TINTED_PAPER, TINTED_INK);
+        let raster = low_ppi_table_raster(9, 12, TINTED_PAPER, TINTED_INK);
         assert!(
             near_white_share(&raster) < CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD,
             "the fixture must carry a tint the fixed near-white split rejects"
@@ -7466,7 +7495,7 @@ mod tests {
     /// The same page with no resolution metadata: the glyph height decides, as for a white page.
     #[test]
     fn tinted_table_of_unknown_resolution_is_resampled_by_its_glyph_height() {
-        let raster = low_ppi_table_raster(9, TINTED_PAPER, TINTED_INK);
+        let raster = low_ppi_table_raster(9, 12, TINTED_PAPER, TINTED_INK);
 
         let prepared = prepare_ocr_image(
             raster.as_raw().clone(),
@@ -7491,7 +7520,7 @@ mod tests {
     /// A 300 DPI tinted table already carries enough pixels for its glyphs and is not resampled.
     #[test]
     fn tinted_300_dpi_table_is_not_resampled() {
-        let raster = low_ppi_table_raster(27, TINTED_PAPER, TINTED_INK);
+        let raster = low_ppi_table_raster(27, 12, TINTED_PAPER, TINTED_INK);
 
         let prepared = prepare_ocr_image(
             raster.as_raw().clone(),
@@ -7514,7 +7543,7 @@ mod tests {
     /// resample; the tint criterion must not turn into "always upscale".
     #[test]
     fn plain_low_ppi_raster_with_legible_glyphs_is_not_resampled() {
-        let raster = low_ppi_table_raster(40, [255; 3], [0; 3]);
+        let raster = low_ppi_table_raster(40, 12, [255; 3], [0; 3]);
 
         let prepared = prepare_ocr_image(
             raster.as_raw().clone(),
@@ -7548,6 +7577,183 @@ mod tests {
         assert!(
             !should_apply_default_preprocessing(&raster, side, side),
             "a tint must not turn a coloured graphic into a page"
+        );
+    }
+
+    /// A page-sized tinted raster with a single row of six three-digit values: ink covers 0.05% of
+    /// the page, like a heading-only page or a half-filled form. The synthetic table above inks
+    /// 8.5%, the real #3337 PNG 0.77%.
+    fn sparse_tinted_page_raster() -> image::RgbImage {
+        let mut raster = image::RgbImage::from_pixel(827, 1169, image::Rgb(TINTED_PAPER));
+        for column in 0..6 {
+            let left = 27 + column * 60;
+            for digit in 0..3 {
+                draw_digit_block(&mut raster, left + digit * 12, 60, 9, TINTED_INK);
+            }
+        }
+        raster
+    }
+
+    /// The sparse arm gates on the ink count, not on the Otsu lower mode's share of the page: the
+    /// share belonged to the lower mode's population, and a heading-only tinted page has nowhere
+    /// near it while still being a page of text.
+    #[test]
+    fn sparse_tinted_heading_takes_the_default_preprocessing() {
+        let raster = sparse_tinted_page_raster();
+        let pixel_count = raster.width() as usize * raster.height() as usize;
+        assert!(foreground_share(raster.as_raw()) < 0.001, "the fixture must be sparse");
+
+        let split = paper_split(raster.as_raw());
+        let histogram = ink_histogram(raster.as_raw(), split);
+        let foreground_pixels: usize = histogram.iter().sum();
+        let Some((ink_split_level, ink_pixels)) = ink_split(
+            &histogram,
+            foreground_pixels,
+            pixel_count,
+            false,
+            (split / RGB_CHANNEL_COUNT as u16) as u8,
+        ) else {
+            panic!("a sparse tinted page must still have an ink split");
+        };
+        assert_eq!(
+            ink_split_level,
+            (split / RGB_CHANNEL_COUNT as u16) as u8,
+            "the substitute split is the paper edge"
+        );
+        assert!(ink_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD);
+
+        let prepared = prepare_ocr_image(
+            raster.as_raw().clone(),
+            raster.width(),
+            raster.height(),
+            None,
+            None,
+            false,
+            Some(100.0),
+            false,
+        );
+        assert!(prepared.apply_pix_preprocessing);
+        assert!(
+            !prepared.image_preprocessing.expect("resampled").skipped_resize,
+            "a sparse 100 DPI tinted page must still be resampled"
+        );
+    }
+
+    /// [`ink_split`] prefers the Otsu lower mode while it holds a page share, falls back to the
+    /// whole sparse foreground when it misses that share, and needs a minimal ink count in both.
+    #[test]
+    fn ink_split_prefers_a_significant_lower_mode_and_falls_back_to_sparse_ink() {
+        let mut with_share = [0usize; 256];
+        with_share[30] = 2_000;
+        with_share[120] = 40_000;
+        assert_eq!(
+            ink_split(&with_share, 42_000, 100_000, false, 220),
+            Some((30, 2_000)),
+            "ink at 2% of the page is the lower mode"
+        );
+
+        let mut below_share = [0usize; 256];
+        below_share[30] = 400;
+        below_share[120] = 4_000;
+        assert_eq!(
+            ink_split(&below_share, 4_400, 100_000, false, 220),
+            Some((220, 4_400)),
+            "0.4% of the page misses the lower-mode share but is sparse ink"
+        );
+
+        let mut too_few = [0usize; 256];
+        too_few[30] = CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD - 1;
+        assert_eq!(ink_split(&too_few, 7, 100_000, false, 220), None);
+
+        assert_eq!(
+            ink_split(&below_share, 4_400, 100_000, true, 220),
+            None,
+            "a bright mean keeps the lower mode, which here has no share"
+        );
+    }
+
+    /// A foreground histogram and foreground population for `rgb` under `split`, as the decision
+    /// builds them.
+    fn ink_histogram(rgb: &[u8], split: u16) -> [usize; 256] {
+        let mut histogram = [0usize; 256];
+        for pixel in rgb.as_chunks::<RGB_CHANNEL_COUNT>().0 {
+            let channel_sum = pixel.iter().map(|&channel| u16::from(channel)).sum::<u16>();
+            if channel_sum < split {
+                histogram[usize::from(((channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as u8)] += 1;
+            }
+        }
+        histogram
+    }
+
+    /// [`CLEAN_PAGE_MIN_PAPER_LUMINANCE`] is 0.80 of the channel range: level 204. A page photographed
+    /// in shade at 77% is not paper and keeps its raw pixels.
+    #[test]
+    fn paper_below_the_eighty_percent_floor_is_not_a_page() {
+        let raster = low_ppi_table_raster(9, 12, [196; 3], [0; 3]);
+        let pixel_count = raster.width() as usize * raster.height() as usize;
+
+        assert_eq!(paper_channel_sum_floor(raster.as_raw(), pixel_count), None);
+        assert!(!should_apply_default_preprocessing(
+            raster.as_raw(),
+            raster.width(),
+            raster.height()
+        ));
+    }
+
+    /// The same shape at 210 (82%) is paper: tinted paper is not a shaded photograph.
+    #[test]
+    fn paper_above_the_eighty_percent_floor_is_a_page() {
+        let raster = low_ppi_table_raster(9, 12, [210; 3], [0; 3]);
+        let pixel_count = raster.width() as usize * raster.height() as usize;
+
+        assert_eq!(paper_channel_sum_floor(raster.as_raw(), pixel_count), Some(198 * 3));
+        assert!(should_apply_default_preprocessing(
+            raster.as_raw(),
+            raster.width(),
+            raster.height()
+        ));
+    }
+
+    /// The boundary itself: 204 is paper, 203 is not.
+    #[test]
+    fn the_paper_floor_sits_at_eighty_percent_of_the_channel_range() {
+        for (level, expected) in [(204u8, Some(192 * 3)), (203, None)] {
+            let raster = low_ppi_table_raster(9, 12, [level; 3], [0; 3]);
+            let pixel_count = raster.width() as usize * raster.height() as usize;
+            assert_eq!(
+                paper_channel_sum_floor(raster.as_raw(), pixel_count),
+                expected,
+                "paper level {level}"
+            );
+        }
+    }
+
+    /// A ±25 gradient around 215 is not one paper level: the lightest bulk sets the split at the
+    /// gradient's top, and too few pixels remain behind it, so the page keeps raw pixels even
+    /// though its brightest pixels sit above the floor.
+    #[test]
+    fn a_gradient_paper_above_the_floor_is_rejected_by_the_paper_share() {
+        const WIDTH: u32 = 240;
+        const HEIGHT: u32 = 160;
+        let mut raster = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([215; 3]));
+        for (index, pixel) in raster.pixels_mut().enumerate() {
+            let x = index as u32 % WIDTH;
+            let level = 190 + x * 50 / (WIDTH - 1);
+            *pixel = image::Rgb([level as u8; 3]);
+        }
+        for column in 0..6 {
+            let left = 20 + column * 35;
+            for digit in 0..3 {
+                draw_digit_block(&mut raster, left + digit * 10, 40, 9, [0; 3]);
+            }
+        }
+        let pixel_count = (WIDTH * HEIGHT) as usize;
+
+        // The lightest 15% of the gradient sits at 232, so the split is (232 - 12) * 3. ~keep
+        assert_eq!(paper_channel_sum_floor(raster.as_raw(), pixel_count), Some(220 * 3));
+        assert!(
+            !should_apply_default_preprocessing(raster.as_raw(), WIDTH, HEIGHT),
+            "a graded paper is not the uniform paper a page has"
         );
     }
 
@@ -7856,14 +8062,21 @@ mod tests {
         );
     }
 
-    /// Mean luminance of the pixels that are not light, which the contrast check compares with the paper.
+    /// The paper/ink split the decision itself uses for `rgb`, so a fixture is read the same way
+    /// the code under test reads it.
+    fn paper_split(rgb: &[u8]) -> u16 {
+        paper_channel_sum_floor(rgb, rgb.len() / RGB_CHANNEL_COUNT).unwrap_or(CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+    }
+
+    /// Mean luminance of the pixels that are not paper, which the contrast check compares with the paper.
     fn foreground_luminance(rgb: &[u8]) -> f64 {
+        let split = paper_split(rgb);
         let foreground: Vec<u16> = rgb
             .as_chunks::<RGB_CHANNEL_COUNT>()
             .0
             .iter()
             .map(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>())
-            .filter(|&sum| sum < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .filter(|&sum| sum < split)
             .collect();
         let channels = RGB_CHANNEL_COUNT as f64 * RGB_CHANNEL_MAX;
         foreground.iter().map(|&sum| f64::from(sum)).sum::<f64>() / (foreground.len() as f64 * channels)
@@ -7871,11 +8084,12 @@ mod tests {
 
     /// Share of the foreground pixels that are coloured, counted over the whole page and not over the ink.
     fn coloured_foreground_share(rgb: &[u8]) -> f64 {
+        let split = paper_split(rgb);
         let foreground: Vec<&[u8; 3]> = rgb
             .as_chunks::<RGB_CHANNEL_COUNT>()
             .0
             .iter()
-            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < split)
             .collect();
         let coloured = foreground
             .iter()
@@ -7888,15 +8102,20 @@ mod tests {
 
     const PALE_TINT: [u16; 3] = [200, 220, 255];
 
-    /// Share of the pixels that are not light, which is what the 80 percent light-pixel gate reads.
-    fn foreground_share(rgb: &[u8]) -> f64 {
+    /// Share of the pixels below `split`.
+    fn foreground_share_at(rgb: &[u8], split: u16) -> f64 {
         let foreground = rgb
             .as_chunks::<RGB_CHANNEL_COUNT>()
             .0
             .iter()
-            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < split)
             .count();
         foreground as f64 / (rgb.len() / RGB_CHANNEL_COUNT) as f64
+    }
+
+    /// Share of the pixels that are not paper, which is what the 80 percent paper gate reads.
+    fn foreground_share(rgb: &[u8]) -> f64 {
+        foreground_share_at(rgb, paper_split(rgb))
     }
 
     /// The repeated-line raster with a pale blue tint over the top `band` rows of every line, like shaded
@@ -7916,12 +8135,19 @@ mod tests {
         Some(raster)
     }
 
-    /// The widest tint that still leaves the page 80 percent light, so the page reaches the ink check. ~keep
+    /// The widest tint that still leaves the page 80 percent light, so the page reaches the ink check.
+    ///
+    /// The historical fixed split is the point of this construction: the tint has to sit outside the
+    /// near-white band to be the shading the ink check has to see through. The decision's own split
+    /// counts the tint as paper, which would make the tint share zero. ~keep
     fn pale_tinted_field_lines() -> Option<(image::RgbImage, f64)> {
-        let plain = foreground_share(repeated_line_raster(REPEATED_LINE_COUNT, false)?.as_raw());
+        let plain = foreground_share_at(
+            repeated_line_raster(REPEATED_LINE_COUNT, false)?.as_raw(),
+            CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD,
+        );
         (1..REPEATED_LINE_PITCH).rev().find_map(|band| {
             let raster = tinted_field_lines(band)?;
-            let share = foreground_share(raster.as_raw());
+            let share = foreground_share_at(raster.as_raw(), CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD);
             (share <= 1.0 - CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD - 0.01).then_some((raster, share - plain))
         })
     }

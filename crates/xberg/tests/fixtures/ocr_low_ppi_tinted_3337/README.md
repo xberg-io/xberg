@@ -17,13 +17,21 @@ SHA-256:
 - `tinted-100-7px.png`: `5af0e10e0a92130a61534e15ccd42f85aa052b3726bdfd09004a3c9b37e334e3`
 - `tinted-300-9px.png`: `8df42b2796c2e6ffa4cf02f38890ba47755a811c8ecf06d8e552791d6e2abb97`
 
-The tint is 88% of the channel range, ten points below the near-white level the OCR preprocessing
-gate used before #3337, which is why these rasters used to reach Tesseract at their own resolution.
+The paper averages 225 of 255, 88% of the channel range: about two points below the 90% near-white
+level the OCR preprocessing gate used before #3337, the dimmest channel (214) six points below it.
+That is why these rasters used to reach Tesseract at their own resolution.
 
 ## Generator
 
-A local Swift/CoreText renderer (`xcrun swift`), one call per file: `dpi`, digit pixel height,
-`tinted`, output path. A4 page, `Arial`, left margin 2 em, top margin 3 em, column pitch 3.1 em,
-row pitch 1.5 em, em = digit height / 0.716. The PNG carries a `pHYs` density chunk, so the
-extractor knows the source resolution. Font rendering is generation-time only; the committed PNGs
-are the fixtures.
+`generate.swift` (CoreGraphics/CoreText, run with `xcrun swift`) draws an A4 page with `Arial`,
+left margin 2 em, top margin 3 em, column pitch 3.1 em, row pitch 1.5 em, em = digit height /
+0.716. The PNG carries a `pHYs` density chunk, so the extractor knows the source resolution.
+Regenerating produced byte-identical files for all three committed PNGs:
+
+```
+xcrun swift generate.swift 100 9 tinted tinted-100-9px.png
+xcrun swift generate.swift 100 7 tinted tinted-100-7px.png
+xcrun swift generate.swift 300 27 tinted tinted-300-9px.png
+```
+
+Font rendering is generation time only; the committed PNGs are the fixtures.

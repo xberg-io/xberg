@@ -23,6 +23,15 @@ fn source_numbers() -> std::ops::RangeInclusive<u16> {
     101..=172
 }
 
+/// Numbers of 72 that must survive recognition, at PSM 11.
+///
+/// Before the resample the same fixtures kept 65 (9 px) and 49 (7 px); with it they kept 72 and 71
+/// (vendored Tesseract 5.5.4, macOS arm64). The floors sit between the two so a reverted decision
+/// fails while a recognizer that reads one or two numbers differently does not.
+const KEPT_100_DPI_9PX: usize = 68;
+const KEPT_100_DPI_7PX: usize = 60;
+const KEPT_300_DPI: usize = 68;
+
 fn fixture(bytes: &[u8], sha256: &str) -> Vec<u8> {
     assert_eq!(hex::encode(Sha256::digest(bytes)), sha256);
     bytes.to_vec()
@@ -114,10 +123,10 @@ fn one_hundred_dpi_tinted_table_resamples_and_keeps_its_numbers() {
         metadata.scale_factor
     );
 
-    let kept = assert_kept(&document.content, 68, "document");
+    let kept = assert_kept(&document.content, KEPT_100_DPI_9PX, "document");
     if let Some(pages) = document.pages.as_deref() {
         let [page] = pages else { panic!("one source page") };
-        assert_eq!(assert_kept(&page.content, 68, "page"), kept);
+        assert_eq!(assert_kept(&page.content, KEPT_100_DPI_9PX, "page"), kept);
     }
 }
 
@@ -132,12 +141,12 @@ fn seven_pixel_glyphs_on_a_tinted_page_survive_recognition() {
     let metadata = preprocessing(&document);
     assert!(!metadata.skipped_resize);
     assert!(
-        metadata.scale_factor >= 3.0,
-        "7 px glyphs at 100 DPI must reach the 300 DPI target, got {}",
+        (metadata.scale_factor - 3.0).abs() < 0.01,
+        "7 px glyphs at 100 DPI keep the 3x resample to the 300 DPI target, got {}",
         metadata.scale_factor
     );
 
-    assert_kept(&document.content, 60, "document");
+    assert_kept(&document.content, KEPT_100_DPI_7PX, "document");
 }
 
 #[test]
@@ -160,5 +169,5 @@ fn three_hundred_dpi_tinted_table_is_not_resampled() {
     );
     assert!((metadata.scale_factor - 1.0).abs() < 1e-3);
 
-    assert_kept(&document.content, 68, "document");
+    assert_kept(&document.content, KEPT_300_DPI, "document");
 }
