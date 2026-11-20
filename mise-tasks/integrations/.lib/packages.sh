@@ -49,13 +49,14 @@ node_test_packages=(
 # (bootstrap), so it must not resolve from an index. UV_FIND_LINKS makes the local wheel the source
 # that satisfies the pin; --no-install-package + the explicit wheel install then pin the exact
 # bytes just built. No --locked: the pin was just version-bumped, so the committed lock
-# intentionally lags the unpublished rc. ~keep
+# intentionally lags the unpublished rc. --no-sources drops the integrations' workspace path source
+# so the wheel is not rebuilt from the checkout. ~keep
 test_python_integration() {
   local package="$1" wheel_dir="$2"
   (
     cd "integrations/$package" || exit
     export UV_FIND_LINKS="$wheel_dir"
-    uv sync --all-extras --prerelease=allow --no-install-package xberg
+    uv sync --all-extras --prerelease=allow --no-sources --no-install-package xberg
     uv pip install --python .venv/bin/python --reinstall "$wheel_dir"/*.whl
     uv run --no-sync pytest -q
   )

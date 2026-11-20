@@ -16,17 +16,19 @@ enum ScriptGeometry {
 /// span it follows.
 ///
 /// Preserved script geometry keeps a mark off its base line, so a row sort or column cut on it
-/// lifts the mark out of its sentence. `order` must only permute `spans`. Only `bbox.y` of a snapped
-/// mark changes while it runs, and the raw value is put back afterwards, matched on the span's
-/// text, x, snapped y, size and `sequence`, so `sequence` itself stays the content-stream order
-/// that the ordering passes read.
+/// lifts the mark out of its sentence. A mark that arrived ahead of the span it annotates is also
+/// moved directly behind that span, because a single-column page keeps stream order and the row
+/// sort would not correct it. `order` must only permute `spans`. Only `bbox.y` of a snapped mark
+/// changes while it runs, and the raw value is put back afterwards, matched on the span's text, x,
+/// snapped y, size and `sequence`, so `sequence` itself stays the content-stream order that the
+/// ordering passes read.
 #[doc(hidden)]
 pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
     order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
 ) {
-    use crate::extractors::text::{OrderingSpan, ordering_script_baselines};
-    use std::collections::HashMap;
+    use crate::extractors::text::{OrderingSpan, ordering_script_bases};
+    use std::collections::{HashMap, HashSet};
 
     type Key = (String, u32, u32, usize, u32);
     fn key(span: &crate::layout::TextSpan) -> Key {
@@ -51,14 +53,66 @@ pub fn order_on_script_base_lines(
             )
         })
         .collect();
-    let snapped = ordering_script_baselines(&snapshot);
+    let snapped = ordering_script_bases(&snapshot);
     let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
-    for (span, base_y) in spans.iter_mut().zip(snapped) {
-        if let Some(base_y) = base_y {
+    for (span, base) in spans.iter_mut().zip(&snapped) {
+        if let Some((base_y, _)) = base {
             let raw_y = span.bbox.y;
-            span.bbox.y = base_y;
+            span.bbox.y = *base_y;
             raw_by_key.entry(key(span)).or_default().push(raw_y);
         }
+    }
+    // Input order can arrive from a raw-baseline sort with a raised mark ahead of the span it
+    // annotates. The ordering passes read the stream order, and a single-column page is not
+    // re-sorted by them, so put a mark that precedes its base back behind it. ~keep
+    let mut marks_by_base: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (mark, base) in snapped.iter().enumerate() {
+        if let Some((_, base_index)) = base {
+            marks_by_base.entry(*base_index).or_default().push(mark);
+        }
+    }
+    // A cluster the stream split is rebuilt whole: its members that already follow the base are
+    // part of the same run, and leaving them where they are puts a trailing glyph of the run on
+    // the wrong side of one that arrived ahead of the base (`/t`, base, `1`). A member of a moved
+    // mark travels with it, so a nested mark that follows its parent looks ahead of its own base
+    // index yet still belongs to the cluster the parent is pulled into. ~keep
+    let mut moved = HashSet::new();
+    let mut rebuilt: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (&base, marks) in &marks_by_base {
+        if marks.iter().all(|&mark| mark > base) {
+            continue;
+        }
+        let mut members = Vec::new();
+        let mut visited = HashSet::new();
+        let mut pending = marks.clone();
+        while let Some(mark) = pending.pop() {
+            if visited.insert(mark) {
+                members.push(mark);
+                pending.extend(marks_by_base.get(&mark).into_iter().flatten().copied());
+            }
+        }
+        members.sort_by(|&left, &right| spans[left].bbox.x.total_cmp(&spans[right].bbox.x));
+        moved.extend(members.iter().copied());
+        rebuilt.insert(base, members);
+    }
+    // A nested base inside a rebuilt cluster is already in its ancestor's member list.
+    rebuilt.retain(|base, _| !moved.contains(base));
+    if !moved.is_empty() {
+        let mut ordered = Vec::with_capacity(spans.len());
+        let mut pending: Vec<usize> = Vec::new();
+        for index in 0..spans.len() {
+            if moved.contains(&index) {
+                continue;
+            }
+            pending.push(index);
+            while let Some(index) = pending.pop() {
+                ordered.push(spans[index].clone());
+                if let Some(marks) = rebuilt.get(&index) {
+                    pending.extend(marks.iter().rev());
+                }
+            }
+        }
+        *spans = ordered;
     }
     order(spans);
     for span in spans.iter_mut() {
@@ -2349,6 +2403,59 @@ mod order_on_script_base_lines_tests {
 
     fn texts(spans: &[TextSpan]) -> Vec<&str> {
         spans.iter().map(|span| span.text.as_str()).collect()
+    }
+
+    #[test]
+    fn should_move_a_wide_raised_run_behind_its_base_when_the_page_keeps_stream_order() {
+        let mut spans = vec![
+            span("against the", 100.0, 250.0, 40.0, 12.0, 1),
+            span("nd", 140.0, 227.52, 8.16, 8.04, 3),
+            span("refusal on 2", 80.0, 222.96, 60.0, 12.0, 2),
+            span("June", 148.0, 222.96, 20.0, 12.0, 4),
+        ];
+        // A single-column page's reorder pass keeps stream order, so the snap alone cannot fix
+        // the position. The mark must land behind its base before the grouper reads the stream.
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["against the", "refusal on 2", "nd", "June"]);
+    }
+
+    #[test]
+    fn should_rebuild_a_split_cluster_in_glyph_order_including_its_trailing_glyph() {
+        let mut spans = vec![
+            span("/t", 134.0, 703.0, 7.0, 7.0, 5),
+            span("(1 \u{2212} \u{3b4})", 100.0, 700.0, 30.0, 10.0, 1),
+            span("1", 130.0, 703.0, 4.0, 7.0, 5),
+        ];
+        // `1/t` arrives with only its first glyph ahead of the base. Moving that glyph alone
+        // leaves the exponent as `/t1`; the whole cluster must follow the base in glyph order.
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["(1 \u{2212} \u{3b4})", "1", "/t"]);
+    }
+
+    #[test]
+    fn should_move_a_nested_mark_with_the_parent_the_stream_put_ahead_of_its_base() {
+        let mut spans = vec![
+            span("2", 120.0, 703.5, 4.0, 9.0, 5),
+            span("3", 124.0, 706.5, 3.0, 7.0, 5),
+            span("(0)", 100.0, 700.0, 20.0, 12.0, 1),
+        ];
+        // `2` annotates the label and arrives ahead of it; `3` annotates `2` but follows it, so
+        // its own base index does not put it ahead of anything. It belongs to the cluster `2` is
+        // pulled into and must travel with it.
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["(0)", "2", "3"]);
+    }
+
+    #[test]
+    fn should_leave_a_lone_raised_mark_ahead_of_its_base_on_a_stream_ordered_page() {
+        let mut spans = vec![
+            span("against the", 100.0, 250.0, 40.0, 12.0, 1),
+            span("f", 140.0, 227.52, 4.0, 8.0, 3),
+            span("refusal on 2", 80.0, 222.96, 60.0, 12.0, 2),
+            span("June", 148.0, 222.96, 20.0, 12.0, 4),
+        ];
+        order_on_script_base_lines(&mut spans, |_| {});
+        assert_eq!(texts(&spans), ["against the", "f", "refusal on 2", "June"]);
     }
 
     #[test]
