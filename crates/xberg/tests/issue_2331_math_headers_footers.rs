@@ -118,6 +118,25 @@ fn an_equation_inside_a_sentence_becomes_inline_math() {
     );
 }
 
+/// A sentence that carries symbols stays a paragraph, so its expression is inline math
+/// rather than display math.
+#[test]
+fn a_sentence_carrying_symbols_stays_a_paragraph() {
+    let markdown = extract(
+        &[vec![
+            line(72.0, 760.0, 16.0, "A Study of Symbols"),
+            line(72.0, 700.0, 12.0, "We use x = y + z^2 here."),
+        ]],
+        OutputFormat::Markdown,
+    );
+
+    assert_eq!(
+        markdown.trim(),
+        "A Study of Symbols\n\nWe use $x = y + z^2$ here.",
+        "a sentence with symbols must stay a paragraph with inline math"
+    );
+}
+
 /// A running header that changes only its page number is still one running line.
 #[test]
 fn a_repeated_running_header_stays_out_of_the_body() {

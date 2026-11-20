@@ -1324,16 +1324,20 @@ fn push_text_with_inline_math(
         return builder.push_paragraph(text, annotations, page, bbox);
     }
 
+    let spans: Vec<(usize, usize)> = spans
+        .into_iter()
+        .map(|(start, end)| (start as usize, end as usize))
+        .collect();
     let mut marked = String::with_capacity(text.len() + 2 * spans.len());
+    let mut math_annotations = Vec::with_capacity(spans.len());
     let mut cursor = 0usize;
-    for (start, end) in spans {
-        let (start, end) = (start as usize, end as usize);
+    for &(start, end) in &spans {
         marked.push_str(&text[cursor..start]);
         let delimited_start = marked.len();
         marked.push('$');
         marked.push_str(&text[start..end]);
         marked.push('$');
-        annotations.push(TextAnnotation {
+        math_annotations.push(TextAnnotation {
             start: delimited_start as u32,
             end: marked.len() as u32,
             kind: AnnotationKind::math(false),
@@ -1341,9 +1345,31 @@ fn push_text_with_inline_math(
         cursor = end;
     }
     marked.push_str(&text[cursor..]);
+    shift_annotations_for_math_delimiters(&mut annotations, &spans);
+    annotations.extend(math_annotations);
     let index = builder.push_paragraph(&marked, annotations, page, bbox);
     builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
     index
+}
+
+/// Move annotation ranges from the source text onto `marked`, which carries a `$` before
+/// and after every math span.
+///
+/// A start moves past a delimiter inserted at or before it; an end stops before a closing
+/// delimiter inserted exactly at it. An annotation over a math run therefore keeps
+/// covering the run's characters instead of one of its delimiters, and every boundary
+/// stays on a UTF-8 character boundary because the insertion points already are.
+fn shift_annotations_for_math_delimiters(annotations: &mut [TextAnnotation], spans: &[(usize, usize)]) {
+    for annotation in annotations.iter_mut() {
+        let start = annotation.start as usize;
+        let end = annotation.end as usize;
+        let start_shift = spans.iter().filter(|(span_start, _)| *span_start <= start).count()
+            + spans.iter().filter(|(_, span_end)| *span_end <= start).count();
+        let end_shift = spans.iter().filter(|(span_start, _)| *span_start < end).count()
+            + spans.iter().filter(|(_, span_end)| *span_end < end).count();
+        annotation.start = (start + start_shift) as u32;
+        annotation.end = (end + end_shift) as u32;
+    }
 }
 
 // The caller has matched a source CMSY glyph. Require the complete bounded
@@ -4281,6 +4307,64 @@ mod tests {
             "geometry must still gate suppression even on an exact text match, got {labels:?}"
         );
         assert!(labels.contains(&"<table>"));
+    }
+
+    /// `$` delimiters inserted for inline math must not leave an earlier annotation
+    /// straddling a UTF-8 character.
+    #[test]
+    fn inline_math_delimiters_shift_annotation_ranges() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "Set \u{03B1} = 0.5 here.";
+        let alpha = text.find('\u{03B1}').unwrap() as u32;
+        push_text_with_inline_math(
+            &mut builder,
+            text,
+            vec![TextAnnotation {
+                start: alpha,
+                end: alpha + '\u{03B1}'.len_utf8() as u32,
+                kind: AnnotationKind::Italic,
+            }],
+            None,
+            None,
+        );
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "Set $\u{03B1} = 0.5$ here.");
+        let italic = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind == AnnotationKind::Italic)
+            .expect("the source annotation must survive the insertion");
+        assert_eq!(
+            &element.text[italic.start as usize..italic.end as usize],
+            "\u{03B1}",
+            "the annotation must cover the same character once the delimiters are inserted"
+        );
+    }
+
+    /// A paragraph with no inline math run keeps its annotations byte for byte.
+    #[test]
+    fn inline_math_leaves_annotation_ranges_untouched_when_nothing_is_inserted() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        push_text_with_inline_math(
+            &mut builder,
+            "Ordinary prose only.",
+            vec![TextAnnotation {
+                start: 0,
+                end: 8,
+                kind: AnnotationKind::Bold,
+            }],
+            None,
+            None,
+        );
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "Ordinary prose only.");
+        assert_eq!((element.annotations[0].start, element.annotations[0].end), (0, 8));
     }
 }
 

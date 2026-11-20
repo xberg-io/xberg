@@ -58,9 +58,8 @@ pub(crate) fn inline_math_annotations(text: &str) -> Vec<(u32, u32)> {
 
 /// Emit one run when it reads as an equation, then clear it.
 fn flush_run(run: &mut Vec<Token>, spans: &mut Vec<(u32, u32)>) {
-    while run.first().is_some_and(|token| token.role == Role::Operator) {
-        run.remove(0);
-    }
+    let leading = run.iter().take_while(|token| token.role == Role::Operator).count();
+    run.drain(..leading);
     while run.last().is_some_and(|token| token.role == Role::Operator) {
         run.pop();
     }
@@ -136,6 +135,19 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
             superscript,
         });
     }
+    // A relation joins its two sides, so a compact equation (`x=y`) is judged by the
+    // operands rather than by the token's own letter count. `revenue=growth` remains a
+    // pair of English words because neither side is a single-letter, numeric or named
+    // operand.
+    if relation {
+        return relation_operands_are_math(body).then_some(Token {
+            start,
+            end,
+            role: Role::Operand,
+            relation,
+            superscript,
+        });
+    }
     // A word of two letters or more is prose unless it names a function or carries a
     // digit or superscript (`mc^2`, `H2O`, `sin`). An underscore alone is an identifier
     // separator in source text (`full_join`), not evidence of math.
@@ -151,9 +163,52 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
     })
 }
 
-fn is_math_name(body: &str) -> bool {
+pub(super) fn is_math_name(body: &str) -> bool {
     let lower = body.to_ascii_lowercase();
     MATH_NAMES.contains(&lower.as_str())
+}
+
+/// Whether the text on both sides of every relation reads as math.
+///
+/// Each side is split on operators and grouping characters, so `a+b=c` is judged as the
+/// operands `a`, `b` and `c` rather than as one three-letter word.
+fn relation_operands_are_math(body: &str) -> bool {
+    let mut sides = 0usize;
+    for side in body.split(is_math_relation) {
+        sides += 1;
+        let mut operands = 0usize;
+        for piece in side.split(|ch: char| is_math_punctuation(ch) || ch == '_' || ch.is_whitespace()) {
+            if piece.is_empty() {
+                continue;
+            }
+            operands += 1;
+            if !reads_as_operand(piece) {
+                return false;
+            }
+        }
+        if operands == 0 {
+            return false;
+        }
+    }
+    sides > 1
+}
+
+/// Whether one side of a relation reads as an operand: a variable, a number, a product
+/// carrying a digit or superscript, or a named function.
+fn reads_as_operand(piece: &str) -> bool {
+    let mut letters = 0usize;
+    let mut digits = 0usize;
+    for ch in piece.chars() {
+        if ch.is_alphabetic() {
+            letters += 1;
+        } else if ch.is_numeric() {
+            digits += 1;
+        }
+    }
+    if letters == 0 {
+        return digits > 0;
+    }
+    letters <= 1 || digits > 0 || piece.contains('^') || is_math_name(piece)
 }
 
 /// Relational and set operators that mark a run as an equation.
@@ -246,6 +301,18 @@ mod tests {
     #[test]
     fn should_keep_a_word_between_operands_as_prose() {
         assert_eq!(spans("The revenue = growth is wrong."), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn should_wrap_a_compact_equation_with_single_letter_operands() {
+        assert_eq!(spans("The identity x=y holds here."), ["x=y"]);
+        assert_eq!(spans("Both a+b=c and x=y apply."), ["a+b=c", "x=y"]);
+    }
+
+    #[test]
+    fn should_keep_a_compact_equation_between_words_as_prose() {
+        assert_eq!(spans("The revenue=growth claim is wrong."), Vec::<&str>::new());
+        assert_eq!(spans("Call full_join=group_by here."), Vec::<&str>::new());
     }
 
     #[test]

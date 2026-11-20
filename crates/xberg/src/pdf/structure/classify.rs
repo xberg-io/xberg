@@ -378,8 +378,29 @@ fn reads_as_formula(text: &str) -> bool {
         return false;
     }
     let math_char_count = text.chars().filter(|c| is_math_character(*c)).count();
-    math_char_count >= FORMULA_MIN_MATH_CHARS
-        || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY
+    (math_char_count >= FORMULA_MIN_MATH_CHARS
+        || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY)
+        && reads_as_equation_structure(text)
+}
+
+/// Whether `text` is structured as an equation line rather than a sentence.
+///
+/// A symbol count alone cannot separate `x = y + 1` from `We use x = y + z^2 here.`:
+/// both carry math characters. An equation line holds only operands (`x`, `H2O`,
+/// `mc^2`), function names (`sin`, `lim`) and operators, so an ordinary lowercase word
+/// keeps the line prose and lets the inline-math pass annotate the expression in place.
+fn reads_as_equation_structure(text: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|word| !word.is_empty())
+        .all(|word| {
+            let letters = word.chars().filter(|c| c.is_alphabetic()).count();
+            let digits = word.chars().filter(|c| c.is_numeric()).count();
+            // Two letters tolerate short variables (`xy`); all-caps names are variables.
+            letters <= 2
+                || digits > 0
+                || super::math_inline::is_math_name(word)
+                || !word.chars().any(char::is_lowercase)
+        })
 }
 
 /// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the
@@ -3777,6 +3798,23 @@ mod tests {
         let mut paragraphs = vec![make_text_paragraph(12.0, "a2 + 8 = 12", false)];
         classify_paragraphs(&mut paragraphs, &heading_map);
         assert!(paragraphs[0].is_formula, "ASCII equation should be a formula");
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_keeps_prose_with_symbols_a_paragraph() {
+        let mut paragraphs = vec![make_text_paragraph(12.0, "We use x = y + z^2 here.", false)];
+        classify_formula_paragraphs(&mut paragraphs);
+        assert!(
+            !paragraphs[0].is_formula,
+            "a sentence carrying symbols is prose, so inline math can annotate it"
+        );
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_marks_a_standalone_equation() {
+        let mut paragraphs = vec![make_text_paragraph(12.0, "x = y + z^2", false)];
+        classify_formula_paragraphs(&mut paragraphs);
+        assert!(paragraphs[0].is_formula, "an equation line is display math");
     }
 
     #[test]
