@@ -6116,7 +6116,15 @@ fn zapf_dingbats_encoding_lookup(code: u8) -> Option<char> {
 /// The Unicode character for this code, or None for undefined codes
 pub fn pdfdoc_encoding_lookup(code: u8) -> Option<char> {
     match code {
-        0x00..=0x7F => Some(code as char),
+        0x00..=0x17 | 0x20..=0x7F => Some(code as char),
+        0x18 => Some('\u{02D8}'),
+        0x19 => Some('\u{02C7}'),
+        0x1A => Some('\u{02C6}'),
+        0x1B => Some('\u{02D9}'),
+        0x1C => Some('\u{02DD}'),
+        0x1D => Some('\u{02DB}'),
+        0x1E => Some('\u{02DA}'),
+        0x1F => Some('\u{02DC}'),
 
         0x80 => Some('•'),
         0x81 => Some('†'),
@@ -6131,8 +6139,8 @@ pub fn pdfdoc_encoding_lookup(code: u8) -> Option<char> {
         0x8A => Some('−'),
         0x8B => Some('‰'),
         0x8C => Some('„'),
-        0x8D => Some('"'),
-        0x8E => Some('"'),
+        0x8D => Some('\u{201C}'),
+        0x8E => Some('\u{201D}'),
         0x8F => Some('\u{2018}'),
         0x90 => Some('\u{2019}'),
         0x91 => Some('‚'),
@@ -6151,7 +6159,8 @@ pub fn pdfdoc_encoding_lookup(code: u8) -> Option<char> {
         0x9E => Some('ž'),
         0x9F => None,
 
-        0xA0..=0xFF => Some(code as char),
+        0xA0 => Some('\u{20AC}'),
+        0xA1..=0xFF => Some(code as char),
     }
 }
 
@@ -9819,8 +9828,20 @@ mod tests {
     }
 
     #[test]
+    fn test_pdfdoc_encoding_spacing_diacritics() {
+        assert_eq!(pdfdoc_encoding_lookup(0x18), Some('\u{02D8}'));
+        assert_eq!(pdfdoc_encoding_lookup(0x1F), Some('\u{02DC}'));
+    }
+
+    #[test]
+    fn test_pdfdoc_encoding_quotes() {
+        assert_eq!(pdfdoc_encoding_lookup(0x8D), Some('\u{201C}'));
+        assert_eq!(pdfdoc_encoding_lookup(0x8E), Some('\u{201D}'));
+    }
+
+    #[test]
     fn test_pdfdoc_encoding_latin1_range() {
-        assert_eq!(pdfdoc_encoding_lookup(0xA0), Some('\u{00A0}'));
+        assert_eq!(pdfdoc_encoding_lookup(0xA0), Some('\u{20AC}'));
         assert_eq!(pdfdoc_encoding_lookup(0xFF), Some('\u{00FF}'));
     }
 

@@ -729,7 +729,7 @@ fn test_decode_pdf_text_string_invalid_utf16() {
     // UTF-16BE BOM followed by invalid pair ~keep
     let bytes = vec![0xFE, 0xFF, 0xD8, 0x00]; // invalid surrogate half ~keep
     let result = TextExtractor::decode_pdf_text_string(&bytes);
-    assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}\0");
+    assert_eq!(result, "\u{FFFD}");
 }
 
 #[test]
