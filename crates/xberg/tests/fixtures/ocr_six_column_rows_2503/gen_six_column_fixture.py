@@ -4,9 +4,9 @@ usage: uv run --no-project --with pillow python gen_six_column_fixture.py <DejaV
 
 Twelve invented rows, one label column and five numeric columns, dot leaders between the label
 and the first number. `six-column-150dpi.png` is the table raster; `six-column-150dpi.pdf` is a
-one-page Letter-size scan of it at 150 dpi (the table placed top-left on a white page), the route
-whose HTML output used to print one row beside the table it also carried. Both files are
-deterministic for a given Pillow version.
+one-page 150 dpi scan whose page raster is that table, with no margins, the route whose HTML
+output used to print one row beside the table it also carried. Both files are deterministic for
+a given Pillow version.
 """
 
 import random

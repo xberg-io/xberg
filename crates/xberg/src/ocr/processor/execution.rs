@@ -59,9 +59,10 @@ use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, drop_document_elements_claimed_by_tables, element_center_within_table, extract_table_words_from_tsv,
-    extract_words_from_tsv, orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask,
-    should_adopt_table_rebuild, table_retains_region_words, table_to_markdown,
+    TableWords, drop_document_elements_claimed_by_tables, drop_document_elements_matching_table_rows,
+    element_center_within_table, extract_table_words_from_tsv, extract_words_from_tsv, orient_table_for_reading_order,
+    reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild, table_retains_region_words,
+    table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
@@ -1309,6 +1310,7 @@ fn publish_hocr_table_rows(
         // An exact-only match cannot resolve which physical row owned the table slot.
         if let RetainedTableLeaders::Reconciled(reconciled) = leaders {
             *document = *reconciled;
+            claim_rows_left_by_proof(document, tables);
         }
         return;
     }
@@ -1334,17 +1336,28 @@ fn publish_hocr_table_rows(
         })
     });
     if let Some((reconciled, bounds)) = reconciled {
-        apply_fragmented_reconciliation(document, tables, reconciled, bounds);
-        // A leader-aware proof can leave the line whose leader artifacts it could not match
-        // against the source words, while the table still carries that row (#2503). The sparse
-        // and ordinary routes keep their own reconciliation result.
-        let has_unclaimed_text = document.elements.iter().any(|element| !element.text.trim().is_empty());
-        if leader_aware && has_unclaimed_text {
-            filter_elements_covered_by_tables(document, tables, true);
+        if apply_fragmented_reconciliation(document, tables, reconciled, bounds) && leader_aware {
+            claim_rows_left_by_proof(document, tables);
         }
     } else {
         filter_elements_covered_by_tables(document, tables, leader_aware);
     }
+}
+
+/// Claim the rows a leader-aware proof could not match out of the document it returned. The proof
+/// leaves those lines deliberately, so only a row match may remove one; the table's rectangle must
+/// not claim every line its centre falls in (#2503).
+fn claim_rows_left_by_proof(document: &mut InternalDocument, tables: &[OcrTable]) {
+    if !document.elements.iter().any(|element| !element.text.trim().is_empty()) {
+        return;
+    }
+    drop_document_elements_matching_table_rows(
+        document,
+        tables
+            .iter()
+            .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
+        true,
+    );
 }
 
 fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {

@@ -592,8 +592,9 @@ pdf-ocr)
   run_exact 'extractors::pdf::ocr::document::tests::certified_scan_html_rows_require_each_admission_condition' --lib
   run_exact 'rendering::comrak_bridge::tests::marked_paragraph_rows_escape_html_text_in_each_row' --lib
   run_exact six_column_dot_leader_scan_keeps_every_row_in_html --test ocr_six_column_html_2503
-  run_exact control_table_without_leaders_keeps_its_rows_unchanged --test ocr_six_column_html_2503
-  expected=$((expected + 10))
+  run_exact six_column_dot_leader_picture_keeps_every_row_in_html --test ocr_six_column_html_2503
+  run_exact no_leader_picture_keeps_its_rows_in_html --test ocr_six_column_html_2503
+  expected=$((expected + 11))
   ;;
 pdf-sparse-paddle)
   expected=16

@@ -6,13 +6,13 @@ at 150 dpi. It writes:
 
 - `six-column-150dpi.tsv` — the generator's source rows, independent of OCR.
 - `six-column-150dpi.png` — the table raster, 770 × 534 px at 150 dpi.
-- `six-column-150dpi.pdf` — a one-page 150 dpi scan whose page raster is the table.
-  A Letter-size page with margins reads this table as prose at PSM 6, so the scan
-  route needs the table to fill its page.
+- `six-column-150dpi.pdf` — a one-page 150 dpi scan whose page raster is the table,
+  with no margins. A page with margins reads this table as prose at PSM 6, so the
+  scan route needs the table to fill its page.
 
 Regenerate with Pillow 13 and the repository's DejaVu Sans:
 
-```
+```text
 uv run --no-project --with pillow python gen_six_column_fixture.py \
   ../../../../xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf .
 ```
