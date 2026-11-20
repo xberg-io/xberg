@@ -71,7 +71,7 @@ impl LocalTextClassifier {
             *state
                 .prepared_options
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(model.session_options);
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(model.session_options.clone());
             Ok(info)
         })
         .await
