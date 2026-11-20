@@ -1,3 +1,4 @@
+use crate::TesseractError;
 use crate::api::TesseractAPI;
 use crate::enums::{
     TessOrientation, TessPageIteratorLevel, TessParagraphJustification, TessPolyBlockType, TessTextlineOrder,
@@ -5,7 +6,6 @@ use crate::enums::{
 };
 use crate::error::Result;
 use crate::native_iterator::NativeIterator;
-use crate::TesseractError;
 use std::os::raw::{c_float, c_int, c_void};
 
 /// Block-level layout information from Tesseract.
@@ -86,8 +86,8 @@ impl<'api> PageIterator<'api> {
     /// `raw` must be a non-null `TessPageIterator` (or a `TessResultIterator`, whose single-inheritance
     /// base is the page iterator) that `api`'s engine created from the result at `epoch`, owned by nothing else.
     pub(crate) unsafe fn from_raw(api: &'api TesseractAPI, epoch: u64, raw: *mut c_void) -> Self {
-        // SAFETY: forwarded from this function's contract. ~keep
         PageIterator {
+            // SAFETY: forwarded from this function's contract. ~keep
             inner: unsafe { NativeIterator::new(api, epoch, raw) },
         }
     }
