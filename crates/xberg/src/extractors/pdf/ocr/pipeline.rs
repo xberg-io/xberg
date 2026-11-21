@@ -1415,7 +1415,11 @@ struct MixedOcrRouting {
 /// normalizer that `strip_repeating_text_from_pages` derives from the boxes are in points.
 /// Each such page is scaled into points before the strip and back afterwards, so the
 /// caller's rebuild keeps the frame it already expects.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 fn strip_fallback_furniture_in_page_points(
     pages: &mut [Vec<crate::pdf::structure::types::PdfParagraph>],
     page_numbers: &[u32],
@@ -13650,7 +13654,12 @@ fn layout_orientation_retry_uses_each_siblings_frame() {
     assert!(orientation_retry_page_eligible(true, false, None, 1));
 }
 
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), not(target_arch = "wasm32")))]
+#[cfg(all(
+    test,
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 mod mixed_fallback_furniture_tests {
     use super::*;
     use crate::core::config::ContentFilterConfig;
