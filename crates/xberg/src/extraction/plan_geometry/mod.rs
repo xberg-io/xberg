@@ -5,6 +5,7 @@
 //!   only text, so it is available in every build.
 //! - [`viewports`] reads a PDF page's `/VP` viewport dictionaries onto
 //!   [`PageContent::viewports`](crate::types::PageContent).
+//! - [`write`] appends a measured Polygon annotation to an existing PDF.
 //! - `regions` (opt-in, `plan-regions` feature) closes line segments into faces
 //!   with areas.
 //!
@@ -16,6 +17,9 @@ pub mod drawing_set;
 
 #[cfg(feature = "pdf")]
 pub mod viewports;
+
+#[cfg(feature = "pdf")]
+pub mod write;
 
 #[cfg(feature = "plan-regions")]
 pub mod regions;
