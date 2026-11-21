@@ -52,14 +52,14 @@ for dockerfile in sorted((root / "docker").glob("Dockerfile.*")):
                     and notice in sources and destination == PurePosixPath("/usr/local/share/licenses/xberg")]
         assert len(matching) == 1, f"{dockerfile.name}: missing canonical runtime notice {notice}"
 assert runtime_images == ["Dockerfile.cli", "Dockerfile.core", "Dockerfile.full"], runtime_images
-print("Verified 3 final runtime images and 6 canonical notice copies")
+print("Three final runtime images declare both canonical notices")
 PYTHON
 }
 
 @test "Runtime Docker contexts should include both canonical notices in all three final images" {
 	check_notice_contexts
 	xberg_assert_status 0
-	xberg_assert_output_contains 'Verified 3 final runtime images and 6 canonical notice copies'
+	xberg_assert_output_contains 'Three final runtime images declare both canonical notices'
 }
 
 @test "Runtime notice check should reject an excluded canonical notice" {
@@ -94,47 +94,63 @@ PYTHON
 	xberg_assert_output_contains 'empty source notice: THIRD_PARTY_LICENSES.md'
 }
 
-load_runtime_notice_test() {
-	eval "$(sed -n '/^test_runtime_notices() {$/,/^}$/p' "$REPOSITORY_ROOT/scripts/test/test-docker-config-local.sh")"
-	export DOCKER_DIR="$XBERG_WORK/docker"
-	export TEST_TEMP_DIR="$XBERG_WORK"
-	start_test() { :; }
-	get_image_name() { printf 'xberg:%s\n' "$1"; }
-	pass_test() { printf 'notices match\n'; }
-	fail_test() { printf '%s\n' "$1"; }
+setup_image_verifier() {
+	mkdir -p "$XBERG_WORK/bin" "$XBERG_WORK/image"
+	cp "$REPOSITORY_ROOT/LICENSE" "$REPOSITORY_ROOT/THIRD_PARTY_LICENSES.md" "$XBERG_WORK/image/"
+	# Serve the requested absolute path from the fake image, and fail on a path it lacks. ~keep
+	cat >"$XBERG_WORK/bin/docker" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+for last; do :; done
+file="$FAKE_IMAGE_DIR/${last##*/}"
+[ -f "$file" ] || { echo "cat: $last: No such file or directory" >&2; exit 1; }
+cat "$file"
+SCRIPT
+	chmod +x "$XBERG_WORK/bin/docker"
+	export PATH="$XBERG_WORK/bin:$PATH"
+	export FAKE_IMAGE_DIR="$XBERG_WORK/image"
 }
 
-@test "Image notice smoke test should compare both complete canonical files" {
-	load_runtime_notice_test
-	# The fake image maps the requested absolute path to its canonical fixture. ~keep
-	# shellcheck disable=SC2329 # Invoked by the loaded image smoke test.
-	docker() {
-		local path="${!#}"
-		cat "$XBERG_WORK/${path##*/}"
-	}
-	run test_runtime_notices core
+verify_image_notices() {
+	run python3 "$REPOSITORY_ROOT/scripts/ci/docker/verify_image_notices.py" --image "$1"
+}
+
+@test "Image notice verifier should accept both canonical files byte for byte" {
+	setup_image_verifier
+	verify_image_notices xberg:core
 	xberg_assert_status 0
-	xberg_assert_output_contains 'notices match'
+	xberg_assert_output_contains 'xberg:core: packaged notices match the repository byte-for-byte'
 }
 
-@test "Image notice smoke test should reject different bytes after a matching license" {
-	load_runtime_notice_test
-	# shellcheck disable=SC2329 # Invoked by the loaded image smoke test.
-	docker() {
-		local path="${!#}"
-		cat "$XBERG_WORK/${path##*/}"
-		[[ "$path" != */THIRD_PARTY_LICENSES.md ]] || printf 'corruption\n'
-		return 0
-	}
-	run test_runtime_notices full
+@test "Image notice verifier should reject a notice missing from the image" {
+	setup_image_verifier
+	rm "$FAKE_IMAGE_DIR/THIRD_PARTY_LICENSES.md"
+	verify_image_notices xberg:full
 	xberg_assert_status 1
-	xberg_assert_output_contains 'Runtime notice differs from canonical source: THIRD_PARTY_LICENSES.md'
+	xberg_assert_output_contains 'THIRD_PARTY_LICENSES.md is missing from /usr/local/share/licenses/xberg'
 }
 
-@test "Image notice smoke test should reject an unreadable notice" {
-	load_runtime_notice_test
-	docker() { return 1; }
-	run test_runtime_notices core
+@test "Image notice verifier should reject a truncated notice" {
+	setup_image_verifier
+	head -c 10 "$REPOSITORY_ROOT/LICENSE" >"$FAKE_IMAGE_DIR/LICENSE"
+	verify_image_notices xberg:cli
 	xberg_assert_status 1
-	xberg_assert_output_contains 'Could not read runtime notice: LICENSE'
+	xberg_assert_output_contains 'LICENSE is truncated (10 of'
+}
+
+@test "Image notice verifier should reject stale bytes after a matching license" {
+	setup_image_verifier
+	printf 'corruption\n' >>"$FAKE_IMAGE_DIR/THIRD_PARTY_LICENSES.md"
+	verify_image_notices xberg:full
+	xberg_assert_status 1
+	xberg_assert_output_contains 'THIRD_PARTY_LICENSES.md differs from the repository copy'
+}
+
+@test "Image notice verifier should fail when Docker cannot read the image" {
+	setup_image_verifier
+	printf '#!/usr/bin/env bash\necho "Error: No such image" >&2\nexit 1\n' >"$XBERG_WORK/bin/docker"
+	chmod +x "$XBERG_WORK/bin/docker"
+	verify_image_notices xberg:core
+	xberg_assert_status 1
+	xberg_assert_output_contains 'LICENSE is missing from /usr/local/share/licenses/xberg (Error: No such image)'
 }
