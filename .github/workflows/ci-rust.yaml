@@ -609,7 +609,7 @@ jobs:
           - name: pdf
             features: pdf
           - name: pdf-ocr-pipeline
-            features: pdf,ocr-pipeline
+            features: pdf,ocr-pipeline,tokio-runtime
           - name: sceptre-ocr-ort
             features: sceptre-ocr-ort
           - name: no-ort-target
