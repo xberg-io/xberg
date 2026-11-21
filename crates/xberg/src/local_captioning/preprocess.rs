@@ -3,7 +3,28 @@ use image::imageops::FilterType;
 use super::policy::invalid;
 use super::{LocalCaptioningConfig, LocalCaptioningFormat};
 
+/// Upper bound on a preprocessed frame edge. A larger value is a malformed or hostile processor
+/// config, not a legitimate export.
+pub(super) const MAX_EDGE: u32 = 4_096;
+/// Upper bound on the text-side image token count the prompt expands to.
+pub(super) const MAX_IMAGE_SEQ_LEN: u32 = 1_024;
+
+fn validate_dimensions(edge: u32, image_seq_len: u32) -> crate::Result<()> {
+    if edge == 0 || edge > MAX_EDGE {
+        return Err(invalid(format!(
+            "Local captioning image edge must be in 1..={MAX_EDGE}, got {edge}"
+        )));
+    }
+    if image_seq_len == 0 || image_seq_len > MAX_IMAGE_SEQ_LEN {
+        return Err(invalid(format!(
+            "Local captioning image token count must be in 1..={MAX_IMAGE_SEQ_LEN}, got {image_seq_len}"
+        )));
+    }
+    Ok(())
+}
+
 /// How the pinned processor describes input images and the text-side image token count.
+#[derive(Debug)]
 pub(super) struct PreprocessConfig {
     pub(super) edge: u32,
     pub(super) image_seq_len: u32,
@@ -83,6 +104,7 @@ impl PreprocessConfig {
                     .ok_or_else(|| invalid("Local captioning preprocessor config lacks an image edge"))?;
                 let image_seq_len = value_u32(processor, "image_seq_len")
                     .ok_or_else(|| invalid("SmolVLM processor config lacks image_seq_len"))?;
+                validate_dimensions(edge, image_seq_len)?;
                 Ok(Self {
                     edge,
                     image_seq_len,
@@ -100,6 +122,7 @@ impl PreprocessConfig {
                     .ok_or_else(|| invalid("Florence-2 preprocessor config lacks a size height"))?;
                 let image_seq_len = value_u32(preprocessor, "image_seq_length")
                     .ok_or_else(|| invalid("Florence-2 preprocessor config lacks image_seq_length"))?;
+                validate_dimensions(edge, image_seq_len)?;
                 Ok(Self {
                     edge,
                     image_seq_len,

@@ -102,9 +102,8 @@ pub struct LocalCaptioningConfig {
     /// Bounds checked before decoding an image or generating tokens.
     #[serde(default)]
     pub limits: LocalCaptioningLimits,
-    /// Optional caption instruction. `None` uses the pinned default question for SmolVLM and the
-    /// `<MORE_DETAILED_CAPTION>` task for Florence-2. Florence-2 has a fixed task vocabulary, so a
-    /// custom instruction is rejected for that family rather than silently ignored.
+    /// Optional caption instruction for SmolVLM. `None` uses the pinned default question.
+    /// Florence-2 is refused before prompting, so this field never applies to that family.
     #[serde(default)]
     pub prompt: Option<String>,
     /// Optional cache directory used only by explicit preparation and staging.

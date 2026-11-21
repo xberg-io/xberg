@@ -237,36 +237,19 @@ const TINY_PNG: &[u8] = &[
     0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-/// Real inference runs only when the pinned int8 artifacts are already in the Hugging Face cache.
-/// The default test run never downloads a multi-hundred-megabyte model and never claims a caption
-/// quality result; a missing staging is reported loudly instead of passing silently.
+/// Real inference is opt-in: it requires the pinned int8 artifacts to be staged. The test is
+/// ignored by default so CI compiles it without downloading hundreds of megabytes; running it with
+/// `--ignored` fails loudly when the artifacts are missing instead of skipping.
 #[tokio::test]
+#[ignore = "requires staged pinned artifacts"]
 async fn staged_smolvlm_produces_a_caption_when_its_artifacts_are_present() {
-    let model = match LocalCaptioningModel::staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized) {
-        Ok(model) => model,
-        Err(error) => {
-            eprintln!("SKIP staged_smolvlm_produces_a_caption_when_its_artifacts_are_present: {error}");
-            return;
-        }
-    };
-    let captioner = match LocalImageCaptioner::new(config(model)) {
-        Ok(captioner) => captioner,
-        Err(error) => {
-            eprintln!("SKIP staged_smolvlm_produces_a_caption_when_its_artifacts_are_present: {error}");
-            return;
-        }
-    };
-    if let Err(error) = captioner.prepare(&Default::default()).await {
-        let message = error.to_string();
-        if message.contains("missing from the pre-staged cache") {
-            eprintln!(
-                "SKIP staged_smolvlm_produces_a_caption_when_its_artifacts_are_present: \
-                 pinned xberg-io/captioning-models artifacts are not staged ({message})"
-            );
-            return;
-        }
-        panic!("staged SmolVLM preparation failed: {error}");
-    }
+    let model = LocalCaptioningModel::staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized)
+        .expect("the SmolVLM candidate must stay in the inventory");
+    let captioner = LocalImageCaptioner::new(config(model)).expect("the SmolVLM config must be valid");
+    captioner
+        .prepare(&Default::default())
+        .await
+        .expect("stage the pinned xberg-io/captioning-models artifacts first (LocalImageCaptioner::stage)");
     // A real image can be supplied for manual verification; the default stays offline and tiny.
     let image = match std::env::var_os("XBERG_CAPTION_SMOKE_IMAGE") {
         Some(path) => std::fs::read(path).expect("XBERG_CAPTION_SMOKE_IMAGE should be readable"),
@@ -285,13 +268,8 @@ async fn staged_smolvlm_produces_a_caption_when_its_artifacts_are_present() {
 /// explicitly instead of silently substituting SmolVLM.
 #[test]
 fn staged_florence_is_refused_explicitly() {
-    let model = match LocalCaptioningModel::staged("florence-2-base", LocalCaptioningPrecision::Quantized) {
-        Ok(model) => model,
-        Err(error) => {
-            eprintln!("SKIP staged_florence_is_refused_explicitly: {error}");
-            return;
-        }
-    };
+    let model = LocalCaptioningModel::staged("florence-2-base", LocalCaptioningPrecision::Quantized)
+        .expect("Florence-2 pins must stay in the inventory");
     assert_eq!(model.format, LocalCaptioningFormat::Florence2);
     let error = match LocalImageCaptioner::new(config(model)) {
         Ok(_) => panic!("Florence-2 must be refused by this adapter"),
@@ -299,4 +277,112 @@ fn staged_florence_is_refused_explicitly() {
     };
     assert!(error.contains("not enabled by this adapter"), "{error}");
     assert!(error.contains("Only SmolVLM is wired"), "{error}");
+}
+
+#[test]
+fn smolvlm_prompt_closes_the_image_block_before_the_question() {
+    let text = super::generation::smolvlm_prompt_text(1, None, 64).expect("one global frame");
+    let opening = text.find("<global-img>").expect("global image tag");
+    let closing = text.rfind("<fake_token_around_image>").expect("closing fake image tag");
+    assert!(opening < closing, "{text}");
+    assert_eq!(text.matches("<image>").count(), 64);
+    assert_eq!(text.matches("<fake_token_around_image>").count(), 2, "{text}");
+    assert!(
+        text[closing..].starts_with("<fake_token_around_image>Can you describe this image?"),
+        "{text}"
+    );
+    assert!(text.ends_with("<end_of_utterance>\nAssistant:"), "{text}");
+}
+
+/// Compares the built prompt against the pinned processor's single-frame expansion. It needs the
+/// pinned tokenizer from the Hugging Face cache, so it is ignored by default and fails loudly when
+/// run without the staged artifact.
+#[test]
+#[ignore = "requires the pinned SmolVLM tokenizer in the Hugging Face cache"]
+fn smolvlm_prompt_matches_the_pinned_processor_token_expansion() {
+    let model = LocalCaptioningModel::staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized)
+        .expect("the SmolVLM candidate must stay in the inventory");
+    let tokenizer_file = model
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("/tokenizer.json"))
+        .expect("the descriptor must pin tokenizer.json");
+    let client = crate::model_download::hf_client(None).expect("Hugging Face client");
+    let path = crate::model_download::hf_cached_revision_with_client(
+        &client,
+        &model.repository,
+        &tokenizer_file.path,
+        Some(&model.revision),
+    )
+    .expect("cache lookup")
+    .expect("stage the pinned tokenizer first");
+    let tokenizer = tokenizers::Tokenizer::from_file(path).expect("load the pinned tokenizer");
+
+    let text = super::generation::smolvlm_prompt_text(1, None, 64).expect("one global frame");
+    let ids = tokenizer
+        .encode(text.as_str(), false)
+        .expect("prompt")
+        .get_ids()
+        .to_vec();
+
+    let fake = tokenizer
+        .token_to_id("<fake_token_around_image>")
+        .expect("fake image token");
+    let global = tokenizer.token_to_id("<global-img>").expect("global image token");
+    let image = tokenizer.token_to_id("<image>").expect("image token");
+    let mut expected = tokenizer
+        .encode("<|im_start|>User:", false)
+        .expect("prefix")
+        .get_ids()
+        .to_vec();
+    expected.extend([fake, global]);
+    expected.extend(std::iter::repeat_n(image, 64));
+    expected.push(fake);
+    expected.extend(
+        tokenizer
+            .encode("Can you describe this image?<end_of_utterance>\nAssistant:", false)
+            .expect("suffix")
+            .get_ids(),
+    );
+    assert_eq!(ids, expected);
+}
+
+#[test]
+fn preprocessor_dimensions_are_bounded() {
+    use super::LocalCaptioningFormat;
+    use super::preprocess::PreprocessConfig;
+
+    let preprocessor = |edge: u32| {
+        serde_json::json!({
+            "max_image_size": {"longest_edge": edge},
+            "image_mean": [0.5, 0.5, 0.5],
+            "image_std": [0.5, 0.5, 0.5],
+            "rescale_factor": 0.00392156862745098
+        })
+    };
+    let processor = |tokens: u32| serde_json::json!({"image_seq_len": tokens});
+
+    let error = PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor(super::preprocess::MAX_EDGE + 1),
+        &processor(64),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("image edge must be in"), "{error}");
+    PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor(super::preprocess::MAX_EDGE),
+        &processor(64),
+    )
+    .expect("the ceiling itself is accepted");
+
+    let error = PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor(512),
+        &processor(super::preprocess::MAX_IMAGE_SEQ_LEN + 1),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("image token count must be in"), "{error}");
 }

@@ -91,17 +91,12 @@ pub(super) fn validate_config(config: &LocalCaptioningConfig) -> crate::Result<(
             "Florence-2 captioning is staged in the inventory but not enabled by this adapter: its merged decoder fails on cached decoder steps in the bundled ONNX Runtime. Only SmolVLM is wired; no other family is substituted.",
         ));
     }
-    if let Some(prompt) = &config.prompt {
-        if prompt.trim().is_empty() || prompt.len() > config.limits.max_prompt_bytes as usize {
-            return Err(invalid(
-                "Local captioning prompt must be nonblank and within its byte limit",
-            ));
-        }
-        if config.model.format == LocalCaptioningFormat::Florence2 {
-            return Err(invalid(
-                "Florence-2 captioning exposes a fixed task vocabulary and does not accept a custom prompt",
-            ));
-        }
+    if let Some(prompt) = &config.prompt
+        && (prompt.trim().is_empty() || prompt.len() > config.limits.max_prompt_bytes as usize)
+    {
+        return Err(invalid(
+            "Local captioning prompt must be nonblank and within its byte limit",
+        ));
     }
     if config
         .cache_directory

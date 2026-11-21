@@ -67,27 +67,6 @@ fn cache_root(config: &LocalCaptioningConfig) -> PathBuf {
         .map_or_else(hf_hub::resolve_cache_dir, Path::to_path_buf)
 }
 
-fn read_capped(path: &Path, limit: usize, remote: &str) -> crate::Result<Vec<u8>> {
-    let metadata =
-        std::fs::metadata(path).map_err(|error| invalid(format!("Local captioning artifact {remote}: {error}")))?;
-    if !metadata.is_file() {
-        return Err(invalid(format!(
-            "Local captioning artifact is not a regular file: {remote}"
-        )));
-    }
-    let length = usize::try_from(metadata.len())
-        .ok()
-        .filter(|length| *length != 0 && *length <= limit)
-        .ok_or_else(|| invalid(format!("Local captioning artifact is empty or too large: {remote}")))?;
-    let bytes = std::fs::read(path).map_err(|error| invalid(format!("Local captioning artifact {remote}: {error}")))?;
-    if bytes.len() != length {
-        return Err(invalid(format!(
-            "Local captioning artifact changed while being read: {remote}"
-        )));
-    }
-    Ok(bytes)
-}
-
 fn verify(file: &LocalCaptioningFile, bytes: &[u8]) -> crate::Result<()> {
     if bytes.len() as u64 != file.size_bytes {
         return Err(invalid(format!(
@@ -136,13 +115,40 @@ fn cached_path(config: &LocalCaptioningConfig, file: &LocalCaptioningFile) -> cr
     Ok(path)
 }
 
-fn resolve(config: &LocalCaptioningConfig, file: &LocalCaptioningFile) -> crate::Result<Vec<u8>> {
+fn resolve(config: &LocalCaptioningConfig, file: &LocalCaptioningFile, budget: &mut Budget) -> crate::Result<Vec<u8>> {
     let limit = if basename(&file.path).ends_with(".onnx") {
         MAX_GRAPH_BYTES
     } else {
         MAX_COMPANION_BYTES
     };
-    let bytes = read_capped(&cached_path(config, file)?, limit, &file.path)?;
+    let path = cached_path(config, file)?;
+    let metadata = std::fs::metadata(&path)
+        .map_err(|error| invalid(format!("Local captioning artifact {}: {error}", file.path)))?;
+    if !metadata.is_file() {
+        return Err(invalid(format!(
+            "Local captioning artifact is not a regular file: {}",
+            file.path
+        )));
+    }
+    let length = usize::try_from(metadata.len())
+        .ok()
+        .filter(|length| *length != 0 && *length <= limit)
+        .ok_or_else(|| {
+            invalid(format!(
+                "Local captioning artifact is empty or too large: {}",
+                file.path
+            ))
+        })?;
+    // Charge the declared length before allocating or reading the bytes.
+    budget.charge(length)?;
+    let bytes =
+        std::fs::read(&path).map_err(|error| invalid(format!("Local captioning artifact {}: {error}", file.path)))?;
+    if bytes.len() != length {
+        return Err(invalid(format!(
+            "Local captioning artifact changed while being read: {}",
+            file.path
+        )));
+    }
     verify(file, &bytes)?;
     Ok(bytes)
 }
@@ -164,8 +170,7 @@ pub(super) fn read_artifacts(
     let mut read = |path: &str| -> crate::Result<Vec<u8>> {
         control.check()?;
         let file = find(model, path)?;
-        let bytes = resolve(config, file)?;
-        budget.charge(bytes.len())?;
+        let bytes = resolve(config, file, &mut budget)?;
         control.check()?;
         Ok(bytes)
     };
@@ -178,8 +183,7 @@ pub(super) fn read_artifacts(
         if !is_companion(model.format, name) {
             continue;
         }
-        let bytes = resolve(config, file)?;
-        budget.charge(bytes.len())?;
+        let bytes = resolve(config, file, &mut budget)?;
         companions.insert(name.to_owned(), bytes);
     }
     for name in REQUIRED_COMPANIONS {

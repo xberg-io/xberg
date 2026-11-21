@@ -348,21 +348,7 @@ pub(super) fn generate(
 }
 
 fn smolvlm_prompt(prepared: &PreparedCaptioner, num_images: usize, prompt: Option<&str>) -> crate::Result<Vec<i64>> {
-    let question = prompt.unwrap_or("Can you describe this image?");
-    let image_tokens = prepared.preprocess.image_seq_len as usize * num_images;
-    // The pinned Idefics3 processor wraps a single global frame in
-    // `<fake_token_around_image><global-img>` and then the repeated image token. This adapter
-    // deliberately uses one global frame instead of the export's tile splitting, so no
-    // `<row_N_col_M>` tags are inserted; that choice is recorded as a qualification gap.
-    if num_images != 1 {
-        return Err(invalid(
-            "Local captioning SmolVLM prompt supports one global image frame",
-        ));
-    }
-    let text = format!(
-        "<|im_start|>User:<fake_token_around_image><global-img>{}{question}<end_of_utterance>\nAssistant:",
-        "<image>".repeat(image_tokens)
-    );
+    let text = smolvlm_prompt_text(num_images, prompt, prepared.preprocess.image_seq_len)?;
     let ids: Vec<i64> = prepared
         .tokenizer
         .encode(text.as_str(), false)
@@ -372,6 +358,29 @@ fn smolvlm_prompt(prepared: &PreparedCaptioner, num_images: usize, prompt: Optio
         .map(|id| i64::from(*id))
         .collect();
     Ok(ids)
+}
+
+/// The pinned Idefics3 chat expansion for one global frame. The image block is opened by
+/// `<fake_token_around_image><global-img>`, holds `image_seq_len * num_images` repeated image
+/// tokens, and is closed by `<fake_token_around_image>` before the question. This adapter
+/// deliberately uses one global frame instead of the export's tile splitting, so no
+/// `<row_N_col_M>` tags are inserted; that choice is a documented qualification gap.
+pub(super) fn smolvlm_prompt_text(
+    num_images: usize,
+    prompt: Option<&str>,
+    image_seq_len: u32,
+) -> crate::Result<String> {
+    if num_images != 1 {
+        return Err(invalid(
+            "Local captioning SmolVLM prompt supports one global image frame",
+        ));
+    }
+    let question = prompt.unwrap_or("Can you describe this image?");
+    let image_tokens = image_seq_len as usize * num_images;
+    Ok(format!(
+        "<|im_start|>User:<fake_token_around_image><global-img>{images}<fake_token_around_image>{question}<end_of_utterance>\nAssistant:",
+        images = "<image>".repeat(image_tokens)
+    ))
 }
 
 fn generate_smolvlm(
