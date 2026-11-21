@@ -5347,7 +5347,7 @@ fn completed_table_top_in_band(
         .iter()
         .map(|word| word_pdf_bottom(word, page_height))
         .fold(f32::INFINITY, f32::min);
-    let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f64;
+    let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS;
     completed_bboxes
         .iter()
         .filter(|bounds| {
