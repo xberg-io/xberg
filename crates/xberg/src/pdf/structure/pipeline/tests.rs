@@ -553,6 +553,42 @@ fn splits_a_recovery_band_at_the_completed_table_boundary() {
 }
 
 #[test]
+fn does_not_mix_words_from_both_sides_of_a_completed_table() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 40.0, 100.0, 50.0), &[&["g", "h"], &["i", "j"]]);
+    let mut above = printed_at("12 34", 10.0, 58.0);
+    above.width = 80.0;
+    above.height = 10.0;
+    let mut inside = printed_at("56 78", 10.0, 40.0);
+    inside.width = 80.0;
+    inside.height = 10.0;
+    let mut below = printed_at("90 11", 10.0, 26.0);
+    below.width = 80.0;
+    below.height = 10.0;
+    let pages = vec![vec![above, inside, below]];
+
+    let stitched = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, true]);
+
+    assert_eq!(stitched.len(), 2);
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 58.0))
+        .expect("chain with only the row above the completed table");
+    assert_eq!(chain.cells.len(), 3);
+    assert_eq!(chain.cells.last().unwrap(), &["12", "34"]);
+    assert!(
+        chain
+            .cells
+            .iter()
+            .flatten()
+            .all(|cell| !["56", "78", "90", "11"].contains(&cell.as_str())),
+        "rows at and below the completed table stay out: {:?}",
+        chain.cells
+    );
+}
+
+#[test]
 fn ruled_fragments_with_a_small_gap_still_stitch() {
     let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"], &["c", "d"]]);

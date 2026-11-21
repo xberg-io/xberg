@@ -5244,14 +5244,19 @@ fn recover_trailing_continuation_rows(
         let Some((entity_words, _)) = take_next_entity_band(&band_words) else {
             break;
         };
-        // A completed rejoined table below already owns its rows. The band can
-        // still hold a valid continuation row above that table, so drop only the
-        // completed-table rows and keep the rest; an all-completed band ends
-        // recovery. ~keep
-        let entity_words: Vec<_> = entity_words
-            .into_iter()
-            .filter(|word| !word_is_in_completed_table(word, page_height, completed_bboxes))
-            .collect();
+        // A completed rejoined table below already owns its content. If the
+        // band spans its top edge, keep only the rows above that edge and
+        // recover them as a separate row; rows inside or below the table are
+        // not resumed here. This keeps a recovered row from mixing words from
+        // both sides of the table. ~keep
+        let completed_top = completed_table_top_in_band(&entity_words, page_height, x_lo, x_hi, completed_bboxes);
+        let entity_words: Vec<_> = match completed_top {
+            Some(top) => entity_words
+                .into_iter()
+                .filter(|word| word_pdf_bottom(word, page_height) > top + TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f32)
+                .collect(),
+            None => entity_words,
+        };
         let Some(entity_bottom_image_y) = entity_words.iter().map(|word| word.top + word.height).max() else {
             break;
         };
@@ -5271,28 +5276,48 @@ fn recover_trailing_continuation_rows(
         rows.push(merged_row);
         bbox.y0 = bbox.y0.min(entity_bottom_pdf_y as f64);
         search_floor = entity_bottom_pdf_y;
+        if completed_top.is_some() {
+            break;
+        }
     }
 }
 
-/// Whether one word's box sits inside a completed table's box. A word just
-/// above that table is not inside it and stays eligible as a continuation
-/// row. ~keep
-fn word_is_in_completed_table(
-    word: &crate::pdf::table_reconstruct::HocrWord,
+fn word_pdf_bottom(word: &crate::pdf::table_reconstruct::HocrWord, page_height: f32) -> f32 {
+    page_height - (word.top + word.height) as f32
+}
+
+/// Top edge of the topmost completed table that this band crosses, if any.
+///
+/// PDF y grows upward, so this is the highest `y1` among the completed tables
+/// whose vertical span intersects the band and whose x-span overlaps the
+/// chain. Words above this edge belong to the ordinary chain; everything at or
+/// below it belongs to the completed table and is not recovered. ~keep
+fn completed_table_top_in_band(
+    words: &[crate::pdf::table_reconstruct::HocrWord],
     page_height: f32,
+    x_lo: f32,
+    x_hi: f32,
     completed_bboxes: &[crate::types::BoundingBox],
-) -> bool {
+) -> Option<f32> {
+    let band_top = words
+        .iter()
+        .map(|word| page_height - word.top as f32)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let band_bottom = words
+        .iter()
+        .map(|word| word_pdf_bottom(word, page_height))
+        .fold(f32::INFINITY, f32::min);
     let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f64;
-    let top = page_height - word.top as f32;
-    let bottom = page_height - (word.top + word.height) as f32;
-    let left = word.left as f64;
-    let right = (word.left + word.width) as f64;
-    completed_bboxes.iter().any(|bounds| {
-        right + tolerance >= bounds.x0
-            && left - tolerance <= bounds.x1
-            && bottom as f64 <= bounds.y1 + tolerance
-            && top as f64 >= bounds.y0 - tolerance
-    })
+    completed_bboxes
+        .iter()
+        .filter(|bounds| {
+            bounds.x1 + tolerance >= x_lo as f64
+                && bounds.x0 - tolerance <= x_hi as f64
+                && band_bottom as f64 <= bounds.y1 + tolerance
+                && band_top as f64 >= bounds.y0 - tolerance
+        })
+        .map(|bounds| bounds.y1 as f32)
+        .reduce(f32::max)
 }
 
 /// Take the topmost row-gap-bounded contiguous band of words from `words`
