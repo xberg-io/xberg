@@ -4945,6 +4945,7 @@ jobs:
           }
           names=()
           for gem in "${gems[@]}"; do names+=("$(basename "$gem")"); done
+          expected_source="xberg-${{ needs.prepare.outputs.version }}.gem"
           platforms=(x86_64-linux aarch64-linux arm64-darwin x64-mingw-ucrt)
           for platform in "${platforms[@]}"; do
             matches=0
@@ -4964,10 +4965,10 @@ jobs:
             done
             [ "$native" -eq 0 ] && sources+=("$name")
           done
-          [ "${#sources[@]}" -eq 1 ] && [[ "${sources[0]}" == xberg-*.gem ]] || {
-            echo "::error::expected exactly one source gem without a platform suffix, found: ${sources[*]:-none}"
+          if [ "${#sources[@]}" -ne 1 ] || [ "${sources[0]}" != "$expected_source" ]; then
+            echo "::error::expected the retained source gem to be ${expected_source}, found: ${sources[*]:-none}"
             exit 1
-          }
+          fi
           printf 'Gem inventory (%d): %s\n' "${#names[@]}" "${names[*]}"
 
       # The gemspec lists THIRD_PARTY_LICENSES.md, so both notices are already inside each
