@@ -93,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** A ruled table split by a taller row gap under a subtotal is rejoined into one table when adjacent bands repeat their column tracks and one family of long rules spans both, keeping the wrapped header and the first-column row span. (#3349)
+- **pdf:** A two-column page letterhead in the top band is no longer emitted as a table; it stays text, while ruled tables and tables with retained grids remain tables. (#3350)
 - **layout:** `serve` and `extract` read layout models from the Xberg cache (`XBERG_CACHE_DIR/layout`, the platform cache directory by default) before the Hugging Face cache, so the models the Docker image warms at build time are used instead of downloaded again; a warmed model now resolves with `HF_HUB_OFFLINE=1` and no Hub request. `cache warm` defaults to the same root as the runtime instead of `.xberg` in the current directory, and `xberg::cache::resolve_cache_base_dir()` exposes the resolved root. (#3320)
 - **ocr:** A recognized dot-leader table row is no longer printed beside the row the detected table already carries. The row claim now compares rows without the leader artifacts a recognizer adds between a label and its values, including a leader that picked up a stray dash, while letters, digits, signs and currency still have to match in order. (#2503)- **tesseract:** The text getters on `TesseractAPI` (UTF-8, hOCR, ALTO, TSV, box, LSTM box, word-str box, UNLV) free the native text when UTF-8 conversion fails. (#3228)
 

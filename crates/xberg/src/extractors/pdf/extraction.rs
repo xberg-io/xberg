@@ -870,8 +870,15 @@ pub(crate) fn extract_all_from_native_document(
                     .iter()
                     .enumerate()
                     .map(|(index, table)| {
-                        native_grids.get(index).is_some_and(|metadata| metadata.ruled)
-                            || !crate::pdf::table_normalize::is_page_letterhead_table(table)
+                        let metadata = native_grids.get(index);
+                        let exempt = metadata.is_some_and(|metadata| metadata.ruled || metadata.grid.is_some());
+                        let page_height = table.bounding_box.and_then(|_| {
+                            doc.doc
+                                .get_page_media_box((table.page_number.saturating_sub(1)) as usize)
+                                .ok()
+                                .map(|(_, bottom, _, top)| top - bottom)
+                        });
+                        exempt || !crate::pdf::table_normalize::is_page_letterhead_table(table, page_height)
                     })
                     .collect();
                 if keep.iter().any(|keep| !keep) {

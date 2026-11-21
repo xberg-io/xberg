@@ -995,7 +995,8 @@ fn reconstruct_page_region_tables(
             end += 1;
         }
         if end > index + 1
-            && let Some((table, grid)) = reconstruct_ruled_band_table(&merged, page_height, page_number, ruling_paths)
+            && let Some((table, grid)) =
+                reconstruct_ruled_band_table(&merged, page_height, page_number, allow_single_column, ruling_paths)
         {
             tables.push((table, Some(grid), true));
             index = end;
@@ -1274,6 +1275,7 @@ fn reconstruct_ruled_band_table(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     page_height: f32,
     page_number: u32,
+    allow_single_column: bool,
     ruling_paths: &[PathContent],
 ) -> Option<(Table, crate::types::TableGrid)> {
     if !ruling_paths.iter().any(band_horizontal_rule) {
@@ -1354,7 +1356,25 @@ fn reconstruct_ruled_band_table(
     if cells.len() < 3 || cells.first().is_none_or(|row| row.is_empty()) {
         return None;
     }
-    if !crate::pdf::table_reconstruct::is_well_formed_table(&cells) {
+    // A rejoined table replaces the generic region reconstruction, so it must
+    // pass the same rejection gates that path applies. ~keep
+    let mut column_positions: Vec<u32> = columns.iter().map(|(left, _)| *left as u32).collect();
+    crate::pdf::table_reconstruct::post_process_table_with_columns(
+        cells.clone(),
+        true,
+        allow_single_column,
+        &mut column_positions,
+    )?;
+    if crate::pdf::table_reconstruct::looks_like_code_listing(&cells) || is_axis_tick_grid(&cells) {
+        return None;
+    }
+    let horizontal_rules = ruling_paths.iter().filter(|path| band_horizontal_rule(path)).count();
+    if !crate::pdf::table_reconstruct::is_well_formed_borderless_table(
+        &cells,
+        region,
+        &column_positions,
+        horizontal_rules,
+    ) {
         return None;
     }
     let columns_header = has_header.then(|| cells[0].clone());
@@ -4574,7 +4594,7 @@ mod tests {
         ];
         region.sort_by_key(|word| (word.top, word.left));
         let rules = vec![synthetic_band_rule(260.0, 330.0, 110.0, 300.0)];
-        let (table, _) = reconstruct_ruled_band_table(&region, 300.0, 1, &rules)
+        let (table, _) = reconstruct_ruled_band_table(&region, 300.0, 1, false, &rules)
             .expect("a small ruled table with unambiguous surrounding rows");
 
         assert!(
@@ -4600,8 +4620,8 @@ mod tests {
             region.push(make_word(&format!("{}", row * 2 + 2), 120, 120 + row * 20, 12));
         }
         let rules = vec![synthetic_band_rule(30.0, 160.0, 110.0, 300.0)];
-        let (table, grid) =
-            reconstruct_ruled_band_table(&region, 300.0, 1, &rules).expect("a single header row over numeric data");
+        let (table, grid) = reconstruct_ruled_band_table(&region, 300.0, 1, false, &rules)
+            .expect("a single header row over numeric data");
 
         assert_eq!(table.columns, Some(vec!["Left".to_string(), "Right".to_string()]));
         assert!(
@@ -4651,6 +4671,31 @@ mod tests {
         assert!(
             intervals.len() <= 3,
             "coverage is word intervals, not a page-extent bitmap"
+        );
+    }
+
+    #[test]
+    fn rejects_a_rejoined_chart_axis_grid() {
+        let mut region = vec![
+            make_word("0", 40, 100, 4),
+            make_word("1", 44, 100, 4),
+            make_word("2", 48, 100, 4),
+            make_word("3", 52, 100, 4),
+        ];
+        for row in 0..9u32 {
+            region.push(make_word(&format!("{}", 10 + row), 40, 120 + row * 20, 4));
+            region.push(make_word(&format!("{}", 100 + row), 120, 120 + row * 20, 4));
+        }
+        // A third column makes the tick row sparse enough for the axis-grid gate. ~keep
+        region.push(make_word("999", 200, 120, 4));
+        let rules = vec![
+            synthetic_band_rule(30.0, 160.0, 90.0, 300.0),
+            synthetic_band_rule(30.0, 160.0, 210.0, 300.0),
+        ];
+
+        assert!(
+            reconstruct_ruled_band_table(&region, 300.0, 1, false, &rules).is_none(),
+            "a chart axis grid split by long rules must not bypass the axis-grid rejection"
         );
     }
 

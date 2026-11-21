@@ -4270,10 +4270,28 @@ fn build_document_structure_with_native(
     // A layout model can classify the page letterhead as a table. Reject it
     // before the emission/suppression map so its bbox cannot hide the source
     // text; the real layout table keeps its cells and grid. ~keep
-    let layout_table_count = layout_tables.len();
-    layout_tables.retain(|table| !crate::pdf::table_normalize::is_page_letterhead_table(table));
     #[cfg(feature = "layout-detection")]
-    table_grid_sidecars.retain(|sidecar| !crate::pdf::table_normalize::is_page_letterhead_table(&sidecar.table));
+    let layout_table_has_grid = |table: &crate::types::Table| {
+        table_grid_sidecars.iter().any(|sidecar| {
+            sidecar.table.page_number == table.page_number
+                && sidecar.table.bounding_box == table.bounding_box
+                && sidecar.table.cells == table.cells
+        })
+    };
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_table_has_grid = |_: &crate::types::Table| false;
+    let layout_page_height = |table: &crate::types::Table| {
+        page_heights
+            .get((table.page_number.saturating_sub(1)) as usize)
+            .copied()
+    };
+    let layout_table_count = layout_tables.len();
+    layout_tables.retain(|table| {
+        layout_table_has_grid(table)
+            || !crate::pdf::table_normalize::is_page_letterhead_table(table, layout_page_height(table))
+    });
+    // A layout table with a grid sidecar is exempt above, so no sidecar can
+    // outlive its rejected table. ~keep
     if layout_tables.len() != layout_table_count {
         tracing::debug!(
             rejected = layout_table_count - layout_tables.len(),

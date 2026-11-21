@@ -8,13 +8,26 @@ const MIN_WIDE_TABLE_COLUMNS: usize = 16;
 /// Reject a page letterhead emitted as a table.
 ///
 /// A two-column letterhead (company name, plan line, place) is an unruled,
-/// three-row 2x2-ish block: at most one row fills both columns, one row has
-/// only the left cell and another only the right cell. A real two-column
-/// table repeats both columns across its rows and carries values or at least
-/// more than one full row. ~keep
-pub(crate) fn is_page_letterhead_table(table: &Table) -> bool {
+/// three-row 2x2-ish block in the page's top band: at most one row fills both
+/// columns, one row has only the left cell and another only the right cell.
+/// A real two-column table repeats both columns across its rows and carries
+/// values or at least more than one full row. The top-band requirement keeps
+/// a same-shaped form block lower on the page (`Policy Holder` / `Benefit`
+/// over a name and a coverage line) out of the rejection. ~keep
+pub(crate) fn is_page_letterhead_table(table: &Table, page_height: Option<f32>) -> bool {
+    /// Letterheads start within the top fifteen percent of the page. ~keep
+    const LETTERHEAD_TOP_BAND: f64 = 0.15;
     const MAX_LETTERHEAD_ROWS: usize = 3;
     const MAX_LETTERHEAD_CELLS: usize = 5;
+    let Some(page_height) = page_height.filter(|height| *height > 0.0) else {
+        return false;
+    };
+    let Some(bounds) = table.bounding_box else {
+        return false;
+    };
+    if bounds.y1 < f64::from(page_height) * (1.0 - LETTERHEAD_TOP_BAND) {
+        return false;
+    }
     if table.cells.len() > MAX_LETTERHEAD_ROWS || table.cells.iter().any(|row| row.len() != 2) {
         return false;
     }
@@ -158,33 +171,44 @@ mod tests {
         }
     }
 
+    fn top_band_table(rows: Vec<Vec<&str>>) -> Table {
+        let mut table = table_with_rows(rows);
+        table.bounding_box = Some(crate::types::BoundingBox {
+            x0: 0.0,
+            y0: 700.0,
+            x1: 500.0,
+            y1: 755.0,
+        });
+        table
+    }
+
     #[test]
     fn rejects_two_column_page_letterhead() {
-        let table = table_with_rows(vec![
+        let table = top_band_table(vec![
             vec!["WASHINGTON", "NATIONAL INSURANCE COMPANY"],
             vec!["Medicare Select -- Plan A,B, C, & D", ""],
             vec!["", "Texas Experience"],
         ]);
 
-        assert!(is_page_letterhead_table(&table));
+        assert!(is_page_letterhead_table(&table, Some(792.0)));
     }
 
     #[test]
     fn rejects_a_letterhead_whose_plan_name_contains_a_digit() {
-        let table = table_with_rows(vec![
+        let table = top_band_table(vec![
             vec!["WASHINGTON", "NATIONAL INSURANCE COMPANY"],
             vec!["Medicare Plan A1", ""],
             vec!["", "Texas Experience"],
         ]);
 
-        assert!(is_page_letterhead_table(&table));
+        assert!(is_page_letterhead_table(&table, Some(792.0)));
     }
 
     #[test]
     fn keeps_a_same_shape_grid_with_a_numeric_value() {
-        let table = table_with_rows(vec![vec!["Plan A", "120.00"], vec!["Detail", ""], vec!["", "Note"]]);
+        let table = top_band_table(vec![vec!["Plan A", "120.00"], vec!["Detail", ""], vec!["", "Note"]]);
 
-        assert!(!is_page_letterhead_table(&table));
+        assert!(!is_page_letterhead_table(&table, Some(792.0)));
     }
 
     #[test]
@@ -196,7 +220,7 @@ mod tests {
             vec!["Plan C", "170.00"],
         ]);
 
-        assert!(!is_page_letterhead_table(&table));
+        assert!(!is_page_letterhead_table(&table, Some(792.0)));
     }
 
     #[test]
@@ -208,7 +232,24 @@ mod tests {
             vec!["Gamma", "Delta"],
         ]);
 
-        assert!(!is_page_letterhead_table(&table));
+        assert!(!is_page_letterhead_table(&table, Some(792.0)));
+    }
+
+    #[test]
+    fn keeps_a_header_first_three_row_table_below_the_top_band() {
+        let mut table = table_with_rows(vec![
+            vec!["Policy Holder", "Benefit"],
+            vec!["Jane Doe", ""],
+            vec!["", "Covered"],
+        ]);
+        table.bounding_box = Some(crate::types::BoundingBox {
+            x0: 0.0,
+            y0: 300.0,
+            x1: 500.0,
+            y1: 380.0,
+        });
+
+        assert!(!is_page_letterhead_table(&table, Some(792.0)));
     }
 
     fn repeated_rows(candidate: &str, count: usize) -> Vec<Vec<&str>> {
