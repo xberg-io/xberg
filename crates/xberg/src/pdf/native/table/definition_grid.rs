@@ -526,58 +526,59 @@ fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame<'_>) -> Opt
 /// slice that opens with its own header joins only when that header repeats the
 /// grid's. Two independent tables of the same width therefore stay separate
 /// instead of one's header becoming a data row of the other.
-pub(super) fn stitch_tagged(tables: Vec<Table>, is_definition: Vec<bool>) -> Vec<Table> {
-    if tables.len() != is_definition.len() || !is_definition.iter().any(|&tagged| tagged) {
-        return tables;
+pub(super) fn stitch_tagged<T>(rows: Vec<(Table, T)>, is_definition: Vec<bool>) -> Vec<(Table, T)> {
+    if rows.len() != is_definition.len() || !is_definition.iter().any(|&tagged| tagged) {
+        return rows;
     }
     let mut definition = Vec::new();
-    let mut slots = Vec::with_capacity(tables.len());
-    for (table, tagged) in tables.into_iter().zip(is_definition) {
+    let mut slots = Vec::with_capacity(rows.len());
+    for (row, tagged) in rows.into_iter().zip(is_definition) {
         if tagged {
             slots.push(None);
-            definition.push(table);
+            definition.push(row);
         } else {
-            slots.push(Some(table));
+            slots.push(Some(row));
         }
     }
     let mut stitched = stitch_stacked(definition).into_iter();
-    let mut tables = Vec::with_capacity(slots.len());
+    let mut rows = Vec::with_capacity(slots.len());
     for slot in slots {
         match slot {
-            Some(table) => tables.push(table),
+            Some(row) => rows.push(row),
             None => {
-                if let Some(table) = stitched.next() {
-                    tables.push(table);
+                if let Some(row) = stitched.next() {
+                    rows.push(row);
                 }
             }
         }
     }
-    tables.extend(stitched);
-    tables
+    rows.extend(stitched);
+    rows
 }
 
-fn stitch_stacked(mut tables: Vec<Table>) -> Vec<Table> {
-    if !tables.iter().any(|table| has_definition_shape(&table.cells)) {
-        return tables;
+fn stitch_stacked<T>(mut rows: Vec<(Table, T)>) -> Vec<(Table, T)> {
+    if !rows.iter().any(|(table, _)| has_definition_shape(&table.cells)) {
+        return rows;
     }
-    tables.sort_by(|left, right| {
+    rows.sort_by(|left, right| {
         let top = |table: &Table| table.bounding_box.map_or(f64::NEG_INFINITY, |bounds| bounds.y1);
         let left_edge = |table: &Table| table.bounding_box.map_or(f64::INFINITY, |bounds| bounds.x0);
-        top(right)
-            .total_cmp(&top(left))
-            .then_with(|| left_edge(left).total_cmp(&left_edge(right)))
+        top(&right.0)
+            .total_cmp(&top(&left.0))
+            .then_with(|| left_edge(&left.0).total_cmp(&left_edge(&right.0)))
     });
 
-    let mut stitched: Vec<Table> = Vec::with_capacity(tables.len());
-    for table in tables {
+    let mut stitched: Vec<(Table, T)> = Vec::with_capacity(rows.len());
+    for row in rows {
         let previous = stitched
             .iter_mut()
             .rev()
-            .find(|candidate| stitches_onto(candidate, &table));
-        let Some(previous) = previous else {
-            stitched.push(table);
+            .find(|(candidate, _)| stitches_onto(candidate, &row.0));
+        let Some((previous, _)) = previous else {
+            stitched.push(row);
             continue;
         };
+        let table = row.0;
         let repeated_header = table.cells.first().is_some_and(|row| {
             previous
                 .cells
@@ -879,12 +880,12 @@ mod tests {
             ..Default::default()
         };
 
-        let stitched = stitch_tagged(vec![continuation, header], vec![true, true]);
+        let stitched = stitch_tagged(vec![(continuation, ()), (header, ())], vec![true, true]);
 
         assert_eq!(stitched.len(), 1);
-        assert_eq!(stitched[0].cells.len(), 8, "header stays first, continuation follows");
-        assert_eq!(stitched[0].cells[0], ["Credit Tier", "Factor"]);
-        assert_eq!(stitched[0].cells[7], ["G", "0.6143"]);
+        assert_eq!(stitched[0].0.cells.len(), 8, "header stays first, continuation follows");
+        assert_eq!(stitched[0].0.cells[0], ["Credit Tier", "Factor"]);
+        assert_eq!(stitched[0].0.cells[7], ["G", "0.6143"]);
     }
 
     #[test]
@@ -920,7 +921,7 @@ mod tests {
             ..Default::default()
         };
 
-        let stitched = stitch_tagged(vec![lower, upper], vec![true, true]);
+        let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
 
         assert_eq!(stitched.len(), 2, "a differing header must not become a data row");
     }
@@ -947,7 +948,7 @@ mod tests {
             ..Default::default()
         };
 
-        let stitched = stitch_tagged(vec![first, second], vec![false, false]);
+        let stitched = stitch_tagged(vec![(first, ()), (second, ())], vec![false, false]);
 
         assert_eq!(stitched.len(), 2);
     }
