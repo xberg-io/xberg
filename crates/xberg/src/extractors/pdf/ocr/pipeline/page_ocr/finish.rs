@@ -1,3 +1,7 @@
+// Each phase binds the whole context by value and writes only the fields its own feature leg
+// touches; which of those bindings need `mut` therefore differs per build. ~keep
+#![allow(unused_mut)]
+
 use super::super::*;
 use super::*;
 use crate::plugins::registry::get_ocr_backend_registry;
@@ -6,35 +10,35 @@ impl PageOcrContext<'_> {
     /// Assemble the document the page batches read, dropping what the quality gates rejected.
     pub(super) async fn finish(self) -> OcrRunResult<PageOcrOutput> {
         let Self {
-            content,
-            images,
+            mut content,
+            mut images,
             #[cfg(feature = "layout-detection")]
-            mut layout_detections,
-            config,
-            page_rotation_override,
-            skip_document_global_heuristic,
+                layout_detections: _,
+            mut config,
+            mut page_rotation_override,
+            mut skip_document_global_heuristic,
             points_per_pixel_override: _,
-            page_ocr_hints,
-            page_index_offset,
-            detached_page,
-            xobject_document,
+            mut page_ocr_hints,
+            mut page_index_offset,
+            mut detached_page,
+            mut xobject_document,
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
             mut stored_scan,
             has_stored_scan: _,
-            has_layout_detections,
-            resolved_ocr_config,
+            mut has_layout_detections,
+            mut resolved_ocr_config,
             ocr_config_owned: _,
-            ocr_output_thresholds,
-            backend,
+            mut ocr_output_thresholds,
+            mut backend,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 builtin_tesseract: _,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            can_retry_orientation,
+            mut can_retry_orientation,
             can_prove_no_admitted_images: _,
-            no_admitted_images,
+            mut no_admitted_images,
             backend_confidence_semantics: _,
             backend_name: _,
-            backend_confidence_scale,
+            mut backend_confidence_scale,
             #[cfg(feature = "pdf")]
                 orientation_handling: _,
             #[cfg(feature = "pdf")]
@@ -59,21 +63,21 @@ impl PageOcrContext<'_> {
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            tall_ordered_primary,
+            mut tall_ordered_primary,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 force_khmer_retry: _,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             mut forced_khmer_supplements,
             preprocessing_render_dpi: _,
-            capture_rasters,
+            mut capture_rasters,
             #[cfg(feature = "pdf")]
-            lazy_pdf_render_state,
+            mut lazy_pdf_render_state,
             lazy_pdf_page_count: _,
             batch_size: _,
-            total_pages,
+            mut total_pages,
             progress_total_pages: _,
             #[cfg(feature = "pdf")]
-            external_image_page_geometry,
+            mut external_image_page_geometry,
             #[cfg(feature = "pdf")]
                 fallback_pdf_state: _,
             #[cfg(all(
@@ -85,21 +89,21 @@ impl PageOcrContext<'_> {
             mut leading_khmer_rows,
             mut page_texts,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            paint_retention,
+            mut paint_retention,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            background_noise,
+            mut background_noise,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 certified_background: _,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 paint_work: _,
-            rejected_pages,
+            mut rejected_pages,
             #[cfg(all(
                 feature = "pdf",
                 feature = "ocr",
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            owned_scan_rows,
+            mut owned_scan_rows,
             mut all_page_paragraphs,
             #[cfg(all(
                 feature = "ocr",
@@ -115,36 +119,36 @@ impl PageOcrContext<'_> {
                 not(target_arch = "wasm32")
             ))]
             mut ordered_layout_pages,
-            page_ocr_scales,
-            detached_page_scales,
+            mut page_ocr_scales,
+            mut detached_page_scales,
             #[cfg(feature = "pdf")]
-            paragraph_rasters,
+            mut paragraph_rasters,
             mut public_ocr_pages,
-            ocr_page_heights,
+            mut ocr_page_heights,
             mut pages_text_claimed_by_tables,
-            retry_texts_outside_tables,
+            mut retry_texts_outside_tables,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            caption,
+            mut caption,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 capture_caption: _,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-            detached_table_pair,
+            mut detached_table_pair,
             #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
             mut collected_table_grids,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 orientation_retry: _,
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            matched_layer_occurrences,
+            mut matched_layer_occurrences,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-            complete_native_words,
+            mut complete_native_words,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-            native_ink_owned,
+            mut native_ink_owned,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-            native_placed_words,
+            mut native_placed_words,
             #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-            tall_source_used,
+            mut tall_source_used,
             #[cfg(feature = "pdf")]
-            retained_hocr_read,
+            mut retained_hocr_read,
             #[cfg(all(
                 test,
                 feature = "pdf",
@@ -159,7 +163,7 @@ impl PageOcrContext<'_> {
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            number_recovered_pages,
+            mut number_recovered_pages,
             #[cfg(all(
                 feature = "pdf",
                 feature = "ocr",
@@ -173,39 +177,39 @@ impl PageOcrContext<'_> {
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            number_primary_text,
-            page_segmentation_modes,
-            backend_additional_metadata,
+            mut number_primary_text,
+            mut page_segmentation_modes,
+            mut backend_additional_metadata,
             mut collected_tables,
             mut all_ocr_elements,
-            accumulated_llm_usage,
+            mut accumulated_llm_usage,
             mut accumulated_formulas,
-            conf_sum,
-            conf_count,
-            ocr_confidence_by_page,
-            captured_rasters,
-            preprocessing_by_page,
+            mut conf_sum,
+            mut conf_count,
+            mut ocr_confidence_by_page,
+            mut captured_rasters,
+            mut preprocessing_by_page,
             #[cfg(feature = "pdf")]
-            image_fallback_warnings,
+            mut image_fallback_warnings,
             #[cfg(feature = "pdf")]
                 xobject_recovery_budget: _,
-            page_backend_errors,
+            mut page_backend_errors,
             mut page_failure_warnings,
-            pending_page_failure_warnings,
+            mut pending_page_failure_warnings,
             mut page_failures,
-            pages_with_empty_xobject_retry,
-            pages_with_recovered_xobject_payload,
+            mut pages_with_empty_xobject_retry,
+            mut pages_with_recovered_xobject_payload,
             #[cfg(feature = "pdf")]
-            margin_filter_warnings,
+            mut margin_filter_warnings,
             #[cfg(feature = "pdf")]
-            render_warnings,
+            mut render_warnings,
             #[cfg(feature = "pdf")]
-            raster_dpis,
+            mut raster_dpis,
             mut backend_page_warnings,
             mut recognition_noise_warnings,
-            recognition_noise_verdicts,
+            mut recognition_noise_verdicts,
             #[cfg(feature = "layout-detection")]
-            mut tatr_model,
+                tatr_model: _,
         } = self;
         let base_ocr_config = resolved_ocr_config.as_ref();
         #[cfg(feature = "pdf")]

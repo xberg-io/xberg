@@ -5,8 +5,8 @@ use crate::plugins::registry::get_ocr_backend_registry;
 /// What one prepared run is: a document-level backend already returned the whole answer, or the
 /// phase context every page batch runs through.
 pub(super) enum PageOcrStart<'a> {
-    DocumentLevel(PageOcrOutput),
-    Pages(PageOcrContext<'a>),
+    DocumentLevel(Box<PageOcrOutput>),
+    Pages(Box<PageOcrContext<'a>>),
 }
 
 /// Resolve the backend, the render plan and every accumulator the page batches write, or hand
@@ -238,7 +238,7 @@ pub(super) async fn prepare<'a>(
         };
         #[cfg(not(feature = "pdf"))]
         let ocr_doc = None;
-        return Ok(PageOcrStart::DocumentLevel((
+        return Ok(PageOcrStart::DocumentLevel(Box::new((
             result.content,
             mean_conf,
             Vec::new(),
@@ -260,7 +260,7 @@ pub(super) async fn prepare<'a>(
             // Same reasoning: this route never calls `accept_or_reject_ocr_page` per page.
             Vec::new(),
             OcrReadEvidence::default(),
-        )));
+        ))));
     }
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let preprocessing_render_dpi = configured_preprocessing_render_dpi(
@@ -397,14 +397,14 @@ pub(super) async fn prepare<'a>(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    let mut column_lanes_by_page = (0..total_pages).map(|_| None).collect::<Vec<_>>();
+    let column_lanes_by_page = (0..total_pages).map(|_| None).collect::<Vec<_>>();
     #[cfg(all(
         feature = "ocr",
         feature = "layout-detection",
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    let mut ordered_layout_pages = vec![false; total_pages];
+    let ordered_layout_pages = vec![false; total_pages];
     // The factor from each page's OCR raster to points, recorded beside its paragraphs for the
     // layer merge. ~keep
     #[cfg_attr(
@@ -459,7 +459,7 @@ pub(super) async fn prepare<'a>(
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let detached_table_pair = false;
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
-    let mut collected_table_grids = Vec::new();
+    let collected_table_grids = Vec::new();
     let all_ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
     let accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
@@ -510,13 +510,6 @@ pub(super) async fn prepare<'a>(
     let matched_layer_occurrences = None;
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
-    #[cfg(all(
-        feature = "ocr",
-        feature = "pdf",
-        feature = "tokio-runtime",
-        not(target_arch = "wasm32")
-    ))]
-    let tall_source_used = tall_source_used;
 
     #[cfg(feature = "pdf")]
     let margin_filter_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
@@ -541,7 +534,11 @@ pub(super) async fn prepare<'a>(
     } else {
         super::rendering::PageRasterDpis::new()
     };
-    let backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    #[cfg_attr(
+        not(feature = "layout-detection"),
+        allow(unused_mut, reason = "only the TATR availability warning writes here")
+    )]
+    let mut backend_page_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
     #[cfg(all(
         feature = "pdf",
         feature = "ocr",
@@ -574,7 +571,7 @@ pub(super) async fn prepare<'a>(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    let mut region_replay_raster = None;
+    let region_replay_raster = None;
     #[cfg(all(
         feature = "pdf",
         feature = "ocr",
@@ -624,7 +621,7 @@ pub(super) async fn prepare<'a>(
     // through `spawn_blocking`, mirroring the boundary already used for the RT-DETR layout
     // engine in `layout_runner::run_layout_for_pdf_pages_async`. ~keep
     #[cfg(feature = "layout-detection")]
-    let mut tatr_model = if layout_detections.is_some() && pdf_ocr_table_recognition_enabled(config) {
+    let tatr_model = if layout_detections.is_some() && pdf_ocr_table_recognition_enabled(config) {
         let tatr_acceleration = config.resolved_layout_acceleration().cloned();
         let tatr_thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
         let span = tracing::Span::current();
@@ -646,7 +643,7 @@ pub(super) async fn prepare<'a>(
         crate::core::diagnostics::push_warning_deduped(&mut backend_page_warnings, warning);
     }
 
-    Ok(PageOcrStart::Pages(PageOcrContext {
+    Ok(PageOcrStart::Pages(Box::new(PageOcrContext {
         content,
         images,
         #[cfg(feature = "layout-detection")]
@@ -847,5 +844,5 @@ pub(super) async fn prepare<'a>(
         recognition_noise_verdicts,
         #[cfg(feature = "layout-detection")]
         tatr_model,
-    }))
+    })))
 }

@@ -6,6 +6,9 @@
 
 mod batches;
 mod finish;
+mod pages;
+mod raster;
+mod reads;
 mod setup;
 
 // The phases resolve their helpers through this module: the code they hold used to live
@@ -289,7 +292,44 @@ pub(super) async fn run<'a>(
     )
     .await?
     {
-        setup::PageOcrStart::DocumentLevel(output) => Ok(output),
+        setup::PageOcrStart::DocumentLevel(output) => Ok(*output),
         setup::PageOcrStart::Pages(context) => context.run_batches().await?.finish().await,
     }
+}
+
+/// The pair of rasters one batch renders or encodes: the caller's own page images and this
+/// route's encoded PNG bytes per page.
+pub(super) struct RenderedBatch<'a> {
+    pub(super) slice: Option<std::borrow::Cow<'a, [image::DynamicImage]>>,
+    pub(super) encoded: Vec<(usize, std::sync::Arc<Vec<u8>>, u32, u32)>,
+}
+
+/// What a batch's page reads produced, indexed by the page's offset within the batch.
+pub(super) struct BatchReads {
+    pub(super) upright_correction: Vec<(u32, u32, u32)>,
+    pub(super) results: Vec<Option<crate::types::ExtractedDocument>>,
+    pub(super) errors: Vec<Option<(crate::XbergError, String)>>,
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(super) column_orders: Vec<Option<column_retry::LineOrder>>,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(super) detached_frames: Vec<bool>,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(super) number_frames: Vec<bool>,
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(super) paint_frames: Vec<bool>,
 }
