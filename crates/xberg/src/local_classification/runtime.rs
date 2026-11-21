@@ -5,7 +5,8 @@ use super::control::{WorkerControl, check_control, run_controlled, run_controlle
 use super::policy::{invalid, model_identity, validate_config, validate_request};
 use super::preparation::{PreparedModel, load_model, validate_cpu_runtime};
 use super::{
-    LocalClassificationConfig, LocalClassificationModelInfo, LocalClassificationOptions, LocalClassificationResult,
+    LocalClassificationConfig, LocalClassificationMode, LocalClassificationModelInfo, LocalClassificationOptions,
+    LocalClassificationResult,
 };
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
@@ -81,6 +82,9 @@ impl LocalTextClassifier {
     ///
     /// Cancellation asks ONNX Runtime to terminate active inference and waits for the
     /// blocking worker. A deadline does not guarantee a maximum wall-clock return time.
+    ///
+    /// `labels` are arbitrary caller-provided labels scored through NLI entailment. They are not
+    /// a trained taxonomy: see [`Self::label_source`] and [`Self::classify_trained_taxonomy`].
     pub async fn classify(
         &self,
         text: &str,
@@ -117,6 +121,36 @@ impl LocalTextClassifier {
             }
         })
         .await
+    }
+
+    /// Label semantics this adapter applies.
+    ///
+    /// Always [`LocalClassificationMode::CallerProvidedZeroShot`]: the staged NLI candidate scores
+    /// caller labels through entailment and has no trained taxonomy.
+    pub fn label_source(&self) -> LocalClassificationMode {
+        LocalClassificationMode::CallerProvidedZeroShot
+    }
+
+    /// Classifies against a trained taxonomy.
+    ///
+    /// This adapter deliberately does not implement it. A trained classification head is a
+    /// different model (the MiniLM+head candidate in #2334/#2336), and treating a caller label set
+    /// as a trained taxonomy would silently change the meaning of the prediction. No
+    /// fixed-taxonomy candidate is staged in the canonical inventory, so this fails explicitly
+    /// rather than substituting the zero-shot path.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`crate::XbergError::Validation`] until a fixed-taxonomy candidate is staged
+    /// and qualified.
+    pub fn classify_trained_taxonomy(
+        &self,
+        _text: &str,
+        _options: &LocalClassificationOptions,
+    ) -> crate::Result<LocalClassificationResult> {
+        Err(invalid(
+            "Trained-taxonomy classification needs a staged fixed-taxonomy classification head; none is in the inventory (MiniLM+head, #2336). Caller-provided labels are zero-shot and are never treated as a trained taxonomy.",
+        ))
     }
 }
 

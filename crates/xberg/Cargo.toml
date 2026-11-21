@@ -716,6 +716,11 @@ classification-onnx = ["classification-onnx-types", "onnx-runtime", "dep:ndarray
 # tokio-runtime powers captioning's bounded-concurrency scheduler (JoinSet), which
 # captions embedded images in parallel instead of one-at-a-time (#1378).
 captioning = ["liter-llm", "tokio-runtime"]
+# Experimental local CPU image captioning (SmolVLM / Florence-2). Portable DTOs live
+# behind `captioning-onnx-types`; the inference adapter adds ONNX Runtime and image decoding.
+# Off by default and not part of `full`: no graph is a supported preset until #2334 qualifies it.
+captioning-onnx-types = []
+captioning-onnx = ["captioning-onnx-types", "onnx-runtime", "dep:image", "tokio-runtime"]
 qr-codes = ["dep:rqrr", "dep:image"] # Pure-Rust QR decoding via rqrr.
 
 # SVG support: parse, sanitize (strip external hrefs/JS/foreignObject), re-serialize,

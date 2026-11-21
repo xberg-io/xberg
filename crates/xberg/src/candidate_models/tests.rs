@@ -483,3 +483,46 @@ fn the_classifier_manifests_are_derived_from_the_inventory_pins() {
     assert_eq!(seen, sizes_seen);
     assert_eq!(seen, 1 + CANDIDATE_MODELS[0].required_files.len());
 }
+
+#[test]
+fn an_unsupported_target_fails_instead_of_substituting_another_graph() {
+    let nli = &CANDIDATE_MODELS[0];
+    let error = nli
+        .files_for_target(CandidateTarget::Unsupported, CandidatePrecision::Quantized)
+        .unwrap_err();
+    assert!(error.contains("has no quantized graph for"), "{error}");
+    assert!(error.contains("exceeds the adapter's cap"), "{error}");
+
+    let arm64: BTreeSet<String> = nli
+        .files_for_target(CandidateTarget::Aarch64, CandidatePrecision::Quantized)
+        .unwrap()
+        .into_iter()
+        .map(|file| file.path)
+        .collect();
+    assert!(arm64.contains(&format!("{}/model_qint8_arm64.onnx", nli.id)));
+    let arm64_graphs: BTreeSet<&String> = arm64.iter().filter(|path| path.ends_with(".onnx")).collect();
+    let avx2: BTreeSet<String> = nli
+        .files_for_target(CandidateTarget::X86_64, CandidatePrecision::Quantized)
+        .unwrap()
+        .into_iter()
+        .map(|file| file.path)
+        .collect();
+    assert!(avx2.contains(&format!("{}/model_quint8_avx2.onnx", nli.id)));
+    let avx2_graphs: BTreeSet<&String> = avx2.iter().filter(|path| path.ends_with(".onnx")).collect();
+    assert!(arm64_graphs.is_disjoint(&avx2_graphs));
+}
+
+#[test]
+fn no_fixed_taxonomy_candidate_is_staged_and_its_task_asks_for_one_explicitly() {
+    assert!(CandidateTask::FixedTaxonomyClassification.models().is_empty());
+    let mut probe = CANDIDATE_MODELS[0];
+    probe.task = CandidateTask::FixedTaxonomyClassification;
+    let files = CANDIDATE_MODELS[0].files().unwrap();
+    let error = probe
+        .select_files(CandidateTarget::host(), &files, CandidatePrecision::Quantized)
+        .unwrap_err();
+    assert!(
+        error.contains("no fixed-taxonomy classification candidate is staged"),
+        "{error}"
+    );
+}

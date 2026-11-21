@@ -1130,6 +1130,8 @@ pub(crate) fn hf_cached_revision_with_client(
 ///
 /// Shared by every checksum-manifest consumer (GLiNER model checksums, Candle VLM-OCR
 /// weight staging) so the format and validation live in one place.
+// The cfg gate is broader than any single consumer, so a feature combination that enables
+// onnx-runtime without a manifest consumer would otherwise warn on this shared helper. ~keep
 #[cfg(any(
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
@@ -1137,6 +1139,7 @@ pub(crate) fn hf_cached_revision_with_client(
     feature = "onnx-runtime",
     feature = "static-embeddings"
 ))]
+#[allow(dead_code)]
 pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
     let mut entries = Vec::new();
     let mut paths = std::collections::HashSet::new();
@@ -1183,6 +1186,7 @@ pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String
     feature = "onnx-runtime",
     feature = "static-embeddings"
 ))]
+#[allow(dead_code)]
 fn portable_artifact_component(component: &str) -> bool {
     if component.is_empty()
         || component.ends_with(['.', ' '])
