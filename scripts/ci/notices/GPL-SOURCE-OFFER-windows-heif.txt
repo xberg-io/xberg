@@ -1,0 +1,58 @@
+Xberg - Written Offer of Corresponding Source
+Windows x64 CLI (xberg-cli-x86_64-pc-windows-msvc.zip)
+
+This archive conveys object code for libheif 1.23.7 (LGPL-3.0-only), libde265
+1.1.3 (LGPL-3.0-only) and libaom 3.15.2 (BSD-2-Clause) as the DLLs heif.dll,
+libde265.dll and aom.dll. libheif and libde265 are licensed under the GNU
+Lesser General Public License version 3; libaom is licensed under the BSD
+2-Clause license. Xberg's own code remains MIT-licensed.
+
+GNU LGPL version 3, section 3 lets you convey the library object code only under
+GNU GPL version 3, section 6, which requires the Corresponding Source or a
+written offer for it. Xberg hereby offers, valid for three years from the date
+this release was distributed, to give anyone who possesses this object code a
+complete copy of its Corresponding Source on a durable medium suitable for
+interchanging data, for a charge no more than the cost of physically performing
+source distribution (GNU GPL version 3, section 6(b)).
+
+The Corresponding Source is the complete machine-readable source code for:
+
+  * libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2 at the exact releases
+    selected by the vcpkg baseline commit
+    5363acb796e576328288fae60c25304e227e9839, including each component's
+    build system and the vcpkg port patches that were applied (see below);
+  * the vcpkg ports tree at that baseline, including ports/libheif,
+    ports/libde265 and ports/aom and their patch files: libheif's
+    cxx-linkage-pkgconfig.diff, find-modules.diff, gdk-pixbuf.patch,
+    symbol-exports.diff and vvc-pkgconfig.patch; libde265's fix-linkage.patch;
+    and aom's aom-rename-static.diff;
+  * scripts/ci/install-system-deps/install-windows.ps1 at the release tag that
+    produced this archive, which contains the configure, build and install
+    commands used for it.
+
+The build used the vcpkg triplet x64-windows and this command, run from the
+vcpkg checkout at the baseline above:
+
+  vcpkg install "libheif[core,aom,libde265]:x64-windows" --recurse
+
+Modification notice (GNU LGPL version 3, section 2): the libraries are built
+from the pinned upstream releases above after the vcpkg port patches listed in
+this offer are applied. No other modifications were made by Xberg. The patched
+sources are available from the vcpkg repository at the baseline commit, and
+from the corresponding-source offer below.
+
+The upstream release sources are:
+  libheif   https://github.com/strukturag/libheif/releases/tag/v1.23.7
+  libde265  https://github.com/strukturag/libde265/releases/tag/v1.1.3
+  libaom    https://aomedia.googlesource.com/aom (v3.15.2)
+and the vcpkg patch set is published at
+https://github.com/microsoft/vcpkg/tree/5363acb796e576328288fae60c25304e227e9839/ports
+
+To obtain the source under this offer, email contact@xberg.io with the subject
+"Windows CLI codec corresponding source" and the release version and archive
+name. Xberg will reply with a download location or, where a download is not
+possible, ship a physical copy at no more than the cost of media and shipping.
+
+This offer covers the LGPL-3.0 and BSD-2-Clause components above and is made
+under GNU GPL version 3, section 6(b), satisfying GNU LGPL version 3 sections 3
+and 4(d).

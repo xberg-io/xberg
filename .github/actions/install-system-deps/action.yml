@@ -139,9 +139,11 @@ runs:
       uses: actions/cache@v6
       with:
         path: C:\xberg-vcpkg-5363acb7
-        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v6
+        # v7: libheif moved from the static x64-windows-static-md triplet to the dynamic
+        # x64-windows one (LGPL obligations, #3339); a v6 cache holds no DLLs. ~keep
+        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v7
         restore-keys: |
-          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v6-
+          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v7-
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'

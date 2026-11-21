@@ -1042,6 +1042,74 @@ def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
     assert '"$total" -ne 10' in release, "the completeness gate must count the new archive"
 
 
+def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [package] = [step for step in block["steps"] if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    assert "${XBERG_LIBHEIF_DLL_DIR:?}" in run, "the archive must stage the codec DLLs from vcpkg"
+    assert 'if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]' in run, "the no-GPL archive must stay codec-free"
+    assert "stage_windows_heif_dlls.py" in run, "stage only the codec roots and their imports, not *.dll"
+    assert 'cp "$HEIF_BIN"/*.dll' not in run, "a blind glob copy would ship unneeded DLLs such as zlib1.dll"
+    for notice in ("LGPL-3.0.txt", "GPL-3.0.txt", "libheif-COPYING", "libde265-COPYING", "aom-COPYING"):
+        assert notice in run, f"the archive must stage {notice}"
+    assert "GPL-SOURCE-OFFER-windows-heif.txt" in run, "the archive must stage the written source offer"
+    assert '"$STAGE/GPL-SOURCE-OFFER.txt"' in run, "the offer must ship under the archive's notice name"
+
+    [gate] = [
+        step
+        for step in block["steps"]
+        if step.get("name") == "Verify the Windows HEIF archive links libheif dynamically"
+    ]
+    assert gate["if"] == "runner.os == 'Windows' && matrix.archive_suffix != '-no-gpl-lgpl'"
+    assert "verify_windows_heif_archive.py" in gate["run"]
+
+    [tools] = [
+        step
+        for step in block["steps"]
+        if step.get("uses") == "actions/checkout@v7" and step.get("with", {}).get("path") == ".release-tools"
+    ]
+    sparse = tools["with"]["sparse-checkout"]
+    for path in (
+        "scripts/ci/verify_windows_heif_archive.py",
+        "scripts/ci/stage_windows_heif_dlls.py",
+        "scripts/ci/notices/LGPL-3.0.txt",
+        "scripts/ci/notices/GPL-3.0.txt",
+        "scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt",
+    ):
+        assert path in sparse, f"the release-tools checkout must carry {path}"
+
+
+def test_windows_installer_links_libheif_dynamically() -> None:
+    script = (Path(__file__).parents[2] / "scripts/ci/install-system-deps/install-windows.ps1").read_text()
+    assert "libheif[core,aom,libde265]:x64-windows" in script, (
+        "the Windows port must be the dynamic triplet with the GPL x265 encoder disabled"
+    )
+    assert "XBERG_LIBHEIF_DLL_DIR" in script
+    assert "installed\\x64-windows\\bin" in script, "the installer must export where the DLLs live"
+    assert "x64-windows-static-md" in script, "boost and zlib must stay on the static triplet"
+
+    assert '"zlib:x64-windows"' in script, "libz-sys must keep finding a vcpkg zlib under the dynamic triplet"
+    assert "Assert-LibheifArtifacts" in script, "the artifact checks must be a testable function"
+
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [select] = [step for step in block["steps"] if step.get("name") == "Select the dynamic libheif triplet"]
+    assert select["if"] == "runner.os == 'Windows'", (
+        "the triplet variables must stay unset on Linux and macOS, where an empty value still counts as set"
+    )
+    assert "VCPKGRS_TRIPLET=x64-windows" in select["run"]
+    assert "VCPKGRS_DYNAMIC=1" in select["run"]
+    assert "$GITHUB_ENV" in select["run"]
+    [build] = [
+        step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    ]
+    assert "VCPKGRS_TRIPLET" not in build.get("env", {}), "the build step must not set an empty triplet on non-Windows"
+
+    [setup] = [step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/setup-rust@")]
+    assert setup["with"]["cache-key-prefix"] == "cli-native-v2", (
+        "vcpkg-rs has no rerun-if-env-changed, so a restored target/ from the static triplet must be invalidated"
+    )
+
+
 def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
     block = job_block(WORKFLOW.read_text(), "python-wheels")
     [matrix] = re.findall(r"(?m)^        os: \[([^\]]+)\]$", block)

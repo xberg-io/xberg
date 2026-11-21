@@ -28,3 +28,4 @@ same change as a new record.
 | [0013](https://github.com/xberg-io/xberg/blob/main/adrs/0013-scope-pdf-image-placement-evidence-to-one-extraction.md) | Scope PDF image placement evidence to one extraction | accepted | 2026-11-06 |
 | [0014](https://github.com/xberg-io/xberg/blob/main/adrs/0014-gate-khmer-numeric-recovery-on-locally-provisioned-models.md) | Gate Khmer numeric recovery on locally provisioned models | accepted | 2026-11-10 |
 | [0015](https://github.com/xberg-io/xberg/blob/main/adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-3-0-or-later.md) | Publish the encoder-enabled Elixir NIF under GPL-3.0-or-later with a written source offer | accepted | 2026-11-21 |
+| [0016](https://github.com/xberg-io/xberg/blob/main/adrs/0016-link-the-windows-libheif-decoders-dynamically-to-meet-lgpl-3-0.md) | Link the Windows libheif decoders dynamically to meet LGPL-3.0 | accepted | 2026-11-21 |
