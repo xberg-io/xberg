@@ -3817,7 +3817,16 @@ pub(crate) fn extract_document_structure_from_segments(
 struct NativeTableInputs<'a> {
     sources: &'a [&'a crate::pdf::native::table::source_members::TableSources],
     ruled_count: usize,
+    /// Whether each native table is already complete and must not be stitched. ~keep
+    complete: &'a [bool],
     schemas: &'a [crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
+}
+
+/// Ruled count and completed-table mask for the native tables handed to the
+/// structure pipeline. ~keep
+pub(crate) struct NativeTablePlan<'a> {
+    pub(crate) ruled_count: usize,
+    pub(crate) complete: &'a [bool],
 }
 
 #[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
@@ -3841,7 +3850,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     native_document: &xberg_native_pdf::PdfDocument,
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
-    ruled_table_count: usize,
+    table_plan: NativeTablePlan<'_>,
     schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
@@ -3852,7 +3861,8 @@ pub(crate) fn extract_document_structure_from_native_pages(
         Some(native_document),
         NativeTableInputs {
             sources: table_sources,
-            ruled_count: ruled_table_count,
+            ruled_count: table_plan.ruled_count,
+            complete: table_plan.complete,
             schemas,
         },
         config,
@@ -3872,6 +3882,7 @@ fn build_document_structure_with_native(
     let NativeTableInputs {
         sources: table_sources,
         ruled_count: ruled_table_count,
+        complete: complete_table_mask,
         schemas,
     } = native_tables;
     let SegmentStructureConfig {
@@ -4272,7 +4283,44 @@ fn build_document_structure_with_native(
     let overlap_preference = table_overlap_preference;
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
-    let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
+    // A layout model can classify the page letterhead as a table. Reject it
+    // before the emission/suppression map so its bbox cannot hide the source
+    // text; the real layout table keeps its cells and grid. ~keep
+    #[cfg(feature = "layout-detection")]
+    let layout_table_has_grid = |table: &crate::types::Table| {
+        table_grid_sidecars.iter().any(|sidecar| {
+            sidecar.table.page_number == table.page_number
+                && sidecar.table.bounding_box == table.bounding_box
+                && sidecar.table.cells == table.cells
+        })
+    };
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_table_has_grid = |_: &crate::types::Table| false;
+    let layout_page_height = |table: &crate::types::Table| {
+        page_heights
+            .get((table.page_number.saturating_sub(1)) as usize)
+            .copied()
+    };
+    let layout_table_count = layout_tables.len();
+    layout_tables.retain(|table| {
+        layout_table_has_grid(table)
+            || !crate::pdf::table_normalize::is_page_letterhead_table(table, layout_page_height(table))
+    });
+    // A layout table with a grid sidecar is exempt above, so no sidecar can
+    // outlive its rejected table. ~keep
+    if layout_tables.len() != layout_table_count {
+        tracing::debug!(
+            rejected = layout_table_count - layout_tables.len(),
+            "rejected layout page letterhead table(s)"
+        );
+    }
+
+    let stitched_native_tables = stitch_fragmented_tables(
+        tables.to_vec(),
+        &all_page_segments,
+        ruled_table_count,
+        complete_table_mask,
+    );
     let mut emitted_tables = prepare_emitted_tables(
         &stitched_native_tables,
         layout_tables,
@@ -4995,15 +5043,17 @@ fn stitch_fragmented_tables(
     all_page_segments: &[Vec<SegmentData>],
     // Extraction appends heuristic fragments after the ruled tables. ~keep
     ruled_table_count: usize,
+    complete_tables: &[bool],
 ) -> Vec<crate::types::Table> {
-    let mut by_page: ahash::AHashMap<u32, Vec<(crate::types::Table, bool)>> = ahash::AHashMap::new();
+    let mut by_page: ahash::AHashMap<u32, Vec<(crate::types::Table, bool, bool)>> = ahash::AHashMap::new();
     let mut unbboxed = Vec::new();
     for (index, table) in tables.into_iter().enumerate() {
         if table.bounding_box.is_some() {
+            let complete = complete_tables.get(index).copied().unwrap_or(false);
             by_page
                 .entry(table.page_number)
                 .or_default()
-                .push((table, index < ruled_table_count));
+                .push((table, index < ruled_table_count, complete));
         } else {
             unbboxed.push(table);
         }
@@ -5046,7 +5096,7 @@ fn assign_deterministic_table_ids(tables: &mut [crate::types::Table]) {
 
 /// Stitch one page's table fragments. See [`stitch_fragmented_tables`].
 fn stitch_page_tables(
-    mut fragments: Vec<(crate::types::Table, bool)>,
+    mut fragments: Vec<(crate::types::Table, bool, bool)>,
     all_page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     fragments.sort_by(|a, b| {
@@ -5055,6 +5105,11 @@ fn stitch_page_tables(
         b_top.total_cmp(&a_top)
     });
 
+    let completed_bboxes: Vec<crate::types::BoundingBox> = fragments
+        .iter()
+        .filter(|(_, _, complete)| *complete)
+        .filter_map(|(table, _, _)| table.bounding_box)
+        .collect();
     let mut output = Vec::with_capacity(fragments.len());
     let mut index = 0;
     while index < fragments.len() {
@@ -5069,9 +5124,9 @@ fn stitch_page_tables(
         if chain_end - index >= 2 {
             let chain = fragments[index..chain_end]
                 .iter()
-                .map(|(table, _)| table.clone())
+                .map(|(table, _, _)| table.clone())
                 .collect();
-            output.push(merge_table_chain(chain, all_page_segments));
+            output.push(merge_table_chain(chain, all_page_segments, &completed_bboxes));
         } else {
             output.push(fragments[index].0.clone());
         }
@@ -5084,10 +5139,15 @@ fn stitch_page_tables(
 /// stitch chain: same page, same column count, near-zero row gap, and matching
 /// left/right edges.
 fn fragments_are_stitchable(
-    (prev, prev_ruled): &(crate::types::Table, bool),
-    (next, next_ruled): &(crate::types::Table, bool),
+    (prev, prev_ruled, prev_complete): &(crate::types::Table, bool, bool),
+    (next, next_ruled, next_complete): &(crate::types::Table, bool, bool),
 ) -> bool {
     if prev.page_number != next.page_number {
+        return false;
+    }
+    // A completed rejoined table already holds its logical rows; stitching
+    // would collapse it back into a single row. ~keep
+    if *prev_complete || *next_complete {
         return false;
     }
     let (Some(a), Some(b)) = (prev.bounding_box, next.bounding_box) else {
@@ -5116,7 +5176,11 @@ fn fragments_are_stitchable(
 /// fragment's rows collapse into one data row apiece. See
 /// [`stitch_fragmented_tables`] for why a whole-fragment column merge is used
 /// instead of trying to re-derive a header/data split.
-fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<SegmentData>]) -> crate::types::Table {
+fn merge_table_chain(
+    chain: Vec<crate::types::Table>,
+    all_page_segments: &[Vec<SegmentData>],
+    completed_bboxes: &[crate::types::BoundingBox],
+) -> crate::types::Table {
     let column_count = chain
         .iter()
         .filter_map(|table| table.cells.first())
@@ -5149,7 +5213,7 @@ fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<S
         .collect();
 
     if let Some(page_segments) = all_page_segments.get((page_number.saturating_sub(1)) as usize) {
-        recover_trailing_continuation_rows(&mut rows, &mut bbox, column_count, page_segments);
+        recover_trailing_continuation_rows(&mut rows, &mut bbox, column_count, page_segments, completed_bboxes);
     }
 
     let markdown = crate::pdf::table_reconstruct::table_to_markdown(&rows);
@@ -5187,6 +5251,7 @@ fn recover_trailing_continuation_rows(
     bbox: &mut crate::types::BoundingBox,
     column_count: usize,
     page_segments: &[SegmentData],
+    completed_bboxes: &[crate::types::BoundingBox],
 ) {
     if column_count == 0 || page_segments.is_empty() {
         return;
@@ -5216,7 +5281,23 @@ fn recover_trailing_continuation_rows(
             break;
         }
 
-        let Some((entity_words, entity_bottom_image_y)) = take_next_entity_band(&band_words) else {
+        let Some((entity_words, _)) = take_next_entity_band(&band_words) else {
+            break;
+        };
+        // A completed rejoined table below already owns its content. If the
+        // band spans its top edge, keep only the rows above that edge and
+        // recover them as a separate row; rows inside or below the table are
+        // not resumed here. This keeps a recovered row from mixing words from
+        // both sides of the table. ~keep
+        let completed_top = completed_table_top_in_band(&entity_words, page_height, x_lo, x_hi, completed_bboxes);
+        let entity_words: Vec<_> = match completed_top {
+            Some(top) => entity_words
+                .into_iter()
+                .filter(|word| word_pdf_bottom(word, page_height) > top + TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f32)
+                .collect(),
+            None => entity_words,
+        };
+        let Some(entity_bottom_image_y) = entity_words.iter().map(|word| word.top + word.height).max() else {
             break;
         };
 
@@ -5235,7 +5316,48 @@ fn recover_trailing_continuation_rows(
         rows.push(merged_row);
         bbox.y0 = bbox.y0.min(entity_bottom_pdf_y as f64);
         search_floor = entity_bottom_pdf_y;
+        if completed_top.is_some() {
+            break;
+        }
     }
+}
+
+fn word_pdf_bottom(word: &crate::pdf::table_reconstruct::HocrWord, page_height: f32) -> f32 {
+    page_height - (word.top + word.height) as f32
+}
+
+/// Top edge of the topmost completed table that this band crosses, if any.
+///
+/// PDF y grows upward, so this is the highest `y1` among the completed tables
+/// whose vertical span intersects the band and whose x-span overlaps the
+/// chain. Words above this edge belong to the ordinary chain; everything at or
+/// below it belongs to the completed table and is not recovered. ~keep
+fn completed_table_top_in_band(
+    words: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    x_lo: f32,
+    x_hi: f32,
+    completed_bboxes: &[crate::types::BoundingBox],
+) -> Option<f32> {
+    let band_top = words
+        .iter()
+        .map(|word| page_height - word.top as f32)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let band_bottom = words
+        .iter()
+        .map(|word| word_pdf_bottom(word, page_height))
+        .fold(f32::INFINITY, f32::min);
+    let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f64;
+    completed_bboxes
+        .iter()
+        .filter(|bounds| {
+            bounds.x1 + tolerance >= x_lo as f64
+                && bounds.x0 - tolerance <= x_hi as f64
+                && band_bottom as f64 <= bounds.y1 + tolerance
+                && band_top as f64 >= bounds.y0 - tolerance
+        })
+        .map(|bounds| bounds.y1 as f32)
+        .reduce(f32::max)
 }
 
 /// Take the topmost row-gap-bounded contiguous band of words from `words`

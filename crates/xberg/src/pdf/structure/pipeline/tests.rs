@@ -441,7 +441,7 @@ fn stitch_and_emit(
     all_page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     use crate::core::config::layout::TableOverlapPreference;
-    let stitched = stitch_fragmented_tables(native_tables, all_page_segments, 0);
+    let stitched = stitch_fragmented_tables(native_tables, all_page_segments, 0, &[]);
     prepare_emitted_tables(&stitched, layout_tables, TableOverlapPreference::Content, &[])
 }
 
@@ -451,22 +451,148 @@ fn touching_ruled_sections_keep_rows_while_text_fragments_stitch() {
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["a", "b"], &["c", "d"]]);
     let tables = vec![top.clone(), bottom.clone()];
 
-    let ruled = stitch_fragmented_tables(tables.clone(), &[], 2);
+    let ruled = stitch_fragmented_tables(tables.clone(), &[], 2, &[]);
     assert_eq!(
         ruled.iter().map(|table| &table.cells).collect::<Vec<_>>(),
         [&top.cells, &bottom.cells]
     );
 
-    let text = stitch_fragmented_tables(tables, &[], 0);
+    let text = stitch_fragmented_tables(tables, &[], 0, &[]);
     assert_eq!(text.len(), 1);
     assert_eq!(text[0].cells, [["H1 H3", "H2 H4"], ["a c", "b d"]]);
+}
+
+#[test]
+fn completed_tables_are_not_restitched() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["a", "b"], &["c", "d"]]);
+
+    let complete = stitch_fragmented_tables(vec![top.clone(), bottom.clone()], &[], 0, &[true, true]);
+    assert_eq!(
+        complete.len(),
+        2,
+        "completed rejoined tables must not collapse into one row"
+    );
+    assert_eq!(complete[0].cells, top.cells);
+    assert_eq!(complete[1].cells, bottom.cells);
+
+    let fragments = stitch_fragmented_tables(vec![top, bottom], &[], 0, &[false, false]);
+    assert_eq!(
+        fragments.len(),
+        1,
+        "ordinary heuristic fragments stay eligible for stitching"
+    );
+}
+
+#[test]
+fn completed_tables_keep_their_rows_out_of_trailing_recovery() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 30.0, 100.0, 60.0), &[&["g", "h"], &["i", "j"]]);
+    let mut first = printed_at("12 34", 10.0, 50.0);
+    first.width = 80.0;
+    let mut second = printed_at("56 78", 10.0, 40.0);
+    second.width = 80.0;
+    let pages = vec![vec![first, second]];
+
+    let stitched = stitch_fragmented_tables(
+        vec![top.clone(), bottom.clone(), completed.clone()],
+        &pages,
+        0,
+        &[false, false, true],
+    );
+    assert_eq!(stitched.len(), 2, "the completed table stays its own entry");
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 70.0))
+        .expect("stitched ordinary chain");
+    assert_eq!(
+        chain.cells,
+        [["H1 a", "H2 b"], ["c e", "d f"]],
+        "rows inside the completed table's bbox must not be absorbed"
+    );
+
+    let control = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, false]);
+    let control_chain = control
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 < 70.0))
+        .expect("control chain");
+    assert!(
+        control_chain.cells.len() > 2,
+        "without the completed signal, trailing recovery absorbs the same rows"
+    );
+}
+
+#[test]
+fn splits_a_recovery_band_at_the_completed_table_boundary() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 10.0, 100.0, 50.0), &[&["g", "h"], &["i", "j"]]);
+    let mut continuation = printed_at("12 34", 10.0, 58.0);
+    continuation.width = 80.0;
+    continuation.height = 10.0;
+    let mut owned = printed_at("56 78", 10.0, 40.0);
+    owned.width = 80.0;
+    owned.height = 10.0;
+    let pages = vec![vec![continuation, owned]];
+
+    let stitched = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, true]);
+
+    assert_eq!(stitched.len(), 2, "the completed table stays its own entry");
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 58.0))
+        .expect("chain with the recovered continuation row");
+    assert_eq!(chain.cells.len(), 3, "the row above the completed table is recovered");
+    assert_eq!(chain.cells.last().unwrap(), &["12", "34"]);
+    assert!(
+        chain.cells.iter().flatten().all(|cell| cell != "56" && cell != "78"),
+        "the row inside the completed table stays out: {:?}",
+        chain.cells
+    );
+}
+
+#[test]
+fn does_not_mix_words_from_both_sides_of_a_completed_table() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 40.0, 100.0, 50.0), &[&["g", "h"], &["i", "j"]]);
+    let mut above = printed_at("12 34", 10.0, 58.0);
+    above.width = 80.0;
+    above.height = 10.0;
+    let mut inside = printed_at("56 78", 10.0, 40.0);
+    inside.width = 80.0;
+    inside.height = 10.0;
+    let mut below = printed_at("90 11", 10.0, 26.0);
+    below.width = 80.0;
+    below.height = 10.0;
+    let pages = vec![vec![above, inside, below]];
+
+    let stitched = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, true]);
+
+    assert_eq!(stitched.len(), 2);
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 58.0))
+        .expect("chain with only the row above the completed table");
+    assert_eq!(chain.cells.len(), 3);
+    assert_eq!(chain.cells.last().unwrap(), &["12", "34"]);
+    assert!(
+        chain
+            .cells
+            .iter()
+            .flatten()
+            .all(|cell| !["56", "78", "90", "11"].contains(&cell.as_str())),
+        "rows at and below the completed table stay out: {:?}",
+        chain.cells
+    );
 }
 
 #[test]
 fn ruled_fragments_with_a_small_gap_still_stitch() {
     let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"], &["c", "d"]]);
-    let result = stitch_fragmented_tables(vec![top, bottom], &[], 2);
+    let result = stitch_fragmented_tables(vec![top, bottom], &[], 2, &[]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].cells, [["H1 H3", "H2 H4"], ["a c", "b d"]]);
 }

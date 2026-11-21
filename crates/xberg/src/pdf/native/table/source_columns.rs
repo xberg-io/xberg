@@ -66,6 +66,10 @@ impl<'a> PageRules<'a> {
         }
     }
 
+    pub(super) fn paths(&self) -> &'a [PathContent] {
+        self.paths
+    }
+
     pub(super) fn with_source_words(
         mut self,
         segments: &'a [crate::pdf::hierarchy::SegmentData],

@@ -95,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** A ruled table split by a taller row gap under a subtotal is rejoined into one table when adjacent bands repeat their column tracks and one family of long rules spans both, keeping the wrapped header and the first-column row span. (#3349)
+- **pdf:** A two-column page letterhead in the top band is no longer emitted as a table; it stays text, while ruled tables and tables with retained grids remain tables. (#3350)
 - **ocr:** Default preprocessing measures a raster's own paper level instead of comparing it with a fixed near-white value, so a lightly tinted or shaded scan page is still read as a page and takes the 300 DPI resample. A 100 DPI tinted table with 9 px digits keeps 72 of its 72 numbers instead of 65, and its 7 px variant 71 of 72 instead of 49, while a 300 DPI page is not resampled. (#3337)
 - **pdf:** A leading ruled band whose cells wrap over several lines is one header row again, with each column's lines joined by position, instead of one body row per wrapped line that pushed the body down and dropped the header role. (#3346)
 - **pdf:** A stacked header keeps the leaf band under its spanning title as header cells in the table grid and plain HTML output, spans intact, so those labels are no longer body cells there; Markdown and the styled HTML renderer still mark one header row, the spanning title. (#3347)
