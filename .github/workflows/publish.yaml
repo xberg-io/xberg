@@ -117,6 +117,8 @@ jobs:
       release_elixir: ${{ steps.meta.outputs.release_elixir }}
       elixir_assets: ${{ steps.elixir-assets.outputs.names }}
       elixir_assets_multiline: ${{ steps.elixir-assets.outputs.multiline }}
+      cli_assets: ${{ steps.cli-assets.outputs.names }}
+      cli_assets_multiline: ${{ steps.cli-assets.outputs.multiline }}
       release_c_ffi: ${{ steps.meta.outputs.release_c_ffi }}
       release_dart: ${{ steps.meta.outputs.release_dart }}
       release_swift: ${{ steps.meta.outputs.release_swift }}
@@ -179,6 +181,36 @@ jobs:
             printf 'multiline<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${names[@]}")"
           } >> "$GITHUB_OUTPUT"
 
+      - name: List expected CLI release assets
+        id: cli-assets
+        # The single source of truth for the CLI release asset set. `check-cli`,
+        # `upload-cli-release` and `verify-assets` all read these two outputs, so a target
+        # cannot be required by one gate and silently dropped by another: v1.4.1 and v1.4.2
+        # published without `xberg-cli-x86_64-pc-windows-msvc.zip` because `check-cli`
+        # accepted seven names, the upload gate never ran on the re-run, and the local-glob
+        # verifier matched the plain zip in place of the missing no-GPL one. Emitted on
+        # every run (not just CLI releases) so the list is never conditionally empty. ~keep
+        shell: bash
+        run: |
+          set -euo pipefail
+          names=(
+            xberg-cli-aarch64-apple-darwin.tar.gz
+            xberg-cli-x86_64-apple-darwin.tar.gz
+            xberg-cli-aarch64-unknown-linux-gnu.tar.gz
+            xberg-cli-x86_64-unknown-linux-gnu.tar.gz
+            xberg-cli-aarch64-unknown-linux-musl.tar.gz
+            xberg-cli-x86_64-unknown-linux-musl.tar.gz
+            xberg-cli-x86_64-pc-windows-msvc.zip
+            xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip
+            xberg-cli-binstall-aarch64-unknown-linux-musl.tar.gz
+            xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz
+          )
+          test "${#names[@]}" -eq 10
+          {
+            (IFS=,; echo "names=${names[*]}")
+            printf 'multiline<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${names[@]}")"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Resolve PHP source commit
         id: php-source
         if: steps.meta.outputs.release_php == 'true'
@@ -207,11 +239,12 @@ jobs:
             echo "::notice::Skipping registry-backed PHP qualification: xberg $version is unavailable or yanked"
           fi
 
-      # Created NON-draft (published) so the `release: [created]` event fires
-      # immediately and publish-docker.yaml runs as an independent parallel
-      # workflow (App-token-created events do trigger workflows). Assets upload
-      # into the live release over the run; finalize-release is idempotent and
-      # just confirms the prerelease flag at the end. ~keep
+      # Created as a draft so publication is reversible: the release is only un-drafted by
+      # `finalize-github-release-after-uploads`, which requires `verify-assets` to pass.
+      # v1.4.1 and v1.4.2 were created non-draft and stayed public with 0 and 8 CLI assets
+      # respectively, which no gate could retract. Assets upload into the draft over the run;
+      # publish-docker.yaml triggers on `published`, so images still publish only once the
+      # asset gate has passed. ~keep
       - name: Ensure GitHub Release exists for tag
         if: ${{ steps.meta.outputs.is_tag == 'true' && steps.meta.outputs.dry_run != 'true' }}
         uses: xberg-io/actions/publish-github-release@v1
@@ -219,7 +252,7 @@ jobs:
           tag: ${{ steps.meta.outputs.tag }}
           target: ${{ steps.meta.outputs.target_sha }}
           notes: "Release ${{ steps.meta.outputs.tag }}"
-          draft: "false"
+          draft: "true"
           prerelease: ${{ steps.meta.outputs.is_prerelease }}
           token: ${{ steps.app-token.outputs.token }}
 
@@ -507,6 +540,13 @@ jobs:
     if: >-
       ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_cli == 'true') }}
     runs-on: ubuntu-latest
+    # `prepare` creates the release as a draft, and `GET /releases/tags/<tag>` only returns a
+    # draft to a token with push access. Without `contents: write` every re-run of a failed
+    # release would read "no assets", rebuild all seven CLI legs, and clobber the hashes of
+    # archives that are already there; with it, the ten-name check below sees the draft and
+    # rebuilds only what is actually missing. ~keep
+    permissions:
+      contents: write
     # `exists` gates the CLI builds, so it also covers the PyPI xberg-cli wheels built from
     # them: with only the release assets checked, a re-run after a failed PyPI upload skipped
     # the builds and the proxy publish alike. The npm proxy downloads the binaries at install
@@ -526,8 +566,10 @@ jobs:
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
           asset-prefix: xberg-cli-
-          assets: >-
-            xberg-cli-aarch64-apple-darwin.tar.gz,xberg-cli-x86_64-apple-darwin.tar.gz,xberg-cli-aarch64-unknown-linux-gnu.tar.gz,xberg-cli-aarch64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-unknown-linux-gnu.tar.gz,xberg-cli-x86_64-unknown-linux-musl.tar.gz,xberg-cli-x86_64-pc-windows-msvc.zip
+          # The ten-name list from `prepare`: a re-run must rebuild a CLI leg whose archive
+          # is absent rather than accept a partial set (v1.4.2 kept its seven pre-no-GPL
+          # names and skipped the rebuild). ~keep
+          assets: ${{ needs.prepare.outputs.cli_assets }}
 
       - id: npm
         uses: xberg-io/actions/check-registry@v1
@@ -4327,53 +4369,30 @@ jobs:
           path: dist/cli
           merge-multiple: true
 
-      # `cli-*` also matches the `cli-binstall-*` artifacts, and the
-      # `xberg-cli-*` globs below attach the `xberg-cli-binstall-<target>`
-      # archives alongside the bundled tarballs in one shot.
+      # `cli-*` also matches the `cli-binstall-*` and `cli-proxy-wheel-*` artifacts, so the
+      # uploader is given prepare's ten explicit names rather than an `xberg-cli-*.zip` glob:
+      # only the archives the release is expected to carry can be attached. ~keep
       - uses: xberg-io/actions/upload-release-assets@v1
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           working-directory: dist/cli
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           token: ${{ steps.app-token.outputs.token }}
-          assets: |
-            xberg-cli-*.tar.gz
-            xberg-cli-*.zip
+          assets: ${{ needs.prepare.outputs.cli_assets_multiline }}
 
-      # The upload above attaches whatever built. Without this the run stays green
-      # on a partial CLI set, which is the half of #1638 that let it recur: the
-      # release itself looked fine and only a user's `mise install` surfaced it.
-      # Listed explicitly rather than counted, so a renamed target fails loudly
-      # instead of being silently swapped for another archive. ~keep
-      - name: Fail the release when a CLI archive is missing
-        run: |
-          set -euo pipefail
-          expected="xberg-cli-aarch64-apple-darwin.tar.gz
-          xberg-cli-x86_64-apple-darwin.tar.gz
-          xberg-cli-aarch64-unknown-linux-gnu.tar.gz
-          xberg-cli-x86_64-unknown-linux-gnu.tar.gz
-          xberg-cli-aarch64-unknown-linux-musl.tar.gz
-          xberg-cli-x86_64-unknown-linux-musl.tar.gz
-          xberg-cli-x86_64-pc-windows-msvc.zip
-          xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip
-          xberg-cli-binstall-aarch64-unknown-linux-musl.tar.gz
-          xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz"
-          total=0
-          missing=0
-          while read -r asset; do
-            [ -n "$asset" ] || continue
-            total=$((total + 1))
-            if [ ! -f "dist/cli/${asset}" ]; then
-              echo "::error::CLI archive missing from the release: ${asset}"
-              missing=$((missing + 1))
-            fi
-          done <<<"$(echo "$expected" | tr -d ' ')"
-          echo "expected=${total} missing=${missing} present=$((total - missing))"
-          if [ "$total" -ne 10 ]; then
-            echo "::error::the expected-asset list did not parse (counted ${total}, want 10)"
-            exit 1
-          fi
-          [ "$missing" -eq 0 ] || exit 1
+      # The upload above attaches whatever built. Without a gate the run stays green on a
+      # partial CLI set, which is the half of #1638 that let it recur: the release itself
+      # looked fine and only a user's `mise install` surfaced it. The gate reads the LIVE
+      # release against prepare's ten explicit names, never `dist/cli`: a local check proves
+      # only what this run built, and the glob pair it used (`xberg-cli-*.zip`) matched the
+      # plain Windows zip, so a missing `-no-gpl-lgpl` archive was invisible. ~keep
+      - name: Verify the live release carries every CLI archive
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        uses: xberg-io/actions/verify-release-assets@v1
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: ${{ needs.prepare.outputs.cli_assets_multiline }}
 
   # Prove a consumer can actually `cargo binstall xberg-cli` the freshly uploaded
   # (--manifest-path) so it verifies the exact metadata against the release assets
@@ -4381,15 +4400,18 @@ jobs:
   # archives, so the matrix is overridden to those triples.
   verify-binstall:
     name: Verify cargo-binstall
-    needs: [prepare, upload-cli-release]
+    needs: [prepare, finalize-github-release-after-uploads]
     # Not runnable on a dry run, and not adaptable to local artifacts: `cargo binstall` resolves
     # and downloads its archive over HTTP from a real, published GitHub Release, which a dry run
     # never creates (see the "Ensure GitHub Release exists" step). This is the reusable workflow's
     # entire job -- proving the public download URL resolves -- so there is no local-artifact
     # substitute that would still test the thing this job exists to test. A dry run therefore does
     # NOT verify that a consumer can actually `cargo binstall xberg-cli` against this release. ~keep
+    # It follows finalize, not upload-cli-release: prepare now also creates the release as a draft
+    # and only finalize un-drafts it after verify-assets passes, so before that point the asset
+    # URLs are not publicly downloadable and binstall would 404 on a healthy release. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.upload-cli-release.result == 'success' && needs.prepare.outputs.dry_run != 'true') }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.finalize-github-release-after-uploads.result == 'success' && needs.prepare.outputs.dry_run != 'true') }}
     permissions:
       contents: read
     uses: xberg-io/actions/.github/workflows/reusable-binstall-verify.yml@v1
@@ -4687,8 +4709,14 @@ jobs:
     # producing real artifacts on a dry run (see their own ~keep comments), so
     # upload-elixir-release/upload-php-pie-release have nothing to check and a dry run does not
     # verify NIF or PHP-PIE asset packaging. ~keep
+    #
+    # No `!contains(needs.*.result, 'failure')` term: that made this job skip exactly when an
+    # upload failed, so a failed `upload-cli-release` was never contradicted by the live
+    # release and `finalize-github-release-after-uploads` could not be told apart from a
+    # green run. A skipped verifier is not evidence. On a real tag this job therefore runs
+    # after a failed upload, inspects the release, and fails naming the absent assets. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (always() && needs.prepare.outputs.is_tag == 'true' && !contains(needs.*.result, 'failure')) }}
+      ${{ !inputs.plugins-only && (always() && needs.prepare.outputs.is_tag == 'true') }}
     runs-on: ubuntu-latest
     steps:
       # Mint the App token for release asset lookups (push access), consistent
@@ -4709,9 +4737,10 @@ jobs:
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           token: ${{ steps.app-token.outputs.token }}
-          expected-assets: |
-            xberg-cli-*.tar.gz
-            xberg-cli-*.zip
+          # Exact names from `prepare`, shared with check-cli and upload-cli-release. No
+          # glob: `xberg-cli-*.zip` matched the plain Windows zip and hid an absent
+          # `-no-gpl-lgpl` archive. ~keep
+          expected-assets: ${{ needs.prepare.outputs.cli_assets_multiline }}
 
       - uses: xberg-io/actions/verify-release-assets@v1
         name: Verify Go FFI release assets
@@ -4780,8 +4809,9 @@ jobs:
           path: dist/verify-assets/c-ffi
           merge-multiple: true
 
-      # Same expected-assets globs as the live-release check above, minus Elixir/PHP (not
-      # built on a dry run -- see the job comment). Checks the run-artifacts directly rather
+      # Same expected set as the live-release check above, minus Elixir/PHP (not
+      # built on a dry run -- see the job comment). CLI uses prepare's ten exact names;
+      # Go FFI and C FFI keep their prefix globs. Checks the run-artifacts directly rather
       # than a GitHub Release, since a dry run never creates one. ~keep
       - name: Verify locally built release assets
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
@@ -4789,12 +4819,13 @@ jobs:
           RELEASE_CLI: ${{ needs.prepare.outputs.release_cli }}
           RELEASE_GO: ${{ needs.prepare.outputs.release_go }}
           RELEASE_C_FFI: ${{ needs.prepare.outputs.release_c_ffi }}
+          CLI_ASSETS: ${{ needs.prepare.outputs.cli_assets_multiline }}
         shell: bash
         run: |
           set -euo pipefail
           declare -A globs=()
           if [[ "$RELEASE_CLI" == 'true' ]]; then
-            globs["dist/verify-assets/cli"]="xberg-cli-*.tar.gz xberg-cli-*.zip"
+            globs["dist/verify-assets/cli"]="$CLI_ASSETS"
           fi
           if [[ "$RELEASE_GO" == 'true' ]]; then
             globs["dist/verify-assets/go-ffi"]="xberg-go-*.tar.gz"
@@ -4976,9 +5007,13 @@ jobs:
 
   publish-cli-proxy:
     name: Publish CLI proxy to PyPI (wheels + sdist)
-    needs: [prepare, check-cli, cli-proxy-wheels]
+    needs: [prepare, check-cli, cli-proxy-wheels, finalize-github-release-after-uploads]
+    # The sdist is a downloader: installing it resolves the release by tag through the public
+    # API, which cannot see a draft. Publishing before finalize would hand users a version that
+    # 404s for the length of the run and forever if the run dies, and a PyPI version cannot be
+    # replaced. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.pypi_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.finalize-github-release-after-uploads.result == 'success') && (needs.check-cli.outputs.pypi_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -6182,14 +6217,16 @@ jobs:
 
   publish-homebrew-formula:
     name: Update Homebrew formula
-    needs: [prepare, upload-cli-release, check-homebrew]
+    needs: [prepare, check-homebrew, finalize-github-release-after-uploads]
     # The formula builds from the source tarball, so it needs neither crates.io nor a
-    # successful CLI upload; it follows upload-cli-release only for ordering, and the
-    # asset-presence step below refuses a release with no CLI assets at all. ~keep
+    # successful crate publish; it follows finalize because the tap commit pins a release-asset
+    # URL and the asset-presence step below refuses a release with no CLI assets at all. Before
+    # the release is un-drafted that URL 404s, so committing the formula earlier would publish a
+    # broken formula for the length of the run (and forever if the run dies). ~keep
     # `always()` also runs on a cancelled workflow: run 38443926351 was cancelled yet this job
     # pushed the 1.3.10 formula while the release had 0 assets (#2119), hence `!cancelled()`. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-homebrew.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.finalize-github-release-after-uploads.result == 'success') && (needs.check-homebrew.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -6288,12 +6325,14 @@ jobs:
   # `check-scoop` idempotency gate: the action rewrites the manifest in place and commits
   # only when the staged manifest differs from the bucket, so re-running a release is a
   # no-op. It reads the Windows zip from the release rather than this run, so it also runs
-  # when the CLI upload was skipped because check-cli found every asset there. ~keep
+  # when the CLI upload was skipped because check-cli found every asset there. It follows
+  # finalize: the manifest pins the public release URL, which 404s while the release is a
+  # draft. ~keep
   publish-scoop-manifest:
     name: Update Scoop manifest
-    needs: [prepare, check-cli, upload-cli-release]
+    needs: [prepare, check-cli, upload-cli-release, finalize-github-release-after-uploads]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.upload-cli-release.result == 'success' || (needs.upload-cli-release.result == 'skipped' && needs.prepare.outputs.dry_run != 'true' && needs.check-cli.outputs.assets_exist == 'true'))) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.prepare.outputs.dry_run == 'true' || needs.finalize-github-release-after-uploads.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -6606,9 +6645,12 @@ jobs:
 
   cli-proxy:
     name: Publish CLI proxy package (npm)
-    needs: [prepare, check-cli, upload-cli-release]
+    needs: [prepare, check-cli, upload-cli-release, finalize-github-release-after-uploads]
+    # The package resolves the release by tag at install time through the public API, which
+    # cannot see a draft. Publishing before finalize would hand users a version that 404s for
+    # the length of the run and forever if the run dies, and an npm version cannot be replaced. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.npm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.finalize-github-release-after-uploads.result == 'success') && (needs.check-cli.outputs.npm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
