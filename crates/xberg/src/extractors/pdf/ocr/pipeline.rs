@@ -6135,6 +6135,8 @@ fn budget_retry_backend(
         || !super::document::native_preservation_is_automatic(config, 1)
         || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
         || !uses_default_ocr_pipeline(ocr)
+        // A language change is a different recognition request, not a render recovery. ~keep
+        || ocr.language != crate::core::config::OcrConfig::default().language
     {
         return None;
     }
