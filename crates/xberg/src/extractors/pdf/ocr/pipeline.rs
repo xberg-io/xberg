@@ -1185,10 +1185,40 @@ fn mixed_layer_lines_to_put_first(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 type MixedPageDetection = crate::layout::DetectionResult;
-#[cfg(not(feature = "layout-detection"))]
+#[cfg(all(
+    not(feature = "layout-detection"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 type MixedPageDetection = ();
+
+/// Which of the two direct-backend routes recorded a page read. The sequential route never ran
+/// the geometry and language passes on main, so the shared recorder keeps that difference typed.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum GeometryEvidence {
+    Run,
+    Skip,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[allow(dead_code)]
+impl GeometryEvidence {
+    fn concurrent() -> Self {
+        Self::Run
+    }
+
+    fn sequential() -> Self {
+        Self::Skip
+    }
+
+    fn runs(self) -> bool {
+        matches!(self, Self::Run)
+    }
+}
 
 /// Whether the layer-occurrence map may be captured for a page. A scale-only geometry read is
 /// the only mapping `finish_layer_prepend` can trust, so any refusal leaves the map empty.
@@ -1258,6 +1288,10 @@ struct MixedOcrContext<'a> {
     certified_background: bool,
     #[cfg(feature = "layout-detection")]
     resolved_layout_inputs: Option<PreparedLayoutInputs>,
+    #[cfg_attr(
+        not(any(feature = "ocr", all(feature = "tokio-runtime", not(target_arch = "wasm32")))),
+        allow(dead_code)
+    )]
     mixed_route_layout_active: bool,
     total: usize,
     raster_dpis: crate::pdf::render::OcrRasterDpis,
@@ -2421,6 +2455,7 @@ impl MixedOcrContext<'_> {
                 budget_refused,
                 #[cfg(all(paddle_ocr, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 trial_pages,
+                #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 &security_limits,
             )
             .await?;
@@ -2440,6 +2475,7 @@ impl MixedOcrContext<'_> {
         budget_refused: Vec<(usize, crate::XbergError)>,
         #[cfg(all(paddle_ocr, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         trial_pages: Vec<usize>,
+        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> OcrRunResult<()> {
         self.recover_pipeline_budget_refused(budget_refused).await?;
@@ -3246,7 +3282,7 @@ impl MixedOcrContext<'_> {
         )
         .await?;
         #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-        self.run_single_backend_pages_sequential(&encoded, &backend, security_limits, &mut failed_pages)
+        self.run_single_backend_pages_sequential(&encoded, &backend, &mut failed_pages)
             .await?;
 
         self.retry_single_backend_xobjects(
@@ -3620,7 +3656,6 @@ impl MixedOcrContext<'_> {
         &mut self,
         encoded: &[EncodedPage],
         backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
-        security_limits: &crate::extractors::security::SecurityLimits,
         failed_pages: &mut ahash::AHashMap<usize, crate::XbergError>,
     ) -> OcrRunResult<()> {
         let orientation_handling = backend.page_orientation_handling();
@@ -3704,7 +3739,7 @@ impl MixedOcrContext<'_> {
                 None,
                 extraction_result,
                 false,
-                false,
+                GeometryEvidence::sequential(),
                 encoded,
                 backend,
             )
@@ -3833,7 +3868,7 @@ impl MixedOcrContext<'_> {
             retry_dpi,
             extraction_result,
             observed_scale_only,
-            true,
+            GeometryEvidence::concurrent(),
             encoded,
             backend,
         )
@@ -3857,7 +3892,7 @@ impl MixedOcrContext<'_> {
         retry_dpi: Option<crate::pdf::render::OcrRasterDpi>,
         mut extraction_result: crate::types::ExtractedDocument,
         observed_scale_only: bool,
-        run_geometry_evidence: bool,
+        geometry_evidence: GeometryEvidence,
         encoded: &[EncodedPage],
         backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     ) -> OcrRunResult<()> {
@@ -3874,7 +3909,7 @@ impl MixedOcrContext<'_> {
         // the shared recorder keeps them behind the caller's flag instead of changing page
         // decisions in a no-tokio build.
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        if run_geometry_evidence {
+        if geometry_evidence.runs() {
             self.capture_native_coverage(page_idx, correction_degrees, observed_scale_only, &extraction_result);
         }
         crate::extraction::derive::adopt_public_ocr_document(
@@ -3882,7 +3917,7 @@ impl MixedOcrContext<'_> {
             self.config.security_limits.as_ref().unwrap_or(&Default::default()),
         )?;
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        if run_geometry_evidence {
+        if geometry_evidence.runs() {
             self.recover_language_evidence(page_idx, correction_degrees, &mut extraction_result);
         }
         if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
@@ -4387,7 +4422,12 @@ type SingleBackendTaskOutput = (
     Option<crate::pdf::render::OcrRasterDpi>,
 );
 
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 struct SingleBackendRead {
     page_idx: usize,
     correction_degrees: u32,
@@ -5091,14 +5131,13 @@ impl MixedOcrContext<'_> {
                 // heuristic call would.
                 None => {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-                    let stripped_page = stripped_fallback_pages
+                    let mut paragraphs = stripped_fallback_pages
                         .as_ref()
                         .and_then(|pages| pages.get((*page_number - 1) as usize))
-                        .cloned();
-                    #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
-                    let stripped_page = None;
-                    let mut paragraphs = stripped_page
+                        .cloned()
                         .unwrap_or_else(|| self.ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default());
+                    #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+                    let mut paragraphs = self.ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default();
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
@@ -13746,5 +13785,16 @@ mod matched_layer_evidence_tests {
         assert!(!captures_matched_layer_occurrences(false, true));
         assert!(captures_matched_layer_occurrences(true, false));
         assert!(!captures_matched_layer_occurrences(true, true));
+    }
+}
+
+#[cfg(all(test, feature = "ocr", not(target_arch = "wasm32")))]
+mod geometry_evidence_tests {
+    use super::GeometryEvidence;
+
+    #[test]
+    fn only_the_concurrent_route_runs_the_geometry_and_language_passes() {
+        assert!(GeometryEvidence::concurrent().runs());
+        assert!(!GeometryEvidence::sequential().runs());
     }
 }
