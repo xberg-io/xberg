@@ -1648,6 +1648,10 @@ jobs:
           if [[ "$DRY_RUN" == "true" ]]; then
             GEM_VERSION="$(ruby -rrubygems -e 'puts Gem::Specification.load("xberg.gemspec").version')"
           fi
+          # Gem::Package names the source and native files with Gem::Version#to_s, which
+          # normalizes prereleases (`1.5.0-rc.1` -> `1.5.0.pre.rc.1`); the raw prepare version
+          # would not match those paths.
+          GEM_VERSION="$(ruby -rrubygems -e 'print Gem::Version.new(ENV.fetch("GEM_VERSION"))')"
           ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
       - uses: actions/upload-artifact@v7
@@ -4901,8 +4905,8 @@ jobs:
             check-cratesio
             publish-crates
 
-      # Only the mise config plus the canonical notices, so setup-mise installs the locked Ruby
-      # and the shared verifier can read canonical-root. ~keep
+      # Only the mise config, the canonical notices and the gemspec that names the source gem,
+      # so setup-mise installs the locked Ruby and the shared verifier can read canonical-root. ~keep
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
@@ -4914,6 +4918,7 @@ jobs:
             mise-tasks
             LICENSE
             THIRD_PARTY_LICENSES.md
+            packages/ruby/xberg.gemspec
 
       - uses: actions/download-artifact@v8
         with:
@@ -4934,29 +4939,17 @@ jobs:
       # Every one is built from the patched gemspec and carries the notices; assert the exact
       # inventory before the shared verifier checks bytes.
       - name: Assert the expected gem inventory
-        shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
           gems=(dist/rubygems-*/*.gem)
-          [ "${#gems[@]}" -eq 5 ] || {
-            echo "::error::expected five gems (one source plus four platform gems), found ${#gems[@]}: ${gems[*]##*/}"
-            exit 1
-          }
           names=()
           for gem in "${gems[@]}"; do names+=("$(basename "$gem")"); done
-          expected_source="xberg-${{ needs.prepare.outputs.version }}.gem"
+          # Gem::Specification#file_name is exactly what `rake build` wrote, including the
+          # RubyGems prerelease normalization (`1.5.0-rc.1` -> `1.5.0.pre.rc.1`). The raw
+          # prepare version would not match for a prerelease.
+          expected_source="$(ruby -rrubygems -e 'print Gem::Specification.load("packages/ruby/xberg.gemspec").file_name')"
           platforms=(x86_64-linux aarch64-linux arm64-darwin x64-mingw-ucrt)
-          for platform in "${platforms[@]}"; do
-            matches=0
-            for name in "${names[@]}"; do
-              [[ "$name" == xberg-*-"$platform".gem ]] && matches=$((matches + 1))
-            done
-            [ "$matches" -eq 1 ] || {
-              echo "::error::expected exactly one $platform gem, found $matches: ${names[*]}"
-              exit 1
-            }
-          done
           sources=()
           for name in "${names[@]}"; do
             native=0
@@ -4969,7 +4962,22 @@ jobs:
             echo "::error::expected the retained source gem to be ${expected_source}, found: ${sources[*]:-none}"
             exit 1
           fi
+          for platform in "${platforms[@]}"; do
+            matches=0
+            for name in "${names[@]}"; do
+              [[ "$name" == xberg-*-"$platform".gem ]] && matches=$((matches + 1))
+            done
+            [ "$matches" -eq 1 ] || {
+              echo "::error::expected exactly one $platform gem, found $matches: ${names[*]}"
+              exit 1
+            }
+          done
+          [ "${#gems[@]}" -eq 5 ] || {
+            echo "::error::expected five gems (one source plus four platform gems), found ${#gems[@]}: ${names[*]}"
+            exit 1
+          }
           printf 'Gem inventory (%d): %s\n' "${#names[@]}" "${names[*]}"
+        shell: bash
 
       # The gemspec lists THIRD_PARTY_LICENSES.md, so both notices are already inside each
       # gem's data.tar.gz and checksums.yaml.gz; this only re-reads the built bytes.

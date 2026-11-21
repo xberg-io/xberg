@@ -1876,6 +1876,57 @@ def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
         assert_dockerfile_exports_lto_before(dockerfile, "cargo build --release --package xberg-cli")
 
 
+def test_ruby_source_gem_name_is_derived_from_the_gemspec() -> None:
+    block = job_block(WORKFLOW.read_text(), "publish-rubygems")
+    script = step_script(block, "Assert the expected gem inventory")
+    assert 'Gem::Specification.load("packages/ruby/xberg.gemspec").file_name' in script
+    assert "needs.prepare.outputs.version" not in script, "the raw release version does not match a prerelease gem"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        version = "1.5.0.pre.rc.1"
+        source = f"xberg-{version}.gem"
+        artifacts = {
+            "rubygems-linux-x86_64": (source, f"xberg-{version}-x86_64-linux.gem"),
+            "rubygems-linux-aarch64": (f"xberg-{version}-aarch64-linux.gem",),
+            "rubygems-macos-arm64": (f"xberg-{version}-arm64-darwin.gem",),
+            "rubygems-windows-x86_64": (f"xberg-{version}-x64-mingw-ucrt.gem",),
+        }
+        for artifact, names in artifacts.items():
+            path = root / "dist" / artifact
+            path.mkdir(parents=True)
+            for name in names:
+                (path / name).write_bytes(b"")
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        ruby = bin_dir / "ruby"
+        ruby.write_text(f"#!/usr/bin/env bash\nprintf '%s' '{source}'\n")
+        ruby.chmod(0o755)
+        environment = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+        result = run(["bash", "-euo", "pipefail", "-c", script], root, environment)
+        assert result.returncode == 0, result.stderr
+        assert "Gem inventory (5)" in result.stdout, result.stdout
+
+        (root / "dist" / "rubygems-linux-x86_64" / source).unlink()
+        result = run(["bash", "-euo", "pipefail", "-c", script], root, environment)
+        assert result.returncode == 1
+        output = result.stdout + result.stderr
+        assert f"expected the retained source gem to be {source}" in output, output
+
+    ruby_binary = shutil.which("ruby")
+    if ruby_binary is not None:
+        with tempfile.TemporaryDirectory() as directory:
+            spec = Path(directory) / "xberg.gemspec"
+            text = (WORKFLOW.parents[2] / "packages/ruby/xberg.gemspec").read_text()
+            spec.write_text(re.sub(r'(?m)^  spec\.version\s*=\s*"[^"]+"$', '  spec.version = "1.5.0-rc.1"', text))
+            result = run(
+                [ruby_binary, "-rrubygems", "-e", 'print Gem::Specification.load("xberg.gemspec").file_name'],
+                spec.parent,
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "xberg-1.5.0.pre.rc.1.gem", result.stdout
+
+
 if __name__ == "__main__":
     for name, test in list(globals().items()):
         if name.startswith("test_") and callable(test):
