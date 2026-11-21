@@ -406,7 +406,11 @@ Cargo feature** plus the system
   Homebrew)
 - **Debian / Ubuntu**: `apt install libheif-dev`
 - **Fedora**: `dnf install libheif-devel`
-- **Windows (vcpkg)**: `vcpkg install libheif[hevc,aom]:x64-windows`
+- **Windows (vcpkg)**: `vcpkg install libheif[core,aom,libde265]:x64-windows`
+  and set `VCPKGRS_TRIPLET=x64-windows` plus `VCPKGRS_DYNAMIC=1` before building,
+  so `libheif-sys` links the import library instead of the static archive. The
+  official ZIP bundles the DLLs; use `libheif[aom]` instead if you need HEVC
+  encoding and accept the GPL-2.0-or-later x265 it pulls in.
 
 Enable the feature when building from source:
 

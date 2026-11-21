@@ -2015,10 +2015,11 @@ jobs:
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
           # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
           # libheif stack. Until #3338 that stack carried the port's default `hevc` feature (x265,
-          # GPL-2.0-or-later); it is now installed as `libheif[core,aom,libde265]`, so the default
-          # archive is permissive too. This archive still compiles the HEIC/HEIF codecs out
-          # entirely for redistributors that will not ship libheif/libde265 at all (#3294).
-          # `formats-no-heic` stays in `default`, so PDF and Office extraction are unchanged. ~keep
+          # GPL-2.0-or-later); it is now installed as `libheif[core,aom,libde265]` and linked as
+          # the dynamic triplet's DLLs (#3339), so the default archive is permissive too. This
+          # archive still compiles the HEIC/HEIF codecs out entirely for redistributors that will
+          # not ship libheif/libde265 at all (#3294). `formats-no-heic` stays in `default`, so PDF
+          # and Office extraction are unchanged. ~keep
           - {
               os: windows-2022,
               target: x86_64-pc-windows-msvc,
@@ -2036,7 +2037,9 @@ jobs:
       - uses: xberg-io/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}
-          cache-key-prefix: cli-native-v1
+          # v2: vcpkg-rs keeps no rerun-if-env-changed for VCPKGRS_*, so a restored target/
+          # could reuse libheif-sys built against the static triplet (#3339). ~keep
+          cache-key-prefix: cli-native-v2
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
@@ -2061,6 +2064,19 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: "1.24.2"
+
+      # vcpkg-rs reads these process-wide and has no rerun-if-env-changed, and an empty
+      # value still counts as set, so export them only on the Windows leg instead of
+      # giving every other runner a VCPKGRS_DYNAMIC that is present but empty. ~keep
+      - name: Select the dynamic libheif triplet
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "VCPKGRS_TRIPLET=x64-windows"
+            echo "VCPKGRS_DYNAMIC=1"
+          } >>"$GITHUB_ENV"
 
       # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
       # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
@@ -2115,8 +2131,13 @@ jobs:
             scripts/ci/verify_no_gpl_cli_archive.py
             scripts/ci/verify_no_gpl_codecs.py
             scripts/ci/verify-release-archive.sh
+            scripts/ci/verify_windows_heif_archive.py
+            scripts/ci/stage_windows_heif_dlls.py
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
+            scripts/ci/notices/LGPL-3.0.txt
+            scripts/ci/notices/GPL-3.0.txt
+            scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt
             mise.toml
             mise.lock
 
@@ -2139,7 +2160,24 @@ jobs:
           cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             cp "$BINARY_PATH" "$STAGE/xberg.exe"
+            # libheif and libde265 are LGPL-3.0 and are linked as shared libraries, never
+            # into xberg.exe (#3339). Stage only the codec roots and the DLLs they actually
+            # import; a blind *.dll copy would also ship unrelated DLLs such as zlib1.dll.
+            # Then the §4(b) texts and the §3/§6 corresponding-source offer.
+            # The no-GPL archive compiles `heic` out and stays codec-free. ~keep
             CLOSURE_TOOLS="$GITHUB_WORKSPACE/.release-tools/scripts/ci"
+            if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]; then
+              HEIF_BIN="$(cygpath -u "${XBERG_LIBHEIF_DLL_DIR:?}")"
+              HEIF_SHARE="$(cygpath -u "${XBERG_LIBHEIF_NOTICE_DIR:?}")"
+              python "$CLOSURE_TOOLS/stage_windows_heif_dlls.py" \
+                --source "$HEIF_BIN" --destination "$STAGE"
+              NOTICES="$GITHUB_WORKSPACE/.release-tools/scripts/ci/notices"
+              cp "$NOTICES/LGPL-3.0.txt" "$NOTICES/GPL-3.0.txt" "$STAGE/"
+              cp "$NOTICES/GPL-SOURCE-OFFER-windows-heif.txt" "$STAGE/GPL-SOURCE-OFFER.txt"
+              cp "$HEIF_SHARE/libheif/copyright" "$STAGE/libheif-COPYING"
+              cp "$HEIF_SHARE/libde265/copyright" "$STAGE/libde265-COPYING"
+              cp "$HEIF_SHARE/aom/copyright" "$STAGE/aom-COPYING"
+            fi
             ORT_RUNTIME_DLL="$(cygpath -u "${ORT_DYLIB_PATH:?}")"
             test -f "$ORT_RUNTIME_DLL"
             pwsh -NoProfile -File "$CLOSURE_TOOLS/vendor-windows-native-closure.ps1" -Artifact "$STAGE" -DllSourceDir "$(cygpath -w "$(dirname "$ORT_RUNTIME_DLL")")" -NativeGlob "xberg.exe"
@@ -2154,8 +2192,19 @@ jobs:
                   continue
                   ;;
               esac
-              if [ -e "$path_entry/onnxruntime.dll" ]; then
-                echo "Dropping PATH entry providing onnxruntime.dll: $path_entry"
+              # Drop host copies of every DLL the archive must vendor, so a green smoke
+              # test cannot come from the runner's own vcpkg tree (the codec DLLs are
+              # staged before this loop; a missing one must fail here, not resolve from
+              # C:\xberg-vcpkg-*). ~keep
+              masked=""
+              for dll in onnxruntime.dll heif.dll libheif.dll libde265.dll aom.dll; do
+                if [ -e "$path_entry/$dll" ]; then
+                  masked="$dll"
+                  break
+                fi
+              done
+              if [ -n "$masked" ]; then
+                echo "Dropping PATH entry providing $masked: $path_entry"
                 continue
               fi
               CLEAN_PATH="${CLEAN_PATH:+$CLEAN_PATH:}$path_entry"
@@ -2167,7 +2216,7 @@ jobs:
               echo "::warning title=Windows CLI smoke test is weakened::C:\\Windows\\System32\\onnxruntime.dll exists on this runner and is searched before PATH, so xberg.exe --version may succeed here on a host DLL that end users do not have"
             fi
             PATH="$CLEAN_PATH" "$STAGE/xberg.exe" --version
-            echo "Windows CLI smoke test passed: $STAGE/xberg.exe --version ran without a workspace-provided onnxruntime.dll"
+            echo "Windows CLI smoke test passed: $STAGE/xberg.exe --version ran without a host-provided onnxruntime.dll or HEIF codec DLL"
             7z a "${STAGE}.zip" "$STAGE" >/dev/null
             pwsh -NoProfile -File "$CLOSURE_TOOLS/verify-windows-dll-closure.ps1" -Artifact "${STAGE}.zip" -NativeGlob "xberg.exe" -ArtifactKind raw -RequireCrtNotices
           else
@@ -2232,10 +2281,10 @@ jobs:
           install-args: cargo-deny
 
       # Cargo metadata alone cannot prove this artifact is GPL-free: libheif and libde265 are C
-      # libraries reached through `libheif-sys` and linked statically by the vcpkg port, so the
-      # crate license graph stays clean whether or not they are in the binary. `cargo deny`
-      # covers the Rust crates of the exact shipped feature graph (no `heic`), and the archive
-      # audit covers the linked/bundled codecs in xberg.exe and its sibling DLLs. ~keep
+      # libraries reached through `libheif-sys` and the vcpkg port, so the crate license graph
+      # stays clean whether or not they are in the binary. `cargo deny` covers the Rust crates
+      # of the exact shipped feature graph (no `heic`), and the archive audit covers the
+      # linked/bundled codecs in xberg.exe and its sibling DLLs. ~keep
       - name: Verify no GPL/LGPL codecs in the no-GPL CLI archive
         if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
         shell: bash
@@ -2255,6 +2304,21 @@ jobs:
             --require-format pdf \
             --require-format docx \
             --require-format xlsx
+
+      # The default Windows archive carries the LGPL-3.0 libheif/libde265 codecs (#3339). This
+      # gate reads the shipped bytes: xberg.exe must import heif.dll, the codec DLL closure
+      # must resolve inside the archive, and LGPL-3.0.txt, GPL-3.0.txt, the upstream port
+      # copyright files and THIRD_PARTY_LICENSES.md must travel with it. A return to static
+      # linking fails the import check instead of shipping without relink material. ~keep
+      - name: Verify the Windows HEIF archive links libheif dynamically
+        if: runner.os == 'Windows' && matrix.archive_suffix != '-no-gpl-lgpl'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          python .release-tools/scripts/ci/verify_windows_heif_archive.py \
+            --archive "xberg-cli-${TARGET}.zip"
 
       - name: Checkout Linux CLI installer verification tools
         if: endsWith(matrix.target, '-unknown-linux-gnu')

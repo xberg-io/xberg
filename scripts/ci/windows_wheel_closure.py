@@ -425,6 +425,20 @@ def audit_artifact(
     return result
 
 
+def audit_raw_archive(
+    artifact: Path,
+    native_glob: str,
+    required: str = "onnxruntime.dll",
+    forbidden: str = "directml.dll",
+) -> dict[str, int]:
+    """Audit a raw CLI archive or directory with the raw (non-wheel) import policy.
+
+    Callers outside this module should use this rather than assembling the graph
+    audit from the private raw-file and policy helpers.
+    """
+    return audit_artifact(artifact, native_glob, required, forbidden, artifact_kind="raw")
+
+
 def raw_external_policy(
     files: dict[str, tuple[str, bytes]],
     native: list[str],
