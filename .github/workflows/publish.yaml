@@ -809,6 +809,46 @@ jobs:
           "$venv_python" scripts/ci/smoke_test_python_wheel.py \
             scripts/ci/fixtures/musl-python-smoke.pdf "XBERG MUSL SMOKE 490"
 
+      # The wheel bundles the libheif/libde265/libaom closure and links libwpd; PEP 639 puts
+      # license files under .dist-info/licenses, which is also where the shared verifier
+      # expects them. `inject` rewrites METADATA, RECORD and the notice files; the shared
+      # verify-package-contents action then re-reads the final bytes. ~keep
+      - name: Inject canonical notices (wheel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(wheelhouse/*.whl)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one wheel in wheelhouse, found ${#archives[@]}"; exit 1;
+          }
+          python="${{ runner.os == 'Windows' && 'python' || 'python3' }}"
+          "$python" scripts/ci/package-notices.py inject --format wheel --expected-count 1 "${archives[@]}"
+
+      # The shared verifier runs `python3`; Windows only guarantees `python` on PATH.
+      - name: Expose python3 for the shared verifier (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/python3-shim"
+          printf '#!/usr/bin/env bash\nexec python "$@"\n' > "$RUNNER_TEMP/python3-shim/python3"
+          chmod +x "$RUNNER_TEMP/python3-shim/python3"
+          echo "$RUNNER_TEMP/python3-shim" >> "$GITHUB_PATH"
+
+      - name: Verify wheel notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: python
+          artifact-path: wheelhouse
+          artifact-format: wheel
+          expected-artifact-count: "1"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
+
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
@@ -878,6 +918,32 @@ jobs:
           wheel="$(find build-output -name '*.whl' | head -n1)"
           bash scripts/ci/smoke-test-musl-python-wheel.sh "$wheel"
 
+      - name: Inject canonical notices (wheel)
+        run: |
+          set -euo pipefail
+          # The local buildx exporter writes build-output as root; the injection rewrites the
+          # wheel in place, so hand the tree to the runner first.
+          sudo chown -R "$(id -u):$(id -g)" build-output
+          shopt -s nullglob
+          archives=(build-output/*.whl)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one musl wheel, found ${#archives[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format wheel --expected-count 1 "${archives[@]}"
+
+      - name: Verify musl wheel notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: python
+          artifact-path: build-output
+          artifact-format: wheel
+          expected-artifact-count: "1"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
+
       - uses: actions/upload-artifact@v7
         with:
           name: python-wheels-musl-${{ matrix.arch }}
@@ -916,6 +982,29 @@ jobs:
         with:
           output-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+
+      - name: Inject canonical notices (sdist)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/*.tar.gz)
+          [ "${#archives[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one sdist, found ${#archives[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format sdist --expected-count 1 "${archives[@]}"
+
+      - name: Verify sdist notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: python-sdist
+          artifact-path: dist
+          artifact-format: sdist
+          expected-artifact-count: "1"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1461,9 +1550,15 @@ jobs:
             # of the bundle -- native `ocr` is used instead) and `reranker`/`late-interaction`
             # (the ORT-backed engines; `windows-gnu-target` keeps only their ORT-free
             # `reranker-presets`/`late-interaction-presets` siblings, since MinGW has no ORT
-            # prebuilt). `heic` is already excluded from xberg-rb's default via alef.toml's
-            # `excluded_default_features`. Adding a new xberg-rb feature later means adding it
-            # here too whenever `windows-gnu-target` (or its core feature) also carries it. ~keep
+            # prebuilt). `excluded_default_features = ["heic"]` in alef.toml only keeps `heic`
+            # out of xberg-rb's own default list; it does not make the released gems heic-free.
+            # All four gem legs (linux x86_64/aarch64, macos arm64, windows x86_64) request
+            # `wordperfect`, so every gem links libwpd/librevenge (MPL-2.0). The three
+            # non-Windows legs request `full`, which also includes `heic` (libheif, LGPL).
+            # There is no macos-x86_64 gem leg; that unreleased macos-intel config and this
+            # Windows leg are the only heic-free ones. Adding a new xberg-rb feature later
+            # means adding it here too whenever `windows-gnu-target` (or its core feature)
+            # also carries it. ~keep
             ruby_cargo_args: --no-default-features --features api,api-types,auto-rotate-types,captioning,chunking,chunking-tokenizers,classification,diff,embedding-presets,heuristics,html,keywords-rake,keywords-yake,late-interaction-presets,layout-types,liter-llm,markdown-footnotes,mcp,ocr,office,paddle-ocr-types,pdf,presets,quality,redaction,redaction-rehydrate,reranker-presets,sparse-embedding-presets,svg,tokio-runtime,transcription-types,tree-sitter,url-config-types,url-ingestion,xml
     steps:
       - uses: actions/checkout@v7
@@ -1508,6 +1603,24 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      # `spec.files` is built from a glob that only matches LICENSE*, so stage the notice and
+      # extend that glob before `gem build`. Without this the file is absent from data.tar.gz,
+      # `gem contents` under-reports it, and uninstall leaves it behind; alef has no config
+      # knob for extra package files yet.
+      - name: Stage canonical notices into the gem source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp THIRD_PARTY_LICENSES.md packages/ruby/
+          ruby -e '
+            path = "packages/ruby/xberg.gemspec"
+            text = File.read(path)
+            unless text.include?("THIRD_PARTY_LICENSES.md")
+              File.write(path, text.sub(".glob(%W[README* LICENSE*", ".glob(%W[README* LICENSE* THIRD_PARTY_LICENSES.md"))
+            end
+          '
+          grep -q "THIRD_PARTY_LICENSES.md" packages/ruby/xberg.gemspec
+
       - uses: xberg-io/actions/build-ruby-gem@v1
         with:
           package-dir: packages/ruby
@@ -1535,6 +1648,10 @@ jobs:
           if [[ "$DRY_RUN" == "true" ]]; then
             GEM_VERSION="$(ruby -rrubygems -e 'puts Gem::Specification.load("xberg.gemspec").version')"
           fi
+          # Gem::Package names the source and native files with Gem::Version#to_s, which
+          # normalizes prereleases (`1.5.0-rc.1` -> `1.5.0.pre.rc.1`); the raw prepare version
+          # would not match those paths.
+          GEM_VERSION="$(ruby -rrubygems -e 'print Gem::Version.new(ENV.fetch("GEM_VERSION"))')"
           ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
       - uses: actions/upload-artifact@v7
@@ -4084,6 +4201,33 @@ jobs:
           fi
           echo "Wheel smoke test passed for ${TARGET}: $(basename "${wheels[0]}")"
 
+      # The payload is copied from the CLI release tarball, which carries libheif and friends.
+      # The tarball's own LICENSE/THIRD_PARTY files land under xberg_cli/bin/<target>/; add the
+      # canonical set to .dist-info/licenses as well, then gate both copies.
+      - name: Inject canonical notices (CLI proxy wheel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(cli-proxy/pypi/dist/*.whl)
+          [ "${#wheels[@]}" -eq 1 ] || {
+            echo "::error::expected exactly one CLI proxy wheel, found ${#wheels[@]}"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py inject --format wheel --expected-count 1 "${wheels[@]}"
+
+      - name: Verify CLI proxy wheel notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: python
+          artifact-path: cli-proxy/pypi/dist
+          artifact-format: wheel
+          expected-artifact-count: "1"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
+
       - name: Upload wheel
         uses: actions/upload-artifact@v7
         with:
@@ -4844,7 +4988,8 @@ jobs:
             check-cratesio
             publish-crates
 
-      # Only the mise config, so setup-mise installs the locked Ruby. ~keep
+      # Only the mise config, the canonical notices and the gemspec that names the source gem,
+      # so setup-mise installs the locked Ruby and the shared verifier can read canonical-root. ~keep
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
@@ -4854,6 +4999,9 @@ jobs:
             mise.toml
             mise*.lock
             mise-tasks
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+            packages/ruby/xberg.gemspec
 
       - uses: actions/download-artifact@v8
         with:
@@ -4869,12 +5017,65 @@ jobs:
 
       - uses: rubygems/configure-rubygems-credentials@v2.1.0
 
+      # The linux-x86_64 leg keeps the source gem (KEEP_SOURCE=true) beside its native gem, so
+      # the four matrix legs contribute five files: one source gem plus four platform gems.
+      # Every one is built from the patched gemspec and carries the notices; assert the exact
+      # inventory before the shared verifier checks bytes.
+      - name: Assert the expected gem inventory
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gems=(dist/rubygems-*/*.gem)
+          names=()
+          for gem in "${gems[@]}"; do names+=("$(basename "$gem")"); done
+          # Gem::Specification#file_name is exactly what `rake build` wrote, including the
+          # RubyGems prerelease normalization (`1.5.0-rc.1` -> `1.5.0.pre.rc.1`). The raw
+          # prepare version would not match for a prerelease.
+          expected_source="$(ruby -rrubygems -e 'print Gem::Specification.load("packages/ruby/xberg.gemspec").file_name')"
+          platforms=(x86_64-linux aarch64-linux arm64-darwin x64-mingw-ucrt)
+          sources=()
+          for name in "${names[@]}"; do
+            native=0
+            for platform in "${platforms[@]}"; do
+              [[ "$name" == xberg-*-"$platform".gem ]] && native=1
+            done
+            [ "$native" -eq 0 ] && sources+=("$name")
+          done
+          if [ "${#sources[@]}" -ne 1 ] || [ "${sources[0]}" != "$expected_source" ]; then
+            echo "::error::expected the retained source gem to be ${expected_source}, found: ${sources[*]:-none}"
+            exit 1
+          fi
+          for platform in "${platforms[@]}"; do
+            matches=0
+            for name in "${names[@]}"; do
+              [[ "$name" == xberg-*-"$platform".gem ]] && matches=$((matches + 1))
+            done
+            [ "$matches" -eq 1 ] || {
+              echo "::error::expected exactly one $platform gem, found $matches: ${names[*]}"
+              exit 1
+            }
+          done
+          [ "${#gems[@]}" -eq 5 ] || {
+            echo "::error::expected five gems (one source plus four platform gems), found ${#gems[@]}: ${names[*]}"
+            exit 1
+          }
+          printf 'Gem inventory (%d): %s\n' "${#names[@]}" "${names[*]}"
+        shell: bash
+
+      # The gemspec lists THIRD_PARTY_LICENSES.md, so both notices are already inside each
+      # gem's data.tar.gz and checksums.yaml.gz; this only re-reads the built bytes.
       - name: Verify Ruby gem package contents
         uses: xberg-io/actions/verify-package-contents@v1
         with:
           language: ruby
           artifact-path: dist
           package-name: xberg
+          artifact-format: gem
+          expected-artifact-count: "5"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
 
       - uses: xberg-io/actions/publish-rubygems@v1
         with:
@@ -5300,8 +5501,44 @@ jobs:
 
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          tools: maven
+          tools: java maven
           config-ref: ${{ github.sha }}
+
+      # Maven packs src/main/resources verbatim into the main JAR, so the notice set ships under
+      # META-INF without editing the alef-generated pom. The sources JAR is not covered: its
+      # generated includes filter admits only *.java, so the guarded publication mode in
+      # publish-maven@v1 (which also requires notices in the sources JAR) stays unavailable
+      # until alef can emit the notice files into that archive.
+      - name: Stage canonical notices into the Maven resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packages/java/src/main/resources/META-INF
+          cp LICENSE THIRD_PARTY_LICENSES.md packages/java/src/main/resources/META-INF/
+
+      # The publish action runs `mvn clean deploy` itself, so the uploaded JARs are rebuilt from
+      # these same sources. Build that JAR here first so the shared verifier can gate its bytes
+      # before deploy.
+      - name: Build jar before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B --no-transfer-progress -f packages/java/pom.xml -P publish \
+            -DskipTests -Dgpg.skip=true -Djacoco.skip=true package
+          test -f "packages/java/target/xberg-${{ needs.prepare.outputs.version }}.jar"
+
+      - name: Verify jar notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: java
+          artifact-path: packages/java/target/xberg-${{ needs.prepare.outputs.version }}.jar
+          artifact-format: jar
+          expected-artifact-count: "1"
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
 
       - uses: xberg-io/actions/publish-maven@v1
         with:
@@ -5459,6 +5696,78 @@ jobs:
               -o dist/nuget
           done
         shell: bash
+
+      # A nupkg is a zip; the notice set goes at the package root, beside the LICENSE
+      # dotnet already packs. The expected inventory is pinned to the RIDs the publish
+      # matrix builds and cross-checked against runtime.json.template, so a shrunken run
+      # cannot satisfy the count by shrinking both sides.
+      - name: Inject canonical notices (NuGet)
+        id: nuget-notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(
+            python3 - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          built = ["linux-x64", "linux-arm64", "linux-musl-x64", "linux-musl-arm64", "osx-arm64", "win-x64"]
+          # alef renders a runtime package for every PUBLISHED_RUNTIME_IDENTIFIERS entry enabled
+          # in alef.toml, but the publish matrix has no leg for these two. Tracked as a known
+          # gap: any other unbuilt RID in the template is drift and fails below.
+          known_unbuilt = {"osx-x64", "win-arm64"}
+          musl_fallbacks = {"linux-musl-x64", "linux-musl-arm64"}
+          template = json.loads(pathlib.Path("packages/csharp/Xberg/runtime.json.template").read_text())
+          advertised = {
+              rid: package
+              for rid, entry in template["runtimes"].items()
+              for package in entry
+              if package != "#import"
+          }
+          problems = []
+          for rid in built:
+              matches = sorted(pathlib.Path("dist/nuget").glob(f"XbergIo.Xberg.runtime.{rid}.*.nupkg"))
+              if len(matches) != 1:
+                  problems.append(f"RID {rid}: expected one runtime package, found {len(matches)}")
+          unexpected = sorted(set(advertised) - set(built) - known_unbuilt)
+          if unexpected:
+              problems.append("runtime.json.template advertises RIDs the matrix does not build: " + ", ".join(unexpected))
+          unadvertised = sorted(set(built) - set(advertised) - musl_fallbacks)
+          if unadvertised:
+              problems.append("built RIDs missing from runtime.json.template: " + ", ".join(unadvertised))
+          for rid in sorted(known_unbuilt & set(advertised)):
+              print(f"::warning::runtime.json.template advertises {rid}, which has no publish leg", file=sys.stderr)
+          for rid in sorted(musl_fallbacks):
+              print(f"::warning::runtime package {rid} is not referenced by runtime.json.template", file=sys.stderr)
+          for problem in problems:
+              print(f"::error::{problem}", file=sys.stderr)
+          if problems:
+              raise SystemExit(1)
+          print(len(built) + 1)
+          PY
+          )
+          echo "expected=${expected}" >> "$GITHUB_OUTPUT"
+          shopt -s nullglob
+          archives=(dist/nuget/*.nupkg)
+          [ "${#archives[@]}" -eq "$expected" ] || {
+            echo "::error::expected ${expected} nupkg files (meta + runtime packages), found ${#archives[@]}"
+            exit 1
+          }
+          python3 scripts/ci/package-notices.py inject --format nuget --expected-count "$expected" "${archives[@]}"
+
+      - name: Verify NuGet notice bytes
+        uses: xberg-io/actions/verify-package-contents@v1
+        with:
+          language: csharp
+          artifact-path: dist/nuget
+          artifact-format: nuget
+          expected-artifact-count: ${{ steps.nuget-notices.outputs.expected }}
+          required-notice-files: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+          canonical-root: .
+          strict: "false"
 
       - uses: xberg-io/actions/publish-nuget@v1
         with:
@@ -5756,6 +6065,16 @@ jobs:
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
+      - name: Stage canonical notices into the Zig package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/package-notices.py stage packages/zig
+          # Zig materializes only the entries listed in .paths, so asserting the files exist is
+          # not enough: the manifest must expose them to `zig fetch` consumers.
+          grep -q '"LICENSE"' packages/zig/build.zig.zon
+          grep -q '"THIRD_PARTY_LICENSES.md"' packages/zig/build.zig.zon
+
       - uses: xberg-io/actions/publish-zig@v1
         with:
           working-directory: packages/zig
@@ -5783,6 +6102,19 @@ jobs:
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      # The tarball is assembled and uploaded inside the external action, so there is no
+      # pre-upload hook: the action leaves its tarball in RUNNER_TEMP and this reopens those
+      # exact bytes. The stage step above is what puts them in the tarball.
+      - name: Verify canonical notices in the Zig tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/xberg-zig-${{ needs.prepare.outputs.tag }}.tar.gz"
+          [ -f "$tarball" ] || {
+            echo "::error::Zig tarball not found at $tarball"; exit 1;
+          }
+          python3 scripts/ci/package-notices.py check --format zig --expected-count 1 "$tarball"
 
   publish-homebrew-formula:
     name: Update Homebrew formula

@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""Stage canonical distribution notices and verify final archive bytes."""
+"""Stage and inject canonical distribution notices into built archives."""
 
 import argparse
+import base64
+import csv
+import gzip
+import hashlib
+import io
 import json
+import re
 import shutil
 import sys
 import tarfile
+import tomllib
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 NOTICE_NAMES = ("LICENSE", "THIRD_PARTY_LICENSES.md")
+ARCHIVE_FORMATS = ("wheel", "sdist", "jar", "nuget", "gem", "zig")
+ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 
 def canonical_notices() -> dict[str, bytes]:
@@ -21,6 +31,30 @@ def canonical_notices() -> dict[str, bytes]:
             raise ValueError(f"empty canonical notice: {name}")
         notices[name] = content
     return notices
+
+
+def _stage_zig_paths(manifest: Path, names: Iterable[str]) -> None:
+    text = manifest.read_text()
+    marker = ".paths = .{"
+    start = text.find(marker)
+    if start < 0:
+        raise ValueError(f"no .paths block in {manifest}")
+    depth = 0
+    end = len(text)
+    for index in range(start + len(marker) - 1, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                end = index
+                break
+    block = text[start:end]
+    missing = [name for name in names if f'"{name}"' not in block]
+    if not missing:
+        return
+    insertion = "".join(f'\n        "{name}",' for name in missing)
+    manifest.write_text(text[: start + len(marker)] + insertion + text[start + len(marker) :])
 
 
 def stage(destinations: list[str], notices: dict[str, bytes]) -> None:
@@ -35,7 +69,385 @@ def stage(destinations: list[str], notices: dict[str, bytes]) -> None:
             package = json.loads(manifest.read_text())
             package["files"] = sorted(set(package.get("files") or []) | set(notices))
             manifest.write_text(json.dumps(package, indent=2) + "\n")
+        zon = destination / "build.zig.zon"
+        if zon.is_file():
+            _stage_zig_paths(zon, notices)
     print(f"Staged {len(notices) * len(destinations)} canonical notice files")
+
+
+def _zip_rewrite(path: Path, changes: dict[str, bytes], remove: set[str]) -> None:
+    temporary = path.with_name(f".{path.name}.notices")
+    with (
+        zipfile.ZipFile(path) as source,
+        zipfile.ZipFile(temporary, "w") as destination,
+    ):
+        for entry in source.infolist():
+            if entry.filename in remove:
+                continue
+            written = zipfile.ZipInfo(entry.filename, date_time=entry.date_time)
+            written.compress_type = entry.compress_type
+            written.external_attr = entry.external_attr
+            written.internal_attr = entry.internal_attr
+            written.create_system = entry.create_system
+            written.extra = entry.extra
+            destination.writestr(written, source.read(entry))
+        for name, content in changes.items():
+            written = zipfile.ZipInfo(name, date_time=ZIP_EPOCH)
+            written.compress_type = zipfile.ZIP_DEFLATED
+            written.external_attr = 0o100644 << 16
+            destination.writestr(written, content)
+    temporary.replace(path)
+
+
+def _assert_tar_name(name: str, tar_format: int) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = 0
+    try:
+        info.tobuf(tar_format)
+    except ValueError as error:
+        raise ValueError(f"tar member name does not fit the archive format: {name}: {error}") from error
+
+
+def _tar_rewrite(
+    path: Path,
+    additions: dict[str, bytes],
+    root: str,
+    *,
+    replacements: dict[str, bytes] | None = None,
+    tar_format: int | None = None,
+) -> None:
+    replacements = replacements or {}
+    temporary = path.with_name(f".{path.name}.notices")
+    targets = {PurePosixPath(root, notice).as_posix() for notice in additions}
+    with tarfile.open(path, "r:*") as source:
+        archive_format = source.format if tar_format is None else tar_format
+        for name in (*targets, *replacements):
+            _assert_tar_name(name, archive_format)
+        with (
+            temporary.open("wb") as raw,
+            gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed,
+            tarfile.open(fileobj=compressed, mode="w", format=archive_format) as destination,
+        ):
+            for member in source.getmembers():
+                name = PurePosixPath(member.name).as_posix()
+                if name in replacements:
+                    info = tarfile.TarInfo(name)
+                    info.size = len(replacements[name])
+                    info.mtime = 0
+                    info.mode = 0o644
+                    destination.addfile(info, io.BytesIO(replacements[name]))
+                    continue
+                if name in targets:
+                    continue
+                stream = source.extractfile(member) if member.isfile() else None
+                destination.addfile(member, stream)
+            for name, content in additions.items():
+                info = tarfile.TarInfo(PurePosixPath(root, name).as_posix())
+                info.size = len(content)
+                info.mtime = 0
+                info.mode = 0o644
+                destination.addfile(info, io.BytesIO(content))
+    temporary.replace(path)
+
+
+def _single_tar_root(names: Iterable[str]) -> str:
+    roots = {PurePosixPath(name).parts[0] for name in names if name not in {".", ""} and PurePosixPath(name).parts}
+    if len(roots) != 1:
+        raise ValueError(f"archive must have one root, found {sorted(roots)}")
+    return roots.pop()
+
+
+def _tar_member(source: bytes | Path, name: str) -> bytes | None:
+    """Read one member without materialising the whole (possibly multi-GB) archive."""
+    archive = (
+        tarfile.open(fileobj=io.BytesIO(source), mode="r:*")
+        if isinstance(source, bytes)
+        else tarfile.open(source, "r:*")
+    )
+    with archive:
+        matches = [member for member in archive.getmembers() if PurePosixPath(member.name) == PurePosixPath(name)]
+        if len(matches) > 1:
+            raise ValueError(f"duplicate archive entry: {name}")
+        if not matches:
+            return None
+        stream = archive.extractfile(matches[0])
+        if stream is None:
+            raise ValueError(f"unreadable archive member: {name}")
+        with stream:
+            return stream.read()
+
+
+def _zip_entry(path: Path, name: str) -> bytes | None:
+    with zipfile.ZipFile(path) as archive:
+        matches = [entry for entry in archive.namelist() if PurePosixPath(entry) == PurePosixPath(name)]
+        if len(matches) > 1:
+            raise ValueError(f"duplicate archive entry: {name}")
+        return archive.read(matches[0]) if matches else None
+
+
+def _license_header(payload: bytes, notices: dict[str, bytes]) -> bytes:
+    """Declare the notices in an RFC 822 metadata file (wheel METADATA, sdist PKG-INFO)."""
+    text = payload.decode("utf-8")
+    head, separator, body = text.partition("\n\n")
+    declared = {line.split(":", 1)[1].strip() for line in head.splitlines() if line.lower().startswith("license-file:")}
+    missing = [name for name in notices if name not in declared]
+    if not missing:
+        return payload
+    declarations = "\n".join(f"License-File: {name}" for name in missing)
+    if separator:
+        return (head + "\n" + declarations + separator + body).encode("utf-8")
+    # Header-only metadata has no blank line separating the body; appending "\nLicense-File:"
+    # to the whole payload would turn the declaration into body text instead of a header.
+    prefix = head.rstrip("\n")
+    return (((prefix + "\n") if prefix else "") + declarations + "\n").encode("utf-8")
+
+
+def _pyproject_license_files(payload: bytes, notices: dict[str, bytes]) -> bytes:
+    """Add the notices to `project.license-files` so a rebuilt wheel keeps declaring them."""
+    text = payload.decode("utf-8")
+    match = re.search(r"(?m)^license-files\s*=\s*\[", text)
+    if match:
+        opening = text.index("[", match.start())
+        closing = text.find("]", opening)
+        if closing < 0:
+            raise ValueError("unterminated project.license-files array")
+        block = text[opening:closing]
+        missing = [name for name in notices if f'"{name}"' not in block]
+        if missing:
+            insertion = "".join(f'"{name}", ' for name in missing)
+            text = text[: opening + 1] + insertion + text[opening + 1 :]
+    else:
+        project = re.search(r"(?m)^\[project\]\s*$", text)
+        if project is None:
+            raise ValueError("pyproject has no [project] table")
+        line_end = text.find("\n", project.end())
+        declaration = 'license-files = ["LICENSE", "THIRD_PARTY_LICENSES.md"]\n'
+        text = text[: line_end + 1] + declaration + text[line_end + 1 :]
+    declared = tomllib.loads(text)["project"]["license-files"]
+    if not isinstance(declared, list) or set(notices) - set(declared):
+        raise ValueError("pyproject project.license-files does not declare the notice bundle")
+    return text.encode("utf-8")
+
+
+def _record_rows(payload: bytes) -> list[list[str]]:
+    return [row for row in csv.reader(io.StringIO(payload.decode("utf-8"))) if row]
+
+
+def _record_digest(content: bytes) -> str:
+    return base64.urlsafe_b64encode(hashlib.sha256(content).digest()).decode("ascii").rstrip("=")
+
+
+def _verify_record(archive: zipfile.ZipFile, record_path: str) -> None:
+    rows = _record_rows(archive.read(record_path))
+    names = [row[0] for row in rows]
+    if len(names) != len(set(names)):
+        raise ValueError(f"{record_path} has duplicate entries")
+    recorded = dict(zip(names, rows, strict=True))
+    entries = [entry for entry in archive.infolist() if not entry.is_dir()]
+    members = {entry.filename for entry in entries}
+    expected = members | {record_path}
+    if set(recorded) != expected:
+        missing = sorted(expected - set(recorded))
+        extra = sorted(set(recorded) - expected)
+        raise ValueError(f"RECORD does not cover the archive exactly (missing={missing}, extra={extra})")
+    record_row = recorded[record_path]
+    if len(record_row) != 3 or record_row[1] or record_row[2]:
+        raise ValueError(f"RECORD row for {record_path} must have empty hash and size")
+    for entry in entries:
+        if entry.filename == record_path:
+            continue
+        row = recorded[entry.filename]
+        if len(row) != 3:
+            raise ValueError(f"RECORD row for {entry.filename} is malformed")
+        algorithm, _, digest = row[1].partition("=")
+        if not digest or algorithm not in hashlib.algorithms_available:
+            raise ValueError(f"RECORD row for {entry.filename} has no supported hash")
+        actual = base64.urlsafe_b64encode(hashlib.new(algorithm, archive.read(entry)).digest()).decode().rstrip("=")
+        if digest != actual:
+            raise ValueError(f"RECORD hash mismatch for {entry.filename}")
+        if row[2] != str(entry.file_size):
+            raise ValueError(f"RECORD size mismatch for {entry.filename}")
+
+
+def _wheel_dist_info(archive: zipfile.ZipFile, path: Path) -> tuple[str, str]:
+    records = [name for name in archive.namelist() if name.count("/") == 1 and name.endswith(".dist-info/RECORD")]
+    if len(records) != 1:
+        raise ValueError(f"expected one .dist-info/RECORD in {path.name}, found {len(records)}")
+    return records[0], str(PurePosixPath(records[0]).parent)
+
+
+def _inject_wheel(path: Path, notices: dict[str, bytes]) -> None:
+    with zipfile.ZipFile(path) as archive:
+        record_path, dist_info = _wheel_dist_info(archive, path)
+        signed = [name for name in archive.namelist() if name in {f"{record_path}.jws", f"{record_path}.p7s"}]
+        if signed:
+            raise ValueError(f"{path.name} is signed; rewriting RECORD would invalidate {signed[0]}")
+        rows = _record_rows(archive.read(record_path))
+        metadata_path = f"{dist_info}/METADATA"
+        try:
+            metadata = archive.read(metadata_path)
+        except KeyError as error:
+            raise ValueError(f"{path.name} has no {metadata_path}") from error
+    additions = {f"{dist_info}/licenses/{name}": content for name, content in notices.items()}
+    additions[metadata_path] = _license_header(metadata, notices)
+    retained = [row for row in rows if row[0] not in additions and row[0] != record_path]
+    for name in sorted(additions):
+        retained.append([name, f"sha256={_record_digest(additions[name])}", str(len(additions[name]))])
+    retained.append([record_path, "", ""])
+    buffer = io.StringIO()
+    csv.writer(buffer, lineterminator="\n").writerows(retained)
+    _zip_rewrite(path, {**additions, record_path: buffer.getvalue().encode()}, {*additions, record_path})
+
+
+def _inject_zip_root(path: Path, notices: dict[str, bytes], prefix: str) -> None:
+    if prefix == "META-INF/":
+        with zipfile.ZipFile(path) as archive:
+            signed = [
+                name
+                for name in archive.namelist()
+                if name.startswith(prefix) and name.upper().endswith((".SF", ".RSA", ".DSA", ".EC"))
+            ]
+        if signed:
+            raise ValueError(f"{path.name} is signed; adding entries would invalidate {signed[0]}")
+    additions = {f"{prefix}{name}": content for name, content in notices.items()}
+    _zip_rewrite(path, additions, set(additions))
+
+
+def _inject_sdist(path: Path, notices: dict[str, bytes]) -> None:
+    with tarfile.open(path, "r:*") as archive:
+        root = _single_tar_root(member.name for member in archive.getmembers())
+    pkg_info = _tar_member(path, f"{root}/PKG-INFO")
+    pyproject = _tar_member(path, f"{root}/pyproject.toml")
+    if pkg_info is None or pyproject is None:
+        raise ValueError(f"{path.name} is missing PKG-INFO or pyproject.toml under {root}")
+    replacements = {
+        f"{root}/PKG-INFO": _license_header(pkg_info, notices),
+        f"{root}/pyproject.toml": _pyproject_license_files(pyproject, notices),
+    }
+    _tar_rewrite(path, notices, root, replacements=replacements)
+
+
+def _gem_payloads(path: Path) -> tuple[list[str], dict[str, tarfile.TarInfo], dict[str, bytes]]:
+    with tarfile.open(path, "r:") as archive:
+        order = [member.name for member in archive.getmembers()]
+        members = {member.name: member for member in archive.getmembers()}
+        if any(name.endswith(".sig") for name in members):
+            raise ValueError(f"{path.name} is signed; rewriting data.tar.gz would invalidate the signature")
+        payloads = {}
+        for name, member in members.items():
+            if not member.isfile():
+                continue
+            stream = archive.extractfile(member)
+            if stream is None:
+                raise ValueError(f"unreadable gem member: {name}")
+            with stream:
+                payloads[name] = stream.read()
+    return order, members, payloads
+
+
+def _gem_member(payloads: dict[str, bytes], name: str, path: Path) -> bytes:
+    if name not in payloads:
+        raise ValueError(f"{path.name} is missing {name}")
+    return payloads[name]
+
+
+def _gem_checksums(metadata: bytes, data: bytes) -> bytes:
+    lines = ["---"]
+    for algorithm in ("sha256", "sha512"):
+        lines.append(f"{algorithm.upper()}:")
+        for name, payload in (("metadata.gz", metadata), ("data.tar.gz", data)):
+            lines.append(f"  {name}: {hashlib.new(algorithm, payload).hexdigest()}")
+    return gzip.compress(("\n".join(lines) + "\n").encode("utf-8"), mtime=0)
+
+
+def _inject_gem(path: Path, notices: dict[str, bytes]) -> None:
+    order, members, payloads = _gem_payloads(path)
+    metadata = _gem_member(payloads, "metadata.gz", path)
+    data = _gem_member(payloads, "data.tar.gz", path)
+    _gem_member(payloads, "checksums.yaml.gz", path)
+    data_path = path.with_name(f".{path.name}.data.tar.gz")
+    data_path.write_bytes(data)
+    try:
+        # RubyGems' TarReader expects the gem's nested data archive in ustar.
+        _tar_rewrite(data_path, notices, "", tar_format=tarfile.USTAR_FORMAT)
+        payloads["data.tar.gz"] = data_path.read_bytes()
+    finally:
+        data_path.unlink(missing_ok=True)
+    payloads["checksums.yaml.gz"] = _gem_checksums(metadata, payloads["data.tar.gz"])
+    temporary = path.with_name(f".{path.name}.notices")
+    with tarfile.open(temporary, "w", format=tarfile.USTAR_FORMAT) as destination:
+        for name in order:
+            member = members[name]
+            if member.isfile():
+                member.size = len(payloads[name])
+                destination.addfile(member, io.BytesIO(payloads[name]))
+            else:
+                destination.addfile(member)
+    temporary.replace(path)
+
+
+def _inject(path: Path, archive_format: str, notices: dict[str, bytes]) -> None:
+    if archive_format == "wheel":
+        _inject_wheel(path, notices)
+    elif archive_format == "sdist":
+        _inject_sdist(path, notices)
+    elif archive_format == "jar":
+        _inject_zip_root(path, notices, "META-INF/")
+    elif archive_format == "nuget":
+        _inject_zip_root(path, notices, "")
+    elif archive_format == "gem":
+        _inject_gem(path, notices)
+    else:
+        _tar_rewrite(path, notices, "")
+    print(f"Injected {len(notices)} canonical notices into {path}")
+
+
+def _check(path: Path, archive_format: str, notices: dict[str, bytes]) -> None:
+    if archive_format == "wheel":
+        with zipfile.ZipFile(path) as archive:
+            record_path, dist_info = _wheel_dist_info(archive, path)
+            _verify_record(archive, record_path)
+        reader = lambda name: _zip_entry(path, f"{dist_info}/licenses/{name}")  # noqa: E731
+    elif archive_format == "jar":
+        reader = lambda name: _zip_entry(path, f"META-INF/{name}")  # noqa: E731
+    elif archive_format == "nuget":
+        reader = lambda name: _zip_entry(path, name)  # noqa: E731
+    elif archive_format == "gem":
+        data = _tar_member(path, "data.tar.gz")
+        if data is None:
+            raise ValueError(f"{path.name} is missing data.tar.gz")
+        reader = lambda name: _tar_member(data, name)  # noqa: E731
+    else:
+        with tarfile.open(path, "r:*") as archive:
+            root = _single_tar_root(member.name for member in archive.getmembers()) if archive_format == "sdist" else ""
+        prefix = f"{root}/" if root else ""
+        reader = lambda name: _tar_member(path, f"{prefix}{name}")  # noqa: E731
+    for name, expected in notices.items():
+        content = reader(name)
+        if content != expected:
+            raise ValueError(f"{path.name}: {name} is missing or differs from the canonical file")
+    print(f"Verified {len(notices)} canonical notices in {path}")
+
+
+def inject(archives: list[str], archive_format: str, expected: int, notices: dict[str, bytes]) -> None:
+    if len(archives) != expected:
+        raise ValueError(f"expected {expected} {archive_format} archives, found {len(archives)}")
+    for name in archives:
+        path = Path(name)
+        if not path.is_file():
+            raise ValueError(f"archive not found: {name}")
+        _inject(path, archive_format, notices)
+        _check(path, archive_format, notices)
+
+
+def check(archives: list[str], archive_format: str, expected: int, notices: dict[str, bytes]) -> None:
+    if len(archives) != expected:
+        raise ValueError(f"expected {expected} {archive_format} archives, found {len(archives)}")
+    for name in archives:
+        path = Path(name)
+        if not path.is_file():
+            raise ValueError(f"archive not found: {name}")
+        _check(path, archive_format, notices)
 
 
 def verify(archive_path: str, prefixes: list[str], notices: dict[str, bytes]) -> None:
@@ -70,13 +482,22 @@ def main() -> None:
     verification = commands.add_parser("verify")
     verification.add_argument("archive")
     verification.add_argument("prefixes", nargs="+")
+    for name in ("inject", "check"):
+        command = commands.add_parser(name)
+        command.add_argument("--format", dest="archive_format", choices=ARCHIVE_FORMATS, required=True)
+        command.add_argument("--expected-count", type=int, required=True)
+        command.add_argument("archives", nargs="+")
     args = parser.parse_args()
     try:
         notices = canonical_notices()
         if args.command == "stage":
             stage(args.destinations, notices)
-        else:
+        elif args.command == "verify":
             verify(args.archive, args.prefixes, notices)
+        elif args.command == "inject":
+            inject(args.archives, args.archive_format, args.expected_count, notices)
+        else:
+            check(args.archives, args.archive_format, args.expected_count, notices)
     except (OSError, ValueError, tarfile.TarError, zipfile.BadZipFile) as error:
         print(f"::error::{error}", file=sys.stderr)
         sys.exit(1)
