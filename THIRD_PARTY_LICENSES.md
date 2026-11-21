@@ -183,8 +183,7 @@ upstream tarballs untouched.
 | Offer | Covers |
 | --- | --- |
 | [`GPL-SOURCE-OFFER.txt`](GPL-SOURCE-OFFER.txt) | elixir-macos-arm64 |
-
-**xberg-cli-x86_64-pc-windows-msvc.zip.** Xberg offers, valid for three years from the date this release was distributed, to give anyone who possesses this object code a complete copy of its Corresponding Source on a durable medium suitable for interchanging data, for a charge no more than the cost of physically performing source distribution (GNU GPL version 3, section 6(b)). The Corresponding Source is the complete machine-readable source for libheif 1.23.7, libde265 1.1.3, libaom 3.15.2, including every patch and build script named in the table above, at the release that produced this archive. To obtain it, email contact@xberg.io with the subject "xberg-cli-x86_64-pc-windows-msvc.zip corresponding source" and the release version. This offer covers the LGPL-3.0-or-later components on the same terms, satisfying LGPL-3.0 section 4(d).
+| [`scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt`](scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt) | windows-cli |
 
 ## libwpd + librevenge (WordPerfect) — MPL-2.0
 

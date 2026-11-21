@@ -394,6 +394,12 @@ sha256 = "c6d80161d64afb8087f25c41650d2b21b578e2698739af21b7c30681c33d2202"
 shipped_as = "GPL-SOURCE-OFFER.txt"
 channels = ["elixir-macos-arm64"]
 
+[[offer]]
+path = "scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt"
+sha256 = "628f34d882526368cedc40a534b54d1931766a4d0ea13685574d7e02e6be11b3"
+shipped_as = "GPL-SOURCE-OFFER.txt"
+channels = ["windows-cli"]
+
 [[vcpkg]]
 baseline = "5363acb796e576328288fae60c25304e227e9839"
 
