@@ -1983,9 +1983,9 @@ jobs:
           test -f "$ORT_DYLIB_PATH"
           echo "ORT_VENDOR_LIB=$ORT_DYLIB_PATH" >> "$GITHUB_ENV"
 
-      # Retries of older source tags must use closure tools from this workflow revision. ~keep
-      - name: Checkout Windows release closure tools
-        if: runner.os == 'Windows'
+      # Retries of older source tags must use closure and gate tools from this
+      # workflow revision, on every runner: the release checkout can predate them. ~keep
+      - name: Checkout release closure and gate tools
         uses: actions/checkout@v7
         with:
           ref: ${{ github.workflow_sha }}
@@ -2091,19 +2091,6 @@ jobs:
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 
-      # Retries of older source tags must use gate tools from this workflow revision. ~keep
-      - name: Checkout release archive gate tooling
-        if: runner.os != 'Windows'
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .release-tools
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            scripts/ci/verify-release-archive.sh
-            scripts/ci/verify_no_gpl_codecs.py
-
       # `cargo deny` cannot see C codecs and the macOS/Linux closures are walked by
       # filename, not by what the linked bytes reference. Open the finished artifact
       # and fail on an x265 file name, a `libx265` load command/DT_NEEDED entry or an
@@ -2114,7 +2101,11 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           SUFFIX: ${{ matrix.archive_suffix }}
-        run: bash .release-tools/scripts/ci/verify-release-archive.sh "xberg-cli-${TARGET}${SUFFIX}.*"
+        run: |
+          set -euo pipefail
+          gate=.release-tools/scripts/ci/verify-release-archive.sh
+          test -f "$gate" || { echo "::error::missing $gate; the gate must come from github.workflow_sha"; exit 1; }
+          bash "$gate" "xberg-cli-${TARGET}${SUFFIX}.*"
 
       - name: Setup cargo-deny for the no-GPL license audit
         if: runner.os == 'Windows' && matrix.archive_suffix == '-no-gpl-lgpl'
@@ -2251,7 +2242,11 @@ jobs:
       # packed archive carries no x265 plugin or x265-linked binary. ~keep
       - name: Verify musl CLI archive is free of the GPL x265 encoder
         shell: bash
-        run: bash .release-tools/scripts/ci/verify-release-archive.sh 'xberg-cli-*.tar.gz'
+        run: |
+          set -euo pipefail
+          gate=.release-tools/scripts/ci/verify-release-archive.sh
+          test -f "$gate" || { echo "::error::missing $gate; the gate must come from github.workflow_sha"; exit 1; }
+          bash "$gate" 'xberg-cli-*.tar.gz'
 
       - name: Checkout Linux CLI installer verification tools
         uses: actions/checkout@v7
@@ -2366,7 +2361,11 @@ jobs:
       # the feature list. ~keep
       - name: Verify binstall CLI archive is free of the GPL x265 encoder
         shell: bash
-        run: bash .release-tools/scripts/ci/verify-release-archive.sh 'xberg-cli-binstall-*.tar.gz'
+        run: |
+          set -euo pipefail
+          gate=.release-tools/scripts/ci/verify-release-archive.sh
+          test -f "$gate" || { echo "::error::missing $gate; the gate must come from github.workflow_sha"; exit 1; }
+          bash "$gate" 'xberg-cli-binstall-*.tar.gz'
 
       - uses: actions/upload-artifact@v7
         with:

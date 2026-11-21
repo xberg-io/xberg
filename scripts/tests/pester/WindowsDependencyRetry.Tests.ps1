@@ -30,31 +30,36 @@ Describe 'Windows native dependency retries' {
 }
 
 Describe 'Installed Windows libheif validation' {
-    It 'should accept exactly one current base port alongside decode-only feature rows' {
-        # Real `vcpkg list libheif` shape: one core row plus one row per feature.
+    It 'should accept one versioned core row and version-less feature rows' {
+        # Real `vcpkg list libheif` shape: the core row carries the version, each
+        # enabled feature is a separate row with no version column.
         { Assert-LibheifVersion -Packages @(
             'libheif:x64-windows-static-md                       1.23.7#1   HEIF decoder',
-            'libheif[aom]:x64-windows-static-md                   1.23.7#1   AVIF support',
-            'libheif[libde265]:x64-windows-static-md              1.23.7#1   libde265 HEVC decoder'
+            'libheif[aom]:x64-windows-static-md                              AVIF support',
+            'libheif[libde265]:x64-windows-static-md                         libde265 HEVC decoder'
         ) } | Should -Not -Throw
     }
 
-    It 'should accept a single feature-annotated current port' {
+    It 'should reject a feature row travelling on the core row instead of on its own' {
         { Assert-LibheifVersion -Packages @(
             'libheif[core,aom,libde265]:x64-windows-static-md 1.23.7#1 HEIF decoder'
-        ) } | Should -Not -Throw
+        ) } | Should -Throw '*exactly one installed libheif 1.23.7*'
     }
 
     It 'should reject the GPL x265 hevc feature' {
         { Assert-LibheifVersion -Packages @(
             'libheif:x64-windows-static-md                       1.23.7#1   HEIF decoder',
-            'libheif[hevc]:x64-windows-static-md                  1.23.7#1   HEVC encoding via x265'
+            'libheif[aom]:x64-windows-static-md                              AVIF support',
+            'libheif[libde265]:x64-windows-static-md                         libde265 HEVC decoder',
+            'libheif[hevc]:x64-windows-static-md                             HEVC encoding via x265'
         ) } | Should -Throw '*GPL-2.0 x265*'
     }
 
     It 'should reject a separately installed x265 port' {
         { Assert-LibheifVersion -Packages @(
-            'libheif[core,aom,libde265]:x64-windows-static-md 1.23.7#1 HEIF decoder'
+            'libheif:x64-windows-static-md                       1.23.7#1   HEIF decoder',
+            'libheif[aom]:x64-windows-static-md                              AVIF support',
+            'libheif[libde265]:x64-windows-static-md                         libde265 HEVC decoder'
         ) -X265Packages @('x265:x64-windows-static-md 4.1#2 x265 video encoder') } |
             Should -Throw '*installed the GPL-2.0 x265 port*'
     }
@@ -62,8 +67,17 @@ Describe 'Installed Windows libheif validation' {
     It 'should reject a decode-only set that lost libde265' {
         { Assert-LibheifVersion -Packages @(
             'libheif:x64-windows-static-md                       1.23.7#1   HEIF decoder',
-            'libheif[aom]:x64-windows-static-md                   1.23.7#1   AVIF support'
-        ) } | Should -Throw '*missing the libde265 feature*'
+            'libheif[aom]:x64-windows-static-md                              AVIF support'
+        ) } | Should -Throw "*expected exactly 'aom,libde265'*"
+    }
+
+    It 'should reject an unexpected codec feature' {
+        { Assert-LibheifVersion -Packages @(
+            'libheif:x64-windows-static-md                       1.23.7#1   HEIF decoder',
+            'libheif[aom]:x64-windows-static-md                              AVIF support',
+            'libheif[dav1d]:x64-windows-static-md                            AV1 decoder',
+            'libheif[libde265]:x64-windows-static-md                         libde265 HEVC decoder'
+        ) } | Should -Throw "*expected exactly 'aom,libde265'*"
     }
 
     It 'should reject a cache containing an old installed base port' {
@@ -71,9 +85,9 @@ Describe 'Installed Windows libheif validation' {
             Should -Throw '*exactly one installed libheif 1.23.7*'
     }
 
-    It 'should reject an empty query and feature-only output' {
+    It 'should reject an empty query and a feature-only output' {
         { Assert-LibheifVersion -Packages @() } | Should -Throw '*exactly one*'
-        { Assert-LibheifVersion -Packages @('libheif[core,aom,libde265]:x64-windows-static-md HEIF decoder') } |
-            Should -Throw '*exactly one*'
+        { Assert-LibheifVersion -Packages @('libheif[aom]:x64-windows-static-md AVIF support') } |
+            Should -Throw '*exactly one installed libheif 1.23.7*'
     }
 }

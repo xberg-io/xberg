@@ -35,31 +35,33 @@ function Retry-Command {
 
 function Assert-LibheifVersion {
   param([string[]]$Packages, [string[]]$X265Packages = @())
-  # vcpkg has printed either one feature-annotated row or a base row plus one row per
-  # feature across versions; accept both shapes so the assertion cannot be skipped. ~keep
-  $rows = @($Packages | Where-Object { $_ -match '^libheif(?:\[[^\]]*\])?:x64-windows-static-md\s+1\.23\.7(?:#\d+)?\s' })
-  $bases = @($rows | Where-Object { $_ -match '^libheif:x64-windows-static-md\s' })
-  if ($rows.Count -eq 0 -or $bases.Count -gt 1 -or ($bases.Count -eq 0 -and $rows.Count -ne 1)) {
+  # `vcpkg list` prints the core row with its version and each enabled feature as a
+  # separate version-less row, e.g. `libheif[aom]:x64-windows-static-md`. Requiring a
+  # version on feature rows made the resolved feature set unreadable. ~keep
+  $coreRows = @($Packages | Where-Object { $_ -match '^libheif:x64-windows-static-md\s+1\.23\.7(?:#\d+)?\s' })
+  if ($coreRows.Count -ne 1) {
     throw 'Expected exactly one installed libheif 1.23.7 x64-windows-static-md port'
   }
-  Write-Host "Verified $($rows[0])"
+  Write-Host "Verified $($coreRows[0])"
 
   $features = @()
-  foreach ($row in $rows) {
+  foreach ($row in @($Packages | Where-Object { $_ -match '^libheif\[([^\]]*)\]:x64-windows-static-md(?:\s|$)' })) {
     if ($row -match '^libheif\[([^\]]*)\]:') {
-      $features += @($Matches[1] -split ',' | ForEach-Object { $_.Trim() })
+      $features += @($Matches[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
   }
+  $features = @($features | Where-Object { $_ -ne 'core' } | Select-Object -Unique)
   if ($features -contains 'hevc' -or $features -contains 'x265') {
     throw "libheif resolved the GPL-2.0 x265 encoder via the 'hevc' feature (features: $($features -join ','))"
   }
   if ($X265Packages.Count -ne 0) {
     throw "vcpkg installed the GPL-2.0 x265 port alongside libheif: $($X265Packages[0])"
   }
-  foreach ($required in @('aom', 'libde265')) {
-    if (-not ($features -contains $required)) {
-      throw "libheif is missing the $required feature (resolved: $($features -join ','))"
-    }
+  $expected = @('aom', 'libde265')
+  $unexpected = @($features | Where-Object { $expected -notcontains $_ })
+  $missing = @($expected | Where-Object { $features -notcontains $_ })
+  if ($unexpected.Count -ne 0 -or $missing.Count -ne 0) {
+    throw "libheif resolved features '$($features -join ',')'; expected exactly 'aom,libde265'"
   }
   Write-Host "Verified decode-only libheif features: $($features -join ',')"
 }

@@ -13,6 +13,11 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pattern="$1"
+gate="$SCRIPT_DIR/verify_no_gpl_codecs.py"
+if [ ! -f "$gate" ]; then
+  echo "::error::missing $gate beside $0; both must be staged from the same workflow revision" >&2
+  exit 1
+fi
 shopt -s nullglob
 # The argument is a glob by design, so it must stay unquoted here. ~keep
 # shellcheck disable=SC2206

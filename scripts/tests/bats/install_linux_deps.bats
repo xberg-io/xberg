@@ -81,7 +81,10 @@ PC
 	grep -Fq -- '-DWITH_AOM_ENCODER=OFF' "$INSTALL_SCRIPT"
 	awk '/^packages=\(/{capture=1} /^echo "Installing dependencies/{capture=0} capture' \
 		"$INSTALL_SCRIPT" >"$XBERG_WORK/packages.sh"
-	run grep -cx libx265-dev "$XBERG_WORK/packages.sh"
+	printf '  libx265-dev\n' >"$XBERG_WORK/indented-x265.txt"
+	run grep -Ex '[[:space:]]*libx265-dev' "$XBERG_WORK/indented-x265.txt"
+	xberg_assert_status 0
+	run grep -Ex '[[:space:]]*libx265-dev' "$XBERG_WORK/packages.sh"
 	xberg_assert_status 1
 }
 
