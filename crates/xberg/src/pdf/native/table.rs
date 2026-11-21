@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
+mod definition_grid;
 pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
@@ -924,23 +925,27 @@ pub(crate) fn extract_tables_heuristic(
 
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
         let paths = page_paths.take(doc, page_idx);
-        let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
+        // A lifted rotation frame gives `HocrWord`s advance/cross coordinates,
+        // not page x/y, so a page-space rule cannot be attributed to its region.
+        // Falling back to zero rules keeps the geometric gate (and its
+        // columnar-prose guard) for such pages.
+        let region_rules: Vec<usize> = if source_frame {
+            horizontal_rules_for_regions(&paths, &regions, page_height)
+        } else {
+            vec![0; regions.len()]
+        };
         let column_rules =
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
-        let page_tables_start = tables.len();
-        for (table, grid, complete_table) in reconstruct_page_region_tables(
+        let (page_tables, definition_tables) = reconstruct_page_region_tables(
             &regions,
             page_height,
             page_number,
             allow_single_column,
-            horizontal_rules,
+            &region_rules,
             &column_rules,
-        ) {
-            tables.push(table);
-            grids.push(grid);
-            completed.push(complete_table);
-        }
+        );
+        let mut page_tables: Vec<(Table, Option<crate::types::TableGrid>, bool)> = page_tables;
 
         // GH#1358: a page with a rotated run whose frame needed lifting (see
         // `table_reconstruct::page_has_lifted_rotation_frame`) produces
@@ -954,9 +959,23 @@ pub(crate) fn extract_tables_heuristic(
         // fabricated one; the table's cell content is unaffected, and
         // downstream page assignment and dedup are bbox-agnostic.
         if lifted_frame {
-            for table in &mut tables[page_tables_start..] {
+            for (table, _, _) in &mut page_tables {
                 table.bounding_box = None;
             }
+        } else {
+            let rows: Vec<(Table, (Option<crate::types::TableGrid>, bool))> = page_tables
+                .into_iter()
+                .map(|(table, grid, complete_table)| (table, (grid, complete_table)))
+                .collect();
+            page_tables = definition_grid::stitch_tagged(rows, definition_tables)
+                .into_iter()
+                .map(|(table, (grid, complete_table))| (table, grid, complete_table))
+                .collect();
+        }
+        for (table, grid, complete_table) in page_tables {
+            tables.push(table);
+            grids.push(grid);
+            completed.push(complete_table);
         }
     }
 
@@ -971,18 +990,26 @@ pub(crate) fn extract_tables_heuristic(
     })
 }
 
+/// Reconstruct a page's candidate regions, returning the tables and, in
+/// parallel, whether each one came from the definition-grid path.
+///
+/// Only definition-grid tables may be stitched together afterwards; the flag
+/// keeps an ordinary or ruled table from being merged with a neighbouring
+/// definition grid that happens to share its width.
 fn reconstruct_page_region_tables(
     regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
     page_height: f32,
     page_number: u32,
     allow_single_column: bool,
-    horizontal_rules: usize,
+    region_rules: &[usize],
     column_rules: &source_columns::PageRules<'_>,
-) -> Vec<(Table, Option<crate::types::TableGrid>, bool)> {
+) -> (Vec<(Table, Option<crate::types::TableGrid>, bool)>, Vec<bool>) {
     let ruling_paths = column_rules.paths();
     let mut tables = Vec::new();
+    let mut definition_tables = Vec::new();
     let mut index = 0;
     while index < regions.len() {
+        let horizontal_rules = region_rules.get(index).copied().unwrap_or(0);
         // A ruled table can have a taller row gap at a section boundary (the
         // blank line under a subtotal) than the page's normal row pitch, which
         // cuts one table into one word region per ruled band. Rejoin those
@@ -999,6 +1026,7 @@ fn reconstruct_page_region_tables(
                 reconstruct_ruled_band_table(&merged, page_height, page_number, allow_single_column, ruling_paths)
         {
             tables.push((table, Some(grid), true));
+            definition_tables.push(false);
             index = end;
             continue;
         }
@@ -1006,18 +1034,36 @@ fn reconstruct_page_region_tables(
         let Some((first, first_tracks, track_tolerance)) =
             reconstruct_label_heavy_financial_region(&regions[index], page_height, page_number)
         else {
-            tables.extend(
-                reconstruct_region_tables(
-                    &regions[index],
+            let reconstructed = reconstruct_region_tables(
+                &regions[index],
+                page_height,
+                page_number,
+                allow_single_column,
+                horizontal_rules,
+                column_rules,
+            );
+            if reconstructed.is_empty() {
+                let frame = definition_grid::GridFrame {
                     page_height,
                     page_number,
                     allow_single_column,
-                    horizontal_rules,
-                    column_rules,
-                )
-                .into_iter()
-                .map(|table| (table, None, false)),
-            );
+                    // On a lifted rotation frame the words are not in page space,
+                    // so page-space rules cannot be attributed to this region;
+                    // the ordinary path already gives such a region no rules.
+                    paths: if column_rules.attributes_source_rules() {
+                        ruling_paths
+                    } else {
+                        &[]
+                    },
+                };
+                if let Some(grids) = definition_grid::segment_region(&regions[index], frame) {
+                    definition_tables.extend(std::iter::repeat_n(true, grids.len()));
+                    tables.extend(grids.into_iter().map(|table| (table, None, false)));
+                }
+            } else {
+                definition_tables.extend(std::iter::repeat_n(false, reconstructed.len()));
+                tables.extend(reconstructed.into_iter().map(|table| (table, None, false)));
+            }
             index += 1;
             continue;
         };
@@ -1049,26 +1095,25 @@ fn reconstruct_page_region_tables(
         }
 
         if chain.len() < 2 {
-            tables.extend(
-                reconstruct_region_tables(
-                    &regions[index],
-                    page_height,
-                    page_number,
-                    allow_single_column,
-                    horizontal_rules,
-                    column_rules,
-                )
-                .into_iter()
-                .map(|table| (table, None, false)),
+            let reconstructed = reconstruct_region_tables(
+                &regions[index],
+                page_height,
+                page_number,
+                allow_single_column,
+                horizontal_rules,
+                column_rules,
             );
+            definition_tables.extend(std::iter::repeat_n(false, reconstructed.len()));
+            tables.extend(reconstructed.into_iter().map(|table| (table, None, false)));
             index += 1;
             continue;
         }
 
         tables.push((stitch_label_heavy_financial_sections(chain, page_number), None, false));
+        definition_tables.push(false);
         index = chain_end;
     }
-    tables
+    (tables, definition_tables)
 }
 
 /// Largest vertical gap, in median row heights, at which two word regions can
@@ -2279,6 +2324,154 @@ fn median_word_height(region: &[crate::pdf::table_reconstruct::HocrWord]) -> u32
     heights.get(heights.len() / 2).copied().unwrap_or(1).max(1)
 }
 
+/// Planted rules that frame a candidate's top and bottom edges.
+///
+/// In PDF user space the region's words carry top-down `top`, the page's path
+/// bboxes are bottom-up, so the rule's centre is inverted before comparison.
+/// Counting only rules *between* the words misses a table whose producer drew
+/// nothing but its top and bottom border (xberg-io/xberg#3352), so the word
+/// band is extended by one row pitch on each side. A rule within reach of two
+/// regions is credited only to the nearer one, so a neighbouring table's
+/// framing rule never supplies this region's evidence. ~keep
+const FRAMING_RULE_REACH_ROWS: f32 = 1.0;
+
+/// The vertical band a rule must fall in to be credited to a region, plus the
+/// region's own horizontal extent. `top` and `bottom` are image-space (top-down)
+/// word extents; `reach` is one row pitch.
+#[derive(Clone, Copy)]
+struct RuleBand {
+    x0: f32,
+    x1: f32,
+    top: f32,
+    bottom: f32,
+    reach: f32,
+}
+
+impl RuleBand {
+    fn for_region(region: &[crate::pdf::table_reconstruct::HocrWord]) -> Option<Self> {
+        let x0 = region.iter().map(|word| word.left).min()? as f32;
+        let x1 = region
+            .iter()
+            .map(|word| word.left.saturating_add(word.width))
+            .max()
+            .unwrap_or(x0 as u32) as f32;
+        let top = region.iter().map(|word| word.top).min().unwrap_or(0) as f32;
+        let bottom = region
+            .iter()
+            .map(|word| word.top.saturating_add(word.height))
+            .max()
+            .unwrap_or(0) as f32;
+        Some(Self {
+            x0,
+            x1,
+            top,
+            bottom,
+            reach: region_row_pitch(region) * FRAMING_RULE_REACH_ROWS,
+        })
+    }
+
+    /// Distance from an image-space y to this band, when it is close enough to
+    /// frame the band's top or bottom edge.
+    fn distance(&self, image_y: f32) -> Option<f32> {
+        let distance = if image_y < self.top {
+            self.top - image_y
+        } else if image_y > self.bottom {
+            image_y - self.bottom
+        } else {
+            0.0
+        };
+        (distance <= self.reach).then_some(distance)
+    }
+}
+
+/// Median vertical pitch between a region's word rows, falling back to the
+/// median word height when the region has fewer than two rows. Framing rules
+/// sit within one pitch of the text they frame.
+fn region_row_pitch(region: &[crate::pdf::table_reconstruct::HocrWord]) -> f32 {
+    let mut gaps: Vec<f32> = crate::table_core::detect_rows(region, 0.5)
+        .windows(2)
+        .filter_map(|pair| (pair[1] > pair[0]).then_some((pair[1] - pair[0]) as f32))
+        .collect();
+    gaps.sort_by(|left, right| left.total_cmp(right));
+    gaps.get(gaps.len() / 2)
+        .copied()
+        .unwrap_or_else(|| median_word_height(region) as f32)
+        .max(1.0)
+}
+
+/// Horizontal rules spanning each candidate region's own bbox, one count per
+/// region. A rule inside a region's word band belongs to that region (a wide
+/// table split into side-by-side regions shares its own row rules); a rule out
+/// in the gutter between stacked regions is credited only to the nearest one, so
+/// two candidates cannot borrow each other's framing rules.
+fn horizontal_rules_for_regions(
+    paths: &[PathContent],
+    regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
+    page_height: f32,
+) -> Vec<usize> {
+    let bands: Vec<Option<RuleBand>> = regions.iter().map(|region| RuleBand::for_region(region)).collect();
+    let mut counts = vec![0usize; regions.len()];
+    for path in paths {
+        let mut best: Option<f32> = None;
+        let mut owners: Vec<usize> = Vec::new();
+        for (index, band) in bands.iter().enumerate() {
+            let Some(band) = band else {
+                continue;
+            };
+            let Some(rule_y) = crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1) else {
+                continue;
+            };
+            let Some(distance) = band.distance(page_height - rule_y) else {
+                continue;
+            };
+            match best {
+                None => {
+                    best = Some(distance);
+                    owners.clear();
+                    owners.push(index);
+                }
+                Some(best_distance) if distance < best_distance => {
+                    best = Some(distance);
+                    owners.clear();
+                    owners.push(index);
+                }
+                Some(best_distance) if distance == best_distance => owners.push(index),
+                Some(_) => {}
+            }
+        }
+        // A rule inside a region's word band belongs to it; a wide table split
+        // into side-by-side regions shares its own row rules. A rule out in the
+        // gutter is credited only when exactly one region is nearest, so two
+        // stacked candidates cannot both claim a single framing rule.
+        if best == Some(0.0) {
+            for index in owners {
+                counts[index] += 1;
+            }
+        } else if let [index] = owners.as_slice() {
+            counts[*index] += 1;
+        }
+    }
+    counts
+}
+
+/// Horizontal rules that span this candidate's own bbox, in PDF user space.
+fn horizontal_rules_for_region(
+    paths: &[PathContent],
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+) -> usize {
+    let Some(band) = RuleBand::for_region(region) else {
+        return 0;
+    };
+    paths
+        .iter()
+        .filter(|path| {
+            crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
+                .is_some_and(|rule_y| band.distance(page_height - rule_y).is_some())
+        })
+        .count()
+}
+
 fn partition_region_at_seam(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     seam: u64,
@@ -2770,7 +2963,8 @@ fn reconstruct_region_table_with_column_gap(
     horizontal_rules: usize,
 ) -> std::result::Result<Table, HeuristicTableRejection> {
     use crate::pdf::table_reconstruct::{
-        is_well_formed_borderless_table, looks_like_code_listing, post_process_table_with_columns, table_to_markdown,
+        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
+        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
     };
 
     // Take the column positions from the same call that built the grid. `reconstruct_table`
@@ -2801,8 +2995,19 @@ fn reconstruct_region_table_with_column_gap(
     // without telling `column_positions`, leaving a stale boundary for
     // `is_well_formed_borderless_table` below to test against a column that no longer
     // exists (#863).
-    let mut cleaned = post_process_table_with_columns(grid, true, allow_single_column, &mut column_positions)
-        .ok_or(HeuristicTableRejection::PostProcessing)?;
+    // A borderless definition grid's value column holds words like `x`, which the
+    // prose tests read as a lower-case sentence continuation, and its short label
+    // column owns almost all the characters. The geometric pair below is the
+    // stronger signal; it relaxes those textual tests and nothing else
+    // (xberg-io/xberg#3351).
+    let definition_evidence = definition_grid::has_definition_shape(&grid)
+        && definition_grid::tracks_align_across_rows(region, &column_positions);
+    let mut cleaned = if definition_evidence {
+        post_process_table_with_definition_grid(grid, true, allow_single_column, &mut column_positions)
+    } else {
+        post_process_table_with_columns(grid, true, allow_single_column, &mut column_positions)
+    }
+    .ok_or(HeuristicTableRejection::PostProcessing)?;
     repair_heuristic_header_delimiters(&mut cleaned);
     if cleaned.len() <= 1 {
         return Err(HeuristicTableRejection::TooFewRows);
@@ -2821,7 +3026,12 @@ fn reconstruct_region_table_with_column_gap(
     // whitespace (xberg-io/xberg#1399): continuous prose bucketed into a wide
     // grid by vertical-only clustering has words running across those
     // boundaries on most rows, which text statistics alone cannot see.
-    if !is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules) {
+    let well_formed = if definition_evidence {
+        is_well_formed_definition_grid(&cleaned, region, &column_positions, horizontal_rules)
+    } else {
+        is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules)
+    };
+    if !well_formed {
         return Err(HeuristicTableRejection::NotWellFormed);
     }
 
@@ -2839,6 +3049,58 @@ fn reconstruct_region_table_with_column_gap(
         bounding_box,
         ..Default::default()
     })
+}
+
+/// Reconstruct one definition grid, requiring its geometric evidence to survive
+/// cleanup. Used by [`definition_grid::segment_region`], which has already
+/// isolated the grid's words from a wider band. Returns the table, the column
+/// positions from the same reconstruction, and whether a two-line header was
+/// collapsed, so the caller can re-test alignment without discarding a grid
+/// whose header spans two printed lines.
+fn reconstruct_definition_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+    column_threshold: u32,
+) -> Option<(Table, Vec<u32>, bool)> {
+    use crate::pdf::table_reconstruct::{
+        is_well_formed_definition_grid, looks_like_code_listing, post_process_table_with_definition_grid,
+        table_to_markdown,
+    };
+
+    let (mut grid, mut column_positions) =
+        crate::table_core::reconstruct_table_with_columns(region, column_threshold, 0.5);
+    repair_split_numeric_track(&mut grid, region, &mut column_positions);
+    if grid.is_empty() || grid[0].is_empty() {
+        return None;
+    }
+    let mut cleaned = post_process_table_with_definition_grid(grid, true, allow_single_column, &mut column_positions)?;
+    let wrapped_header = definition_grid::collapse_wrapped_header(&mut cleaned);
+    repair_heuristic_header_delimiters(&mut cleaned);
+    if cleaned.len() <= 1
+        || looks_like_code_listing(&cleaned)
+        || is_axis_tick_grid(&cleaned)
+        || !is_well_formed_definition_grid(&cleaned, region, &column_positions, horizontal_rules)
+    {
+        return None;
+    }
+    let markdown = table_to_markdown(&cleaned);
+    if markdown.trim().is_empty() {
+        return None;
+    }
+    Some((
+        Table {
+            cells: cleaned,
+            markdown,
+            page_number,
+            bounding_box: region_bounding_box(region, page_height),
+            ..Default::default()
+        },
+        column_positions,
+        wrapped_header,
+    ))
 }
 
 fn region_bounding_box(region: &[crate::pdf::table_reconstruct::HocrWord], page_height: f32) -> Option<BoundingBox> {
@@ -3467,6 +3729,7 @@ mod header_metadata_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xberg_native_pdf::layout::Color;
 
     #[test]
     fn recovered_year_token_requires_glyphs_inside_the_column() {
@@ -4439,12 +4702,12 @@ mod tests {
             "a large normalized vertical gap must stop same-track tables from chaining"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "independent aligned tables must remain distinct");
@@ -4518,12 +4781,12 @@ mod tests {
     #[test]
     fn rejoins_ruled_bands_into_one_table_with_header_and_first_column_span() {
         let (regions, rules) = synthetic_ruled_bands();
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &regions,
             1000.0,
             1,
             false,
-            rules.len(),
+            &vec![rules.len(); regions.len()],
             &source_columns::PageRules::new(&rules, false),
         );
 
@@ -4704,12 +4967,12 @@ mod tests {
         let (regions, mut rules) = synthetic_ruled_bands();
         // A full-width rule inside the seam closes the upper table and opens the lower one. ~keep
         rules.push(synthetic_band_rule(35.0, 560.0, 367.0, 1000.0));
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &regions,
             1000.0,
             1,
             false,
-            rules.len(),
+            &vec![rules.len(); regions.len()],
             &source_columns::PageRules::new(&rules, false),
         );
 
@@ -4741,12 +5004,12 @@ mod tests {
             "a nearby table without a descriptor-only section label must not chain"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "nearby independent tables must remain distinct");
@@ -4770,12 +5033,12 @@ mod tests {
             "a nearby Security/Value header must not be treated as a continuation label"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "ordinary table headers must remain distinct");
@@ -6624,6 +6887,162 @@ mod tests {
             "rules drawn for another table on the page are not evidence about this band; \
              got {:?}",
             gh1760_table_texts(&tables)
+        );
+    }
+
+    #[test]
+    fn boxed_prose_reaches_the_ruled_branch_and_is_still_refused() {
+        // The negative fixture must actually exercise ruled admission: at least
+        // two full-width rules whose centres lie inside the prose band. Without
+        // that, "no table" could pass because the prose never reached the branch.
+        use std::io::Read;
+
+        let bytes = include_bytes!("../../../tests/fixtures/pdf_ruled_non_tables_3352/boxed-prose-and-axis.pdf.gz");
+        let mut pdf = Vec::new();
+        flate2::read::GzDecoder::new(&bytes[..]).read_to_end(&mut pdf).unwrap();
+        let mut doc = NativeDocument::open_bytes(&pdf).unwrap();
+        let (segments, _) = crate::pdf::native::hierarchy::extract_all_segments_for_tables(
+            &mut doc,
+            crate::pdf::native::hierarchy::ArtifactRetention::default(),
+        )
+        .unwrap();
+        let page_height = segments[0]
+            .iter()
+            .map(|s| s.y + s.height)
+            .fold(0.0_f32, f32::max)
+            .max(792.0);
+        let words = crate::pdf::table_reconstruct::project_segment_words(&segments[0], page_height, None);
+        let regions = cluster_words_into_vertical_regions(&words);
+        let paths = doc.doc.extract_paths(0).unwrap();
+        let counts = horizontal_rules_for_regions(&paths, &regions, page_height);
+        let prose = regions
+            .iter()
+            .position(|region| region.iter().any(|word| word.text == "quick"))
+            .expect("the fixture's boxed prose must form a candidate region");
+        assert!(
+            counts[prose] >= crate::pdf::table_reconstruct::MIN_HORIZONTAL_RULES_FOR_ADMISSION,
+            "the boxed prose candidate must reach the ruled branch, got {} rules",
+            counts[prose]
+        );
+
+        let mut page_paths = TablePagePaths::default();
+        let extraction = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            crate::pdf::native::hierarchy::ArtifactRetention::default(),
+            &mut page_paths,
+        )
+        .unwrap();
+        assert!(
+            extraction
+                .tables
+                .iter()
+                .all(|table| !table.cells.iter().flatten().any(|cell| cell.contains("quick"))),
+            "boxed prose with counted rules is still not a table; got {:?}",
+            extraction
+                .tables
+                .iter()
+                .map(|table| table.cells.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    const FRAMED_PAGE_HEIGHT: f32 = 792.0;
+
+    fn framed_word(text: &str, left: u32, top: u32, width: u32) -> crate::pdf::table_reconstruct::HocrWord {
+        crate::pdf::table_reconstruct::HocrWord {
+            text: text.to_string(),
+            left,
+            top,
+            width,
+            height: 9,
+            confidence: 95.0,
+        }
+    }
+
+    fn framed_painted_rule(y: f32, left: f32, right: f32) -> PathContent {
+        PathContent::from_operations(vec![PathOperation::Rectangle(left, y, right - left, 1.0)])
+            .with_fill(Color::black())
+            .with_stroke_width(0.0)
+    }
+
+    /// A three-column grid of four rows, laid out at a 12-unit pitch, with no
+    /// drawn rule between its words.
+    fn framed_numeric_grid(top: u32) -> Vec<crate::pdf::table_reconstruct::HocrWord> {
+        let mut words = vec![
+            framed_word("Year", 40, top, 24),
+            framed_word("North", 140, top, 28),
+            framed_word("South", 240, top, 28),
+        ];
+        let rows = [
+            ("2021", "1,240", "8,415"),
+            ("2022", "2,310", "9,702"),
+            ("2023", "3,150", "10,344"),
+            ("2024", "4,020", "11,180"),
+        ];
+        for (index, row) in rows.into_iter().enumerate() {
+            let y = top + 12 * (index as u32 + 1);
+            for (column, cell) in [row.0, row.1, row.2].into_iter().enumerate() {
+                words.push(framed_word(cell, 40 + 100 * column as u32, y, 28));
+            }
+        }
+        words
+    }
+
+    #[test]
+    fn rules_framing_a_tables_top_and_bottom_edges_count_for_it() {
+        // The producer drew only the top and bottom border: no rule lies between
+        // the words, so a band made from word extents alone counts zero and the
+        // grid falls to the unruled columnar-prose branch (xberg-io/#3352).
+        let region = framed_numeric_grid(200);
+        // `top` is image-space; the path bboxes are bottom-up PDF user space.
+        let paths = vec![
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 196.0, 36.0, 300.0),
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 261.0, 36.0, 300.0),
+        ];
+
+        assert_eq!(
+            horizontal_rules_for_regions(&paths, std::slice::from_ref(&region), FRAMED_PAGE_HEIGHT),
+            vec![2],
+            "the rules framing the first and last row are the region's own"
+        );
+        assert_eq!(
+            horizontal_rules_for_region(&paths, &region, FRAMED_PAGE_HEIGHT),
+            2,
+            "a single group sees the same framing rules"
+        );
+
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            2,
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert_eq!(
+            tables.len(),
+            1,
+            "a grid framed by two rules is a table; got {:?}",
+            gh1760_table_texts(&tables)
+        );
+    }
+
+    #[test]
+    fn a_neighbouring_regions_framing_rule_is_not_this_regions() {
+        // Two stacked candidates. The single rule sits in the gutter, three
+        // units above the lower region's first row and ten below the upper
+        // region's last row: it frames the lower table, and the upper must not
+        // borrow it just because its own pitch-extended band reaches it.
+        let upper = framed_numeric_grid(200);
+        let lower = framed_numeric_grid(270);
+        let paths = vec![framed_painted_rule(FRAMED_PAGE_HEIGHT - 267.0, 36.0, 300.0)];
+
+        assert_eq!(
+            horizontal_rules_for_regions(&paths, &[upper, lower], FRAMED_PAGE_HEIGHT),
+            vec![0, 1],
+            "a rule is credited only to the nearer region"
         );
     }
 

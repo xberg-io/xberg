@@ -66,8 +66,16 @@ impl<'a> PageRules<'a> {
         }
     }
 
+    /// The page's vector paths, already held for column-rule detection. Rule
+    /// attribution reuses them rather than threading a second copy of the slice.
     pub(super) fn paths(&self) -> &'a [PathContent] {
         self.paths
+    }
+
+    /// Whether this page's words are in page space, so page-space rules can be
+    /// attributed to them. False on a lifted rotation frame.
+    pub(super) fn attributes_source_rules(&self) -> bool {
+        self.eligible
     }
 
     pub(super) fn with_source_words(

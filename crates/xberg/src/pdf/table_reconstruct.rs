@@ -425,7 +425,7 @@ pub(crate) fn post_process_table(
     allow_single_column: bool,
 ) -> Option<Vec<Vec<String>>> {
     let min_columns = min_columns_for(layout_guided, allow_single_column);
-    post_process_table_inner(table, min_columns, layout_guided, None)
+    post_process_table_inner(table, min_columns, layout_guided, None, false)
 }
 
 /// Like [`post_process_table`], but also keeps `column_positions` — the column
@@ -448,7 +448,26 @@ pub(crate) fn post_process_table_with_columns(
     column_positions: &mut Vec<u32>,
 ) -> Option<Vec<Vec<String>>> {
     let min_columns = min_columns_for(layout_guided, allow_single_column);
-    post_process_table_inner(table, min_columns, layout_guided, Some(column_positions))
+    post_process_table_inner(table, min_columns, layout_guided, Some(column_positions), false)
+}
+
+/// Like [`post_process_table_with_columns`], but told that the caller has
+/// already established a borderless two-column definition grid from the
+/// region's geometry (see [`super::native::table`]). A definition grid's right
+/// column is a value per row — `x`, `XX`, `=`, `0.3848` — and a lowercase
+/// value like `x` reads to the column-text-flow test as a sentence continuing
+/// from the label, which rejects the whole grid (xberg-io/xberg#3351). The
+/// caller's geometric evidence (stable column tracks, aligned row bands, short
+/// labels) is stronger than that textual coincidence, so only this one prose
+/// signal is relaxed; every other guard still applies.
+pub(crate) fn post_process_table_with_definition_grid(
+    table: Vec<Vec<String>>,
+    layout_guided: bool,
+    allow_single_column: bool,
+    column_positions: &mut Vec<u32>,
+) -> Option<Vec<Vec<String>>> {
+    let min_columns = min_columns_for(layout_guided, allow_single_column);
+    post_process_table_inner(table, min_columns, layout_guided, Some(column_positions), true)
 }
 
 fn min_columns_for(layout_guided: bool, allow_single_column: bool) -> usize {
@@ -526,6 +545,7 @@ fn post_process_table_inner(
     min_columns: usize,
     layout_guided: bool,
     mut column_positions: Option<&mut Vec<u32>>,
+    definition_grid: bool,
 ) -> Option<Vec<Vec<String>>> {
     table.retain(|row| row.iter().any(|cell| !cell.trim().is_empty()));
     if table.is_empty() {
@@ -1044,7 +1064,7 @@ fn post_process_table_inner(
                 flow_rows += 1;
             }
         }
-        if eligible_rows >= 3 && flow_rows * 10 > eligible_rows * 6 {
+        if !definition_grid && eligible_rows >= 3 && flow_rows * 10 > eligible_rows * 6 {
             tracing::debug!(
                 target: "xberg::table_reconstruct",
                 reason = "column_text_flow",
@@ -1082,7 +1102,12 @@ fn post_process_table_inner(
             let max_col_share = dominant_char_count as f64 / total_chars_asym as f64;
             let dominant_threshold = if layout_guided { 0.92 } else { 0.85 };
             let label_value_table = dominant_column == 0 && is_label_value_table(&processed);
-            if max_col_share > dominant_threshold && !label_value_table {
+            // A definition grid's order column is short labels against single
+            // characters (`Credit Tier | x`, `Bad Debt Factor | =`), so it owns
+            // almost all the characters by construction; the caller established
+            // the label/value shape from geometry as well as text
+            // (xberg-io/xberg#3351).
+            if max_col_share > dominant_threshold && !label_value_table && !definition_grid {
                 tracing::debug!(
                     target: "xberg::table_reconstruct",
                     reason = "content_asymmetry_dominant_column",
@@ -1999,6 +2024,11 @@ pub(crate) fn is_well_formed_table(grid: &[Vec<String>]) -> bool {
 /// the ruling-line check below is the load-bearing one. ~keep
 const MAX_STRADDLED_BOUNDARY_RATIO: f64 = 0.60;
 
+/// Fewest horizontal rules spanning the candidate's own bbox that count as a
+/// producer's table evidence. One rule is what a paragraph above a divider, a
+/// boxed note, or a chart axis carries; a table draws a row rule per row.
+pub(crate) const MIN_HORIZONTAL_RULES_FOR_ADMISSION: usize = 2;
+
 /// Row-grouping tolerance as a multiple of median word height, matching the
 /// value `reconstruct_table` itself uses so both see the same rows.
 const STRADDLE_ROW_THRESHOLD_RATIO: f64 = 0.5;
@@ -2065,11 +2095,16 @@ pub(crate) fn straddled_boundary_ratio(region: &[HocrWord], column_positions: &[
 /// Implements the two-signal admission test from xberg-io/xberg#1399, plus the
 /// short-region evidence requirement from xberg-io/xberg#1760:
 ///
-/// 1. **Drawn ruling lines (positive).** A page whose region carries horizontal
-///    rules had a producer that drew a table, so the candidate is admitted. The
-///    reporter's survey found no real table lacking rules, and this is the
-///    strong signal — see [`MAX_STRADDLED_BOUNDARY_RATIO`] for why the
-///    geometric signal alone cannot carry the decision.
+/// 1. **Drawn ruling lines (positive).** A region whose own bbox is spanned by
+///    at least [`MIN_HORIZONTAL_RULES_FOR_ADMISSION`] horizontal rules had a
+///    producer that drew a table, so the candidate is admitted. The reporter's
+///    survey found no real table lacking rules, and this is the strong signal —
+///    see [`MAX_STRADDLED_BOUNDARY_RATIO`] for why the geometric signal alone
+///    cannot carry the decision. The drawn rules also stand in for the
+///    uniform-column-length prose test: a rate table's value columns are all the
+///    same width, which is exactly the shape that test mistakes for wrapped
+///    columnar prose (xberg-io/xberg#3352). A single divider is not evidence: it
+///    is the shape a paragraph above a rule has too.
 /// 2. **Are the column boundaries actually whitespace (fallback)?** With no
 ///    rules to go on, test the definition of a column. Continuous prose that
 ///    merely aligns into column-like x-buckets has words running across those
@@ -2079,25 +2114,30 @@ pub(crate) fn straddled_boundary_ratio(region: &[HocrWord], column_positions: &[
 ///    [`post_process_table_inner`] need four or more rows to fire, so a shorter
 ///    candidate has passed them only because they never ran. See
 ///    [`short_grid_has_positive_table_evidence`], which is tested before signal 1
-///    because signal 1 is page-scoped.
+///    because signal 1 is region-scoped, not row-scoped.
 ///
-/// This only ever narrows acceptance relative to [`is_well_formed_table`].
+/// This narrows acceptance relative to [`is_well_formed_table`]: a rule-less
+/// candidate additionally faces the straddled-boundary test, and the ruled
+/// branch replaces the column-length guard with rule evidence.
 pub(crate) fn is_well_formed_borderless_table(
     grid: &[Vec<String>],
     region: &[HocrWord],
     column_positions: &[u32],
     horizontal_rules: usize,
 ) -> bool {
-    if !is_well_formed_table(grid) {
+    let ruled = horizontal_rules >= MIN_HORIZONTAL_RULES_FOR_ADMISSION;
+    let well_formed = if ruled {
+        is_well_formed_table_core(grid, true)
+    } else {
+        is_well_formed_table(grid)
+    };
+    if !well_formed {
         return false;
     }
     if !short_grid_has_positive_table_evidence(grid) {
         return false;
     }
-    if horizontal_rules > 0 {
-        return true;
-    }
-    straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+    ruled || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
 }
 
 /// Rows a candidate must have before [`post_process_table_inner`]'s prose tests
@@ -2157,6 +2197,37 @@ fn has_label_like_header_row(grid: &[Vec<String>]) -> bool {
 /// guard (empty-cell fraction, shredded-row, alpha-ratio, unique-word, and
 /// header-duplication checks) still applies.
 pub(crate) fn is_well_formed_table_core(grid: &[Vec<String>], skip_columnar_prose_guard: bool) -> bool {
+    is_well_formed_table_inner(grid, skip_columnar_prose_guard, false)
+}
+
+/// Admission for a borderless definition grid: short labels against a value or
+/// word, every row, over repeated column tracks.
+///
+/// The caller established the shape from both text and geometry
+/// (`native::table::definition_grid`), so the two prose statistics calibrated
+/// for wide multi-column tables — an alphabetic sentence ratio and a
+/// low-vocabulary count — are skipped here. A definition grid's rows are short
+/// labels and values by construction, so they read as prose by the first, and
+/// a categorical column (`N`/`Y`, a rate code repeated on many rows) is exactly
+/// what the second calls repetitive (xberg-io/xberg#3351, xberg-io/xberg#3352).
+/// Every structural guard still applies.
+pub(crate) fn is_well_formed_definition_grid(
+    grid: &[Vec<String>],
+    region: &[HocrWord],
+    column_positions: &[u32],
+    horizontal_rules: usize,
+) -> bool {
+    if !is_well_formed_table_inner(grid, true, true) {
+        return false;
+    }
+    if !short_grid_has_positive_table_evidence(grid) {
+        return false;
+    }
+    horizontal_rules >= MIN_HORIZONTAL_RULES_FOR_ADMISSION
+        || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+}
+
+fn is_well_formed_table_inner(grid: &[Vec<String>], skip_columnar_prose_guard: bool, definition_grid: bool) -> bool {
     if grid.len() < 2 {
         return false;
     }
@@ -2236,7 +2307,7 @@ pub(crate) fn is_well_formed_table_core(grid: &[Vec<String>], skip_columnar_pros
             }
         }
 
-        if eligible_rows >= 3 && prose_like_rows * 2 > eligible_rows {
+        if !definition_grid && eligible_rows >= 3 && prose_like_rows * 2 > eligible_rows {
             return false;
         }
     }
@@ -2290,7 +2361,7 @@ pub(crate) fn is_well_formed_table_core(grid: &[Vec<String>], skip_columnar_pros
             }
         }
         let row_count = data_rows.len();
-        if !dense_numeric_grid && row_count >= 3 && unique_words.len() < row_count * 2 {
+        if !definition_grid && !dense_numeric_grid && row_count >= 3 && unique_words.len() < row_count * 2 {
             return false;
         }
     }
@@ -6610,5 +6681,44 @@ mod tests {
         assert_eq!(processed[3], vec!["Transfers In", "$3,000", "$3,200", "$3,400"]);
         assert_eq!(processed[4], vec!["Interest", "$800", "$900", "$950"]);
         assert_eq!(processed[5], vec!["Refunds", "$1,200", "$1,300", "$1,400"]);
+    }
+
+    /// Three uniform short-word columns are the columnar-prose signature that
+    /// [`is_well_formed_table_core`] rejects. One page-wide divider is not table
+    /// evidence, so the ruled branch must not lift the grid out of that guard;
+    /// two row rules are.
+    #[test]
+    fn a_single_divider_does_not_lift_uniform_columns_out_of_the_prose_guard() {
+        let grid: Vec<Vec<String>> = vec![
+            vec!["one".into(), "two".into(), "three".into()],
+            vec!["four".into(), "five".into(), "seven".into()],
+            vec!["ace".into(), "bee".into(), "seas".into()],
+            vec!["red".into(), "sky".into(), "sunny".into()],
+            vec!["tin".into(), "pot".into(), "jugs".into()],
+        ];
+        let region: Vec<HocrWord> = grid
+            .iter()
+            .enumerate()
+            .flat_map(|(row, cells)| {
+                cells.iter().enumerate().map(move |(column, text)| HocrWord {
+                    text: text.clone(),
+                    left: 60 + column as u32 * 140,
+                    top: 200 + row as u32 * 12,
+                    width: text.len() as u32 * 6,
+                    height: 9,
+                    confidence: 95.0,
+                })
+            })
+            .collect();
+        let columns = vec![60, 200, 340];
+
+        assert!(
+            !is_well_formed_borderless_table(&grid, &region, &columns, 1),
+            "a single divider must leave the columnar-prose guard in force"
+        );
+        assert!(
+            is_well_formed_borderless_table(&grid, &region, &columns, 2),
+            "two spanning row rules are the table evidence that replaces that guard"
+        );
     }
 }
