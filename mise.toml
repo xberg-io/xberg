@@ -141,12 +141,27 @@ run = [
   "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_docker_workflow_contracts.py",
   "python3 -m unittest scripts/ci/docker/test_verify_image_notices.py",
   "python3 -m unittest scripts/ci/test_package_notices.py",
+  "python3 -m unittest scripts/ci/test_generate_notices.py",
   "python3 scripts/ci/test_verify_no_gpl_cli_archive.py",
+  "python3 scripts/ci/test_verify_windows_heif_archive.py",
+  "python3 scripts/ci/test_stage_windows_heif_dlls.py",
   "python3 scripts/ci/test_android_jni_guard.py",
   "python3 scripts/ci/test_macos_deployment_target.py",
   "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_php_release_contracts.py",
   "python3 scripts/ci/test_ios_compiler_runtime.py",
 ]
+
+[tasks."notices:generate"]
+description = "Regenerate THIRD_PARTY_LICENSES.md from the shipped dependency graphs and pinned sources"
+run = "python3 scripts/ci/generate-notices.py"
+
+[tasks."notices:check"]
+description = "Fail when THIRD_PARTY_LICENSES.md no longer matches the shipped graphs and pinned sources"
+run = "python3 scripts/ci/generate-notices.py --check"
+
+[tasks."notices:vendor"]
+description = "Vendor the license texts for the pinned third-party sources (needs network after a bump)"
+run = "python3 scripts/ci/vendor-notice-sources.py"
 
 [tasks."release:test:php-macos-gate"]
 description = "Test the macOS PHP archive gate against compiled Mach-O files"

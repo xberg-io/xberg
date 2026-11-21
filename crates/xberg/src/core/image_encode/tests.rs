@@ -314,7 +314,7 @@ fn png_to_heif_without_hevc_encoder_reports_encoder_unavailable() {
     let mut image = make_image(original.clone(), "png");
     let result = re_encode_default(&mut image, ImageOutputFormat::Heif { quality: 80 });
     assert!(
-        matches!(result, Err(EncodeWarning::EncoderUnavailable { ref target_format, .. }) if *target_format == "heif"),
+        matches!(result, Err(EncodeWarning::EncoderUnavailable { target_format, .. }) if target_format == "heif"),
         "a decode-only libheif must report EncoderUnavailable for heif; got {result:?}"
     );
     assert_eq!(image.format.as_ref(), "png");

@@ -21,6 +21,12 @@ on:
       - ".deny.exceptions.toml"
       - ".config/deny.exceptions.toml"
       - "scripts/ci/check-licenses.sh"
+      - "scripts/ci/license-graphs.txt"
+      - "scripts/ci/generate-notices.py"
+      - "scripts/ci/notices_sources.py"
+      - "scripts/ci/vendor-notice-sources.py"
+      - "scripts/ci/notices/**"
+      - "THIRD_PARTY_LICENSES.md"
       - "rust-toolchain.toml"
       - "mise.toml"
       - "mise.lock"
@@ -48,6 +54,12 @@ on:
       - ".deny.exceptions.toml"
       - ".config/deny.exceptions.toml"
       - "scripts/ci/check-licenses.sh"
+      - "scripts/ci/license-graphs.txt"
+      - "scripts/ci/generate-notices.py"
+      - "scripts/ci/notices_sources.py"
+      - "scripts/ci/vendor-notice-sources.py"
+      - "scripts/ci/notices/**"
+      - "THIRD_PARTY_LICENSES.md"
       - "rust-toolchain.toml"
       - "mise.toml"
       - "mise.lock"
@@ -150,6 +162,10 @@ jobs:
           install-args: cargo-deny
       - name: Check every shipped graph against deny.toml
         run: mise run rust:check:licenses
+      # The same graphs the license gate audits feed the notice bundle; a dependency bump that
+      # changes licenses must regenerate it rather than ship the previous release's notices.
+      - name: Check the third-party notice bundle is current
+        run: mise run notices:check
 
   regressions:
     if: >-

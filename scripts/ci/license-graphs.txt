@@ -1,0 +1,24 @@
+# Every dependency graph a released artifact is built from, one row per graph:
+#
+#   label|manifest|features|target
+#
+# `check-licenses.sh` audits each row with cargo-deny and `generate-notices.py` collects the
+# same rows into the third-party notice bundle, so a graph added or changed here changes both
+# the license gate and the notices it certifies. An empty features column means the crate's
+# default features; an empty target column means every platform's target-specific dependencies
+# are resolved, not just the host's.
+xberg-cli (default)|crates/xberg-cli/Cargo.toml||
+# `all` is what the Docker images build; the musl images add `mimalloc` on top of it.
+xberg-cli --features all,mimalloc|crates/xberg-cli/Cargo.toml|all,mimalloc|
+xberg-py (default)|crates/xberg-py/Cargo.toml||
+xberg-node (default)|crates/xberg-node/Cargo.toml||
+xberg-php (default)|crates/xberg-php/Cargo.toml||
+xberg-ffi (default)|crates/xberg-ffi/Cargo.toml||
+xberg-jni (default)|crates/xberg-jni/Cargo.toml||
+xberg-wasm (default)|crates/xberg-wasm/Cargo.toml||
+xberg-swift (default)|packages/swift/rust/Cargo.toml||
+xberg-dart (default)|packages/dart/rust/Cargo.toml||
+xberg_nif (default)|packages/elixir/native/xberg_nif/Cargo.toml||
+xberg-rb (default)|packages/ruby/ext/xberg_rb/native/Cargo.toml||
+# The Windows no-heic release archive: publish.yaml's matrix cargo_features for that leg.
+xberg-cli --features mcp,mcp-http,api (windows no-heic)|crates/xberg-cli/Cargo.toml|mcp,mcp-http,api|x86_64-pc-windows-msvc
