@@ -100,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** Separately titled tables printed as one band are split at each title again, both when a ruled detector joins stacked tables whose rules line up and when three titled tables sit side by side in one borderless band. Each title stays a full-width row and the header band that follows it stays with its own table; a spanning row inside a body and a header band that repeats without a title do not split. (#3348)
 - **pdf:** A ruled table split by a taller row gap under a subtotal is rejoined into one table when adjacent bands repeat their column tracks and one family of long rules spans both, keeping the wrapped header and the first-column row span. (#3349)
 - **pdf:** A two-column page letterhead in the top band is no longer emitted as a table; it stays text, while ruled tables and tables with retained grids remain tables. (#3350)
 - **ocr:** Default preprocessing measures a raster's own paper level instead of comparing it with a fixed near-white value, so a lightly tinted or shaded scan page is still read as a page and takes the 300 DPI resample. A 100 DPI tinted table with 9 px digits keeps 72 of its 72 numbers instead of 65, and its 7 px variant 71 of 72 instead of 49, while a 300 DPI page is not resampled. (#3337)
