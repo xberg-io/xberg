@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "issue": 2334,
+  "posted_before_run": true,
+  "posted_url": "https://github.com/xberg-io/xberg/issues/2334#issuecomment-7067589364",
+  "corpora": {
+    "classification": {
+      "manifest_sha256": "a59a67c614bc451c7de925f2b91b3cd9951fabb15cb5a3451990f2b2b5150d4d",
+      "digest": "19ec5bb7b332ff89be30eed720d446fd138670144e4f8fb0b7ea02d78d68eba2",
+      "entries": 408,
+      "split_counts": {
+        "training": 135,
+        "calibration": 87,
+        "held_out": 186
+      },
+      "license": "US-PD (17 U.S.C. 105)",
+      "license_url": "https://www.federalregister.gov"
+    },
+    "captioning": {
+      "manifest_sha256": "ff07b9971f8f8210e21c76cb5a7d209c97dfd93721fd8fd7ea5c0b4ed8f55cc4",
+      "digest": "1bf64e698dbc64ea7a2c3ecbe1ceb6596bd0e1edfa3525810e45065c2f721ba6",
+      "entries": 30,
+      "split_counts": {
+        "held_out": 30
+      },
+      "license": "CC-BY-4.0 annotations; Flickr images evaluation-only",
+      "license_url": "https://cocodataset.org/#termsofuse"
+    }
+  },
+  "models": [
+    {
+      "workload": "classification",
+      "id": "nli-minilm2-l6-h768",
+      "repository": "xberg-io/classification-models",
+      "revision": "a29f2096c723fd39c45b7c21690ea0318866bd0b",
+      "license": "Apache-2.0",
+      "arms": {
+        "int8": "nli-minilm2-l6-h768/model_qint8_arm64.onnx"
+      }
+    },
+    {
+      "workload": "captioning",
+      "id": "smolvlm-256m-instruct",
+      "repository": "xberg-io/captioning-models",
+      "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+      "license": "Apache-2.0",
+      "arms": {
+        "fp32": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+        "int8": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx"
+      }
+    },
+    {
+      "workload": "captioning",
+      "id": "smolvlm-500m-instruct",
+      "repository": "xberg-io/captioning-models",
+      "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+      "license": "Apache-2.0",
+      "arms": {
+        "fp32": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+        "int8": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx"
+      }
+    }
+  ],
+  "classification": {
+    "candidate_ids": ["nli-minilm2-l6-h768"],
+    "arms": ["int8"],
+    "repeats": 3,
+    "scored_splits": ["calibration", "held_out"],
+    "expected": {
+      "factors": [
+        {
+          "name": "documents",
+          "count": 273
+        },
+        {
+          "name": "models",
+          "count": 1
+        },
+        {
+          "name": "arms",
+          "count": 1
+        },
+        {
+          "name": "repeats",
+          "count": 3
+        }
+      ],
+      "total": 819
+    },
+    "labels": ["final rule", "proposed rule", "public notice"],
+    "unknown_class": "presidential document",
+    "hypothesis_template": "This document is a {label}.",
+    "confidence_threshold": 0.5,
+    "baseline": "Always predict the most frequent held-out gold class. It is not a candidate and cannot authorize anything.",
+    "thresholds": {
+      "macro_f1_noninferiority": 0.5,
+      "macro_f1_target": 0.65,
+      "per_class_recall_min": 0.45,
+      "ece_max": 0.2,
+      "max_abstention_on_known": 0.4,
+      "unknown_rejection_min": 0.7,
+      "ci_level": 0.95,
+      "bootstrap_replicates": 2000
+    }
+  },
+  "captioning": {
+    "candidate_ids": ["smolvlm-256m-instruct", "smolvlm-500m-instruct"],
+    "arms": ["fp32", "int8"],
+    "repeats": 1,
+    "expected_per_candidate": {
+      "factors": [
+        {
+          "name": "images",
+          "count": 30
+        },
+        {
+          "name": "models",
+          "count": 1
+        },
+        {
+          "name": "arms",
+          "count": 2
+        },
+        {
+          "name": "repeats",
+          "count": 1
+        }
+      ],
+      "total": 60
+    },
+    "expected_total": 120,
+    "thresholds": {
+      "number_recall_min": 0.2,
+      "term_recall_min": 0.35,
+      "max_invented_number_image_rate": 0.6,
+      "ci_level": 0.95,
+      "bootstrap_replicates": 2000
+    },
+    "human_rating_required": true
+  },
+  "metric_definitions": {
+    "macro_f1": "Unweighted mean of per-class F1 over the vocabulary classes that have held-out support. One-vs-rest per class: an abstention is a false negative for the gold class and no prediction for any other. The baseline is the majority-class rule.",
+    "per_class_recall": "True positives divided by that class's held-out support; a refusal to answer counts against recall. Per-class precision and the full confusion matrix are reported alongside.",
+    "calibration_ece": "Expected calibration error over ten equal-width top-1 confidence bins, over answered known-class predictions only. Confidence is the NLI entailment softmax for the chosen label, so ECE is descriptive rather than a probability the caller can consume directly.",
+    "abstention": "A completed inference that returns no label at the caller threshold 0.50. Abstention rate is reported over known-class documents, with selective accuracy over the answered ones.",
+    "unknown_class_rejection": "Fraction of held-out documents whose gold set is empty (presidential documents outside the vocabulary) that return no label. A forced label on these documents is reported as an adverse example.",
+    "confidence_interval": "95% source-family cluster bootstrap with 2000 replicates and a fixed deterministic seed. Whole families are resampled, so documents from one issuing agency are never treated as independent evidence. Paired arm differences resample images.",
+    "repeat_stability": "Maximum minus minimum macro-F1 across the three frozen repeats. It measures run-to-run determinism of the pipeline, not model quality.",
+    "caption_reference_number_recall": "Over the ten number-bearing images, the fraction of distinct numbers in the five reference captions that also appear in the generated caption, averaged per image.",
+    "caption_reference_term_recall": "Over all thirty images, the fraction of reference content words (lowercase alphabetic tokens longer than two characters after stopword removal) that appear in the generated caption, averaged per image. It is an omission proxy, not fact precision.",
+    "caption_invented_number_image_rate": "Fraction of images whose caption contains a number absent from every reference caption. Each is an unverified candidate that needs a rater who can see the image.",
+    "caption_paired_arm_difference": "Per-image difference between the fp32 and int8 arms for reference-term and reference-number recall, with a 95% image-cluster bootstrap interval."
+  },
+  "unmeasured": [
+    {
+      "workload": "classification",
+      "clause": "FP32 versus architecture-appropriate quantization",
+      "reason": "The fp32 NLI graph is 328,649,957 bytes, above the adapter's 256 MiB graph cap, so the SDK refuses it by design. Only the host's quantized graph can be measured through the SDK path.",
+      "requires": "An fp32 export under the cap, or an explicit adapter decision to raise the cap, before FP32/quantized parity can be claimed."
+    },
+    {
+      "workload": "classification",
+      "clause": "OCR noise, long-document degradation and non-English inputs",
+      "reason": "The frozen corpus is native digital English-language U.S. Government text. Text is truncated at the model's 512-token window, so long-document behaviour is exercised but OCR-degraded and multilingual behaviour is not.",
+      "requires": "An OCR-degraded and multilingual corpus with the same family-stable splitting."
+    },
+    {
+      "workload": "classification",
+      "clause": "Trained fixed taxonomy head",
+      "reason": "No trained-head candidate is staged; only caller-provided zero-shot labels were measured. The staged head and the NLI path are not interchangeable and no claim is made about a trained taxonomy.",
+      "requires": "A staged MiniLM-plus-head artifact with its own held-out label set."
+    },
+    {
+      "workload": "captioning",
+      "clause": "Visible-fact precision",
+      "reason": "There is no automatic oracle. Five short reference captions cannot establish whether a stated fact is true; a fact absent from all five references may still be correct.",
+      "requires": "Blind human raters who can see each image and score asserted facts."
+    },
+    {
+      "workload": "captioning",
+      "clause": "Invented entities and relations",
+      "reason": "Term absence is not invention, and a hallucinated relation can reuse reference words. Only numbers are checked, and each is reported as an unverified candidate.",
+      "requires": "Blind human raters with entity and relation adjudication."
+    },
+    {
+      "workload": "captioning",
+      "clause": "Illegibility handling",
+      "reason": "COCO has no illegible-region annotations, so a caption that invents text for a blurred region cannot be detected automatically.",
+      "requires": "A document-image corpus with marked illegible regions."
+    },
+    {
+      "workload": "captioning",
+      "clause": "Florence-2-base",
+      "reason": "The captioning adapter refuses the Florence-2 merged decoder because it fails on cached decoder steps in the bundled ONNX Runtime (crates/xberg/src/local_captioning/types.rs). It cannot produce a report, so it is not scored.",
+      "requires": "A decoder export or runtime that supports cached steps for that family."
+    },
+    {
+      "workload": "resources",
+      "clause": "Isolated CPU timing and peak RSS",
+      "reason": "Elapsed inference time is recorded per row, but the host is a shared workstation and no isolated-resource claim is made. Peak RSS is not sampled at all.",
+      "requires": "An exclusive host with RSS sampling and a quiet machine."
+    }
+  ]
+}
