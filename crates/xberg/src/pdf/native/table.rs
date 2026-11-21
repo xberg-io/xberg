@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
+mod definition_grid;
 pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
@@ -918,7 +919,10 @@ pub(crate) fn extract_tables_heuristic(
 
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
         let paths = page_paths.take(doc, page_idx);
-        let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
+        let region_rules: Vec<usize> = regions
+            .iter()
+            .map(|region| horizontal_rules_for_region(&paths, region, page_height))
+            .collect();
         let column_rules =
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
@@ -928,7 +932,7 @@ pub(crate) fn extract_tables_heuristic(
             page_height,
             page_number,
             allow_single_column,
-            horizontal_rules,
+            &region_rules,
             &column_rules,
         ));
 
@@ -947,6 +951,9 @@ pub(crate) fn extract_tables_heuristic(
             for table in &mut tables[page_tables_start..] {
                 table.bounding_box = None;
             }
+        } else {
+            let page_tables: Vec<Table> = tables.drain(page_tables_start..).collect();
+            tables.extend(definition_grid::stitch_stacked(page_tables));
         }
     }
 
@@ -964,23 +971,37 @@ fn reconstruct_page_region_tables(
     page_height: f32,
     page_number: u32,
     allow_single_column: bool,
-    horizontal_rules: usize,
+    region_rules: &[usize],
     column_rules: &source_columns::PageRules<'_>,
 ) -> Vec<Table> {
     let mut tables = Vec::new();
     let mut index = 0;
     while index < regions.len() {
+        let horizontal_rules = region_rules.get(index).copied().unwrap_or(0);
         let Some((first, first_tracks, track_tolerance)) =
             reconstruct_label_heavy_financial_region(&regions[index], page_height, page_number)
         else {
-            tables.extend(reconstruct_region_tables(
+            let reconstructed = reconstruct_region_tables(
                 &regions[index],
                 page_height,
                 page_number,
                 allow_single_column,
                 horizontal_rules,
                 column_rules,
-            ));
+            );
+            if reconstructed.is_empty() {
+                let frame = definition_grid::GridFrame {
+                    page_height,
+                    page_number,
+                    allow_single_column,
+                    horizontal_rules,
+                };
+                if let Some(grids) = definition_grid::segment_region(&regions[index], frame) {
+                    tables.extend(grids);
+                }
+            } else {
+                tables.extend(reconstructed);
+            }
             index += 1;
             continue;
         };
@@ -1722,6 +1743,38 @@ fn median_word_height(region: &[crate::pdf::table_reconstruct::HocrWord]) -> u32
     heights.get(heights.len() / 2).copied().unwrap_or(1).max(1)
 }
 
+/// Horizontal rules this candidate region draws, in PDF user space. The
+/// region's words carry top-down `top`; the page's path bboxes are bottom-up. ~keep
+fn horizontal_rules_for_region(
+    paths: &[PathContent],
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+) -> usize {
+    let Some(x0) = region.iter().map(|word| word.left).min() else {
+        return 0;
+    };
+    let x1 = region
+        .iter()
+        .map(|word| word.left.saturating_add(word.width))
+        .max()
+        .unwrap_or(x0);
+    let top = region.iter().map(|word| word.top).min().unwrap_or(0);
+    let bottom = region
+        .iter()
+        .map(|word| word.top.saturating_add(word.height))
+        .max()
+        .unwrap_or(top);
+    crate::pdf::rules::count_horizontal_rules_in(
+        paths,
+        (
+            x0 as f32,
+            (page_height - bottom as f32).max(0.0),
+            x1 as f32,
+            (page_height - top as f32).min(page_height),
+        ),
+    )
+}
+
 fn partition_region_at_seam(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     seam: u64,
@@ -2213,7 +2266,8 @@ fn reconstruct_region_table_with_column_gap(
     horizontal_rules: usize,
 ) -> std::result::Result<Table, HeuristicTableRejection> {
     use crate::pdf::table_reconstruct::{
-        is_well_formed_borderless_table, looks_like_code_listing, post_process_table_with_columns, table_to_markdown,
+        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
+        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
     };
 
     // Take the column positions from the same call that built the grid. `reconstruct_table`
@@ -2244,8 +2298,19 @@ fn reconstruct_region_table_with_column_gap(
     // without telling `column_positions`, leaving a stale boundary for
     // `is_well_formed_borderless_table` below to test against a column that no longer
     // exists (#863).
-    let mut cleaned = post_process_table_with_columns(grid, true, allow_single_column, &mut column_positions)
-        .ok_or(HeuristicTableRejection::PostProcessing)?;
+    // A borderless definition grid's value column holds words like `x`, which the
+    // prose tests read as a lower-case sentence continuation, and its short label
+    // column owns almost all the characters. The geometric pair below is the
+    // stronger signal; it relaxes those textual tests and nothing else
+    // (xberg-io/xberg#3351).
+    let definition_evidence = definition_grid::has_definition_shape(&grid)
+        && definition_grid::tracks_align_across_rows(region, &column_positions);
+    let mut cleaned = if definition_evidence {
+        post_process_table_with_definition_grid(grid, true, allow_single_column, &mut column_positions)
+    } else {
+        post_process_table_with_columns(grid, true, allow_single_column, &mut column_positions)
+    }
+    .ok_or(HeuristicTableRejection::PostProcessing)?;
     repair_heuristic_header_delimiters(&mut cleaned);
     if cleaned.len() <= 1 {
         return Err(HeuristicTableRejection::TooFewRows);
@@ -2264,7 +2329,12 @@ fn reconstruct_region_table_with_column_gap(
     // whitespace (xberg-io/xberg#1399): continuous prose bucketed into a wide
     // grid by vertical-only clustering has words running across those
     // boundaries on most rows, which text statistics alone cannot see.
-    if !is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules) {
+    let well_formed = if definition_evidence {
+        is_well_formed_definition_grid(&cleaned, region, &column_positions, horizontal_rules)
+    } else {
+        is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules)
+    };
+    if !well_formed {
         return Err(HeuristicTableRejection::NotWellFormed);
     }
 
@@ -2280,6 +2350,51 @@ fn reconstruct_region_table_with_column_gap(
         markdown,
         page_number,
         bounding_box,
+        ..Default::default()
+    })
+}
+
+/// Reconstruct one definition grid, requiring its geometric evidence to survive
+/// cleanup. Used by [`definition_grid::segment_region`], which has already
+/// isolated the grid's words from a wider band.
+fn reconstruct_definition_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+    column_threshold: u32,
+) -> Option<Table> {
+    use crate::pdf::table_reconstruct::{
+        is_well_formed_definition_grid, looks_like_code_listing, post_process_table_with_definition_grid,
+        table_to_markdown,
+    };
+
+    let (mut grid, mut column_positions) =
+        crate::table_core::reconstruct_table_with_columns(region, column_threshold, 0.5);
+    repair_split_numeric_track(&mut grid, region, &mut column_positions);
+    if grid.is_empty() || grid[0].is_empty() {
+        return None;
+    }
+    let mut cleaned = post_process_table_with_definition_grid(grid, true, allow_single_column, &mut column_positions)?;
+    definition_grid::collapse_wrapped_header(&mut cleaned);
+    repair_heuristic_header_delimiters(&mut cleaned);
+    if cleaned.len() <= 1
+        || looks_like_code_listing(&cleaned)
+        || is_axis_tick_grid(&cleaned)
+        || !is_well_formed_definition_grid(&cleaned, region, &column_positions, horizontal_rules)
+    {
+        return None;
+    }
+    let markdown = table_to_markdown(&cleaned);
+    if markdown.trim().is_empty() {
+        return None;
+    }
+    Some(Table {
+        cells: cleaned,
+        markdown,
+        page_number,
+        bounding_box: region_bounding_box(region, page_height),
         ..Default::default()
     })
 }
@@ -3887,7 +4002,7 @@ mod tests {
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "independent aligned tables must remain distinct");
@@ -3920,7 +4035,7 @@ mod tests {
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "nearby independent tables must remain distinct");
@@ -3949,7 +4064,7 @@ mod tests {
             792.0,
             1,
             false,
-            0,
+            &[0, 0],
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "ordinary table headers must remain distinct");
