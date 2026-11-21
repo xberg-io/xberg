@@ -1042,6 +1042,56 @@ def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
     assert '"$total" -ne 10' in release, "the completeness gate must count the new archive"
 
 
+def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [package] = [step for step in block["steps"] if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    assert "${XBERG_LIBHEIF_DLL_DIR:?}" in run, "the archive must stage the codec DLLs from vcpkg"
+    assert 'if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]' in run, "the no-GPL archive must stay codec-free"
+    for notice in ("LGPL-3.0.txt", "GPL-3.0.txt", "libheif-COPYING", "libde265-COPYING", "aom-COPYING"):
+        assert notice in run, f"the archive must stage {notice}"
+
+    [gate] = [
+        step
+        for step in block["steps"]
+        if step.get("name") == "Verify the Windows HEIF archive links libheif dynamically"
+    ]
+    assert gate["if"] == "runner.os == 'Windows' && matrix.archive_suffix != '-no-gpl-lgpl'"
+    assert "verify_windows_heif_archive.py" in gate["run"]
+
+    [tools] = [
+        step
+        for step in block["steps"]
+        if step.get("uses") == "actions/checkout@v7" and step.get("with", {}).get("path") == ".release-tools"
+    ]
+    sparse = tools["with"]["sparse-checkout"]
+    for path in (
+        "scripts/ci/verify_windows_heif_archive.py",
+        "scripts/ci/notices/LGPL-3.0.txt",
+        "scripts/ci/notices/GPL-3.0.txt",
+    ):
+        assert path in sparse, f"the release-tools checkout must carry {path}"
+
+
+def test_windows_installer_links_libheif_dynamically() -> None:
+    script = (Path(__file__).parents[2] / "scripts/ci/install-system-deps/install-windows.ps1").read_text()
+    assert "libheif[core,aom,libde265]:x64-windows" in script, (
+        "the Windows port must be the dynamic triplet with the GPL x265 encoder disabled"
+    )
+    assert "XBERG_LIBHEIF_DLL_DIR" in script
+    assert "installed\\x64-windows\\bin" in script, "the installer must export where the DLLs live"
+    assert "x64-windows-static-md" in script, "boost and zlib must stay on the static triplet"
+
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [build] = [
+        step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    ]
+    assert "x64-windows" in build["env"]["VCPKGRS_TRIPLET"], (
+        "only the CLI build must move vcpkg-rs off its x64-windows-static-md default"
+    )
+    assert build["env"]["VCPKGRS_DYNAMIC"], "vcpkg-rs refuses a dynamic triplet without VCPKGRS_DYNAMIC"
+
+
 def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
     block = job_block(WORKFLOW.read_text(), "python-wheels")
     [matrix] = re.findall(r"(?m)^        os: \[([^\]]+)\]$", block)

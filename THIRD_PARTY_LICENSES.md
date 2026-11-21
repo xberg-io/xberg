@@ -17,18 +17,53 @@ redistributed in published release artifacts, with an emphasis on copyleft
 - **License:** GNU Lesser General Public License (LGPL). See the upstream
   [`COPYING`](https://github.com/strukturag/libheif/blob/master/COPYING) for the
   authoritative version and text.
-- **Linking:** **Dynamic**, with one exception (below). Xberg resolves
-  `libheif` via `pkg-config` (`-lheif`) against a shared library. The musl CLI
-  container build explicitly disables `crt-static`
+- **Linking:** **Dynamic on every platform**, with one exception (below). On
+  Linux and macOS Xberg resolves `libheif` via `pkg-config` (`-lheif`) against a
+  shared library. The musl CLI container build explicitly disables `crt-static`
   (`RUSTFLAGS="-C target-feature=-crt-static"`) so the resulting binary loads
-  `libheif.so` at runtime rather than embedding it. The embedded source build
-  (`embedded-libheif`) feature has been **removed** from `xberg-libheif`. The
-  one static link is the macOS PHP extension, described in the next section.
+  `libheif.so` at runtime rather than embedding it. On Windows the release CLI
+  builds against vcpkg's dynamic `x64-windows` triplet (`libheif` and `libde265`
+  are DLLs, `libheif-sys` links `heif.lib`, the import library) and bundles the
+  DLLs beside `xberg.exe`; `VCPKGRS_TRIPLET=x64-windows` and
+  `VCPKGRS_DYNAMIC=1` make vcpkg-rs choose that triplet. The embedded source
+  build (`embedded-libheif`) feature has been **removed** from `xberg-libheif`.
+  The only static link is the macOS PHP extension, described in the next
+  section.
 - **Redistribution:** the Linux CLI archives and the `full`/`core` images ship
   unmodified `libheif` shared objects separately from the Xberg executable.
   The glibc builds use v1.23.0 from the official release tarball; musl builds
-  use Alpine's shared package. The library remains replaceable to satisfy LGPL
-  §6. Upstream source: <https://github.com/strukturag/libheif>.
+  use Alpine's shared package. The Windows CLI ZIP carries `heif.dll`,
+  `libde265.dll`, `aom.dll` and their Visual C++ runtime closure as separate
+  files. Every one remains replaceable: a user can drop in an
+  interface-compatible rebuild of `heif.dll` (or `libde265.dll`) and
+  `xberg.exe` loads it instead. Upstream source:
+  <https://github.com/strukturag/libheif>. The separate
+  `xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip` variant compiles `heic`
+  out instead, so it carries no codec, no DLLs and none of these obligations.
+- **LGPL-3.0 compliance method (Windows CLI ZIP):** the codecs are linked as
+  shared libraries, the §4(d)(1) route, rather than statically, which would fall
+  under §4(d)(0) and require relinkable application objects or a written offer.
+  The shipped `heif.dll`, `libde265.dll` and `aom.dll` are unmodified builds of
+  libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2 from the vcpkg baseline
+  pinned in
+  [`scripts/ci/install-system-deps/install-windows.ps1`](scripts/ci/install-system-deps/install-windows.ps1)
+  (`5363acb796e576328288fae60c25304e227e9839`); their source is public, and an
+  interface-compatible rebuild can be dropped in beside `xberg.exe`, which
+  satisfies §4(d)(1)(b).
+  §4(e) Installation Information does not apply: a downloaded ZIP is not a
+  User Product under GPL-3.0 §6. The archive satisfies the rest of §4 directly:
+  - §4(a) prominent notice: `THIRD_PARTY_LICENSES.md` (this file) ships in the
+    ZIP and names the libraries and the licence.
+  - §4(b) texts: `LGPL-3.0.txt`, `GPL-3.0.txt` (LGPL-3.0 incorporates
+    GPL-3.0), and the upstream per-port `libheif-COPYING`, `libde265-COPYING`
+    and `aom-COPYING` files.
+  - §4(c): the CLI prints no copyright banner, so no in-execution notice is
+    owed.
+  - The release gate `scripts/ci/verify_windows_heif_archive.py` reads the
+    shipped bytes and fails the release if `xberg.exe` stops importing
+    `heif.dll`, if a codec DLL or its closure is missing, or if any of those
+    texts is absent or empty. A return to static linking therefore cannot ship
+    silently.
 
 ## libheif codec libraries
 
@@ -47,7 +82,12 @@ separate, replaceable shared object and retains its upstream license:
 
 Xberg supports both HEIF-family input decoding and optional HEIF image output.
 `libx265` is needed only for the latter and is redistributed only when the
-platform's `libheif` build links it.
+platform's `libheif` build links it. The **Windows CLI builds it without**:
+vcpkg installs `libheif[core,aom,libde265]`, so the archive carries no GPL code
+at all (`core` suppresses the port's default `hevc`/x265 feature). HEIC/HEIF
+decoding and AVIF (aom) encoding remain available; HEVC encoding does not, and
+Xberg reports the encoder-unavailable warning like the other codec-free
+packages.
 
 The macOS Elixir NIF archive ships `libheif`, `libde265`, `libaom` and `libx265`
 (built from the pinned sources with both encoders) as separate sibling dylibs

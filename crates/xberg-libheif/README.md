@@ -33,9 +33,13 @@ HEVC and AV1 codec backends (`libde265`, `libaom`):
 - **macOS**: `brew install libheif`
 - **Debian/Ubuntu**: `apt install libheif-dev`
 - **Fedora**: `dnf install libheif-devel`
+- **Windows**: `vcpkg install libheif[core,aom,libde265]:x64-windows`, then set
+  `VCPKGRS_TRIPLET=x64-windows` and `VCPKGRS_DYNAMIC=1` so `libheif-sys` links
+  the import library (the DLLs must be on `PATH` at run time)
 
 `libheif` is LGPL-licensed and is therefore linked **dynamically only** — it is
-never statically linked or vendored into Xberg binaries.
+never statically linked or vendored into Xberg binaries. Release archives ship
+the shared libraries and the LGPL-3.0 and GPL-3.0 texts beside the executable.
 
 ## License
 
