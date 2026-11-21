@@ -791,6 +791,7 @@ mod tests {
             ocr_confidence: None,
             native_content: native_content.map(str::to_string),
             geometry: None,
+            viewports: None,
         };
         let expected = ExtractedDocument {
             content: "page 1 text\n\npage 2 text".to_string(),

@@ -1258,6 +1258,10 @@ pub(crate) fn extract_all_from_native_document(
         None
     });
 
+    if !cut_short && let Some(pages) = page_contents.as_mut() {
+        crate::extraction::plan_geometry::viewports::attach_page_viewports(&doc.doc, pages);
+    }
+
     if cut_short && geometry_enabled {
         skipped_stages.push("vector geometry");
     }
@@ -1869,6 +1873,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
                 image_preprocessing: None,
             },
             PageContent {
@@ -1885,6 +1890,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
                 image_preprocessing: None,
             },
         ]);

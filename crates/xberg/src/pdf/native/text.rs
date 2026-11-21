@@ -472,6 +472,7 @@ fn extract_text_with_tracking(
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             });
         }
     }
