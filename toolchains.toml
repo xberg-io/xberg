@@ -1,4 +1,4 @@
-baseline = "v1.21.0"
+baseline = "v1.22.0"
 task_sets = [
   "alef-bindings",
   "alef-version",
@@ -12,6 +12,10 @@ task_sets = [
   "plugin",
   "rust",
 ]
+
+[overrides."github:xberg-io/alef"]
+version = "0.130.4"
+reason = "alef.toml alef_version pins the 0.130.x maintenance line; move both together"
 
 [task_overrides]
 "plugin:generate" = "Refresh plugin source and root served-skill pins after Xberg public skill export"
