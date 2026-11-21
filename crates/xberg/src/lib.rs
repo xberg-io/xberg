@@ -292,7 +292,9 @@ pub mod transcription;
 pub mod captioning;
 
 /// Pinned inventory of experimental candidate models staged on owned Hugging Face repositories.
-#[cfg(feature = "onnx-runtime")]
+/// Compiled whenever the inventory checks can run: tests always exercise it, and production builds
+/// only where the shared model downloader exists.
+#[cfg(any(test, model_download))]
 // No non-test consumer exists until the captioning adapters in #2335 and a supported preset land. ~keep
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) mod candidate_models;

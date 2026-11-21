@@ -71,6 +71,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The license controls audit scratch manifests with the real cargo-deny and the repo's
+      # deny.toml, so this job needs the metadata toolchain even though nothing here compiles. ~keep
+      - name: Setup Rust for the shipped-license controls
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+
+      - name: Install cargo-deny for the shipped-license controls
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: cargo-deny
+
+      # cargo-deny is a cargo subcommand, so the suite needs its bin directory on PATH: the Bats
+      # runner is not a `mise run` task and therefore gets no tool environment of its own. ~keep
+      - name: Expose cargo-deny to the Bats suite
+        run: echo "$(dirname "$(mise which cargo-deny)")" >>"$GITHUB_PATH"
+
       - name: Install Bats
         uses: xberg-io/actions/install-bats@v1
         with:
@@ -84,6 +103,11 @@ jobs:
           args: |-
             --recursive
             --print-output-on-failure
+
+      # The gate runs on the Linux and macOS release runners against real archives;
+      # prove here that it rejects an x265-bearing fixture and accepts a decode-only one. ~keep
+      - name: Run the release archive x265 gate contracts
+        run: python3 scripts/ci/test_no_gpl_codecs.py -v
 
   pester:
     if: github.ref == 'refs/heads/main'

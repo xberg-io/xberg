@@ -295,8 +295,45 @@ fn svg_to_jpeg_rasterizes() {
 }
 
 #[cfg(feature = "heic")]
+fn hevc_encoder_is_registered() -> bool {
+    xberg_libheif::LibHeif::new()
+        .encoder_for_format(xberg_libheif::CompressionFormat::Hevc)
+        .is_ok()
+}
+
+/// Decode-only builds link libheif without x265, so HEIF output must fail as
+/// `EncoderUnavailable` instead of silently falling back or panicking. ~keep
+#[cfg(feature = "heic")]
+#[test]
+fn png_to_heif_without_hevc_encoder_reports_encoder_unavailable() {
+    if hevc_encoder_is_registered() {
+        eprintln!("skipping: this build registers an HEVC encoder");
+        return;
+    }
+    let original = make_png_bytes();
+    let mut image = make_image(original.clone(), "png");
+    let result = re_encode_default(&mut image, ImageOutputFormat::Heif { quality: 80 });
+    assert!(
+        matches!(result, Err(EncodeWarning::EncoderUnavailable { ref target_format, .. }) if *target_format == "heif"),
+        "a decode-only libheif must report EncoderUnavailable for heif; got {result:?}"
+    );
+    assert_eq!(image.format.as_ref(), "png");
+    assert_eq!(image.data, original, "a rejected re-encode must preserve source bytes");
+}
+
+/// Opt in on encoder-enabled builds (Homebrew libheif or the macOS
+/// `elixir-encoders` profile) with `XBERG_TEST_HEIC_ENCODER=1`. ~keep
+#[cfg(feature = "heic")]
 #[test]
 fn png_to_heif_round_trip() {
+    if std::env::var_os("XBERG_TEST_HEIC_ENCODER").is_none() {
+        eprintln!("skipping: set XBERG_TEST_HEIC_ENCODER=1 to exercise HEIF output");
+        return;
+    }
+    assert!(
+        hevc_encoder_is_registered(),
+        "XBERG_TEST_HEIC_ENCODER requires a libheif build with an HEVC encoder"
+    );
     let mut image = make_image(make_png_bytes(), "png");
     let result = re_encode_default(&mut image, ImageOutputFormat::Heif { quality: 80 });
     assert!(

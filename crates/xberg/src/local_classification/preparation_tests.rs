@@ -45,13 +45,19 @@ fn fixture() -> Fixture {
     ];
     std::fs::create_dir_all(fixture.snapshot()).unwrap();
     fixture.config.model.sha256_manifest.clear();
+    fixture.config.model.size_manifest.clear();
     for (name, bytes) in files {
         std::fs::write(fixture.snapshot().join(name), &bytes).unwrap();
         fixture
             .config
             .model
             .sha256_manifest
-            .push_str(&format!("{}  {name}\n", hex::encode(Sha256::digest(bytes))));
+            .push_str(&format!("{}  {name}\n", hex::encode(Sha256::digest(&bytes))));
+        fixture
+            .config
+            .model
+            .size_manifest
+            .push_str(&format!("{}  {name}\n", bytes.len()));
     }
     fixture
 }
@@ -150,6 +156,19 @@ async fn preparation_rejects_pinned_fixed_taxonomy_metadata_before_inference() {
             }
         })
         .collect();
+    fixture.config.model.size_manifest = fixture
+        .config
+        .model
+        .size_manifest
+        .lines()
+        .map(|line| {
+            if line.ends_with("  config.json") {
+                format!("{}  config.json\n", bytes.len())
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
     let classifier = LocalTextClassifier::new(fixture.config).unwrap();
     let error = classifier.prepare(&Default::default()).await.unwrap_err();
     assert!(error.to_string().contains("NLI label"), "{error}");
@@ -234,6 +253,19 @@ fn external_fixture(declare_weights: bool) -> Fixture {
             }
         })
         .collect();
+    fixture.config.model.size_manifest = fixture
+        .config
+        .model
+        .size_manifest
+        .lines()
+        .map(|line| {
+            if line.ends_with("  model.onnx") {
+                format!("{}  model.onnx\n", graph.len())
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
     if declare_weights {
         fixture.config.model.external_files = vec!["weights.data".to_owned()];
         fixture
@@ -241,6 +273,11 @@ fn external_fixture(declare_weights: bool) -> Fixture {
             .model
             .sha256_manifest
             .push_str(&format!("{}  weights.data\n", hex::encode(Sha256::digest(weights)),));
+        fixture
+            .config
+            .model
+            .size_manifest
+            .push_str(&format!("{}  weights.data\n", weights.len()));
     }
     fixture
 }

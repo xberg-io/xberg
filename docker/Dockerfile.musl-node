@@ -17,7 +17,7 @@ RUN apk add --no-cache \
     apk add --no-cache \
         gcc g++ libstdc++ libstdc++-dev \
         nodejs npm libssl3 libcrypto3 \
-        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
+        onnxruntime-dev libheif-dev libde265-dev aom-dev dav1d-dev \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
@@ -77,6 +77,12 @@ RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>
 
 COPY scripts/ci/vendor-native-closure.sh /usr/local/bin/vendor-native-closure.sh
 RUN bash /usr/local/bin/vendor-native-closure.sh /build
+
+# x265-dev pulls Alpine's libheif-x265 plugin through install_if, which would link
+# the GPL-2.0 encoder into the vendored closure. ~keep
+RUN if [ -n "$(find /build -name '*x265*' -print -quit)" ]; then \
+        echo "FAIL: the bundle carries the GPL-2.0 x265 encoder" >&2; exit 1; \
+    fi
 
 RUN file /build/*.node && \
     echo "=== Dynamic dependencies ===" && \

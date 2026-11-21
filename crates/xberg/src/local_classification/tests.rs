@@ -17,6 +17,15 @@ pub(super) fn configuration() -> LocalClassificationConfig {
     ]
     .map(|path| format!("{}  {path}\n", "a".repeat(64)))
     .concat();
+    let sizes = [
+        "model.onnx",
+        "tokenizer.json",
+        "config.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+    ]
+    .map(|path| format!("1  {path}\n"))
+    .concat();
     LocalClassificationConfig {
         model: LocalNliModel {
             repository: "owner/nli-model".to_owned(),
@@ -24,6 +33,7 @@ pub(super) fn configuration() -> LocalClassificationConfig {
             model_file: "model.onnx".to_owned(),
             external_files: vec![],
             sha256_manifest: manifest,
+            size_manifest: sizes,
             output_name: "logits".to_owned(),
             entailment_index: 2,
             contradiction_index: 0,

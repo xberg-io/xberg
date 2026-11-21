@@ -40,6 +40,14 @@ allow = [
 ]
 confidence-threshold = 0.8
 
+# Every entry here is asserted matched: `mise run rust:check:licenses` fails when no checked
+# graph encounters one, so a renamed or removed dependency cannot leave a stale acceptance
+# behind. The benchmark-only `inferno` (CDDL-1.0, tools/benchmark-harness `profiling`) and
+# `intel-mkl-src` (an unrecognized Intel license file, only reachable through `candle-mkl`)
+# deliberately have none: the check is rooted at each shipped manifest, neither crate is in
+# those graphs, and accepting either would hide it from every shipped graph too. Crates whose
+# manifest omits `license` are held to an explicit list in that script instead of passing on a
+# cargo-deny warning.
 exceptions = [
   { allow = ["MPL-2.0"], crate = "cbindgen" },
   { allow = ["MPL-2.0"], crate = "option-ext" },
@@ -47,8 +55,6 @@ exceptions = [
   # MPL-2.0 is file-level weak copyleft; merely linking it imposes no obligation
   # on xberg. Unavoidable while on hf-hub 1.0. ~keep
   { allow = ["MPL-2.0"], crate = "colored" },
-  { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
-  { allow = ["MPL-2.0"], crate = "dyn-eq" },
   { allow = ["MPL-2.0"], crate = "symphonia" },
   { allow = ["MPL-2.0"], crate = "symphonia-core" },
   { allow = ["MPL-2.0"], crate = "symphonia-common" },
@@ -58,12 +64,8 @@ exceptions = [
   { allow = ["MPL-2.0"], crate = "symphonia-codec-aac" },
   { allow = ["MPL-2.0"], crate = "symphonia-metadata" },
   { allow = ["MPL-2.0"], crate = "symphonia-format-riff" },
-  { allow = ["MPL-2.0"], crate = "symphonia-utils-xiph" },
   { allow = ["MPL-2.0"], crate = "symphonia-codec-adpcm" },
   { allow = ["MPL-2.0"], crate = "symphonia-codec-pcm" },
-  { allow = ["MPL-2.0"], crate = "symphonia-codec-vorbis" },
-  { allow = ["MPL-2.0"], crate = "symphonia-bundle-flac" },
-  { allow = ["MPL-2.0"], crate = "symphonia-format-ogg" },
 ]
 
 #[[licenses.clarify]]

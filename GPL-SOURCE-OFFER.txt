@@ -1,0 +1,36 @@
+Xberg - Written Offer of Corresponding Source
+macOS arm64 Elixir NIF (libxberg_nif)
+
+This archive contains a combined work. libxberg_nif links libheif and libde265
+(LGPL-3.0-or-later), libaom (BSD-2-Clause) and x265 (GPL-2.0-or-later). Because
+GPL-2.0-or-later and LGPL-3.0-or-later are combined here, the combined work is
+conveyed under GPL-3.0-or-later.
+
+Xberg hereby offers, valid for three years from the date this release was
+distributed, to give anyone who possesses this object code a complete copy of
+its Corresponding Source on a durable medium suitable for interchanging data,
+for a charge no more than the cost of physically performing source
+distribution (GNU GPL version 3, section 6(b)).
+
+The Corresponding Source is the complete machine-readable source code for:
+
+  * x265, libheif, libde265 and libaom at the exact versions recorded in
+    sources.tsv inside this archive, including each component's build system;
+  * scripts/ci/build-macos-heif-deps.sh at the release tag that produced this
+    archive, which contains the configure, build and install commands used for
+    it;
+  * the interface definition files, and the scripts used to control compilation
+    and installation, of the combined work.
+
+The upstream release URLs and SHA-256 digests are recorded in sources.tsv, and
+each component's license text ships beside this offer, so the source is also
+available directly from those upstream locations (GNU GPL version 3, section
+6(d)).
+
+To obtain the source under this offer, email contact@xberg.io with the subject
+"Elixir NIF corresponding source" and the release version and archive name.
+Xberg will reply with a download location or, where a download is not possible,
+ship a physical copy at no more than the cost of media and shipping.
+
+This offer covers the LGPL-3.0-or-later components on the same terms, satisfying
+LGPL-3.0 section 4(d).

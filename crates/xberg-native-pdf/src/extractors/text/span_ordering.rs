@@ -724,6 +724,17 @@ impl<'doc> TextExtractor<'doc> {
 /// when the span is not a raised mark. Shared by the extractor's own sort and by the
 /// script-preserving row sort, so both agree on which marks stay inside their line.
 pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], reach: SnapReach) -> Vec<Option<f32>> {
+    snapped_script_bases(snapshot, reach)
+        .into_iter()
+        .map(|base| base.map(|(y, _)| y))
+        .collect()
+}
+
+/// Base line and base span index each span would snap to, or `None` when it is not a raised mark.
+///
+/// The index lets a reader that orders on script base lines keep a mark next to the span it
+/// annotates even when the input arrived with the mark on its own row.
+pub(crate) fn snapped_script_bases(snapshot: &[(f32, f32, f32, f32)], reach: SnapReach) -> Vec<Option<(f32, usize)>> {
     let n = snapshot.len();
     let mut snapped = vec![None; n];
     if n < 2 {
@@ -754,7 +765,7 @@ pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], reach:
     };
     for (i, slot) in snapped.iter_mut().enumerate() {
         if snapshot[i].3 > 0.0 {
-            *slot = search.base_y_for(i);
+            *slot = search.base_for(i);
         }
     }
     snapped
@@ -818,11 +829,12 @@ struct SnapBaseSearch<'a> {
 
 impl SnapBaseSearch<'_> {
     /// Closest base candidate (in Y) that satisfies the super/subscript
-    /// geometry for span `i`. Ties break on the smallest `|y_offset|` so a
-    /// candidate sandwiched between two body lines snaps onto the nearer one.
-    fn base_y_for(&self, i: usize) -> Option<f32> {
+    /// geometry for span `i`, as its baseline and span index. Ties break on the
+    /// smallest `|y_offset|` so a candidate sandwiched between two body lines
+    /// snaps onto the nearer one.
+    fn base_for(&self, i: usize) -> Option<(f32, usize)> {
         let (sx, sy, _sw, sfs) = self.snapshot[i];
-        let mut best_base_y: Option<f32> = None;
+        let mut best_base: Option<(f32, usize)> = None;
         let mut best_abs_offset = f32::MAX;
         // Candidates have `by ∈ [sy - max_half_em, sy]`; restrict the scan
         // to that contiguous slice of the Y-sorted index. ~keep
@@ -865,10 +877,10 @@ impl SnapBaseSearch<'_> {
             let abs_off = y_offset.abs();
             if abs_off < best_abs_offset {
                 best_abs_offset = abs_off;
-                best_base_y = Some(by);
+                best_base = Some((by, j));
             }
         }
-        best_base_y
+        best_base
     }
 }
 

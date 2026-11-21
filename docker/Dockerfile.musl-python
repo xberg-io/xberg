@@ -16,7 +16,7 @@ RUN apk add --no-cache \
     perl linux-headers git file python3 python3-dev py3-pip && \
     apk add --no-cache \
         gcc g++ libstdc++ libstdc++-dev \
-        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
+        onnxruntime-dev libheif-dev libde265-dev aom-dev dav1d-dev \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
@@ -96,6 +96,14 @@ COPY scripts/ci/vendor-native-closure.sh /usr/local/bin/vendor-native-closure.sh
 RUN df -h; (free -m || cat /proc/meminfo)
 
 RUN for w in /build/wheelhouse/*.whl; do bash /usr/local/bin/vendor-native-closure.sh "$w"; done
+
+# The wheel is a ZIP, so a bare filename search cannot see a vendored libx265:
+# open it with the shared release gate as well as checking the build tree. ~keep
+COPY scripts/ci/verify_no_gpl_codecs.py /usr/local/bin/verify_no_gpl_codecs.py
+RUN python3 /usr/local/bin/verify_no_gpl_codecs.py --min-artifacts 1 /build/wheelhouse/*.whl && \
+    if [ -n "$(find /build -name '*x265*' -print -quit)" ]; then \
+        echo "FAIL: the build carries the GPL-2.0 x265 encoder" >&2; exit 1; \
+    fi
 
 RUN echo "=== Wheels produced ===" && ls -la /build/wheelhouse/*.whl
 

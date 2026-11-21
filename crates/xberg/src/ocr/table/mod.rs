@@ -13,8 +13,8 @@ pub(crate) use crate::table_core::{orient_table_for_reading_order, reconstruct_t
 pub(crate) use crate::pdf::table_reconstruct::post_process_table;
 
 pub(crate) use coverage::{
-    ExactTableRows, drop_document_elements_claimed_by_tables, element_center_within_table, should_adopt_table_rebuild,
-    table_retains_region_words,
+    ExactTableRows, drop_document_elements_claimed_by_tables, drop_document_elements_matching_table_rows,
+    element_center_within_table, should_adopt_table_rebuild, table_retains_region_words,
 };
 pub(crate) use grid_shape::has_table_grid;
 pub(crate) use shading_marks::shading_mark_keep_mask;

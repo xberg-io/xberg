@@ -125,6 +125,42 @@ for entry in ${allowed[@]+"${allowed[@]}"}; do
   fi
 done
 
+# Fourth direction: the same reachability rule for `COPY scripts/...` lines. The
+# context starts at `*`, so an allowlisted script is the only kind that exists in
+# the build context; a missing entry fails buildx with "\"/scripts/...\": not found".
+# The crates/ passes above are structurally blind to this: Dockerfile.core copied
+# scripts/ci/verify_no_gpl_codecs.py while .dockerignore excluded it.
+script_allowed=()
+while IFS= read -r entry; do
+  script_allowed+=("$entry")
+done < <(grep -oE '^!scripts/[^[:space:]]*' .dockerignore | sed 's#^!##')
+for dockerfile in docker/Dockerfile.*; do
+  [ -f "$dockerfile" ] || continue
+  while read -r copied; do
+    [ -n "$copied" ] || continue
+    reachable=0
+    for entry in ${script_allowed[@]+"${script_allowed[@]}"}; do
+      if [ "$entry" = "$copied" ]; then
+        reachable=1
+        break
+      fi
+      case "$entry" in
+      */)
+        case "$copied" in
+        "$entry"*)
+          reachable=1
+          break
+          ;;
+        esac
+        ;;
+      esac
+    done
+    [ "$reachable" -eq 1 ] && continue
+    echo "::error file=${dockerfile}::COPY names '${copied}', which .dockerignore excludes from the build context; buildx will fail with '\"/${copied}\": not found'. Add '!${copied}' to .dockerignore"
+    status=1
+  done < <(grep -oE '^COPY scripts/[^[:space:]]+' "$dockerfile" | sed 's#^COPY ##' | sort -u)
+done
+
 if [ "$status" -eq 0 ]; then
   echo "Checked ${#members[@]} workspace crates across $dockerfile_count Dockerfiles."
   echo "All Cargo workspace members are covered by every docker/Dockerfile.*,"

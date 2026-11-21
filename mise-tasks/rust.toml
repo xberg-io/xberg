@@ -14,6 +14,10 @@ description = "Verify real v1_19 Rust decoding against the selected system runti
 depends = ["os:require linux"]
 run = "bash scripts/ci/rust/check-libheif-runtime.sh"
 
+["rust:check:licenses"]
+description = "Enforce deny.toml on every shipped crate graph: CLI default, --features all, the Windows no-heic archive, and each binding default"
+run = "bash scripts/ci/check-licenses.sh"
+
 ["rust:build:dev"]
 description = "Build all Rust crates in debug mode"
 run = [{ task = "rust:build", args = ["dev"] }]

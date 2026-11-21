@@ -135,6 +135,19 @@ class MainOnlyCiTests(unittest.TestCase):
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []
 
+    def test_focused_pr_license_job_uses_pinned_cargo_deny_and_the_repo_task(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        job = workflow["jobs"]["licenses"]
+        setup_mise = [step for step in job["steps"] if step.get("uses") == "xberg-io/actions/setup-mise@v1"]
+        assert len(setup_mise) == 1
+        assert setup_mise[0]["with"]["install-args"] == "cargo-deny"
+        assert any(step.get("uses") == "xberg-io/actions/setup-rust@v1" for step in job["steps"])
+        assert [step["run"] for step in job["steps"] if "run" in step] == ["mise run rust:check:licenses"]
+        triggers = workflow.get("on", workflow.get(True))
+        for event in ("pull_request", "push"):
+            assert "packages/**" in triggers[event]["paths"]
+            assert "deny.exceptions.toml" in triggers[event]["paths"]
+
     def test_python_callback_smoke_rejects_automatic_runs(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         workflow["jobs"][PYTHON_CALLBACK_SMOKE]["if"] = "github.repository == 'xberg-io/xberg'"

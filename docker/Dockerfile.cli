@@ -21,7 +21,7 @@ SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN apk add --no-cache \
     curl musl-dev cmake make pkgconf perl linux-headers git file \
     gcc g++ libstdc++ libstdc++-dev \
-    onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev
+    onnxruntime-dev libheif-dev libde265-dev aom-dev dav1d-dev
 
 # The pins come from the matching rustup-init.sha256 files in Rust's release archive. ~keep
 RUN RUSTUP_VERSION=1.29.3 && \
@@ -103,12 +103,17 @@ RUN file /build/xberg && \
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # Remove unused ONNX/protobuf test and codegen executables in the install layer.
-# Keep the libheif codecs, including the HEIC encoders (core/image_encode.rs). ~keep
+# Keep the libheif decoders, not the GPL-2.0 x265 encoder: this image does not
+# support HEIF output (ImageOutputFormat::Heif reports EncoderUnavailable), while
+# HEIC/AVIF decoding still uses libde265 and libaom. ~keep
 RUN apk add --no-cache \
         libgcc libstdc++ onnxruntime \
-        libheif libheif-libde265 libheif-aom libheif-dav1d libheif-x265 && \
+        libheif libheif-libde265 libheif-aom libheif-dav1d && \
     rm -f /usr/bin/onnx_test_runner /usr/bin/protoc /usr/bin/protoc-[0-9]* \
-          /usr/bin/protoc-gen-upb-* /usr/bin/protoc-gen-upbdefs-*
+          /usr/bin/protoc-gen-upb-* /usr/bin/protoc-gen-upbdefs-* && \
+    if [ -n "$(find /usr/lib /usr/local/lib -name '*x265*' -print -quit)" ]; then \
+        echo 'GPL-2.0 x265 must not be present in the CLI image' >&2; exit 1; \
+    fi
 
 COPY --from=builder /build/xberg /usr/local/bin/xberg
 COPY LICENSE THIRD_PARTY_LICENSES.md /usr/local/share/licenses/xberg/
