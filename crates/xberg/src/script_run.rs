@@ -50,6 +50,10 @@ pub(crate) const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 /// ~keep
 pub(crate) const SCRIPT_RUN_MIN_WIDE_WIDTH_EM: f32 = 0.6;
 
+/// Largest advance width of a raised run, in ems of its own font. An ordinal suffix spans about
+/// one em; a whole body line is many ems wide and must not borrow the wider row reach. ~keep
+pub(crate) const SCRIPT_RUN_MAX_WIDE_WIDTH_EM: f32 = 3.0;
+
 /// Whether a non-zero baseline offset paired with a materially smaller font reads as a
 /// sub/superscript relationship.
 ///
@@ -86,7 +90,10 @@ pub(crate) fn is_script_run_baseline_offset_for_width(
     run_width: f32,
     run_font_size: f32,
 ) -> bool {
-    let reach = if run_font_size > 0.0 && run_width > run_font_size * SCRIPT_RUN_MIN_WIDE_WIDTH_EM {
+    let reach = if run_font_size > 0.0
+        && run_width > run_font_size * SCRIPT_RUN_MIN_WIDE_WIDTH_EM
+        && run_width <= run_font_size * SCRIPT_RUN_MAX_WIDE_WIDTH_EM
+    {
         SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR
     } else {
         SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
@@ -133,6 +140,15 @@ mod tests {
         // Word sets `2nd` 0.38em up in a run about one em wide; a lone digit is half an em.
         assert!(is_script_run_baseline_offset_for_width(4.56, 12.0, 8.04, 8.16, 8.04));
         assert!(!is_script_run_baseline_offset_for_width(4.56, 12.0, 8.04, 4.02, 8.04));
+    }
+
+    #[test]
+    fn should_not_give_a_whole_body_line_the_wide_run_reach() {
+        // A 9 pt body line under a 30 pt heading is 11 em wide: wider than any ordinal suffix,
+        // so it stays an ordinary next line instead of attaching to the heading. ~keep
+        assert!(!is_script_run_baseline_offset_for_width(15.0, 30.0, 9.0, 100.0, 9.0));
+        // A 4-character suffix at the same rise still qualifies.
+        assert!(is_script_run_baseline_offset_for_width(15.0, 30.0, 9.0, 18.0, 9.0));
     }
 
     #[test]
