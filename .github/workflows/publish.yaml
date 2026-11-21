@@ -4363,11 +4363,77 @@ jobs:
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
           owner: xberg-io
 
+      # A retry of an older tag runs this workflow revision, which can postdate the source that
+      # built the archives. Take the verifier from the workflow revision so it exists, and the
+      # canonical notice bytes from the checkout the build jobs packed them from. ~keep
+      - name: Checkout the CLI notice verifier
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .notice-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/ci/package-notices.py
+
+      - name: Checkout the release notice bundle
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          path: .release-notices
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            LICENSE
+            THIRD_PARTY_LICENSES.md
+
       - uses: actions/download-artifact@v8
         with:
           pattern: cli-*
           path: dist/cli
           merge-multiple: true
+
+      # These are the bytes that become release assets, so verify the archives themselves and
+      # not the scripts that built them: `package-notices.py verify` opens each one and compares
+      # both notices with the release source's generated copies. A missing, empty, truncated or
+      # stale notice fails here, naming the archive and file, before anything is uploaded. Each
+      # archive packs a single top-level directory named after the archive, which is its prefix;
+      # `prepare`'s exact asset names supply both, never a glob. A leg that failed to build leaves
+      # its archive absent (the live asset gate names that shortfall and the partial upload still
+      # lets a retry resume), but this step fails when it would otherwise verify nothing. One
+      # step over the collected `dist/cli`, not a copy in every build matrix leg. ~keep
+      - name: Verify notice bytes in every CLI archive
+        shell: bash
+        env:
+          CLI_ASSETS: ${{ needs.prepare.outputs.cli_assets_multiline }}
+          NOTICE_ROOT: ${{ github.workspace }}/.release-notices
+        run: |
+          set -euo pipefail
+          assets=()
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            assets+=("$asset")
+          done <<<"$CLI_ASSETS"
+          test "${#assets[@]}" -gt 0 || { echo "::error::no expected CLI archives to verify"; exit 1; }
+          verified=0
+          for asset in "${assets[@]}"; do
+            case "$asset" in
+              *.tar.gz) prefix="${asset%.tar.gz}" ;;
+              *.zip) prefix="${asset%.zip}" ;;
+              *) echo "::error::unsupported CLI archive name: $asset"; exit 1 ;;
+            esac
+            archive="dist/cli/$asset"
+            if [ ! -e "$archive" ]; then
+              echo "::warning::no CLI archive at $archive; the live asset gate reports the shortfall"
+              continue
+            fi
+            test -s "$archive" || { echo "::error::empty CLI archive: $archive"; exit 1; }
+            python3 .notice-tools/scripts/ci/package-notices.py verify \
+              --canonical-root "$NOTICE_ROOT" "$archive" "$prefix"
+            verified=$((verified + 1))
+          done
+          test "$verified" -gt 0 || { echo "::error::no staged CLI archive was verified"; exit 1; }
+          echo "Verified notices in $verified CLI archives"
 
       # `cli-*` also matches the `cli-binstall-*` and `cli-proxy-wheel-*` artifacts, so the
       # uploader is given prepare's ten explicit names rather than an `xberg-cli-*.zip` glob:

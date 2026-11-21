@@ -745,6 +745,63 @@ def test_upload_cli_release_verifies_the_live_release_not_dist() -> None:
     assert "if: ${{ needs.prepare.outputs.dry_run != 'true' }}" in gate
 
 
+CLI_NOTICE_GATE = "Verify notice bytes in every CLI archive"
+
+
+def upload_cli_release_steps(workflow: str) -> list[str]:
+    return re.split(r"(?m)^(?=      - )", job_block(workflow, "upload-cli-release"))
+
+
+def assert_cli_archive_notice_gate(workflow: str) -> None:
+    """The collected CLI archives must be opened and byte-checked before they are uploaded."""
+    steps = upload_cli_release_steps(workflow)
+    downloads = [index for index, step in enumerate(steps) if "uses: actions/download-artifact@v8" in step]
+    uploads = [index for index, step in enumerate(steps) if "uses: xberg-io/actions/upload-release-assets@v1" in step]
+    gates = [index for index, step in enumerate(steps) if f"name: {CLI_NOTICE_GATE}" in step]
+    assert len(downloads) == len(uploads) == len(gates) == 1, "CLI notice gate missing"
+    assert downloads[0] < gates[0] < uploads[0], "CLI notice gate must run on the collected archives before upload"
+
+    gate = uncommented(steps[gates[0]])
+    assert "package-notices.py verify" in gate, "CLI notice gate must call package-notices.py verify"
+    # The archives were packed from the release checkout, so its bytes are canonical, while
+    # the verifier must come from this workflow revision and still be reachable by retries. ~keep
+    assert "--canonical-root" in gate, "CLI notice gate must compare against an explicit notice root"
+    assert "CLI_ASSETS: ${{ needs.prepare.outputs.cli_assets_multiline }}" in gate, (
+        "CLI notice gate must verify prepare's exact asset list"
+    )
+    assert 'prefix="${asset%.tar.gz}"' in gate and 'prefix="${asset%.zip}"' in gate, (
+        "CLI notice gate must derive each archive's root prefix from its name"
+    )
+    assert "xberg-cli-*" not in gate, "a glob cannot fail on the archive that is missing"
+    # The gate must never pass having verified nothing, which is what an all-skipped set does. ~keep
+    assert 'test "$verified" -gt 0' in gate, "CLI notice gate must fail when nothing was verified"
+
+    checkouts = [step for step in steps if "uses: actions/checkout@" in step]
+    [verifier] = [step for step in checkouts if "path: .notice-tools" in step]
+    [notices] = [step for step in checkouts if "path: .release-notices" in step]
+    assert "ref: ${{ github.workflow_sha }}" in verifier
+    assert "scripts/ci/package-notices.py" in verifier
+    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" in notices
+    for name in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
+        assert name in notices, name
+
+
+def test_upload_cli_release_verifies_notice_bytes_in_every_archive() -> None:
+    assert_cli_archive_notice_gate(WORKFLOW.read_text())
+
+
+def test_cli_notice_gate_contract_rejects_a_removed_step_and_a_glob() -> None:
+    workflow = WORKFLOW.read_text()
+    [gate] = [step for step in upload_cli_release_steps(workflow) if f"name: {CLI_NOTICE_GATE}" in step]
+    with rejected_contract("CLI notice gate missing"):
+        assert_cli_archive_notice_gate(workflow.replace(gate, ""))
+
+    globbed = gate.replace("python3 .notice-tools/scripts/ci/package-notices.py verify", "ls")
+    assert globbed != gate
+    with rejected_contract("CLI notice gate must call package-notices.py verify"):
+        assert_cli_archive_notice_gate(workflow.replace(gate, globbed))
+
+
 def test_release_stays_draft_until_the_asset_gate_passes() -> None:
     workflow = WORKFLOW.read_text()
     prepare = job_block(workflow, "prepare")
