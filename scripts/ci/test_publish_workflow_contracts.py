@@ -1616,7 +1616,17 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     selected = [leg for leg in legs if leg[0] == "sceptre-ocr-ort"]
     assert len(selected) == 1, "standalone Sceptre ORT matrix leg must exist exactly once"
     assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
-    assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
+    assert [name for name, _ in legs] == [
+        "pdf",
+        "pdf-ocr-pipeline",
+        "pdf-ocr-pipeline-tokio",
+        "sceptre-ocr-ort",
+        "no-ort-target",
+        "formats-no-heic",
+        "email",
+        "xml",
+        "hwpx",
+    ], "retain every existing feature leg alongside Sceptre ORT"
     steps = re.split(r"(?m)^(?=      - )", job)
     checks = [step for step in steps if step.startswith("      - name: cargo clippy -p xberg --no-default-features")]
     assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
