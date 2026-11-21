@@ -1,11 +1,18 @@
-// Generates the synthetic tinted table rasters used by the #3337 low-ppi resample fixtures.
+// Generates the synthetic tinted table rasters used by the #3337 low-ppi fixtures.
 //
 //   xcrun swift generate.swift 100 9 tinted tinted-100-9px.png
 //   xcrun swift generate.swift 100 7 tinted tinted-100-7px.png
 //   xcrun swift generate.swift 300 27 tinted tinted-300-9px.png
 //
-// Byte-identical output was verified for all three committed PNGs. Arial is only needed at
-// generation time; the committed PNG is the fixture.
+// A fifth argument wraps the PNG it just wrote into a one-page PDF scan whose page geometry
+// matches the raster's density, so the scan route (PDF raster -> OCR) sees the same pixels:
+//
+//   xcrun swift generate.swift 100 9 tinted tinted-100-9px.png tinted-100-9px.pdf
+//   xcrun swift generate.swift 100 7 tinted tinted-100-7px.png tinted-100-7px.pdf
+//
+// Byte-identical output was verified for all three committed PNGs. The PDFs carry no creation
+// date or producer string, so a regenerated PDF differs only in the trailer /ID. Arial is only
+// needed at generation time; the committed rasters are the fixtures.
 import CoreGraphics
 import CoreText
 import Foundation
@@ -13,8 +20,8 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let args = CommandLine.arguments
-guard args.count == 5, let dpi = Int(args[1]), let digitPx = Int(args[2]) else {
-    FileHandle.standardError.write("usage: gen_tinted_table.swift <dpi> <digit-px> <tinted|plain> <out.png>\n".data(using: .utf8)!)
+guard (args.count == 5 || args.count == 6), let dpi = Int(args[1]), let digitPx = Int(args[2]) else {
+    FileHandle.standardError.write("usage: gen_tinted_table.swift <dpi> <digit-px> <tinted|plain> <out.png> [out.pdf]\n".data(using: .utf8)!)
     exit(2)
 }
 let tinted = args[3] == "tinted"
@@ -76,9 +83,8 @@ for row in 0..<12 {
 }
 
 let image = context.makeImage()!
-let destination = CGImageDestinationCreateWithURL(
-    URL(fileURLWithPath: outPath) as CFURL, UTType.png.identifier as CFString, 1, nil
-)!
+let pngURL = URL(fileURLWithPath: outPath) as CFURL
+let destination = CGImageDestinationCreateWithURL(pngURL, UTType.png.identifier as CFString, 1, nil)!
 CGImageDestinationAddImage(destination, image, [
     kCGImagePropertyDPIWidth: dpi,
     kCGImagePropertyDPIHeight: dpi,
@@ -88,3 +94,27 @@ guard CGImageDestinationFinalize(destination) else {
     exit(4)
 }
 print("wrote \(outPath) \(widthPx)x\(heightPx) dpi=\(dpi) digit=\(digitPx)px tinted=\(tinted)")
+
+if args.count == 6 {
+    // Wrap the just-written PNG, not a re-render, so the scan route receives the fixture raster
+    // pixel for pixel. The page is the raster's own size in points at its own density.
+    let pdfPath = args[5]
+    let source = CGImageSourceCreateWithURL(pngURL, nil)!
+    let raster = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+    var mediaBox = CGRect(
+        x: 0,
+        y: 0,
+        width: Double(widthPx) * 72.0 / Double(dpi),
+        height: Double(heightPx) * 72.0 / Double(dpi)
+    )
+    let pdfContext = CGContext(
+        consumer: CGDataConsumer(url: URL(fileURLWithPath: pdfPath) as CFURL)!,
+        mediaBox: &mediaBox,
+        [kCGPDFContextCreator: "generate.swift"] as CFDictionary
+    )!
+    pdfContext.beginPDFPage(nil)
+    pdfContext.draw(raster, in: mediaBox)
+    pdfContext.endPDFPage()
+    pdfContext.closePDF()
+    print("wrote \(pdfPath) \(widthPx)x\(heightPx) dpi=\(dpi) scan page")
+}
