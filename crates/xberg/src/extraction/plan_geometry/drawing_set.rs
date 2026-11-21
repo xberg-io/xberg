@@ -104,6 +104,7 @@ impl DrawingSetText {
     ///
     /// Entries that are not dimensions are dropped; the order of the survivors
     /// follows the caller's order.
+    #[cfg_attr(feature = "alef-meta", alef(skip))]
     pub fn parse_dimensions<'a>(items: impl IntoIterator<Item = (&'a str, VectorPoint)>) -> Vec<ParsedDimension> {
         items
             .into_iter()
