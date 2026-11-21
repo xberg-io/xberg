@@ -31,7 +31,7 @@ mod dehyphenation;
 mod full_scan_table;
 
 use super::ImageOcrPolicy;
-use super::api_pool::TesseractApiPool;
+use super::api_pool::{TesseractApiLease, TesseractApiPool};
 use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
 use super::model_context::ModelContext;
@@ -68,6 +68,7 @@ use crate::ocr::table::{
 use crate::ocr::types::BatchItemResult;
 use crate::ocr::types::TesseractConfig;
 use crate::types::extraction::BoundingBox;
+use crate::types::formats::RetainedHocrRead;
 use crate::types::internal::{ElementKind, InternalDocument};
 use crate::types::{OcrExtractionResult, OcrTable, OcrTableBoundingBox};
 use std::collections::HashMap;
@@ -320,6 +321,30 @@ fn quantity_retry_column_index(table: &[Vec<String>]) -> Option<(usize, usize)> 
         }
     }
     (support >= MIN_QUANTITY_COLUMN_SUPPORT).then_some((quantity_column, blank_row?))
+}
+
+/// The blank quantity cell a table candidate can re-read, when its rows and columns line up.
+fn quantity_retry_candidate(
+    words: &[HocrWord],
+    table: &[Vec<String>],
+    column_positions: &[u32],
+    config: &TesseractConfig,
+    dimensions: (u32, u32),
+) -> Option<QuantityRetryRegion> {
+    let (quantity_column, blank_row) = quantity_retry_column_index(table)?;
+    let row_positions = detect_rows(words, config.table_row_threshold_ratio);
+    if row_positions.len() != table.len() {
+        return None;
+    }
+    quantity_retry_region(
+        words,
+        quantity_column,
+        blank_row,
+        &row_positions,
+        column_positions,
+        dimensions.0,
+        dimensions.1,
+    )
 }
 
 fn quantity_retry_column(
@@ -1407,6 +1432,12 @@ const MIN_ORIENTATION_CONFIDENCE: f32 = 0.35;
 
 #[cfg(auto_rotate)]
 const _: () = assert!(MIN_ORIENTATION_CONFIDENCE == crate::doc_orientation::MIN_CONFIDENCE);
+
+/// Bytes per pixel of the RGB raster handed to Tesseract.
+const RGB_BYTES_PER_PIXEL: u32 = 3;
+
+/// Lowest source resolution Tesseract accepts; lower reported values are clamped up.
+const MIN_SOURCE_DPI: i32 = 70;
 
 /// Source resolution assumed when OCR receives the original image unchanged and the caller did
 /// not tell us what resolution it really is.
@@ -2759,295 +2790,34 @@ pub(super) fn perform_ocr(
         )
     });
 
-    let security_limits = security_limits_for_ocr(config, extraction_config);
-    let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
-    let prepared_image = encoded_image::prepare_with_dpi_policy(
+    let request = OcrRequest {
         image_bytes,
-        &security_limits,
         config,
-        images_config,
+        api_pool,
+        extraction_config,
+        models,
+        policy,
         ci_debug_enabled,
-        policy == ImageOcrPolicy::BoundedInferredUpscale,
-    )
-    .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut image_data = prepared_image.data;
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut width = prepared_image.width;
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut height = prepared_image.height;
-    let source_dpi = prepared_image.source_dpi;
-    let raw_ocr_source_frame = prepared_image.raw_ocr_source_frame;
-    let preprocessing = prepared_image.preprocessing;
-    let image_preprocessing = prepared_image.image_preprocessing;
+        security_limits: security_limits_for_ocr(config, extraction_config),
+    };
 
-    let bytes_per_pixel: u32 = 3;
-
-    let tessdata_path = &models.directory;
-
-    log_ci_debug(ci_debug_enabled, "tessdata", || {
-        let path_preview = env::var_os("PATH").map(|paths| {
-            env::split_paths(&paths)
-                .take(6)
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
-        let resolved_exists = !tessdata_path.is_empty() && std::path::Path::new(tessdata_path).exists();
-
-        format!(
-            "env={:?} resolved={} exists={} path_preview={:?}",
-            env::var("TESSDATA_PREFIX").ok(),
-            if tessdata_path.is_empty() {
-                "unset"
-            } else {
-                tessdata_path
-            },
-            resolved_exists,
-            path_preview
-        )
-    });
-
-    log_ci_debug(ci_debug_enabled, "tesseract_version", || {
-        format!("version={}", TesseractAPI::version())
-    });
-
-    validate_language_and_traineddata(&config.language, tessdata_path)?;
-
-    let api = api_pool.checkout(models, &config.language, config.oem)?;
+    let mut image = request.prepare_page()?;
+    request.validate_engine_environment()?;
+    let api = request.acquire_engine()?;
     let dictionary = api.word_dictionary();
 
-    log_ci_debug(ci_debug_enabled, "init", || {
-        format!("language={} datapath='{}'", config.language, tessdata_path)
-    });
-
-    if ci_debug_enabled {
-        match api.get_available_languages() {
-            Ok(languages) => {
-                log_ci_debug(ci_debug_enabled, "available_languages", move || {
-                    let preview = languages.iter().take(10).cloned().collect::<Vec<_>>();
-                    format!("count={} preview={:?}", languages.len(), preview)
-                });
-            }
-            Err(err) => {
-                log_ci_debug(ci_debug_enabled, "available_languages_error", move || {
-                    format!("error={:?}", err)
-                });
-            }
-        }
-    }
-
-    let psm_mode = TessPageSegMode::from_int(config.psm as i32);
-    let psm_result = api.set_page_seg_mode(psm_mode);
-    log_ci_debug(ci_debug_enabled, "set_psm", || match &psm_result {
-        Ok(_) => format!("mode={}", config.psm),
-        Err(err) => format!("error={:?}", err),
-    });
-    psm_result.map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set PSM mode: {}", e)))?;
-
-    apply_tesseract_variables(&api, config)?;
-    let source_dpi = source_dpi.max(70);
-
-    // Only (degrees, confidence): the ONNX PP-LCNet orientation classifier used
-    // here has no script-detection capability, unlike Tesseract's own
-    // `DetectOrientationScript()`/OSD, which this crate does not call (#184).
-    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
-    let mut detected_orientation: Option<(i32, f32)> = None;
-    let auto_rotate_enabled =
-        config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false) || config.auto_rotate;
-
-    // Recorded into `metadata` below (once `metadata` exists) under the
-    // `auto_rotate_unavailable` key, mirroring `pre_formatted` and
-    // `word_iterator_skipped_count`: `OcrExtractionResult` has no dedicated
-    // warnings field, so `TesseractBackend` reads this key back out and turns
-    // it into a `ProcessingWarning` the caller actually sees (#309). Without
-    // it, a user's explicit `auto_rotate = true` silently does nothing on a
-    // build without the `auto-rotate` feature.
-    let auto_rotate_unavailable = is_auto_rotate_requested_but_unavailable(auto_rotate_enabled);
-
-    #[cfg(not(auto_rotate))]
-    if auto_rotate_enabled {
-        tracing::warn!(
-            "auto_rotate requested but the `auto-rotate` feature is not compiled in; skipping orientation detection"
-        );
-    }
-
-    #[cfg(auto_rotate)]
-    if auto_rotate_enabled {
-        detected_orientation = auto_rotate_rgb(
-            &mut image_data,
-            &mut width,
-            &mut height,
-            bytes_per_pixel,
-            ci_debug_enabled,
-        );
-    }
-    let ocr_image_width = width;
-    let ocr_image_height = height;
-
-    let processed_pix: Option<xberg_tesseract::Pix> = if let (true, Some(preprocessing)) =
-        (prepared_image.apply_pix_preprocessing, preprocessing.as_ref())
-    {
-        // A gray raster on the contrast policy takes the 8-bit route, which frees the RGB (the
-        // workspace model's `known_gray_phase_peak`); anything else keeps the colour path. ~keep
-        if native_image_budget::releases_source_rgb(preprocessing)
-            && crate::ocr::preprocessing::rgb_is_gray(&image_data)
-        {
-            match crate::ocr::preprocessing::preprocess_gray_contrast(&mut image_data, width, height, preprocessing) {
-                Ok(processed) => Some(processed),
-                Err(error) => {
-                    tracing::debug!(%error, "Leptonica gray preprocessing failed; using raw image");
-                    None
-                }
-            }
-        } else {
-            match xberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
-                Ok(pix) => match preprocess_pix(pix, preprocessing) {
-                    Ok(processed) => Some(processed),
-                    Err(error) => {
-                        tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
-                        None
-                    }
-                },
-                Err(error) => {
-                    tracing::debug!(%error, "Leptonica Pix creation failed; using raw image");
-                    None
-                }
-            }
-        }
-    } else {
-        None
-    };
-
-    if let Some(ref pix) = processed_pix {
-        api.set_image_2(pix.as_ptr())
-            .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set preprocessed image: {error}")))?;
-    } else {
-        let raw_peak = native_image_budget::known_phase_peak(width, height, image_bytes.len(), None)
-            .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
-        if raw_peak.is_some_and(|peak| peak > security_limits.max_content_size as u64) {
-            return Err(OcrError::ImageProcessingFailed(format!(
-                "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
-                 Raise security_limits.max_content_size",
-                security_limits.max_content_size,
-            )));
-        }
-        let bytes_per_line = width * bytes_per_pixel;
-        api.set_image(
-            &image_data,
-            width as i32,
-            height as i32,
-            bytes_per_pixel as i32,
-            bytes_per_line as i32,
-        )
-        .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set image: {error}")))?;
-    }
+    let (detected_orientation, auto_rotate_unavailable) = request.orient_page(&mut image);
+    let (ocr_image_width, ocr_image_height) = (image.width, image.height);
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    let leader_raster = processed_pix.filter(|pix| {
-        config.known_full_page_scan
-            && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
-            && config.enable_table_detection
-            && config.output_format == "markdown"
-            && full_scan_table::uses_default_table_thresholds(config)
-            && full_scan_table::can_hold_leader_raster(
-                pix,
-                (width, height),
-                image_bytes.len(),
-                preprocessing.as_ref(),
-                &security_limits,
-            )
-    });
+    let leader_raster = request.set_page_image(&api, &mut image)?;
     #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
-    drop(processed_pix);
+    request.set_page_image(&api, &mut image)?;
+    drop(std::mem::take(&mut image.data));
 
-    api.set_source_resolution(source_dpi)
-        .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set source resolution: {error}")))?;
-
-    log_ci_debug(ci_debug_enabled, "set_image", || {
-        format!(
-            "width={} height={} bytes_per_pixel={} source_dpi={}",
-            width, height, bytes_per_pixel, source_dpi
-        )
-    });
-
-    drop(image_data);
-
-    recognize_until_stop(&api).map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
-
-    let mean_text_conf = api.mean_text_conf().unwrap_or(-1);
-
-    log_ci_debug(ci_debug_enabled, "recognize", || {
-        format!("completed mean_text_conf={}", mean_text_conf)
-    });
-
-    let word_confidence_stats = read_native_word_confidence_stats(&api, config.output_format.as_str());
-
-    let mut tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
-        Some(
-            api.get_tsv_text(0)
-                .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?,
-        )
-    } else {
-        None
-    };
-    let script_retry = (!crate::core::extractor::cacheability::ocr_stop_requested())
-        .then(|| {
-            models.retry_models(config, f64::from(mean_text_conf), || {
-                script_retry::first_read_suggests_han(&api, tsv_data_for_tables.as_deref())
-                    || script_retry::first_read_suggests_vertical_japanese(&api, tsv_data_for_tables.as_deref(), config)
-            })
-        })
-        .flatten()
-        .and_then(|retry_models| {
-            let pass = script_retry::Pass {
-                config,
-                source_dpi,
-                pool: api_pool.retry(),
-            };
-            retry_with_tsv(
-                models,
-                tsv_data_for_tables.as_deref(),
-                || {
-                    api.get_tsv_text(0).map_err(|error| {
-                        OcrError::ProcessingFailed(format!(
-                            "Failed to extract first-pass TSV for script retry: {error}"
-                        ))
-                    })
-                },
-                |tsv| {
-                    script_retry::run(
-                        &api,
-                        tsv,
-                        &pass,
-                        &retry_models,
-                        || models.khmer_retry_is_current(config),
-                        |model| {
-                            if model == script_retry::VERTICAL_JAPANESE_MODEL {
-                                models.vertical_retry_is_current(config)
-                            } else {
-                                finish_script_retry(Some(()), |_| true, models, config).is_some()
-                            }
-                        },
-                        |model, error| {
-                            if model == script_retry::KHMER_MODEL {
-                                models.invalidate_khmer_cache(&error);
-                            } else if model == script_retry::VERTICAL_JAPANESE_MODEL {
-                                models.invalidate_vertical_cache(&error);
-                            } else {
-                                models.invalidate_han_cache(&error);
-                            }
-                        },
-                    )
-                },
-            )
-        });
-    let merged_read = script_retry
-        .as_ref()
-        .filter(|outcome| outcome.replaces_primary())
-        .map(|outcome| &outcome.merged)
-        .filter(|merged| merged.changed());
-    tsv_data_for_tables = table_tsv(tsv_data_for_tables, merged_read);
-    let table_mark_symbols = match tsv_data_for_tables.as_deref() {
+    let recognition = request.recognize(&api, image.source_dpi)?;
+    let merged_read = recognition.merged_read();
+    let tsv_data_for_tables = recognition.tsv_data_for_tables.as_deref();
+    let table_mark_symbols = match tsv_data_for_tables {
         Some(tsv) if config.enable_table_detection && tsv.contains('_') => underscore_word_symbols(&api),
         _ => Vec::new(),
     };
@@ -3070,12 +2840,12 @@ pub(super) fn perform_ocr(
     let primary_output::Output {
         raw_content,
         mime_type,
-        mut hocr_document,
+        hocr_document,
         hocr_for_tables,
         dictionary_filtered_line_count,
         dictionary_kept_numeral_line_count,
         retained_hocr_confidence_stats,
-        mut retained_hocr_read,
+        retained_hocr_read,
         #[cfg(feature = "pdf")]
         dehyphenation_words,
     } = primary_output::read(primary_output::Request {
@@ -3084,8 +2854,8 @@ pub(super) fn perform_ocr(
         extraction_config,
         dictionary_filter: &dictionary_filter,
         merged_read,
-        tsv_data_for_tables: tsv_data_for_tables.as_deref(),
-        security_limits: &security_limits,
+        tsv_data_for_tables,
+        security_limits: &request.security_limits,
         dimensions: (ocr_image_width, ocr_image_height),
         capture_region_hocr,
         observe_hyphens,
@@ -3094,102 +2864,544 @@ pub(super) fn perform_ocr(
     let mut metadata = primary_read_metadata::build(primary_read_metadata::PrimaryRead {
         config,
         dimensions: (ocr_image_width, ocr_image_height),
-        image_preprocessing,
+        image_preprocessing: image.image_preprocessing,
         auto_rotate_unavailable,
         dictionary_line_counts: (dictionary_filtered_line_count, dictionary_kept_numeral_line_count),
         retained_hocr_confidence_stats: retained_hocr_confidence_stats.as_ref(),
-        mean_text_conf,
-        word_confidence_stats,
+        mean_text_conf: recognition.mean_text_conf,
+        word_confidence_stats: recognition.word_confidence_stats,
         detected_orientation,
     })?;
-
-    if let Some(outcome) = script_retry.as_ref() {
+    if let Some(outcome) = recognition.script_retry.as_ref() {
         // After the first read's confidence metadata, so the merged page reports its own. ~keep
         script_retry::record(&mut metadata, outcome);
     }
 
-    let mut content = strip_control_characters(&raw_content).into_owned();
-    let retained_text = (config.output_format == "text").then_some(content.as_str());
-    let iterator_extraction = if merged_read.is_some() {
-        // The first engine holds only the first read; the merged elements come from the word
-        // table below. ~keep
-        Err(OcrError::ProcessingFailed(
-            "merged read has no result iterator".to_string(),
-        ))
-    } else {
-        extract_elements_via_iterator(
-            &api,
-            &dictionary,
-            config.page_number,
-            config.min_confidence,
-            retained_text,
-        )
+    let (content, ocr_elements) = request.read_primary_text(
+        &api,
+        &dictionary,
+        &raw_content,
+        merged_read,
+        tsv_data_for_tables,
+        &mut metadata,
+    );
+    let mut page = PageAssembly {
+        content,
+        mime_type,
+        metadata,
+        tables: Vec::new(),
+        ocr_elements,
+        hocr_document,
+        retained_hocr_read,
     };
-    let mut ocr_elements = None;
-    if let Ok(extraction) = &iterator_extraction
-        && let Some(stats) = extraction.retained_text_confidence_stats.as_ref()
-    {
-        insert_retained_word_confidence_metadata(&mut metadata, stats);
+
+    let detected = if config.enable_table_detection {
+        request.detect_tables(
+            TableDetection {
+                api: &api,
+                tsv_data: tsv_data_for_tables.expect("table detection requires the first read's word table"),
+                table_mark_symbols: &table_mark_symbols,
+                dimensions: (ocr_image_width, ocr_image_height),
+                apply_pix_preprocessing: image.apply_pix_preprocessing,
+                #[cfg(feature = "pdf")]
+                content: &page.content,
+                hocr_for_tables: hocr_for_tables.as_deref(),
+                #[cfg(feature = "pdf")]
+                hocr_document: page.hocr_document.as_ref(),
+                dictionary_filtered_line_count,
+                #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+                leader_raster: leader_raster.as_ref(),
+            },
+            &mut page.metadata,
+        )?
+    } else {
+        DetectedTables::empty()
+    };
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    drop(leader_raster);
+
+    page.tables = detected.tables;
+    request.restore_rejected_regions(
+        &mut page,
+        &dictionary_filter,
+        &detected.rejected_regions,
+        hocr_for_tables.as_deref(),
+    );
+    request.publish_table_rows(
+        &mut page,
+        hocr_for_tables.as_deref(),
+        detected.fully_claimed,
+        dictionary_filtered_line_count,
+        tsv_data_for_tables,
+    );
+    request.adopt_inline_tables(&mut page, tsv_data_for_tables);
+    #[cfg(feature = "pdf")]
+    request.join_scanned_wraps(
+        &mut page,
+        dehyphenation_words.as_deref(),
+        (ocr_image_width, ocr_image_height),
+        detected.fully_claimed,
+        &raw_content,
+    );
+    request.verify_hocr_receipt(&mut page, (ocr_image_width, ocr_image_height), capture_region_hocr);
+
+    drop(api);
+
+    Ok(OcrExtractionResult {
+        content: page.content,
+        mime_type: page.mime_type,
+        metadata: page.metadata,
+        tables: page.tables,
+        ocr_elements: page.ocr_elements,
+        internal_document: page.hocr_document,
+        raw_ocr_source_frame: image.raw_ocr_source_frame,
+        retained_hocr_read: page.retained_hocr_read,
+    })
+}
+
+/// The inputs of one `perform_ocr` call: they stay fixed for every phase of the page.
+struct OcrRequest<'a> {
+    image_bytes: &'a [u8],
+    config: &'a TesseractConfig,
+    api_pool: &'a Arc<TesseractApiPool>,
+    extraction_config: Option<&'a ExtractionConfig>,
+    models: &'a ModelContext,
+    policy: ImageOcrPolicy,
+    ci_debug_enabled: bool,
+    security_limits: SecurityLimits,
+}
+
+impl OcrRequest<'_> {
+    /// Prepare the raster Tesseract will recognize, under the request's security limits.
+    fn prepare_page(&self) -> Result<PreparedOcrImage, OcrError> {
+        let images_config = self
+            .extraction_config
+            .and_then(|extraction_config| extraction_config.images.as_ref());
+        encoded_image::prepare_with_dpi_policy(
+            self.image_bytes,
+            &self.security_limits,
+            self.config,
+            images_config,
+            self.ci_debug_enabled,
+            self.policy == ImageOcrPolicy::BoundedInferredUpscale,
+        )
+        .map(|mut image| {
+            image.source_dpi = image.source_dpi.max(MIN_SOURCE_DPI);
+            image
+        })
+        .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))
     }
-    match iterator_extraction {
-        Ok(extraction) if !extraction.elements.is_empty() => {
-            #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            crate::ocr::preprocessing::geometry_evidence::record_word_inventory(
-                crate::ocr::preprocessing::geometry_evidence::WordInventory {
-                    count: extraction.iterator_word_count,
-                    skipped: extraction.skipped_words,
+
+    /// Report the tessdata directory and engine version, and reject a language with no
+    /// traineddata there.
+    fn validate_engine_environment(&self) -> Result<(), OcrError> {
+        let tessdata_path = &self.models.directory;
+
+        log_ci_debug(self.ci_debug_enabled, "tessdata", || {
+            let path_preview = env::var_os("PATH").map(|paths| {
+                env::split_paths(&paths)
+                    .take(6)
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            });
+            let resolved_exists = !tessdata_path.is_empty() && std::path::Path::new(tessdata_path).exists();
+
+            format!(
+                "env={:?} resolved={} exists={} path_preview={:?}",
+                env::var("TESSDATA_PREFIX").ok(),
+                if tessdata_path.is_empty() {
+                    "unset"
+                } else {
+                    tessdata_path
                 },
-            );
-            insert_word_iterator_skipped_count_metadata(&mut metadata, extraction.skipped_words);
-            if extraction.non_text_block_word_count > 0 {
-                metadata.insert(
-                    "non_text_block_word_count".to_string(),
-                    serde_json::Value::Number(extraction.non_text_block_word_count.into()),
-                );
+                resolved_exists,
+                path_preview
+            )
+        });
+
+        log_ci_debug(self.ci_debug_enabled, "tesseract_version", || {
+            format!("version={}", TesseractAPI::version())
+        });
+
+        validate_language_and_traineddata(&self.config.language, tessdata_path)
+    }
+
+    /// Take an engine for the page's language and configure it for this read.
+    fn acquire_engine(&self) -> Result<TesseractApiLease, OcrError> {
+        let config = self.config;
+        let api = self.api_pool.checkout(self.models, &config.language, config.oem)?;
+
+        log_ci_debug(self.ci_debug_enabled, "init", || {
+            format!("language={} datapath='{}'", config.language, self.models.directory)
+        });
+
+        if self.ci_debug_enabled {
+            match api.get_available_languages() {
+                Ok(languages) => {
+                    log_ci_debug(self.ci_debug_enabled, "available_languages", move || {
+                        let preview = languages.iter().take(10).cloned().collect::<Vec<_>>();
+                        format!("count={} preview={:?}", languages.len(), preview)
+                    });
+                }
+                Err(err) => {
+                    log_ci_debug(self.ci_debug_enabled, "available_languages_error", move || {
+                        format!("error={:?}", err)
+                    });
+                }
             }
-            if let Some(ratio) = extraction.dict_invalid_word_ratio {
-                metadata.insert(
-                    crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY.to_string(),
-                    serde_json::Value::Number(
-                        serde_json::Number::from_f64(ratio).unwrap_or(serde_json::Number::from(0)),
-                    ),
-                );
-            }
-            ocr_elements = Some(extraction.elements);
         }
-        _ => {
-            let merged_tsv = merged_read.map(|merged| merged.tsv());
-            if let Some(tsv_data) = merged_tsv.as_deref().or(tsv_data_for_tables.as_deref()) {
-                let elements = parse_tsv_to_elements(tsv_data, config.min_confidence, config.page_number);
-                if !elements.is_empty() {
-                    ocr_elements = Some(elements);
+
+        let psm_mode = TessPageSegMode::from_int(config.psm as i32);
+        let psm_result = api.set_page_seg_mode(psm_mode);
+        log_ci_debug(self.ci_debug_enabled, "set_psm", || match &psm_result {
+            Ok(_) => format!("mode={}", config.psm),
+            Err(err) => format!("error={:?}", err),
+        });
+        psm_result.map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set PSM mode: {}", e)))?;
+
+        apply_tesseract_variables(&api, config)?;
+        Ok(api)
+    }
+
+    /// Rotate the raster to the detected orientation when `auto_rotate` is on, and report whether
+    /// a build without the `auto-rotate` feature had to skip the request.
+    fn orient_page(&self, image: &mut PreparedOcrImage) -> (Option<(i32, f32)>, bool) {
+        let config = self.config;
+        #[cfg(not(auto_rotate))]
+        let _ = image;
+        // Only (degrees, confidence): the ONNX PP-LCNet orientation classifier used
+        // here has no script-detection capability, unlike Tesseract's own
+        // `DetectOrientationScript()`/OSD, which this crate does not call (#184).
+        #[cfg_attr(not(auto_rotate), allow(unused_mut))]
+        let mut detected_orientation: Option<(i32, f32)> = None;
+        let auto_rotate_enabled =
+            config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false) || config.auto_rotate;
+
+        // Recorded into `metadata` below (once `metadata` exists) under the
+        // `auto_rotate_unavailable` key, mirroring `pre_formatted` and
+        // `word_iterator_skipped_count`: `OcrExtractionResult` has no dedicated
+        // warnings field, so `TesseractBackend` reads this key back out and turns
+        // it into a `ProcessingWarning` the caller actually sees (#309). Without
+        // it, a user's explicit `auto_rotate = true` silently does nothing on a
+        // build without the `auto-rotate` feature.
+        let auto_rotate_unavailable = is_auto_rotate_requested_but_unavailable(auto_rotate_enabled);
+
+        #[cfg(not(auto_rotate))]
+        if auto_rotate_enabled {
+            tracing::warn!(
+                "auto_rotate requested but the `auto-rotate` feature is not compiled in; skipping orientation detection"
+            );
+        }
+
+        #[cfg(auto_rotate)]
+        if auto_rotate_enabled {
+            detected_orientation = auto_rotate_rgb(
+                &mut image.data,
+                &mut image.width,
+                &mut image.height,
+                RGB_BYTES_PER_PIXEL,
+                self.ci_debug_enabled,
+            );
+        }
+
+        (detected_orientation, auto_rotate_unavailable)
+    }
+
+    /// Preprocess the page into the Leptonica image Tesseract reads, falling back to the raw
+    /// raster whenever preprocessing fails.
+    fn process_pix(&self, image: &mut PreparedOcrImage) -> Option<xberg_tesseract::Pix> {
+        let preprocessing = image.preprocessing.as_ref()?;
+        if !image.apply_pix_preprocessing {
+            return None;
+        }
+        // A gray raster on the contrast policy takes the 8-bit route, which frees the RGB (the
+        // workspace model's `known_gray_phase_peak`); anything else keeps the colour path. ~keep
+        if native_image_budget::releases_source_rgb(preprocessing)
+            && crate::ocr::preprocessing::rgb_is_gray(&image.data)
+        {
+            match crate::ocr::preprocessing::preprocess_gray_contrast(
+                &mut image.data,
+                image.width,
+                image.height,
+                preprocessing,
+            ) {
+                Ok(processed) => Some(processed),
+                Err(error) => {
+                    tracing::debug!(%error, "Leptonica gray preprocessing failed; using raw image");
+                    None
+                }
+            }
+        } else {
+            match xberg_tesseract::Pix::from_raw_rgb(&image.data, image.width, image.height) {
+                Ok(pix) => match preprocess_pix(pix, preprocessing) {
+                    Ok(processed) => Some(processed),
+                    Err(error) => {
+                        tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
+                        None
+                    }
+                },
+                Err(error) => {
+                    tracing::debug!(%error, "Leptonica Pix creation failed; using raw image");
+                    None
                 }
             }
         }
     }
 
-    let mut tables = Vec::new();
-    let mut rejected_regions: Vec<Vec<HocrWord>> = Vec::new();
-    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    let mut fully_claimed = false;
-    #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
-    let fully_claimed = false;
+    /// Hand the page raster to the engine, report its resolution, and return the leader raster the
+    /// PDF full-scan table proof keeps when it can hold it.
+    fn set_page_image(
+        &self,
+        api: &TesseractAPI,
+        image: &mut PreparedOcrImage,
+    ) -> Result<Option<xberg_tesseract::Pix>, OcrError> {
+        let processed_pix = self.process_pix(image);
+        if let Some(ref pix) = processed_pix {
+            api.set_image_2(pix.as_ptr())
+                .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set preprocessed image: {error}")))?;
+        } else {
+            let raw_peak =
+                native_image_budget::known_phase_peak(image.width, image.height, self.image_bytes.len(), None)
+                    .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))?;
+            if raw_peak.is_some_and(|peak| peak > self.security_limits.max_content_size as u64) {
+                return Err(OcrError::ImageProcessingFailed(format!(
+                    "OCR raw image workspace exceeds security_limits.max_content_size ({} bytes). \
+                     Raise security_limits.max_content_size",
+                    self.security_limits.max_content_size,
+                )));
+            }
+            let bytes_per_line = image.width * RGB_BYTES_PER_PIXEL;
+            api.set_image(
+                &image.data,
+                image.width as i32,
+                image.height as i32,
+                RGB_BYTES_PER_PIXEL as i32,
+                bytes_per_line as i32,
+            )
+            .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set image: {error}")))?;
+        }
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        let leader_raster = processed_pix.filter(|pix| {
+            self.config.known_full_page_scan
+                && self.config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+                && self.config.enable_table_detection
+                && self.config.output_format == "markdown"
+                && full_scan_table::uses_default_table_thresholds(self.config)
+                && full_scan_table::can_hold_leader_raster(
+                    pix,
+                    (image.width, image.height),
+                    self.image_bytes.len(),
+                    image.preprocessing.as_ref(),
+                    &self.security_limits,
+                )
+        });
+        #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
+        let leader_raster: Option<xberg_tesseract::Pix> = {
+            drop(processed_pix);
+            None
+        };
 
-    if config.enable_table_detection {
-        let tsv_data = tsv_data_for_tables.as_ref().unwrap();
+        api.set_source_resolution(image.source_dpi)
+            .map_err(|error| OcrError::ProcessingFailed(format!("Failed to set source resolution: {error}")))?;
 
-        let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, &table_mark_symbols)?;
+        log_ci_debug(self.ci_debug_enabled, "set_image", || {
+            format!(
+                "width={} height={} bytes_per_pixel={} source_dpi={}",
+                image.width, image.height, RGB_BYTES_PER_PIXEL, image.source_dpi
+            )
+        });
+
+        Ok(leader_raster)
+    }
+
+    /// Recognize the page and report what the read and its optional script retry produced.
+    fn recognize(&self, api: &TesseractAPI, source_dpi: i32) -> Result<Recognition, OcrError> {
+        let config = self.config;
+        recognize_until_stop(api)
+            .map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
+
+        let mean_text_conf = api.mean_text_conf().unwrap_or(-1);
+
+        log_ci_debug(self.ci_debug_enabled, "recognize", || {
+            format!("completed mean_text_conf={}", mean_text_conf)
+        });
+
+        let word_confidence_stats = read_native_word_confidence_stats(api, config.output_format.as_str());
+
+        let mut tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
+            Some(
+                api.get_tsv_text(0)
+                    .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?,
+            )
+        } else {
+            None
+        };
+        let script_retry = self.run_script_retry(api, mean_text_conf, source_dpi, tsv_data_for_tables.as_deref());
+        tsv_data_for_tables = table_tsv(tsv_data_for_tables, merged_read(script_retry.as_ref()));
+
+        Ok(Recognition {
+            mean_text_conf,
+            word_confidence_stats,
+            tsv_data_for_tables,
+            script_retry,
+        })
+    }
+
+    /// Repeat the page with a script-specific model when the first read suggests the page is not in
+    /// the configured language, unless an extraction stop arrived first.
+    fn run_script_retry(
+        &self,
+        api: &TesseractAPI,
+        mean_text_conf: i32,
+        source_dpi: i32,
+        first_read_tsv: Option<&str>,
+    ) -> Option<script_retry::Outcome> {
+        let config = self.config;
+        if crate::core::extractor::cacheability::ocr_stop_requested() {
+            return None;
+        }
+        let retry_models = self.models.retry_models(config, f64::from(mean_text_conf), || {
+            script_retry::first_read_suggests_han(api, first_read_tsv)
+                || script_retry::first_read_suggests_vertical_japanese(api, first_read_tsv, config)
+        })?;
+        let pass = script_retry::Pass {
+            config,
+            source_dpi,
+            pool: self.api_pool.retry(),
+        };
+        retry_with_tsv(
+            self.models,
+            first_read_tsv,
+            || {
+                api.get_tsv_text(0).map_err(|error| {
+                    OcrError::ProcessingFailed(format!("Failed to extract first-pass TSV for script retry: {error}"))
+                })
+            },
+            |tsv| {
+                script_retry::run(
+                    api,
+                    tsv,
+                    &pass,
+                    &retry_models,
+                    || self.models.khmer_retry_is_current(config),
+                    |model| {
+                        if model == script_retry::VERTICAL_JAPANESE_MODEL {
+                            self.models.vertical_retry_is_current(config)
+                        } else {
+                            finish_script_retry(Some(()), |_| true, self.models, config).is_some()
+                        }
+                    },
+                    |model, error| {
+                        if model == script_retry::KHMER_MODEL {
+                            self.models.invalidate_khmer_cache(&error);
+                        } else if model == script_retry::VERTICAL_JAPANESE_MODEL {
+                            self.models.invalidate_vertical_cache(&error);
+                        } else {
+                            self.models.invalidate_han_cache(&error);
+                        }
+                    },
+                )
+            },
+        )
+    }
+
+    /// Turn the first read's raw output into page text and OCR elements, recording the iterator
+    /// counters in `metadata`.
+    fn read_primary_text(
+        &self,
+        api: &TesseractAPI,
+        dictionary: &WordDictionary<'_>,
+        raw_content: &str,
+        merged_read: Option<&script_retry::Merged>,
+        tsv_data_for_tables: Option<&str>,
+        metadata: &mut HashMap<String, serde_json::Value>,
+    ) -> (String, Option<Vec<OcrElement>>) {
+        let config = self.config;
+        let content = strip_control_characters(raw_content).into_owned();
+        let retained_text = (config.output_format == "text").then_some(content.as_str());
+        let iterator_extraction = if merged_read.is_some() {
+            // The first engine holds only the first read; the merged elements come from the word
+            // table below. ~keep
+            Err(OcrError::ProcessingFailed(
+                "merged read has no result iterator".to_string(),
+            ))
+        } else {
+            extract_elements_via_iterator(
+                api,
+                dictionary,
+                config.page_number,
+                config.min_confidence,
+                retained_text,
+            )
+        };
+        let mut ocr_elements = None;
+        if let Ok(extraction) = &iterator_extraction
+            && let Some(stats) = extraction.retained_text_confidence_stats.as_ref()
+        {
+            insert_retained_word_confidence_metadata(metadata, stats);
+        }
+        match iterator_extraction {
+            Ok(extraction) if !extraction.elements.is_empty() => {
+                #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                crate::ocr::preprocessing::geometry_evidence::record_word_inventory(
+                    crate::ocr::preprocessing::geometry_evidence::WordInventory {
+                        count: extraction.iterator_word_count,
+                        skipped: extraction.skipped_words,
+                    },
+                );
+                insert_word_iterator_skipped_count_metadata(metadata, extraction.skipped_words);
+                if extraction.non_text_block_word_count > 0 {
+                    metadata.insert(
+                        "non_text_block_word_count".to_string(),
+                        serde_json::Value::Number(extraction.non_text_block_word_count.into()),
+                    );
+                }
+                if let Some(ratio) = extraction.dict_invalid_word_ratio {
+                    metadata.insert(
+                        crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY.to_string(),
+                        serde_json::Value::Number(
+                            serde_json::Number::from_f64(ratio).unwrap_or(serde_json::Number::from(0)),
+                        ),
+                    );
+                }
+                ocr_elements = Some(extraction.elements);
+            }
+            _ => {
+                let merged_tsv = merged_read.map(|merged| merged.tsv());
+                if let Some(tsv_data) = merged_tsv.as_deref().or(tsv_data_for_tables) {
+                    let elements = parse_tsv_to_elements(tsv_data, config.min_confidence, config.page_number);
+                    if !elements.is_empty() {
+                        ocr_elements = Some(elements);
+                    }
+                }
+            }
+        }
+        (content, ocr_elements)
+    }
+
+    /// Reconstruct the page's tables from its word table, recording the counts in `metadata`.
+    fn detect_tables(
+        &self,
+        detection: TableDetection<'_>,
+        metadata: &mut HashMap<String, serde_json::Value>,
+    ) -> Result<DetectedTables, OcrError> {
+        let config = self.config;
+        let mut detected = DetectedTables::empty();
+        let tsv_data = detection.tsv_data;
+
+        let words = extract_table_words_from_tsv(tsv_data, config.table_min_confidence, detection.table_mark_symbols)?;
 
         let recognition_orientation::Oriented {
             tables: oriented,
             page_down,
         } = recognition_orientation::tables(
-            &api,
+            detection.api,
             tsv_data,
             &words,
             config,
-            (ocr_image_width, ocr_image_height),
-            &security_limits,
+            detection.dimensions,
+            &self.security_limits,
         );
         if page_down {
             metadata.insert(
@@ -3202,221 +3414,28 @@ pub(super) fn perform_ocr(
         } else {
             table_regions(&words)
         };
-        #[cfg(feature = "pdf")]
-        let can_prove_scan_grid = config.known_full_page_scan
-            && regions.len() == 1
-            && dictionary_filtered_line_count == 0
-            && hocr_for_tables.is_some()
-            && full_scan_table::uses_default_table_thresholds(config);
-        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-        let can_prove_sparse_grid = matches!(
-            policy,
-            ImageOcrPolicy::StandaloneSparseRows | ImageOcrPolicy::ImplicitStandaloneSparseRows
-        ) && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
-            && regions.len() == 1
-            && dictionary_filtered_line_count == 0
-            && full_scan_table::uses_default_table_thresholds(config);
-        tables.extend(oriented.into_iter().flatten());
-        for (region_index, mut region) in regions.into_iter().enumerate() {
-            if region.words.len() < MIN_TABLE_CANDIDATE_WORDS {
-                tracing::debug!(
-                    target: "xberg::ocr::tables",
-                    region_index,
-                    word_count = region.words.len(),
-                    min_required = MIN_TABLE_CANDIDATE_WORDS,
-                    "OCR table region skipped: below MIN_TABLE_CANDIDATE_WORDS"
-                );
-                continue;
+        let single_region = regions.len() == 1;
+        detected.tables.extend(oriented.into_iter().flatten());
+        for (region_index, region) in regions.into_iter().enumerate() {
+            let outcome = self.build_region_table(region_index, region, &detection, single_region);
+            detected.fully_claimed |= outcome.claims_page;
+            if let Some(read_boxes) = outcome.rejected_boxes {
+                detected.rejected_regions.push(read_boxes);
             }
-            // The minimum above counts every word Tesseract read, before shading marks are
-            // dropped, so a dropped mark changes a table's cells but never whether a table is
-            // attempted at all (GH#1858). ~keep
-            region.drop_shading_marks(config.table_row_threshold_ratio);
-            if config
-                .preprocessing
-                .as_ref()
-                .is_some_and(|preprocessing| preprocessing.normalize_shaded_rows)
-            {
-                region.drop_normalized_band_edge_glyphs();
-            }
-            if !has_semantic_ocr_table_content(&region.words) {
-                tracing::debug!(
-                    target: "xberg::ocr::tables",
-                    region_index,
-                    word_count = region.words.len(),
-                    "OCR table region skipped: insufficient semantic content"
-                );
-                continue;
-            }
-
-            let region_left = region.words.iter().map(|w| w.left).min().unwrap_or(0);
-            let region_top = region.words.iter().map(|w| w.top).min().unwrap_or(0);
-            let region_right = region.words.iter().map(|w| w.left + w.width).max().unwrap_or(0);
-            let region_bottom = region.words.iter().map(|w| w.top + w.height).max().unwrap_or(0);
-            let word_preview: String = region
-                .words
-                .iter()
-                .take(12)
-                .map(|w| w.text.as_str())
-                .collect::<Vec<_>>()
-                .join(" ")
-                .chars()
-                .take(200)
-                .collect();
-
-            let (mut table, mut column_positions) = reconstruct_cleaned_table(&region.words, config);
-            let retry_region = if let Some((quantity_column, blank_row)) = quantity_retry_column_index(&table) {
-                let row_positions = detect_rows(&region.words, config.table_row_threshold_ratio);
-                if row_positions.len() == table.len() {
-                    quantity_retry_region(
-                        &region.words,
-                        quantity_column,
-                        blank_row,
-                        &row_positions,
-                        &column_positions,
-                        width,
-                        height,
-                    )
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            let recovered =
-                recover_blank_quantity_word(&api, config, retry_region.as_ref(), width, height).or_else(|| {
-                    if !prepared_image.apply_pix_preprocessing {
-                        return None;
-                    }
-                    let retry = retry_region.as_ref()?;
-                    recover_blank_quantity_from_source(
-                        image_bytes,
-                        config,
-                        retry,
-                        width,
-                        height,
-                        tessdata_path,
-                        &security_limits,
-                    )
-                });
-            if let Some(recovered) = recovered {
-                region.push(recovered);
-                (table, column_positions) = reconstruct_cleaned_table(&region.words, config);
-            }
-            orient_table_for_reading_order(&mut table, &mut column_positions, &region.words);
-            tracing::debug!(
-                target: "xberg::ocr::tables",
-                region_index,
-                word_count = region.words.len(),
-                left = region_left,
-                top = region_top,
-                right = region_right,
-                bottom = region_bottom,
-                word_preview = %word_preview,
-                raw_rows = table.len(),
-                raw_cols = table.first().map_or(0, Vec::len),
-                "OCR table region reconstructed"
-            );
-
-            if table.is_empty() || table[0].is_empty() {
-                continue;
-            }
-
-            #[cfg(feature = "pdf")]
-            let cleaned = {
-                let bbox = region.bounding_box();
-                let cleaned = post_process_table(table, false, false);
-                #[cfg(not(target_arch = "wasm32"))]
-                let cleaned = if can_prove_sparse_grid {
-                    let recovered = hocr_for_tables
-                        .as_deref()
-                        .zip(hocr_document.as_ref())
-                        .and_then(|source| {
-                            use full_scan_table::GridProof;
-
-                            // Preserve the strict proof for explicit segmentation requests; only
-                            // an automatically selected sparse mode admits an unreadable value. ~keep
-                            let proof = match cleaned.as_deref() {
-                                Some(merged_header) => GridProof::MergedHeader(merged_header),
-                                None if policy == ImageOcrPolicy::ImplicitStandaloneSparseRows => GridProof::Standalone,
-                                None => GridProof::Strict,
-                            };
-                            full_scan_table::recover_standalone(
-                                tsv_data,
-                                &content,
-                                &bbox,
-                                &security_limits,
-                                source,
-                                proof,
-                            )
-                        });
-                    fully_claimed |= recovered.is_some();
-                    recovered.or(cleaned)
-                } else {
-                    cleaned
-                };
-                cleaned.or_else(|| {
-                    if !can_prove_scan_grid {
-                        return None;
-                    }
-                    let stock = full_scan_table::recover(tsv_data, &content, &bbox, &security_limits);
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if stock.is_none()
-                        && let Some(raster) = leader_raster.as_ref()
-                        && let Some(source) = hocr_for_tables.as_deref().zip(hocr_document.as_ref())
-                        && let Some(cells) = full_scan_table::recover_dot_leader_rows(
-                            tsv_data,
-                            &content,
-                            &bbox,
-                            &security_limits,
-                            source,
-                            raster,
-                        )
-                    {
-                        fully_claimed = true;
-                        return Some(cells);
-                    }
-                    stock
-                })
-            };
-            #[cfg(not(feature = "pdf"))]
-            let cleaned = Some(table);
-            let Some(cleaned) = cleaned else {
-                continue;
-            };
-            if !has_table_grid(&cleaned) {
-                tracing::debug!(
-                    target: "xberg::ocr::tables",
-                    region_index,
-                    "OCR table region has no row or column that relates two cells; keeping it as text"
-                );
-                if dictionary_filtered_line_count > 0 && hocr_for_tables.is_some() {
-                    rejected_regions.push(region.read_boxes);
-                }
-                continue;
-            }
-
-            let markdown_table = table_to_markdown(&cleaned);
-
-            tables.push(OcrTable {
-                cells: cleaned,
-                markdown: markdown_table,
-                page_number: config.page_number,
-                bounding_box: Some(region.bounding_box()),
-            });
+            detected.tables.extend(outcome.table);
         }
 
         // Real count, not hardcoded to at-most-one (#177): a page can contain
         // several independent tables separated by prose.
         metadata.insert(
             "table_count".to_string(),
-            serde_json::Value::Number(tables.len().into()),
+            serde_json::Value::Number(detected.tables.len().into()),
         );
         metadata.insert(
             "tables_detected".to_string(),
-            serde_json::Value::Number(tables.len().into()),
+            serde_json::Value::Number(detected.tables.len().into()),
         );
-        if let Some(first) = tables.first() {
+        if let Some(first) = detected.tables.first() {
             metadata.insert(
                 "table_rows".to_string(),
                 serde_json::Value::Number(first.cells.len().into()),
@@ -3426,146 +3445,536 @@ pub(super) fn perform_ocr(
                 serde_json::Value::Number(first.cells.first().map_or(0, Vec::len).into()),
             );
         }
+        Ok(detected)
     }
 
-    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    drop(leader_raster);
+    /// Reconstruct one candidate table region into a table, or decide that it stays text.
+    fn build_region_table(
+        &self,
+        region_index: usize,
+        mut region: TableRegion,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionOutcome {
+        #[cfg(not(feature = "pdf"))]
+        let _ = single_region;
+        let mut outcome = RegionOutcome::default();
+        if !self.keep_region_candidate(region_index, &mut region) {
+            return outcome;
+        }
+        let Some(table) = self.reconstruct_region_table(region_index, &mut region, detection) else {
+            return outcome;
+        };
 
-    // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
-    if let Some(hocr) = hocr_for_tables.as_deref().filter(|_| !rejected_regions.is_empty())
-        && let Some((restored_content, document)) = restore_rejected_table_words(
-            hocr,
-            &dictionary_filter,
-            config.page_number,
-            &rejected_regions,
-            &mut metadata,
-        )
-    {
-        content = restored_content;
-        hocr_document = Some(document);
+        #[cfg(feature = "pdf")]
+        let grid = self.prove_region_grid(table, &region, detection, single_region);
+        #[cfg(not(feature = "pdf"))]
+        let grid = RegionGrid {
+            cells: Some(table),
+            claims_page: false,
+        };
+        let Some(cleaned) = grid.cells else {
+            return outcome;
+        };
+        if !has_table_grid(&cleaned) {
+            tracing::debug!(
+                target: "xberg::ocr::tables",
+                region_index,
+                "OCR table region has no row or column that relates two cells; keeping it as text"
+            );
+            if detection.dictionary_filtered_line_count > 0 && detection.hocr_for_tables.is_some() {
+                outcome.rejected_boxes = Some(region.read_boxes);
+            }
+            return outcome;
+        }
+
+        let markdown_table = table_to_markdown(&cleaned);
+        outcome.claims_page = grid.claims_page;
+        outcome.table = Some(OcrTable {
+            cells: cleaned,
+            markdown: markdown_table,
+            page_number: self.config.page_number,
+            bounding_box: Some(region.bounding_box()),
+        });
+        outcome
     }
-    if let Some(document) = hocr_document.as_mut().filter(|_| fully_claimed) {
-        document.elements.clear();
-        document.ocr_text_claimed_by_tables = true;
-    } else if let Some(document) = hocr_document.as_mut() {
-        // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
-        publish_hocr_table_rows(
-            document,
-            &mut tables,
-            hocr_for_tables
-                .as_deref()
-                .filter(|_| dictionary_filtered_line_count == 0),
-            tsv_data_for_tables.as_deref(),
-            config,
-            policy,
-            &security_limits,
+
+    /// Reconstruct a region's words into its oriented table, or `None` when it reads as no cells.
+    fn reconstruct_region_table(
+        &self,
+        region_index: usize,
+        region: &mut TableRegion,
+        detection: &TableDetection<'_>,
+    ) -> Option<Vec<Vec<String>>> {
+        let config = self.config;
+        let (width, height) = detection.dimensions;
+        let region_left = region.words.iter().map(|w| w.left).min().unwrap_or(0);
+        let region_top = region.words.iter().map(|w| w.top).min().unwrap_or(0);
+        let region_right = region.words.iter().map(|w| w.left + w.width).max().unwrap_or(0);
+        let region_bottom = region.words.iter().map(|w| w.top + w.height).max().unwrap_or(0);
+        let word_preview: String = region
+            .words
+            .iter()
+            .take(12)
+            .map(|w| w.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(200)
+            .collect();
+
+        let (mut table, mut column_positions) = reconstruct_cleaned_table(&region.words, config);
+        let retry_region = quantity_retry_candidate(&region.words, &table, &column_positions, config, (width, height));
+        if let Some(recovered) = self.recover_region_quantity(retry_region.as_ref(), detection) {
+            region.push(recovered);
+            (table, column_positions) = reconstruct_cleaned_table(&region.words, config);
+        }
+        orient_table_for_reading_order(&mut table, &mut column_positions, &region.words);
+        tracing::debug!(
+            target: "xberg::ocr::tables",
+            region_index,
+            word_count = region.words.len(),
+            left = region_left,
+            top = region_top,
+            right = region_right,
+            bottom = region_bottom,
+            word_preview = %word_preview,
+            raw_rows = table.len(),
+            raw_cols = table.first().map_or(0, Vec::len),
+            "OCR table region reconstructed"
         );
+
+        (!table.is_empty() && !table[0].is_empty()).then_some(table)
     }
 
-    let is_markdown_output = extraction_config
-        .map(|c| c.output_format == crate::core::config::OutputFormat::Markdown)
-        .unwrap_or(config.output_format == "markdown");
+    /// Apply the region's size and semantic gates, keeping only regions worth reconstructing.
+    fn keep_region_candidate(&self, region_index: usize, region: &mut TableRegion) -> bool {
+        let config = self.config;
+        if region.words.len() < MIN_TABLE_CANDIDATE_WORDS {
+            tracing::debug!(
+                target: "xberg::ocr::tables",
+                region_index,
+                word_count = region.words.len(),
+                min_required = MIN_TABLE_CANDIDATE_WORDS,
+                "OCR table region skipped: below MIN_TABLE_CANDIDATE_WORDS"
+            );
+            return false;
+        }
+        // The minimum above counts every word Tesseract read, before shading marks are
+        // dropped, so a dropped mark changes a table's cells but never whether a table is
+        // attempted at all (GH#1858). ~keep
+        region.drop_shading_marks(config.table_row_threshold_ratio);
+        if config
+            .preprocessing
+            .as_ref()
+            .is_some_and(|preprocessing| preprocessing.normalize_shaded_rows)
+        {
+            region.drop_normalized_band_edge_glyphs();
+        }
+        if !has_semantic_ocr_table_content(&region.words) {
+            tracing::debug!(
+                target: "xberg::ocr::tables",
+                region_index,
+                word_count = region.words.len(),
+                "OCR table region skipped: insufficient semantic content"
+            );
+            return false;
+        }
+        true
+    }
 
-    if !tables.is_empty()
-        && is_markdown_output
-        && let Some(ref tsv_data) = tsv_data_for_tables
-    {
-        let rebuilt = build_content_with_inline_tables(tsv_data, &tables, config.table_min_confidence);
-        if !rebuilt.is_empty() {
-            if should_adopt_table_rebuild(&content, &rebuilt) {
-                if let Some(read) = retained_hocr_read.as_mut() {
-                    read.inline_page = inline_hocr_receipt(tsv_data, &tables, config.table_min_confidence, read)
-                        .filter(|projection| projection.text == rebuilt);
-                    tracing::trace!(
-                        matched = read.inline_page.as_ref().map_or(0, |page| page.ranges.len()),
-                        "verified inline OCR occurrence ranges"
+    /// Recover a blank quantity cell the first read dropped, from the engine or the source raster.
+    fn recover_region_quantity(
+        &self,
+        retry_region: Option<&QuantityRetryRegion>,
+        detection: &TableDetection<'_>,
+    ) -> Option<HocrWord> {
+        let retry_region = retry_region?;
+        let (width, height) = detection.dimensions;
+        recover_blank_quantity_word(detection.api, self.config, Some(retry_region), width, height).or_else(|| {
+            if !detection.apply_pix_preprocessing {
+                return None;
+            }
+            recover_blank_quantity_from_source(
+                self.image_bytes,
+                self.config,
+                retry_region,
+                width,
+                height,
+                &self.models.directory,
+                &self.security_limits,
+            )
+        })
+    }
+
+    /// Prove a reconstructed table's grid from its words, keeping the post-processed cells when no
+    /// proof holds.
+    #[cfg(feature = "pdf")]
+    fn prove_region_grid(
+        &self,
+        table: Vec<Vec<String>>,
+        region: &TableRegion,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionGrid {
+        let bbox = region.bounding_box();
+        let cleaned = post_process_table(table, false, false);
+        #[cfg(not(target_arch = "wasm32"))]
+        let sparse = self.prove_sparse_region_grid(cleaned, &bbox, detection, single_region);
+        #[cfg(target_arch = "wasm32")]
+        let sparse = RegionGrid {
+            cells: cleaned,
+            claims_page: false,
+        };
+        if sparse.cells.is_some() {
+            return sparse;
+        }
+        self.prove_scan_region_grid(&bbox, detection, single_region)
+    }
+
+    /// Prove a sparse-row grid from the first read's hOCR, when the page policy admits one.
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    fn prove_sparse_region_grid(
+        &self,
+        cleaned: Option<Vec<Vec<String>>>,
+        bbox: &OcrTableBoundingBox,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionGrid {
+        let config = self.config;
+        let can_prove_sparse_grid = matches!(
+            self.policy,
+            ImageOcrPolicy::StandaloneSparseRows | ImageOcrPolicy::ImplicitStandaloneSparseRows
+        ) && config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && single_region
+            && detection.dictionary_filtered_line_count == 0
+            && full_scan_table::uses_default_table_thresholds(config);
+        let recovered = if can_prove_sparse_grid {
+            detection
+                .hocr_for_tables
+                .zip(detection.hocr_document)
+                .and_then(|source| {
+                    use full_scan_table::GridProof;
+
+                    // Preserve the strict proof for explicit segmentation requests; only
+                    // an automatically selected sparse mode admits an unreadable value. ~keep
+                    let proof = match cleaned.as_deref() {
+                        Some(merged_header) => GridProof::MergedHeader(merged_header),
+                        None if self.policy == ImageOcrPolicy::ImplicitStandaloneSparseRows => GridProof::Standalone,
+                        None => GridProof::Strict,
+                    };
+                    full_scan_table::recover_standalone(
+                        detection.tsv_data,
+                        detection.content,
+                        bbox,
+                        &self.security_limits,
+                        source,
+                        proof,
+                    )
+                })
+        } else {
+            None
+        };
+        RegionGrid {
+            claims_page: recovered.is_some(),
+            cells: recovered.or(cleaned),
+        }
+    }
+
+    /// Prove a whole-page grid from the word table and hOCR, including a dot-leader row.
+    #[cfg(feature = "pdf")]
+    fn prove_scan_region_grid(
+        &self,
+        bbox: &OcrTableBoundingBox,
+        detection: &TableDetection<'_>,
+        single_region: bool,
+    ) -> RegionGrid {
+        let config = self.config;
+        let can_prove_scan_grid = config.known_full_page_scan
+            && single_region
+            && detection.dictionary_filtered_line_count == 0
+            && detection.hocr_for_tables.is_some()
+            && full_scan_table::uses_default_table_thresholds(config);
+        if !can_prove_scan_grid {
+            return RegionGrid {
+                cells: None,
+                claims_page: false,
+            };
+        }
+        let tsv_data = detection.tsv_data;
+        let stock = full_scan_table::recover(tsv_data, detection.content, bbox, &self.security_limits);
+        #[cfg(not(target_arch = "wasm32"))]
+        if stock.is_none()
+            && let Some(raster) = detection.leader_raster
+            && let Some(source) = detection.hocr_for_tables.zip(detection.hocr_document)
+            && let Some(cells) = full_scan_table::recover_dot_leader_rows(
+                tsv_data,
+                detection.content,
+                bbox,
+                &self.security_limits,
+                source,
+                raster,
+            )
+        {
+            return RegionGrid {
+                cells: Some(cells),
+                claims_page: true,
+            };
+        }
+        RegionGrid {
+            cells: stock,
+            claims_page: false,
+        }
+    }
+
+    /// Restore lines the dictionary filter rejected inside a table region when the region stayed
+    /// text, since the filter has no say over them.
+    fn restore_rejected_regions(
+        &self,
+        page: &mut PageAssembly,
+        dictionary_filter: &DictionaryLineFilter<'_>,
+        rejected_regions: &[Vec<HocrWord>],
+        hocr_for_tables: Option<&str>,
+    ) {
+        // Restore supported lines before paragraphs are flattened or claimed by accepted tables. ~keep
+        if let Some(hocr) = hocr_for_tables.filter(|_| !rejected_regions.is_empty())
+            && let Some((restored_content, document)) = restore_rejected_table_words(
+                hocr,
+                dictionary_filter,
+                self.config.page_number,
+                rejected_regions,
+                &mut page.metadata,
+            )
+        {
+            page.content = restored_content;
+            page.hocr_document = Some(document);
+        }
+    }
+
+    /// Let accepted tables claim their rows in the hOCR document, or clear a document the tables
+    /// fully cover.
+    fn publish_table_rows(
+        &self,
+        page: &mut PageAssembly,
+        hocr_for_tables: Option<&str>,
+        fully_claimed: bool,
+        dictionary_filtered_line_count: usize,
+        tsv_data_for_tables: Option<&str>,
+    ) {
+        if let Some(document) = page.hocr_document.as_mut().filter(|_| fully_claimed) {
+            document.elements.clear();
+            document.ocr_text_claimed_by_tables = true;
+        } else if let Some(document) = page.hocr_document.as_mut() {
+            // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
+            publish_hocr_table_rows(
+                document,
+                &mut page.tables,
+                hocr_for_tables.filter(|_| dictionary_filtered_line_count == 0),
+                tsv_data_for_tables,
+                self.config,
+                self.policy,
+                &self.security_limits,
+            );
+        }
+    }
+
+    /// Rebuild markdown content with the accepted tables inlined when the rebuild keeps the page's
+    /// content.
+    fn adopt_inline_tables(&self, page: &mut PageAssembly, tsv_data_for_tables: Option<&str>) {
+        let config = self.config;
+        let is_markdown_output = self
+            .extraction_config
+            .map(|c| c.output_format == crate::core::config::OutputFormat::Markdown)
+            .unwrap_or(config.output_format == "markdown");
+
+        if !page.tables.is_empty()
+            && is_markdown_output
+            && let Some(tsv_data) = tsv_data_for_tables
+        {
+            let rebuilt = build_content_with_inline_tables(tsv_data, &page.tables, config.table_min_confidence);
+            if !rebuilt.is_empty() {
+                if should_adopt_table_rebuild(&page.content, &rebuilt) {
+                    if let Some(read) = page.retained_hocr_read.as_mut() {
+                        read.inline_page =
+                            inline_hocr_receipt(tsv_data, &page.tables, config.table_min_confidence, read)
+                                .filter(|projection| projection.text == rebuilt);
+                        tracing::trace!(
+                            matched = read.inline_page.as_ref().map_or(0, |page| page.ranges.len()),
+                            "verified inline OCR occurrence ranges"
+                        );
+                    }
+                    page.content = rebuilt;
+                    page.metadata.insert(
+                        "pre_formatted".to_string(),
+                        serde_json::Value::String("markdown".to_string()),
+                    );
+                } else {
+                    tracing::warn!(
+                        target: "xberg::ocr::tables",
+                        original_word_count = page.content.split_whitespace().count(),
+                        rebuilt_word_count = rebuilt.split_whitespace().count(),
+                        "OCR markdown table rebuild dropped content relative to the original; keeping original content"
                     );
                 }
-                content = rebuilt;
-                metadata.insert(
-                    "pre_formatted".to_string(),
-                    serde_json::Value::String("markdown".to_string()),
-                );
-            } else {
-                tracing::warn!(
-                    target: "xberg::ocr::tables",
-                    original_word_count = content.split_whitespace().count(),
-                    rebuilt_word_count = rebuilt.split_whitespace().count(),
-                    "OCR markdown table rebuild dropped content relative to the original; keeping original content"
-                );
             }
         }
     }
 
+    /// Join paragraph-final scanned line wraps on a page no accepted table claimed.
     #[cfg(feature = "pdf")]
-    if tables.is_empty()
-        && !fully_claimed
-        && content == raw_content
-        && let Some(words) = dehyphenation_words.as_deref()
-        && let Some(doc) = hocr_document.as_mut()
-        && let sparse = config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
-        && dehyphenation::may_join_scanned_wraps(&doc.elements, sparse)
-        && content == flatten_hocr_elements_to_text(&doc.elements)
-        && dehyphenation::join_scanned_wraps(&mut doc.elements, words, ocr_image_width, sparse)
-    {
-        content = flatten_hocr_elements_to_text(&doc.elements);
+    fn join_scanned_wraps(
+        &self,
+        page: &mut PageAssembly,
+        dehyphenation_words: Option<&[crate::ocr::hocr_parser::HocrWordOccurrence]>,
+        dimensions: (u32, u32),
+        fully_claimed: bool,
+        raw_content: &str,
+    ) {
+        if page.tables.is_empty()
+            && !fully_claimed
+            && page.content == raw_content
+            && let Some(words) = dehyphenation_words
+            && let Some(doc) = page.hocr_document.as_mut()
+            && let sparse = self.config.psm == TessPageSegMode::PSM_SPARSE_TEXT as u8
+            && dehyphenation::may_join_scanned_wraps(&doc.elements, sparse)
+            && page.content == flatten_hocr_elements_to_text(&doc.elements)
+            && dehyphenation::join_scanned_wraps(&mut doc.elements, words, dimensions.0, sparse)
+        {
+            page.content = flatten_hocr_elements_to_text(&doc.elements);
+        }
     }
 
-    if let Some(read) = retained_hocr_read.as_mut()
-        && let Some(doc) = hocr_document.as_mut()
-    {
-        read.plain_document = document_hocr_receipt(read, doc);
-        if let (Some(page), Some(document)) = (&read.inline_page, &read.plain_document) {
+    /// Keep the hOCR receipt only when it still describes the finished page, and report what a
+    /// region capture saw.
+    fn verify_hocr_receipt(&self, page: &mut PageAssembly, dimensions: (u32, u32), capture_region_hocr: bool) {
+        if let Some(read) = page.retained_hocr_read.as_mut()
+            && let Some(doc) = page.hocr_document.as_mut()
+        {
+            read.plain_document = document_hocr_receipt(read, doc);
+            if let (Some(page), Some(document)) = (&read.inline_page, &read.plain_document) {
+                tracing::trace!(
+                    page_ranges = ?page.ranges, document_ranges = ?document.ranges,
+                    document_bytes = document.text.len(),
+                    "verified post-table plain OCR occurrence ranges"
+                );
+            }
+        }
+        if let Some(read) = page.retained_hocr_read.as_ref() {
             tracing::trace!(
-                page_ranges = ?page.ranges, document_ranges = ?document.ranges,
-                document_bytes = document.text.len(),
-                "verified post-table plain OCR occurrence ranges"
+                count = read.occurrences.len(),
+                transcript_matches = read.transcript == page.content,
+                owners_match =
+                    page.hocr_document
+                        .as_ref()
+                        .is_some_and(|doc| read.matches(&read.transcript, read.dimensions, doc)),
+                "checking OCR worker hOCR receipt"
+            );
+        }
+        let captured_occurrences = page.retained_hocr_read.as_ref().map(|read| read.occurrences.len());
+        let retained = page.retained_hocr_read.take().filter(|read| {
+            read.inline_page
+                .as_ref()
+                .is_some_and(|projection| projection.text == page.content)
+                || read.transcript == page.content
+                    && page.hocr_document.as_ref().is_some_and(|doc| {
+                        flatten_hocr_elements_to_text(&doc.elements) == read.transcript
+                            && read.matches(&page.content, dimensions, doc)
+                    })
+        });
+        page.retained_hocr_read = retained;
+
+        if capture_region_hocr {
+            tracing::trace!(
+                ?captured_occurrences,
+                retained = page.retained_hocr_read.is_some(),
+                "hOCR region capture result"
             );
         }
     }
-    if let Some(read) = retained_hocr_read.as_ref() {
-        tracing::trace!(
-            count = read.occurrences.len(),
-            transcript_matches = read.transcript == content,
-            owners_match =
-                hocr_document
-                    .as_ref()
-                    .is_some_and(|doc| read.matches(&read.transcript, read.dimensions, doc)),
-            "checking OCR worker hOCR receipt"
-        );
+}
+
+/// What the page's first read, and its optional script retry, produced.
+struct Recognition {
+    mean_text_conf: i32,
+    word_confidence_stats: Option<primary_read_metadata::WordConfidenceStats>,
+    tsv_data_for_tables: Option<String>,
+    script_retry: Option<script_retry::Outcome>,
+}
+
+impl Recognition {
+    /// The second read's word table, when it replaced the first read and changed the page.
+    fn merged_read(&self) -> Option<&script_retry::Merged> {
+        merged_read(self.script_retry.as_ref())
     }
-    let captured_occurrences = retained_hocr_read.as_ref().map(|read| read.occurrences.len());
-    let retained_hocr_read = retained_hocr_read.filter(|read| {
-        read.inline_page
-            .as_ref()
-            .is_some_and(|projection| projection.text == content)
-            || read.transcript == content
-                && hocr_document.as_ref().is_some_and(|doc| {
-                    flatten_hocr_elements_to_text(&doc.elements) == read.transcript
-                        && read.matches(&content, (ocr_image_width, ocr_image_height), doc)
-                })
-    });
+}
 
-    if capture_region_hocr {
-        tracing::trace!(
-            ?captured_occurrences,
-            retained = retained_hocr_read.is_some(),
-            "hOCR region capture result"
-        );
+/// The second read's word table, when it replaced the first read and changed the page.
+fn merged_read(script_retry: Option<&script_retry::Outcome>) -> Option<&script_retry::Merged> {
+    script_retry
+        .filter(|outcome| outcome.replaces_primary())
+        .map(|outcome| &outcome.merged)
+        .filter(|merged| merged.changed())
+}
+
+/// The page under assembly: the post-recognition phases rewrite its text, tables and hOCR
+/// document in place.
+struct PageAssembly {
+    content: String,
+    mime_type: String,
+    metadata: HashMap<String, serde_json::Value>,
+    tables: Vec<OcrTable>,
+    ocr_elements: Option<Vec<OcrElement>>,
+    hocr_document: Option<InternalDocument>,
+    retained_hocr_read: Option<RetainedHocrRead>,
+}
+
+/// The page and receipts the table phase reads while reconstructing its regions.
+struct TableDetection<'a> {
+    api: &'a TesseractAPI,
+    tsv_data: &'a str,
+    table_mark_symbols: &'a [xberg_tesseract::WordSymbols],
+    dimensions: (u32, u32),
+    apply_pix_preprocessing: bool,
+    #[cfg(feature = "pdf")]
+    content: &'a str,
+    hocr_for_tables: Option<&'a str>,
+    #[cfg(feature = "pdf")]
+    hocr_document: Option<&'a InternalDocument>,
+    dictionary_filtered_line_count: usize,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    leader_raster: Option<&'a xberg_tesseract::Pix>,
+}
+
+/// What the table phase produced for the page.
+struct DetectedTables {
+    tables: Vec<OcrTable>,
+    rejected_regions: Vec<Vec<HocrWord>>,
+    fully_claimed: bool,
+}
+
+impl DetectedTables {
+    fn empty() -> Self {
+        Self {
+            tables: Vec::new(),
+            rejected_regions: Vec::new(),
+            fully_claimed: false,
+        }
     }
+}
 
-    drop(api);
+/// The cells a region's grid proof accepted, and whether it accounts for the whole page's text.
+struct RegionGrid {
+    cells: Option<Vec<Vec<String>>>,
+    claims_page: bool,
+}
 
-    Ok(OcrExtractionResult {
-        content,
-        mime_type,
-        metadata,
-        tables,
-        ocr_elements,
-        internal_document: hocr_document,
-        raw_ocr_source_frame,
-        retained_hocr_read,
-    })
+/// What one candidate table region produced: a table, the words whose restoration it rejected, and
+/// whether its grid proof claimed the whole page.
+#[derive(Default)]
+struct RegionOutcome {
+    table: Option<OcrTable>,
+    rejected_boxes: Option<Vec<HocrWord>>,
+    claims_page: bool,
 }
 
 /// Process an image file and return OCR results.
@@ -5493,9 +5902,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn blank_quantity_retry_is_bounded_to_the_missing_quantity_cell() {
-        let words = vec![
+    fn invoice_words() -> Vec<crate::table_core::HocrWord> {
+        vec![
             invoice_word("DESCRIPTION", 279, 100, 250),
             invoice_word("QTY", 1_699, 100, 90),
             invoice_word("UNIT PRICE", 2_096, 100, 258),
@@ -5511,7 +5919,12 @@ mod tests {
             invoice_word("Cleaning Tablets", 279, 400, 360),
             invoice_word("$18.50", 2_206, 400, 150),
             invoice_word("$92.50", 2_772, 400, 150),
-        ];
+        ]
+    }
+
+    #[test]
+    fn blank_quantity_retry_is_bounded_to_the_missing_quantity_cell() {
+        let words = invoice_words();
         let table = vec![
             vec!["DESCRIPTION", "QTY", "UNIT PRICE", "LINE TOTAL"],
             vec!["Espresso Beans", "10", "$45.00", "$450.00"],
@@ -5539,6 +5952,66 @@ mod tests {
         assert_eq!(region.column, 1);
         assert_eq!((region.left, region.top), (1_659, 380));
         assert_eq!((region.width, region.height), (170, 80));
+    }
+
+    #[test]
+    fn reconstructed_invoice_table_keeps_the_blank_quantity_crop() {
+        let words = invoice_words();
+        let config = TesseractConfig::default();
+        let (table, column_positions) = reconstruct_cleaned_table(&words, &config);
+
+        let region = quantity_retry_candidate(&words, &table, &column_positions, &config, (3_200, 4_089))
+            .expect("the reconstructed invoice keeps one bounded retry region");
+
+        assert_eq!((region.row, region.column), (3, 1));
+        assert_eq!((region.left, region.top), (1_659, 380));
+        assert_eq!((region.width, region.height), (170, 80));
+    }
+
+    #[test]
+    fn quantity_retry_candidate_requires_one_detected_row_per_table_row() {
+        let words = vec![
+            invoice_word("DESCRIPTION", 279, 100, 250),
+            invoice_word("QTY", 1_699, 100, 90),
+            invoice_word("Espresso Beans", 279, 200, 400),
+            invoice_word("10", 1_740, 200, 48),
+            invoice_word("Cups", 279, 300, 100),
+            invoice_word("200", 1_709, 300, 75),
+            invoice_word("Cleaning Tablets", 279, 400, 360),
+        ];
+        let table = vec![
+            vec!["DESCRIPTION", "QTY"],
+            vec!["Espresso Beans", "10"],
+            vec!["Cups", "200"],
+            vec!["Cleaning Tablets", ""],
+        ]
+        .into_iter()
+        .map(|row| row.into_iter().map(str::to_string).collect())
+        .collect::<Vec<Vec<String>>>();
+        let column_positions = [279, 1_709];
+        let config = TesseractConfig::default();
+
+        let region = quantity_retry_candidate(&words, &table, &column_positions, &config, (3_200, 4_089))
+            .expect("four detected word rows match four table rows");
+        assert_eq!((region.row, region.column), (3, 1));
+
+        let mut extra_row = words.clone();
+        extra_row.push(invoice_word("Total", 279, 500, 100));
+        assert!(
+            quantity_retry_candidate(&extra_row, &table, &column_positions, &config, (3_200, 4_089)).is_none(),
+            "a fifth detected row must not retry a four-row table"
+        );
+        assert!(
+            quantity_retry_candidate(
+                &words[..words.len() - 1],
+                &table,
+                &column_positions,
+                &config,
+                (3_200, 4_089)
+            )
+            .is_none(),
+            "a table row with no detected words must not retry"
+        );
     }
 
     #[test]
