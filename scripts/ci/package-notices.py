@@ -460,26 +460,39 @@ def check(archives: list[str], archive_format: str, expected: int, notices: dict
 def verify(archive_path: str, prefixes: list[str], notices: dict[str, bytes]) -> None:
     with zipfile.ZipFile(archive_path) if zipfile.is_zipfile(archive_path) else tarfile.open(archive_path) as archive:
         if isinstance(archive, zipfile.ZipFile):
-            members = [(member.filename, member) for member in archive.infolist() if not member.is_dir()]
+            # A ZIP written on a Windows runner can separate entries with backslashes; normalise
+            # so the same archive root matches on either separator. Tar member names are literal
+            # paths: a backslash there is part of the name, and POSIX extraction keeps it, so
+            # `root\LICENSE` is not `root/LICENSE` and must not satisfy the gate.
+            members = [
+                (PurePosixPath(member.filename.replace("\\", "/")), member)
+                for member in archive.infolist()
+                if not member.is_dir()
+            ]
         else:
-            members = [(member.name, member) for member in archive.getmembers() if member.isfile()]
+            members = [(PurePosixPath(member.name), member) for member in archive.getmembers() if member.isfile()]
         for prefix in prefixes:
             for notice, expected in notices.items():
                 path = PurePosixPath(prefix) / notice
-                matches = [member for name, member in members if PurePosixPath(name) == path]
+                matches = [member for member_path, member in members if member_path == path]
+                # The archive name is part of every message: a release run stages ten of them and
+                # the failure is only actionable when it says which one and which file.
                 if len(matches) != 1:
-                    raise ValueError(f"expected one {path}, found {len(matches)}")
+                    raise ValueError(f"{archive_path}: expected one {path}, found {len(matches)}")
                 if isinstance(archive, zipfile.ZipFile):
                     content = archive.read(matches[0])
                 else:
                     stream = archive.extractfile(matches[0])
                     if stream is None:
-                        raise ValueError(f"unreadable archive notice: {path}")
+                        raise ValueError(f"{archive_path}: unreadable archive notice {path}")
                     with stream:
                         content = stream.read()
                 if content != expected:
-                    raise ValueError(f"{path} differs from canonical {notice}")
-    print(f"Verified {len(notices) * len(prefixes)} canonical notice files")
+                    raise ValueError(
+                        f"{archive_path}: {path} differs from canonical {notice} "
+                        f"({len(content)} bytes, expected {len(expected)})"
+                    )
+    print(f"Verified {len(notices) * len(prefixes)} canonical notice files in {archive_path}")
 
 
 def main() -> None:
@@ -487,6 +500,14 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("stage").add_argument("destinations", nargs="+")
     verification = commands.add_parser("verify")
+    # A release job verifies archives built from the release source while running this
+    # workflow revision's script, so the canonical bytes need their own root. ~keep
+    verification.add_argument(
+        "--canonical-root",
+        type=Path,
+        default=None,
+        help="directory holding the canonical LICENSE and THIRD_PARTY_LICENSES.md (default: this checkout)",
+    )
     verification.add_argument("archive")
     verification.add_argument("prefixes", nargs="+")
     for name in ("inject", "check"):
@@ -496,7 +517,7 @@ def main() -> None:
         command.add_argument("archives", nargs="+")
     args = parser.parse_args()
     try:
-        notices = canonical_notices()
+        notices = canonical_notices(getattr(args, "canonical_root", None))
         if args.command == "stage":
             stage(args.destinations, notices)
         elif args.command == "verify":
@@ -505,7 +526,10 @@ def main() -> None:
             inject(args.archives, args.archive_format, args.expected_count, notices)
         else:
             check(args.archives, args.archive_format, args.expected_count, notices)
-    except (OSError, ValueError, tarfile.TarError, zipfile.BadZipFile) as error:
+    # EOFError covers a gzip stream cut short (`tarfile` surfaces it as "unexpected end of
+    # data" only after getmembers in some Python versions); a truncated archive must fail the
+    # gate, not crash it with a traceback.
+    except (OSError, ValueError, EOFError, tarfile.TarError, zipfile.BadZipFile) as error:
         print(f"::error::{error}", file=sys.stderr)
         sys.exit(1)
 

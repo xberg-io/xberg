@@ -93,6 +93,25 @@ def build_tarball(directory: Path, *, roots: tuple[str, ...] = ("demo-1.0.0",)) 
     return path
 
 
+def build_cli_archive(directory: Path, asset: str, *, notices: dict[str, bytes] | None = None) -> Path:
+    """Pack one archive shaped like the release jobs: a single root named after the archive."""
+    notices = notices if notices is not None else {name: notice_bytes(name) for name in NOTICES}
+    stage = asset.removesuffix(".tar.gz").removesuffix(".zip")
+    payload = {**notices, "xberg": b"binary"}
+    path = directory / asset
+    if asset.endswith(".zip"):
+        with zipfile.ZipFile(path, "w") as archive:
+            for name, content in payload.items():
+                archive.writestr(f"{stage}/{name}", content)
+    else:
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in payload.items():
+                member = tarfile.TarInfo(f"{stage}/{name}")
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+    return path
+
+
 def build_sdist(directory: Path, *, header_only: bool = False) -> Path:
     path = build_tarball(directory)
     pkg_info = b"Metadata-Version: 2.4\nName: demo\nVersion: 1.0.0\n"
@@ -405,6 +424,100 @@ class PackageNoticesTests(unittest.TestCase):
         assert manifest.count('"THIRD_PARTY_LICENSES.md"') == 1
         assert run_script("stage", str(package)).returncode == 0
         assert (package / "build.zig.zon").read_text().count('"LICENSE"') == 1
+
+
+class CliArchiveNoticeTests(unittest.TestCase):
+    """Check notice bytes at the archive's own root prefix, as the release job does."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+
+    def test_should_verify_cli_archive_notice_bytes_under_the_archive_root(self) -> None:
+        for asset in ("xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip", "xberg-cli-aarch64-unknown-linux-gnu.tar.gz"):
+            archive = build_cli_archive(self.root, asset)
+            result = run_script("verify", str(archive), asset.removesuffix(".tar.gz").removesuffix(".zip"))
+            assert result.returncode == 0, result.stderr
+            assert f"Verified 2 canonical notice files in {archive}" in result.stdout
+
+    def test_should_match_a_zip_root_written_with_backslash_separators(self) -> None:
+        asset = "xberg-cli-x86_64-pc-windows-msvc.zip"
+        stage = asset.removesuffix(".zip")
+        path = self.root / asset
+        with zipfile.ZipFile(path, "w") as archive:
+            for name in NOTICES:
+                archive.writestr(f"{stage}\\{name}", notice_bytes(name))
+        result = run_script("verify", str(path), stage)
+        assert result.returncode == 0, result.stderr
+
+    def test_should_reject_a_tar_whose_notice_members_use_backslashes(self) -> None:
+        asset = "xberg-cli-x86_64-unknown-linux-gnu.tar.gz"
+        stage = asset.removesuffix(".tar.gz")
+        path = self.root / asset
+        payload = {name: notice_bytes(name) for name in NOTICES}
+        payload["xberg"] = b"binary"
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in payload.items():
+                member = tarfile.TarInfo(f"{stage}\\{name}")
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+        result = run_script("verify", str(path), stage)
+        assert result.returncode == 1, result.stdout
+        assert f"{path}: expected one {stage}/LICENSE, found 0" in result.stderr
+
+    def test_should_name_the_archive_and_file_when_a_notice_is_missing_or_stale(self) -> None:
+        notices = {name: notice_bytes(name) for name in NOTICES}
+        for asset in ("xberg-cli-x86_64-pc-windows-msvc.zip", "xberg-cli-x86_64-unknown-linux-musl.tar.gz"):
+            directory = self.root / asset.replace(".", "-")
+            directory.mkdir()
+            stage = asset.removesuffix(".tar.gz").removesuffix(".zip")
+
+            # Rebuild without one notice instead of rewriting the archive: the gate must fail on
+            # an archive that never carried it, not only on one whose copy went stale.
+            missing = build_cli_archive(
+                directory, asset, notices={key: value for key, value in notices.items() if key != NOTICES[1]}
+            )
+            result = run_script("verify", str(missing), stage)
+            assert result.returncode == 1, result.stdout
+            assert f"{missing}: expected one {stage}/{NOTICES[1]}, found 0" in result.stderr
+
+            stale = build_cli_archive(directory, asset, notices={**notices, "LICENSE": b"stale"})
+            result = run_script("verify", str(stale), stage)
+            assert result.returncode == 1, result.stdout
+            assert f"{stale}: {stage}/LICENSE differs from canonical LICENSE" in result.stderr
+            assert f"expected {len(notices['LICENSE'])}" in result.stderr
+
+            assert run_script("verify", str(build_cli_archive(directory, asset)), stage).returncode == 0
+
+    def test_should_compare_against_an_explicit_canonical_root(self) -> None:
+        asset = "xberg-cli-x86_64-apple-darwin.tar.gz"
+        archive = build_cli_archive(self.root, asset)
+        stage = asset.removesuffix(".tar.gz")
+        canonical = self.root / "canonical"
+        canonical.mkdir()
+        for name in NOTICES:
+            (canonical / name).write_bytes(notice_bytes(name))
+        assert run_script("verify", "--canonical-root", str(canonical), str(archive), stage).returncode == 0
+
+        (canonical / "LICENSE").write_bytes(b"stale\n")
+        result = run_script("verify", "--canonical-root", str(canonical), str(archive), stage)
+        assert result.returncode == 1, result.stdout
+        assert f"{archive}: {stage}/LICENSE differs from canonical LICENSE" in result.stderr
+
+    def test_should_fail_closed_on_an_empty_or_truncated_cli_archive(self) -> None:
+        asset = "xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz"
+        stage = asset.removesuffix(".tar.gz")
+        archive = build_cli_archive(self.root, asset)
+        empty = self.root / "empty.tar.gz"
+        empty.write_bytes(b"")
+        truncated = self.root / "truncated.tar.gz"
+        truncated.write_bytes(archive.read_bytes()[: archive.stat().st_size // 2])
+        for broken in (empty, truncated):
+            result = run_script("verify", str(broken), stage)
+            assert result.returncode == 1, result.stdout
+            assert result.stderr.startswith("::error::"), result.stderr
+            assert "Traceback" not in result.stderr, result.stderr
 
 
 if __name__ == "__main__":

@@ -378,3 +378,108 @@ assert len(expected) == len(names) == 6
 assert set(names) == expected
 PYTHON
 }
+
+prepare_cli_notice_gate() {
+	mkdir -p .notice-tools/scripts/ci .release-notices dist/cli
+	# The verifier comes from the workflow revision, the canonical bytes from the release
+	# checkout; keeping them apart proves the gate reads the root it is given. ~keep
+	cp scripts/ci/package-notices.py .notice-tools/scripts/ci/
+	cp LICENSE THIRD_PARTY_LICENSES.md .release-notices/
+	export NOTICE_ROOT="$XBERG_WORK/.release-notices"
+}
+
+build_cli_archive() {
+	local asset="$1" defect="${2:-}" stage
+	stage="${asset%.tar.gz}"
+	stage="${stage%.zip}"
+	mkdir -p "cli-stage/$stage"
+	cp LICENSE THIRD_PARTY_LICENSES.md "cli-stage/$stage/"
+	printf native >"cli-stage/$stage/xberg"
+	case "$defect" in
+	missing) rm "cli-stage/$stage/THIRD_PARTY_LICENSES.md" ;;
+	stale) printf 'corrupt\n' >"cli-stage/$stage/THIRD_PARTY_LICENSES.md" ;;
+	esac
+	case "$asset" in
+	*.zip)
+		python3 - "dist/cli/$asset" "$stage" <<'PYTHON'
+import sys, zipfile
+from pathlib import Path
+asset, stage = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(asset, "w") as archive:
+    for path in sorted((Path("cli-stage") / stage).iterdir()):
+        archive.write(path, f"{stage}/{path.name}")
+PYTHON
+		;;
+	*)
+		tar -czf "dist/cli/$asset" -C cli-stage "$stage"
+		;;
+	esac
+}
+
+run_cli_notice_gate() {
+	extract_run upload-cli-release 'Verify notice bytes in every CLI archive'
+	export CLI_ASSETS="$1"
+	run bash -e -o pipefail "$XBERG_WORK/step.sh"
+}
+
+@test "CLI release upload should verify notice bytes inside every collected archive" {
+	local count=0 asset
+	local -a assets=(
+		xberg-cli-aarch64-apple-darwin.tar.gz
+		xberg-cli-x86_64-unknown-linux-gnu.tar.gz
+		xberg-cli-x86_64-pc-windows-msvc.zip
+		xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip
+		xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz
+	)
+	prepare_cli_notice_gate
+	local assets_multiline=""
+	for asset in "${assets[@]}"; do
+		count=$((count + 1))
+		build_cli_archive "$asset"
+		assets_multiline+="$asset"$'\n'
+	done
+	# The remaining five prepare names are absent on purpose: a leg that failed to build leaves
+	# no archive, and the ones that did build must still be byte-checked here. ~keep
+	run_cli_notice_gate "$assets_multiline"
+	xberg_assert_status 0
+	xberg_assert_output_contains "Verified notices in $count CLI archives"
+	xberg_assert_output_contains "Verified 2 canonical notice files in dist/cli/xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip"
+	xberg_assert_output_contains "Verified 2 canonical notice files in dist/cli/xberg-cli-x86_64-unknown-linux-gnu.tar.gz"
+}
+
+@test "CLI notice gate should reject an archive that dropped a notice, naming archive and file" {
+	prepare_cli_notice_gate
+	build_cli_archive xberg-cli-x86_64-unknown-linux-gnu.tar.gz
+	build_cli_archive xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip missing
+	run_cli_notice_gate "$(printf '%s\n' \
+		xberg-cli-x86_64-unknown-linux-gnu.tar.gz \
+		xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip)"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'dist/cli/xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip: expected one xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl/THIRD_PARTY_LICENSES.md, found 0'
+	[[ "$output" != *"Verified notices in"* ]]
+}
+
+@test "CLI notice gate should reject truncated notice bytes rather than a present file name" {
+	prepare_cli_notice_gate
+	build_cli_archive xberg-cli-aarch64-unknown-linux-musl.tar.gz stale
+	run_cli_notice_gate $'xberg-cli-aarch64-unknown-linux-musl.tar.gz\n'
+	xberg_assert_status 1
+	xberg_assert_output_contains 'dist/cli/xberg-cli-aarch64-unknown-linux-musl.tar.gz: xberg-cli-aarch64-unknown-linux-musl/THIRD_PARTY_LICENSES.md differs from canonical THIRD_PARTY_LICENSES.md'
+	[[ "$output" != *"Verified notices in"* ]]
+}
+
+@test "CLI notice gate should fail closed on an empty archive, an empty set or a fully skipped build" {
+	prepare_cli_notice_gate
+	run_cli_notice_gate ''
+	xberg_assert_status 1
+	xberg_assert_output_contains 'no expected CLI archives to verify'
+
+	run_cli_notice_gate $'xberg-cli-x86_64-apple-darwin.tar.gz\n'
+	xberg_assert_status 1
+	xberg_assert_output_contains 'no staged CLI archive was verified'
+
+	: >dist/cli/xberg-cli-x86_64-apple-darwin.tar.gz
+	run_cli_notice_gate $'xberg-cli-x86_64-apple-darwin.tar.gz\n'
+	xberg_assert_status 1
+	xberg_assert_output_contains 'empty CLI archive: dist/cli/xberg-cli-x86_64-apple-darwin.tar.gz'
+}
