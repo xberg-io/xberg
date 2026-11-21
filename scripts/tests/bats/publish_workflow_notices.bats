@@ -483,3 +483,115 @@ run_cli_notice_gate() {
 	xberg_assert_status 1
 	xberg_assert_output_contains 'empty CLI archive: dist/cli/xberg-cli-x86_64-apple-darwin.tar.gz'
 }
+
+prepare_android_aar_notice_step() {
+	mkdir -p .release-tools/scripts/ci packages/kotlin-android/build/outputs/aar
+	cp "$REPOSITORY_ROOT/scripts/ci/android-aar-notices.py" \
+		"$REPOSITORY_ROOT/scripts/ci/verify-android-jni.py" \
+		"$REPOSITORY_ROOT/scripts/ci/package-notices.py" \
+		.release-tools/scripts/ci/
+	cp "$REPOSITORY_ROOT/scripts/ci/android-aar-notices.py" scripts/ci/
+	xberg_stub gradle 'exit 0'
+	extract_run publish-kotlin-android 'Inject canonical notices into the release AAR'
+}
+
+build_android_aar_fixture() {
+	local destination="${1:-packages/kotlin-android/build/outputs/aar/xberg-android-release.aar}"
+	python3 - "$destination" <<'PYTHON'
+import struct
+import sys
+import zipfile
+from pathlib import Path
+
+
+def elf(machine):
+    header = bytearray(64)
+    header[:7] = b"\x7fELF\x02\x01\x01"
+    struct.pack_into("<HH", header, 16, 3, machine)
+    struct.pack_into("<I", header, 20, 1)
+    struct.pack_into("<Q", header, 32, 64)
+    struct.pack_into("<3H", header, 52, 64, 56, 1)
+    segment = struct.pack("<II6Q", 1, 5, 120, 120, 0, 8, 8, 8)
+    return bytes(header) + segment + bytes(8)
+
+
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(path, "w") as archive:
+    archive.writestr("AndroidManifest.xml", '<manifest package="io.xberg"/>')
+    archive.writestr("classes.jar", b"classes")
+    archive.writestr("jni/arm64-v8a/libxberg_jni.so", elf(183))
+    archive.writestr("jni/x86_64/libxberg_jni.so", elf(62))
+    archive.writestr("R.txt", b"")
+PYTHON
+}
+
+@test "Android AAR workflow step should inject canonical notices and keep the archive valid" {
+	prepare_android_aar_notice_step
+	build_android_aar_fixture
+	run bash -e -o pipefail "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'Injected canonical notices into packages/kotlin-android/build/outputs/aar/xberg-android-release.aar'
+	python3 - <<'PYTHON'
+import zipfile
+from pathlib import Path
+
+aar = Path("packages/kotlin-android/build/outputs/aar/xberg-android-release.aar")
+with zipfile.ZipFile(aar) as archive:
+    names = [entry.filename for entry in archive.infolist()]
+    assert len(names) == len(set(names)), names
+    assert archive.read("META-INF/LICENSE") == Path("LICENSE").read_bytes()
+    assert archive.read("META-INF/THIRD_PARTY_LICENSES.md") == Path("THIRD_PARTY_LICENSES.md").read_bytes()
+    assert archive.read("AndroidManifest.xml") == b'<manifest package="io.xberg"/>'
+    assert archive.read("classes.jar") == b"classes"
+    assert archive.read("R.txt") == b""
+    for abi in ("arm64-v8a", "x86_64"):
+        assert archive.read(f"jni/{abi}/libxberg_jni.so")[:4] == b"\x7fELF"
+print("archive kept its entries and gained both notices")
+PYTHON
+}
+
+@test "Android AAR notice gate should reject a missing notice, naming archive and file" {
+	prepare_android_aar_notice_step
+	build_android_aar_fixture
+	run python3 scripts/ci/android-aar-notices.py verify --canonical-root . \
+		packages/kotlin-android/build/outputs/aar/xberg-android-release.aar
+	xberg_assert_status 1
+	xberg_assert_output_contains \
+		'packages/kotlin-android/build/outputs/aar/xberg-android-release.aar: expected one META-INF/LICENSE, found 0'
+	[[ "$output" != *"Verified"* ]]
+}
+
+@test "Android AAR notice gate should reject truncated notice bytes, naming archive and file" {
+	prepare_android_aar_notice_step
+	build_android_aar_fixture
+	bash -e -o pipefail "$XBERG_WORK/step.sh"
+	python3 - <<'PYTHON'
+import zipfile
+from pathlib import Path
+
+aar = Path("packages/kotlin-android/build/outputs/aar/xberg-android-release.aar")
+payload = {}
+with zipfile.ZipFile(aar) as archive:
+    for entry in archive.infolist():
+        payload[entry.filename] = archive.read(entry)
+payload["META-INF/THIRD_PARTY_LICENSES.md"] = b"truncated"
+with zipfile.ZipFile(aar, "w") as archive:
+    for name, content in payload.items():
+        archive.writestr(name, content)
+PYTHON
+	run python3 scripts/ci/android-aar-notices.py verify --canonical-root . \
+		packages/kotlin-android/build/outputs/aar/xberg-android-release.aar
+	xberg_assert_status 1
+	xberg_assert_output_contains \
+		'packages/kotlin-android/build/outputs/aar/xberg-android-release.aar: META-INF/THIRD_PARTY_LICENSES.md differs from canonical THIRD_PARTY_LICENSES.md'
+	[[ "$output" != *"Verified"* ]]
+}
+
+@test "Android AAR workflow step should fail closed when the build produced no archive" {
+	prepare_android_aar_notice_step
+	run bash -e -o pipefail "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'expected one release AAR, found 0'
+	[[ "$output" != *"Injected canonical notices"* ]]
+}

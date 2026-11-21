@@ -1,0 +1,43 @@
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
+
+// The generated project has no hook for extra AAR assets (xberg-io/alef#943), and Gradle rebuilds
+// the AAR inside the publish invocation, so a workflow step that injects before `gradle publish`
+// cannot ship its bytes. This hooks the injection into the publication graph itself: after the
+// AAR is bundled, before the module metadata and signatures that encode its bytes are written. ~keep
+gradle.projectsEvaluated {
+    def project = gradle.rootProject
+    def publications = project.extensions.getByType(PublishingExtension).publications
+        .withType(MavenPublication).findAll { it.groupId == "io.xberg" && it.artifactId == "xberg-android" }
+    if (publications.size() != 1) {
+        throw new GradleException("Expected one io.xberg:xberg-android Maven publication, found: ${publications*.name}")
+    }
+    def archives = publications.first().artifacts.findAll { it.extension == "aar" && !it.classifier }
+    if (archives.size() != 1) {
+        throw new GradleException("Expected one main AAR in the Android Maven publication, found: ${archives*.file}")
+    }
+    def artifact = archives.first()
+    def noticesRoot = project.providers.gradleProperty("alef.noticesRoot").getOrElse(
+        project.rootProject.projectDir.parentFile.parentFile.absolutePath
+    )
+    def helper = project.file("../../.release-tools/scripts/ci/android-aar-notices.py")
+    def inject = project.tasks.register("injectAndroidAarNotices") {
+        dependsOn(artifact.buildDependencies)
+        doLast {
+            def check = project.providers.exec {
+                commandLine "python3", helper.absolutePath, "inject",
+                    "--canonical-root", noticesRoot, "--expected-count", "1", artifact.file.absolutePath
+                ignoreExitValue = true
+            }
+            if (check.result.get().exitValue != 0) {
+                throw new GradleException(check.standardError.asText.get().trim())
+            }
+        }
+    }
+    project.tasks.matching { task ->
+        task.name.startsWith("sign") || task.name.startsWith("publish") ||
+            task.name.startsWith("generateMetadataFileFor") || task.name == "releaseToMavenCentral"
+    }.configureEach {
+        dependsOn(inject)
+    }
+}

@@ -29,6 +29,7 @@ RUST_UNIT_SCRIPT = Path(__file__).parent / "rust" / "run-unit-tests.sh"
 PHP_ABI_SCRIPT = Path(__file__).parent / "verify-php-linux-abi.sh"
 PHP_STAGE_SCRIPT = Path(__file__).parent / "stage-php-linux-ort.sh"
 PUBLISHER_BOT = "xberg-dev-publisher[bot]"
+ANDROID_NOTICE_GATE = "Inject canonical notices into the release AAR"
 
 # The CLI release asset set, in `prepare`'s emission order. Xberg ships ten archives: six
 # bundled tarballs (two macOS, gnu/musl per arch), the dynamic Windows zip, its
@@ -469,7 +470,7 @@ def test_android_dry_run_and_live_release_gates() -> None:
         assert not evaluate_condition(publish, context), disable
 
 
-def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -> None:
+def test_android_dry_run_stages_both_abis_and_builds_the_release_aar() -> None:
     workflow = WORKFLOW.read_text()
     native = job_block(workflow, "kotlin-android-natives")
     publish = job_block(workflow, "publish-kotlin-android")
@@ -496,15 +497,17 @@ def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -
     assert "          pattern: kotlin-android-*" in download
     assert "          merge-multiple: true" in download
     [stage] = [step for step in steps if "verify-android-jni.py stage" in step]
-    [verify] = [step for step in steps if "run: gradle " in step]
+    [gate] = [step for step in steps if f"name: {ANDROID_NOTICE_GATE}" in step]
     [action] = [step for step in steps if "uses: xberg-io/actions/publish-maven-gradle@v1" in step]
     [guard] = [step for step in steps if "ref: ${{ github.workflow_sha }}" in step]
-    assert steps.index(download) < steps.index(guard) < steps.index(stage) < steps.index(action) < steps.index(verify)
+    assert steps.index(download) < steps.index(guard) < steps.index(stage) < steps.index(gate) < steps.index(action)
     assert (
-        "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true"
-        in action
-    )
+        "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle "
+        "-I ../../.release-tools/scripts/ci/inject-android-aar-notices.init.gradle "
+        "-Palef.skipAndroidJni=true"
+    ) in action
     assert "        if:" not in stage
+    assert "        if:" not in gate
     assert "          dry-run: ${{ needs.prepare.outputs.dry_run }}" in action
     assert "          expected-version: ${{ needs.prepare.outputs.tag }}" in action
     bindings = re.findall(r"(?m)^          MAVEN_[A-Z_]+: \$\{\{ (.+) \}\}$", action)
@@ -512,17 +515,64 @@ def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -
     context = {"needs": {"prepare": {"outputs": {"dry_run": "true"}}}}
     for binding in bindings:
         assert evaluate_expression(binding, context) == ""
-    assert "        if: ${{ needs.prepare.outputs.dry_run == 'true' }}" in verify
-    assert "        working-directory: packages/kotlin-android" in verify
-    [command] = re.findall(r"(?m)^        run: (.+)$", verify)
-    assert shlex.split(command) == [
-        "gradle",
-        "--no-daemon",
-        "-I",
-        "../../.release-tools/scripts/ci/verify-android-aar.init.gradle",
-        "-Palef.skipAndroidJni=true",
-        "verifyReleaseAarJni",
-    ]
+
+
+def publish_kotlin_android_steps(workflow: str) -> list[str]:
+    """Split the Kotlin Android publish job into its steps, in execution order."""
+    return re.split(r"(?m)^(?=      - )", job_block(workflow, "publish-kotlin-android"))
+
+
+def assert_android_aar_notice_injection(workflow: str) -> None:
+    """The release AAR must gain the canonical notices after it is built and before publishing."""
+    steps = publish_kotlin_android_steps(workflow)
+    stages = [index for index, step in enumerate(steps) if "verify-android-jni.py stage" in step]
+    gates = [index for index, step in enumerate(steps) if f"name: {ANDROID_NOTICE_GATE}" in step]
+    publishes = [index for index, step in enumerate(steps) if "uses: xberg-io/actions/publish-maven-gradle@v1" in step]
+    assert len(stages) == len(gates) == len(publishes) == 1, "Android AAR notice injection missing"
+    assert stages[0] < gates[0] < publishes[0], (
+        "Android AAR notice injection must run after the JNI libraries are staged and before publishing"
+    )
+
+    gate = uncommented(steps[gates[0]])
+    assert "android-aar-notices.py inject" in gate, (
+        "Android AAR notice injection must call android-aar-notices.py inject"
+    )
+    assert "--canonical-root" in gate, "Android AAR notice injection must use an explicit notice root"
+    assert "--expected-count 1" in gate, "Android AAR notice injection must require exactly one archive"
+    assert "build/outputs/aar/*-release.aar" in gate, "Android AAR notice injection must target the built release AAR"
+    assert "verify-android-jni.py verify-aar" in gate, (
+        "Android AAR notice injection must prove the modified archive still parses"
+    )
+
+    # Gradle rebuilds the AAR inside the publish invocation, so a step-only injection would be
+    # discarded. The publication must re-inject through the same helper in its own task graph. ~keep
+    action = steps[publishes[0]]
+    assert "inject-android-aar-notices.init.gradle" in action, (
+        "the Kotlin Android publication must re-inject notices inside its own Gradle build"
+    )
+    [guard] = [step for step in steps if "ref: ${{ github.workflow_sha }}" in step]
+    for path in (
+        "scripts/ci/android-aar-notices.py",
+        "scripts/ci/package-notices.py",
+        "scripts/ci/inject-android-aar-notices.init.gradle",
+    ):
+        assert path in guard, f"Android release guards must check out {path}"
+
+
+def test_android_aar_publish_injects_canonical_notices_before_publication() -> None:
+    assert_android_aar_notice_injection(WORKFLOW.read_text())
+
+
+def test_android_aar_notice_contract_rejects_a_removed_step_and_a_noop() -> None:
+    workflow = WORKFLOW.read_text()
+    [gate] = [step for step in publish_kotlin_android_steps(workflow) if f"name: {ANDROID_NOTICE_GATE}" in step]
+    with rejected_contract("Android AAR notice injection missing"):
+        assert_android_aar_notice_injection(workflow.replace(gate, ""))
+
+    noop = gate.replace("android-aar-notices.py inject", "ls")
+    assert noop != gate
+    with rejected_contract("Android AAR notice injection must call android-aar-notices.py inject"):
+        assert_android_aar_notice_injection(workflow.replace(gate, noop))
 
 
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
