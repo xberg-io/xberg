@@ -88,6 +88,33 @@ pub enum LocalClassificationBackend {
     OnnxCpu,
 }
 
+/// Graph quantization a caller selects from the canonical candidate inventory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(alef, alef(skip))]
+pub enum LocalClassificationPrecision {
+    /// The upstream full-precision export. The staged NLI candidate's fp32 graph exceeds this
+    /// adapter's size cap, so selecting it fails with an explicit error.
+    Fp32,
+    /// The dynamically quantized graph the adapter loads on the host architecture.
+    Quantized,
+}
+
+/// Where a classification request's label set comes from. The two are not interchangeable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(alef, alef(skip))]
+pub enum LocalClassificationMode {
+    /// Zero-shot natural-language inference: the request supplies arbitrary labels and the
+    /// hypothesis template, and the model scores each premise/hypothesis pair. No label is a
+    /// trained class, and the result is not a taxonomy prediction.
+    CallerProvidedZeroShot,
+    /// A classification head trained on a fixed label set. Labels come from the model, not the
+    /// request, and a request may not substitute its own labels. No fixed-taxonomy candidate is
+    /// staged yet, so this adapter rejects the mode instead of emulating it with NLI.
+    TrainedTaxonomy,
+}
+
 /// Identity of an explicitly prepared local model.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(alef, alef(skip))]
@@ -128,4 +155,42 @@ pub struct LocalClassificationOptions {
     pub deadline_ms: Option<u64>,
     /// Cooperative cancellation, including an ORT termination request during active inference.
     pub cancel_token: Option<crate::cancellation::CancellationToken>,
+}
+
+#[cfg(feature = "classification-onnx")]
+impl LocalNliModel {
+    /// Descriptor for a staged evaluation candidate, selected from the canonical inventory at
+    /// `precision`. The artifacts are not a supported preset and are not qualified.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `id` is not an inventory candidate, names another task, or when the host
+    /// architecture has no graph for `precision` (the fp32 NLI graph exceeds the adapter's cap).
+    pub fn staged(id: &str, precision: LocalClassificationPrecision) -> crate::Result<Self> {
+        use crate::candidate_models::{CandidateModel, CandidatePrecision, CandidateTask};
+        let model = CandidateModel::find(id)
+            .ok_or_else(|| super::policy::invalid(format!("{id} is not a candidate in the model inventory")))?;
+        if model.task != CandidateTask::ZeroShotClassification {
+            return Err(super::policy::invalid(format!(
+                "{id} is a {:?} candidate, not a zero-shot classification candidate",
+                model.task
+            )));
+        }
+        let precision = match precision {
+            LocalClassificationPrecision::Fp32 => CandidatePrecision::Fp32,
+            LocalClassificationPrecision::Quantized => CandidatePrecision::Quantized,
+        };
+        crate::candidate_models::nli_classifier(model, precision).map_err(super::policy::invalid)
+    }
+
+    /// Identifiers of the staged zero-shot classification candidates. Empty when the inventory has
+    /// none; the list is experimental assessment data, never a supported preset list.
+    pub fn staged_candidates() -> Vec<&'static str> {
+        use crate::candidate_models::{CandidateModel, CandidateTask};
+        CandidateTask::ZeroShotClassification
+            .models()
+            .into_iter()
+            .map(|model: &'static CandidateModel| model.id)
+            .collect()
+    }
 }

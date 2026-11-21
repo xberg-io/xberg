@@ -29,6 +29,25 @@ Every model below is downloaded from a checksum-pinned `xberg-io` repository wit
 | Late interaction (ColBERT) — gte-moderncolbert | [`xberg-io/late-interaction-models`](https://huggingface.co/xberg-io/late-interaction-models) | Mirror of [`lightonai/GTE-ModernColBERT-v1`](https://huggingface.co/lightonai/GTE-ModernColBERT-v1) (Apache-2.0). |
 | Experimental candidates — NLI-MiniLM2 (zero-shot), SmolVLM-256M/500M, Florence-2-base (captioning) | [`xberg-io/classification-models`](https://huggingface.co/xberg-io/classification-models), [`xberg-io/captioning-models`](https://huggingface.co/xberg-io/captioning-models) | Pinned to immutable commits with a SHA-256, size and per-file source. NLI-MiniLM2 is Apache-2.0, but its base model [`nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large`](https://huggingface.co/nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large) publishes no license, so qualified use is blocked by that caveat (recorded in the inventory; the model directory carries no separate notice). SmolVLM is Apache-2.0; Florence-2-base is MIT. Staged for evaluation only: none is a default or supported preset, and captioning requires an explicit fp32 or int8 graph selection. |
 
+### Experimental local CPU adapters
+
+The Rust SDK exposes two opt-in, CPU-only adapters over these candidates. Both are
+unqualified: they are not compiled into the default feature set, are not selected by
+any default, and produce no supported preset. #2334 must post a go for a workload
+before either becomes a default.
+
+| Cargo feature | Adapter | Selection |
+| ------------- | ------- | --------- |
+| `classification-onnx` (`classification-onnx-types` for the DTOs alone) | Zero-shot NLI classification (`xberg::local_classification`) | `LocalNliModel::staged(id, LocalClassificationPrecision::Quantized)`; the pinned fp32 NLI graph exceeds the adapter's size cap, while aarch64 selects `model_qint8_arm64.onnx` and x86_64 `model_quint8_avx2.onnx`. Caller labels are zero-shot only; a trained taxonomy is a separate, currently unstaged candidate. |
+| `captioning-onnx` (`captioning-onnx-types` for the DTOs alone) | SmolVLM and Florence-2 image captioning (`xberg::local_captioning`) | `LocalCaptioningModel::staged(id, LocalCaptioningPrecision)` then `LocalImageCaptioner::stage`/`prepare`. Both fp32 and int8 graph sets are pinned; nothing is downloaded by `prepare` or `caption`. SmolVLM uses one global 512x512 frame (no upstream tile splitting) and greedy decoding. Florence-2 files are pinned and its descriptor is validated, but the adapter refuses that family explicitly: its merged decoder fails on cached decoder steps in the bundled ONNX Runtime. |
+
+The provider-backed `classify_text` and `caption_image` paths through liter-llm are
+unchanged and remain the default. A local adapter failure never falls back to a
+provider. Artifacts are resolved from the Hugging Face cache; pre-stage them offline
+with `LocalImageCaptioner::stage` on a connected host and then run with
+`HF_HUB_OFFLINE=1`. Never point these adapters at an unverified repository: every
+file is checked against the inventory's SHA-256 and exact size before a session loads.
+
 For GLiNER, Xberg downloads only the exported artifacts listed in
 `xberg-io/gliner-models`. If the repository is private or not publicly readable,
 configure Hugging Face credentials supported by `hf-hub` before warming the

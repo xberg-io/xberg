@@ -220,3 +220,46 @@ fn staged_nli_candidate_with_an_omitted_or_floating_pin_is_rejected() {
     let error = validate_config(&floating).unwrap_err().to_string();
     assert!(error.contains("immutable forty-digit hexadecimal revision"), "{error}");
 }
+
+#[test]
+fn the_staged_constructor_selects_the_inventory_quantized_graph() {
+    let Some(graph) = expected_host_graph() else {
+        return;
+    };
+    let model =
+        super::LocalNliModel::staged("nli-minilm2-l6-h768", super::LocalClassificationPrecision::Quantized).unwrap();
+    assert_eq!(model.model_file, format!("nli-minilm2-l6-h768/{graph}"));
+    assert_eq!(model.repository, "xberg-io/classification-models");
+    assert_eq!(super::LocalNliModel::staged_candidates(), ["nli-minilm2-l6-h768"]);
+
+    let error = super::LocalNliModel::staged("nli-minilm2-l6-h768", super::LocalClassificationPrecision::Fp32)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("exceeds the adapter's size cap"), "{error}");
+
+    let error = super::LocalNliModel::staged("not-a-candidate", super::LocalClassificationPrecision::Quantized)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not a candidate in the model inventory"), "{error}");
+
+    let error = super::LocalNliModel::staged("florence-2-base", super::LocalClassificationPrecision::Quantized)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not a zero-shot classification candidate"), "{error}");
+}
+
+#[test]
+fn caller_labels_are_zero_shot_and_a_trained_taxonomy_is_rejected() {
+    let classifier = LocalTextClassifier::new(configuration()).unwrap();
+    assert_eq!(
+        classifier.label_source(),
+        super::LocalClassificationMode::CallerProvidedZeroShot
+    );
+    let error = classifier
+        .classify_trained_taxonomy("alpha", &Default::default())
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("fixed-taxonomy classification head"), "{error}");
+    assert!(error.contains("never treated as a trained taxonomy"), "{error}");
+    assert!(error.contains("#2336"), "{error}");
+}
