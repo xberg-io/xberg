@@ -77,7 +77,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: /tmp/libheif-cache
-        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v7
+        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v8
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
@@ -139,9 +139,9 @@ runs:
       uses: actions/cache@v6
       with:
         path: C:\xberg-vcpkg-5363acb7
-        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5
+        key: libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v6
         restore-keys: |
-          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v5-
+          libheif-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v1.23.7-vcpkg-5363acb7-v6-
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'

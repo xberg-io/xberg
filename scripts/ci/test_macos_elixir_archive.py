@@ -323,23 +323,59 @@ class MacosElixirArchiveTests(unittest.TestCase):
             archive.read_notices(directory)
 
 
+OFFER = (
+    b"Xberg - Written Offer of Corresponding Source\n"
+    b"The combined work is conveyed under GPL-3.0-or-later.\n"
+    b"Xberg offers the Corresponding Source for three years (GPL section 6(b)).\n"
+    b"Email contact@xberg.io; the build script is scripts/ci/build-macos-heif-deps.sh.\n"
+)
+
+
 class ProjectNoticeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
-    def test_project_notice_pair_must_exist_under_the_release_source(self) -> None:
-        expected = {"LICENSE": b"project license\n", "THIRD_PARTY_LICENSES.md": b"third-party notices\n"}
+    def test_project_notices_must_exist_under_the_release_source(self) -> None:
+        expected = {
+            "LICENSE": b"project license\n",
+            "THIRD_PARTY_LICENSES.md": b"third-party notices\n",
+            "GPL-SOURCE-OFFER.txt": OFFER,
+        }
         (self.root / "LICENSE").write_bytes(expected["LICENSE"])
         with expected_error(ValueError, "THIRD_PARTY_LICENSES"):
             archive.read_project_notices(self.root)
         (self.root / "THIRD_PARTY_LICENSES.md").write_bytes(expected["THIRD_PARTY_LICENSES.md"])
+        with expected_error(ValueError, "GPL-SOURCE-OFFER"):
+            archive.read_project_notices(self.root)
+        (self.root / "GPL-SOURCE-OFFER.txt").write_bytes(expected["GPL-SOURCE-OFFER.txt"])
         assert archive.read_project_notices(self.root) == expected
+
+    def test_source_offer_must_name_license_scope_term_and_contact(self) -> None:
+        (self.root / "LICENSE").write_bytes(b"project license\n")
+        (self.root / "THIRD_PARTY_LICENSES.md").write_bytes(b"third-party notices\n")
+        for phrase in archive.SOURCE_OFFER_PHRASES:
+            with self.subTest(phrase=phrase):
+                damaged = OFFER.replace(phrase.encode("ascii"), b"omitted")
+                (self.root / "GPL-SOURCE-OFFER.txt").write_bytes(damaged)
+                with expected_error(ValueError, f"source offer is missing: {phrase}"):
+                    archive.read_project_notices(self.root)
+        (self.root / "GPL-SOURCE-OFFER.txt").write_bytes(OFFER)
+        assert archive.read_project_notices(self.root)["GPL-SOURCE-OFFER.txt"] == OFFER
+
+    def test_external_source_offer_is_shipped_verbatim_for_tagged_republishes(self) -> None:
+        (self.root / "LICENSE").write_bytes(b"project license\n")
+        (self.root / "THIRD_PARTY_LICENSES.md").write_bytes(b"third-party notices\n")
+        external = self.root / "workflow-revision-offer"
+        external.write_bytes(OFFER)
+        notices = archive.read_project_notices(self.root, external)
+        assert notices["GPL-SOURCE-OFFER.txt"] == OFFER
 
     def test_archive_must_match_project_notice_bytes(self) -> None:
         project = self.root / "release-source"
         project.mkdir()
         for name in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
             (project / name).write_bytes(f"upstream {name}\n".encode("ascii"))
+        (project / "GPL-SOURCE-OFFER.txt").write_bytes(OFFER)
         expected = archive.read_project_notices(project)
         members = {NIF, *CODECS, *expected}
         for damaged in expected:

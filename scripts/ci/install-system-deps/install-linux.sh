@@ -50,7 +50,6 @@ packages=(
   aom-tools
   libyuv-dev
   libwebm-dev
-  libx265-dev
   libdav1d-dev
   libnuma-dev
   # boost (header-only spirit) and zlib headers are build-time deps of
@@ -159,6 +158,17 @@ libheif_runtime_links() {
   fi
   if grep -Eq '\((RPATH|RUNPATH)\)' <<<"$elf"; then
     echo "::warning::$library has an embedded RPATH or RUNPATH." >&2
+    return 1
+  fi
+  # The CLI decodes HEIC/AVIF; these builds have no HEVC encoder, so a libheif that
+  # links the GPL-2.0 x265 encoder is a packaging defect even when the loader
+  # resolves it. The symbol scan also catches a statically linked x265. ~keep
+  if grep -Eq '\(NEEDED\)[[:space:]]+[^[]*\[libx265[.]' <<<"$elf"; then
+    echo "::warning::$library links the GPL-2.0 x265 encoder." >&2
+    return 1
+  fi
+  if LC_ALL=C grep -a -q 'x265_' "$library"; then
+    echo "::warning::$library carries x265 symbols." >&2
     return 1
   fi
   if grep -Eq '^[[:space:]]*INTERP[[:space:]]|^[[:space:]]*0x[[:xdigit:]]+[[:space:]]+\((AUDIT|DEPAUDIT|FILTER|AUXILIARY)\)' <<<"$elf" ||
@@ -276,6 +286,11 @@ else
     cd "libheif-${LIBHEIF_VERSION}"
     mkdir build
     cd build
+    # Decode-only: HEIF output is unsupported in these artifacts, so keep the
+    # GPL-2.0 x265 encoder (libheif's CMake default is ON when x265 headers are
+    # present), the GPL x264 encoder and the unused AV1 encoder out.
+    # ImageOutputFormat::Heif then reports EncoderUnavailable; HEIC decoding still
+    # comes from libde265. ~keep
     cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$LIBHEIF_PREFIX" \
@@ -283,6 +298,9 @@ else
       -DCMAKE_SKIP_INSTALL_RPATH=ON \
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
+      -DWITH_X265=OFF \
+      -DWITH_X264=OFF \
+      -DWITH_AOM_ENCODER=OFF \
       -DBUILD_TESTING=OFF
     make -j"$(nproc)"
     make DESTDIR="$build_dir/staged" install

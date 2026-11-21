@@ -26,7 +26,15 @@ MH_DYLIB = 6
 MAX_LOAD_COMMANDS = 512
 MAX_LOAD_COMMAND_BYTES = 64 * 1024
 CODECS = {"libheif", "libde265", "libaom", "libx265"}
-PROJECT_NOTICES = ("LICENSE", "THIRD_PARTY_LICENSES.md")
+PROJECT_NOTICES = ("LICENSE", "THIRD_PARTY_LICENSES.md", "GPL-SOURCE-OFFER.txt")
+SOURCE_OFFER_PHRASES = (
+    "GPL-3.0-or-later",
+    "Corresponding Source",
+    "three years",
+    "section 6(b)",
+    "contact@xberg.io",
+    "build-macos-heif-deps.sh",
+)
 ARCHIVE_NAME = re.compile(
     r"libxberg_nif-v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]+)?-nif-[0-9]+\.[0-9]+"
     r"-aarch64-apple-darwin\.so\.tar\.gz"
@@ -194,8 +202,22 @@ def read_notices(directory: Path) -> dict[str, bytes]:
     return {**notices, "notices.sha256": manifest}
 
 
-def read_project_notices(source: Path) -> dict[str, bytes]:
-    return {name: read_notice(source / name) for name in PROJECT_NOTICES}
+def verify_source_offer(data: bytes) -> None:
+    """The GPL written offer must name the license, scope, term and contact."""
+    try:
+        text = data.decode("ascii")
+    except UnicodeDecodeError as error:
+        raise ValueError("source offer must be ASCII text") from error
+    missing = [phrase for phrase in SOURCE_OFFER_PHRASES if phrase not in text]
+    if missing:
+        raise ValueError(f"source offer is missing: {', '.join(missing)}")
+
+
+def read_project_notices(source: Path, offer: Path | None = None) -> dict[str, bytes]:
+    notices = {name: read_notice(source / name) for name in PROJECT_NOTICES if name != "GPL-SOURCE-OFFER.txt"}
+    notices["GPL-SOURCE-OFFER.txt"] = read_notice(offer or source / "GPL-SOURCE-OFFER.txt")
+    verify_source_offer(notices["GPL-SOURCE-OFFER.txt"])
+    return notices
 
 
 def verify_source_receipt(prefix: Path, sources: bytes) -> None:
@@ -449,6 +471,12 @@ def main() -> None:
         "--project-source", type=Path, required=True, help="release-source root containing the project notices"
     )
     parser.add_argument("--output-dir", type=Path, help="existing output directory for stage and its checksum")
+    parser.add_argument(
+        "--source-offer",
+        type=Path,
+        help="GPL written offer to ship; defaults to <project-source>/GPL-SOURCE-OFFER.txt. "
+        "Tagged republishes pass the workflow revision's offer.",
+    )
     args = parser.parse_args()
     if (args.operation == "stage") != (args.output_dir is not None):
         parser.error("--output-dir is required only for stage")
@@ -460,7 +488,7 @@ def main() -> None:
         library_dir = args.codec_prefix.absolute() / "lib"
         notices = read_notices(library_dir.parent / "share/xberg-heif-notices")
         verify_source_receipt(library_dir.parent, notices["sources.tsv"])
-        notices.update(read_project_notices(args.project_source))
+        notices.update(read_project_notices(args.project_source, args.source_offer))
         codecs = codec_filenames(library_dir)
         if args.operation == "stage":
             stage_archive(
@@ -470,7 +498,10 @@ def main() -> None:
             verify_checksum(archive, archive.with_name(f"{archive.name}.sha256"))
             with tempfile.TemporaryDirectory(prefix="elixir-archive-audit-") as temporary:
                 verify_release(archive, Path(temporary), root, codecs, notices)
-        print(f"verified macOS arm64 Elixir NIF, four codecs, and {len(notices)} notice and provenance files")
+        print(
+            f"verified macOS arm64 Elixir NIF, four codecs, the GPL source offer, "
+            f"and {len(notices)} notice and provenance files"
+        )
     except (ValueError, OSError, EOFError, tarfile.TarError) as error:
         parser.exit(1, f"macos-elixir-archive: {error}\n")
 
