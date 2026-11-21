@@ -937,3 +937,7 @@ mod source_space_tests {
 #[cfg(test)]
 #[path = "tables/header_source_diagnostic_tests.rs"]
 mod header_source_diagnostic_tests;
+
+#[cfg(test)]
+#[path = "tables/wrapped_header_text_tests.rs"]
+mod wrapped_header_text_tests;
