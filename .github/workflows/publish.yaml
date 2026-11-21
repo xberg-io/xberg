@@ -5756,6 +5756,9 @@ jobs:
           sparse-checkout: |
             scripts/ci/verify-android-jni.py
             scripts/ci/verify-android-aar.init.gradle
+            scripts/ci/android-aar-notices.py
+            scripts/ci/package-notices.py
+            scripts/ci/inject-android-aar-notices.init.gradle
           sparse-checkout-cone-mode: false
 
       - name: Validate and stage both Android JNI libraries
@@ -5768,11 +5771,29 @@ jobs:
         with:
           packages: "platforms;android-36 build-tools;36.0.0"
 
+      # The generated Gradle project has no hook for extra AAR assets (xberg-io/alef#943), so the
+      # canonical notices are injected into the built archive. This proves the release artifact
+      # before publication; the publish invocation rebuilds the AAR and re-injects through
+      # inject-android-aar-notices.init.gradle, which is what actually ships. ~keep
+      - name: Inject canonical notices into the release AAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon -p packages/kotlin-android -Palef.skipAndroidJni=true assembleRelease
+          shopt -s nullglob
+          aars=(packages/kotlin-android/build/outputs/aar/*-release.aar)
+          test "${#aars[@]}" -eq 1 || { echo "::error::expected one release AAR, found ${#aars[@]}"; exit 1; }
+          aar="${aars[0]}"
+          python3 .release-tools/scripts/ci/android-aar-notices.py inject \
+            --canonical-root . --expected-count 1 "$aar"
+          python3 .release-tools/scripts/ci/verify-android-jni.py verify-aar "$aar"
+          echo "Injected canonical notices into $aar"
+
       - uses: xberg-io/actions/publish-maven-gradle@v1
         with:
           working-directory: packages/kotlin-android
           gradle-task: publishAndReleaseToMavenCentral
-          extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true
+          extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -I ../../.release-tools/scripts/ci/inject-android-aar-notices.init.gradle -Palef.skipAndroidJni=true
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           expected-version: ${{ needs.prepare.outputs.tag }}
         env:
@@ -5780,13 +5801,6 @@ jobs:
           MAVEN_PASSWORD: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.CENTRAL_PASSWORD || '' }}
           MAVEN_GPG_PRIVATE_KEY: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PRIVATE_KEY || '' }}
           MAVEN_GPG_PASSPHRASE: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PASSPHRASE || '' }}
-
-      # The composite only prints its publish command in dry runs. Build the publication's AAR
-      # and verify its JNI contents by invoking the same guard directly. ~keep
-      - name: Verify the staged release AAR in dry runs
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
-        working-directory: packages/kotlin-android
-        run: gradle --no-daemon -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true verifyReleaseAarJni
 
   publish-nuget:
     name: Publish NuGet package
