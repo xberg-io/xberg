@@ -66,15 +66,28 @@ lines = source.splitlines()
 
 
 def method_body(header: str) -> str:
-    start = next(index for index, line in enumerate(lines) if header in line)
+    start = next(index for index, line in enumerate(lines) if line.startswith(header))
     end = next(index for index in range(start + 1, len(lines)) if lines[index] == "    }")
     return "\n".join(lines[start : end + 1])
 
 
-hints_builder = method_body("fn hints_for_pipeline_page(")
-tokio = method_body("async fn run_pipeline_pages_async(")
-collector = method_body("async fn collect_pipeline_reads<F>(")
-sequential = method_body("async fn run_pipeline_pages_sequential(")
+def free_body(header: str) -> str:
+    start = next(index for index, line in enumerate(lines) if line.startswith(header))
+    end = next(index for index in range(start + 1, len(lines)) if lines[index] == "}")
+    return "\n".join(lines[start : end + 1])
+
+
+entry = free_body("async fn extract_mixed_ocr_native_with_layout_inputs(")
+assert re.search(r"run_page_batches\(\)\.await\?;\s*\n\s*context\.finish\(\)", entry), (
+    "the dispatcher must run the page batches before finishing"
+)
+
+hints_builder = method_body("    fn hints_for_pipeline_page(")
+tokio = method_body("    async fn run_pipeline_pages_async(")
+collector = method_body("    async fn collect_pipeline_reads<F>(")
+sequential = method_body("    async fn run_pipeline_pages_sequential(")
+sequential_backend = method_body("    async fn run_single_backend_pages_sequential(")
+finish_backend = method_body("    async fn finish_single_backend_read(")
 
 assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", hints_builder), (
     "the shared page hints must supply the decision layers"
@@ -107,8 +120,22 @@ assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", sequential
 assert re.search(r"Some\(page_ocr_hints\),\s*\*page_idx,\s*Some\(source\),", sequential), (
     "the sequential mixed OCR route must pass the hints and the page index to detached OCR"
 )
+
+assert re.search(r"record_single_backend_read\(", finish_backend) and re.search(
+    r"GeometryEvidence::concurrent\(\)", finish_backend
+), "the concurrent backend route must run the geometry and language passes"
+assert re.search(r"record_single_backend_read\(", sequential_backend) and re.search(
+    r"GeometryEvidence::sequential\(\)", sequential_backend
+), "the sequential backend route must skip the geometry and language passes"
+assert "GeometryEvidence::sequential()" not in finish_backend, (
+    "the concurrent route must not use the sequential evidence policy"
+)
+assert "GeometryEvidence::concurrent()" not in sequential_backend, (
+    "the sequential route must not use the concurrent evidence policy"
+)
 print("Tokio mixed OCR decision-layer handoff verified")
 print("sequential mixed OCR decision-layer handoff verified")
+print("direct-backend geometry evidence routing verified")
 PYTHON
 }
 
