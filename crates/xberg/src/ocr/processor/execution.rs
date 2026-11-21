@@ -59,9 +59,10 @@ use crate::ocr::table::has_table_grid;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, drop_document_elements_claimed_by_tables, element_center_within_table, extract_table_words_from_tsv,
-    extract_words_from_tsv, orient_table_for_reading_order, reconstruct_table_with_columns, shading_mark_keep_mask,
-    should_adopt_table_rebuild, table_retains_region_words, table_to_markdown,
+    TableWords, drop_document_elements_claimed_by_tables, drop_document_elements_matching_table_rows,
+    element_center_within_table, extract_table_words_from_tsv, extract_words_from_tsv, orient_table_for_reading_order,
+    reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild, table_retains_region_words,
+    table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
@@ -1278,12 +1279,13 @@ mod hocr_occurrence_tests;
 /// hOCR before table detection runs, and `build_content_with_inline_tables` repairs only the `content`
 /// string (and is skipped for Plain/Djot output), so the element tree needs this regardless of
 /// `output_format`. ~keep
-fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable]) {
+fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable], ignore_marks: bool) {
     drop_document_elements_claimed_by_tables(
         document,
         tables
             .iter()
             .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
+        ignore_marks,
     )
 }
 
@@ -1296,19 +1298,19 @@ fn publish_hocr_table_rows(
     policy: ImageOcrPolicy,
     limits: &SecurityLimits,
 ) {
+    let leader_aware = matches!(
+        policy,
+        ImageOcrPolicy::StandaloneAutoTableRows | ImageOcrPolicy::StandaloneDotLeaderRows
+    ) || (config.known_full_page_scan && config.psm == TessPageSegMode::PSM_SINGLE_BLOCK as u8);
     if let Some(leaders) = hocr
         .zip(tsv)
-        .filter(|_| {
-            matches!(
-                policy,
-                ImageOcrPolicy::StandaloneAutoTableRows | ImageOcrPolicy::StandaloneDotLeaderRows
-            ) || (config.known_full_page_scan && config.psm == TessPageSegMode::PSM_SINGLE_BLOCK as u8)
-        })
+        .filter(|_| leader_aware)
         .and_then(|(hocr, tsv)| reconcile_retained_table_leaders(hocr, document, tables, tsv, config, limits))
     {
         // An exact-only match cannot resolve which physical row owned the table slot.
         if let RetainedTableLeaders::Reconciled(reconciled) = leaders {
             *document = *reconciled;
+            claim_rows_left_by_proof(document, tables);
         }
         return;
     }
@@ -1334,10 +1336,28 @@ fn publish_hocr_table_rows(
         })
     });
     if let Some((reconciled, bounds)) = reconciled {
-        apply_fragmented_reconciliation(document, tables, reconciled, bounds);
+        if apply_fragmented_reconciliation(document, tables, reconciled, bounds) && leader_aware {
+            claim_rows_left_by_proof(document, tables);
+        }
     } else {
-        filter_elements_covered_by_tables(document, tables);
+        filter_elements_covered_by_tables(document, tables, leader_aware);
     }
+}
+
+/// Claim the rows a leader-aware proof could not match out of the document it returned. The proof
+/// leaves those lines deliberately, so only a row match may remove one; the table's rectangle must
+/// not claim every line its centre falls in (#2503).
+fn claim_rows_left_by_proof(document: &mut InternalDocument, tables: &[OcrTable]) {
+    if !document.elements.iter().any(|element| !element.text.trim().is_empty()) {
+        return;
+    }
+    drop_document_elements_matching_table_rows(
+        document,
+        tables
+            .iter()
+            .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
+        true,
+    );
 }
 
 fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
@@ -5393,7 +5413,7 @@ mod tests {
         ];
         let tables = vec![table_at_with_cells(0, 40, 100, 140, cells_of("Apple 50 10 00"))];
 
-        filter_elements_covered_by_tables(&mut document, &tables);
+        filter_elements_covered_by_tables(&mut document, &tables, false);
 
         assert_eq!(
             document.elements.len(),
