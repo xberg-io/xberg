@@ -5065,6 +5065,11 @@ fn stitch_page_tables(
         b_top.total_cmp(&a_top)
     });
 
+    let completed_bboxes: Vec<crate::types::BoundingBox> = fragments
+        .iter()
+        .filter(|(_, _, complete)| *complete)
+        .filter_map(|(table, _, _)| table.bounding_box)
+        .collect();
     let mut output = Vec::with_capacity(fragments.len());
     let mut index = 0;
     while index < fragments.len() {
@@ -5081,7 +5086,7 @@ fn stitch_page_tables(
                 .iter()
                 .map(|(table, _, _)| table.clone())
                 .collect();
-            output.push(merge_table_chain(chain, all_page_segments));
+            output.push(merge_table_chain(chain, all_page_segments, &completed_bboxes));
         } else {
             output.push(fragments[index].0.clone());
         }
@@ -5131,7 +5136,11 @@ fn fragments_are_stitchable(
 /// fragment's rows collapse into one data row apiece. See
 /// [`stitch_fragmented_tables`] for why a whole-fragment column merge is used
 /// instead of trying to re-derive a header/data split.
-fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<SegmentData>]) -> crate::types::Table {
+fn merge_table_chain(
+    chain: Vec<crate::types::Table>,
+    all_page_segments: &[Vec<SegmentData>],
+    completed_bboxes: &[crate::types::BoundingBox],
+) -> crate::types::Table {
     let column_count = chain
         .iter()
         .filter_map(|table| table.cells.first())
@@ -5164,7 +5173,7 @@ fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<S
         .collect();
 
     if let Some(page_segments) = all_page_segments.get((page_number.saturating_sub(1)) as usize) {
-        recover_trailing_continuation_rows(&mut rows, &mut bbox, column_count, page_segments);
+        recover_trailing_continuation_rows(&mut rows, &mut bbox, column_count, page_segments, completed_bboxes);
     }
 
     let markdown = crate::pdf::table_reconstruct::table_to_markdown(&rows);
@@ -5202,6 +5211,7 @@ fn recover_trailing_continuation_rows(
     bbox: &mut crate::types::BoundingBox,
     column_count: usize,
     page_segments: &[SegmentData],
+    completed_bboxes: &[crate::types::BoundingBox],
 ) {
     if column_count == 0 || page_segments.is_empty() {
         return;
@@ -5234,6 +5244,18 @@ fn recover_trailing_continuation_rows(
         let Some((entity_words, entity_bottom_image_y)) = take_next_entity_band(&band_words) else {
             break;
         };
+        let entity_top_image_y = entity_words.iter().map(|word| word.top).min().unwrap_or(0);
+        // A completed rejoined table below already owns its rows. Never absorb
+        // them into an ordinary chain above it. ~keep
+        if band_intersects_completed_table(
+            page_height - entity_top_image_y as f32,
+            page_height - entity_bottom_image_y as f32,
+            x_lo,
+            x_hi,
+            completed_bboxes,
+        ) {
+            break;
+        }
 
         let col_gap = super::regions::tables::compute_adaptive_column_gap(&entity_words, (x_hi - x_lo).max(1.0));
         let grid = crate::pdf::table_reconstruct::reconstruct_table(&entity_words, col_gap, 0.5);
@@ -5251,6 +5273,24 @@ fn recover_trailing_continuation_rows(
         bbox.y0 = bbox.y0.min(entity_bottom_pdf_y as f64);
         search_floor = entity_bottom_pdf_y;
     }
+}
+
+/// Whether a candidate band's vertical span overlaps a completed table that
+/// occupies the same horizontal span. ~keep
+fn band_intersects_completed_table(
+    band_top_pdf_y: f32,
+    band_bottom_pdf_y: f32,
+    x_lo: f32,
+    x_hi: f32,
+    completed_bboxes: &[crate::types::BoundingBox],
+) -> bool {
+    let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f64;
+    completed_bboxes.iter().any(|bounds| {
+        bounds.x1 + tolerance >= x_lo as f64
+            && bounds.x0 - tolerance <= x_hi as f64
+            && band_bottom_pdf_y as f64 <= bounds.y1 + tolerance
+            && band_top_pdf_y as f64 >= bounds.y0 - tolerance
+    })
 }
 
 /// Take the topmost row-gap-bounded contiguous band of words from `words`

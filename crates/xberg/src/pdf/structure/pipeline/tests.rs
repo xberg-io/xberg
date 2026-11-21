@@ -485,6 +485,45 @@ fn completed_tables_are_not_restitched() {
 }
 
 #[test]
+fn completed_tables_keep_their_rows_out_of_trailing_recovery() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 30.0, 100.0, 60.0), &[&["g", "h"], &["i", "j"]]);
+    let mut first = printed_at("12 34", 10.0, 50.0);
+    first.width = 80.0;
+    let mut second = printed_at("56 78", 10.0, 40.0);
+    second.width = 80.0;
+    let pages = vec![vec![first, second]];
+
+    let stitched = stitch_fragmented_tables(
+        vec![top.clone(), bottom.clone(), completed.clone()],
+        &pages,
+        0,
+        &[false, false, true],
+    );
+    assert_eq!(stitched.len(), 2, "the completed table stays its own entry");
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 70.0))
+        .expect("stitched ordinary chain");
+    assert_eq!(
+        chain.cells,
+        [["H1 a", "H2 b"], ["c e", "d f"]],
+        "rows inside the completed table's bbox must not be absorbed"
+    );
+
+    let control = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, false]);
+    let control_chain = control
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 < 70.0))
+        .expect("control chain");
+    assert!(
+        control_chain.cells.len() > 2,
+        "without the completed signal, trailing recovery absorbs the same rows"
+    );
+}
+
+#[test]
 fn ruled_fragments_with_a_small_gap_still_stitch() {
     let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"], &["c", "d"]]);
