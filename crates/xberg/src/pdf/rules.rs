@@ -39,8 +39,14 @@ pub(crate) fn count_rules(paths: &[xberg_native_pdf::elements::PathContent]) -> 
     (horizontal, vertical)
 }
 
-/// Horizontal rules that lie inside `bounds`, given in PDF user space
-/// (`x0`, `y0` bottom-left to `x1`, `y1` top-right).
+/// Horizontal rules that are the candidate region's own, given in PDF user
+/// space (`x0`, `y0` bottom-left to `x1`, `y1` top-right).
+///
+/// A rule belongs to the candidate only when it spans the region's full width,
+/// not merely when it intersects it: a page-wide divider above a paragraph of
+/// justified prose, or an axis line crossing a chart label, would otherwise
+/// supply "the table's rules" to a region that has none. A spanning rule
+/// crosses every inferred column boundary by construction.
 ///
 /// The borderless gate admits a candidate on drawn rules, so the rules must be
 /// the candidate's own. Counting them page-wide admits every short region on a
@@ -58,7 +64,8 @@ pub(crate) fn count_horizontal_rules_in(
             let rule_y = path.bbox.y + path.bbox.height * 0.5;
             let rule_x0 = path.bbox.x;
             let rule_x1 = path.bbox.x + path.bbox.width;
-            rule_y >= y0 && rule_y <= y1 && rule_x1 >= x0 && rule_x0 <= x1
+            let spans = rule_x0 <= x0 + GRID_EDGE_ALIGN_TOLERANCE_PTS && rule_x1 >= x1 - GRID_EDGE_ALIGN_TOLERANCE_PTS;
+            rule_y >= y0 && rule_y <= y1 && spans
         })
         .count()
 }
@@ -164,6 +171,29 @@ mod tests {
             count_horizontal_rules_in(&paths, rect(60.0, 280.0, RULE_WIDTH, 40.0)),
             1,
             "the bar inside the region belongs to it; the other one does not"
+        );
+    }
+
+    #[test]
+    fn a_rule_that_only_intersects_the_region_is_not_its_own() {
+        // A page-wide divider above a paragraph crosses the region's left edge
+        // but does not span it.
+        let divider = PathContent::from_operations(vec![PathOperation::Rectangle(0.0, 300.0, PAGE_WIDTH, 1.0)])
+            .with_fill(Color::black())
+            .with_stroke_width(0.0);
+        let partial = PathContent::from_operations(vec![PathOperation::Rectangle(60.0, 300.0, 100.0, 1.0)])
+            .with_fill(Color::black())
+            .with_stroke_width(0.0);
+
+        assert_eq!(
+            count_horizontal_rules_in(&[partial], rect(60.0, 280.0, RULE_WIDTH, 40.0)),
+            0,
+            "a bar shorter than the region is decoration, not its rule"
+        );
+        assert_eq!(
+            count_horizontal_rules_in(&[divider], rect(60.0, 280.0, RULE_WIDTH, 40.0)),
+            1,
+            "a divider that spans the region is still not enough on its own; the gate needs two"
         );
     }
 

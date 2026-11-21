@@ -12,6 +12,10 @@
 //! (left cells are short labels, the right column is values or single words).
 //! Either signal alone is not enough — geometry alone accepts a narrow prose
 //! column, text alone accepts a key/value paragraph.
+//!
+//! Grids this module produced are tagged at the call site, and only they are
+//! re-joined when the row-gap splitter cuts one table into several regions; an
+//! ordinary or ruled table is never a stitching candidate.
 
 use crate::pdf::table_reconstruct::{HocrWord, table_to_markdown};
 use crate::types::Table;
@@ -74,11 +78,13 @@ const STITCH_TRACK_TOLERANCE: f64 = 4.0;
 
 /// Page-level context every grid in one region is reconstructed under.
 #[derive(Clone, Copy)]
-pub(super) struct GridFrame {
+pub(super) struct GridFrame<'a> {
     pub page_height: f32,
     pub page_number: u32,
     pub allow_single_column: bool,
-    pub horizontal_rules: usize,
+    /// Page paths, so each group can be credited with the rules that span its
+    /// own bbox rather than the whole fused region's.
+    pub paths: &'a [super::PathContent],
 }
 
 #[derive(Clone, Copy)]
@@ -104,12 +110,7 @@ pub(super) fn has_definition_shape(grid: &[Vec<String>]) -> bool {
         return false;
     }
 
-    let has_header = first.first().is_some_and(|cell| is_short_label(cell))
-        && first.iter().skip(1).all(|cell| {
-            let text = cell.trim();
-            text.is_empty() || is_short_label(text)
-        });
-    let data_rows = if has_header { &grid[1..] } else { &grid[..] };
+    let data_rows = if has_header_row(first) { &grid[1..] } else { &grid[..] };
     if data_rows.len() < MIN_DATA_ROWS {
         return false;
     }
@@ -153,6 +154,16 @@ pub(super) fn has_definition_shape(grid: &[Vec<String>]) -> bool {
     complete_rows >= 2 && complete_rows * 100 >= data_rows.len() * MIN_COMPLETE_ROW_PERCENT
 }
 
+/// Whether a grid's first row is a column-label header: every populated cell is
+/// a short label, and the row names at most its own columns.
+fn has_header_row(row: &[String]) -> bool {
+    row.first().is_some_and(|cell| is_short_label(cell))
+        && row.iter().skip(1).all(|cell| {
+            let text = cell.trim();
+            text.is_empty() || is_short_label(text)
+        })
+}
+
 /// Collapse a header that the producer printed on two lines.
 ///
 /// A column-label header can land one line below the value column's header:
@@ -174,20 +185,19 @@ pub(super) fn collapse_wrapped_header(grid: &mut Vec<Vec<String>>) {
     let first_value_present = !first[width - 1].trim().is_empty();
     let second_labels_present = second[..width - 1].iter().any(|cell| !cell.trim().is_empty());
     let second_value_empty = second[width - 1].trim().is_empty();
-    // Either the first line carries only the value label, or it carries the
-    // first words of a label whose rest wraps to the next line
-    // (`Additional Driver` / `Count Group`). A data row always has a value, so
-    // an empty value on the second row means it is header text.
-    if !((first_labels_empty || !first[0].trim().is_empty())
-        && first_value_present
-        && second_labels_present
-        && second_value_empty)
-    {
+    if !(first_labels_empty && first_value_present && second_labels_present && second_value_empty) {
         return;
     }
-    let merged = crate::pdf::table_reconstruct::merge_rows_columnwise(&grid[..2], width);
-    grid.drain(1..2);
-    grid[0] = merged;
+    // The collapsed grid must still be a definition grid: without this, a
+    // value-less row could vanish into the header and the remaining rows would
+    // be admitted on the strength of the row that disappeared.
+    let mut collapsed = grid.clone();
+    let merged = crate::pdf::table_reconstruct::merge_rows_columnwise(&collapsed[..2], width);
+    collapsed.drain(1..2);
+    collapsed[0] = merged;
+    if has_definition_shape(&collapsed) {
+        *grid = collapsed;
+    }
 }
 
 fn is_short_label(text: &str) -> bool {
@@ -276,7 +286,7 @@ pub(super) fn tracks_align_across_rows(region: &[HocrWord], column_positions: &[
 /// unreconstructable wrapped header cannot shift the grids beside it. A region
 /// holding a single definition grid is also returned directly: no ruling
 /// reconstruction accepted it, so the grid is the region's only table.
-pub(super) fn segment_region(region: &[HocrWord], frame: GridFrame) -> Option<Vec<Table>> {
+pub(super) fn segment_region(region: &[HocrWord], frame: GridFrame<'_>) -> Option<Vec<Table>> {
     let tracks = region_tracks(region);
     if tracks.len() < 2 || tracks.len() > MAX_REGION_TRACKS {
         return None;
@@ -308,9 +318,12 @@ fn reconstruct_grid(
     tracks: &[Track],
     start: usize,
     end: usize,
-    frame: GridFrame,
+    frame: GridFrame<'_>,
 ) -> Option<Table> {
     let words = group_words(region, tracks, start, end);
+    // Rules belong to the grid whose bbox they span, not to the fused band: a
+    // rule under one grid must not supply rule evidence to its neighbour.
+    let horizontal_rules = super::horizontal_rules_for_region(frame.paths, &words, frame.page_height);
     let spacing = tracks[start..end]
         .windows(2)
         .map(|pair| pair[1].left.saturating_sub(pair[0].left))
@@ -327,7 +340,7 @@ fn reconstruct_grid(
             frame.page_height,
             frame.page_number,
             frame.allow_single_column,
-            frame.horizontal_rules,
+            horizontal_rules,
             threshold,
         ) else {
             continue;
@@ -374,7 +387,17 @@ fn starts_mid_word(region: &[HocrWord], tracks: &[Track], index: usize) -> bool 
     if index == 0 {
         return false;
     }
-    let cut = cut_between(tracks, index);
+    cut_crosses_word(region, cut_between(tracks, index))
+}
+
+/// Whether the cut at `end` runs through a word that the group ending there
+/// would leave behind. The cut only matters when another track follows it; the
+/// region's right edge is not a table boundary.
+fn mid_word_cut(region: &[HocrWord], tracks: &[Track], end: usize) -> bool {
+    end < tracks.len() && cut_crosses_word(region, cut_between(tracks, end))
+}
+
+fn cut_crosses_word(region: &[HocrWord], cut: u32) -> bool {
     region.iter().any(|word| {
         let center = word.left.saturating_add(word.width / 2);
         word.left < cut && center >= cut
@@ -416,12 +439,12 @@ fn group_words(region: &[HocrWord], tracks: &[Track], start: usize, end: usize) 
 
 /// Best cover of the track list by valid grids: most rows first, then the most
 /// tracks claimed, then the fewest grids.
-fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame) -> Option<Vec<(usize, usize)>> {
+fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame<'_>) -> Option<Vec<(usize, usize)>> {
     fn best_from(
         index: usize,
         tracks: &[Track],
         region: &[HocrWord],
-        frame: GridFrame,
+        frame: GridFrame<'_>,
         memo: &mut Vec<Option<Option<(usize, Vec<(usize, usize)>)>>>,
     ) -> Option<(usize, Vec<(usize, usize)>)> {
         if index == tracks.len() {
@@ -445,7 +468,11 @@ fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame) -> Option<
         };
         for size in 2..=MAX_GROUP_TRACKS.min(tracks.len() - index) {
             let end = index + size;
-            if starts_mid_word(region, tracks, index) {
+            // Neither edge may cut through a word: a group starting inside a
+            // cell loses its left part, and one ending mid-cell leaves its last
+            // column truncated (the word is handed to the neighbour). Both are
+            // how prose fragments get read as short table rows.
+            if starts_mid_word(region, tracks, index) || mid_word_cut(region, tracks, end) {
                 continue;
             }
             let Some(table) = reconstruct_grid(region, tracks, index, end, frame) else {
@@ -494,7 +521,42 @@ fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame) -> Option<
 /// Restricted to definition-shaped tables on purpose: a ruled table is never
 /// re-segmented here, and two ordinary tables that happen to share a width are
 /// left alone.
-pub(super) fn stitch_stacked(mut tables: Vec<Table>) -> Vec<Table> {
+///
+/// Only the tables the definition-grid path produced are candidates, and a
+/// slice that opens with its own header joins only when that header repeats the
+/// grid's. Two independent tables of the same width therefore stay separate
+/// instead of one's header becoming a data row of the other.
+pub(super) fn stitch_tagged(tables: Vec<Table>, is_definition: Vec<bool>) -> Vec<Table> {
+    if tables.len() != is_definition.len() || !is_definition.iter().any(|&tagged| tagged) {
+        return tables;
+    }
+    let mut definition = Vec::new();
+    let mut slots = Vec::with_capacity(tables.len());
+    for (table, tagged) in tables.into_iter().zip(is_definition) {
+        if tagged {
+            slots.push(None);
+            definition.push(table);
+        } else {
+            slots.push(Some(table));
+        }
+    }
+    let mut stitched = stitch_stacked(definition).into_iter();
+    let mut tables = Vec::with_capacity(slots.len());
+    for slot in slots {
+        match slot {
+            Some(table) => tables.push(table),
+            None => {
+                if let Some(table) = stitched.next() {
+                    tables.push(table);
+                }
+            }
+        }
+    }
+    tables.extend(stitched);
+    tables
+}
+
+fn stitch_stacked(mut tables: Vec<Table>) -> Vec<Table> {
     if !tables.iter().any(|table| has_definition_shape(&table.cells)) {
         return tables;
     }
@@ -546,6 +608,14 @@ fn stitches_onto(previous: &Table, next: &Table) -> bool {
     if !has_definition_shape(&previous.cells) || !has_definition_shape(&next.cells) {
         return false;
     }
+    if let Some(next_header) = next.cells.first().filter(|row| has_header_row(row)) {
+        let repeats_previous = previous.cells.first().is_some_and(|header| {
+            header.len() == next_header.len() && header.iter().zip(next_header).all(|(a, b)| a == b)
+        });
+        if !repeats_previous {
+            return false;
+        }
+    }
     if (previous_bounds.x0 - next_bounds.x0).abs() > STITCH_TRACK_TOLERANCE
         || (previous_bounds.x1 - next_bounds.x1).abs() > STITCH_TRACK_TOLERANCE
     {
@@ -568,16 +638,20 @@ fn row_pitch(table: &Table) -> f64 {
 mod tests {
     use super::*;
     use crate::pdf::table_reconstruct::HocrWord;
+    use xberg_native_pdf::elements::PathContent;
+    use xberg_native_pdf::elements::PathOperation;
+    use xberg_native_pdf::layout::Color;
 
     const PAGE_HEIGHT: f32 = 792.0;
     const ROW_PITCH: u32 = 12;
+    const WORD_HEIGHT: u32 = 9;
 
-    fn frame() -> GridFrame {
+    fn frame(paths: &[PathContent]) -> GridFrame<'_> {
         GridFrame {
             page_height: PAGE_HEIGHT,
             page_number: 1,
             allow_single_column: false,
-            horizontal_rules: 0,
+            paths,
         }
     }
 
@@ -587,23 +661,40 @@ mod tests {
             left,
             top,
             width,
-            height: 9,
+            height: WORD_HEIGHT,
             confidence: 95.0,
         }
     }
 
-    /// A two-column definition grid: a header pair and `rows` data rows.
-    fn grid(label_x: u32, value_x: u32, header: (&str, &str), rows: &[(&str, &str)], top: u32) -> Vec<HocrWord> {
-        let mut words = vec![
-            word(header.0, label_x, top, header.0.len() as u32 * 4),
-            word(header.1, value_x, top, header.1.len() as u32 * 4),
-        ];
-        for (index, (label, value)) in rows.iter().enumerate() {
-            let y = top + ROW_PITCH * (index as u32 + 1);
-            words.push(word(label, label_x, y, label.len() as u32 * 4));
-            words.push(word(value, value_x, y, value.len() as u32 * 4));
+    /// Lay out a cell the way the text extractor does: one word per token, one
+    /// point apart, so the cell merge has to put them back together.
+    fn cell(text: &str, left: u32, top: u32) -> Vec<HocrWord> {
+        let mut x = left;
+        let mut words = Vec::new();
+        for token in text.split_whitespace() {
+            let width = token.len() as u32 * 4;
+            words.push(word(token, x, top, width));
+            x += width + 1;
         }
         words
+    }
+
+    /// A two-column definition grid: a header pair and its data rows.
+    fn grid(label_x: u32, value_x: u32, header: (&str, &str), rows: &[(&str, &str)], top: u32) -> Vec<HocrWord> {
+        let mut words = cell(header.0, label_x, top);
+        words.extend(cell(header.1, value_x, top));
+        for (index, (label, value)) in rows.iter().enumerate() {
+            let y = top + ROW_PITCH * (index as u32 + 1);
+            words.extend(cell(label, label_x, y));
+            words.extend(cell(value, value_x, y));
+        }
+        words
+    }
+
+    fn ruled_bar(top: f32, left: f32, right: f32) -> PathContent {
+        PathContent::from_operations(vec![PathOperation::Rectangle(left, top, right - left, 1.0)])
+            .with_fill(Color::black())
+            .with_stroke_width(0.0)
     }
 
     #[test]
@@ -631,7 +722,7 @@ mod tests {
             400,
         ));
 
-        let tables = segment_region(&words, frame()).expect("three definition grids");
+        let tables = segment_region(&words, frame(&[])).expect("three definition grids");
 
         let headers: Vec<&str> = tables.iter().map(|table| table.cells[0][0].as_str()).collect();
         assert_eq!(
@@ -649,17 +740,21 @@ mod tests {
     fn keeps_a_lone_definition_grid_whose_values_are_single_letters() {
         // This is the shape the borderless reconstruction loses: a lowercase
         // value reads as a sentence continuation and the value `=` is not a
-        // number (ParseBench record 0580ae4eb20f312e0b8b).
+        // number (ParseBench record 0580ae4eb20f312e0b8b). Labels are multi-word
+        // cells exactly as the extractor produces them.
         let mut rows: Vec<(&str, &str)> = (0..7).map(|_| ("Credit Tier", "x")).collect();
         rows[0] = ("Mean Bad Debt", "XX");
+        rows[3] = ("Additional Driver Count Group", "x");
         rows[6] = ("Bad Debt Factor", "=");
-        let words = grid(40, 120, ("Factor", ""), &rows, 200);
+        let words = grid(40, 190, ("Factor", ""), &rows, 200);
 
-        let tables = segment_region(&words, frame()).expect("one definition grid");
+        let tables = segment_region(&words, frame(&[])).expect("one definition grid");
 
         assert_eq!(tables.len(), 1);
         assert_eq!(tables[0].cells.len(), 8);
         assert_eq!(tables[0].cells[0], ["Factor", ""]);
+        assert_eq!(tables[0].cells[1], ["Mean Bad Debt", "XX"]);
+        assert_eq!(tables[0].cells[4], ["Additional Driver Count Group", "x"]);
         assert_eq!(tables[0].cells[7], ["Bad Debt Factor", "="]);
     }
 
@@ -676,13 +771,78 @@ mod tests {
         let mut words = Vec::new();
         for (index, (left, right)) in prose.iter().enumerate() {
             let y = 200 + ROW_PITCH * index as u32;
-            words.push(word(left, 40, y, left.len() as u32 * 4));
-            words.push(word(right, 320, y, right.len() as u32 * 4));
+            words.extend(cell(left, 40, y));
+            words.extend(cell(right, 320, y));
         }
 
         assert!(
-            segment_region(&words, frame()).is_none(),
+            segment_region(&words, frame(&[])).is_none(),
             "prose must not be segmented into a definition grid"
+        );
+    }
+
+    #[test]
+    fn both_group_cuts_are_checked_for_a_split_word() {
+        // Track centres come from the tracks' own extents, so a word that
+        // starts at its track's left edge cannot cross that group's right cut;
+        // the check guards the remaining shape, a word that starts inside the
+        // span and is centred past the cut.
+        let tracks = vec![
+            Track {
+                left: 40,
+                right: 200,
+                words: 4,
+            },
+            Track {
+                left: 150,
+                right: 160,
+                words: 2,
+            },
+        ];
+        let region = vec![word("continuation", 100, 200, 80), word("tail", 150, 212, 10)];
+
+        assert!(
+            mid_word_cut(&region, &tracks, 1) || mid_word_cut(&region, &tracks, 2),
+            "a word centred past the cut is a split word"
+        );
+        assert!(
+            !mid_word_cut(&region, &tracks, 2),
+            "the region's right edge is not a table boundary"
+        );
+
+        // The left edge uses the same predicate.
+        assert!(starts_mid_word(&region, &tracks, 1), "45..125 crosses the cut at 95");
+    }
+
+    #[test]
+    fn a_rule_belongs_only_to_the_grid_it_spans() {
+        let left = grid(
+            40,
+            120,
+            ("Credit Tier", "Factor"),
+            &[("A", "0.3848"), ("B", "0.4017"), ("C", "0.4365")],
+            400,
+        );
+        let right = grid(
+            300,
+            380,
+            ("ISI", "Factor"),
+            &[("1_BEST", "0.5732"), ("2_GOOD", "0.7460"), ("3_AVER", "0.9370")],
+            400,
+        );
+        // Rules under the left grid only, in PDF (bottom-up) space. The words
+        // are in image (top-down) space, which the attribution converts.
+        let paths = vec![ruled_bar(360.0, 40.0, 150.0), ruled_bar(380.0, 40.0, 150.0)];
+
+        assert_eq!(
+            super::super::horizontal_rules_for_region(&paths, &left, PAGE_HEIGHT),
+            2,
+            "both rules span the left grid"
+        );
+        assert_eq!(
+            super::super::horizontal_rules_for_region(&paths, &right, PAGE_HEIGHT),
+            0,
+            "the left grid's rules do not span the right grid"
         );
     }
 
@@ -719,11 +879,76 @@ mod tests {
             ..Default::default()
         };
 
-        let stitched = stitch_stacked(vec![continuation, header]);
+        let stitched = stitch_tagged(vec![continuation, header], vec![true, true]);
 
         assert_eq!(stitched.len(), 1);
         assert_eq!(stitched[0].cells.len(), 8, "header stays first, continuation follows");
         assert_eq!(stitched[0].cells[0], ["Credit Tier", "Factor"]);
         assert_eq!(stitched[0].cells[7], ["G", "0.6143"]);
+    }
+
+    #[test]
+    fn a_slice_with_its_own_header_is_a_separate_table() {
+        let upper = Table {
+            cells: vec![
+                vec!["Credit Tier".into(), "Factor".into()],
+                vec!["A".into(), "0.3848".into()],
+                vec!["B".into(), "0.4017".into()],
+                vec!["C".into(), "0.4365".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 300.0,
+                x1: 140.0,
+                y1: 330.0,
+            }),
+            ..Default::default()
+        };
+        let lower = Table {
+            cells: vec![
+                vec!["ISI".into(), "Factor".into()],
+                vec!["1_BEST".into(), "0.5732".into()],
+                vec!["2_GOOD".into(), "0.7460".into()],
+                vec!["3_AVER".into(), "0.9370".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 282.0,
+                x1: 142.0,
+                y1: 298.0,
+            }),
+            ..Default::default()
+        };
+
+        let stitched = stitch_tagged(vec![lower, upper], vec![true, true]);
+
+        assert_eq!(stitched.len(), 2, "a differing header must not become a data row");
+    }
+
+    #[test]
+    fn ordinary_tables_are_never_stitched() {
+        let cells = |row: &str| vec![vec![row.to_string(), "1".to_string()]; 4];
+        let bounds = |y: f64| {
+            Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: y,
+                x1: 140.0,
+                y1: y + 15.0,
+            })
+        };
+        let first = Table {
+            cells: cells("Label"),
+            bounding_box: bounds(300.0),
+            ..Default::default()
+        };
+        let second = Table {
+            cells: cells("Label"),
+            bounding_box: bounds(282.0),
+            ..Default::default()
+        };
+
+        let stitched = stitch_tagged(vec![first, second], vec![false, false]);
+
+        assert_eq!(stitched.len(), 2);
     }
 }

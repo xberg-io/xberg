@@ -19,9 +19,14 @@ use xberg::{ExtractedDocument, ExtractionConfig};
 
 const FIXTURE: &[u8] = include_bytes!("fixtures/pdf_ruled_rate_table_3352/painted-rules.pdf.gz");
 
-fn extract() -> ExtractedDocument {
+/// Painted rules around prose and across a chart must not become table
+/// evidence: the box's two spanning rules surround justified prose, and the
+/// axis ticks are shorter than the region that carries them.
+const NON_TABLES: &[u8] = include_bytes!("fixtures/pdf_ruled_non_tables_3352/boxed-prose-and-axis.pdf.gz");
+
+fn extract_fixture(fixture: &[u8]) -> ExtractedDocument {
     let mut pdf = Vec::new();
-    GzDecoder::new(FIXTURE).read_to_end(&mut pdf).unwrap();
+    GzDecoder::new(fixture).read_to_end(&mut pdf).unwrap();
     let config = ExtractionConfig {
         disable_ocr: true,
         use_cache: false,
@@ -29,6 +34,10 @@ fn extract() -> ExtractedDocument {
         ..Default::default()
     };
     extract_bytes_document_blocking(&pdf, "application/pdf", &config).unwrap()
+}
+
+fn extract() -> ExtractedDocument {
+    extract_fixture(FIXTURE)
 }
 
 #[test]
@@ -55,4 +64,15 @@ fn table_with_painted_rules_is_detected() {
     );
     let last_row = table.cells.last().unwrap();
     assert_eq!(last_row.first().map(String::as_str), Some("95"), "{last_row:?}");
+}
+
+#[test]
+fn painted_rules_around_prose_or_axis_ticks_are_not_a_table() {
+    let document = extract_fixture(NON_TABLES);
+
+    assert!(
+        document.tables.is_empty(),
+        "painted non-table rules were admitted: {}",
+        document.content
+    );
 }

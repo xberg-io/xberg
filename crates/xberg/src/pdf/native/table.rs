@@ -919,22 +919,31 @@ pub(crate) fn extract_tables_heuristic(
 
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
         let paths = page_paths.take(doc, page_idx);
-        let region_rules: Vec<usize> = regions
-            .iter()
-            .map(|region| horizontal_rules_for_region(&paths, region, page_height))
-            .collect();
+        // A lifted rotation frame gives `HocrWord`s advance/cross coordinates,
+        // not page x/y, so a page-space rule cannot be attributed to its region.
+        // Falling back to zero rules keeps the geometric gate (and its
+        // columnar-prose guard) for such pages.
+        let region_rules: Vec<usize> = if source_frame {
+            regions
+                .iter()
+                .map(|region| horizontal_rules_for_region(&paths, region, page_height))
+                .collect()
+        } else {
+            vec![0; regions.len()]
+        };
         let column_rules =
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
         let page_tables_start = tables.len();
-        tables.extend(reconstruct_page_region_tables(
+        let (page_tables, definition_tables) = reconstruct_page_region_tables(
             &regions,
             page_height,
             page_number,
             allow_single_column,
             &region_rules,
             &column_rules,
-        ));
+        );
+        tables.extend(page_tables);
 
         // GH#1358: a page with a rotated run whose frame needed lifting (see
         // `table_reconstruct::page_has_lifted_rotation_frame`) produces
@@ -953,7 +962,7 @@ pub(crate) fn extract_tables_heuristic(
             }
         } else {
             let page_tables: Vec<Table> = tables.drain(page_tables_start..).collect();
-            tables.extend(definition_grid::stitch_stacked(page_tables));
+            tables.extend(definition_grid::stitch_tagged(page_tables, definition_tables));
         }
     }
 
@@ -966,6 +975,12 @@ pub(crate) fn extract_tables_heuristic(
     })
 }
 
+/// Reconstruct a page's candidate regions, returning the tables and, in
+/// parallel, whether each one came from the definition-grid path.
+///
+/// Only definition-grid tables may be stitched together afterwards; the flag
+/// keeps an ordinary or ruled table from being merged with a neighbouring
+/// definition grid that happens to share its width.
 fn reconstruct_page_region_tables(
     regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
     page_height: f32,
@@ -973,8 +988,9 @@ fn reconstruct_page_region_tables(
     allow_single_column: bool,
     region_rules: &[usize],
     column_rules: &source_columns::PageRules<'_>,
-) -> Vec<Table> {
+) -> (Vec<Table>, Vec<bool>) {
     let mut tables = Vec::new();
+    let mut definition_tables = Vec::new();
     let mut index = 0;
     while index < regions.len() {
         let horizontal_rules = region_rules.get(index).copied().unwrap_or(0);
@@ -994,12 +1010,14 @@ fn reconstruct_page_region_tables(
                     page_height,
                     page_number,
                     allow_single_column,
-                    horizontal_rules,
+                    paths: column_rules.paths(),
                 };
                 if let Some(grids) = definition_grid::segment_region(&regions[index], frame) {
+                    definition_tables.extend(std::iter::repeat_n(true, grids.len()));
                     tables.extend(grids);
                 }
             } else {
+                definition_tables.extend(std::iter::repeat_n(false, reconstructed.len()));
                 tables.extend(reconstructed);
             }
             index += 1;
@@ -1033,22 +1051,25 @@ fn reconstruct_page_region_tables(
         }
 
         if chain.len() < 2 {
-            tables.extend(reconstruct_region_tables(
+            let reconstructed = reconstruct_region_tables(
                 &regions[index],
                 page_height,
                 page_number,
                 allow_single_column,
                 horizontal_rules,
                 column_rules,
-            ));
+            );
+            definition_tables.extend(std::iter::repeat_n(false, reconstructed.len()));
+            tables.extend(reconstructed);
             index += 1;
             continue;
         }
 
         tables.push(stitch_label_heavy_financial_sections(chain, page_number));
+        definition_tables.push(false);
         index = chain_end;
     }
-    tables
+    (tables, definition_tables)
 }
 
 fn label_heavy_financial_sections_are_contiguous(
@@ -1743,8 +1764,9 @@ fn median_word_height(region: &[crate::pdf::table_reconstruct::HocrWord]) -> u32
     heights.get(heights.len() / 2).copied().unwrap_or(1).max(1)
 }
 
-/// Horizontal rules this candidate region draws, in PDF user space. The
-/// region's words carry top-down `top`; the page's path bboxes are bottom-up. ~keep
+/// Horizontal rules that span this candidate's own bbox, in PDF user space. The
+/// region's words carry top-down `top`; the page's path bboxes are bottom-up,
+/// so the vertical band is inverted before counting. ~keep
 fn horizontal_rules_for_region(
     paths: &[PathContent],
     region: &[crate::pdf::table_reconstruct::HocrWord],
@@ -3997,7 +4019,7 @@ mod tests {
             "a large normalized vertical gap must stop same-track tables from chaining"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,
@@ -4030,7 +4052,7 @@ mod tests {
             "a nearby table without a descriptor-only section label must not chain"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,
@@ -4059,7 +4081,7 @@ mod tests {
             "a nearby Security/Value header must not be treated as a continuation label"
         );
 
-        let tables = reconstruct_page_region_tables(
+        let (tables, _) = reconstruct_page_region_tables(
             &[first, second],
             792.0,
             1,

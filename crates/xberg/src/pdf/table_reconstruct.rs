@@ -2024,6 +2024,11 @@ pub(crate) fn is_well_formed_table(grid: &[Vec<String>]) -> bool {
 /// the ruling-line check below is the load-bearing one. ~keep
 const MAX_STRADDLED_BOUNDARY_RATIO: f64 = 0.60;
 
+/// Fewest horizontal rules spanning the candidate's own bbox that count as a
+/// producer's table evidence. One rule is what a paragraph above a divider, a
+/// boxed note, or a chart axis carries; a table draws a row rule per row.
+pub(crate) const MIN_HORIZONTAL_RULES_FOR_ADMISSION: usize = 2;
+
 /// Row-grouping tolerance as a multiple of median word height, matching the
 /// value `reconstruct_table` itself uses so both see the same rows.
 const STRADDLE_ROW_THRESHOLD_RATIO: f64 = 0.5;
@@ -2090,14 +2095,16 @@ pub(crate) fn straddled_boundary_ratio(region: &[HocrWord], column_positions: &[
 /// Implements the two-signal admission test from xberg-io/xberg#1399, plus the
 /// short-region evidence requirement from xberg-io/xberg#1760:
 ///
-/// 1. **Drawn ruling lines (positive).** A page whose region carries horizontal
-///    rules had a producer that drew a table, so the candidate is admitted. The
-///    reporter's survey found no real table lacking rules, and this is the
-///    strong signal — see [`MAX_STRADDLED_BOUNDARY_RATIO`] for why the
-///    geometric signal alone cannot carry the decision. The drawn rules also
-///    stand in for the uniform-column-length prose test: a rate table's value
-///    columns are all the same width, which is exactly the shape that test
-///    mistakes for wrapped columnar prose (xberg-io/xberg#3352).
+/// 1. **Drawn ruling lines (positive).** A region whose own bbox is spanned by
+///    at least [`MIN_HORIZONTAL_RULES_FOR_ADMISSION`] horizontal rules had a
+///    producer that drew a table, so the candidate is admitted. The reporter's
+///    survey found no real table lacking rules, and this is the strong signal —
+///    see [`MAX_STRADDLED_BOUNDARY_RATIO`] for why the geometric signal alone
+///    cannot carry the decision. The drawn rules also stand in for the
+///    uniform-column-length prose test: a rate table's value columns are all the
+///    same width, which is exactly the shape that test mistakes for wrapped
+///    columnar prose (xberg-io/xberg#3352). A single divider is not evidence: it
+///    is the shape a paragraph above a rule has too.
 /// 2. **Are the column boundaries actually whitespace (fallback)?** With no
 ///    rules to go on, test the definition of a column. Continuous prose that
 ///    merely aligns into column-like x-buckets has words running across those
@@ -2107,16 +2114,18 @@ pub(crate) fn straddled_boundary_ratio(region: &[HocrWord], column_positions: &[
 ///    [`post_process_table_inner`] need four or more rows to fire, so a shorter
 ///    candidate has passed them only because they never ran. See
 ///    [`short_grid_has_positive_table_evidence`], which is tested before signal 1
-///    because signal 1 is page-scoped.
+///    because signal 1 is region-scoped, not row-scoped.
 ///
-/// This only ever narrows acceptance relative to [`is_well_formed_table`].
+/// This narrows acceptance relative to [`is_well_formed_table`]: a rule-less
+/// candidate additionally faces the straddled-boundary test, and the ruled
+/// branch replaces the column-length guard with rule evidence.
 pub(crate) fn is_well_formed_borderless_table(
     grid: &[Vec<String>],
     region: &[HocrWord],
     column_positions: &[u32],
     horizontal_rules: usize,
 ) -> bool {
-    let ruled = horizontal_rules > 0;
+    let ruled = horizontal_rules >= MIN_HORIZONTAL_RULES_FOR_ADMISSION;
     let well_formed = if ruled {
         is_well_formed_table_core(grid, true)
     } else {
@@ -2214,7 +2223,8 @@ pub(crate) fn is_well_formed_definition_grid(
     if !short_grid_has_positive_table_evidence(grid) {
         return false;
     }
-    horizontal_rules > 0 || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+    horizontal_rules >= MIN_HORIZONTAL_RULES_FOR_ADMISSION
+        || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
 }
 
 fn is_well_formed_table_inner(grid: &[Vec<String>], skip_columnar_prose_guard: bool, definition_grid: bool) -> bool {
@@ -6671,5 +6681,44 @@ mod tests {
         assert_eq!(processed[3], vec!["Transfers In", "$3,000", "$3,200", "$3,400"]);
         assert_eq!(processed[4], vec!["Interest", "$800", "$900", "$950"]);
         assert_eq!(processed[5], vec!["Refunds", "$1,200", "$1,300", "$1,400"]);
+    }
+
+    /// Three uniform short-word columns are the columnar-prose signature that
+    /// [`is_well_formed_table_core`] rejects. One page-wide divider is not table
+    /// evidence, so the ruled branch must not lift the grid out of that guard;
+    /// two row rules are.
+    #[test]
+    fn a_single_divider_does_not_lift_uniform_columns_out_of_the_prose_guard() {
+        let grid: Vec<Vec<String>> = vec![
+            vec!["one".into(), "two".into(), "three".into()],
+            vec!["four".into(), "five".into(), "seven".into()],
+            vec!["ace".into(), "bee".into(), "seas".into()],
+            vec!["red".into(), "sky".into(), "sunny".into()],
+            vec!["tin".into(), "pot".into(), "jugs".into()],
+        ];
+        let region: Vec<HocrWord> = grid
+            .iter()
+            .enumerate()
+            .flat_map(|(row, cells)| {
+                cells.iter().enumerate().map(move |(column, text)| HocrWord {
+                    text: text.clone(),
+                    left: 60 + column as u32 * 140,
+                    top: 200 + row as u32 * 12,
+                    width: text.len() as u32 * 6,
+                    height: 9,
+                    confidence: 95.0,
+                })
+            })
+            .collect();
+        let columns = vec![60, 200, 340];
+
+        assert!(
+            !is_well_formed_borderless_table(&grid, &region, &columns, 1),
+            "a single divider must leave the columnar-prose guard in force"
+        );
+        assert!(
+            is_well_formed_borderless_table(&grid, &region, &columns, 2),
+            "two spanning row rules are the table evidence that replaces that guard"
+        );
     }
 }

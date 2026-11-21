@@ -66,6 +66,12 @@ impl<'a> PageRules<'a> {
         }
     }
 
+    /// The page's vector paths, already held for column-rule detection. Rule
+    /// attribution reuses them rather than threading a second copy of the slice.
+    pub(super) fn paths(&self) -> &'a [PathContent] {
+        self.paths
+    }
+
     pub(super) fn with_source_words(
         mut self,
         segments: &'a [crate::pdf::hierarchy::SegmentData],
