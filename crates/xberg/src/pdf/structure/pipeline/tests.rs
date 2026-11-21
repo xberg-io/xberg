@@ -441,7 +441,7 @@ fn stitch_and_emit(
     all_page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     use crate::core::config::layout::TableOverlapPreference;
-    let stitched = stitch_fragmented_tables(native_tables, all_page_segments, 0);
+    let stitched = stitch_fragmented_tables(native_tables, all_page_segments, 0, &[]);
     prepare_emitted_tables(&stitched, layout_tables, TableOverlapPreference::Content, &[])
 }
 
@@ -451,22 +451,44 @@ fn touching_ruled_sections_keep_rows_while_text_fragments_stitch() {
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["a", "b"], &["c", "d"]]);
     let tables = vec![top.clone(), bottom.clone()];
 
-    let ruled = stitch_fragmented_tables(tables.clone(), &[], 2);
+    let ruled = stitch_fragmented_tables(tables.clone(), &[], 2, &[]);
     assert_eq!(
         ruled.iter().map(|table| &table.cells).collect::<Vec<_>>(),
         [&top.cells, &bottom.cells]
     );
 
-    let text = stitch_fragmented_tables(tables, &[], 0);
+    let text = stitch_fragmented_tables(tables, &[], 0, &[]);
     assert_eq!(text.len(), 1);
     assert_eq!(text[0].cells, [["H1 H3", "H2 H4"], ["a c", "b d"]]);
+}
+
+#[test]
+fn completed_tables_are_not_restitched() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["a", "b"], &["c", "d"]]);
+
+    let complete = stitch_fragmented_tables(vec![top.clone(), bottom.clone()], &[], 0, &[true, true]);
+    assert_eq!(
+        complete.len(),
+        2,
+        "completed rejoined tables must not collapse into one row"
+    );
+    assert_eq!(complete[0].cells, top.cells);
+    assert_eq!(complete[1].cells, bottom.cells);
+
+    let fragments = stitch_fragmented_tables(vec![top, bottom], &[], 0, &[false, false]);
+    assert_eq!(
+        fragments.len(),
+        1,
+        "ordinary heuristic fragments stay eligible for stitching"
+    );
 }
 
 #[test]
 fn ruled_fragments_with_a_small_gap_still_stitch() {
     let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"], &["c", "d"]]);
-    let result = stitch_fragmented_tables(vec![top, bottom], &[], 2);
+    let result = stitch_fragmented_tables(vec![top, bottom], &[], 2, &[]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].cells, [["H1 H3", "H2 H4"], ["a c", "b d"]]);
 }

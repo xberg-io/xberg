@@ -815,6 +815,9 @@ pub(crate) struct ExtractedHierarchySegments {
 pub(crate) struct HeuristicTableExtraction {
     pub(crate) tables: Vec<Table>,
     pub(crate) grids: Vec<Option<crate::types::TableGrid>>,
+    /// Whether the table was already completed (a rejoined ruled band) and must
+    /// not be re-fragmented by the wrapped-row stitcher. ~keep
+    pub(crate) completed: Vec<bool>,
     pub(crate) hierarchy_segments: ExtractedHierarchySegments,
 }
 
@@ -876,6 +879,7 @@ pub(crate) fn extract_tables_heuristic(
 
     let mut tables = Vec::new();
     let mut grids = Vec::new();
+    let mut completed = Vec::new();
 
     for page_idx in 0..page_count {
         let page_number = (page_idx + 1) as u32;
@@ -925,7 +929,7 @@ pub(crate) fn extract_tables_heuristic(
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
 
         let page_tables_start = tables.len();
-        for (table, grid) in reconstruct_page_region_tables(
+        for (table, grid, complete_table) in reconstruct_page_region_tables(
             &regions,
             page_height,
             page_number,
@@ -935,6 +939,7 @@ pub(crate) fn extract_tables_heuristic(
         ) {
             tables.push(table);
             grids.push(grid);
+            completed.push(complete_table);
         }
 
         // GH#1358: a page with a rotated run whose frame needed lifting (see
@@ -958,6 +963,7 @@ pub(crate) fn extract_tables_heuristic(
     Ok(HeuristicTableExtraction {
         tables,
         grids,
+        completed,
         hierarchy_segments: ExtractedHierarchySegments {
             pages: per_page_segments,
             used_structure_tree,
@@ -972,7 +978,7 @@ fn reconstruct_page_region_tables(
     allow_single_column: bool,
     horizontal_rules: usize,
     column_rules: &source_columns::PageRules<'_>,
-) -> Vec<(Table, Option<crate::types::TableGrid>)> {
+) -> Vec<(Table, Option<crate::types::TableGrid>, bool)> {
     let ruling_paths = column_rules.paths();
     let mut tables = Vec::new();
     let mut index = 0;
@@ -991,7 +997,7 @@ fn reconstruct_page_region_tables(
         if end > index + 1
             && let Some((table, grid)) = reconstruct_ruled_band_table(&merged, page_height, page_number, ruling_paths)
         {
-            tables.push((table, Some(grid)));
+            tables.push((table, Some(grid), true));
             index = end;
             continue;
         }
@@ -1009,7 +1015,7 @@ fn reconstruct_page_region_tables(
                     column_rules,
                 )
                 .into_iter()
-                .map(|table| (table, None)),
+                .map(|table| (table, None, false)),
             );
             index += 1;
             continue;
@@ -1052,13 +1058,13 @@ fn reconstruct_page_region_tables(
                     column_rules,
                 )
                 .into_iter()
-                .map(|table| (table, None)),
+                .map(|table| (table, None, false)),
             );
             index += 1;
             continue;
         }
 
-        tables.push((stitch_label_heavy_financial_sections(chain, page_number), None));
+        tables.push((stitch_label_heavy_financial_sections(chain, page_number), None, false));
         index = chain_end;
     }
     tables
@@ -1120,14 +1126,7 @@ fn ruled_bands_continue(
 
     let upper_tracks = word_left_tracks(upper);
     let lower_tracks = word_left_tracks(lower);
-    let shared_tracks = upper_tracks
-        .iter()
-        .filter(|track| {
-            lower_tracks
-                .iter()
-                .any(|other| other.abs_diff(**track) <= RULED_BAND_TRACK_TOLERANCE)
-        })
-        .count();
+    let shared_tracks = matched_track_count(&upper_tracks, &lower_tracks);
     let smaller = upper_tracks.len().min(lower_tracks.len());
     if shared_tracks < RULED_BAND_MIN_SHARED_TRACKS
         || shared_tracks * 100 < smaller * RULED_BAND_MIN_SHARED_TRACK_PERCENT
@@ -1153,6 +1152,26 @@ fn word_left_tracks(words: &[crate::pdf::table_reconstruct::HocrWord]) -> Vec<u3
     tracks.sort_unstable();
     tracks.dedup_by(|left, right| left.abs_diff(*right) <= RULED_BAND_TRACK_TOLERANCE);
     tracks
+}
+
+/// One-to-one track matches. A single lower track cannot satisfy two upper
+/// tracks that both sit within the tolerance, which would otherwise report a
+/// shared skeleton the bands do not actually have. ~keep
+fn matched_track_count(upper: &[u32], lower: &[u32]) -> usize {
+    let mut used = vec![false; lower.len()];
+    let mut matched = 0usize;
+    for track in upper {
+        let Some(index) = lower
+            .iter()
+            .enumerate()
+            .position(|(index, other)| !used[index] && other.abs_diff(*track) <= RULED_BAND_TRACK_TOLERANCE)
+        else {
+            continue;
+        };
+        used[index] = true;
+        matched += 1;
+    }
+    matched
 }
 
 /// Count numeric words per text row, using the same half-row grouping as the
@@ -1211,7 +1230,8 @@ fn has_continuous_ruling(
     let upper_top = upper.iter().map(|word| word.top).min().unwrap_or(0) as f32;
     let lower_bottom = lower.iter().map(|word| word.top + word.height).max().unwrap_or(0) as f32;
 
-    let mut spanning_rules = 0usize;
+    let mut upper_rules = 0usize;
+    let mut lower_rules = 0usize;
     for path in paths {
         if !band_horizontal_rule(path) {
             continue;
@@ -1226,15 +1246,20 @@ fn has_continuous_ruling(
         // (y grows upward). ~keep
         let path_center = path.bbox.y + path.bbox.height / 2.0;
         let rule_y = page_height - path_center;
-        if rule_y >= upper_top - 1.0 && rule_y <= lower_bottom + 1.0 {
-            spanning_rules += 1;
+        if rule_y >= upper_top - 1.0 && rule_y <= upper_bottom as f32 + 1.0 {
+            upper_rules += 1;
+        }
+        if rule_y >= lower_top as f32 - 1.0 && rule_y <= lower_bottom + 1.0 {
+            lower_rules += 1;
         }
         if rule_y > upper_bottom as f32 + 1.0 && rule_y < lower_top as f32 - 1.0 {
             // A rule in the gap closes the upper table and opens the lower one. ~keep
             return false;
         }
     }
-    spanning_rules >= 2
+    // Each side of this seam needs its own ruling; a rule already counted for a
+    // previously rejoined band cannot support the next one. ~keep
+    upper_rules >= 1 && lower_rules >= 1
 }
 
 /// Rebuild one table from recombined ruled bands.
@@ -1277,28 +1302,7 @@ fn reconstruct_ruled_band_table(
             })
             .map(|(index, _)| index)?;
         if is_bridge_numeric_word(word, median_height) {
-            // A TJ array can place several values without whitespace, so the
-            // text layer hands them over as one wide token ("0000"). Split it
-            // by character advance and give each surviving glyph its column. ~keep
-            let characters: Vec<char> = word.text.chars().collect();
-            let advance = word.width as f32 / characters.len().max(1) as f32;
-            let mut split: Vec<(usize, char)> = Vec::new();
-            for (index, character) in characters.iter().enumerate() {
-                if character.is_whitespace() {
-                    continue;
-                }
-                let x = word.left as f32 + index as f32 * advance;
-                if let Some(column) = column_at(&columns, x) {
-                    split.push((column, *character));
-                }
-            }
-            // One original token broken across values: each column's glyphs form
-            // one value, so append them together rather than as separate words. ~keep
-            for chunk in split.chunk_by(|left, right| left.0 == right.0) {
-                if let Some((column, _)) = chunk.first() {
-                    grid[row][*column].push(chunk.iter().map(|(_, character)| *character).collect());
-                }
-            }
+            assign_bridge_numeric_word(&mut grid[row], &columns, word);
             continue;
         }
         let center_x = word.left as f32 + word.width as f32 / 2.0;
@@ -1329,8 +1333,8 @@ fn reconstruct_ruled_band_table(
         .iter()
         .position(|row| row.iter().any(|cell| crate::table_core::text_is_value(cell.trim())))
         .unwrap_or(0);
-    let has_header = first_data_row > 1;
-    if has_header {
+    let has_header = first_data_row > 0;
+    if first_data_row > 1 {
         let header: Vec<String> = (0..columns.len())
             .map(|column| {
                 cells[..first_data_row]
@@ -1386,7 +1390,7 @@ fn ruled_band_grid(cells: &[Vec<String>], has_header: bool) -> Option<crate::typ
     }
     let mut row_spans = vec![vec![1u32; cols as usize]; rows as usize];
     let mut covered = vec![vec![false; cols as usize]; rows as usize];
-    let mut row = 0usize;
+    let mut row = usize::from(has_header);
     while row < rows as usize {
         if cells[row][0].trim().is_empty() {
             row += 1;
@@ -1432,6 +1436,51 @@ fn ruled_band_grid(cells: &[Vec<String>], has_header: bool) -> Option<crate::typ
     })
 }
 
+/// Place one text-layer token that spans several columns.
+///
+/// A TJ array can place several values without whitespace, so the text layer
+/// hands them over as one wide token ("0000"). Split it by character advance
+/// and give each surviving glyph its column only when every glyph lands in its
+/// own consecutive column. Two values sharing one column would need a boundary
+/// the geometry does not establish; keep the token whole in that case. ~keep
+fn assign_bridge_numeric_word(
+    row: &mut [Vec<String>],
+    columns: &[(f32, f32)],
+    word: &crate::pdf::table_reconstruct::HocrWord,
+) {
+    let characters: Vec<char> = word.text.chars().collect();
+    let advance = word.width as f32 / characters.len().max(1) as f32;
+    let split: Vec<(usize, char)> = characters
+        .iter()
+        .enumerate()
+        .filter(|(_, character)| !character.is_whitespace())
+        .filter_map(|(index, character)| {
+            let x = word.left as f32 + index as f32 * advance;
+            column_at(columns, x).map(|column| (column, *character))
+        })
+        .collect();
+    let unambiguous = !split.is_empty() && split.windows(2).all(|pair| pair[1].0 > pair[0].0);
+    if unambiguous {
+        // One original token broken across values: each column's glyphs form one
+        // value, so append them together rather than as separate words. ~keep
+        for chunk in split.chunk_by(|left, right| left.0 == right.0) {
+            if let Some((column, _)) = chunk.first() {
+                row[*column].push(chunk.iter().map(|(_, character)| *character).collect());
+            }
+        }
+        return;
+    }
+    // Trailing padding inflates the token box; measure the text that is
+    // actually painted, then fall back to whole-token placement. ~keep
+    let text = word.text.trim();
+    let total = word.text.chars().count().max(1);
+    let effective_width = word.width as f32 * (text.chars().count() as f32 / total as f32);
+    let center_x = word.left as f32 + effective_width / 2.0;
+    if let Some(column) = column_at(columns, center_x) {
+        row[column].push(text.to_string());
+    }
+}
+
 /// A numeric token wider than four row heights, whose glyphs the text layer
 /// merged from a spaced TJ array rather than a word. Its character advances
 /// still locate the individual values. ~keep
@@ -1469,50 +1518,29 @@ fn interval_distance(point: f32, interval: (f32, f32)) -> f32 {
 }
 
 /// The x-runs covered by at least one word anywhere in `region`.
+///
+/// Intervals are bounded by the word count, so a hostile word placed far to the
+/// right cannot request an allocation proportional to its x-extent. Bounds are
+/// half-open: a word ending at 296 leaves a gutter from 296 to 300 intact. ~keep
 fn ruled_band_column_intervals(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     median_height: u32,
 ) -> Vec<(f32, f32)> {
-    let Some(left) = region.iter().map(|word| word.left).min() else {
-        return Vec::new();
-    };
-    let Some(right) = region.iter().map(|word| word.left.saturating_add(word.width)).max() else {
-        return Vec::new();
-    };
-    let width = right.saturating_sub(left) as f32;
-    if width < 1.0 {
-        return Vec::new();
-    }
-    let bins = width.ceil() as usize + 1;
-    let mut covered = vec![false; bins];
-    for word in region
+    let mut extents: Vec<(f32, f32)> = region
         .iter()
         .filter(|word| !is_bridge_numeric_word(word, median_height))
-    {
-        let start = (word.left.saturating_sub(left) as f32).floor() as usize;
-        let end = (word.left.saturating_add(word.width).saturating_sub(left) as f32).ceil() as usize;
-        for slot in covered.iter_mut().take((end + 1).min(bins)).skip(start.min(bins)) {
-            *slot = true;
-        }
-    }
+        .map(|word| (word.left as f32, word.left as f32 + word.width.max(1) as f32))
+        .collect();
+    extents.sort_by(|left, right| left.0.total_cmp(&right.0));
 
     let mut intervals: Vec<(f32, f32)> = Vec::new();
-    let mut start = 0usize;
-    while start < bins {
-        if !covered[start] {
-            start += 1;
-            continue;
-        }
-        let mut end = start + 1;
-        while end < bins && covered[end] {
-            end += 1;
-        }
-        let interval = (left as f32 + start as f32, left as f32 + end as f32);
+    for (left, right) in extents {
         match intervals.last_mut() {
-            Some(previous) if interval.0 - previous.1 < RULED_BAND_MIN_COLUMN_GUTTER => previous.1 = interval.1,
-            _ => intervals.push(interval),
+            Some(previous) if left - previous.1 < RULED_BAND_MIN_COLUMN_GUTTER => {
+                previous.1 = previous.1.max(right);
+            }
+            _ => intervals.push((left, right)),
         }
-        start = end;
     }
     intervals
 }
@@ -4484,7 +4512,8 @@ mod tests {
             1,
             "three ruled bands with one column skeleton are one table"
         );
-        let (table, grid) = &tables[0];
+        let (table, grid, complete) = &tables[0];
+        assert!(complete, "a rejoined band is a completed table");
         assert_eq!(table.cells.first().map(Vec::len), Some(14));
         assert_eq!(table.cells[0][0], "Alpha0 Beta0 Gamma0");
         assert_eq!(table.cells[0][13], "Alpha13 Beta13 Gamma13");
@@ -4501,6 +4530,127 @@ mod tests {
                 .iter()
                 .filter(|cell| cell.row == 0)
                 .all(|cell| cell.is_header)
+        );
+    }
+
+    #[test]
+    fn matched_track_count_is_one_to_one() {
+        assert_eq!(matched_track_count(&[40, 49, 120], &[44, 120, 240]), 2);
+        assert_eq!(matched_track_count(&[40, 120, 240], &[44, 124, 244]), 3);
+    }
+
+    #[test]
+    fn requires_ruling_on_both_sides_of_a_seam() {
+        let (regions, _) = synthetic_ruled_bands();
+        let upper_only = vec![
+            synthetic_band_rule(35.0, 560.0, 300.0, 1000.0),
+            synthetic_band_rule(35.0, 560.0, 310.0, 1000.0),
+        ];
+        assert!(
+            !ruled_bands_continue(&regions[0], &regions[1], &upper_only, 1000.0),
+            "rules already inside the upper band cannot support the next seam"
+        );
+        let both_sides = vec![
+            synthetic_band_rule(35.0, 560.0, 300.0, 1000.0),
+            synthetic_band_rule(35.0, 560.0, 500.0, 1000.0),
+        ];
+        assert!(ruled_bands_continue(&regions[0], &regions[1], &both_sides, 1000.0));
+    }
+
+    #[test]
+    fn keeps_an_ambiguous_fused_numeric_token_whole() {
+        let mut region = vec![
+            make_word("A", 280, 100, 12),
+            make_word("B", 300, 100, 12),
+            make_word("12", 280, 120, 12),
+            make_word("34", 300, 120, 12),
+            make_word("1234", 270, 140, 44),
+            make_word("56", 280, 160, 12),
+            make_word("78", 300, 160, 12),
+            make_word("90", 280, 180, 12),
+            make_word("11", 300, 180, 12),
+            make_word("22", 280, 200, 12),
+            make_word("33", 300, 200, 12),
+        ];
+        region.sort_by_key(|word| (word.top, word.left));
+        let rules = vec![synthetic_band_rule(260.0, 330.0, 110.0, 300.0)];
+        let (table, _) = reconstruct_ruled_band_table(&region, 300.0, 1, &rules)
+            .expect("a small ruled table with unambiguous surrounding rows");
+
+        assert!(
+            table.cells.iter().flatten().any(|cell| cell == "1234"),
+            "a token whose glyph advance does not establish a boundary stays whole: {:?}",
+            table.cells
+        );
+        assert!(
+            table.cells.iter().flatten().all(|cell| cell != "123" && cell != "4"),
+            "the fused value must not be split by uniform advance: {:?}",
+            table.cells
+        );
+    }
+
+    #[test]
+    fn single_line_header_is_kept() {
+        let mut region = Vec::new();
+        for (label, left) in [("Left", 40), ("Right", 120)] {
+            region.push(make_word(label, left, 100, 24));
+        }
+        for row in 0..5 {
+            region.push(make_word(&format!("{}", row * 2 + 1), 40, 120 + row * 20, 12));
+            region.push(make_word(&format!("{}", row * 2 + 2), 120, 120 + row * 20, 12));
+        }
+        let rules = vec![synthetic_band_rule(30.0, 160.0, 110.0, 300.0)];
+        let (table, grid) =
+            reconstruct_ruled_band_table(&region, 300.0, 1, &rules).expect("a single header row over numeric data");
+
+        assert_eq!(table.columns, Some(vec!["Left".to_string(), "Right".to_string()]));
+        assert!(
+            grid.cells
+                .iter()
+                .filter(|cell| cell.row == 0)
+                .all(|cell| cell.is_header),
+            "a single text row before numeric data is the header"
+        );
+    }
+
+    #[test]
+    fn header_cell_does_not_span_into_body_rows() {
+        let cells = vec![
+            vec!["Group".to_string(), "Value".to_string()],
+            vec![String::new(), "1".to_string()],
+            vec!["Alpha".to_string(), "2".to_string()],
+        ];
+        let grid = ruled_band_grid(&cells, true).expect("header and body rows");
+        let header = grid
+            .cells
+            .iter()
+            .find(|cell| cell.row == 0 && cell.col == 0)
+            .expect("header anchor");
+        assert_eq!(header.row_span, 1, "the header must not cover the empty body slot");
+    }
+
+    #[test]
+    fn column_intervals_preserve_a_four_point_gutter() {
+        let region = vec![make_word("a", 280, 0, 16), make_word("b", 300, 20, 16)];
+        let intervals = ruled_band_column_intervals(&region, 10);
+        assert_eq!(
+            intervals.len(),
+            2,
+            "a word ending at 296 leaves a four-point gutter to a column at 300"
+        );
+    }
+
+    #[test]
+    fn column_intervals_are_bounded_by_words_not_extent() {
+        let region = vec![
+            make_word("a", 0, 0, 10),
+            make_word("b", 100, 0, 10),
+            make_word("far", 10_000_000, 0, 10),
+        ];
+        let intervals = ruled_band_column_intervals(&region, 10);
+        assert!(
+            intervals.len() <= 3,
+            "coverage is word intervals, not a page-extent bitmap"
         );
     }
 

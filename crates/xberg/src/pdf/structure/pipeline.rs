@@ -3801,7 +3801,16 @@ pub(crate) fn extract_document_structure_from_segments(
 struct NativeTableInputs<'a> {
     sources: &'a [&'a crate::pdf::native::table::source_members::TableSources],
     ruled_count: usize,
+    /// Whether each native table is already complete and must not be stitched. ~keep
+    complete: &'a [bool],
     schemas: &'a [crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
+}
+
+/// Ruled count and completed-table mask for the native tables handed to the
+/// structure pipeline. ~keep
+pub(crate) struct NativeTablePlan<'a> {
+    pub(crate) ruled_count: usize,
+    pub(crate) complete: &'a [bool],
 }
 
 #[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
@@ -3825,7 +3834,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     native_document: &xberg_native_pdf::PdfDocument,
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
-    ruled_table_count: usize,
+    table_plan: NativeTablePlan<'_>,
     schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
@@ -3836,7 +3845,8 @@ pub(crate) fn extract_document_structure_from_native_pages(
         Some(native_document),
         NativeTableInputs {
             sources: table_sources,
-            ruled_count: ruled_table_count,
+            ruled_count: table_plan.ruled_count,
+            complete: table_plan.complete,
             schemas,
         },
         config,
@@ -3856,6 +3866,7 @@ fn build_document_structure_with_native(
     let NativeTableInputs {
         sources: table_sources,
         ruled_count: ruled_table_count,
+        complete: complete_table_mask,
         schemas,
     } = native_tables;
     let SegmentStructureConfig {
@@ -4256,7 +4267,26 @@ fn build_document_structure_with_native(
     let overlap_preference = table_overlap_preference;
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
-    let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
+    // A layout model can classify the page letterhead as a table. Reject it
+    // before the emission/suppression map so its bbox cannot hide the source
+    // text; the real layout table keeps its cells and grid. ~keep
+    let layout_table_count = layout_tables.len();
+    layout_tables.retain(|table| !crate::pdf::table_normalize::is_page_letterhead_table(table));
+    #[cfg(feature = "layout-detection")]
+    table_grid_sidecars.retain(|sidecar| !crate::pdf::table_normalize::is_page_letterhead_table(&sidecar.table));
+    if layout_tables.len() != layout_table_count {
+        tracing::debug!(
+            rejected = layout_table_count - layout_tables.len(),
+            "rejected layout page letterhead table(s)"
+        );
+    }
+
+    let stitched_native_tables = stitch_fragmented_tables(
+        tables.to_vec(),
+        &all_page_segments,
+        ruled_table_count,
+        complete_table_mask,
+    );
     let mut emitted_tables = prepare_emitted_tables(
         &stitched_native_tables,
         layout_tables,
@@ -4973,15 +5003,17 @@ fn stitch_fragmented_tables(
     all_page_segments: &[Vec<SegmentData>],
     // Extraction appends heuristic fragments after the ruled tables. ~keep
     ruled_table_count: usize,
+    complete_tables: &[bool],
 ) -> Vec<crate::types::Table> {
-    let mut by_page: ahash::AHashMap<u32, Vec<(crate::types::Table, bool)>> = ahash::AHashMap::new();
+    let mut by_page: ahash::AHashMap<u32, Vec<(crate::types::Table, bool, bool)>> = ahash::AHashMap::new();
     let mut unbboxed = Vec::new();
     for (index, table) in tables.into_iter().enumerate() {
         if table.bounding_box.is_some() {
+            let complete = complete_tables.get(index).copied().unwrap_or(false);
             by_page
                 .entry(table.page_number)
                 .or_default()
-                .push((table, index < ruled_table_count));
+                .push((table, index < ruled_table_count, complete));
         } else {
             unbboxed.push(table);
         }
@@ -5024,7 +5056,7 @@ fn assign_deterministic_table_ids(tables: &mut [crate::types::Table]) {
 
 /// Stitch one page's table fragments. See [`stitch_fragmented_tables`].
 fn stitch_page_tables(
-    mut fragments: Vec<(crate::types::Table, bool)>,
+    mut fragments: Vec<(crate::types::Table, bool, bool)>,
     all_page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     fragments.sort_by(|a, b| {
@@ -5047,7 +5079,7 @@ fn stitch_page_tables(
         if chain_end - index >= 2 {
             let chain = fragments[index..chain_end]
                 .iter()
-                .map(|(table, _)| table.clone())
+                .map(|(table, _, _)| table.clone())
                 .collect();
             output.push(merge_table_chain(chain, all_page_segments));
         } else {
@@ -5062,10 +5094,15 @@ fn stitch_page_tables(
 /// stitch chain: same page, same column count, near-zero row gap, and matching
 /// left/right edges.
 fn fragments_are_stitchable(
-    (prev, prev_ruled): &(crate::types::Table, bool),
-    (next, next_ruled): &(crate::types::Table, bool),
+    (prev, prev_ruled, prev_complete): &(crate::types::Table, bool, bool),
+    (next, next_ruled, next_complete): &(crate::types::Table, bool, bool),
 ) -> bool {
     if prev.page_number != next.page_number {
+        return false;
+    }
+    // A completed rejoined table already holds its logical rows; stitching
+    // would collapse it back into a single row. ~keep
+    if *prev_complete || *next_complete {
         return false;
     }
     let (Some(a), Some(b)) = (prev.bounding_box, next.bounding_box) else {

@@ -35,7 +35,8 @@ pub(crate) fn is_page_letterhead_table(table: &Table) -> bool {
             (true, true) => {}
         }
         for cell in [left, right] {
-            has_numeric |= cell.chars().any(|character| character.is_ascii_digit());
+            // A plan label can contain a digit ("Plan A1") without being a value. ~keep
+            has_numeric |= crate::table_core::text_is_value(cell);
             has_multiword_cell |= cell.split_whitespace().count() > 1;
         }
     }
@@ -166,6 +167,24 @@ mod tests {
         ]);
 
         assert!(is_page_letterhead_table(&table));
+    }
+
+    #[test]
+    fn rejects_a_letterhead_whose_plan_name_contains_a_digit() {
+        let table = table_with_rows(vec![
+            vec!["WASHINGTON", "NATIONAL INSURANCE COMPANY"],
+            vec!["Medicare Plan A1", ""],
+            vec!["", "Texas Experience"],
+        ]);
+
+        assert!(is_page_letterhead_table(&table));
+    }
+
+    #[test]
+    fn keeps_a_same_shape_grid_with_a_numeric_value() {
+        let table = table_with_rows(vec![vec!["Plan A", "120.00"], vec!["Detail", ""], vec!["", "Note"]]);
+
+        assert!(!is_page_letterhead_table(&table));
     }
 
     #[test]
