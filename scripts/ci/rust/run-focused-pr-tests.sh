@@ -73,6 +73,7 @@ def method_body(header: str) -> str:
 
 hints_builder = method_body("fn hints_for_pipeline_page(")
 tokio = method_body("async fn run_pipeline_pages_async(")
+collector = method_body("async fn collect_pipeline_reads<F>(")
 sequential = method_body("async fn run_pipeline_pages_sequential(")
 
 assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", hints_builder), (
@@ -81,8 +82,20 @@ assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", hints_buil
 assert re.search(r"self\.hints_for_pipeline_page\(idx, None\)", tokio), (
     "the sparse trial must use the same page hints as regular detached OCR"
 )
+assert re.search(r"let hints =\s*self\.hints_for_pipeline_page\(\s*page_idx,", tokio), (
+    "the Tokio route's regular page hints must come from the shared builder"
+)
+assert re.search(r"let hints =\s*self\.hints_for_pipeline_page\(\s*retry_idx,", collector), (
+    "the Tokio retry-render hints must come from the shared builder"
+)
 assert re.search(r"\blet mut page_ocr_hints = hints;", tokio), (
     "the Tokio route must build its page hints from the shared builder"
+)
+assert re.search(r"spawn_page\(&mut join_set, page_idx, image_arc, hints, page_detection\);", tokio), (
+    "the Tokio route must pass the shared builder's hints to the page task"
+)
+assert re.search(r"spawn_page\(join_set, retry_idx, image_arc, hints, page_detection\);", collector), (
+    "the Tokio retry requeue must pass the shared builder's hints to the page task"
 )
 assert re.search(r"Some\(page_ocr_hints\),\s*idx,\s*Some\(source\),", tokio), (
     "the Tokio mixed OCR route must pass the hints and the page index to detached OCR"
