@@ -451,6 +451,21 @@ class CliArchiveNoticeTests(unittest.TestCase):
         result = run_script("verify", str(path), stage)
         assert result.returncode == 0, result.stderr
 
+    def test_should_reject_a_tar_whose_notice_members_use_backslashes(self) -> None:
+        asset = "xberg-cli-x86_64-unknown-linux-gnu.tar.gz"
+        stage = asset.removesuffix(".tar.gz")
+        path = self.root / asset
+        payload = {name: notice_bytes(name) for name in NOTICES}
+        payload["xberg"] = b"binary"
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in payload.items():
+                member = tarfile.TarInfo(f"{stage}\\{name}")
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+        result = run_script("verify", str(path), stage)
+        assert result.returncode == 1, result.stdout
+        assert f"{path}: expected one {stage}/LICENSE, found 0" in result.stderr
+
     def test_should_name_the_archive_and_file_when_a_notice_is_missing_or_stale(self) -> None:
         notices = {name: notice_bytes(name) for name in NOTICES}
         for asset in ("xberg-cli-x86_64-pc-windows-msvc.zip", "xberg-cli-x86_64-unknown-linux-musl.tar.gz"):

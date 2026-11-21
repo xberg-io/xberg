@@ -460,16 +460,21 @@ def check(archives: list[str], archive_format: str, expected: int, notices: dict
 def verify(archive_path: str, prefixes: list[str], notices: dict[str, bytes]) -> None:
     with zipfile.ZipFile(archive_path) if zipfile.is_zipfile(archive_path) else tarfile.open(archive_path) as archive:
         if isinstance(archive, zipfile.ZipFile):
-            members = [(member.filename, member) for member in archive.infolist() if not member.is_dir()]
+            # A ZIP written on a Windows runner can separate entries with backslashes; normalise
+            # so the same archive root matches on either separator. Tar member names are literal
+            # paths: a backslash there is part of the name, and POSIX extraction keeps it, so
+            # `root\LICENSE` is not `root/LICENSE` and must not satisfy the gate.
+            members = [
+                (PurePosixPath(member.filename.replace("\\", "/")), member)
+                for member in archive.infolist()
+                if not member.is_dir()
+            ]
         else:
-            members = [(member.name, member) for member in archive.getmembers() if member.isfile()]
-        # A ZIP written on a Windows runner can separate entries with backslashes; normalise so
-        # the same archive root matches on either separator.
-        paths = [(PurePosixPath(name.replace("\\", "/")), member) for name, member in members]
+            members = [(PurePosixPath(member.name), member) for member in archive.getmembers() if member.isfile()]
         for prefix in prefixes:
             for notice, expected in notices.items():
                 path = PurePosixPath(prefix) / notice
-                matches = [member for member_path, member in paths if member_path == path]
+                matches = [member for member_path, member in members if member_path == path]
                 # The archive name is part of every message: a release run stages ten of them and
                 # the failure is only actionable when it says which one and which file.
                 if len(matches) != 1:
