@@ -77,6 +77,7 @@ dbase = "0.8"
 flate2 = "1.1"
 fs2 = "0.4.3"
 futures = "0.3"
+geo = { version = "0.33", default-features = false }
 hex = "0.4.3"
 html-to-markdown-rs = { version = "3.22.2", default-features = false }
 image = { version = "0.25.10", default-features = false }

@@ -763,6 +763,7 @@ mod binding_value_serde_tests {
                 },
                 ..Default::default()
             }],
+            regions: Vec::new(),
         });
 
         let present = serde_json::to_value(&page).expect("the page serializes");

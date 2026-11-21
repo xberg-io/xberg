@@ -72,7 +72,7 @@ pub use ocr::{
 pub(crate) use ocr::OcrPipelineSelection;
 pub use page::PageConfig;
 #[cfg(feature = "pdf")]
-pub use pdf::{HierarchyConfig, PdfBackend, PdfConfig};
+pub use pdf::{HierarchyConfig, PdfBackend, PdfConfig, PlanRegionConfig};
 pub use processing::{
     ChunkSizing, ChunkerType, ChunkingConfig, EmbeddingConfig, EmbeddingModelType, PostProcessorConfig,
     TableChunkingMode,

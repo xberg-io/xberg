@@ -657,11 +657,21 @@ pub(crate) fn extract_all_from_native_document(
     let force_hierarchy_page_tracking =
         hierarchy_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
     // Vector geometry is returned on `PageContent`, so the same rule applies: asking for it
-    // is the opt-in for the per-page tracking it needs.
-    let geometry_enabled = config
+    // is the opt-in for the per-page tracking it needs. Closed regions are computed from
+    // those same paths, so asking for them also turns the geometry pass on internally.
+    let extract_vector_geometry = config
         .pdf_options
         .as_ref()
         .is_some_and(|options| options.extract_vector_geometry);
+    #[cfg(feature = "plan-regions")]
+    let plan_region_settings = config
+        .pdf_options
+        .as_ref()
+        .and_then(|options| options.plan_regions.as_ref())
+        .filter(|regions| regions.enabled);
+    #[cfg(not(feature = "plan-regions"))]
+    let plan_region_settings: Option<&crate::core::config::PlanRegionConfig> = None;
+    let geometry_enabled = extract_vector_geometry || plan_region_settings.is_some();
     let force_geometry_page_tracking =
         geometry_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
     let mut tracked_config;
@@ -1270,6 +1280,15 @@ pub(crate) fn extract_all_from_native_document(
         && let Some(pages) = page_contents.as_mut()
     {
         crate::pdf::native::geometry::attach_page_geometry(&doc.doc, pages);
+        #[cfg(feature = "plan-regions")]
+        if let Some(settings) = plan_region_settings {
+            crate::extraction::plan_geometry::regions::attach_plan_regions(
+                &doc.doc,
+                pages,
+                settings,
+                extract_vector_geometry,
+            );
+        }
     }
 
     if !skipped_stages.is_empty() {
