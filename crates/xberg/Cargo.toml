@@ -1381,7 +1381,7 @@ dbase = { workspace = true, optional = true }
 dirs = "7"
 either = { version = "1", optional = true }
 encoding_rs = { version = "0.8.44" }
-fast_image_resize = { version = "6.1.0", optional = true }
+fast_image_resize = { version = "6.2.0", optional = true }
 flate2 = { version = "1.1", optional = true }
 hayro-jbig2 = { version = "0.4", default-features = false, features = ["std"], optional = true }
 hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std", "simd"], optional = true }
@@ -1410,7 +1410,7 @@ jotdown = "0.10"
 # The reduced-decode memory bound follows the decoder's internals, and
 # `tests/bounded_jpeg_peak.rs` measures it. Re-run that test after a bump. ~keep
 jpeg-decoder = { version = "0.3.2", default-features = false, features = ["rayon"], optional = true }
-jsonschema = { version = "0.61", optional = true, default-features = false }
+jsonschema = { version = "0.62", optional = true, default-features = false }
 libc = { workspace = true }
 # lofty: pure-Rust audio tag reader (ID3v1/v2, MP4 atoms, Vorbis comments, FLAC, etc.)
 # MIT license. Used for metadata extraction independent of the inference backend.
@@ -1584,7 +1584,7 @@ xberg-native-pdf = { workspace = true, optional = true }
 xberg-tesseract = { path = "../xberg-tesseract", optional = true }
 yaml_serde = "0.10.7"
 zeroize = { version = "1", optional = true }
-zip = { version = "9.7.0", optional = true, default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.8.1", optional = true, default-features = false, features = ["deflate-flate2"] }
 
 # `tower` (GH#1381) unlocks the `cache`/`budget`/`rate_limit`/`cost_tracking`/`tracing`/
 # `cooldown_secs`/`health_check_secs` fields on liter-llm's `client::ClientConfigBuilder` —
@@ -1725,7 +1725,7 @@ optional = true
 # the reported failure exactly as-is for anyone depending on the published crate.
 # See the wasm32 block below for the WASM-safe alternative.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.model2vec-rs]
-version = "0.4"
+version = "0.5"
 default-features = false
 features = []
 optional = true
@@ -1768,7 +1768,7 @@ liter-llm = { workspace = true, optional = true, features = ["wasm-http"] }
 # `tokenizers/unstable_wasm`, which avoids the `esaxx_fast` C++ build entirely.
 # Model acquisition is `StaticEmbeddingEngine::from_bytes`-only on this target —
 # see `embeddings/static_engine.rs`.
-model2vec-rs = { version = "0.4", default-features = false, features = ["wasm"], optional = true }
+model2vec-rs = { version = "0.5", default-features = false, features = ["wasm"], optional = true }
 tree-sitter-language-pack = { workspace = true, default-features = false, features = ["serde"], optional = true }
 # On wasm32, swap xberg-tesseract from its native default ("static-linking" -> "build-tesseract")
 # to the WASI-SDK build path ("build-tesseract-wasm") and bundle eng.traineddata so OCR works
@@ -1811,8 +1811,8 @@ image = { workspace = true, default-features = false, features = ["png"] }
 # Test-only: encodes progressive and chroma-subsampled JPEG fixtures. ~keep
 jpeg-encoder = "0.7.1"
 # Test retrieval features prove runtime compilation stays offline under Cargo feature unification. ~keep
-jsonschema = { version = "0.61", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }
-qrcode = { version = "0.14", default-features = false, features = ["image"] }
+jsonschema = { version = "0.62", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }
+qrcode = { version = "0.15", default-features = false, features = ["image"] }
 # Test-only: builds an in-memory model2vec fixture (safetensors bytes) for the
 # static_engine unit tests, without a network fetch.
 safetensors = "0.8"
@@ -1829,7 +1829,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = "1"
 wiremock = "0.6"
 xberg-child-test = { workspace = true }
-zip = { version = "9.7.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2"] }
 
 [[test]]
 name = "bounded_jpeg_peak"
