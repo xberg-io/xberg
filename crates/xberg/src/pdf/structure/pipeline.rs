@@ -5241,21 +5241,20 @@ fn recover_trailing_continuation_rows(
             break;
         }
 
-        let Some((entity_words, entity_bottom_image_y)) = take_next_entity_band(&band_words) else {
+        let Some((entity_words, _)) = take_next_entity_band(&band_words) else {
             break;
         };
-        let entity_top_image_y = entity_words.iter().map(|word| word.top).min().unwrap_or(0);
-        // A completed rejoined table below already owns its rows. Never absorb
-        // them into an ordinary chain above it. ~keep
-        if band_intersects_completed_table(
-            page_height - entity_top_image_y as f32,
-            page_height - entity_bottom_image_y as f32,
-            x_lo,
-            x_hi,
-            completed_bboxes,
-        ) {
+        // A completed rejoined table below already owns its rows. The band can
+        // still hold a valid continuation row above that table, so drop only the
+        // completed-table rows and keep the rest; an all-completed band ends
+        // recovery. ~keep
+        let entity_words: Vec<_> = entity_words
+            .into_iter()
+            .filter(|word| !word_is_in_completed_table(word, page_height, completed_bboxes))
+            .collect();
+        let Some(entity_bottom_image_y) = entity_words.iter().map(|word| word.top + word.height).max() else {
             break;
-        }
+        };
 
         let col_gap = super::regions::tables::compute_adaptive_column_gap(&entity_words, (x_hi - x_lo).max(1.0));
         let grid = crate::pdf::table_reconstruct::reconstruct_table(&entity_words, col_gap, 0.5);
@@ -5275,21 +5274,24 @@ fn recover_trailing_continuation_rows(
     }
 }
 
-/// Whether a candidate band's vertical span overlaps a completed table that
-/// occupies the same horizontal span. ~keep
-fn band_intersects_completed_table(
-    band_top_pdf_y: f32,
-    band_bottom_pdf_y: f32,
-    x_lo: f32,
-    x_hi: f32,
+/// Whether one word's box sits inside a completed table's box. A word just
+/// above that table is not inside it and stays eligible as a continuation
+/// row. ~keep
+fn word_is_in_completed_table(
+    word: &crate::pdf::table_reconstruct::HocrWord,
+    page_height: f32,
     completed_bboxes: &[crate::types::BoundingBox],
 ) -> bool {
     let tolerance = TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f64;
+    let top = page_height - word.top as f32;
+    let bottom = page_height - (word.top + word.height) as f32;
+    let left = word.left as f64;
+    let right = (word.left + word.width) as f64;
     completed_bboxes.iter().any(|bounds| {
-        bounds.x1 + tolerance >= x_lo as f64
-            && bounds.x0 - tolerance <= x_hi as f64
-            && band_bottom_pdf_y as f64 <= bounds.y1 + tolerance
-            && band_top_pdf_y as f64 >= bounds.y0 - tolerance
+        right + tolerance >= bounds.x0
+            && left - tolerance <= bounds.x1
+            && bottom as f64 <= bounds.y1 + tolerance
+            && top as f64 >= bounds.y0 - tolerance
     })
 }
 

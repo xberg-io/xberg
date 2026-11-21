@@ -524,6 +524,35 @@ fn completed_tables_keep_their_rows_out_of_trailing_recovery() {
 }
 
 #[test]
+fn splits_a_recovery_band_at_the_completed_table_boundary() {
+    let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["a", "b"]]);
+    let bottom = cell_table(1, (0.0, 70.0, 100.0, 90.0), &[&["c", "d"], &["e", "f"]]);
+    let completed = cell_table(1, (0.0, 10.0, 100.0, 50.0), &[&["g", "h"], &["i", "j"]]);
+    let mut continuation = printed_at("12 34", 10.0, 58.0);
+    continuation.width = 80.0;
+    continuation.height = 10.0;
+    let mut owned = printed_at("56 78", 10.0, 40.0);
+    owned.width = 80.0;
+    owned.height = 10.0;
+    let pages = vec![vec![continuation, owned]];
+
+    let stitched = stitch_fragmented_tables(vec![top, bottom, completed], &pages, 0, &[false, false, true]);
+
+    assert_eq!(stitched.len(), 2, "the completed table stays its own entry");
+    let chain = stitched
+        .iter()
+        .find(|table| table.bounding_box.is_some_and(|bbox| bbox.y0 == 58.0))
+        .expect("chain with the recovered continuation row");
+    assert_eq!(chain.cells.len(), 3, "the row above the completed table is recovered");
+    assert_eq!(chain.cells.last().unwrap(), &["12", "34"]);
+    assert!(
+        chain.cells.iter().flatten().all(|cell| cell != "56" && cell != "78"),
+        "the row inside the completed table stays out: {:?}",
+        chain.cells
+    );
+}
+
+#[test]
 fn ruled_fragments_with_a_small_gap_still_stitch() {
     let top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"], &["H3", "H4"]]);
     let bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"], &["c", "d"]]);
