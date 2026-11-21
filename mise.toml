@@ -141,6 +141,7 @@ run = [
   "python3 -m unittest scripts/ci/test_package_notices.py",
   "python3 scripts/ci/test_verify_no_gpl_cli_archive.py",
   "python3 scripts/ci/test_verify_windows_heif_archive.py",
+  "python3 scripts/ci/test_stage_windows_heif_dlls.py",
   "python3 scripts/ci/test_android_jni_guard.py",
   "python3 scripts/ci/test_macos_deployment_target.py",
   "uv run --no-project --with PyYAML==6.0.3 python scripts/ci/test_php_release_contracts.py",

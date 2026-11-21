@@ -1048,8 +1048,12 @@ def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
     run = package["run"]
     assert "${XBERG_LIBHEIF_DLL_DIR:?}" in run, "the archive must stage the codec DLLs from vcpkg"
     assert 'if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]' in run, "the no-GPL archive must stay codec-free"
+    assert "stage_windows_heif_dlls.py" in run, "stage only the codec roots and their imports, not *.dll"
+    assert 'cp "$HEIF_BIN"/*.dll' not in run, "a blind glob copy would ship unneeded DLLs such as zlib1.dll"
     for notice in ("LGPL-3.0.txt", "GPL-3.0.txt", "libheif-COPYING", "libde265-COPYING", "aom-COPYING"):
         assert notice in run, f"the archive must stage {notice}"
+    assert "GPL-SOURCE-OFFER-windows-heif.txt" in run, "the archive must stage the written source offer"
+    assert '"$STAGE/GPL-SOURCE-OFFER.txt"' in run, "the offer must ship under the archive's notice name"
 
     [gate] = [
         step
@@ -1067,8 +1071,10 @@ def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
     sparse = tools["with"]["sparse-checkout"]
     for path in (
         "scripts/ci/verify_windows_heif_archive.py",
+        "scripts/ci/stage_windows_heif_dlls.py",
         "scripts/ci/notices/LGPL-3.0.txt",
         "scripts/ci/notices/GPL-3.0.txt",
+        "scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt",
     ):
         assert path in sparse, f"the release-tools checkout must carry {path}"
 
@@ -1082,14 +1088,26 @@ def test_windows_installer_links_libheif_dynamically() -> None:
     assert "installed\\x64-windows\\bin" in script, "the installer must export where the DLLs live"
     assert "x64-windows-static-md" in script, "boost and zlib must stay on the static triplet"
 
+    assert '"zlib:x64-windows"' in script, "libz-sys must keep finding a vcpkg zlib under the dynamic triplet"
+    assert "Assert-LibheifArtifacts" in script, "the artifact checks must be a testable function"
+
     block = workflow_job(WORKFLOW, "cli-binaries")
+    [select] = [step for step in block["steps"] if step.get("name") == "Select the dynamic libheif triplet"]
+    assert select["if"] == "runner.os == 'Windows'", (
+        "the triplet variables must stay unset on Linux and macOS, where an empty value still counts as set"
+    )
+    assert "VCPKGRS_TRIPLET=x64-windows" in select["run"]
+    assert "VCPKGRS_DYNAMIC=1" in select["run"]
+    assert "$GITHUB_ENV" in select["run"]
     [build] = [
         step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
     ]
-    assert "x64-windows" in build["env"]["VCPKGRS_TRIPLET"], (
-        "only the CLI build must move vcpkg-rs off its x64-windows-static-md default"
+    assert "VCPKGRS_TRIPLET" not in build.get("env", {}), "the build step must not set an empty triplet on non-Windows"
+
+    [setup] = [step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/setup-rust@")]
+    assert setup["with"]["cache-key-prefix"] == "cli-native-v2", (
+        "vcpkg-rs has no rerun-if-env-changed, so a restored target/ from the static triplet must be invalidated"
     )
-    assert build["env"]["VCPKGRS_DYNAMIC"], "vcpkg-rs refuses a dynamic triplet without VCPKGRS_DYNAMIC"
 
 
 def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:

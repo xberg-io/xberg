@@ -2037,7 +2037,9 @@ jobs:
       - uses: xberg-io/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}
-          cache-key-prefix: cli-native-v1
+          # v2: vcpkg-rs keeps no rerun-if-env-changed for VCPKGRS_*, so a restored target/
+          # could reuse libheif-sys built against the static triplet (#3339). ~keep
+          cache-key-prefix: cli-native-v2
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
@@ -2063,6 +2065,19 @@ jobs:
         with:
           ort-version: "1.24.2"
 
+      # vcpkg-rs reads these process-wide and has no rerun-if-env-changed, and an empty
+      # value still counts as set, so export them only on the Windows leg instead of
+      # giving every other runner a VCPKGRS_DYNAMIC that is present but empty. ~keep
+      - name: Select the dynamic libheif triplet
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "VCPKGRS_TRIPLET=x64-windows"
+            echo "VCPKGRS_DYNAMIC=1"
+          } >>"$GITHUB_ENV"
+
       # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
       # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
       # ARM64 legs and the musl CLI profile; every other target keeps fat LTO. ~keep
@@ -2070,12 +2085,6 @@ jobs:
         id: build
         env:
           CARGO_PROFILE_RELEASE_LTO: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'thin' || 'fat' }}
-          # libheif-sys's vcpkg probe selects x64-windows-static-md unless both are set, and
-          # LGPL-3.0 wants the shared library here (#3339). Scoped to this step on purpose:
-          # no other Windows job compiles `heic`, and a dynamic triplet would push their
-          # libz-sys probe off the static zlib too. ~keep
-          VCPKGRS_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows' || '' }}
-          VCPKGRS_DYNAMIC: ${{ runner.os == 'Windows' && '1' || '' }}
         with:
           package-name: xberg-cli
           binary-name: xberg
@@ -2123,10 +2132,12 @@ jobs:
             scripts/ci/verify_no_gpl_codecs.py
             scripts/ci/verify-release-archive.sh
             scripts/ci/verify_windows_heif_archive.py
+            scripts/ci/stage_windows_heif_dlls.py
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
             scripts/ci/notices/LGPL-3.0.txt
             scripts/ci/notices/GPL-3.0.txt
+            scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt
             mise.toml
             mise.lock
 
@@ -2150,20 +2161,23 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             cp "$BINARY_PATH" "$STAGE/xberg.exe"
             # libheif and libde265 are LGPL-3.0 and are linked as shared libraries, never
-            # into xberg.exe (#3339). Ship the DLLs as separate replaceable files plus the
-            # texts LGPL-3.0 §4(b) requires. The no-GPL archive compiles `heic` out and
-            # stays codec-free. ~keep
+            # into xberg.exe (#3339). Stage only the codec roots and the DLLs they actually
+            # import; a blind *.dll copy would also ship unrelated DLLs such as zlib1.dll.
+            # Then the §4(b) texts and the §3/§6 corresponding-source offer.
+            # The no-GPL archive compiles `heic` out and stays codec-free. ~keep
+            CLOSURE_TOOLS="$GITHUB_WORKSPACE/.release-tools/scripts/ci"
             if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]; then
               HEIF_BIN="$(cygpath -u "${XBERG_LIBHEIF_DLL_DIR:?}")"
               HEIF_SHARE="$(cygpath -u "${XBERG_LIBHEIF_NOTICE_DIR:?}")"
-              cp "$HEIF_BIN"/*.dll "$STAGE/"
+              python "$CLOSURE_TOOLS/stage_windows_heif_dlls.py" \
+                --source "$HEIF_BIN" --destination "$STAGE"
               NOTICES="$GITHUB_WORKSPACE/.release-tools/scripts/ci/notices"
               cp "$NOTICES/LGPL-3.0.txt" "$NOTICES/GPL-3.0.txt" "$STAGE/"
+              cp "$NOTICES/GPL-SOURCE-OFFER-windows-heif.txt" "$STAGE/GPL-SOURCE-OFFER.txt"
               cp "$HEIF_SHARE/libheif/copyright" "$STAGE/libheif-COPYING"
               cp "$HEIF_SHARE/libde265/copyright" "$STAGE/libde265-COPYING"
               cp "$HEIF_SHARE/aom/copyright" "$STAGE/aom-COPYING"
             fi
-            CLOSURE_TOOLS="$GITHUB_WORKSPACE/.release-tools/scripts/ci"
             ORT_RUNTIME_DLL="$(cygpath -u "${ORT_DYLIB_PATH:?}")"
             test -f "$ORT_RUNTIME_DLL"
             pwsh -NoProfile -File "$CLOSURE_TOOLS/vendor-windows-native-closure.ps1" -Artifact "$STAGE" -DllSourceDir "$(cygpath -w "$(dirname "$ORT_RUNTIME_DLL")")" -NativeGlob "xberg.exe"

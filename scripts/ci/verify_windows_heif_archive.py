@@ -4,21 +4,28 @@
 libheif and libde265 are LGPL-3.0. Statically linking them into ``xberg.exe``
 would put the archive under section 4(d)(0) of the licence: it would have to
 carry the Minimal Corresponding Source and relinkable application objects, or a
-written offer for them. The Windows CLI avoids that by linking shared libraries:
-``xberg.exe`` imports ``heif.dll``, and the codec DLLs travel beside it as
-separate, replaceable files.
+written offer for them. The Windows CLI avoids the combined-work clause by
+linking shared libraries: ``xberg.exe`` imports ``heif.dll``, and the codec DLLs
+travel beside it as separate, replaceable files.
 
-Section 4(b) still applies to that combined work, so the archive must carry the
-GNU GPL and GNU LGPL texts and a prominent notice. This gate checks the shipped
-bytes, not the build script's intent: the executable's import table, the codec
-DLLs and their dependency closure, the two licence texts, the upstream
-per-port copyright files and ``THIRD_PARTY_LICENSES.md``. A return to static
-linking therefore fails here instead of shipping silently.
+Two further obligations still apply to those DLLs and are checked here. LGPL-3.0
+section 4(b) requires the GNU GPL and GNU LGPL texts and a prominent notice, and
+section 3 (through GPL-3.0 section 6) requires the Corresponding Source or a
+written offer for it, because the vcpkg ports patch the upstream releases. The
+archive must therefore carry ``GPL-SOURCE-OFFER.txt`` naming the exact versions,
+the vcpkg baseline, the patch set and the build triplet.
+
+This gate checks the shipped bytes, not the build script's intent: the
+executable's import table, the codec DLLs and their dependency closure, the two
+licence texts, the upstream per-port copyright files, the written offer and
+``THIRD_PARTY_LICENSES.md``. A return to static linking, or a dropped offer,
+fails here instead of shipping silently.
 """
 
 from __future__ import annotations
 
 import argparse
+import struct
 import sys
 import zipfile
 from pathlib import Path
@@ -29,7 +36,7 @@ import windows_wheel_closure as closure
 # upstream only sets `PREFIX lib` on Windows for libde265). Accept `libheif.dll` too so
 # a future upstream prefix change does not turn a compliant archive red.
 LIBHEIF_DLL_NAMES = ("heif.dll", "libheif.dll")
-CODEC_DLLS = ("libde265.dll",)
+CODEC_DLLS = ("libde265.dll", "aom.dll")
 
 # Every text is identified by strings that only the real licence carries, so an
 # empty or placeholder file cannot satisfy the gate.
@@ -45,7 +52,32 @@ CODEC_NOTICES = {
 }
 
 PROJECT_NOTICE = "THIRD_PARTY_LICENSES.md"
-PROJECT_NOTICE_MARKERS = (b"heif.dll", b"Windows")
+# `§4(d)(1)` and the §2 modification notice are the statements the document must
+# carry, not just the word "Windows".
+PROJECT_NOTICE_MARKERS = (b"heif.dll", "\u00a74(d)(1)".encode(), b"Modification notice")
+
+SOURCE_OFFER = "GPL-SOURCE-OFFER.txt"
+# The offer is only an offer if it names the licence path, the term, the contact,
+# the exact codecs, the vcpkg baseline, the patches and the build triplet.
+SOURCE_OFFER_PHRASES = (
+    b"LGPL-3.0",
+    b"Corresponding Source",
+    b"three years",
+    b"section 6(b)",
+    b"contact@xberg.io",
+    b"5363acb796e576328288fae60c25304e227e9839",
+    b"libheif 1.23.7",
+    b"libde265 1.1.3",
+    b"libaom 3.15.2",
+    b"cxx-linkage-pkgconfig.diff",
+    b"find-modules.diff",
+    b"gdk-pixbuf.patch",
+    b"symbol-exports.diff",
+    b"vvc-pkgconfig.patch",
+    b"fix-linkage.patch",
+    b"aom-rename-static.diff",
+    b"x64-windows",
+)
 STATIC_HINT = "section 4(d)(0)"
 
 
@@ -60,6 +92,15 @@ def member_named(names: list[str], basename: str) -> str | None:
     return next((name for name in names if Path(name).name.casefold() == wanted), None)
 
 
+def imported_libraries(archive: zipfile.ZipFile, executable: str, problems: list[str]) -> list[str]:
+    """Return one executable's imports, recording unreadable PE data as a problem."""
+    try:
+        return closure.PeImage(archive.read(executable)).imports()
+    except (ValueError, struct.error, UnicodeError) as error:
+        problems.append(f"{executable} is not a readable PE image: {error}")
+        return []
+
+
 def linkage_problems(archive: zipfile.ZipFile, names: list[str]) -> list[str]:
     """Return the reasons the executable does not dynamically link the codecs."""
     problems = []
@@ -67,7 +108,7 @@ def linkage_problems(archive: zipfile.ZipFile, names: list[str]) -> list[str]:
     if not executables:
         return ["the archive holds no executable"]
     for executable in executables:
-        imports = closure.PeImage(archive.read(executable)).imports()
+        imports = imported_libraries(archive, executable, problems)
         imported = next((candidate for candidate in LIBHEIF_DLL_NAMES if candidate in imports), None)
         if imported is None:
             problems.append(
@@ -109,24 +150,32 @@ def notice_problems(archive: zipfile.ZipFile, names: list[str]) -> list[str]:
     return problems
 
 
+def offer_problems(archive: zipfile.ZipFile, names: list[str]) -> list[str]:
+    """Return why the written corresponding-source offer is missing or incomplete."""
+    member = member_named(names, SOURCE_OFFER)
+    if member is None:
+        return [f"the archive is missing the {SOURCE_OFFER} corresponding-source offer"]
+    payload = archive.read(member)
+    missing = [phrase.decode("ascii", "replace") for phrase in SOURCE_OFFER_PHRASES if phrase not in payload]
+    if missing:
+        return [f"{SOURCE_OFFER} does not name {', '.join(missing)}"]
+    return []
+
+
 def verify(archive_path: Path) -> list[str]:
     """Return every reason the archive fails the Windows LGPL codec contract."""
     if not archive_path.is_file():
         return [f"archive not found: {archive_path}"]
-    with zipfile.ZipFile(archive_path) as archive:
-        names = file_members(archive.namelist())
-        problems = linkage_problems(archive, names)
-        problems.extend(notice_problems(archive, names))
     try:
-        files = closure._raw_artifact_files(archive_path)
-        native = closure.roots(files, "xberg.exe")
-        closure._audit_graph(
-            files,
-            "xberg.exe",
-            "onnxruntime.dll",
-            "directml.dll",
-            closure.raw_external_policy(files, native, None, None),
-        )
+        with zipfile.ZipFile(archive_path) as archive:
+            names = file_members(archive.namelist())
+            problems = linkage_problems(archive, names)
+            problems.extend(notice_problems(archive, names))
+            problems.extend(offer_problems(archive, names))
+    except (zipfile.BadZipFile, OSError, ValueError) as error:
+        return [f"{archive_path} is not a readable ZIP archive: {error}"]
+    try:
+        closure.audit_raw_archive(archive_path, "xberg.exe")
     except ValueError as error:
         problems.append(f"the codec DLL dependency closure is incomplete: {error}")
     return problems
@@ -145,7 +194,7 @@ def main(argv: list[str]) -> int:
         for problem in problems:
             print(f"error: {problem}", file=sys.stderr)
         return 1
-    print(f"{args.archive.name} links libheif dynamically and ships the LGPL-3.0 notices")
+    print(f"{args.archive.name} links libheif dynamically and ships the LGPL-3.0 texts and source offer")
     return 0
 
 

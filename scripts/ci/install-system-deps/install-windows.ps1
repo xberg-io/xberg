@@ -35,10 +35,12 @@ function Retry-Command {
 
 function Assert-LibheifVersion {
   param([string[]]$Packages, [string[]]$X265Packages = @())
-  # `vcpkg list` prints the core row with its version and each enabled feature as a
-  # separate version-less row, e.g. `libheif[aom]:x64-windows`. Requiring a
-  # version on feature rows made the resolved feature set unreadable. ~keep
-  $coreRows = @($Packages | Where-Object { $_ -match '^libheif:x64-windows\s+1\.23\.7(?:#\d+)?\s' })
+  # `vcpkg list` normally prints the core row with its version and each enabled
+  # feature as a separate version-less row, e.g. `libheif[aom]:x64-windows`, but
+  # some vcpkg versions collapse the features onto the versioned row
+  # (`libheif[aom,libde265]:x64-windows 1.23.7#1`). Accept either shape; the
+  # feature set is parsed from every feature row below. ~keep
+  $coreRows = @($Packages | Where-Object { $_ -match '^libheif(?:\[[^\]]*\])?:x64-windows\s+1\.23\.7(?:#\d+)?\s' })
   if ($coreRows.Count -ne 1) {
     throw 'Expected exactly one installed libheif 1.23.7 x64-windows port'
   }
@@ -64,6 +66,41 @@ function Assert-LibheifVersion {
     throw "libheif resolved features '$($features -join ',')'; expected exactly 'aom,libde265'"
   }
   Write-Host "Verified decode-only libheif features: $($features -join ',')"
+}
+
+function Assert-LibheifArtifacts {
+  param([string]$VcpkgRoot)
+  # The metadata assertions above cannot see a cached tree built before the triplet
+  # change. Check the files the linker, the loader and the release packaging read.
+  # The static-md tree may also be present (boost/zlib) and is deliberately ignored. ~keep
+  $bin = Join-Path $VcpkgRoot 'installed\x64-windows\bin'
+  $lib = Join-Path $VcpkgRoot 'installed\x64-windows\lib'
+  $share = Join-Path $VcpkgRoot 'installed\x64-windows\share'
+  foreach ($dll in @('heif.dll', 'libde265.dll', 'aom.dll')) {
+    $path = Join-Path $bin $dll
+    if (-not (Test-Path -LiteralPath $path)) {
+      throw "$path is missing -- the dynamic libheif triplet did not install its runtime DLLs"
+    }
+  }
+  $importLib = Join-Path $lib 'heif.lib'
+  if (-not (Test-Path -LiteralPath $importLib)) {
+    throw "$importLib is missing -- libheif-sys cannot link the import library"
+  }
+  foreach ($port in @('libheif', 'libde265', 'aom')) {
+    $copyright = Join-Path $share "$port\copyright"
+    if (-not (Test-Path -LiteralPath $copyright)) {
+      throw "$copyright is missing -- the release archive cannot ship the $port license text"
+    }
+  }
+  $x265 = @(
+    foreach ($dir in @($bin, $lib)) {
+      Get-ChildItem -LiteralPath $dir -Filter '*x265*' -ErrorAction SilentlyContinue
+    }
+  )
+  if ($x265.Count -ne 0) {
+    throw "The dynamic vcpkg tree carries a GPL-2.0 x265 file: $($x265[0].FullName)"
+  }
+  Write-Host "✓ dynamic libheif artifacts verified: $bin"
 }
 
 $tesseractCacheHit = $env:TESSERACT_CACHE_HIT -eq "true"
@@ -111,8 +148,12 @@ if (-not $libheifCacheHit) {
   # `libheif` here silently restores the GPL encoder.
   # The dynamic triplet is on purpose: libheif and libde265 are LGPL-3.0, so the CLI
   # links replaceable DLLs and ships their texts instead of embedding the code in
-  # xberg.exe (#3339). ~keep
-  if (-not (Retry-Command { & $vcpkgExe install "libheif[core,aom,libde265]:x64-windows" --recurse } -MaxAttempts 2)) {
+  # xberg.exe (#3339). zlib is installed in the same triplet only so libz-sys's vcpkg
+  # probe succeeds under VCPKGRS_TRIPLET=x64-windows and it does not fall back to a
+  # vendored zlib beside the static zlib xberg-libwpd links. Nothing copies
+  # zlib1.dll into the release ZIP; the archive closure gate rejects a ZIP whose
+  # executable imports it without it. ~keep
+  if (-not (Retry-Command { & $vcpkgExe install "libheif[core,aom,libde265]:x64-windows" "zlib:x64-windows" --recurse } -MaxAttempts 2)) {
     throw "Failed to install libheif via the verified vcpkg baseline"
   }
   else {
@@ -154,44 +195,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Failed to query the installed libheif port' }
 $x265Packages = @(& $vcpkgExe list 'x265:x64-windows' | Where-Object { $_ -match '^x265' })
 Assert-LibheifVersion -Packages $heifPackages -X265Packages $x265Packages
 
-# The metadata assertion above cannot see a cached tree built before the feature
-# change, so check the installed archive too: the dynamic triplet puts libx265 in
-# the same lib/bin directories the build links from and loads. ~keep
-$x265Archives = @(
-  foreach ($dir in @('lib', 'bin')) {
-    Get-ChildItem -LiteralPath (Join-Path $vcpkgRoot "installed\x64-windows\$dir") -Filter '*x265*' -ErrorAction SilentlyContinue
-  }
-)
-if ($x265Archives.Count -ne 0) {
-  throw "The vcpkg tree carries a GPL-2.0 x265 archive: $($x265Archives[0].FullName)"
-}
-Write-Host "✓ libheif is decode-only (no x265 archive in the vcpkg tree)"
-
-# The cache key can be stale, and a vcpkg call that merely does not throw proves nothing
-# about the files the linker and the release packaging read (same trap as the zlib probe
-# below). Check the artifacts the dynamic triplet must have produced. ~keep
+# A cached tree can predate the triplet change and a vcpkg call that merely does not
+# throw proves nothing about the files the linker, the loader and the packaging read
+# (same trap as the zlib probe below). ~keep
+Assert-LibheifArtifacts -VcpkgRoot $vcpkgRoot
 $heifDllDir = Join-Path $vcpkgRoot 'installed\x64-windows\bin'
 $heifNoticeDir = Join-Path $vcpkgRoot 'installed\x64-windows\share'
-$heifImportLib = Join-Path $vcpkgRoot 'installed\x64-windows\lib\heif.lib'
-foreach ($required in @('heif.dll', 'libde265.dll')) {
-  $path = Join-Path $heifDllDir $required
-  if (-not (Test-Path -LiteralPath $path)) {
-    Write-Host "::error::$path is missing -- the dynamic libheif triplet did not install its runtime DLLs"
-    exit 1
-  }
-}
-if (-not (Test-Path -LiteralPath $heifImportLib)) {
-  Write-Host "::error::$heifImportLib is missing -- libheif-sys cannot link the import library"
-  exit 1
-}
-foreach ($port in @('libheif', 'libde265', 'aom')) {
-  $path = Join-Path $heifNoticeDir "$port\copyright"
-  if (-not (Test-Path -LiteralPath $path)) {
-    Write-Host "::error::$path is missing -- the release archive cannot ship the $port license text"
-    exit 1
-  }
-}
-Write-Host "✓ dynamic libheif artifacts verified: $heifDllDir"
 
 Add-Content -Path $env:GITHUB_ENV -Value "XBERG_LIBHEIF_DLL_DIR=$heifDllDir"
 Add-Content -Path $env:GITHUB_ENV -Value "XBERG_LIBHEIF_NOTICE_DIR=$heifNoticeDir"

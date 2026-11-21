@@ -43,15 +43,29 @@ redistributed in published release artifacts, with an emphasis on copyleft
 - **LGPL-3.0 compliance method (Windows CLI ZIP):** the codecs are linked as
   shared libraries, the §4(d)(1) route, rather than statically, which would fall
   under §4(d)(0) and require relinkable application objects or a written offer.
-  The shipped `heif.dll`, `libde265.dll` and `aom.dll` are unmodified builds of
-  libheif 1.23.7, libde265 1.1.3 and libaom 3.15.2 from the vcpkg baseline
-  pinned in
+  The shipped `heif.dll`, `libde265.dll` and `aom.dll` are builds of libheif
+  1.23.7, libde265 1.1.3 and libaom 3.15.2 from the vcpkg baseline pinned in
   [`scripts/ci/install-system-deps/install-windows.ps1`](scripts/ci/install-system-deps/install-windows.ps1)
-  (`5363acb796e576328288fae60c25304e227e9839`); their source is public, and an
-  interface-compatible rebuild can be dropped in beside `xberg.exe`, which
-  satisfies §4(d)(1)(b).
-  §4(e) Installation Information does not apply: a downloaded ZIP is not a
-  User Product under GPL-3.0 §6. The archive satisfies the rest of §4 directly:
+  (`5363acb796e576328288fae60c25304e227e9839`), with the vcpkg port patches
+  applied. Because the archive conveys their object code, LGPL-3.0 §3 reaches
+  GPL-3.0 §6: the ZIP ships `GPL-SOURCE-OFFER.txt`, a written offer of the
+  complete Corresponding Source valid for three years from distribution,
+  naming the exact versions, baseline, patch set and `x64-windows` build
+  command, and answered at `contact@xberg.io` under §6(b). The offer also
+  covers the LGPL components on the same terms. An interface-compatible
+  rebuild of `heif.dll` (or `libde265.dll`) can be dropped in beside
+  `xberg.exe`, which satisfies §4(d)(1)(b). §4(e) Installation Information
+  does not apply: a downloaded ZIP is not a User Product under GPL-3.0 §6.
+- **Modification notice (LGPL-3.0 §2):** the codecs are not compiled verbatim
+  from the upstream tarballs. The vcpkg ports at the baseline above apply
+  libheif's `cxx-linkage-pkgconfig.diff`, `find-modules.diff`,
+  `gdk-pixbuf.patch`, `symbol-exports.diff` and `vvc-pkgconfig.patch`,
+  libde265's `fix-linkage.patch` and aom's `aom-rename-static.diff` before
+  building. Xberg makes no further changes. The patched sources are published
+  in the vcpkg tree at that baseline
+  (<https://github.com/microsoft/vcpkg/tree/5363acb796e576328288fae60c25304e227e9839/ports>)
+  and are covered by the written offer. The archive satisfies the rest of §4
+  directly:
   - §4(a) prominent notice: `THIRD_PARTY_LICENSES.md` (this file) ships in the
     ZIP and names the libraries and the licence.
   - §4(b) texts: `LGPL-3.0.txt`, `GPL-3.0.txt` (LGPL-3.0 incorporates
@@ -61,9 +75,10 @@ redistributed in published release artifacts, with an emphasis on copyleft
     owed.
   - The release gate `scripts/ci/verify_windows_heif_archive.py` reads the
     shipped bytes and fails the release if `xberg.exe` stops importing
-    `heif.dll`, if a codec DLL or its closure is missing, or if any of those
-    texts is absent or empty. A return to static linking therefore cannot ship
-    silently.
+    `heif.dll`, if a codec DLL or its closure is missing, if any of those texts
+    is absent or empty, or if the written offer stops naming the licence, term,
+    contact, versions, baseline, patches or triplet. A return to static linking,
+    or a dropped offer, therefore cannot ship silently.
 
 ## libheif codec libraries
 

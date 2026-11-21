@@ -3,8 +3,9 @@
 
 Each case builds a throwaway Windows CLI archive so the gate is exercised on the
 bytes the release job produces: a dynamically linked archive with its licence
-texts passes, and a statically linked one, a missing or placeholder licence
-text, an undocumented link or an incomplete DLL closure each fail.
+texts and corresponding-source offer passes, and a statically linked one, a
+missing or placeholder licence text, a missing or empty offer, an undocumented
+link, an unreadable executable or an incomplete DLL closure each fail.
 """
 
 from __future__ import annotations
@@ -18,13 +19,17 @@ from pathlib import Path
 from test_windows_wheel_closure import pe
 
 SCRIPT = Path(__file__).with_name("verify_windows_heif_archive.py")
+OFFER = Path(__file__).with_name("notices").joinpath("GPL-SOURCE-OFFER-windows-heif.txt").read_bytes()
 ARCHIVE_NAME = "xberg-cli-x86_64-pc-windows-msvc.zip"
 STAGED = f"{ARCHIVE_NAME[:-4]}/"
 
 LGPL_TEXT = b"                    GNU LESSER GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
 GPL_TEXT = b"                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
 AOM_NOTICE = b"Copyright (c) 2016, Alliance for Open Media. All rights reserved.\n"
-PROJECT_NOTICE = b"# Third-Party Licenses\n\nThe Windows CLI links heif.dll and libde265.dll dynamically.\n"
+PROJECT_NOTICE = (
+    b"# Third-Party Licenses\n\nThe Windows CLI links heif.dll and libde265.dll dynamically; "
+    b"the compliance method is \xc2\xa74(d)(1). Modification notice: the vcpkg ports patch the codecs.\n"
+)
 
 DYNAMIC_FILES = {
     "xberg.exe": bytes(pe(["heif.dll", "onnxruntime.dll", "KERNEL32.dll"])),
@@ -40,6 +45,7 @@ DYNAMIC_FILES = {
     "libheif-COPYING": LGPL_TEXT,
     "libde265-COPYING": LGPL_TEXT,
     "aom-COPYING": AOM_NOTICE,
+    "GPL-SOURCE-OFFER.txt": OFFER,
 }
 
 
@@ -115,6 +121,28 @@ def case_missing_codec_dll_fails() -> None:
     assert "missing wheel-local dependency libde265.dll" in result.stderr, result.stderr
 
 
+def case_missing_source_offer_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        result = run_gate(Path(tmp), without("GPL-SOURCE-OFFER.txt"))
+    assert result.returncode == 1, result.stdout
+    assert "missing the GPL-SOURCE-OFFER.txt corresponding-source offer" in result.stderr, result.stderr
+
+
+def case_empty_source_offer_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        result = run_gate(Path(tmp), {**DYNAMIC_FILES, "GPL-SOURCE-OFFER.txt": b""})
+    assert result.returncode == 1, result.stdout
+    assert "GPL-SOURCE-OFFER.txt does not name LGPL-3.0" in result.stderr, result.stderr
+
+
+def case_unreadable_executable_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        result = run_gate(Path(tmp), {**DYNAMIC_FILES, "xberg.exe": b"MZ truncated"})
+    assert result.returncode == 1, result.stdout
+    assert "xberg.exe is not a readable PE image" in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr
+
+
 def case_missing_lgpl_text_fails() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         result = run_gate(Path(tmp), without("LGPL-3.0.txt"))
@@ -127,6 +155,14 @@ def case_placeholder_license_text_fails() -> None:
         result = run_gate(Path(tmp), {**DYNAMIC_FILES, "LGPL-3.0.txt": b"see the website\n"})
     assert result.returncode == 1, result.stdout
     assert "LGPL-3.0.txt does not contain GNU LESSER GENERAL PUBLIC LICENSE" in result.stderr, result.stderr
+
+
+def case_missing_modification_notice_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        notice = b"# Third-Party Licenses\n\nheif.dll is linked dynamically via \xc2\xa74(d)(1).\n"
+        result = run_gate(Path(tmp), {**DYNAMIC_FILES, "THIRD_PARTY_LICENSES.md": notice})
+    assert result.returncode == 1, result.stdout
+    assert "THIRD_PARTY_LICENSES.md does not document Modification notice" in result.stderr, result.stderr
 
 
 def case_missing_codec_notice_fails() -> None:
@@ -179,8 +215,12 @@ CASES = (
     case_libheif_prefixed_name_is_accepted,
     case_imported_dll_missing_under_its_own_name_fails,
     case_missing_codec_dll_fails,
+    case_missing_source_offer_fails,
+    case_empty_source_offer_fails,
+    case_unreadable_executable_fails,
     case_missing_lgpl_text_fails,
     case_placeholder_license_text_fails,
+    case_missing_modification_notice_fails,
     case_missing_codec_notice_fails,
     case_undocumented_dynamic_link_fails,
     case_non_system_import_outside_the_archive_fails,
