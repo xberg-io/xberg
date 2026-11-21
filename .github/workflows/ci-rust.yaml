@@ -143,7 +143,7 @@ jobs:
         shell: bash
 
       - name: Clippy full ORT surface (layout + OCR + ML)
-        run: mise run rust:lint:features full,classification-onnx
+        run: mise run rust:lint:features full,classification-onnx,captioning-onnx
         shell: bash
 
       - name: Clippy no-ORT tract engine

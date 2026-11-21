@@ -59,6 +59,9 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
 #[derive(Default)]
 struct NativeTableMetadata {
     ruled: bool,
+    /// The table is already complete (a rejoined ruled band) and must not be
+    /// sent through the wrapped-row stitcher. ~keep
+    complete_table: bool,
     grid: Option<crate::types::TableGrid>,
     scripts: Option<crate::pdf::native::table::scripts::TableScripts>,
     complete_leading_header: bool,
@@ -789,7 +792,19 @@ pub(crate) fn extract_all_from_native_document(
                     &mut page_paths,
                 );
                 let hierarchy_segments = hierarchy_segments.map(|mut extraction| {
-                    extraction.tables.retain(|table| ruled.allows_heuristic_table(table));
+                    let keep: Vec<bool> = extraction
+                        .tables
+                        .iter()
+                        .map(|table| ruled.allows_heuristic_table(table))
+                        .collect();
+                    if keep.iter().any(|keep| !keep) {
+                        let mut mask = keep.iter();
+                        extraction.tables.retain(|_| *mask.next().unwrap_or(&true));
+                        let mut mask = keep.iter();
+                        extraction.grids.retain(|_| *mask.next().unwrap_or(&true));
+                        let mut mask = keep.iter();
+                        extraction.completed.retain(|_| *mask.next().unwrap_or(&true));
+                    }
                     extraction
                 });
                 let mut warnings = ruled.warnings;
@@ -801,6 +816,7 @@ pub(crate) fn extract_all_from_native_document(
                             entry.table,
                             NativeTableMetadata {
                                 ruled: true,
+                                complete_table: false,
                                 grid: entry.grid,
                                 scripts: entry.scripts,
                                 complete_leading_header: entry.complete_leading_header,
@@ -811,9 +827,19 @@ pub(crate) fn extract_all_from_native_document(
                     .unzip();
                 let hierarchy_segments = match hierarchy_segments {
                     Ok(extraction) => {
-                        native_grids
-                            .resize_with(combined.len() + extraction.tables.len(), NativeTableMetadata::default);
+                        let table_count = extraction.tables.len();
+                        let mut completed = extraction.completed.into_iter();
+                        let mut heuristic_metadata: Vec<NativeTableMetadata> = (0..table_count)
+                            .map(|_| NativeTableMetadata {
+                                complete_table: completed.next().unwrap_or(false),
+                                ..NativeTableMetadata::default()
+                            })
+                            .collect();
+                        for (metadata, grid) in heuristic_metadata.iter_mut().zip(extraction.grids) {
+                            metadata.grid = grid;
+                        }
                         combined.extend(extraction.tables);
+                        native_grids.extend(heuristic_metadata);
                         drop((
                             extraction.hierarchy_segments.pages,
                             extraction.hierarchy_segments.used_structure_tree,
@@ -840,6 +866,27 @@ pub(crate) fn extract_all_from_native_document(
                         None
                     }
                 };
+                let keep: Vec<bool> = combined
+                    .iter()
+                    .enumerate()
+                    .map(|(index, table)| {
+                        let metadata = native_grids.get(index);
+                        let exempt = metadata.is_some_and(|metadata| metadata.ruled || metadata.grid.is_some());
+                        let page_height = table.bounding_box.and_then(|_| {
+                            doc.doc
+                                .get_page_media_box((table.page_number.saturating_sub(1)) as usize)
+                                .ok()
+                                .map(|(_, bottom, _, top)| top - bottom)
+                        });
+                        exempt || !crate::pdf::table_normalize::is_page_letterhead_table(table, page_height)
+                    })
+                    .collect();
+                if keep.iter().any(|keep| !keep) {
+                    let mut mask = keep.iter();
+                    combined.retain(|_| *mask.next().unwrap_or(&true));
+                    let mut mask = keep.iter();
+                    native_grids.retain(|_| *mask.next().unwrap_or(&true));
+                }
                 let repaired_tables = combined
                     .iter_mut()
                     .map(crate::pdf::table_normalize::repair_consistently_merged_numeric_column)
@@ -959,6 +1006,10 @@ pub(crate) fn extract_all_from_native_document(
     let mut pdf_page_coordinate_frames: Vec<crate::types::internal::PdfPageCoordinateFrame> = Vec::new();
     use crate::pdf::native::table::repeated_schema_header;
     let ruled_count = native_table_grids.iter().take_while(|metadata| metadata.ruled).count();
+    let complete_table_mask: Vec<bool> = native_table_grids
+        .iter()
+        .map(|metadata| metadata.complete_table)
+        .collect();
     let verified_schemas = repeated_schema_header::verify(&doc.doc, &tables, ruled_count);
     let mut pre_rendered_doc = if needs_structured && !config.force_ocr {
         let k = hierarchy_cluster_count(config);
@@ -1070,7 +1121,10 @@ pub(crate) fn extract_all_from_native_document(
                 .iter()
                 .filter_map(|metadata| metadata.source_members.as_ref())
                 .collect::<Vec<_>>(),
-            ruled_count,
+            crate::pdf::structure::pipeline::NativeTablePlan {
+                ruled_count,
+                complete: &complete_table_mask,
+            },
             &verified_schemas,
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,

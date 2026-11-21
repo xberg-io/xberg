@@ -7,6 +7,8 @@ on:
       - "vendored/**"
       - "docker/**"
       - ".dockerignore"
+      - "LICENSE"
+      - "THIRD_PARTY_LICENSES.md"
       - "scripts/pdfium-runtime-checksums.sha256"
       - "scripts/ci/actions/setup-onnx-runtime/checksums.sha256"
       - "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
@@ -102,6 +104,13 @@ jobs:
             XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
           cache-from: type=gha,scope=ci-docker-${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=ci-docker-${{ matrix.variant }}
+
+      # A Dockerfile lint cannot prove the shipped bytes: the final stage can drop the COPY,
+      # the build context can carry stale notices, and a copy can be truncated. Open every
+      # image here, before any test that is skipped for the cli variant, and compare both
+      # notices byte for byte with the repository. ~keep
+      - name: Verify image notices
+        run: python3 scripts/ci/docker/verify_image_notices.py --image xberg:${{ matrix.variant }}
 
       - name: Check image size
         if: matrix.variant != 'cli'

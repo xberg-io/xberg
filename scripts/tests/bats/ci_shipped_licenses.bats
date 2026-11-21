@@ -118,3 +118,15 @@ EOF
 	xberg_assert_status 0
 	xberg_assert_output_contains "no license exceptions declared"
 }
+
+@test "license gate should reject a graph table with no rows" {
+	# The default table is shared with generate-notices.py; an empty one would silently audit
+	# nothing while reporting success. ~keep
+	: >"$SCRATCH/graphs.txt"
+	export XBERG_LICENSE_GRAPHS_FILE="$SCRATCH/graphs.txt"
+
+	run bash "$REPOSITORY_ROOT/scripts/ci/check-licenses.sh"
+
+	xberg_assert_status 1
+	xberg_assert_output_contains "names no graph"
+}

@@ -6,11 +6,13 @@
 # CLI) went unaudited until release time. This checks each graph on every push instead.
 #
 # Each row below roots the graph at that crate's OWN manifest. With `--manifest-path` pointing
-# at a workspace member, cargo-deny makes that member the sole root of the graph, so the
-# resolved features match what the artifact ships. A workspace-root run instead makes every
-# member a root: it would audit crates that never ship (benchmark-harness's `inferno`) and
-# force acceptances that, being repo-wide, would then excuse those crates in the shipped graphs
-# too.
+# row of scripts/ci/license-graphs.txt roots the graph at a crate's OWN manifest. With
+# `--manifest-path` pointing at a workspace member, cargo-deny makes that member the sole root
+# of the graph, so the resolved features match what the artifact ships. A workspace-root run
+# instead makes every member a root: it would audit crates that never ship
+# (benchmark-harness's `inferno`) and force acceptances that, being repo-wide, would then
+# excuse those crates in the shipped graphs too. `generate-notices.py` reads the same table,
+# so the notice bundle covers exactly the graphs this gate certifies.
 #
 # A license exception in deny.toml is repo-wide, so no single graph has to encounter every
 # entry: symphonia only arrives with `transcription`, cbindgen only with the FFI build. The
@@ -26,23 +28,7 @@ cd "$repo_root"
 
 # label|manifest|features|target. Empty features mean the crate's default features; an empty
 # target means every platform's target-specific dependencies are resolved, not the host's.
-default_graphs=(
-  "xberg-cli (default)|crates/xberg-cli/Cargo.toml||"
-  # `all` is what the Docker images build; the musl images add `mimalloc` on top of it.
-  "xberg-cli --features all,mimalloc|crates/xberg-cli/Cargo.toml|all,mimalloc|"
-  "xberg-py (default)|crates/xberg-py/Cargo.toml||"
-  "xberg-node (default)|crates/xberg-node/Cargo.toml||"
-  "xberg-php (default)|crates/xberg-php/Cargo.toml||"
-  "xberg-ffi (default)|crates/xberg-ffi/Cargo.toml||"
-  "xberg-jni (default)|crates/xberg-jni/Cargo.toml||"
-  "xberg-wasm (default)|crates/xberg-wasm/Cargo.toml||"
-  "xberg-swift (default)|packages/swift/rust/Cargo.toml||"
-  "xberg-dart (default)|packages/dart/rust/Cargo.toml||"
-  "xberg_nif (default)|packages/elixir/native/xberg_nif/Cargo.toml||"
-  "xberg-rb (default)|packages/ruby/ext/xberg_rb/native/Cargo.toml||"
-  # The Windows no-heic release archive: publish.yaml's matrix cargo_features for that leg.
-  "xberg-cli --features mcp,mcp-http,api (windows no-heic)|crates/xberg-cli/Cargo.toml|mcp,mcp-http,api|x86_64-pc-windows-msvc"
-)
+graphs_file="${XBERG_LICENSE_GRAPHS_FILE:-scripts/ci/license-graphs.txt}"
 
 if [ -n "${XBERG_LICENSE_GRAPHS:-}" ]; then
   graphs=()
@@ -56,7 +42,21 @@ if [ -n "${XBERG_LICENSE_GRAPHS:-}" ]; then
     exit 2
   fi
 else
-  graphs=("${default_graphs[@]}")
+  [ -f "$graphs_file" ] || {
+    echo "error: graph table $graphs_file does not exist" >&2
+    exit 1
+  }
+  graphs=()
+  while IFS= read -r row; do
+    case "$row" in
+    "" | "#"*) continue ;;
+    esac
+    graphs+=("$row")
+  done <"$graphs_file"
+  if [ "${#graphs[@]}" -eq 0 ]; then
+    echo "error: graph table $graphs_file names no graph" >&2
+    exit 1
+  fi
 fi
 
 config="${XBERG_DENY_CONFIG:-deny.toml}"

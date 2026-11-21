@@ -62,39 +62,80 @@ from pathlib import Path
 import re
 
 source = Path("crates/xberg/src/extractors/pdf/ocr/pipeline.rs").read_text()
-mixed = source.split("async fn extract_mixed_ocr_native_with_layout_inputs(", 1)[1].split("\n}", 1)[0]
-handoff = r"\blet page_ocr_hints = PageOcrHints \{(?P<fields>.*?)\n\s*\};"
-call = r"\brun_ocr_pipeline_for_page\((?P<args>.*?)\n\s*\)\)"
-for route, loop, page in (
-    ("Tokio", "for (page_idx, image_arc) in page_images {", "idx"),
-    ("sequential", "for (page_idx, image) in &page_images {", "*page_idx"),
-):
-    loop_start = mixed.index(loop)
-    branch = mixed[loop_start:].split("let result = match result.map_err", 1)[0]
-    if route == "Tokio":
-        # The rendered pages are spawned through the `spawn_page` closure, defined before
-        # the loop; it builds the hints once for every caller, including the retry-render
-        # requeue. Search the whole function so the closure is in range. ~keep
-        hints = re.search(r"\blet mut page_ocr_hints = hints_for_pipeline_page\(idx, [^\n]+;", mixed)
-        branch = mixed
-        builder = mixed.split("let hints_for_pipeline_page =", 1)[1].split("let images_for_page =", 1)[0]
-        fields = builder
-    else:
-        hints = re.search(handoff, branch, re.S)
-        fields = hints["fields"] if hints is not None else ""
-    assert hints is not None, f"{route} mixed OCR must construct page hints"
-    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", fields, re.M), (
-        f"{route} mixed OCR must supply the decision layers"
-    )
-    invocation = re.search(call, branch[hints.end():], re.S)
-    assert invocation is not None and re.search(
-        rf"Some\(page_ocr_hints\),\s*{re.escape(page)},\s*Some\(source\),", invocation["args"]
-    ), f"{route} mixed OCR must pass the hints and the page index to detached OCR"
-    print(f"{route} mixed OCR decision-layer handoff verified")
+lines = source.splitlines()
 
-assert re.search(r"hints:\s*hints_for_pipeline_page\(idx, None\)", mixed), (
+
+def method_body(header: str) -> str:
+    start = next(index for index, line in enumerate(lines) if line.startswith(header))
+    end = next(index for index in range(start + 1, len(lines)) if lines[index] == "    }")
+    return "\n".join(lines[start : end + 1])
+
+
+def free_body(header: str) -> str:
+    start = next(index for index, line in enumerate(lines) if line.startswith(header))
+    end = next(index for index in range(start + 1, len(lines)) if lines[index] == "}")
+    return "\n".join(lines[start : end + 1])
+
+
+entry = free_body("async fn extract_mixed_ocr_native_with_layout_inputs(")
+assert re.search(r"run_page_batches\(\)\.await\?;\s*\n\s*context\.finish\(\)", entry), (
+    "the dispatcher must run the page batches before finishing"
+)
+
+hints_builder = method_body("    fn hints_for_pipeline_page(")
+tokio = method_body("    async fn run_pipeline_pages_async(")
+collector = method_body("    async fn collect_pipeline_reads<F>(")
+sequential = method_body("    async fn run_pipeline_pages_sequential(")
+sequential_backend = method_body("    async fn run_single_backend_pages_sequential(")
+finish_backend = method_body("    async fn finish_single_backend_read(")
+
+assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", hints_builder), (
+    "the shared page hints must supply the decision layers"
+)
+assert re.search(r"self\.hints_for_pipeline_page\(idx, None\)", tokio), (
     "the sparse trial must use the same page hints as regular detached OCR"
 )
+assert re.search(r"let hints =\s*self\.hints_for_pipeline_page\(\s*page_idx,", tokio), (
+    "the Tokio route's regular page hints must come from the shared builder"
+)
+assert re.search(r"let hints =\s*self\.hints_for_pipeline_page\(\s*retry_idx,", collector), (
+    "the Tokio retry-render hints must come from the shared builder"
+)
+assert re.search(r"\blet mut page_ocr_hints = hints;", tokio), (
+    "the Tokio route must build its page hints from the shared builder"
+)
+assert re.search(r"spawn_page\(&mut join_set, page_idx, image_arc, hints, page_detection\);", tokio), (
+    "the Tokio route must pass the shared builder's hints to the page task"
+)
+assert re.search(r"spawn_page\(join_set, retry_idx, image_arc, hints, page_detection\);", collector), (
+    "the Tokio retry requeue must pass the shared builder's hints to the page task"
+)
+assert re.search(r"Some\(page_ocr_hints\),\s*idx,\s*Some\(source\),", tokio), (
+    "the Tokio mixed OCR route must pass the hints and the page index to detached OCR"
+)
+
+assert re.search(r"decision_layers:\s*self\.page_layers\.clone\(\),", sequential), (
+    "the sequential mixed OCR route must supply the decision layers"
+)
+assert re.search(r"Some\(page_ocr_hints\),\s*\*page_idx,\s*Some\(source\),", sequential), (
+    "the sequential mixed OCR route must pass the hints and the page index to detached OCR"
+)
+
+assert re.search(r"record_single_backend_read\(", finish_backend) and re.search(
+    r"GeometryEvidence::concurrent\(\)", finish_backend
+), "the concurrent backend route must run the geometry and language passes"
+assert re.search(r"record_single_backend_read\(", sequential_backend) and re.search(
+    r"GeometryEvidence::sequential\(\)", sequential_backend
+), "the sequential backend route must skip the geometry and language passes"
+assert "GeometryEvidence::sequential()" not in finish_backend, (
+    "the concurrent route must not use the sequential evidence policy"
+)
+assert "GeometryEvidence::concurrent()" not in sequential_backend, (
+    "the sequential route must not use the concurrent evidence policy"
+)
+print("Tokio mixed OCR decision-layer handoff verified")
+print("sequential mixed OCR decision-layer handoff verified")
+print("direct-backend geometry evidence routing verified")
 PYTHON
 }
 

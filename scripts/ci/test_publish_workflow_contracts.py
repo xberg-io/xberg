@@ -30,6 +30,22 @@ PHP_ABI_SCRIPT = Path(__file__).parent / "verify-php-linux-abi.sh"
 PHP_STAGE_SCRIPT = Path(__file__).parent / "stage-php-linux-ort.sh"
 PUBLISHER_BOT = "xberg-dev-publisher[bot]"
 
+# The CLI release asset set, in `prepare`'s emission order. Xberg ships ten archives: six
+# bundled tarballs (two macOS, gnu/musl per arch), the dynamic Windows zip, its
+# no-GPL/LGPL counterpart, and two static binstall tarballs.
+CLI_RELEASE_ASSETS = (
+    "xberg-cli-aarch64-apple-darwin.tar.gz",
+    "xberg-cli-x86_64-apple-darwin.tar.gz",
+    "xberg-cli-aarch64-unknown-linux-gnu.tar.gz",
+    "xberg-cli-x86_64-unknown-linux-gnu.tar.gz",
+    "xberg-cli-aarch64-unknown-linux-musl.tar.gz",
+    "xberg-cli-x86_64-unknown-linux-musl.tar.gz",
+    "xberg-cli-x86_64-pc-windows-msvc.zip",
+    "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip",
+    "xberg-cli-binstall-aarch64-unknown-linux-musl.tar.gz",
+    "xberg-cli-binstall-x86_64-unknown-linux-musl.tar.gz",
+)
+
 
 def job_block(workflow: str, job: str) -> str:
     match = re.search(rf"(?ms)^  {re.escape(job)}:\n(.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", workflow)
@@ -654,6 +670,115 @@ def test_php_partial_retry_publishes_packagist_only_after_successful_upload() ->
         assert gate_passes("publish-packagist", context) is expected, (build, upload, pie)
 
 
+def uncommented(text: str) -> str:
+    """Drop full-line YAML comments so prose about a pattern cannot satisfy a contract."""
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+def prepare_cli_asset_names() -> list[str]:
+    """Read the CLI asset list `prepare` emits, in emission order."""
+    block = job_block(WORKFLOW.read_text(), "prepare")
+    [step] = [step for step in re.split(r"(?m)^(?=      - )", block) if "id: cli-assets\n" in step]
+    match = re.search(r"(?ms)^          names=\(\n(.*?)^          \)\n", step)
+    assert match is not None, "prepare must emit the CLI asset list from a `names=(...)` block"
+    return [line.strip() for line in match.group(1).splitlines() if line.strip()]
+
+
+def test_cli_asset_list_is_shared_by_check_upload_and_verify() -> None:
+    workflow = WORKFLOW.read_text()
+    names = prepare_cli_asset_names()
+    assert names == list(CLI_RELEASE_ASSETS)
+    assert len(names) == 10
+    assert "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip" in names
+
+    check_cli = job_block(workflow, "check-cli")
+    assert "assets: ${{ needs.prepare.outputs.cli_assets }}" in check_cli
+    for job in ("upload-cli-release", "verify-assets"):
+        block = job_block(workflow, job)
+        assert "expected-assets: ${{ needs.prepare.outputs.cli_assets_multiline }}" in block, job
+
+    # One copy of the set, in prepare. A second inlined list is how `check-cli` came to
+    # require seven names while the upload gate required ten. ~keep
+    live = uncommented(workflow)
+    for name in names:
+        assert live.count(name) == 1, name
+
+
+def test_verify_assets_runs_on_failure_and_checks_exact_cli_names() -> None:
+    block = job_block(WORKFLOW.read_text(), "verify-assets")
+    condition = job_if_expression(block)
+    assert "always()" in condition
+    for term in ("contains(", "needs.*.result", "failure"):
+        assert term not in condition, term
+
+    steps = re.split(r"(?m)^(?=      - )", block)
+    [cli] = [step for step in steps if "name: Verify CLI release assets" in step]
+    assert "xberg-io/actions/verify-release-assets@v1" in cli
+    assert "expected-assets: ${{ needs.prepare.outputs.cli_assets_multiline }}" in cli
+    assert "expected-assets: |" not in cli
+    assert "xberg-cli-*" not in uncommented(cli)
+
+    # The dry-run half must not fall back to the glob pair that hid the no-GPL archive.
+    assert "xberg-cli-*" not in uncommented(block)
+
+
+def test_upload_cli_release_verifies_the_live_release_not_dist() -> None:
+    block = job_block(WORKFLOW.read_text(), "upload-cli-release")
+    assert 'if [ ! -f "dist/cli/' not in block
+    assert "expected=${total}" not in block
+
+    upload = block.index("uses: xberg-io/actions/upload-release-assets@v1")
+    verify = block.index("uses: xberg-io/actions/verify-release-assets@v1")
+    assert upload < verify
+    [upload_step] = [step for step in re.split(r"(?m)^(?=      - )", block) if "upload-release-assets@v1" in step]
+    assert "assets: ${{ needs.prepare.outputs.cli_assets_multiline }}" in upload_step
+    # Neither the upload nor the gate may widen the set with a glob. ~keep
+    assert "xberg-cli-*" not in uncommented(block)
+    [gate] = [
+        step
+        for step in re.split(r"(?m)^(?=      - )", block)
+        if "uses: xberg-io/actions/verify-release-assets@v1" in step
+    ]
+    assert "expected-assets: ${{ needs.prepare.outputs.cli_assets_multiline }}" in gate
+    assert "tag: ${{ needs.prepare.outputs.tag }}" in gate
+    # A dry run may carry a real tag but never creates the release to verify.
+    assert "if: ${{ needs.prepare.outputs.dry_run != 'true' }}" in gate
+
+
+def test_release_stays_draft_until_the_asset_gate_passes() -> None:
+    workflow = WORKFLOW.read_text()
+    prepare = job_block(workflow, "prepare")
+    [ensure] = [step for step in re.split(r"(?m)^(?=      - )", prepare) if "publish-github-release@v1" in step]
+    assert 'draft: "true"' in ensure
+    assert workflow.count('draft: "') == 1
+
+    finalize = job_block(workflow, "finalize-github-release-after-uploads")
+    assert "uses: xberg-io/actions/finalize-release@v1" in finalize
+    assert "needs.verify-assets.result == 'success'" in job_if_expression(finalize)
+
+    # `created` never fires for a draft, so Docker images must hang off `published`, which
+    # is the first moment the release is public. ~keep
+    docker = yaml.safe_load(DOCKER_WORKFLOW.read_text())
+    triggers = docker.get("on", docker.get(True))
+    assert triggers["release"]["types"] == ["published"]
+
+    # binstall downloads the public asset URL, so it runs after the un-draft, as do the
+    # channels that publish a pointer to the release: an install-time downloader (npm and the
+    # PyPI sdist) or a pinned URL (Homebrew formula, Scoop manifest). Before the release is
+    # public those pointers 404, and the registry versions cannot be replaced. ~keep
+    channels = (
+        "verify-binstall",
+        "cli-proxy",
+        "publish-cli-proxy",
+        "publish-homebrew-formula",
+        "publish-scoop-manifest",
+    )
+    for job in channels:
+        header = job_block(workflow, job).split("    steps:", 1)[0]
+        needs = re.search(r"(?m)^    needs: (.+)$", header)
+        assert needs is not None and "finalize-github-release-after-uploads" in needs.group(1), job
+
+
 def test_release_finalization_requires_successful_asset_verification() -> None:
     block = job_block(WORKFLOW.read_text(), "finalize-github-release-after-uploads")
     condition = job_if_expression(block)
@@ -1037,9 +1162,79 @@ def test_cli_no_gpl_archive_is_built_without_heic_and_audited() -> None:
         "the gate must prove PDF and Office extraction survived the feature removal"
     )
 
-    release = job_block(WORKFLOW.read_text(), "upload-cli-release")
-    assert "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip" in release
-    assert '"$total" -ne 10' in release, "the completeness gate must count the new archive"
+    # The shared prepare list is what check-cli, upload-cli-release and verify-assets gate on,
+    # so membership here is what makes the no-GPL archive required by every gate. ~keep
+    assert "xberg-cli-x86_64-pc-windows-msvc-no-gpl-lgpl.zip" in prepare_cli_asset_names(), (
+        "the completeness gate must cover the new archive"
+    )
+
+
+def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [package] = [step for step in block["steps"] if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    assert "${XBERG_LIBHEIF_DLL_DIR:?}" in run, "the archive must stage the codec DLLs from vcpkg"
+    assert 'if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]' in run, "the no-GPL archive must stay codec-free"
+    assert "stage_windows_heif_dlls.py" in run, "stage only the codec roots and their imports, not *.dll"
+    assert 'cp "$HEIF_BIN"/*.dll' not in run, "a blind glob copy would ship unneeded DLLs such as zlib1.dll"
+    for notice in ("LGPL-3.0.txt", "GPL-3.0.txt", "libheif-COPYING", "libde265-COPYING", "aom-COPYING"):
+        assert notice in run, f"the archive must stage {notice}"
+    assert "GPL-SOURCE-OFFER-windows-heif.txt" in run, "the archive must stage the written source offer"
+    assert '"$STAGE/GPL-SOURCE-OFFER.txt"' in run, "the offer must ship under the archive's notice name"
+
+    [gate] = [
+        step
+        for step in block["steps"]
+        if step.get("name") == "Verify the Windows HEIF archive links libheif dynamically"
+    ]
+    assert gate["if"] == "runner.os == 'Windows' && matrix.archive_suffix != '-no-gpl-lgpl'"
+    assert "verify_windows_heif_archive.py" in gate["run"]
+
+    [tools] = [
+        step
+        for step in block["steps"]
+        if step.get("uses") == "actions/checkout@v7" and step.get("with", {}).get("path") == ".release-tools"
+    ]
+    sparse = tools["with"]["sparse-checkout"]
+    for path in (
+        "scripts/ci/verify_windows_heif_archive.py",
+        "scripts/ci/stage_windows_heif_dlls.py",
+        "scripts/ci/notices/LGPL-3.0.txt",
+        "scripts/ci/notices/GPL-3.0.txt",
+        "scripts/ci/notices/GPL-SOURCE-OFFER-windows-heif.txt",
+    ):
+        assert path in sparse, f"the release-tools checkout must carry {path}"
+
+
+def test_windows_installer_links_libheif_dynamically() -> None:
+    script = (Path(__file__).parents[2] / "scripts/ci/install-system-deps/install-windows.ps1").read_text()
+    assert "libheif[core,aom,libde265]:x64-windows" in script, (
+        "the Windows port must be the dynamic triplet with the GPL x265 encoder disabled"
+    )
+    assert "XBERG_LIBHEIF_DLL_DIR" in script
+    assert "installed\\x64-windows\\bin" in script, "the installer must export where the DLLs live"
+    assert "x64-windows-static-md" in script, "boost and zlib must stay on the static triplet"
+
+    assert '"zlib:x64-windows"' in script, "libz-sys must keep finding a vcpkg zlib under the dynamic triplet"
+    assert "Assert-LibheifArtifacts" in script, "the artifact checks must be a testable function"
+
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [select] = [step for step in block["steps"] if step.get("name") == "Select the dynamic libheif triplet"]
+    assert select["if"] == "runner.os == 'Windows'", (
+        "the triplet variables must stay unset on Linux and macOS, where an empty value still counts as set"
+    )
+    assert "VCPKGRS_TRIPLET=x64-windows" in select["run"]
+    assert "VCPKGRS_DYNAMIC=1" in select["run"]
+    assert "$GITHUB_ENV" in select["run"]
+    [build] = [
+        step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    ]
+    assert "VCPKGRS_TRIPLET" not in build.get("env", {}), "the build step must not set an empty triplet on non-Windows"
+
+    [setup] = [step for step in block["steps"] if str(step.get("uses", "")).startswith("xberg-io/actions/setup-rust@")]
+    assert setup["with"]["cache-key-prefix"] == "cli-native-v2", (
+        "vcpkg-rs has no rerun-if-env-changed, so a restored target/ from the static triplet must be invalidated"
+    )
 
 
 def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
@@ -1616,7 +1811,17 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     selected = [leg for leg in legs if leg[0] == "sceptre-ocr-ort"]
     assert len(selected) == 1, "standalone Sceptre ORT matrix leg must exist exactly once"
     assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
-    assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
+    assert [name for name, _ in legs] == [
+        "pdf",
+        "pdf-ocr-pipeline",
+        "pdf-ocr-pipeline-tokio",
+        "sceptre-ocr-ort",
+        "no-ort-target",
+        "formats-no-heic",
+        "email",
+        "xml",
+        "hwpx",
+    ], "retain every existing feature leg alongside Sceptre ORT"
     steps = re.split(r"(?m)^(?=      - )", job)
     checks = [step for step in steps if step.startswith("      - name: cargo clippy -p xberg --no-default-features")]
     assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
@@ -1656,7 +1861,7 @@ def test_live_release_assets_verify_only_selected_groups() -> None:
         for platform in ("x86_64-linux-glibc-nts", "arm64-linux-glibc-nts", "arm64-darwin-bsdlibc-nts")
     } | {f"php_xberg-*-{version}-nts-vs17-x86_64.zip" for version in ("8.3", "8.4", "8.5")}
     groups = {
-        "release_cli": {"xberg-cli-*.tar.gz", "xberg-cli-*.zip"},
+        "release_cli": set(CLI_RELEASE_ASSETS),
         "release_go": {"xberg-go-*.tar.gz"},
         "release_c_ffi": {"xberg-ffi-*.tar.gz"},
         "release_php": php,
@@ -1668,7 +1873,9 @@ def test_live_release_assets_verify_only_selected_groups() -> None:
         (set(groups), "true"),
     ):
         outputs = {group: str(group in selected).lower() for group in groups}
-        outputs.update(dry_run=dry_run, elixir_assets_multiline=elixir)
+        outputs.update(
+            dry_run=dry_run, elixir_assets_multiline=elixir, cli_assets_multiline="\n".join(CLI_RELEASE_ASSETS)
+        )
         context = {"needs": {"prepare": {"outputs": outputs}}}
         required = []
         for step in verifiers:
@@ -1690,7 +1897,7 @@ def test_dry_release_assets_verify_only_selected_groups() -> None:
     header, script = verify.split("        run: |\n", 1)
     bindings = re.findall(r"(?m)^          ([A-Z_]+): \$\{\{ (.+) \}\}$", header)
     assets = {
-        "cli": ("release_cli", ("xberg-cli-linux.tar.gz", "xberg-cli-windows.zip")),
+        "cli": ("release_cli", CLI_RELEASE_ASSETS),
         "go-ffi": ("release_go", ("xberg-go-linux.tar.gz",)),
         "c-ffi": ("release_c_ffi", ("xberg-ffi-linux.tar.gz",)),
     }
@@ -1698,7 +1905,11 @@ def test_dry_release_assets_verify_only_selected_groups() -> None:
         for selected in itertools.product((False, True), repeat=len(assets)):
             arm = Path(temp) / "".join(str(int(value)) for value in selected)
             arm.mkdir()
-            outputs = {"dry_run": "true", "release_swift": "true"}
+            outputs = {
+                "dry_run": "true",
+                "release_swift": "true",
+                "cli_assets_multiline": "\n".join(CLI_RELEASE_ASSETS),
+            }
             expected = []
             for (group, (output, names)), enabled in zip(assets.items(), selected, strict=True):
                 outputs[output] = str(enabled).lower()

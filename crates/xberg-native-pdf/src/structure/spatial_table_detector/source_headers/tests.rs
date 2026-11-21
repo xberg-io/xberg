@@ -856,3 +856,5 @@ fn overlapping_overpaint_counts_shared_area_once() {
 }
 
 mod single_title;
+
+mod wrapped_header;

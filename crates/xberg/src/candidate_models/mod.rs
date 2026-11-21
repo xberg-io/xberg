@@ -41,6 +41,11 @@ const INVENTORY_SCHEMA_VERSION: u32 = 2;
 pub enum CandidateTask {
     /// Zero-shot classification through natural-language inference.
     ZeroShotClassification,
+    /// Classification against a label set the model was trained on, not a request label set.
+    /// No fixed-taxonomy candidate is staged yet; the variant exists so a consumer can ask for
+    /// one and receive an explicit "not staged" answer instead of treating zero-shot labels as a
+    /// trained taxonomy.
+    FixedTaxonomyClassification,
     /// Image captioning.
     ImageCaptioning,
 }
@@ -63,6 +68,41 @@ pub enum CandidatePrecision {
     Fp32,
     /// Int8/qint8 dynamic-quantization graphs from the upstream export.
     Quantized,
+}
+
+/// Target architecture a consumer selects graphs for. An unsupported target is a typed value so
+/// selection fails with an error naming the platform instead of falling back to another graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(alef, alef(skip))]
+pub enum CandidateTarget {
+    /// 64-bit ARM (Apple silicon and ARM servers).
+    Aarch64,
+    /// 64-bit x86.
+    X86_64,
+    /// Any other architecture: no candidate pins a graph for it.
+    Unsupported,
+}
+
+impl CandidateTarget {
+    /// The architecture this build runs on.
+    pub const fn host() -> Self {
+        if cfg!(target_arch = "aarch64") {
+            Self::Aarch64
+        } else if cfg!(target_arch = "x86_64") {
+            Self::X86_64
+        } else {
+            Self::Unsupported
+        }
+    }
+
+    /// Architecture name used in selection errors.
+    pub const fn arch(self) -> &'static str {
+        match self {
+            Self::Aarch64 => "aarch64",
+            Self::X86_64 => "x86_64",
+            Self::Unsupported => std::env::consts::ARCH,
+        }
+    }
 }
 
 /// One pinned file of a candidate model.
@@ -541,12 +581,23 @@ impl CandidateModel {
     /// tokenizer/processor/configuration companions and the upstream `LICENSE` and model card.
     /// Quantized alternatives outside `precision` stay optional.
     pub fn files_for(&self, precision: CandidatePrecision) -> Result<Vec<CandidateFile>, String> {
+        self.files_for_target(CandidateTarget::host(), precision)
+    }
+
+    /// Selects the files for `precision` on `target`. An architecture without a usable graph
+    /// fails with an error naming it rather than substituting another export.
+    pub fn files_for_target(
+        &self,
+        target: CandidateTarget,
+        precision: CandidatePrecision,
+    ) -> Result<Vec<CandidateFile>, String> {
         let files = self.files()?;
-        self.select_files(&files, precision)
+        self.select_files(target, &files, precision)
     }
 
     fn select_files(
         &self,
+        target: CandidateTarget,
         files: &[CandidateFile],
         precision: CandidatePrecision,
     ) -> Result<Vec<CandidateFile>, String> {
@@ -554,11 +605,11 @@ impl CandidateModel {
         match self.task {
             CandidateTask::ZeroShotClassification => {
                 let graph = match precision {
-                    CandidatePrecision::Quantized => nli_minilm2_l6_h768_graph().ok_or_else(|| {
+                    CandidatePrecision::Quantized => nli_graph_for(target).ok_or_else(|| {
                         format!(
                             "{} has no quantized graph for {} and the fp32 graph exceeds the adapter's cap",
                             self.id,
-                            std::env::consts::ARCH
+                            target.arch()
                         )
                     })?,
                     CandidatePrecision::Fp32 => {
@@ -569,6 +620,12 @@ impl CandidateModel {
                     }
                 };
                 wanted.insert(format!("{}/{graph}", self.id));
+            }
+            CandidateTask::FixedTaxonomyClassification => {
+                return Err(format!(
+                    "{} is not a zero-shot or captioning candidate; no fixed-taxonomy classification candidate is staged",
+                    self.id
+                ));
             }
             CandidateTask::ImageCaptioning => {
                 let graph_prefix = format!("{}/onnx/", self.id);
@@ -612,7 +669,7 @@ impl CandidateModel {
     pub fn optional_files(&self, precision: CandidatePrecision) -> Result<Vec<CandidateFile>, String> {
         let files = self.files()?;
         let required: std::collections::BTreeSet<String> = self
-            .select_files(&files, precision)?
+            .select_files(CandidateTarget::host(), &files, precision)?
             .into_iter()
             .map(|file| file.path)
             .collect();
@@ -672,14 +729,17 @@ impl CandidateModel {
 /// Graph the NLI descriptor selects on this architecture. The fp32 graph (328,649,957 bytes) exceeds
 /// the adapter's graph size cap, so only the dynamically quantized graph for the host ISA is usable.
 /// x86_64 selects the AVX2 graph without checking the CPU for AVX2 support.
-pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
-    if cfg!(target_arch = "aarch64") {
-        Some("model_qint8_arm64.onnx")
-    } else if cfg!(target_arch = "x86_64") {
-        Some("model_quint8_avx2.onnx")
-    } else {
-        None
+pub(crate) const fn nli_graph_for(target: CandidateTarget) -> Option<&'static str> {
+    match target {
+        CandidateTarget::Aarch64 => Some("model_qint8_arm64.onnx"),
+        CandidateTarget::X86_64 => Some("model_quint8_avx2.onnx"),
+        CandidateTarget::Unsupported => None,
     }
+}
+
+/// The quantized graph for the host architecture, when one is pinned.
+pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
+    nli_graph_for(CandidateTarget::host())
 }
 
 /// The Rust-only NLI classifier descriptor for the NLI-MiniLM2 candidate, usable as
@@ -688,29 +748,19 @@ pub(crate) const fn nli_minilm2_l6_h768_graph() -> Option<&'static str> {
 /// the adapter's caps rather than substituting the oversized fp32 graph.
 #[cfg(feature = "classification-onnx")]
 pub(crate) fn nli_minilm2_l6_h768_classifier() -> Result<crate::local_classification::LocalNliModel, String> {
-    nli_classifier(&NLI_MINILM2_L6_H768)
+    nli_classifier(&NLI_MINILM2_L6_H768, CandidatePrecision::Quantized)
 }
 
 /// Builds the descriptor from the inventory pins, so this is the only place the classifier's
-/// SHA-256 and size manifests come from.
+/// SHA-256 and size manifests come from. `files_for` performs the precision and target selection.
 #[cfg(feature = "classification-onnx")]
-pub(crate) fn nli_classifier(model: &CandidateModel) -> Result<crate::local_classification::LocalNliModel, String> {
-    let graph = nli_minilm2_l6_h768_graph().ok_or_else(|| {
-        format!(
-            "{} has no quantized graph within the adapter's size cap for {}",
-            model.id,
-            std::env::consts::ARCH
-        )
-    })?;
-    nli_classifier_for(model, graph)
-}
-
-#[cfg(feature = "classification-onnx")]
-pub(crate) fn nli_classifier_for(
+pub(crate) fn nli_classifier(
     model: &CandidateModel,
-    graph: &str,
+    precision: CandidatePrecision,
 ) -> Result<crate::local_classification::LocalNliModel, String> {
-    nli_descriptor(model, graph, &model.files()?)
+    let files = model.files_for(precision)?;
+    let graph = selected_graph(model, &files)?;
+    nli_descriptor(model, &graph, &files)
 }
 
 /// Test seam: the production builder above always reads the inventory; a test can substitute
@@ -722,6 +772,21 @@ pub(crate) fn nli_classifier_with_files(
     files: &[CandidateFile],
 ) -> Result<crate::local_classification::LocalNliModel, String> {
     nli_descriptor(model, graph, files)
+}
+
+/// Repository-relative path of the one graph a selected file set contains.
+#[cfg(feature = "classification-onnx")]
+fn selected_graph(model: &CandidateModel, files: &[CandidateFile]) -> Result<String, String> {
+    let prefix = format!("{}/", model.id);
+    let graph = files
+        .iter()
+        .find(|file| {
+            file.path
+                .strip_prefix(&prefix)
+                .is_some_and(|relative| relative.ends_with(".onnx"))
+        })
+        .ok_or_else(|| format!("{} selection contains no ONNX graph", model.id))?;
+    Ok(graph.path[prefix.len()..].to_owned())
 }
 
 #[cfg(feature = "classification-onnx")]
@@ -752,6 +817,34 @@ fn nli_descriptor(
         entailment_index: 1,
         contradiction_index: 0,
     })
+}
+
+/// Builds the captioning descriptor for a staged candidate from the inventory selection. Graph
+/// roles come from the export's own file names, so no revision, hash or size is hard-coded here.
+#[cfg(feature = "captioning-onnx")]
+pub(crate) fn captioning_model(
+    model: &CandidateModel,
+    precision: CandidatePrecision,
+) -> Result<crate::local_captioning::LocalCaptioningModel, String> {
+    if model.task != CandidateTask::ImageCaptioning {
+        return Err(format!(
+            "{} is a {:?} candidate, not an image-captioning candidate",
+            model.id, model.task
+        ));
+    }
+    let files = model.files_for(precision)?;
+    crate::local_captioning::descriptor_from_selection(model.repository, model.revision, model.id, precision, &files)
+}
+
+/// Test seam: assemble the descriptor from fabricated pins so the inventory layout can be exercised
+/// without the real multi-gigabyte graphs.
+#[cfg(all(test, feature = "captioning-onnx"))]
+pub(crate) fn captioning_model_with_files(
+    model: &CandidateModel,
+    precision: CandidatePrecision,
+    files: &[CandidateFile],
+) -> Result<crate::local_captioning::LocalCaptioningModel, String> {
+    crate::local_captioning::descriptor_from_selection(model.repository, model.revision, model.id, precision, files)
 }
 
 #[cfg(test)]

@@ -21,13 +21,15 @@ on:
         required: false
         type: boolean
         default: false
-  # Fire the instant the GitHub Release is created (publish.yaml creates it
-  # non-draft, so `created` fires up front) — this workflow then builds and
-  # publishes images in parallel with, and independent of, publish.yaml. Do NOT
-  # use `published`: that only fires when a draft is un-drafted at finalize,
-  # which would serialize Docker behind the entire publish run. ~keep
+  # Fire when the GitHub Release is published, which publish.yaml now does only at
+  # `finalize-github-release-after-uploads` after `verify-assets` has confirmed every
+  # expected asset on the live release. publish.yaml creates the release as a draft, and
+  # `created` never fires for a draft, so `published` is the first point the release is
+  # public. Consequence: Docker no longer runs in parallel with publish.yaml; it starts
+  # once the asset gate is green, which is the price of not publishing images for an
+  # incomplete release. ~keep
   release:
-    types: [created]
+    types: [published]
   repository_dispatch:
     types: [publish-docker]
 
@@ -287,6 +289,13 @@ jobs:
         if: ${{ steps.gate.outputs.go == 'true' }}
         run: python3 scripts/ci/docker/test_docker.py --image xberg-publish:${{ matrix.variant }}-test --variant ${{ matrix.variant }} --verbose
 
+      # The digest push re-exports the same cached build, so this loaded image is the byte
+      # content that gets tagged. Verify its notices here so a missing or stale copy cannot be
+      # pushed to GHCR. ~keep
+      - name: Verify image notices
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        run: python3 scripts/ci/docker/verify_image_notices.py --image xberg-publish:${{ matrix.variant }}-test
+
       - name: Log in to GitHub Container Registry
         if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
         uses: docker/login-action@v4
@@ -313,7 +322,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Xberg document intelligence - ${{ matrix.variant }} variant
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=${{ matrix.variant == 'cli' && 'MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0' || 'MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0 AND Apache-2.0' }}
           outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
 

@@ -1,5 +1,16 @@
 //! Experimental Rust-only local NLI classification from explicitly pre-staged immutable artifacts.
 //! The experimental API may change between releases.
+//!
+//! This adapter is zero-shot: the request supplies arbitrary labels and a hypothesis template, and
+//! the staged NLI cross-encoder scores every premise/hypothesis pair. A label is not a trained
+//! class. [`LocalClassificationMode::TrainedTaxonomy`] is a different backend over a
+//! classification head with its own label set, and [`LocalTextClassifier::classify_trained_taxonomy`]
+//! rejects it while no fixed-taxonomy candidate is staged, rather than implying a taxonomy from
+//! caller labels.
+//!
+//! The NLI-MiniLM2 candidate is unqualified and is selected only through
+//! [`LocalNliModel::staged`] or an explicit caller-pinned descriptor. It is not a default, and
+//! the provider-backed [`crate::text`] classification path is unchanged.
 
 #[cfg(feature = "classification-onnx")]
 mod artifacts;
@@ -27,8 +38,9 @@ mod types;
 pub use runtime::LocalTextClassifier;
 
 pub use types::{
-    LocalClassificationBackend, LocalClassificationConfig, LocalClassificationLimits, LocalClassificationModelInfo,
-    LocalClassificationOptions, LocalClassificationResult, LocalNliModel,
+    LocalClassificationBackend, LocalClassificationConfig, LocalClassificationLimits, LocalClassificationMode,
+    LocalClassificationModelInfo, LocalClassificationOptions, LocalClassificationPrecision, LocalClassificationResult,
+    LocalNliModel,
 };
 
 #[cfg(all(test, feature = "classification-onnx"))]
