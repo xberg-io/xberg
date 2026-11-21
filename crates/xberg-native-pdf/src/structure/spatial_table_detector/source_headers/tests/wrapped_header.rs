@@ -173,7 +173,11 @@ fn a_wrapped_leading_band_is_one_header_row() {
     let mut rows = wrapped_rows();
     assert!(wrapped_is_header(&mut rows, &rules));
     assert!(rows[0].cells.iter().all(|cell| cell.is_header));
-    assert_eq!(rows[0].cells[1].text, "Proposed\nChicago,\nCommonwealth\nLabel D");
+    assert_eq!(rows[0].cells[1].text, "Proposed Chicago, Commonwealth Label D");
+    assert!(
+        !rows[0].cells[1].text.contains('\n'),
+        "a kept header cell must render on one line"
+    );
     assert!(rows[1..].iter().all(|row| !row.is_header));
 }
 
@@ -401,7 +405,8 @@ fn a_wrapped_leading_band_reaches_the_table_as_one_header_row() {
     assert!(table.has_header, "the wrapped band is the header");
     assert_eq!(table.rows.len(), BODY_ROWS + 1, "one header row plus the body");
     assert!(table.rows[0].is_header);
-    assert_eq!(table.rows[0].cells[1].text, "Proposed\nChicago,\nCommonwealth\nLabel D");
+    assert_eq!(table.rows[0].cells[1].text, "Proposed Chicago, Commonwealth Label D");
+    assert!(table.rows[0].cells.iter().all(|cell| !cell.text.contains('\n')));
     assert_eq!(table.rows[1].cells[0].text, "$1,000");
 }
 
@@ -416,6 +421,18 @@ fn a_form_numbering_band_above_the_wrapped_header_is_stripped() {
     assert_eq!(table.rows.len(), BODY_ROWS + 1, "the numbering band is gone");
     assert!(table.rows[0].is_header, "the wrapped band is the first row");
     assert_eq!(table.rows[0].cells[0].text, "Amount");
+}
+
+#[test]
+fn a_drifting_leaf_track_is_not_one_row_band() {
+    // Comparing each cell with its predecessor would accept 0, 0.9, 1.8; a track must agree with
+    // the first cell's edges within the snap tolerance. ~keep
+    let cells: Vec<TableCell> = [0.0, 0.9, 1.8]
+        .into_iter()
+        .enumerate()
+        .map(|(column, drift)| stacked_cell("x", column, 1, 30.0 + drift, STACKED_WIDTH, true))
+        .collect();
+    assert!(super::super::single_title::row_tracks(&cells).is_none());
 }
 
 #[test]

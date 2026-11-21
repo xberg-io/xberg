@@ -122,7 +122,13 @@ const MAX_RULE_BAR_THICKNESS: f32 = 2.0 * HEADER_RULE_TOLERANCE;
 /// ruled, its first non-numbering band is drawn as one row, every band below is single-line, no
 /// line of the band is a data value, and the band below it holds values (xberg-io/xberg#3346).
 /// The strip that removes form-numbering bands runs later, so a leading run of blank or lone-digit
-/// bands is skipped here instead of being mistaken for the header. ~keep
+/// bands is skipped here instead of being mistaken for the header.
+///
+/// No font-weight or size contrast test can stand in for those checks: the #3346 producer sets the
+/// wrapped labels in the same regular 11 pt face as its body values, so the two bands are
+/// indistinguishable by weight and a contrast test would reject the very record this targets. The
+/// discriminating evidence is structural instead: the band is the only one carrying several
+/// baselines, it is one drawn row, and every band below it is single-line over a numeric body. ~keep
 pub(super) fn retain_wrapped_leading_header(rows: &mut [TableRow], paths: &[PathContent], tolerance: f32) {
     if rows.len() < 2 || !tolerance.is_finite() || tolerance < 0.0 {
         return;
@@ -176,7 +182,19 @@ pub(super) fn retain_wrapped_leading_header(rows: &mut [TableRow], paths: &[Path
     header.is_header = true;
     for cell in &mut header.cells {
         cell.is_header = true;
+        cell.text = single_line(&cell.text);
     }
+}
+
+/// The detector joins a cell's baselines with `\n`. A header band kept whole stays exempt from
+/// `split_rows_by_text_positions`, and `Table::render_text` prints `cell.text` verbatim, so the
+/// embedded breaks would otherwise reach plain text as one row ending mid-cell (xberg-io/xberg#3346).
+/// Collapse them the way the reading-order join does: one space between the wrapped lines.
+fn single_line(text: &str) -> String {
+    text.split('\n')
+        .flat_map(|line| line.split_whitespace())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// A band `strip_form_numbering_artifacts` removes: every cell empty or one digit 1-9, with at

@@ -231,15 +231,17 @@ fn aligned_bands(title: &TableCell, peers: &[TableCell], leaves: &TableRow, body
     .then_some((upper, band))
 }
 
-/// The band's cells as contiguous column tracks, left to right.
-fn row_tracks(cells: &[TableCell]) -> Option<Vec<Rect>> {
+/// The band's cells as contiguous column tracks, left to right. Each cell joins the previous one at
+/// its left edge, and both its top and bottom are compared with the first track: comparing with the
+/// previous cell instead would let a 1 pt tolerance accumulate (`0, 0.9, 1.8` all match). ~keep
+pub(super) fn row_tracks(cells: &[TableCell]) -> Option<Vec<Rect>> {
     let mut tracks: Vec<Rect> = Vec::with_capacity(cells.len());
     for cell in cells {
         let bounds = cell.bbox.filter(|bounds| valid(*bounds))?;
-        if let Some(previous) = tracks.last()
+        if let (Some(first), Some(previous)) = (tracks.first(), tracks.last())
             && (!same_rule_position(bounds.left(), previous.right())
-                || !same_rule_position(bounds.top(), previous.top())
-                || !same_rule_position(bounds.bottom(), previous.bottom()))
+                || !same_rule_position(bounds.top(), first.top())
+                || !same_rule_position(bounds.bottom(), first.bottom()))
         {
             return None;
         }
