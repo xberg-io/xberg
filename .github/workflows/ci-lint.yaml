@@ -15,6 +15,8 @@ on:
       - "*.yaml"
       - "*.yml"
       - "*.md"
+      - "LICENSE"
+      - "THIRD_PARTY_LICENSES.md"
       # Root lockfiles. This job runs `uv sync --locked` and, through the poly hooks,
       # cargo-deny against Cargo.lock -- but neither file matched any pattern above, so the
       # one change that fixes a stale lock could not trigger the job that rejects it. A root

@@ -287,6 +287,13 @@ jobs:
         if: ${{ steps.gate.outputs.go == 'true' }}
         run: python3 scripts/ci/docker/test_docker.py --image xberg-publish:${{ matrix.variant }}-test --variant ${{ matrix.variant }} --verbose
 
+      # The digest push re-exports the same cached build, so this loaded image is the byte
+      # content that gets tagged. Verify its notices here so a missing or stale copy cannot be
+      # pushed to GHCR. ~keep
+      - name: Verify image notices
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        run: python3 scripts/ci/docker/verify_image_notices.py --image xberg-publish:${{ matrix.variant }}-test
+
       - name: Log in to GitHub Container Registry
         if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
         uses: docker/login-action@v4
