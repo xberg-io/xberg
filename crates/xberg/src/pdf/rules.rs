@@ -59,15 +59,30 @@ pub(crate) fn count_horizontal_rules_in(
     let (x0, y0, x1, y1) = bounds;
     paths
         .iter()
-        .filter(|path| rule_orientation(path) == Some(RuleOrientation::Horizontal))
-        .filter(|path| {
-            let rule_y = path.bbox.y + path.bbox.height * 0.5;
-            let rule_x0 = path.bbox.x;
-            let rule_x1 = path.bbox.x + path.bbox.width;
-            let spans = rule_x0 <= x0 + GRID_EDGE_ALIGN_TOLERANCE_PTS && rule_x1 >= x1 - GRID_EDGE_ALIGN_TOLERANCE_PTS;
-            rule_y >= y0 && rule_y <= y1 && spans
-        })
+        .filter_map(|path| horizontal_rule_center_y(path, x0, x1))
+        .filter(|rule_y| *rule_y >= y0 && *rule_y <= y1)
         .count()
+}
+
+/// Vertical centre, in PDF user space, of a horizontal rule that spans the
+/// full width `[x0, x1]`.
+///
+/// A producer draws a table's top and bottom rule just outside the text it
+/// frames, so a caller that only looks *between* a region's words sees no rule
+/// at all on a table ruled only at its edges. Exposing the rule's own
+/// coordinate lets that caller compare it with a pitch-extended band instead.
+pub(crate) fn horizontal_rule_center_y(
+    path: &xberg_native_pdf::elements::PathContent,
+    x0: f32,
+    x1: f32,
+) -> Option<f32> {
+    if rule_orientation(path) != Some(RuleOrientation::Horizontal) {
+        return None;
+    }
+    let rule_x0 = path.bbox.x;
+    let rule_x1 = path.bbox.x + path.bbox.width;
+    let spans = rule_x0 <= x0 + GRID_EDGE_ALIGN_TOLERANCE_PTS && rule_x1 >= x1 - GRID_EDGE_ALIGN_TOLERANCE_PTS;
+    spans.then_some(path.bbox.y + path.bbox.height * 0.5)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,7 +140,6 @@ mod tests {
     use super::{RuleOrientation, count_horizontal_rules_in, rule_orientation};
     use xberg_native_pdf::elements::PathContent;
     use xberg_native_pdf::elements::PathOperation;
-    use xberg_native_pdf::geometry::Rect;
     use xberg_native_pdf::layout::Color;
 
     const PAGE_WIDTH: f32 = 595.0;

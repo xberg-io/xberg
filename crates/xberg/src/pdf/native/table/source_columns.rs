@@ -72,6 +72,12 @@ impl<'a> PageRules<'a> {
         self.paths
     }
 
+    /// Whether this page's words are in page space, so page-space rules can be
+    /// attributed to them. False on a lifted rotation frame.
+    pub(super) fn attributes_source_rules(&self) -> bool {
+        self.eligible
+    }
+
     pub(super) fn with_source_words(
         mut self,
         segments: &'a [crate::pdf::hierarchy::SegmentData],

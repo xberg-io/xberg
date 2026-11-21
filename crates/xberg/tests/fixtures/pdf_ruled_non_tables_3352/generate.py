@@ -51,6 +51,11 @@ def boxed_prose(commands: list[str], top: int) -> None:
         y = top - 12 * index
         for x, word in zip(COLUMNS, words, strict=True):
             commands.append(text(x, y, word))
+    # Two full-width rules whose centres lie inside the prose text band, not only
+    # above and below it: the candidate must reach the ruled branch of the
+    # borderless gate and still be refused by the structural prose guards. ~keep
+    commands.append(bar(50, top - 18, 470, grey="0.6"))
+    commands.append(bar(50, top - 42, 470, grey="0.6"))
     bottom = top - 12 * len(PROSE)
     commands.append(bar(50, bottom - 6, 470, grey="0.6"))
     commands.append(bar(50, bottom - 6, 1, top + 7 - bottom, grey="0.6"))

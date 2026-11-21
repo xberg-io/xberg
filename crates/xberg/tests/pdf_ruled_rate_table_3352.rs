@@ -52,18 +52,27 @@ fn table_with_painted_rules_is_detected() {
         );
     };
 
-    assert!(
-        table.cells.len() >= 30,
-        "expected the 31 rate rows to survive, got {}",
-        table.cells.len()
-    );
     let first = &table.cells[0];
     assert!(
         first.iter().any(|cell| cell.contains("Age")),
         "header must name the age column, got {first:?}"
     );
-    let last_row = table.cells.last().unwrap();
-    assert_eq!(last_row.first().map(String::as_str), Some("95"), "{last_row:?}");
+    assert_eq!(
+        table.cells.len(),
+        32,
+        "one header row plus the 31 age rows, got {} rows",
+        table.cells.len()
+    );
+    let ages: Vec<String> = table.cells[1..]
+        .iter()
+        .filter_map(|row| row.first())
+        .map(|age| age.trim().to_string())
+        .collect();
+    let expected: Vec<String> = (65..=95).map(|age| age.to_string()).collect();
+    assert_eq!(
+        ages, expected,
+        "every age from 65 to 95 inclusive must be present, with none missing or repeated"
+    );
 }
 
 #[test]

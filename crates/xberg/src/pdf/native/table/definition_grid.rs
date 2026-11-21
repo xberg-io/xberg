@@ -154,14 +154,41 @@ pub(super) fn has_definition_shape(grid: &[Vec<String>]) -> bool {
     complete_rows >= 2 && complete_rows * 100 >= data_rows.len() * MIN_COMPLETE_ROW_PERCENT
 }
 
-/// Whether a grid's first row is a column-label header: every populated cell is
-/// a short label, and the row names at most its own columns.
+/// Shortest cell that can name a column rather than hold a value. A definition
+/// grid's values are short tokens: a single letter (`x`), a placeholder (`XX`),
+/// a symbol (`=`) or a number (`0.3848`). A header names its column with a word.
+/// This is the evidence that keeps a headerless continuation (`D | x`) from
+/// reading as an independent table's header (`Plan | Factor`).
+const MIN_COLUMN_NAME_CHARS: usize = 3;
+
+/// Whether a row reads as a column-label header.
+///
+/// Every populated cell must be a short label, and the row must name a column:
+/// its first cell is a multi-character word (or empty, as a corner cell), so a
+/// headerless continuation row whose first cell is a data label (`D`) does not
+/// qualify. Genuinely headed tables keep their differing-header rejection.
 fn has_header_row(row: &[String]) -> bool {
-    row.first().is_some_and(|cell| is_short_label(cell))
-        && row.iter().skip(1).all(|cell| {
-            let text = cell.trim();
-            text.is_empty() || is_short_label(text)
-        })
+    let Some(first) = row.first() else {
+        return false;
+    };
+    let first = first.trim();
+    if !first.is_empty() && !is_short_label(first) {
+        return false;
+    }
+    if !row.iter().skip(1).all(|cell| {
+        let text = cell.trim();
+        text.is_empty() || is_short_label(text)
+    }) {
+        return false;
+    }
+    if !first.is_empty() {
+        return names_a_column(first);
+    }
+    row.iter().skip(1).any(|cell| names_a_column(cell.trim()))
+}
+
+fn names_a_column(text: &str) -> bool {
+    text.chars().count() >= MIN_COLUMN_NAME_CHARS && text.chars().any(char::is_alphabetic)
 }
 
 /// Collapse a header that the producer printed on two lines.
@@ -171,13 +198,17 @@ fn has_header_row(row: &[String]) -> bool {
 /// Left alone, the first row reads as a headerless data row with empty labels
 /// and the grid is rejected. The two rows are one header when the first holds
 /// only the value label and the second holds only the column labels.
-pub(super) fn collapse_wrapped_header(grid: &mut Vec<Vec<String>>) {
+///
+/// Returns whether a collapse happened; a collapsed header is explicit evidence
+/// that the grid is a table, which the caller may use instead of a single-row
+/// alignment test.
+pub(super) fn collapse_wrapped_header(grid: &mut Vec<Vec<String>>) -> bool {
     if grid.len() < MIN_GROUP_ROWS {
-        return;
+        return false;
     }
     let width = grid[0].len();
     if grid[1].len() != width || width < 2 {
-        return;
+        return false;
     }
     let first = &grid[0];
     let second = &grid[1];
@@ -186,7 +217,7 @@ pub(super) fn collapse_wrapped_header(grid: &mut Vec<Vec<String>>) {
     let second_labels_present = second[..width - 1].iter().any(|cell| !cell.trim().is_empty());
     let second_value_empty = second[width - 1].trim().is_empty();
     if !(first_labels_empty && first_value_present && second_labels_present && second_value_empty) {
-        return;
+        return false;
     }
     // The collapsed grid must still be a definition grid: without this, a
     // value-less row could vanish into the header and the remaining rows would
@@ -197,7 +228,9 @@ pub(super) fn collapse_wrapped_header(grid: &mut Vec<Vec<String>>) {
     collapsed[0] = merged;
     if has_definition_shape(&collapsed) {
         *grid = collapsed;
+        return true;
     }
+    false
 }
 
 fn is_short_label(text: &str) -> bool {
@@ -335,7 +368,7 @@ fn reconstruct_grid(
         if index == 1 && threshold == thresholds[0] {
             break;
         }
-        let Some(table) = super::reconstruct_definition_grid(
+        let Some((table, column_positions, wrapped_header)) = super::reconstruct_definition_grid(
             &words,
             frame.page_height,
             frame.page_number,
@@ -345,7 +378,17 @@ fn reconstruct_grid(
         ) else {
             continue;
         };
-        if has_definition_shape(&table.cells) && table.cells.len() >= MIN_GROUP_ROWS {
+        // The fallback reconstructs from its own column clustering, so the same
+        // alignment threshold the heuristic path applies has to be re-tested
+        // here. Shape alone admits a grid whose labels populate only 60% of the
+        // rows; the columns only align on those rows (xberg-io/xberg#3351). A
+        // two-line header collapsed during reconstruction is explicit table
+        // evidence: its value label sits one row above the column labels, so the
+        // raw words can never align on every track in one row.
+        if has_definition_shape(&table.cells)
+            && table.cells.len() >= MIN_GROUP_ROWS
+            && (wrapped_header || tracks_align_across_rows(&words, &column_positions))
+        {
             return Some(table);
         }
     }
@@ -460,8 +503,10 @@ fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame<'_>) -> Opt
         // *interior* tracks may be skipped: a partition that leaves the
         // region's leftmost columns unclaimed has shifted every grid one table
         // to the right, which is how a three-column roster becomes a two-column
-        // "City | Role" definition grid.
-        let mut best: Option<(usize, Vec<(usize, usize)>)> = if index > 0 {
+        // "City | Role" definition grid; one that leaves the final track
+        // unclaimed has dropped the roster's last column. Either way the region
+        // is rejected rather than truncating the table.
+        let mut best: Option<(usize, Vec<(usize, usize)>)> = if index > 0 && index + 1 < tracks.len() {
             best_from(index + 1, tracks, region, frame, memo)
         } else {
             None
@@ -580,10 +625,11 @@ fn stitch_stacked<T>(mut rows: Vec<(Table, T)>) -> Vec<(Table, T)> {
         };
         let table = row.0;
         let repeated_header = table.cells.first().is_some_and(|row| {
-            previous
-                .cells
-                .first()
-                .is_some_and(|header| row.len() == header.len() && row.iter().zip(header).all(|(a, b)| a == b))
+            has_header_row(row)
+                && previous
+                    .cells
+                    .first()
+                    .is_some_and(|header| row.len() == header.len() && row.iter().zip(header).all(|(a, b)| a == b))
         });
         let skip = usize::from(repeated_header);
         previous.cells.extend(table.cells.into_iter().skip(skip));
@@ -924,6 +970,204 @@ mod tests {
         let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
 
         assert_eq!(stitched.len(), 2, "a differing header must not become a data row");
+    }
+
+    #[test]
+    fn a_three_track_roster_is_not_truncated_to_two_columns() {
+        // `Name | City | Role` where the last column is a word, not a value: the
+        // three-column candidate fails the value-text threshold, and the
+        // two-column `Name | City` candidate would otherwise pass. Dropping
+        // `Role` loses a column of the roster, so the region must be rejected.
+        let mut words = cell("Name", 40, 200);
+        words.extend(cell("City", 120, 200));
+        words.extend(cell("Role", 200, 200));
+        let rows = [
+            ("Alice", "Boston", "Manager"),
+            ("Bob", "Denver", "Analyst"),
+            ("Carol", "Austin", "Clerk"),
+            ("Dave", "Seattle", "Engineer"),
+        ];
+        for (index, (name, city, role)) in rows.iter().enumerate() {
+            let y = 200 + ROW_PITCH * (index as u32 + 1);
+            words.extend(cell(name, 40, y));
+            words.extend(cell(city, 120, y));
+            words.extend(cell(role, 200, y));
+        }
+
+        assert!(
+            segment_region(&words, frame(&[])).is_none(),
+            "a partition that leaves the final track unclaimed must not return a truncated roster"
+        );
+    }
+
+    #[test]
+    fn labels_on_six_of_ten_rows_do_not_align_enough() {
+        // The fallback used to accept on shape alone: 6 of 10 data rows are
+        // complete (60%, the shape threshold) but the label column carries a
+        // word on only 6 rows, below the 70% alignment threshold the heuristic
+        // path already applies.
+        let mut words = cell("Tier", 40, 200);
+        words.extend(cell("Factor", 120, 200));
+        for index in 0..10u32 {
+            let y = 200 + ROW_PITCH * (index + 1);
+            if index < 6 {
+                words.extend(cell("Label", 40, y));
+            }
+            words.extend(cell("x", 120, y));
+        }
+
+        assert!(
+            segment_region(&words, frame(&[])).is_none(),
+            "a grid whose columns align on only 60% of the rows must be rejected"
+        );
+    }
+
+    #[test]
+    fn independently_headed_tables_do_not_merge() {
+        let table = |header_label: &str, rows: &[(&str, &str)], y0: f64| Table {
+            cells: std::iter::once(vec![header_label.to_string(), "Factor".into()])
+                .chain(rows.iter().map(|(a, b)| vec![(*a).to_string(), (*b).to_string()]))
+                .collect(),
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0,
+                x1: 140.0,
+                y1: y0 + 15.0,
+            }),
+            ..Default::default()
+        };
+        let upper = table(
+            "Credit Tier",
+            &[("A", "0.3848"), ("B", "0.4017"), ("C", "0.4365")],
+            300.0,
+        );
+        let lower = table("Plan", &[("D", "0.4995"), ("E", "0.5475"), ("F", "0.5840")], 282.0);
+        let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
+
+        assert_eq!(
+            stitched.len(),
+            2,
+            "two independently headed tables must not become one table with a header row: {:?}",
+            stitched
+                .iter()
+                .map(|(table, _)| table.cells.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_corner_empty_header_keeps_its_table_separate() {
+        // A header row can leave its corner cell empty. It is still a header,
+        // and it still must not be inserted into the table above as a data row.
+        let upper = Table {
+            cells: vec![
+                vec!["Credit Tier".into(), "Factor".into()],
+                vec!["A".into(), "0.3848".into()],
+                vec!["B".into(), "0.4017".into()],
+                vec!["C".into(), "0.4365".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 300.0,
+                x1: 140.0,
+                y1: 330.0,
+            }),
+            ..Default::default()
+        };
+        let lower = Table {
+            cells: vec![
+                vec![String::new(), "Factor".into()],
+                vec!["Gold".into(), "Y".into()],
+                vec!["Silver".into(), "N".into()],
+                vec!["Bronze".into(), "Y".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 282.0,
+                x1: 140.0,
+                y1: 298.0,
+            }),
+            ..Default::default()
+        };
+        let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
+
+        assert_eq!(stitched.len(), 2, "a corner-empty header is still a header");
+    }
+
+    #[test]
+    fn a_headerless_short_value_continuation_stitches() {
+        let upper = Table {
+            cells: vec![
+                vec!["Credit Tier".into(), "Factor".into()],
+                vec!["A".into(), "0.3848".into()],
+                vec!["B".into(), "0.4017".into()],
+                vec!["C".into(), "0.4365".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 300.0,
+                x1: 140.0,
+                y1: 330.0,
+            }),
+            ..Default::default()
+        };
+        let lower = Table {
+            cells: vec![
+                vec!["D".into(), "x".into()],
+                vec!["E".into(), "x".into()],
+                vec!["F".into(), "x".into()],
+                vec!["G".into(), "x".into()],
+            ],
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0: 282.0,
+                x1: 140.0,
+                y1: 298.0,
+            }),
+            ..Default::default()
+        };
+        let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
+
+        assert_eq!(stitched.len(), 1, "`D | x` is a data row, not a new header");
+        assert_eq!(stitched[0].0.cells.len(), 8);
+        assert_eq!(stitched[0].0.cells[4], ["D", "x"]);
+    }
+
+    #[test]
+    fn a_repeated_headerless_first_row_is_kept() {
+        // Two slices whose first rows coincide but whose value `0.4995` is not a
+        // column name: the row is data, so dropping it as a repeated header
+        // loses a row.
+        let table = |rows: &[(&str, &str)], y0: f64| Table {
+            cells: rows
+                .iter()
+                .map(|(a, b)| vec![(*a).to_string(), (*b).to_string()])
+                .collect(),
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 40.0,
+                y0,
+                x1: 140.0,
+                y1: y0 + 15.0,
+            }),
+            ..Default::default()
+        };
+        let upper = table(
+            &[("A", "0.4995"), ("B", "0.5475"), ("C", "0.5840"), ("D", "0.6143")],
+            300.0,
+        );
+        let lower = table(
+            &[("A", "0.4995"), ("E", "0.6702"), ("F", "0.7152"), ("G", "0.8190")],
+            282.0,
+        );
+        let stitched = stitch_tagged(vec![(lower, ()), (upper, ())], vec![true, true]);
+
+        assert_eq!(stitched.len(), 1);
+        assert_eq!(
+            stitched[0].0.cells.len(),
+            8,
+            "a repeated data row must not be dropped as a header"
+        );
+        assert_eq!(stitched[0].0.cells[4], ["A", "0.4995"]);
     }
 
     #[test]

@@ -13,7 +13,7 @@ from pathlib import Path
 
 PAGE_HEIGHT = 842
 LEFT = 60
-RIGHT = 520
+RIGHT = 580
 EDGES = (60, 175, 290, 405, 520)
 
 HEADER = ("Attained Age", "Non-Tobacco", "Tobacco")
