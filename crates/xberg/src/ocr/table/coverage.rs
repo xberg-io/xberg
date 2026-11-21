@@ -41,13 +41,30 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
     elements: Vec<InternalElement>,
     tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
 ) -> Vec<InternalElement> {
+    drop_elements_claimed_by_tables_with_matching(elements, tables, false)
+}
+
+/// [`drop_elements_claimed_by_tables`] for a route that keeps dot leaders in its cells: a line
+/// whose only extra tokens are leader artifacts is still the row the table carries (#2503).
+pub(crate) fn drop_elements_claimed_by_tables_ignoring_marks<'a>(
+    elements: Vec<InternalElement>,
+    tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+) -> Vec<InternalElement> {
+    drop_elements_claimed_by_tables_with_matching(elements, tables, true)
+}
+
+fn drop_elements_claimed_by_tables_with_matching<'a>(
+    elements: Vec<InternalElement>,
+    tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+    ignore_marks: bool,
+) -> Vec<InternalElement> {
     let mut claiming_bboxes: Vec<BoundingBox> = Vec::new();
     let mut claimed_lines = HashSet::new();
     for (bbox, cells) in tables {
         if table_retains_region_words(&elements, &bbox, cells) {
             claiming_bboxes.push(bbox);
         } else {
-            claim_matching_table_rows(&elements, &bbox, cells, &mut claimed_lines);
+            claim_matching_table_rows(&elements, &bbox, cells, &mut claimed_lines, ignore_marks);
             tracing::warn!(
                 target: "xberg::ocr::tables",
                 left = bbox.x0,
@@ -76,16 +93,48 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
         .collect()
 }
 
+/// Claim only the lines that are a complete table row, never the table's rectangle.
+///
+/// A row proof rebuilds the page document with the rows it proved removed (`#2503`), so the
+/// surviving lines are the ones it could not match. Judging those few lines as a region against
+/// the table's full cell set says the table retained them and promotes it to a bbox claim, which
+/// then deletes every line centred in the table -- including one whose words the table lacks. A
+/// caller that just ran a proof must use this rows-only claim.
+fn drop_elements_matching_table_rows<'a>(
+    elements: Vec<InternalElement>,
+    tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+    ignore_marks: bool,
+) -> Vec<InternalElement> {
+    let mut claimed_lines = HashSet::new();
+    for (bbox, cells) in tables {
+        claim_matching_table_rows(&elements, &bbox, cells, &mut claimed_lines, ignore_marks);
+    }
+    if claimed_lines.is_empty() {
+        return elements;
+    }
+    elements
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, element)| (!claimed_lines.contains(&index)).then_some(element))
+        .collect()
+}
+
 /// A row may replace one single-line element with the same ordered tokens. Spending each
-/// row once preserves repeated source lines, and unmatched text stays intact. This is the exact
-/// comparison: only a leader-aware caller asks for [`ExactTableRows::ignoring_marks`].
+/// row once preserves repeated source lines, and unmatched text stays intact. `ignore_marks`
+/// compares leader artifacts as absent for a route that keeps dot leaders in its cells (#2503);
+/// every other token still has to match in order.
 fn claim_matching_table_rows(
     elements: &[InternalElement],
     bbox: &BoundingBox,
     cells: &[Vec<String>],
     claimed_lines: &mut HashSet<usize>,
+    ignore_marks: bool,
 ) {
-    let mut rows = ExactTableRows::new(cells);
+    let mut rows = if ignore_marks {
+        ExactTableRows::ignoring_marks(cells)
+    } else {
+        ExactTableRows::new(cells)
+    };
     for (index, element) in elements.iter().enumerate() {
         if !claimed_lines.contains(&index)
             && element_center_within_table(element, bbox)
@@ -163,10 +212,30 @@ fn row_tokens<'a>(tokens: impl Iterator<Item = &'a str>, ignore_marks: bool) -> 
 pub(crate) fn drop_document_elements_claimed_by_tables<'a>(
     document: &mut InternalDocument,
     tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+    ignore_marks: bool,
 ) {
     let element_count = document.elements.len();
-    document.elements = drop_elements_claimed_by_tables(std::mem::take(&mut document.elements), tables);
-    document.ocr_text_claimed_by_tables = document.elements.len() < element_count
+    let elements = std::mem::take(&mut document.elements);
+    document.elements = if ignore_marks {
+        drop_elements_claimed_by_tables_ignoring_marks(elements, tables)
+    } else {
+        drop_elements_claimed_by_tables(elements, tables)
+    };
+    document.ocr_text_claimed_by_tables |= document.elements.len() < element_count
+        && document.elements.iter().all(|element| element.text.trim().is_empty());
+}
+
+/// [`drop_elements_matching_table_rows`] over a page document. Call this after a row proof
+/// replaced the document; it never promotes the table to a bbox claim (#2503).
+pub(crate) fn drop_document_elements_matching_table_rows<'a>(
+    document: &mut InternalDocument,
+    tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+    ignore_marks: bool,
+) {
+    let element_count = document.elements.len();
+    let elements = std::mem::take(&mut document.elements);
+    document.elements = drop_elements_matching_table_rows(elements, tables, ignore_marks);
+    document.ocr_text_claimed_by_tables |= document.elements.len() < element_count
         && document.elements.iter().all(|element| element.text.trim().is_empty());
 }
 
@@ -411,6 +480,126 @@ mod tests {
     }
 
     #[test]
+    fn leader_aware_claim_removes_a_line_whose_only_extra_tokens_are_leaders() {
+        // A six-column scan at PSM 6 keeps short leader runs the table cell does not carry. The
+        // table carries every word of the line, so the line is the row's duplicate (#2503).
+        let elements = vec![
+            paragraph_with_bbox(
+                "Transit passes .. 40 176,798 223.86 87,244 872.97",
+                10.0,
+                10.0,
+                90.0,
+                30.0,
+            ),
+            paragraph_with_bbox(
+                "Code review ... 84 847,072 (2,106) 74,261 946.49",
+                10.0,
+                30.0,
+                90.0,
+                50.0,
+            ),
+        ];
+        let cells = [
+            "Transit passes 40 176,798 223.86 87,244 872.97",
+            "Code review 84 847,072 (2,106) 74,261 946.49",
+        ]
+        .map(|row| cells_of(row).remove(0));
+
+        let table = [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())];
+        let filtered = drop_elements_claimed_by_tables_ignoring_marks(elements.clone(), table);
+        assert!(filtered.is_empty(), "leader rows are the table's own rows");
+
+        let exact = drop_elements_claimed_by_tables(elements, table);
+        assert_eq!(
+            exact.len(),
+            2,
+            "the exact comparison keeps both lines, so the new path is what claims them"
+        );
+    }
+
+    #[test]
+    fn leader_aware_claim_keeps_a_row_whose_value_differs() {
+        let elements = vec![paragraph_with_bbox(
+            "Transit passes .. 40 176,798 223.86 87,244 872.97",
+            10.0,
+            10.0,
+            90.0,
+            30.0,
+        )];
+        let cells = ["Transit passes 40 176,798 223.86 87,244 872.98"].map(|row| cells_of(row).remove(0));
+
+        let filtered = drop_elements_claimed_by_tables_ignoring_marks(
+            elements,
+            [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())],
+        );
+
+        assert_eq!(filtered.len(), 1, "a value the table does not carry must keep its line");
+    }
+
+    #[test]
+    fn rows_only_claim_keeps_a_leftover_line_the_table_does_not_carry() {
+        // After a row proof the document holds only its leftovers: one row whose short leader the
+        // cell lacks, and one line with a value the table lost. Comparing those few leftovers as a
+        // region against the full cell set says the table retained them and promotes it to a bbox
+        // claim, which would delete the unmatched line too (#2503).
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![
+            paragraph_with_bbox("Transit passes .. 40 176,798", 10.0, 10.0, 90.0, 30.0),
+            paragraph_with_bbox("Snow removal 63 195,184", 10.0, 40.0, 90.0, 60.0),
+        ];
+        let cells = [
+            "Transit passes 40 176,798",
+            "Snow removal 63 195,181",
+            "Code review 84 847,072",
+        ]
+        .map(|row| cells_of(row).remove(0));
+        let table = [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())];
+
+        let whole_region = drop_elements_claimed_by_tables_ignoring_marks(document.elements.clone(), table);
+        assert!(
+            whole_region.is_empty(),
+            "the region claim would delete the line whose value the table lost"
+        );
+
+        drop_document_elements_matching_table_rows(&mut document, table, true);
+
+        assert_eq!(document.elements.len(), 1);
+        assert_eq!(document.elements[0].text, "Snow removal 63 195,184");
+        assert!(!document.ocr_text_claimed_by_tables);
+    }
+
+    #[test]
+    fn exact_claim_keeps_a_line_whose_only_extra_token_is_a_leader() {
+        // The non-leader route keeps the extra leader token: only a leader-aware caller drops it.
+        let elements = vec![paragraph_with_bbox("Apple 50 ..... 10 00", 10.0, 10.0, 90.0, 30.0)];
+        let cells = ["Apple 50 10 00"].map(|row| cells_of(row).remove(0));
+
+        let filtered = drop_elements_claimed_by_tables(elements, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+
+        assert_eq!(
+            filtered.len(),
+            1,
+            "the exact comparison must keep the extra leader token"
+        );
+    }
+
+    #[test]
+    fn a_claim_never_clears_a_page_already_recorded_as_claimed() {
+        let cells = cells_of("Apple 50 10 00");
+        let table = [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())];
+
+        let mut document = InternalDocument::new("pdf");
+        document.ocr_text_claimed_by_tables = true;
+        drop_document_elements_matching_table_rows(&mut document, table, true);
+        assert!(document.ocr_text_claimed_by_tables);
+
+        let mut document = InternalDocument::new("pdf");
+        document.ocr_text_claimed_by_tables = true;
+        drop_document_elements_claimed_by_tables(&mut document, table, false);
+        assert!(document.ocr_text_claimed_by_tables);
+    }
+
+    #[test]
     fn drop_elements_claimed_by_tables_claims_only_the_tables_that_retained_their_words() {
         // The decision is per table, not per page (#1884): a faithful table still removes its own
         // region's duplicate lines even when another table on the same page lost words.
@@ -463,7 +652,11 @@ mod tests {
         document.elements = vec![paragraph_with_bbox("Apple 50 10 00", 10.0, 10.0, 90.0, 30.0)];
         let cells = cells_of("Apple 50 10 00");
 
-        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+        drop_document_elements_claimed_by_tables(
+            &mut document,
+            [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())],
+            false,
+        );
 
         assert!(document.elements.is_empty());
         assert!(document.ocr_text_claimed_by_tables);
@@ -474,7 +667,11 @@ mod tests {
         let mut document = InternalDocument::new("pdf");
         let cells = cells_of("TICKET CP 2 60,000");
 
-        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+        drop_document_elements_claimed_by_tables(
+            &mut document,
+            [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())],
+            false,
+        );
 
         assert!(
             !document.ocr_text_claimed_by_tables,
@@ -491,7 +688,11 @@ mod tests {
         ];
         let cells = cells_of("Apple 50 10 00");
 
-        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 40.0, 100.0, 140.0), cells.as_slice())]);
+        drop_document_elements_claimed_by_tables(
+            &mut document,
+            [(bbox(0.0, 40.0, 100.0, 140.0), cells.as_slice())],
+            false,
+        );
 
         assert_eq!(document.elements.len(), 1);
         assert!(!document.ocr_text_claimed_by_tables);

@@ -44,6 +44,8 @@ pub struct InternalDocumentBuilder {
     doc: InternalDocument,
     depth: u16,
     node_count: u32,
+    /// Write inline math delimiters into native paragraph text.
+    inline_math: bool,
 }
 
 impl InternalDocumentBuilder {
@@ -53,7 +55,20 @@ impl InternalDocumentBuilder {
             doc: InternalDocument::new(source_format),
             depth: 0,
             node_count: 0,
+            inline_math: false,
         }
+    }
+
+    /// Enable inline math delimiters in paragraph text.
+    ///
+    /// Only native PDF text opts in: OCR text is compared against the native ink it
+    /// replaces, so rewriting it would break that accounting.
+    pub(crate) fn set_inline_math(&mut self, enabled: bool) {
+        self.inline_math = enabled;
+    }
+
+    pub(crate) fn inline_math(&self) -> bool {
+        self.inline_math
     }
 
     /// Set the source format identifier (e.g. "docx", "html", "pptx").

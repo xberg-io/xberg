@@ -75,3 +75,8 @@ blake3 = "9646553cc062e0821b6444652344d175e4b2823136f3b389925b372412622d68"
 number = 14
 status = "accepted"
 blake3 = "594a0e191e5d87c4ac154cb6f77badb9b56574d352b3fb68ed387b54fcceb5c0"
+
+[adrs."adrs/0015-publish-the-encoder-enabled-elixir-nif-under-gpl-3-0-or-later.md"]
+number = 15
+status = "accepted"
+blake3 = "adbf417a76fe2e0775cf1b163b00220b70016ed9828384c98e9f9b32cb59cad5"

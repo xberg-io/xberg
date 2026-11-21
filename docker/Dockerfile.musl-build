@@ -22,7 +22,7 @@ RUN apk add --no-cache \
     perl linux-headers git file patchelf && \
     apk add --no-cache \
         gcc g++ libstdc++ libstdc++-dev \
-        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
+        onnxruntime-dev libheif-dev libde265-dev aom-dev dav1d-dev \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
@@ -146,7 +146,10 @@ RUN set -eu; \
     done; \
     ls /build/lib/libheif.so* >/dev/null; \
     ls /build/lib/libheif/*.so* >/dev/null; \
-    echo "OK: every bundled library resolves inside /build/lib/"
+    if [ -n "$(find /build/lib -maxdepth 2 -name '*x265*' -print -quit)" ]; then \
+        echo "FAIL: the bundle carries the GPL-2.0 x265 encoder" >&2; exit 1; \
+    fi; \
+    echo "OK: every bundled library resolves inside /build/lib/ and no x265 is present"
 
 RUN mv /build/xberg /build/xberg.bin && \
     INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \

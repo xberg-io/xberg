@@ -9017,7 +9017,6 @@ dependencies = [
 name = "xberg-libheif"
 version = "1.4.2"
 dependencies = [
- "cfg-if",
  "enumn",
  "four-cc",
  "libc",

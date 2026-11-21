@@ -24,12 +24,32 @@ mod recovered_headers;
 ///
 /// Builds a typed `InternalDocument` where each paragraph, heading, code block, formula,
 /// list item, table, and image is represented as a distinct `InternalElement`.
+///
+/// The native route writes inline math into its paragraph text, so only OCR and the
+/// tests call this plain entry point.
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn assemble_internal_document(
     pages: Vec<Vec<PdfParagraph>>,
     tables: &[crate::types::Table],
     images: Option<&[crate::types::ExtractedImage]>,
     image_positions: &[(u32, u32)],
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+) -> InternalDocument {
+    assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false)
+}
+
+/// [`assemble_internal_document`] with inline math written into native paragraph text.
+///
+/// OCR text is excluded: recognition output is checked against the native ink it
+/// replaces (`did not recover the N glyphs`), and rewriting it would break that
+/// accounting.
+pub(crate) fn assemble_internal_document_with_inline_math(
+    pages: Vec<Vec<PdfParagraph>>,
+    tables: &[crate::types::Table],
+    images: Option<&[crate::types::ExtractedImage]>,
+    image_positions: &[(u32, u32)],
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+    inline_math: bool,
 ) -> InternalDocument {
     tracing::debug!(
         page_count = pages.len(),
@@ -39,6 +59,7 @@ pub(crate) fn assemble_internal_document(
         "assemble_internal_document: start"
     );
     let mut builder = InternalDocumentBuilder::new("pdf");
+    builder.set_inline_math(inline_math);
 
     let mut tables_by_page: std::collections::BTreeMap<u32, Vec<&crate::types::Table>> =
         std::collections::BTreeMap::new();
@@ -1264,19 +1285,90 @@ fn push_paragraph_element_by_kind(
     }
 
     if !para.text.is_empty() && !paragraph_has_scripts(para) {
-        let annotations = if para.is_bold {
-            vec![TextAnnotation {
-                start: 0,
-                end: para.text.len() as u32,
-                kind: AnnotationKind::Bold,
-            }]
-        } else {
-            vec![]
-        };
-        builder.push_paragraph(&para.text, annotations, page, bbox)
+        let annotations = para.is_bold.then_some(TextAnnotation {
+            start: 0,
+            end: para.text.len() as u32,
+            kind: AnnotationKind::Bold,
+        });
+        push_text_with_inline_math(builder, &para.text, annotations.into_iter().collect(), page, bbox)
     } else {
         let (text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
-        builder.push_paragraph(&text, annotations, page, bbox)
+        push_text_with_inline_math(builder, &text, annotations, page, bbox)
+    }
+}
+
+/// Push a paragraph, writing `$..$` around each inline math run in `text`.
+///
+/// The Markdown, HTML and Djot renderers accept a math annotation only over a span
+/// that carries its delimiters (`rendering::common::annotated_math`), so the
+/// delimiters are written into the text and the element's plain projection keeps
+/// the undelimited source.
+fn push_text_with_inline_math(
+    builder: &mut InternalDocumentBuilder,
+    text: &str,
+    mut annotations: Vec<TextAnnotation>,
+    page: Option<u32>,
+    bbox: Option<BoundingBox>,
+) -> u32 {
+    let spans = if !builder.inline_math()
+        || text.contains('$')
+        || annotations
+            .iter()
+            .any(|annotation| annotation.kind.math_display().is_some())
+    {
+        Vec::new()
+    } else {
+        super::math_inline::inline_math_annotations(text)
+    };
+    if spans.is_empty() {
+        return builder.push_paragraph(text, annotations, page, bbox);
+    }
+
+    let spans: Vec<(usize, usize)> = spans
+        .into_iter()
+        .map(|(start, end)| (start as usize, end as usize))
+        .collect();
+    let mut marked = String::with_capacity(text.len() + 2 * spans.len());
+    let mut math_annotations = Vec::with_capacity(spans.len());
+    let mut cursor = 0usize;
+    for &(start, end) in &spans {
+        marked.push_str(&text[cursor..start]);
+        let delimited_start = marked.len();
+        marked.push('$');
+        marked.push_str(&text[start..end]);
+        marked.push('$');
+        math_annotations.push(TextAnnotation {
+            start: delimited_start as u32,
+            end: marked.len() as u32,
+            kind: AnnotationKind::math(false),
+        });
+        cursor = end;
+    }
+    marked.push_str(&text[cursor..]);
+    shift_annotations_for_math_delimiters(&mut annotations, &spans);
+    annotations.extend(math_annotations);
+    let index = builder.push_paragraph(&marked, annotations, page, bbox);
+    builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
+    index
+}
+
+/// Move annotation ranges from the source text onto `marked`, which carries a `$` before
+/// and after every math span.
+///
+/// A start moves past a delimiter inserted at or before it; an end stops before a closing
+/// delimiter inserted exactly at it. An annotation over a math run therefore keeps
+/// covering the run's characters instead of one of its delimiters, and every boundary
+/// stays on a UTF-8 character boundary because the insertion points already are.
+fn shift_annotations_for_math_delimiters(annotations: &mut [TextAnnotation], spans: &[(usize, usize)]) {
+    for annotation in annotations.iter_mut() {
+        let start = annotation.start as usize;
+        let end = annotation.end as usize;
+        let start_shift = spans.iter().filter(|(span_start, _)| *span_start <= start).count()
+            + spans.iter().filter(|(_, span_end)| *span_end <= start).count();
+        let end_shift = spans.iter().filter(|(span_start, _)| *span_start < end).count()
+            + spans.iter().filter(|(_, span_end)| *span_end < end).count();
+        annotation.start = (start + start_shift) as u32;
+        annotation.end = (end + end_shift) as u32;
     }
 }
 
@@ -4215,6 +4307,64 @@ mod tests {
             "geometry must still gate suppression even on an exact text match, got {labels:?}"
         );
         assert!(labels.contains(&"<table>"));
+    }
+
+    /// `$` delimiters inserted for inline math must not leave an earlier annotation
+    /// straddling a UTF-8 character.
+    #[test]
+    fn inline_math_delimiters_shift_annotation_ranges() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "Set \u{03B1} = 0.5 here.";
+        let alpha = text.find('\u{03B1}').unwrap() as u32;
+        push_text_with_inline_math(
+            &mut builder,
+            text,
+            vec![TextAnnotation {
+                start: alpha,
+                end: alpha + '\u{03B1}'.len_utf8() as u32,
+                kind: AnnotationKind::Italic,
+            }],
+            None,
+            None,
+        );
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "Set $\u{03B1} = 0.5$ here.");
+        let italic = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind == AnnotationKind::Italic)
+            .expect("the source annotation must survive the insertion");
+        assert_eq!(
+            &element.text[italic.start as usize..italic.end as usize],
+            "\u{03B1}",
+            "the annotation must cover the same character once the delimiters are inserted"
+        );
+    }
+
+    /// A paragraph with no inline math run keeps its annotations byte for byte.
+    #[test]
+    fn inline_math_leaves_annotation_ranges_untouched_when_nothing_is_inserted() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        push_text_with_inline_math(
+            &mut builder,
+            "Ordinary prose only.",
+            vec![TextAnnotation {
+                start: 0,
+                end: 8,
+                kind: AnnotationKind::Bold,
+            }],
+            None,
+            None,
+        );
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "Ordinary prose only.");
+        assert_eq!((element.annotations[0].start, element.annotations[0].end), (0, 8));
     }
 }
 

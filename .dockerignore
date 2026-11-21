@@ -31,6 +31,7 @@
 !packages/elixir/native/xberg_nif/
 !docker/
 !scripts/ci/vendor-native-closure.sh
+!scripts/ci/verify_no_gpl_codecs.py
 !scripts/ci/actions/setup-onnx-runtime/checksums.sha256
 !scripts/ci/actions/setup-onnx-runtime/verify-archive.sh
 !scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh

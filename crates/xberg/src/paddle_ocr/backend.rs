@@ -1818,7 +1818,7 @@ impl PaddleOcrBackend {
         let claiming_tables = tables
             .iter()
             .filter_map(|table| Some((table.bounding_box?, table.cells.as_slice())));
-        drop_document_elements_claimed_by_tables(&mut doc, claiming_tables);
+        drop_document_elements_claimed_by_tables(&mut doc, claiming_tables, false);
         doc
     }
 

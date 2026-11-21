@@ -21,7 +21,6 @@ RUN apt-get update && \
         libpng-dev libjpeg-dev libtiff-dev zlib1g-dev \
         libgif-dev libwebp-dev libopenjp2-7-dev \
         libarchive-dev libcurl4-openssl-dev \
-        libx265-dev \
         libdav1d-dev \
         clang \
         nasm \
@@ -60,13 +59,17 @@ RUN cd /tmp && \
     ldconfig && \
     cd / && rm -rf /tmp/libaom*
 
+# Decode-only: these images do not support HEIF output, so keep the GPL-2.0 x265
+# encoder (libheif's default when x265 headers exist), x264 and the unused AV1 encoder
+# out. ImageOutputFormat::Heif then reports EncoderUnavailable. ~keep
 RUN cd /tmp && \
     export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig && \
     curl -fsSL -o libheif.tar.gz https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz && \
     echo "f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475  libheif.tar.gz" | sha256sum -c - && \
     tar -xzf libheif.tar.gz && \
     cd libheif-1.23.7 && \
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF -DBUILD_TESTING=OFF && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib \
+        -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF -DWITH_X265=OFF -DWITH_X264=OFF -DWITH_AOM_ENCODER=OFF -DBUILD_TESTING=OFF && \
     cmake --build build -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}" && \
     cmake --install build && \
     ldconfig && \
@@ -196,7 +199,6 @@ RUN apt-get update && \
         tesseract-ocr-ara \
         tesseract-ocr-rus \
         tesseract-ocr-hin \
-        libx265-215 \
         libdav1d7 \
         && \
     apt-get clean && \
@@ -207,6 +209,7 @@ COPY --from=builder /usr/local/lib/libleptonica.so* /usr/local/lib/
 COPY --from=builder /usr/local/bin/tesseract /usr/local/bin/tesseract
 COPY --from=builder /usr/local/share/licenses/xberg-system-ocr /usr/local/share/licenses/xberg-system-ocr
 COPY scripts/ci/install-system-deps/verify-ocr-linux.py scripts/ci/install-system-deps/verify-ocr-fixture.sh /opt/xberg-ocr/
+COPY scripts/ci/verify_no_gpl_codecs.py /opt/xberg-release/verify_no_gpl_codecs.py
 COPY --from=builder /usr/local/lib/libheif* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libde265.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libaom.so* /usr/local/lib/
@@ -215,6 +218,8 @@ COPY --from=builder /usr/local/lib/pkgconfig/libheif.pc /usr/local/lib/pkgconfig
 # libc.conf (/usr/local/lib), so without a 00- entry the distro Leptonica from the tesseract-ocr
 # package wins on arm64 and Tesseract loads it instead of the built one.
 RUN echo /usr/local/lib >/etc/ld.so.conf.d/00-xberg-ocr.conf && ldconfig && \
+    test -f /usr/local/lib/libheif.so.1 && \
+    python3 /opt/xberg-release/verify_no_gpl_codecs.py --min-artifacts 1 /usr/local/lib && \
     python3 /opt/xberg-ocr/verify-ocr-linux.py /usr/local && \
     tesseract --version >/tmp/ocr-version 2>&1 && grep -q '^tesseract 5\.5\.4$' /tmp/ocr-version && \
     tesseract --list-langs >/tmp/ocr-languages && grep -qx eng /tmp/ocr-languages && \

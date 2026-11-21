@@ -10,10 +10,17 @@ on:
       - ".github/actions/setup-onnx-runtime/**"
       - "scripts/ci/actions/setup-onnx-runtime/**"
       - "crates/**"
+      - "packages/**"
       - "fixtures/**"
       - "vendored/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
+      # cargo-deny merges these even when --config is passed; a commit here changes the policy. ~keep
+      - "deny.exceptions.toml"
+      - ".deny.exceptions.toml"
+      - ".config/deny.exceptions.toml"
+      - "scripts/ci/check-licenses.sh"
       - "rust-toolchain.toml"
       - "mise.toml"
       - "mise.lock"
@@ -30,10 +37,17 @@ on:
       - ".github/actions/setup-onnx-runtime/**"
       - "scripts/ci/actions/setup-onnx-runtime/**"
       - "crates/**"
+      - "packages/**"
       - "fixtures/**"
       - "vendored/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
+      # cargo-deny merges these even when --config is passed; a commit here changes the policy. ~keep
+      - "deny.exceptions.toml"
+      - ".deny.exceptions.toml"
+      - ".config/deny.exceptions.toml"
+      - "scripts/ci/check-licenses.sh"
       - "rust-toolchain.toml"
       - "mise.toml"
       - "mise.lock"
@@ -110,6 +124,32 @@ jobs:
           set -euo pipefail
           export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
           mise run python:callback:smoke
+
+  licenses:
+    if: >-
+      ${{ github.repository == 'xberg-io/xberg' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           (github.event_name == 'workflow_dispatch') ||
+           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
+    name: Shipped license graphs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Setup Rust for cargo metadata
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          disable-cache: "true"
+          use-sccache: "false"
+          install-llvm-cov: "false"
+      - name: Install cargo-deny
+        uses: xberg-io/actions/setup-mise@v1
+        with:
+          install-args: cargo-deny
+      - name: Check every shipped graph against deny.toml
+        run: mise run rust:check:licenses
 
   regressions:
     if: >-

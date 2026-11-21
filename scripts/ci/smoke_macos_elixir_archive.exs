@@ -80,7 +80,13 @@ defmodule MacosElixirArchiveSmoke do
     count = length(members)
     @member_count = count
 
-    for name <- ["LICENSE", "THIRD_PARTY_LICENSES.md", "sources.tsv", "notices.sha256"] do
+    for name <- [
+          "LICENSE",
+          "THIRD_PARTY_LICENSES.md",
+          "GPL-SOURCE-OFFER.txt",
+          "sources.tsv",
+          "notices.sha256"
+        ] do
       true = name in members
     end
 

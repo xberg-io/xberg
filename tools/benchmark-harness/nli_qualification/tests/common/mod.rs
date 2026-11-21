@@ -11,6 +11,15 @@ pub fn plan_value() -> Value {
     ]
     .map(|name| format!("{}  {name}\n", "a".repeat(64)))
     .concat();
+    let sizes = [
+        "model.onnx",
+        "tokenizer.json",
+        "config.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+    ]
+    .map(|name| format!("1  {name}\n"))
+    .concat();
     json!({
         "schema_version": 1, "qualified": false, "expected_inferences": 4, "repeats": 2,
         "labels": ["science", "finance"], "arms": ["fp32"],
@@ -29,6 +38,7 @@ pub fn plan_value() -> Value {
             "license_receipt_sha256": "3".repeat(64),
             "config": {"model": {"repository": "owner/nli", "revision": "4".repeat(40),
                 "model_file": "model.onnx", "external_files": [], "sha256_manifest": manifest,
+                "size_manifest": sizes,
                 "output_name": "logits", "entailment_index": 2, "contradiction_index": 0},
                 "hypothesis_template": "This text is about {label}.", "multi_label": false,
                 "confidence_threshold": 0.75, "cache_directory": null}

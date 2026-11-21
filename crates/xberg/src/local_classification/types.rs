@@ -20,6 +20,11 @@ pub struct LocalNliModel {
     pub external_files: Vec<String>,
     /// SHA-256 manifest covering the graph and all tokenizer/configuration assets.
     pub sha256_manifest: String,
+    /// `<size in bytes>  <repo-relative path>` lines covering exactly the same artifacts as
+    /// [`Self::sha256_manifest`]. Every pin must declare its exact size; a truncated or extended
+    /// file fails before its bytes are read.
+    #[serde(default)]
+    pub size_manifest: String,
     /// Name of the three-way NLI logits output.
     pub output_name: String,
     /// Index of entailment in the three-way logits.
