@@ -442,6 +442,10 @@ exclude = [
   # adrlint owns ADR Markdown with its own rumdl config and content-hash lock; poly would
   # double-report and its lock-unaware formatter would break locks. ~keep
   "/adrs/**",
+  # The third-party notice bundle is generated from the dependency graph and pinned sources by
+  # scripts/ci/generate-notices.py; a lint or format rewrite of an embedded license text would
+  # change the bytes its digest is checked against. `mise run notices:check` is its gate. ~keep
+  "/THIRD_PARTY_LICENSES.md",
 ]
 
 # Appended only to poly's `file_safety` builtin hook. swift-bridge emits its
@@ -462,6 +466,9 @@ file-safety-exclude = [
   # on the 1.1.4 regen and api-c.md is 12 KiB behind it. Generator output, not a size
   # regression. ~keep
   "docs-site/src/content/docs/reference/api-*.md",
+  # The generated third-party notice bundle carries one copy of every distinct license text the
+  # shipped graphs resolve; its size tracks the dependency count, not a hand-written regression. ~keep
+  "THIRD_PARTY_LICENSES.md",
 ]
 
 # Opt-in comment-removal sweep. Preserve doc comments (rustdoc is required on

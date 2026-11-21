@@ -267,6 +267,16 @@ install() {
   cp "$binary_path" "${install_dir}/${BINARY_NAME}"
   chmod +x "${install_dir}/${BINARY_NAME}"
 
+  # The archives carry the generated license bundle beside the binary; a redistributed copy
+  # needs it, so install it alongside. Older releases predate the bundle. ~keep
+  local notice
+  for notice in LICENSE THIRD_PARTY_LICENSES.md; do
+    if [ -f "${stage_dir}/${notice}" ]; then
+      cp "${stage_dir}/${notice}" "${install_dir}/${notice}"
+      info "Installed ${notice} to ${install_dir}/${notice}"
+    fi
+  done
+
   if version_output="$("${install_dir}/${BINARY_NAME}" --version 2>&1)"; then
     info "Installed ${BINARY_NAME} to ${install_dir}/${BINARY_NAME}"
     info "Verified: ${version_output}"

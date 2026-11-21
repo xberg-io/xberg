@@ -313,7 +313,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Xberg document intelligence - ${{ matrix.variant }} variant
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=${{ matrix.variant == 'cli' && 'MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0' || 'MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0 AND Apache-2.0' }}
           outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
 

@@ -121,7 +121,11 @@ COPY --from=builder /build/pdfium/lib/libpdfium.so /usr/local/lib/
 
 LABEL org.opencontainers.image.source="https://github.com/xberg-io/xberg"
 LABEL org.opencontainers.image.description="Xberg document intelligence - CLI variant"
-LABEL org.opencontainers.image.licenses="MIT"
+# The image bundles libheif/libde265 (LGPL-3.0-or-later), libaom/libdav1d and
+# PDFium (BSD-2/3-Clause) and statically linked libwpd/librevenge (MPL-2.0); the
+# core/full images also carry the statically built Tesseract (Apache-2.0). No image
+# ships GPL code: x265 is compiled out everywhere (#3340). ~keep
+LABEL org.opencontainers.image.licenses="MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0"
 
 ARG XBERG_BUILD_ID
 
