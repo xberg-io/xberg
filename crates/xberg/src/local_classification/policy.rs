@@ -97,6 +97,7 @@ fn validate_descriptor_lengths(model: &LocalNliModel) -> crate::Result<()> {
         || model.model_file.len() > MAX_ARTIFACT_PATH_BYTES
         || model.output_name.len() > MAX_OUTPUT_NAME_BYTES
         || model.sha256_manifest.len() > MAX_MANIFEST_BYTES
+        || model.size_manifest.len() > MAX_MANIFEST_BYTES
         || model.external_files.len() > MAX_EXTERNAL_FILES
         || model
             .external_files
@@ -151,6 +152,7 @@ pub(super) fn model_identity(config: &LocalClassificationConfig) -> String {
         &model.revision,
         &model.model_file,
         &model.sha256_manifest,
+        &model.size_manifest,
         &model.output_name,
     ] {
         hash.update((value.len() as u64).to_le_bytes());

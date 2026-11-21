@@ -67,6 +67,7 @@ fn graph_relative_files(model: &LocalNliModel) -> crate::Result<Vec<(String, Str
 struct Pin {
     path: String,
     sha256: String,
+    size_bytes: u64,
 }
 
 #[derive(Debug)]
@@ -83,22 +84,22 @@ impl ArtifactInventory {
 
     pub(super) fn new(model: &LocalNliModel) -> crate::Result<Self> {
         let external_names = graph_relative_files(model)?;
-        let mut pins: std::collections::BTreeMap<_, _> =
-            crate::model_download::parse_sha256_manifest(&model.sha256_manifest)
-                .map_err(invalid)?
-                .into_iter()
-                .collect();
-        let graph = take_pin(&mut pins, &model.model_file)?;
+        let mut pins: PinMap = crate::model_download::parse_sha256_manifest(&model.sha256_manifest)
+            .map_err(invalid)?
+            .into_iter()
+            .collect();
+        let mut sizes = parse_size_manifest(&model.size_manifest)?;
+        let graph = take_pin(&mut pins, &mut sizes, &model.model_file)?;
         let external = external_names
             .into_iter()
-            .map(|(remote, binding)| Ok((binding, take_pin(&mut pins, &remote)?)))
+            .map(|(remote, binding)| Ok((binding, take_pin(&mut pins, &mut sizes, &remote)?)))
             .collect::<crate::Result<Vec<_>>>()?;
         let mut companions = Vec::with_capacity(COMPANIONS.len());
         for name in COMPANIONS {
             let path = companion_path(&pins, &model.model_file, name)?;
-            companions.push(take_pin(&mut pins, &path)?);
+            companions.push(take_pin(&mut pins, &mut sizes, &path)?);
         }
-        if !pins.is_empty() {
+        if !pins.is_empty() || !sizes.is_empty() {
             return Err(invalid("Local NLI manifest lists unexpected artifacts"));
         }
         let companions = companions
@@ -113,14 +114,47 @@ impl ArtifactInventory {
 }
 
 type PinMap = std::collections::BTreeMap<String, String>;
+type SizeMap = std::collections::BTreeMap<String, u64>;
 
-fn take_pin(pins: &mut PinMap, path: &str) -> crate::Result<Pin> {
+/// Parses `<size in bytes>  <repo-relative path>` lines. Sizes are mandatory for every pin and
+/// must be positive and unique.
+fn parse_size_manifest(content: &str) -> crate::Result<SizeMap> {
+    let mut sizes = SizeMap::new();
+    for (index, line) in content.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (size, path) = line
+            .split_once("  ")
+            .ok_or_else(|| invalid(format!("Local NLI size manifest line {} is malformed", index + 1)))?;
+        let size_bytes = size
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .filter(|size| *size > 0)
+            .ok_or_else(|| invalid(format!("Local NLI size manifest line {} has no byte size", index + 1)))?;
+        if path.is_empty() || sizes.insert(path.to_owned(), size_bytes).is_some() {
+            return Err(invalid(format!(
+                "Local NLI size manifest line {} has an empty or duplicate path",
+                index + 1
+            )));
+        }
+    }
+    Ok(sizes)
+}
+
+fn take_pin(pins: &mut PinMap, sizes: &mut SizeMap, path: &str) -> crate::Result<Pin> {
     let sha256 = pins
         .remove(path)
         .ok_or_else(|| invalid(format!("Local NLI artifact lacks a pin: {path}")))?;
+    let size_bytes = sizes
+        .remove(path)
+        .ok_or_else(|| invalid(format!("Local NLI artifact lacks a size pin: {path}")))?;
     Ok(Pin {
         path: path.to_owned(),
         sha256,
+        size_bytes,
     })
 }
 
@@ -150,14 +184,25 @@ impl ArtifactBudget {
     }
 }
 
+pub(super) struct ArtifactExpectation<'a> {
+    pub remote: &'a str,
+    pub sha256: &'a str,
+    pub size_bytes: u64,
+    pub max_bytes: usize,
+}
+
 pub(super) fn read_verified(
     input_path: &Path,
-    remote: &str,
-    checksum: &str,
+    expectation: &ArtifactExpectation<'_>,
     cache_root: &Path,
-    max_bytes: usize,
     budget: &mut ArtifactBudget,
 ) -> crate::Result<Vec<u8>> {
+    let ArtifactExpectation {
+        remote,
+        sha256: checksum,
+        size_bytes: expected_size,
+        max_bytes,
+    } = *expectation;
     let path = canonical_in_cache(input_path, cache_root)?;
     let mut file = open_file(&path, remote)?;
     let initial = file.metadata().map_err(|error| read_error(remote, error))?;
@@ -172,6 +217,11 @@ pub(super) fn read_verified(
                 "Local NLI asset is empty or exceeds the remaining artifact byte limit: {remote}"
             ))
         })?;
+    if length as u64 != expected_size {
+        return Err(invalid(format!(
+            "Local NLI artifact size mismatch: {remote} (expected {expected_size} bytes, got {length})"
+        )));
+    }
     let bytes = read_exact_snapshot(&mut file, length, remote)?;
     let after = file.metadata().map_err(|error| read_error(remote, error))?;
     let current_path = canonical_in_cache(input_path, cache_root)?;
@@ -276,7 +326,13 @@ impl CachedReader<'_> {
                 self.model.repository, self.model.revision, pin.path,
             ))
         })?;
-        let bytes = read_verified(&path, &pin.path, &pin.sha256, &self.root, max_bytes, &mut self.budget)?;
+        let expectation = ArtifactExpectation {
+            remote: &pin.path,
+            sha256: &pin.sha256,
+            size_bytes: pin.size_bytes,
+            max_bytes,
+        };
+        let bytes = read_verified(&path, &expectation, &self.root, &mut self.budget)?;
         self.control.check()?;
         Ok(bytes)
     }

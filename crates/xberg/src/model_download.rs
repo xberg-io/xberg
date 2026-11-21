@@ -1655,18 +1655,6 @@ pub(crate) fn vendored_model_manifests() -> Vec<(&'static str, &'static str)> {
     ))]
     manifests.push(("reranking", crate::reranking::RERANKER_SHA256_MANIFEST));
 
-    #[cfg(feature = "onnx-runtime")]
-    {
-        manifests.push((
-            "candidate_classification",
-            crate::candidate_models::CLASSIFICATION_SHA256_MANIFEST,
-        ));
-        manifests.push((
-            "candidate_captioning",
-            crate::candidate_models::CAPTIONING_SHA256_MANIFEST,
-        ));
-    }
-
     #[cfg(feature = "ner-onnx")]
     manifests.push(("gliner", crate::text::ner::gline::GLINER_SHA256_MANIFEST));
 

@@ -84,6 +84,7 @@ fn portable_admission_agrees_with_sdk_constructor_on_edge_configurations() {
         let mut plan = common::plan();
         let model = &mut plan.candidates[0].variants.get_mut("fp32").unwrap().config.model;
         model.sha256_manifest = model.sha256_manifest.replace("model.onnx", path);
+        model.size_manifest = model.size_manifest.replace("model.onnx", path);
         model.model_file = path.into();
         plan.validate_portable().unwrap();
         LocalTextClassifier::new(plan.candidates[0].variants["fp32"].config.clone())
