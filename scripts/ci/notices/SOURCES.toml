@@ -391,6 +391,7 @@ sha256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
 [[offer]]
 path = "GPL-SOURCE-OFFER.txt"
 sha256 = "c6d80161d64afb8087f25c41650d2b21b578e2698739af21b7c30681c33d2202"
+shipped_as = "GPL-SOURCE-OFFER.txt"
 channels = ["elixir-macos-arm64"]
 
 [[vcpkg]]

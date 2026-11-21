@@ -244,7 +244,6 @@ VCPKG_PORTS = {
     "libaom": ("aom", "aom"),
     "libdav1d": ("dav1d", "dav1d"),
 }
-OFFER_CHANNELS = (("windows", "windows-cli"), ("elixir", "elixir-macos-arm64"))
 
 
 def vendor_vcpkg(root: Path, cache: Path) -> tuple[str, list[tuple[str, str, str, str, list[str]]]]:
@@ -292,15 +291,12 @@ def download_text(url: str, destination: Path) -> str:
     return destination.read_text(encoding="utf-8")
 
 
-def discover_offers(root: Path) -> list[tuple[str, str, list[str]]]:
+def discover_offers(root: Path) -> list[tuple[str, str, list[str], str]]:
     """Find written source offers and the channels whose artifacts their text names."""
-    offers = []
-    for path in sorted(root.glob("GPL-SOURCE-OFFER*.txt")):
-        text = path.read_text(encoding="utf-8").lower()
-        channels = [channel for marker, channel in OFFER_CHANNELS if marker in text]
-        digest = sources.digest(path)
-        offers.append((path.relative_to(root).as_posix(), digest, channels))
-    return offers
+    return [
+        (path.relative_to(root).as_posix(), sources.digest(path), channels, shipped_as)
+        for path, shipped_as, channels in sources.discover_offer_files(root)
+    ]
 
 
 def toml_array(key: str, values: list[str]) -> list[str]:
@@ -374,12 +370,13 @@ def component_rows(root: Path, spec: Spec, pins: list[sources.Pin], cache: Path)
 def release_rows(root: Path, cache: Path, vendored_spdx: dict[str, tuple[str, str]]) -> list[str]:
     """Render the offers, vcpkg ports and SPDX texts the generator also consumes."""
     rows: list[str] = []
-    for path, digest, channels in discover_offers(root):
+    for path, digest, channels, shipped_as in discover_offers(root):
         rows.extend(
             [
                 "[[offer]]",
                 f"path = {toml_value(path)}",
                 f"sha256 = {toml_value(digest)}",
+                f"shipped_as = {toml_value(shipped_as)}",
                 *toml_array("channels", channels),
                 "",
             ]

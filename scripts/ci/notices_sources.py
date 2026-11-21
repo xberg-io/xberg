@@ -148,6 +148,7 @@ class Offer:
     path: str
     sha256: str
     channels: tuple[str, ...]
+    shipped_as: str = ""
 
 
 @dataclass
@@ -175,10 +176,22 @@ class BuildInputs:
         """Distinct pinned versions for a component, ordered oldest to newest."""
         return sorted({pin.version for pin in self.pins.get(component, [])}, key=version_key)
 
-    def upstream_url(self, component: str) -> str:
-        """The first pinned release URL for a component (all of them for a source build)."""
-        urls = sorted({pin.url for pin in self.pins.get(component, []) if pin.url})
-        return urls[0] if urls else ""
+    def pin(self, component: str, version: str) -> Pin:
+        """The single pin a channel builds, proving version, URL and digest belong together."""
+        candidates = self.pins.get(component, [])
+        matches = [pin for pin in candidates if pin.version == version]
+        if not matches:
+            raise ValueError(f"no {component} pin at version {version}; the channel requires it")
+        unique = {(pin.url, pin.sha256) for pin in matches}
+        if len(unique) != 1:
+            raise ValueError(f"{component} {version} has {len(unique)} distinct pins; cannot pick one")
+        pin = matches[0]
+        # Every release URL for this component names its version; a URL that names a different
+        # version is a swapped pin, not provenance for this one. ~keep
+        versioned = [other for other in candidates if other.url and other.version in other.url]
+        if versioned and pin.url and version not in pin.url:
+            raise ValueError(f"{component} {version} is pinned to a URL naming another release: {pin.url}")
+        return pin
 
     def channel(self, channel_id: str) -> Channel:
         """Look up a channel by id."""
@@ -682,6 +695,32 @@ def load_offers(root: Path) -> list[Offer]:
     path = root / NOTICES_DIR / MANIFEST_NAME
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     return [Offer(row["path"], row["sha256"], tuple(row.get("channels") or [])) for row in data.get("offer") or []]
+
+
+OFFER_MARKERS = (
+    (("windows", "win-x64", "win64", "x86_64-pc-windows"), "windows-cli"),
+    (("elixir", "nif", "macos"), "elixir-macos-arm64"),
+)
+
+
+def offer_channels(text: str) -> list[str]:
+    """Read which artifact an offer names from its own text."""
+    lowered = text.lower()
+    return sorted({channel for markers, channel in OFFER_MARKERS if any(marker in lowered for marker in markers)})
+
+
+def discover_offer_files(root: Path) -> list[tuple[Path, str, list[str]]]:
+    """Find every written offer in the repository, including offer sources not staged at the root."""
+    candidates = sorted(root.glob("GPL-SOURCE-OFFER*.txt"))
+    candidates.extend(sorted((root / NOTICES_DIR).glob("GPL-SOURCE-OFFER*.txt")))
+    offers = []
+    for path in candidates:
+        channels = offer_channels(path.read_text(encoding="utf-8"))
+        if not channels:
+            raise ValueError(f"{path} is a written offer but names no known artifact")
+        shipped_as = path.name if path.parent == root else "GPL-SOURCE-OFFER.txt"
+        offers.append((path, "GPL-SOURCE-OFFER.txt" if path.parent != root else shipped_as, channels))
+    return offers
 
 
 def assert_offers(root: Path, inputs: BuildInputs, offers: list[Offer]) -> None:

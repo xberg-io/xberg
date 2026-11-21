@@ -223,6 +223,36 @@ class NoticeBundleTest(unittest.TestCase):
         components = notices_sources.load_manifest(self.fixture.root)
         assert_raises("matches no build input", lambda: notices_sources.resolve_texts(inputs, components))
 
+    def test_corresponding_source_pairs_the_required_version_with_its_own_url(self) -> None:
+        inputs = notices_sources.BuildInputs(
+            pins={
+                "widget": [
+                    notices_sources.Pin(
+                        "widget", "1.2.3", "a" * 64, "https://example.invalid/widget-1.2.3.tar.gz", "decode"
+                    ),
+                    notices_sources.Pin(
+                        "widget", "1.3.0", "b" * 64, "https://example.invalid/widget-1.3.0.tar.gz", "encoders"
+                    ),
+                ]
+            },
+            channels=[
+                notices_sources.Channel(
+                    "elixir-macos-arm64",
+                    "demo-archive",
+                    "upstream-tarball",
+                    ("widget",),
+                    "scripts/build.sh",
+                    "1.0.0",
+                    False,
+                )
+            ],
+        )
+        bundle = generate_notices.Bundle(inputs, {}, {}, [], [], {}, [], "", "", None)
+        table = generate_notices.corresponding_source(bundle)
+        assert "widget 1.3.0" in table
+        assert "widget-1.3.0.tar.gz" in table
+        assert "widget-1.2.3.tar.gz" not in table
+
     def test_renders_corresponding_source_and_written_offer(self) -> None:
         content = self.fixture.render()
         assert "## Corresponding Source" in content
@@ -230,6 +260,8 @@ class NoticeBundleTest(unittest.TestCase):
         assert "fix-build.patch" in content
         assert "GPL-SOURCE-OFFER.txt" in content
         assert "windows-cli" in content
+        # A channel with an offer file must reference it, not duplicate it inline. ~keep
+        assert "Xberg offers, valid for" not in content
 
     def test_check_fails_when_the_source_section_is_removed(self) -> None:
         content = self.fixture.render()
@@ -246,6 +278,28 @@ class NoticeBundleTest(unittest.TestCase):
             content.replace("| [`GPL-SOURCE-OFFER.txt`](GPL-SOURCE-OFFER.txt) | windows-cli |", "").encode()
         )
         assert_raises("stale", lambda: generate_notices.check(self.fixture.root, self.fixture.render()))
+
+    def test_an_offer_source_shipped_under_the_staged_name_is_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            notices = root / "scripts/ci/notices"
+            notices.mkdir(parents=True)
+            (notices / "GPL-SOURCE-OFFER-windows-heif.txt").write_text(
+                "Xberg - Written Offer of Corresponding Source\nWindows x86_64 CLI archive\n\n"
+                "valid for three years. contact@xberg.io\n"
+            )
+            discovered = notices_sources.discover_offer_files(root)
+            assert len(discovered) == 1
+            path, shipped_as, channels = discovered[0]
+            assert path.name == "GPL-SOURCE-OFFER-windows-heif.txt"
+            assert shipped_as == "GPL-SOURCE-OFFER.txt"
+            assert channels == ["windows-cli"]
+
+    def test_an_uncovered_patched_channel_gets_an_inline_offer(self) -> None:
+        manifest = self.fixture.root / "scripts/ci/notices/SOURCES.toml"
+        text = manifest.read_text().replace('channels = ["windows-cli"]', "channels = []")
+        manifest.write_text(text)
+        assert "Xberg offers, valid for" in self.fixture.render()
 
     def test_a_patched_channel_without_any_offer_fails(self) -> None:
         manifest = self.fixture.root / "scripts/ci/notices/SOURCES.toml"
@@ -272,6 +326,47 @@ class BuildInputTest(unittest.TestCase):
 
     def test_libaom_tracks_both_pinned_profiles(self) -> None:
         assert len(self.inputs.versions("libaom")) >= 2
+
+    def test_each_pinned_version_keeps_its_own_url(self) -> None:
+        for version in ("3.15.2", "3.15.3"):
+            pin = self.inputs.pin("libaom", version)
+            assert pin.url.endswith(f"libaom-{version}.tar.gz"), pin.url
+            assert pin.sha256
+
+    def test_a_swapped_release_url_is_rejected(self) -> None:
+        pins = [
+            notices_sources.Pin("widget", "1.2.3", "a" * 64, "https://example.invalid/widget-1.2.3.tar.gz", "test"),
+            notices_sources.Pin("widget", "1.3.0", "a" * 64, "https://example.invalid/widget-1.2.3.tar.gz", "test"),
+        ]
+        inputs = notices_sources.BuildInputs(pins={"widget": pins})
+        assert_raises("URL naming another release", lambda: inputs.pin("widget", "1.3.0"))
+
+    def test_a_missing_pin_version_is_rejected(self) -> None:
+        inputs = notices_sources.BuildInputs(
+            pins={
+                "widget": [
+                    notices_sources.Pin(
+                        "widget", "1.2.3", "a" * 64, "https://example.invalid/widget-1.2.3.tar.gz", "test"
+                    )
+                ]
+            }
+        )
+        assert_raises("no widget pin at version 1.3.0", lambda: inputs.pin("widget", "1.3.0"))
+
+    def test_an_ambiguous_pin_version_is_rejected(self) -> None:
+        inputs = notices_sources.BuildInputs(
+            pins={
+                "widget": [
+                    notices_sources.Pin(
+                        "widget", "1.3.0", "a" * 64, "https://example.invalid/widget-1.3.0.tar.gz", "one"
+                    ),
+                    notices_sources.Pin(
+                        "widget", "1.3.0", "b" * 64, "https://other.invalid/widget-1.3.0.tar.gz", "two"
+                    ),
+                ]
+            }
+        )
+        assert_raises("distinct pins", lambda: inputs.pin("widget", "1.3.0"))
 
     def test_every_input_has_a_vendored_manifest_row(self) -> None:
         components = notices_sources.load_manifest(ROOT)

@@ -269,19 +269,26 @@ def build_description(bundle: Bundle, channel: sources.Channel) -> str:
 
 
 def corresponding_source(bundle: Bundle) -> str:
-    """Build the per-channel Corresponding Source table."""
+    """Build the per-channel Corresponding Source table.
+
+    Each cell resolves one version and then that version's own pin or port, so the version,
+    URL and digest always describe the same release.
+    """
     rows = ["| Artifact | Copyleft components | Build and patches | Upstream source |", "| --- | --- | --- | --- |"]
     for channel in sorted(bundle.inputs.channels, key=lambda item: item.id):
+        versions = channel_versions(bundle, channel)
         sources = []
         for component in channel.components:
             port_name = PORT_NAMES.get(component, component)
             port = None
             if channel.build == "vcpkg-port" and bundle.vcpkg is not None:
                 port = next((item for item in bundle.vcpkg.ports if item.name == port_name), None)
-            url = port.source if port else bundle.inputs.upstream_url(component)
-            digest = f" ({port.digest})" if port and port.digest else ""
-            if url:
-                sources.append(f"{component}: <{url}>{digest}")
+            if port is not None:
+                digest = f" ({port.digest})" if port.digest else ""
+                sources.append(f"{component}: <{port.source}>{digest}")
+                continue
+            pin = bundle.inputs.pin(component, versions[component])
+            sources.append(f"{component}: <{pin.url}> (sha256 {pin.sha256})")
         rows.append(
             f"| {channel.artifact} | {component_versions(bundle, channel)} | "
             f"{build_description(bundle, channel)} | {'; '.join(sources) or '—'} |"
@@ -313,7 +320,13 @@ def written_offers(bundle: Bundle) -> str:
     if bundle.offers:
         rows = ["| Offer | Covers |", "| --- | --- |"]
         for offer in sorted(bundle.offers, key=lambda item: item.path):
-            rows.append(f"| [`{offer.path}`]({offer.path}) | {', '.join(offer.channels)} |")
+            basename = offer.path.rsplit("/", 1)[-1]
+            shipped = (
+                f" (shipped in the archive as `{offer.shipped_as}`)"
+                if offer.shipped_as and offer.shipped_as != basename
+                else ""
+            )
+            rows.append(f"| [`{offer.path}`]({offer.path}){shipped} | {', '.join(offer.channels)} |")
             covered.update(offer.channels)
         parts.append("\n".join(rows))
     for channel in sorted(bundle.inputs.channels, key=lambda item: item.id):
