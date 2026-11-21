@@ -1,0 +1,270 @@
+{
+  "header_roles": {
+    "grid": {
+      "cells": [
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "Region",
+          "is_header": true,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "Code",
+          "is_header": true,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "Rate",
+          "is_header": true,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "Note",
+          "is_header": true,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "North",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "A1",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "0.924",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "base",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "East",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "B2",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "0.930",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "peak",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        }
+      ],
+      "cols": 4,
+      "rows": 3
+    },
+    "table": {
+      "cells": [
+        [
+          "Region",
+          "Code",
+          "Rate",
+          "Note"
+        ],
+        [
+          "North",
+          "A1",
+          "0.924",
+          "base"
+        ],
+        [
+          "East",
+          "B2",
+          "0.930",
+          "peak"
+        ]
+      ],
+      "columns": [
+        "Region",
+        "Code",
+        "Rate",
+        "Note"
+      ],
+      "markdown": "",
+      "page_number": 1
+    }
+  },
+  "no_header_roles": {
+    "grid": {
+      "cells": [
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "Region",
+          "is_header": false,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "Code",
+          "is_header": false,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "Rate",
+          "is_header": false,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "Note",
+          "is_header": false,
+          "row": 0,
+          "row_span": 1
+        },
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "North",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "A1",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "0.924",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "base",
+          "is_header": false,
+          "row": 1,
+          "row_span": 1
+        },
+        {
+          "col": 0,
+          "col_span": 1,
+          "content": "East",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 1,
+          "col_span": 1,
+          "content": "B2",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 2,
+          "col_span": 1,
+          "content": "0.930",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        },
+        {
+          "col": 3,
+          "col_span": 1,
+          "content": "peak",
+          "is_header": false,
+          "row": 2,
+          "row_span": 1
+        }
+      ],
+      "cols": 4,
+      "rows": 3
+    },
+    "table": {
+      "cells": [
+        [
+          "Region",
+          "Code",
+          "Rate",
+          "Note"
+        ],
+        [
+          "North",
+          "A1",
+          "0.924",
+          "base"
+        ],
+        [
+          "East",
+          "B2",
+          "0.930",
+          "peak"
+        ]
+      ],
+      "columns": [
+        "Region",
+        "Code",
+        "Rate",
+        "Note"
+      ],
+      "markdown": "",
+      "page_number": 1
+    }
+  }
+}

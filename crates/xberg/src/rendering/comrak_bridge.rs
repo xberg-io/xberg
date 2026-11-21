@@ -1085,27 +1085,38 @@ fn build_retained_grid_html<'a>(
 
 /// Number of leading rows that may close a `<thead>`.
 ///
-/// A row group can only end between rows that no merge crosses, so the leading run of rows whose
-/// cells are all header roles stops before the first row whose header cell spans further down, or
-/// before the first data cell. A source can declare header cells anywhere (a row header in a body
-/// row, several header tiers under a title), and a row group cannot express that shape, so those
-/// cells keep their `<th>` role inside `<tbody>` instead of losing it to a guessed group split.
+/// The leading run of rows whose *covering* cells are all header roles is a header group. A merge
+/// inside that run stays inside the group, so an upper tier may span down over the tier below it.
+/// The run stops at the first row that also carries a data cell, and a header merge that reaches
+/// into that row cannot be expressed by a row group: the group then stops before the merge's anchor
+/// row, and those cells keep their `<th>` role inside `<tbody>` rather than being guessed into one.
+/// A source can declare header cells anywhere (a row header in a body row, several header tiers
+/// under a title), and a row group cannot express that shape.
 fn closed_header_rows(grid: &crate::types::TableGrid) -> u32 {
     let mut header_rows = 0;
     for row in 0..grid.rows {
         let mut saw_cell = false;
-        let mut spans_past_row = false;
-        for cell in grid.cells.iter().filter(|cell| cell.row == row) {
-            if !cell.is_header {
-                return header_rows;
-            }
+        let mut all_header = true;
+        for cell in grid
+            .cells
+            .iter()
+            .filter(|cell| cell.row <= row && row < cell.row + cell.row_span)
+        {
             saw_cell = true;
-            spans_past_row |= cell.row_span > 1;
+            all_header &= cell.is_header;
         }
-        if !saw_cell || spans_past_row {
-            return header_rows;
+        if !saw_cell || !all_header {
+            break;
         }
         header_rows = row + 1;
+    }
+    while header_rows > 0
+        && grid
+            .cells
+            .iter()
+            .any(|cell| cell.is_header && cell.row < header_rows && cell.row + cell.row_span > header_rows)
+    {
+        header_rows -= 1;
     }
     header_rows
 }
@@ -1474,10 +1485,30 @@ fn build_comrak_ast_with_table_mode<'a>(
                         });
                     #[cfg(not(feature = "pdf"))]
                     let headerless_pdf = false;
-                    let has_header = table.has_header_row()
-                        || (table_mode == TableRenderMode::Markdown
-                            && !headerless_pdf
-                            && !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst"));
+                    // A retained grid records the source's per-cell role, so where it exists and
+                    // still describes this table it decides the header row; `columns` is only the
+                    // dense projection of the same fact, and a producer may fill it without marking
+                    // any header role.
+                    let retained_header_row = (table_mode == TableRenderMode::Markdown)
+                        .then(|| crate::types::document_structure::decode_retained_grid(elem_attributes))
+                        .flatten()
+                        .filter(|grid| {
+                            crate::extraction::derive::validated_table_grid_occupancy(table, grid).is_some()
+                                && grid.cells.iter().any(|cell| cell.row == 0)
+                        })
+                        .map(|grid| grid.cells.iter().any(|cell| cell.row == 0 && cell.is_header));
+                    // GFM needs a header row, so a table whose source proved there is none gets an
+                    // empty synthetic one. Promoting the first data row instead would claim a header
+                    // the source does not have.
+                    let has_header = match retained_header_row {
+                        Some(header) => header,
+                        None => {
+                            table.has_header_row()
+                                || (table_mode == TableRenderMode::Markdown
+                                    && !headerless_pdf
+                                    && !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst"))
+                        }
+                    };
                     match build_table(arena, &table.cells, has_header, elem_attributes, table_mode) {
                         Some(table_node) => {
                             tracing::trace!(table_index, rows = table.cells.len(), "rendering table");
@@ -1901,6 +1932,23 @@ mod tests {
             ],
         };
         assert_eq!(closed_header_rows(&two_tiers), 2);
+
+        let two_tiers_with_an_upper_span = crate::types::TableGrid {
+            rows: 3,
+            cols: 2,
+            cells: vec![
+                grid_cell(0, 0, 2, 1, true),
+                grid_cell(0, 1, 1, 1, true),
+                grid_cell(1, 1, 1, 1, true),
+                grid_cell(2, 0, 1, 1, false),
+                grid_cell(2, 1, 1, 1, false),
+            ],
+        };
+        assert_eq!(
+            closed_header_rows(&two_tiers_with_an_upper_span),
+            2,
+            "an upper header tier may span over the header tier below it"
+        );
     }
 
     #[test]
