@@ -1185,6 +1185,11 @@ fn mixed_layer_lines_to_put_first(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(feature = "layout-detection")]
+type MixedPageDetection = crate::layout::DetectionResult;
+#[cfg(not(feature = "layout-detection"))]
+type MixedPageDetection = ();
+
 /// Whether the layer-occurrence map may be captured for a page. A scale-only geometry read is
 /// the only mapping `finish_layer_prepend` can trust, so any refusal leaves the map empty.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -2443,9 +2448,12 @@ impl MixedOcrContext<'_> {
             source: None,
         })?;
         let page_images = share_rendered_page_images(page_images);
+        // Rasters are released as each page task finishes; only an explicit capture keeps a
+        // second reference for the batch to encode afterwards.
+        let page_images_for_capture = self.capture_rasters.then(|| page_images.clone());
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         self.run_pipeline_pages_async(
-            &page_images,
+            page_images,
             pipeline,
             #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
             trial_pages,
@@ -2454,7 +2462,7 @@ impl MixedOcrContext<'_> {
         .await?;
         #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
         self.run_pipeline_pages_sequential(&page_images, pipeline).await?;
-        if self.capture_rasters {
+        if let Some(page_images) = page_images_for_capture {
             self.capture_pipeline_rasters(&page_images)?;
         }
         Ok(())
@@ -2587,7 +2595,7 @@ impl MixedOcrContext<'_> {
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     async fn run_pipeline_pages_async(
         &mut self,
-        page_images: &[(usize, std::sync::Arc<image::DynamicImage>)],
+        page_images: Vec<(usize, std::sync::Arc<image::DynamicImage>)>,
         pipeline: crate::core::config::OcrPipelineConfig,
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))] trial_pages: Vec<usize>,
         security_limits: &crate::extractors::security::SecurityLimits,
@@ -2598,8 +2606,6 @@ impl MixedOcrContext<'_> {
         let page_rotations = self.page_rotations.clone();
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let orientation_retry = self.orientation_retry.clone();
-        #[cfg(feature = "layout-detection")]
-        let layout_detections = self.layout_detections_for_mixed().map(<[_]>::to_vec);
         let capture_rasters = self.capture_rasters;
         let mixed_route_layout_active = self.mixed_route_layout_active;
         #[cfg(not(all(paddle_ocr, feature = "ocr")))]
@@ -2619,7 +2625,8 @@ impl MixedOcrContext<'_> {
         let spawn_page = |join_set: &mut tokio::task::JoinSet<PageTaskOutput>,
                           page_idx: usize,
                           image_arc: std::sync::Arc<image::DynamicImage>,
-                          hints: PageOcrHints| {
+                          hints: PageOcrHints,
+                          page_detection: Option<MixedPageDetection>| {
             let render_doc_clone = std::sync::Arc::clone(&render_doc);
             let pipeline_clone = pipeline.clone();
             let config_clone = stage_config.clone();
@@ -2649,16 +2656,6 @@ impl MixedOcrContext<'_> {
                 let image_height_px = image_arc.height();
                 (image_height_px > 0).then(|| page_height_pt / image_height_px as f32)
             };
-            // This page's own pixel-space detection from the whole-document layout
-            // pass above (#665), cloned out here because the spawned task below must
-            // own everything it captures. `extract_with_ocr_for_page` (reached through
-            // `run_ocr_pipeline_for_page`) rescales it to match this exact raster via
-            // `scale_detection_to_dimensions`/`scale_detection_to_ocr_coordinates`, so
-            // a DPI mismatch between the layout pass's own render and this page's OCR
-            // render is handled there, not here.
-            #[cfg(feature = "layout-detection")]
-            let page_detection: Option<crate::layout::DetectionResult> =
-                detection_for_mixed_route_page(layout_detections.as_deref(), page_idx).cloned();
             #[cfg(all(paddle_ocr, feature = "ocr"))]
             let allow_stored_retry = !capture_rasters
                 && !mixed_route_layout_active
@@ -2672,6 +2669,8 @@ impl MixedOcrContext<'_> {
                 }
                 #[cfg(feature = "layout-detection")]
                 let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
+                #[cfg(not(feature = "layout-detection"))]
+                let _ = page_detection;
                 let source = DetachedOcrPage {
                     document: render_doc_clone.as_ref(),
                     #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
@@ -2748,9 +2747,14 @@ impl MixedOcrContext<'_> {
                 if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     break;
                 }
-                pending_pages.insert(*page_idx);
-                let hints = self.hints_for_pipeline_page(*page_idx, self.raster_dpis.get(page_idx).copied());
-                spawn_page(&mut join_set, *page_idx, std::sync::Arc::clone(image_arc), hints);
+                pending_pages.insert(page_idx);
+                let hints = self.hints_for_pipeline_page(page_idx, self.raster_dpis.get(&page_idx).copied());
+                #[cfg(feature = "layout-detection")]
+                let page_detection =
+                    detection_for_mixed_route_page(self.layout_detections_for_mixed(), page_idx).cloned();
+                #[cfg(not(feature = "layout-detection"))]
+                let page_detection: Option<MixedPageDetection> = None;
+                spawn_page(&mut join_set, page_idx, image_arc, hints, page_detection);
             }
         }
 
@@ -2780,7 +2784,13 @@ impl MixedOcrContext<'_> {
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> OcrRunResult<()>
     where
-        F: Fn(&mut tokio::task::JoinSet<PageTaskOutput>, usize, std::sync::Arc<image::DynamicImage>, PageOcrHints),
+        F: Fn(
+            &mut tokio::task::JoinSet<PageTaskOutput>,
+            usize,
+            std::sync::Arc<image::DynamicImage>,
+            PageOcrHints,
+            Option<MixedPageDetection>,
+        ),
     {
         let config = self.config;
         let render_doc = std::sync::Arc::clone(&self.render_doc);
@@ -2900,7 +2910,12 @@ impl MixedOcrContext<'_> {
                     for (retry_idx, image_arc) in retry_images {
                         dimensions.insert(retry_idx, (image_arc.width(), image_arc.height()));
                         let hints = self.hints_for_pipeline_page(retry_idx, self.raster_dpis.get(&retry_idx).copied());
-                        spawn_page(join_set, retry_idx, image_arc, hints);
+                        #[cfg(feature = "layout-detection")]
+                        let page_detection =
+                            detection_for_mixed_route_page(self.layout_detections_for_mixed(), retry_idx).cloned();
+                        #[cfg(not(feature = "layout-detection"))]
+                        let page_detection: Option<MixedPageDetection> = None;
+                        spawn_page(join_set, retry_idx, image_arc, hints, page_detection);
                     }
                     continue;
                 }
