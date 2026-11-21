@@ -65,7 +65,8 @@ fn expected_rows(tinted: bool) -> Vec<Vec<&'static str>> {
     assert_eq!(rows.len(), 13);
     if tinted {
         assert_eq!(rows[1], ["Signal timing", "59", "860,596", "(3,091)"]);
-        rows[1][1] = "BY)";
+        // The tinted picture now takes the default preprocessing, so the count is read as the
+        // source value; it used to reach OCR at 20 px and read as "BY)" (#3337). ~keep
     } else {
         assert_eq!(rows[7], ["Storm drains", "86", "346,028", "(1,463)"]);
         rows[7][3] = "(1.463)";
