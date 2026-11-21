@@ -14,7 +14,7 @@
 //! when the text labels it or a plain-language line sits next to the sheet
 //! number; the parser never fabricates one from unrelated tokens.
 
-use crate::types::VectorPoint;
+use crate::types::{PageViewport, VectorPoint};
 
 /// Metadata read from a drawing set's title block.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -153,8 +153,21 @@ impl DrawingSetText {
         })
     }
 
-    /// Read a sheet number such as `A5.01`, `A-101` or `E102`.
+    /// Parse the scale of a page viewport's measure dictionary, when present.
     ///
+    /// This is the bridge between the PDF `/VP` output and the scale parser: a
+    /// viewport carrying `3/8 in = 1 ft` reports `32.0`.
+    #[cfg_attr(feature = "alef-meta", alef(skip))]
+    pub fn parse_viewport_scale(viewport: &PageViewport) -> Option<ParsedScale> {
+        viewport
+            .measure
+            .as_ref()?
+            .scale_ratio
+            .as_deref()
+            .and_then(Self::parse_scale)
+    }
+
+    /// Read a sheet number such as `A5.01`, `A-101` or `E102`.    ///
     /// A bare two-character token such as `A5` is not accepted: it is far more
     /// likely a paper size or a room label than a sheet number.
     pub fn parse_sheet_number(text: &str) -> Option<String> {
@@ -242,13 +255,32 @@ fn parse_positive(text: &str) -> Option<f64> {
     (value.is_finite() && value > 0.0).then_some(value)
 }
 
-/// A length note (`3/8"`, `1'-0"`, `10'`) in inches.
+/// A length note (`3/8"`, `1'-0"`, `10'`, or `3/8 in` / `1 ft`) in inches.
 fn parse_length_inches(text: &str) -> Option<f64> {
     let trimmed = text.trim();
-    if !trimmed.contains('\'') && !trimmed.contains('"') {
-        return None;
+    if trimmed.contains('\'') || trimmed.contains('"') {
+        return DrawingSetText::parse_dimension(trimmed);
     }
-    DrawingSetText::parse_dimension(trimmed)
+
+    let lower = trimmed.to_ascii_lowercase();
+    for (suffix, factor) in [
+        ("inches", 1.0),
+        ("inch", 1.0),
+        ("in", 1.0),
+        ("feet", 12.0),
+        ("foot", 12.0),
+        ("ft", 12.0),
+    ] {
+        let Some(number) = lower.strip_suffix(suffix) else {
+            continue;
+        };
+        let number = number.trim();
+        if number.is_empty() {
+            return None;
+        }
+        return parse_component(number).map(|value| value * factor);
+    }
+    None
 }
 
 /// A whole number or fraction (`6`, `5/8`, `6 1/2`) as a decimal.
@@ -465,6 +497,8 @@ mod tests {
             ("1/4\" = 1'-0\"", 48.0),
             ("1\" = 10'", 120.0),
             ("1/2\" = 1'-0\"", 24.0),
+            ("3/8 in = 1 ft", 32.0),
+            ("1 in = 10 ft", 120.0),
             ("1:100", 100.0),
             ("1 : 50", 50.0),
         ] {
@@ -489,6 +523,7 @@ mod tests {
             "",
             "1 = 10'",
             "1\" = 10",
+            "1 in = 10",
             "0:100",
             "1:0",
             "3/8\" = 1'-0\" extra",
@@ -556,5 +591,32 @@ mod tests {
         let labelled = DrawingSetText::parse_title_block("SHEET TITLE: ROOF PLAN\nA2.03");
         assert_eq!(labelled.sheet_number.as_deref(), Some("A2.03"));
         assert_eq!(labelled.title.as_deref(), Some("ROOF PLAN"));
+    }
+}
+
+#[cfg(test)]
+mod viewport_scale_tests {
+    use super::*;
+    use crate::types::{BoundingBox, MeasureData};
+
+    #[test]
+    fn a_viewport_measure_scale_is_parsed_from_its_text() {
+        let viewport = PageViewport {
+            bounding_box: BoundingBox::default(),
+            name: Some("PLAN".to_string()),
+            measure: Some(MeasureData {
+                scale_ratio: Some("3/8 in = 1 ft".to_string()),
+                ..MeasureData::default()
+            }),
+        };
+        let scale = DrawingSetText::parse_viewport_scale(&viewport).expect("the viewport scale parses");
+        assert_eq!(scale.ratio, 32.0);
+
+        let without_ratio = PageViewport {
+            measure: Some(MeasureData::default()),
+            ..viewport.clone()
+        };
+        assert!(DrawingSetText::parse_viewport_scale(&without_ratio).is_none());
+        assert!(DrawingSetText::parse_viewport_scale(&PageViewport::default()).is_none());
     }
 }
