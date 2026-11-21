@@ -440,7 +440,7 @@ jobs:
     name: Check crates.io for existing versions
     needs: prepare
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_crates == 'true') }}
+      ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_crates == 'true') }}
     runs-on: ubuntu-latest
     outputs:
       xberg_exists: ${{ steps.check.outputs.exists }}
@@ -4863,12 +4863,16 @@ jobs:
   # which is what a re-run with every crate already published produces; they also require
   # check-cratesio and validate-versions, whose failure would skip publish-crates too. WASM is
   # the one exception: wasm-bindings is continue-on-error by design, so publish-wasm keeps
-  # its success requirement in the `if:` and stays best-effort. ~keep
+  # its success requirement in the `if:` and stays best-effort. publish-crates also runs on a
+  # dry run, where the action verifies the whole set with one multi-package
+  # `cargo publish --dry-run` and never publishes (its `dry-run` input is the dry_run output);
+  # a real publish still needs is_tag. check-cratesio, which it needs, runs on dry runs too
+  # (read-only registry lookup); a skipped need would skip publish-crates. ~keep
   publish-crates:
     name: Publish crates.io packages
     needs: [prepare, validate-versions, check-cratesio]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_crates == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cratesio.outputs.all_exist != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_crates == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.check-cratesio.outputs.all_exist != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
