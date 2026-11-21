@@ -100,7 +100,7 @@ run_coverage() {
 @test "Docker CLI runner should execute unit contracts before the real image test command" {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/docker/run-cli-tests.sh"
 	xberg_assert_status 0
-	xberg_assert_trace 'python3 -m unittest scripts/ci/docker/test_docker_unit.py
+	xberg_assert_trace 'python3 -m unittest scripts/ci/docker/test_docker_unit.py scripts/ci/docker/test_verify_image_notices.py
 python3 scripts/ci/docker/test_docker.py --image xberg:cli --variant cli --verbose'
 }
 
@@ -108,7 +108,7 @@ python3 scripts/ci/docker/test_docker.py --image xberg:cli --variant cli --verbo
 	export PYTHON_STATUS=18
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/docker/run-cli-tests.sh"
 	xberg_assert_status 18
-	xberg_assert_trace 'python3 -m unittest scripts/ci/docker/test_docker_unit.py'
+	xberg_assert_trace 'python3 -m unittest scripts/ci/docker/test_docker_unit.py scripts/ci/docker/test_verify_image_notices.py'
 }
 
 @test "Docker feature runner should forward the exact selected variant and preserve failure" {
