@@ -6,6 +6,9 @@ use super::super::*;
 use super::*;
 use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
+// rayon's work-stealing pool needs OS threads; wasm32 has none, so the parallel encode
+// path below falls back to sequential `.iter()` there. Gate the import to match. ~keep
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use rayon::prelude::*;
 use std::io::Cursor;
 use std::sync::Arc;

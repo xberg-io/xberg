@@ -6,6 +6,7 @@ use super::super::*;
 use super::*;
 use crate::plugins::registry::get_ocr_backend_registry;
 use std::sync::Arc;
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use tokio::task::JoinSet;
 
 impl PageOcrContext<'_> {

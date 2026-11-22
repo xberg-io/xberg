@@ -20,11 +20,21 @@ mod setup;
     not(target_arch = "wasm32")
 ))]
 use super::super::column_retry;
-use super::super::{
-    caption_conversion, document, hidden_layer, layer_token_recovery, native_word_coverage, number_recovery,
-    orientation_retry, read_reuse, rendering, strip_embedded_gfm_tables, symbol_noise_background, symbol_noise_lines,
-    tall_source,
-};
+// Each import carries the gate its module declaration has in `extractors/pdf/ocr/mod.rs`:
+// `page_ocr` also compiles on the `ocr-pipeline`-only legs, where the `ocr`-gated helpers are
+// absent, so a single gate here would name modules that do not exist there. ~keep
+#[cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+use super::super::tall_source;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+use super::super::{caption_conversion, layer_token_recovery, number_recovery, symbol_noise_background};
+use super::super::{document, rendering, strip_embedded_gfm_tables, symbol_noise_lines};
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+use super::super::{hidden_layer, native_word_coverage, orientation_retry, read_reuse};
 #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 use super::stored_scan_retry;
 use super::{DetachedOcrPage, OcrPageNoiseVerdict, OcrReadEvidence, OcrRunResult, PageOcrHints, RunPageParagraphs};
