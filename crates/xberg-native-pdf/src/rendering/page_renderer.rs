@@ -2271,13 +2271,35 @@ impl PageRenderer {
         mask_obj: Option<Object>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        use crate::extractors::images::{ImageData, extract_image_from_xobject};
+        use crate::extractors::images::{ImageData, extract_image_from_xobject, extract_image_from_xobject_at};
 
         if self.skip_image(obj_ref) {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
-        let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
+        // A colour-key /Mask and an in-data soft mask index the full-size samples, so only an
+        // image free of both may be decoded at its painted footprint. ~keep
+        let reduced_target = {
+            let full_size_samples_needed = matches!(mask_obj, Some(Object::Array(_)))
+                || xobject
+                    .as_dict()
+                    .and_then(|dict| dict.get("SMaskInData"))
+                    .and_then(Object::as_integer)
+                    .is_some_and(|value| value != 0);
+            let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
+            (!full_size_samples_needed
+                && painted.0.is_finite()
+                && painted.1.is_finite()
+                && painted.0 >= 1.0
+                && painted.1 >= 1.0)
+                .then(|| (painted.0.ceil() as u32, painted.1.ceil() as u32))
+        };
+        let pdf_image = match reduced_target {
+            Some(target) => {
+                extract_image_from_xobject_at(Some(doc), xobject, obj_ref, Some(&color_space_map), Some(target))?
+            }
+            None => extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?,
+        };
         let mut reduction = 1;
         let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
@@ -2415,12 +2437,17 @@ impl PageRenderer {
                                                             mh,
                                                         );
                                                     match ccitt_result {
-                                                        Ok(decompressed) => {
+                                                        Ok(mut decompressed) => {
                                                             tracing::trace!(
                                                                 "CCITT Group4 decompressed mask: {} → {} bytes",
                                                                 raw_mask_data.len(),
                                                                 decompressed.len()
                                                             );
+                                                            // The decoder emits 1 for ink; the stencil rule
+                                                            // below reads PDF sample values, where 0 marks. ~keep
+                                                            for b in &mut decompressed {
+                                                                *b = !*b;
+                                                            }
                                                             decompressed
                                                         }
                                                         Err(error) => {
@@ -2957,7 +2984,8 @@ impl PageRenderer {
                 height,
             )?;
         } else if let Some(params) = Self::image_mask_ccitt_params(dict, width, height, doc)? {
-            raw = crate::extractors::ccitt_bilevel::decompress_ccitt(&raw, &params)?;
+            let (decoded, rows_valid) = crate::extractors::ccitt_bilevel::decompress_ccitt_reporting(&raw, &params)?;
+            raw = decoded;
 
             // The shared CCITT image decoder normalises packed rows to
             // 0=white, 1=black. An ImageMask needs the actual PDF sample
@@ -2968,6 +2996,17 @@ impl PageRenderer {
             // values consumed by the independent `/Decode` mapping below. ~keep
             for byte in &mut raw {
                 *byte = !*byte;
+            }
+
+            // Rows past `rows_valid` are padding or a blank substitute, not
+            // content; fill them with the sample that paints nothing under this
+            // mask's own /Decode so an unreadable stencil does not cover its
+            // whole footprint under [1 0]. ~keep
+            let row_bytes = (width as usize).div_ceil(8);
+            if rows_valid < height as usize && row_bytes > 0 {
+                let blank = if invert { 0x00 } else { 0xFF };
+                let from = rows_valid.saturating_mul(row_bytes).min(raw.len());
+                raw[from..].fill(blank);
             }
         }
 
