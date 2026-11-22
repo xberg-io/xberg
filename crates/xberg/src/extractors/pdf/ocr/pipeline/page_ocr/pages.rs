@@ -1111,7 +1111,7 @@ impl PageOcrContext<'_> {
             let recognized_tables = if let (Some(scaled_det), Some(render_ocr_elements), true) =
                 (render_scaled_detection, render_ocr_elements, tatr_model.is_some())
             {
-                let rgb = if let Some(ref slice) = batch_slice {
+                let rgb = if let Some(slice) = batch_slice.as_ref() {
                     let default_security_limits = crate::extractors::security::SecurityLimits::default();
                     let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
                     crate::extraction::image_decode::clone_dynamic_image_to_rgb8_with_security_limits(
