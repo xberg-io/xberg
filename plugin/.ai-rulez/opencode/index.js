@@ -40,8 +40,7 @@ function runCli(args, context, directory) {
     child.on("error", (error) => {
       if (error.code === "ENOENT") {
         resolve({
-          content:
-            "Install the xberg CLI with `brew install xberg-io/tap/xberg`, or run it via `npx -y @xberg-io/xberg-cli` / `uvx --from xberg-cli xberg`.",
+          content: "Install the xberg CLI with `brew install xberg-io/tap/xberg`, or `cargo install xberg-cli`.",
           metadata: { exitCode: 127, command: "xberg", subcommand: args[0] },
         });
         return;

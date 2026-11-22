@@ -1,8 +1,9 @@
 //! Vendored from <https://github.com/benbrandt/text-splitter> @ v0.30.1
 //! MIT, © 2023 Benjamin Brandt. See `ATTRIBUTIONS.md` for full provenance.
 //!
-//! Trimmed: dropped `code` (tree-sitter) and `tiktoken-rs` features and their
-//! files; rebuilt against `tokenizers 0.23`. The `markdown` splitter is always
+//! Inlined because upstream's `tokenizers` feature forces the `onig` C regex backend
+//! (xberg uses `fancy-regex`) and for local fixes. Trimmed: dropped `code`
+//! (tree-sitter) and `tiktoken-rs` features and their files. The `markdown` splitter is always
 //! compiled because `pulldown-cmark` is already a non-optional xberg
 //! dependency.
 

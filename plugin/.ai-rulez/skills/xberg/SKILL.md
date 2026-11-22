@@ -61,9 +61,6 @@ tokio = { version = "1", features = ["full"] }
 
 ```bash
 brew install xberg-io/tap/xberg
-# or run without a persistent install (the CLI proxy package self-installs the binary):
-npx @xberg-io/xberg-cli@1.3.10 --help
-uvx --from xberg-cli==1.3.8 xberg --help
 # or download a prebuilt binary from the latest GitHub release:
 #   https://github.com/xberg-io/xberg/releases/latest
 # or build from source:

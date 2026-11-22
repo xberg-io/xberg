@@ -364,7 +364,16 @@ impl PageRenderer {
             Pixmap::new(width, height).ok_or_else(|| Error::InvalidPdf("knockout image shape alloc failed".into()))?;
         let state = Self::coverage_only_gs(gs);
         let result = if is_mask {
-            self.render_image_mask(&mut scratch, image, None, transform, doc, clip, &state)
+            self.render_image_mask(
+                &mut scratch,
+                image,
+                None,
+                transform,
+                doc,
+                clip,
+                &state,
+                (Transform::identity(), &Object::Dictionary(HashMap::new())),
+            )
         } else {
             self.render_image(&mut scratch, image, None, transform, doc, clip, None, None, &state)
         };
@@ -619,6 +628,7 @@ impl PageRenderer {
         resources: &Object,
         initial_text_mode: Option<u8>,
     ) -> Result<Option<super::knockout_resources::WorkFallback>> {
+        let entry = self.form_entry.take();
         let pixels = pixmap.width() as usize * pixmap.height() as usize;
         let (sidecar_bytes, spot_count) = self.cmyk_sidecar.as_ref().map_or((0, 0), |sidecar| {
             (
@@ -643,10 +653,12 @@ impl PageRenderer {
             surfaces_in_pass,
         )?;
         let Some(workspace) = workspace else {
+            self.form_entry = entry;
             return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
         };
         let parent_shape = self.knockout_shape.take();
         let mut group = KnockoutGroup::new(self, pixmap);
+        self.form_entry = entry.clone();
         let result = self.execute_operators_with_backdrop(
             pixmap,
             base_transform,
@@ -661,6 +673,7 @@ impl PageRenderer {
             group.backdrop.restore(self, pixmap);
             drop(group);
             drop(workspace);
+            self.form_entry = entry;
             return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
         }
         if let Some(parent) = self.knockout_shape.as_mut() {

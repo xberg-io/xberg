@@ -1,6 +1,6 @@
 // AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-// Content-Hash: blake3:3fe1a33d721dfa8b49134cbe88659999cf9e481c558eb8e4b5ac81bc672c88db
-// Source-Hash: blake3:c222fc982b9c5f3485c2b4b74087e923da7345e4b5eea4b8df8db4810fba1d76
+// Content-Hash: blake3:46f8f791b8245653dbdbaf9e518595813fb8d6ca6e976cddbc0d1a7879447f3f
+// Source-Hash: blake3:349da3cd7af45e537dbb8e8aa6b033a84afccc9dd0f9ad1552d37ae18780228d
 // Schema-Version: v1
 
 import { spawn } from "node:child_process";
@@ -45,8 +45,7 @@ function runCli(args, context, directory) {
     child.on("error", (error) => {
       if (error.code === "ENOENT") {
         resolve({
-          content:
-            "Install the xberg CLI with `brew install xberg-io/tap/xberg`, or run it via `npx -y @xberg-io/xberg-cli` / `uvx --from xberg-cli xberg`.",
+          content: "Install the xberg CLI with `brew install xberg-io/tap/xberg`, or `cargo install xberg-cli`.",
           metadata: { exitCode: 127, command: "xberg", subcommand: args[0] },
         });
         return;

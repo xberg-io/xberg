@@ -39,6 +39,9 @@ use std::collections::HashMap;
 /// caution on adversarial PDFs).
 const MAX_OPERATORS: usize = 1_000_000;
 
+/// Operand stack depth kept per operator; the oldest operands are dropped past it, as a real operand stack would. ~keep
+const MAX_OPERANDS: usize = 64;
+
 /// Global cap override for content-stream operator count. `0`
 /// means "use [`MAX_OPERATORS`] default"; any other value is the
 /// effective cap. Atomic so it's safe to set from one thread while
@@ -2465,6 +2468,9 @@ fn parse_operator(input: &[u8], strict: bool) -> IResult<&[u8], Operator> {
         } else {
             parse_object(remaining)?
         };
+        if operands.len() >= MAX_OPERANDS {
+            operands.drain(..MAX_OPERANDS / 2);
+        }
         operands.push(obj);
         remaining = inp;
     }
@@ -4814,6 +4820,21 @@ fn scan_graphics_region<'a>(data: &'a [u8], consecutive_errors: &mut usize) -> S
 #[allow(deprecated)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn operands_beyond_the_stack_cap_keep_the_most_recent() {
+        let mut data = b"0 ".repeat(300_000);
+        data.extend_from_slice(b"2 0 0 2 5 6 Tm");
+
+        let started = std::time::Instant::now();
+        let operators = parse_content_stream(&data).unwrap();
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        match operators.last() {
+            Some(Operator::Tm { a, d, e, f, .. }) => assert_eq!((*a, *d, *e, *f), (2.0, 2.0, 5.0, 6.0)),
+            other => panic!("expected Tm, got {other:?}"),
+        }
+    }
 
     #[test]
     fn test_parse_simple_text() {

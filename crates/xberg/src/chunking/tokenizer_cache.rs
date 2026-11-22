@@ -173,7 +173,12 @@ pub(crate) fn get_or_init_tokenizer_from_source(
         return Ok(Arc::clone(tok));
     }
 
-    let tokenizer = load_tokenizer(source)?;
+    let mut tokenizer = load_tokenizer(source)?;
+    // Embedded truncation parameters would cap `encode` at the model's max length, so counts
+    // and chunk sizes must be taken from the untruncated encoding.
+    tokenizer
+        .with_truncation(None)
+        .map_err(|e| XbergError::validation(format!("Failed to disable tokenizer truncation: {e}")))?;
     let arc = Arc::new(tokenizer);
     cache.insert(key, Arc::clone(&arc));
     Ok(arc)
@@ -385,6 +390,22 @@ mod tests {
             "expected a non-trivial vocabulary, got {}",
             tok.get_vocab_size(true)
         );
+    }
+
+    /// A tokenizer.json that embeds truncation parameters must still count the whole text.
+    #[test]
+    fn test_embedded_truncation_does_not_cap_the_count() {
+        let mut json: serde_json::Value = serde_json::from_slice(BERT_TOKENIZER_BYTES).unwrap();
+        json["truncation"] = serde_json::json!({
+            "direction": "Right",
+            "max_length": 4,
+            "strategy": "LongestFirst",
+            "stride": 0,
+        });
+        let bytes = serde_json::to_vec(&json).unwrap();
+
+        let truncated = try_count_tokens("hello world and many more words here", TokenizerSource::Bytes(&bytes));
+        assert_eq!(truncated.unwrap(), 7);
     }
 
     /// Verify `try_count_tokens` with `Bytes` source returns a deterministic count.

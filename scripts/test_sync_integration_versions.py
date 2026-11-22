@@ -1,6 +1,6 @@
 import json
 
-from scripts.sync_integration_versions import helm_metadata_errors, mcp_metadata_errors, transform
+from scripts.sync_integration_versions import LAUNCHER_PIN_RE, helm_metadata_errors, mcp_metadata_errors, transform
 
 
 def chart_metadata(
@@ -131,3 +131,10 @@ def test_server_json_transform_rewrites_version_and_package_version_only() -> No
     assert data["version"] == "1.6.0-rc.1"
     assert data["packages"][0]["version"] == "1.6.0-rc.1"
     assert data["$schema"] == json.loads(original)["$schema"]
+
+
+def test_launcher_pin_rewrites_only_the_pinned_version_line() -> None:
+    launcher = 'LAUNCHER="${XBERG_LAUNCHER:-auto}"\nPINNED_VERSION="1.4.2"\n'
+    assert LAUNCHER_PIN_RE.sub(r"\g<1>1.5.0\g<3>", launcher, count=1) == (
+        'LAUNCHER="${XBERG_LAUNCHER:-auto}"\nPINNED_VERSION="1.5.0"\n'
+    )

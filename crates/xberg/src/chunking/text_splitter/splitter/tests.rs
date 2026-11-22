@@ -190,3 +190,30 @@ fn indexed_level_ranges_match_legacy_nested_range_semantics() {
         }
     }
 }
+
+#[test]
+fn reuses_the_size_of_a_probed_chunk() {
+    struct ProbeCalls(Cell<usize>);
+
+    impl ChunkSizer for ProbeCalls {
+        fn size(&self, chunk: &str) -> usize {
+            if chunk == "b\nc" {
+                self.0.set(self.0.get() + 1);
+            }
+            chunk.len()
+        }
+    }
+
+    let calls = ProbeCalls(Cell::new(0));
+    let splitter = TextSplitter::new(ChunkConfig {
+        capacity: 2.into(),
+        overlap: 0,
+        sizer: &calls,
+        trim: false,
+    });
+    let chunks = splitter.chunks("a\nb\nc").collect::<Vec<_>>();
+
+    assert_eq!(chunks, ["a\n", "b\n", "c"]);
+    // The probe and the chunk selection both measure the same three bytes at offset 2.
+    assert_eq!(calls.0.get(), 1);
+}

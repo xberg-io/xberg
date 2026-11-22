@@ -5,7 +5,7 @@ version = 1
 ai_rulez_version = '5.14.1'
 scope = 'all'
 outputs_pinned = true
-tree = 'sha256:a66c31d6589a51dea8c83cb78cd1478447caaa18e422976046e2476487f50345'
+tree = 'sha256:c5f1a1c2625b9020a43eaf0610e68ddaf565ddc707c165ef91932006c722de96'
 
 [[item]]
 kind = 'command'
@@ -23,7 +23,7 @@ digest = 'sha256:5f8f6a9e4b3eaf59645ba3311129405c69668df0a423c43024296a455e1b057
 kind = 'skill'
 id = 'xberg'
 path = 'skills/xberg'
-digest = 'sha256:35740a96532da1d8a0add5e13bdca8d7ec53a5bdea13325a4cc396776960aa52'
+digest = 'sha256:2941a2b5d5d8d479bc89703287831fb47c8d0675584b9b6bfa4df3129e254668'
 
 [[item]]
 kind = 'skill'
