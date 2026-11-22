@@ -34,6 +34,17 @@ on:
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
+  # Only the pdfium jobs run on a PR; every other job here is gated to refs/heads/main. ~keep
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/xberg-pdfium-render/**"
+      - "crates/xberg/src/extractors/pdf/pdfium_engine.rs"
+      - "crates/xberg/src/extractors/pdf/pdfium_engine/**"
+      # A fixture pin bump changes the gitlink itself, not a path beneath it. ~keep
+      - "test_documents"
+      - ".github/actions/download-pdfium/**"
+      - ".github/workflows/ci-rust.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -932,7 +943,7 @@ jobs:
   pdfium-engine:
     name: Rust pdfium engine (real library)
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+      ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -947,6 +958,7 @@ jobs:
         with:
           include: |
             pdf/**
+            vendored/pdfium-render/**
 
       - name: Setup Rust
         uses: xberg-io/actions/setup-rust@v1
@@ -981,6 +993,73 @@ jobs:
           # Turns the test's soft-skip-on-absence into a hard failure (see mod.rs:4008-4050): both
           # the unreadable-fixture path and the bind-failure path assert `!require_pdfium`.
           XBERG_REQUIRE_PDFIUM: "1"
+
+      # The fork binds pdfium through one process-global cell, so its tests run on one thread.
+      # Fixtures are test_documents/vendored/pdfium-render. The test count is asserted: a filter
+      # or feature typo would otherwise pass with zero tests. ~keep
+      - name: Run xberg-pdfium-render tests (real library required)
+        run: |
+          set -euo pipefail
+          cargo test --locked -p xberg-pdfium-render 2>&1 | tee /tmp/pdfium-render-test.log
+          passed=$(grep -E '^test result: ok\. [0-9]+ passed' /tmp/pdfium-render-test.log | head -1 | sed -E 's/^test result: ok\. ([0-9]+) passed.*/\1/')
+          if [ -z "${passed}" ] || [ "${passed}" -lt 50 ]; then
+            echo "::error::Expected at least 50 passing xberg-pdfium-render tests, saw '${passed:-none}'" >&2
+            exit 1
+          fi
+        shell: bash
+        env:
+          RUST_TEST_THREADS: "1"
+          LD_LIBRARY_PATH: ${{ env.XBERG_PDFIUM_PREBUILT }}/lib
+          DYLD_LIBRARY_PATH: ${{ env.XBERG_PDFIUM_PREBUILT }}/lib
+          DYLD_FALLBACK_LIBRARY_PATH: ${{ env.XBERG_PDFIUM_PREBUILT }}/lib
+
+  # No libpdfium here: type-checks the pdfium engine and proves a build without it still refuses
+  # PdfBackend::Pdfium with the actionable validation error instead of falling back to native. ~keep
+  pdfium-gating:
+    name: Rust pdfium gating (no library)
+    if: >-
+      ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Fetch test_documents fixtures
+        uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: |
+            pdf/**
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-pdfium-gating
+          use-sccache: "true"
+
+      - name: Check with the pdfium engine compiled in
+        run: cargo check --locked -p xberg --lib --tests --features "pdf,pdf-pdfium"
+        shell: bash
+
+      - name: Check without the pdfium engine
+        run: cargo check --locked -p xberg --lib --tests --no-default-features --features "pdf"
+        shell: bash
+
+      - name: A build without pdf-pdfium rejects PdfBackend::Pdfium
+        run: |
+          set -euo pipefail
+          for test_name in \
+            extractors::pdf::tests::pdfium_backend_is_rejected_with_actionable_error_not_generic_parse_failure \
+            extractors::pdf::tests::pdfium_backend_never_silently_falls_back_to_xberg_native_pdf_output; do
+            cargo test --locked -p xberg --no-default-features --features "pdf" --lib \
+              -- --exact "$test_name" 2>&1 | tee /tmp/pdfium-gating-test.log
+            if ! grep -qE '^test result: ok\. 1 passed; 0 failed; 0 ignored;' /tmp/pdfium-gating-test.log; then
+              echo "::error::Expected exactly one passed test: $test_name" >&2
+              exit 1
+            fi
+          done
+        shell: bash
 
   live-hf:
     name: Live HF preset tests

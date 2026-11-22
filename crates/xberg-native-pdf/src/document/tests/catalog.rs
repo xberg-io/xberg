@@ -174,7 +174,12 @@ fn output_intent_and_page_tree_warnings_hide_attacker_controlled_details() {
         assert!(malformed_profile.output_intent_cmyk_profile().is_none());
         assert!(undecodable_profile.output_intent_cmyk_profile().is_none());
         assert!(invalid_profile.output_intent_cmyk_profile().is_none());
-        assert_eq!(unknown_page.count_pages_recursive(ObjectRef::new(2, 0), 0).unwrap(), 0);
+        assert_eq!(
+            unknown_page
+                .count_pages_recursive(ObjectRef::new(2, 0), 0, &mut std::collections::HashSet::new())
+                .unwrap(),
+            0
+        );
     });
     let warnings: Vec<_> = events
         .iter()

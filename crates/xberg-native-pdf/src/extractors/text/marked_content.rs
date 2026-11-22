@@ -143,7 +143,7 @@ impl<'doc> TextExtractor<'doc> {
         held.iter()
             .map(|group| {
                 Self::placed_text_kept(group.chars, other.chars, || {
-                    let words = Self::text_duplication_fraction(&group.txt, &other.txt);
+                    let words = Self::text_duplication_fraction(&group.txt, &other.txt).unwrap_or(0.0);
                     words.max(Self::copied_line_fraction(&group.lines, &other.lines))
                 })
             })
@@ -327,8 +327,12 @@ impl<'doc> TextExtractor<'doc> {
                 _ => {}
             }
         }
+        // The operands are encoded character codes, not text: under Identity-H the
+        // bytes are two-byte CIDs and no ASCII word forms, so `None` is absence of
+        // evidence, not "not a duplicate". Fail closed (suppress) rather than emit
+        // every word twice. ~keep
         Self::placed_text_kept(placed_chars, other_chars, || {
-            Self::text_duplication_fraction(&placed_txt, &other_txt)
+            Self::text_duplication_fraction(&placed_txt, &other_txt).unwrap_or(1.0)
         })
     }
 
@@ -389,9 +393,10 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Fraction of alphanumeric word tokens in `a` (counting repeats) that also
     /// occur anywhere in `b`. Words are lowercased runs of >= 2 alphanumeric
-    /// bytes; punctuation and single characters are ignored. Returns 0.0 when `a`
-    /// has no such tokens (nothing to be a duplicate of).
-    fn text_duplication_fraction(a: &[u8], b: &[u8]) -> f64 {
+    /// bytes; punctuation and single characters are ignored. Returns `None` when
+    /// `a` has no such tokens: that is no evidence either way, since encoded
+    /// character codes can hold text that tokenises to nothing.
+    fn text_duplication_fraction(a: &[u8], b: &[u8]) -> Option<f64> {
         fn tokens(bytes: &[u8]) -> Vec<Vec<u8>> {
             let mut out = Vec::new();
             let mut cur = Vec::new();
@@ -413,11 +418,11 @@ impl<'doc> TextExtractor<'doc> {
         }
         let a_tokens = tokens(a);
         if a_tokens.is_empty() {
-            return 0.0;
+            return None;
         }
         let b_set: std::collections::HashSet<Vec<u8>> = tokens(b).into_iter().collect();
         let shared = a_tokens.iter().filter(|t| b_set.contains(*t)).count();
-        shared as f64 / a_tokens.len() as f64
+        Some(shared as f64 / a_tokens.len() as f64)
     }
 
     /// Parse artifact type and subtype from artifact properties dictionary.

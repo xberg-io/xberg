@@ -268,7 +268,7 @@ impl PdfDocument {
         out
     }
 
-    /// Drop spans whose bbox lies ENTIRELY outside the page's MediaBox.
+    /// Drop spans whose bbox lies ENTIRELY outside the page's visible box (CropBox reduced to the MediaBox).
     ///
     /// PDFs that reuse one big Form XObject across pages (ExpertPdf and similar
     /// tools - see issue B1 / nougat_005.pdf) rely on the content stream's `W n`
@@ -281,7 +281,7 @@ impl PdfDocument {
     /// `get_page_media_box` returns `(llx, lly, urx, ury)` - absolute corner
     /// coordinates per ISO 32000-1 s7.7.3.3, NOT `(x, y, width, height)`.
     pub(super) fn drop_offpage_spans(&self, page_index: usize, spans: &mut Vec<crate::layout::TextSpan>) {
-        if let Ok((llx, lly, urx, ury)) = self.get_page_media_box(page_index) {
+        if let Ok((llx, lly, urx, ury)) = self.get_page_visible_box(page_index) {
             const EDGE_TOLERANCE_PT: f32 = 2.0;
             // Normalise corners: some producers write the MediaBox with swapped
             // corners (e.g. `[0 792 612 0]`, ury < lly). Taking min/max makes the
@@ -461,7 +461,9 @@ impl PdfDocument {
         // Annotation text is horizontal (rotation_degrees == 0), so on a 90°/270°
         // page it stays raw, matching the horizontal content spans above. ~keep
         let pre_annotation_len = spans.len();
-        spans.extend(self.annotation_content_spans(page_index));
+        let mut annotation_spans = self.annotation_content_spans(page_index);
+        self.drop_offpage_spans(page_index, &mut annotation_spans);
+        spans.extend(annotation_spans);
         if let Some((rot, llx, lly, w, h)) = page_rotation {
             for s in spans[pre_annotation_len..].iter_mut() {
                 if rot != 180 && s.rotation_degrees == 0.0 {

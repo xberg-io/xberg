@@ -6,7 +6,7 @@ x-ai-rulez:
   kind: skill
   id: xberg
   metadata:
-    license: Elastic-2.0
+    license: MIT
     metadata:
       author: xberg-io
       version: "0.1.0"

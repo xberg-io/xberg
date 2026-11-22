@@ -6,7 +6,7 @@ name: xberg-extracting-tables
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 Content-Hash: blake3:80d26904ff70da39df4ee2b35bcfc06a186b30c0d2566cf4b60832cd42e475ef
-Source-Hash: blake3:3fe619691b35fa619d59e836771b41c0ca93890a7de029cca8c9b15b5849ebcc
+Source-Hash: blake3:c222fc982b9c5f3485c2b4b74087e923da7345e4b5eea4b8df8db4810fba1d76
 Schema-Version: v1
 -->
 

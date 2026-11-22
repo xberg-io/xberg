@@ -415,7 +415,7 @@ fn build_page_structure(doc: &mut NativeDocument, boundaries: &[PageBoundary], c
     })
 }
 
-fn parse_authors(author_str: &str) -> Vec<String> {
+pub(crate) fn parse_authors(author_str: &str) -> Vec<String> {
     let author_str = author_str.replace(" and ", ", ");
     let mut authors = Vec::new();
 
@@ -431,7 +431,7 @@ fn parse_authors(author_str: &str) -> Vec<String> {
     authors
 }
 
-fn parse_keywords(keywords_str: &str) -> Vec<String> {
+pub(crate) fn parse_keywords(keywords_str: &str) -> Vec<String> {
     keywords_str
         .replace(';', ",")
         .split(',')
@@ -467,7 +467,7 @@ fn parse_keywords(keywords_str: &str) -> Vec<String> {
 ///
 /// On malformed or non-ASCII-in-range input the original string is returned
 /// unchanged, matching the pre-existing fallback for short input.
-fn parse_pdf_date(date_str: &str) -> String {
+pub(crate) fn parse_pdf_date(date_str: &str) -> String {
     let cleaned = date_str.trim();
     let ascii_prefix_len = cleaned.as_bytes().iter().take_while(|byte| byte.is_ascii()).count();
 

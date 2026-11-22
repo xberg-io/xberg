@@ -176,57 +176,14 @@ fn resolve_object(document: &PdfDocument, obj: &Object) -> Result<Object, Error>
 /// Build a mapping from page object IDs to page indices.
 /// This allows resolving /Pg references in marked content references.
 ///
-/// Uses a single-pass traversal of the page tree (O(n)) instead of
-/// calling get_page_ref per page (which is O(n) per call → O(n²) total).
+/// Shares the page-tree walk of [`PdfDocument::all_page_refs`], which is
+/// cycle- and depth-guarded and infers node kind when /Type is missing.
 fn build_page_map(document: &PdfDocument) -> HashMap<u32, u32> {
     let mut page_map = HashMap::new();
-
-    let pages_ref = match document.catalog().ok().and_then(|cat| {
-        cat.as_dict()
-            .and_then(|d| d.get("Pages"))
-            .and_then(|p| p.as_reference())
-    }) {
-        Some(r) => r,
-        None => return page_map,
-    };
-
-    let mut index: u32 = 0;
-    build_page_map_recursive(document, pages_ref, &mut page_map, &mut index);
-    page_map
-}
-
-/// Recursively walk the page tree once, collecting page object IDs.
-fn build_page_map_recursive(
-    document: &PdfDocument,
-    node_ref: crate::object::ObjectRef,
-    page_map: &mut HashMap<u32, u32>,
-    index: &mut u32,
-) {
-    let node = match document.load_object(node_ref) {
-        Ok(n) => n,
-        Err(_) => return,
-    };
-    let dict = match node.as_dict() {
-        Some(d) => d,
-        None => return,
-    };
-    let node_type = dict.get("Type").and_then(|t| t.as_name()).unwrap_or("");
-
-    match node_type {
-        "Page" => {
-            page_map.insert(node_ref.id, *index);
-            *index += 1;
-        }
-        "Pages" => {
-            if let Some(kids) = dict.get("Kids").and_then(|k| k.as_array()) {
-                let kid_refs: Vec<_> = kids.iter().filter_map(|k| k.as_reference()).collect();
-                for kid_ref in kid_refs {
-                    build_page_map_recursive(document, kid_ref, page_map, index);
-                }
-            }
-        }
-        _ => {}
+    for (index, page_ref) in document.all_page_refs().unwrap_or_default().into_iter().enumerate() {
+        page_map.entry(page_ref.id).or_insert(index as u32);
     }
+    page_map
 }
 
 /// Parse the complete structure tree from a PDF document.
@@ -354,6 +311,7 @@ fn parse_structure_tree_checked(
                         deadline,
                         &mut element_count,
                         &mut visited,
+                        ElemScope::root(),
                     )? {
                         struct_tree.add_root_element(elem);
                     }
@@ -368,6 +326,7 @@ fn parse_structure_tree_checked(
                     deadline,
                     &mut element_count,
                     &mut visited,
+                    ElemScope::root(),
                 )? {
                     struct_tree.add_root_element(elem);
                 }
@@ -386,6 +345,32 @@ fn parse_structure_tree_checked(
     Ok(Some(struct_tree))
 }
 
+/// Maximum structure-element nesting depth; deeper subtrees are truncated so
+/// recursive parsing, traversal and drop stay within the stack.
+pub(crate) const MAX_STRUCT_DEPTH: usize = 128;
+
+/// Position of an element in the tree: its nesting depth and the nearest
+/// ancestor's resolved /Pg, which /Pg-less descendants inherit.
+#[derive(Clone, Copy)]
+struct ElemScope {
+    depth: usize,
+    page: Option<u32>,
+}
+
+impl ElemScope {
+    fn root() -> Self {
+        Self { depth: 0, page: None }
+    }
+}
+
+/// Resolves a dictionary's own /Pg reference to a page index.
+fn dict_page(dict: &HashMap<String, Object>, page_map: &HashMap<u32, u32>) -> Option<u32> {
+    match dict.get("Pg") {
+        Some(Object::Reference(pg_ref)) => page_map.get(&pg_ref.id).copied(),
+        _ => None,
+    }
+}
+
 /// Parse a structure element (StructElem) from a PDF object.
 fn parse_struct_elem(
     document: &PdfDocument,
@@ -395,8 +380,13 @@ fn parse_struct_elem(
     deadline: ParseBudget,
     element_count: &mut usize,
     visited: &mut HashSet<u32>,
+    scope: ElemScope,
 ) -> Result<Option<StructElem>, ParseFailure> {
     deadline.check(*element_count)?;
+    if scope.depth > MAX_STRUCT_DEPTH {
+        tracing::warn!("structure tree deeper than {MAX_STRUCT_DEPTH} levels, truncating");
+        return Ok(None);
+    }
     *element_count += 1;
 
     let obj = resolve_object(document, obj)?;
@@ -425,6 +415,7 @@ fn parse_struct_elem(
                 }
                 match document.load_object(obj_ref) {
                     Ok(resolved) => {
+                        let objr_page = dict_page(dict, page_map).or(scope.page);
                         return parse_struct_elem(
                             document,
                             &resolved,
@@ -433,6 +424,10 @@ fn parse_struct_elem(
                             deadline,
                             element_count,
                             visited,
+                            ElemScope {
+                                depth: scope.depth + 1,
+                                page: objr_page,
+                            },
                         );
                     }
                     Err(error) => {
@@ -472,11 +467,13 @@ fn parse_struct_elem(
         struct_elem.source_role = Some(s_name.to_string());
     }
 
-    if let Some(Object::Reference(pg_ref)) = dict.get("Pg")
-        && let Some(&page_num) = page_map.get(&pg_ref.id)
-    {
+    if let Some(page_num) = dict_page(dict, page_map) {
         struct_elem.page = Some(page_num);
     }
+    let child_scope = ElemScope {
+        depth: scope.depth,
+        page: struct_elem.page.or(scope.page),
+    };
 
     // Skip /A (attributes) during text extraction — not needed for reading order.
     // Skip /Alt (alternate description) — not needed for text extraction. ~keep
@@ -528,6 +525,7 @@ fn parse_struct_elem(
                 deadline,
                 element_count,
                 visited,
+                child_scope,
             )?;
         } else {
             let k_obj = resolve_object(document, k_obj_raw)?;
@@ -540,6 +538,7 @@ fn parse_struct_elem(
                 deadline,
                 element_count,
                 visited,
+                child_scope,
             )?;
         }
     }
@@ -557,14 +556,20 @@ fn parse_k_children(
     deadline: ParseBudget,
     element_count: &mut usize,
     visited: &mut HashSet<u32>,
+    scope: ElemScope,
 ) -> Result<(), ParseFailure> {
+    let page_ctx = parent.page.or(scope.page).unwrap_or(0);
+    let child_scope = ElemScope {
+        depth: scope.depth + 1,
+        page: parent.page.or(scope.page),
+    };
     match k_obj {
         Object::Integer(mcid) => {
             // Single MCID — bare integer child references the page's
             // own content stream (ISO 32000-1:2008 §14.7.5.4.2 "MCR"
             // form is reserved for cross-stream refs). ~keep
             if let Some(mcid) = checked_mcid(*mcid) {
-                let page = parent.page.unwrap_or(0);
+                let page = page_ctx;
                 parent.add_child(StructChild::MarkedContentRef {
                     mcid,
                     page,
@@ -596,7 +601,7 @@ fn parse_k_children(
                 match &child_obj {
                     Object::Integer(mcid) => {
                         if let Some(mcid) = checked_mcid(*mcid) {
-                            let page = parent.page.unwrap_or(0);
+                            let page = page_ctx;
                             parent.add_child(StructChild::MarkedContentRef {
                                 mcid,
                                 page,
@@ -615,12 +620,13 @@ fn parse_k_children(
                             deadline,
                             element_count,
                             visited,
+                            child_scope,
                         )? {
                             Some(child_elem) => {
                                 parent.add_child(StructChild::StructElem(Box::new(child_elem)));
                             }
                             _ => {
-                                if let Some(mcr) = parse_marked_content_ref(document, &child_obj, page_map)? {
+                                if let Some(mcr) = parse_marked_content_ref(document, &child_obj, page_map, page_ctx)? {
                                     parent.add_child(mcr);
                                 }
                             }
@@ -645,12 +651,15 @@ fn parse_k_children(
                                     deadline,
                                     element_count,
                                     visited,
+                                    child_scope,
                                 )? {
                                     Some(child_elem) => {
                                         parent.add_child(StructChild::StructElem(Box::new(child_elem)));
                                     }
                                     _ => {
-                                        if let Some(mcr) = parse_marked_content_ref(document, &resolved, page_map)? {
+                                        if let Some(mcr) =
+                                            parse_marked_content_ref(document, &resolved, page_map, page_ctx)?
+                                        {
                                             parent.add_child(mcr);
                                         }
                                     }
@@ -674,12 +683,21 @@ fn parse_k_children(
         }
 
         Object::Dictionary(_) => {
-            match parse_struct_elem(document, k_obj, role_map, page_map, deadline, element_count, visited)? {
+            match parse_struct_elem(
+                document,
+                k_obj,
+                role_map,
+                page_map,
+                deadline,
+                element_count,
+                visited,
+                child_scope,
+            )? {
                 Some(child_elem) => {
                     parent.add_child(StructChild::StructElem(Box::new(child_elem)));
                 }
                 _ => {
-                    if let Some(mcr) = parse_marked_content_ref(document, k_obj, page_map)? {
+                    if let Some(mcr) = parse_marked_content_ref(document, k_obj, page_map, page_ctx)? {
                         parent.add_child(mcr);
                     }
                 }
@@ -704,12 +722,13 @@ fn parse_k_children(
                         deadline,
                         element_count,
                         visited,
+                        child_scope,
                     )? {
                         Some(child_elem) => {
                             parent.add_child(StructChild::StructElem(Box::new(child_elem)));
                         }
                         _ => {
-                            if let Some(mcr) = parse_marked_content_ref(document, &resolved, page_map)? {
+                            if let Some(mcr) = parse_marked_content_ref(document, &resolved, page_map, page_ctx)? {
                                 parent.add_child(mcr);
                             }
                         }
@@ -753,6 +772,7 @@ fn parse_marked_content_ref(
     document: &PdfDocument,
     obj: &Object,
     page_map: &HashMap<u32, u32>,
+    inherited_page: u32,
 ) -> Result<Option<StructChild>, Error> {
     let dict = match obj.as_dict() {
         Some(d) => d,
@@ -774,16 +794,7 @@ fn parse_marked_content_ref(
         return Ok(None);
     };
 
-    let page = dict
-        .get("Pg")
-        .and_then(|pg_obj| {
-            if let Object::Reference(pg_ref) = pg_obj {
-                page_map.get(&pg_ref.id).copied()
-            } else {
-                None
-            }
-        })
-        .unwrap_or(0);
+    let page = dict_page(dict, page_map).unwrap_or(inherited_page);
 
     // Resolve /Stm to determine the MCID's content-stream scope.
     // `/StmOwn` is the "inline image" form (§14.7.5.4.2) — out of
@@ -978,7 +989,7 @@ mod tests {
         let doc = minimal_test_doc();
         let obj = Object::Integer(5);
         let page_map = HashMap::new();
-        let result = parse_marked_content_ref(&doc, &obj, &page_map).unwrap();
+        let result = parse_marked_content_ref(&doc, &obj, &page_map, 0).unwrap();
         assert!(result.is_none());
     }
 
@@ -990,7 +1001,7 @@ mod tests {
         dict.insert("MCID".to_string(), Object::Integer(5));
         let obj = Object::Dictionary(dict);
         let page_map = HashMap::new();
-        let result = parse_marked_content_ref(&doc, &obj, &page_map).unwrap();
+        let result = parse_marked_content_ref(&doc, &obj, &page_map, 0).unwrap();
         assert!(result.is_none());
     }
 
@@ -1001,7 +1012,7 @@ mod tests {
         dict.insert("Type".to_string(), Object::Name("MCR".to_string()));
         let obj = Object::Dictionary(dict);
         let page_map = HashMap::new();
-        let result = parse_marked_content_ref(&doc, &obj, &page_map).unwrap();
+        let result = parse_marked_content_ref(&doc, &obj, &page_map, 0).unwrap();
         assert!(result.is_none());
     }
 
@@ -1013,7 +1024,7 @@ mod tests {
         dict.insert("MCID".to_string(), Object::Integer(7));
         let obj = Object::Dictionary(dict);
         let page_map = HashMap::new();
-        let result = parse_marked_content_ref(&doc, &obj, &page_map).unwrap();
+        let result = parse_marked_content_ref(&doc, &obj, &page_map, 0).unwrap();
         assert!(result.is_some());
         if let Some(StructChild::MarkedContentRef { mcid, page, scope }) = result {
             assert_eq!(mcid, 7);
@@ -1036,7 +1047,7 @@ mod tests {
             Object::Reference(crate::object::ObjectRef { id: 10, generation: 0 }),
         );
         let obj = Object::Dictionary(dict);
-        let result = parse_marked_content_ref(&doc, &obj, &page_map).unwrap();
+        let result = parse_marked_content_ref(&doc, &obj, &page_map, 0).unwrap();
         if let Some(StructChild::MarkedContentRef { mcid, page, scope }) = result {
             assert_eq!(mcid, 3);
             assert_eq!(page, 2);

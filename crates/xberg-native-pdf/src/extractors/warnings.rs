@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// A single structured warning raised during PDF processing.
@@ -92,6 +93,46 @@ impl WarningCategory {
 #[derive(Debug, Default, Clone)]
 pub struct WarningSink {
     warnings: Arc<Mutex<Vec<Warning>>>,
+    dropped: Arc<AtomicUsize>,
+}
+
+/// A sink that is never drained must not grow without bound: past this many
+/// entries a single `diagnostics_truncated` sentinel counts what was dropped.
+const MAX_SINK_ENTRIES: usize = 1000;
+/// How far back a repeat of an earlier warning is collapsed into it. One
+/// malformed font can warn once per glyph. ~keep
+const REPEAT_WINDOW: usize = 16;
+
+impl WarningSink {
+    fn insert(&self, v: &mut Vec<Warning>, warning: Warning) {
+        let recent = &v[..v.len().min(MAX_SINK_ENTRIES)];
+        if recent
+            .iter()
+            .rev()
+            .take(REPEAT_WINDOW)
+            .any(|w| w.category == warning.category && w.page == warning.page && w.message == warning.message)
+        {
+            return;
+        }
+        if v.len() < MAX_SINK_ENTRIES {
+            v.push(warning);
+            return;
+        }
+        let dropped = self.dropped.fetch_add(1, Ordering::Relaxed) + 1;
+        let sentinel = Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: format!(
+                "diagnostics_truncated: {dropped} further diagnostics were dropped after the {MAX_SINK_ENTRIES}-entry cap"
+            ),
+            spec_section: None,
+        };
+        if v.len() == MAX_SINK_ENTRIES {
+            v.push(sentinel);
+        } else {
+            v[MAX_SINK_ENTRIES] = sentinel;
+        }
+    }
 }
 
 // The document owns the sink. Each synchronous parser or renderer entry point
@@ -167,7 +208,7 @@ impl WarningSink {
     /// Record a warning without emitting a tracing event.
     pub fn push(&self, warning: Warning) {
         if let Ok(mut v) = self.warnings.lock() {
-            v.push(warning);
+            self.insert(&mut v, warning);
         }
         // If the mutex was poisoned, silently drop — better than panic. ~keep
     }
@@ -193,20 +234,26 @@ impl WarningSink {
     pub fn clear(&self) {
         if let Ok(mut v) = self.warnings.lock() {
             v.clear();
+            self.dropped.store(0, Ordering::Relaxed);
         }
     }
 
     /// Push multiple warnings under a single lock acquisition.
     pub fn extend(&self, warnings: impl IntoIterator<Item = Warning>) {
         if let Ok(mut v) = self.warnings.lock() {
-            v.extend(warnings);
+            for warning in warnings {
+                self.insert(&mut v, warning);
+            }
         }
     }
 
     /// Drain and return all accumulated warnings.
     pub fn take(&self) -> Vec<Warning> {
         match self.warnings.lock() {
-            Ok(mut v) => std::mem::take(&mut *v),
+            Ok(mut v) => {
+                self.dropped.store(0, Ordering::Relaxed);
+                std::mem::take(&mut *v)
+            }
             _ => Vec::new(),
         }
     }
@@ -393,5 +440,76 @@ mod tests {
             h.join().unwrap();
         }
         assert_eq!(sink.len(), 10);
+    }
+}
+
+#[cfg(test)]
+mod sink_bound_tests {
+    use super::*;
+
+    fn w(msg: &str) -> Warning {
+        Warning {
+            category: WarningCategory::SpecViolation,
+            page: None,
+            message: msg.to_string(),
+            spec_section: None,
+        }
+    }
+
+    #[test]
+    fn test_identical_warning_is_not_recorded_repeatedly() {
+        let sink = WarningSink::new();
+        for _ in 0..50 {
+            sink.push(w("one malformed font, warned per glyph"));
+        }
+        assert_eq!(sink.len(), 1);
+    }
+
+    #[test]
+    fn test_sink_is_bounded_and_reports_what_it_dropped() {
+        let sink = WarningSink::new();
+        for i in 0..MAX_SINK_ENTRIES + 25 {
+            sink.push(w(&format!("distinct {i}")));
+        }
+        let out = sink.take();
+        assert_eq!(out.len(), MAX_SINK_ENTRIES + 1, "capped, plus one sentinel");
+        let sentinel = out.last().expect("sentinel");
+        assert!(
+            sentinel.message.starts_with("diagnostics_truncated: 25 further"),
+            "{sentinel:?}"
+        );
+    }
+
+    #[test]
+    fn test_repeat_outside_the_window_is_kept() {
+        let sink = WarningSink::new();
+        sink.push(w("first"));
+        for i in 0..REPEAT_WINDOW {
+            sink.push(w(&format!("other {i}")));
+        }
+        sink.push(w("first"));
+        assert_eq!(sink.len(), REPEAT_WINDOW + 2);
+    }
+
+    #[test]
+    fn test_take_resets_the_drop_count_under_the_vector_lock() {
+        let sink = WarningSink::new();
+        for i in 0..MAX_SINK_ENTRIES + 25 {
+            sink.push(w(&format!("distinct {i}")));
+        }
+        let mut held = sink.warnings.lock().unwrap();
+        let drainer = {
+            let sink = sink.clone();
+            std::thread::spawn(move || sink.take())
+        };
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        sink.insert(&mut held, w("overflow while draining"));
+        drop(held);
+        let out = drainer.join().unwrap();
+        let sentinel = out.last().expect("sentinel");
+        assert!(
+            sentinel.message.starts_with("diagnostics_truncated: 26 further"),
+            "{sentinel:?}"
+        );
     }
 }

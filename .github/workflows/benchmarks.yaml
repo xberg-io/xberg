@@ -564,10 +564,8 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
 
-      - name: Download Pdfium runtime (pinned to the checked-in bindings' release)
+      - name: Download Pdfium runtime (pinned by scripts/pdfium-version)
         uses: ./.github/actions/download-pdfium
-        with:
-          pdfium-version: "7678"
 
       - name: Run benchmark
         env:

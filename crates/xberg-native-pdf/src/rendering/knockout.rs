@@ -494,7 +494,7 @@ impl PageRenderer {
             && gs.fill_alpha >= 1.0
             && gs.smask.is_none()
             && !gs.fill_overprint
-            && gs.fill_color_space != "Pattern";
+            && !self.is_pattern_space(&gs.fill_color_space);
         let sidecar_snapshots = if plain_fill { 1 } else { SIDECAR_SNAPSHOT_COPIES };
         self.reserve_raster_workspace(pixmap, gs, coverage, sidecar_snapshots)
     }

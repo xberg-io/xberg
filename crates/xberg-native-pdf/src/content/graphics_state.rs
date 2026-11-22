@@ -485,7 +485,16 @@ impl Default for GraphicsState {
 #[derive(Debug, Clone)]
 pub struct GraphicsStateStack {
     stack: Vec<GraphicsState>,
+    /// `q` operators past [`MAX_GRAPHICS_STATE_DEPTH`], counted so the matching `Q` operators stay balanced.
+    overflow: usize,
+    /// Working state for scopes opened past the cap; dropped when the last such scope closes, so the retained top
+    /// frame is never modified by them.
+    overflow_state: Option<Box<GraphicsState>>,
 }
+
+/// Deepest `q` nesting that keeps its own state. ISO 32000-1 Annex C suggests 28; hostile streams
+/// otherwise grow the stack one full state clone per byte pair.
+const MAX_GRAPHICS_STATE_DEPTH: usize = 256;
 
 impl GraphicsStateStack {
     /// Create a new graphics state stack with an initial state.
@@ -501,6 +510,8 @@ impl GraphicsStateStack {
     pub fn new() -> Self {
         Self {
             stack: vec![GraphicsState::new()],
+            overflow: 0,
+            overflow_state: None,
         }
     }
 
@@ -516,6 +527,9 @@ impl GraphicsStateStack {
     /// assert_eq!(state.font_size, 12.0);
     /// ```
     pub fn current(&self) -> &GraphicsState {
+        if let Some(state) = &self.overflow_state {
+            return state;
+        }
         self.stack.last().expect("Stack should never be empty")
     }
 
@@ -531,6 +545,9 @@ impl GraphicsStateStack {
     /// assert_eq!(stack.current().font_size, 14.0);
     /// ```
     pub fn current_mut(&mut self) -> &mut GraphicsState {
+        if let Some(state) = &mut self.overflow_state {
+            return state;
+        }
         self.stack.last_mut().expect("Stack should never be empty")
     }
 
@@ -548,6 +565,13 @@ impl GraphicsStateStack {
     /// assert_eq!(stack.depth(), 2);
     /// ```
     pub fn save(&mut self) {
+        if self.stack.len() >= MAX_GRAPHICS_STATE_DEPTH {
+            if self.overflow_state.is_none() {
+                self.overflow_state = Some(Box::new(self.current().clone()));
+            }
+            self.overflow = self.overflow.saturating_add(1);
+            return;
+        }
         let state = self.current().clone();
         self.stack.push(state);
     }
@@ -573,7 +597,12 @@ impl GraphicsStateStack {
     /// assert_eq!(stack.depth(), 1);
     /// ```
     pub fn restore(&mut self) {
-        if self.stack.len() > 1 {
+        if self.overflow > 0 {
+            self.overflow -= 1;
+            if self.overflow == 0 {
+                self.overflow_state = None;
+            }
+        } else if self.stack.len() > 1 {
             self.stack.pop();
         }
     }
@@ -862,6 +891,37 @@ mod tests {
         assert!(!gs.fill_overprint);
         assert!(!gs.stroke_overprint);
         assert_eq!(gs.overprint_mode, 0);
+    }
+
+    #[test]
+    fn save_depth_is_capped_and_restores_stay_balanced() {
+        let mut stack = GraphicsStateStack::new();
+        for _ in 0..1_000 {
+            stack.save();
+        }
+        assert_eq!(stack.depth(), MAX_GRAPHICS_STATE_DEPTH);
+        stack.current_mut().font_size = 99.0;
+        for _ in 0..1_000 {
+            stack.restore();
+        }
+        assert_eq!(stack.depth(), 1);
+        assert_eq!(stack.current().font_size, 12.0);
+    }
+
+    #[test]
+    fn overflow_scope_does_not_modify_retained_frame() {
+        let mut stack = GraphicsStateStack::new();
+        for _ in 1..MAX_GRAPHICS_STATE_DEPTH {
+            stack.save();
+        }
+        assert_eq!(stack.depth(), MAX_GRAPHICS_STATE_DEPTH);
+        stack.current_mut().font_size = 12.0;
+        stack.save();
+        stack.current_mut().font_size = 99.0;
+        assert_eq!(stack.current().font_size, 99.0);
+        stack.restore();
+        assert_eq!(stack.current().font_size, 12.0);
+        assert_eq!(stack.depth(), MAX_GRAPHICS_STATE_DEPTH);
     }
 
     #[test]
