@@ -85,8 +85,88 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "fmt.markdown.rumdl.disable"
+key_path = "engines.mago.lint.ignore"
+values = ["strict-assertions", "use-specific-assertions", "no-redundant-variable", "sensitive-parameter"]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.mago.lint.select"
+values = ["correctness", "security"]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.ruff.lint.ignore"
+values = [
+  "ANN401",
+  "ASYNC109",
+  "ASYNC110",
+  "D100",
+  "D104",
+  "D107",
+  "D205",
+  "E501",
+  "ISC001",
+  "PGH003",
+  "PLR2004",
+  "PLW0603",
+  "S104",
+  "S110",
+  "S603",
+]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.ruff.lint.select"
+values = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "N",
+  "D",
+  "UP",
+  "ANN",
+  "ASYNC",
+  "S",
+  "B",
+  "A",
+  "C4",
+  "DTZ",
+  "T10",
+  "T20",
+  "ISC",
+  "ICN",
+  "PIE",
+  "PT",
+  "Q",
+  "RSE",
+  "RET",
+  "SIM",
+  "TID",
+  "TC",
+  "ARG",
+  "PTH",
+  "PGH",
+  "PL",
+  "PERF",
+  "FURB",
+  "RUF",
+]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.rumdl.lang.markdown.format.disable"
 values = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076", "MD025"]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.rumdl.lang.markdown.lint.disable"
+values = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
+
+[[entries]]
+relative_path = "poly.toml"
+key_path = "engines.uncomment.preserve_patterns"
+values = ["SAFETY", "SPDX", "Copyright", "License", "licensed under", "namespace"]
 
 [[entries]]
 relative_path = "poly.toml"
@@ -329,87 +409,7 @@ values = ["pre-commit"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "lint.markdown.rumdl.disable"
-values = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "lint.php.mago.ignore"
-values = ["strict-assertions", "use-specific-assertions", "no-redundant-variable", "sensitive-parameter"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "lint.php.mago.select"
-values = ["correctness", "security"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "lint.python.ruff.ignore"
-values = [
-  "ANN401",
-  "ASYNC109",
-  "ASYNC110",
-  "D100",
-  "D104",
-  "D107",
-  "D205",
-  "E501",
-  "ISC001",
-  "PGH003",
-  "PLR2004",
-  "PLW0603",
-  "S104",
-  "S110",
-  "S603",
-]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "lint.python.ruff.select"
-values = [
-  "F",
-  "E",
-  "W",
-  "I",
-  "N",
-  "D",
-  "UP",
-  "ANN",
-  "ASYNC",
-  "S",
-  "B",
-  "A",
-  "C4",
-  "DTZ",
-  "T10",
-  "T20",
-  "ISC",
-  "ICN",
-  "PIE",
-  "PT",
-  "Q",
-  "RSE",
-  "RET",
-  "SIM",
-  "TID",
-  "TC",
-  "ARG",
-  "PTH",
-  "PGH",
-  "PL",
-  "PERF",
-  "FURB",
-  "RUF",
-]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "lint.uncomment.preserve_patterns"
-values = ["SAFETY", "SPDX", "Copyright", "License", "licensed under", "namespace"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "per-file-ignores.**"
+key_path = "per_file_ignores.**"
 values = [
   "CPY001",
   "UnorderedKey",
@@ -446,82 +446,82 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*.pyi"
+key_path = "per_file_ignores.**/*.pyi"
 values = ["A002", "F401", "I001", "PYI033", "TC006", "UP035"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*.spec.js"
+key_path = "per_file_ignores.**/*.spec.js"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*.spec.ts"
+key_path = "per_file_ignores.**/*.spec.ts"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*.test.ts"
+key_path = "per_file_ignores.**/*.test.ts"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*Test.java"
+key_path = "per_file_ignores.**/*Test.java"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*Tests.cs"
+key_path = "per_file_ignores.**/*Tests.cs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*_spec.rb"
+key_path = "per_file_ignores.**/*_spec.rb"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*_test.dart"
+key_path = "per_file_ignores.**/*_test.dart"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*_test.go"
+key_path = "per_file_ignores.**/*_test.go"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*_test.rs"
+key_path = "per_file_ignores.**/*_test.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/*_tests.rs"
+key_path = "per_file_ignores.**/*_tests.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/__init__.py"
+key_path = "per_file_ignores.**/__init__.py"
 values = ["I001"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/api.py"
+key_path = "per_file_ignores.**/api.py"
 values = ["F401", "I001", "TC006", "UP035"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/benches/**/*"
+key_path = "per_file_ignores.**/benches/**/*"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/conftest.py"
+key_path = "per_file_ignores.**/conftest.py"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/e2e/**"
+key_path = "per_file_ignores.**/e2e/**"
 values = [
   "ANN",
   "D103",
@@ -566,27 +566,27 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/examples/**"
+key_path = "per_file_ignores.**/examples/**"
 values = ["ANN", "D100", "D103", "I001", "INP001", "PLR2004", "S101", "PLC0415", "SLF001", "T201", "typo"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/options.py"
+key_path = "per_file_ignores.**/options.py"
 values = ["F401", "I001", "RUF100"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/test/**/*"
+key_path = "per_file_ignores.**/test/**/*"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/test_*.py"
+key_path = "per_file_ignores.**/test_*.py"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/test_apps/**"
+key_path = "per_file_ignores.**/test_apps/**"
 values = [
   "ANN",
   "D103",
@@ -631,7 +631,7 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/tests/**"
+key_path = "per_file_ignores.**/tests/**"
 values = [
   "ANN",
   "D103",
@@ -676,87 +676,87 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/tests/**/*"
+key_path = "per_file_ignores.**/tests/**/*"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/tests/**/*.py"
+key_path = "per_file_ignores.**/tests/**/*.py"
 values = ["PT019", "PLC0415", "SLF001"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.**/text_repair.rs"
+key_path = "per_file_ignores.**/text_repair.rs"
 values = ["typo"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores..alef-toml-merge-provenance.toml"
+key_path = "per_file_ignores..alef-toml-merge-provenance.toml"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores..cargo/config.toml"
+key_path = "per_file_ignores..cargo/config.toml"
 values = ["comment", "doc-comment"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.CHANGELOG-1.0-1.2.md"
+key_path = "per_file_ignores.CHANGELOG-1.0-1.2.md"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.CHANGELOG.md"
+key_path = "per_file_ignores.CHANGELOG.md"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.Package.swift"
+key_path = "per_file_ignores.Package.swift"
 values = ["comment", "doc-comment"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.alef.toml"
+key_path = "per_file_ignores.alef.toml"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.cli-proxy/pypi/**/*.py"
+key_path = "per_file_ignores.cli-proxy/pypi/**/*.py"
 values = ["ANN001", "ANN202", "S310", "T201"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-candle-ocr/src/models/deepseek_ocr/model.rs"
+key_path = "per_file_ignores.crates/xberg-candle-ocr/src/models/deepseek_ocr/model.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-candle-ocr/src/models/paddleocr_vl/model.rs"
+key_path = "per_file_ignores.crates/xberg-candle-ocr/src/models/paddleocr_vl/model.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-cli/README.md"
+key_path = "per_file_ignores.crates/xberg-cli/README.md"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-cli/src/commands/overrides/mod.rs"
+key_path = "per_file_ignores.crates/xberg-cli/src/commands/overrides/mod.rs"
 values = ["type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-cli/src/main.rs"
+key_path = "per_file_ignores.crates/xberg-cli/src/main.rs"
 values = ["file-too-long", "function-too-long", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-ffi/build.rs"
+key_path = "per_file_ignores.crates/xberg-ffi/build.rs"
 values = ["comment", "doc-comment"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-ffi/cbindgen.toml"
+key_path = "per_file_ignores.crates/xberg-ffi/cbindgen.toml"
 values = [
   "comment",
   "doc-comment",
@@ -770,12 +770,12 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-ffi/include/xberg.h"
+key_path = "per_file_ignores.crates/xberg-ffi/include/xberg.h"
 values = ["comment", "doc-comment", "file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-ffi/src/lib.rs"
+key_path = "per_file_ignores.crates/xberg-ffi/src/lib.rs"
 values = [
   "comment",
   "doc-comment",
@@ -789,7 +789,7 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-jni/**"
+key_path = "per_file_ignores.crates/xberg-jni/**"
 values = [
   "comment",
   "doc-comment",
@@ -803,222 +803,222 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/content/operators.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/content/operators.rs"
 values = ["file-too-long", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/content/parser.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/content/parser.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/converters/text_post_processor.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/converters/text_post_processor.rs"
 values = ["function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/annotations.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/annotations.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/columns.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/columns.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/extract_api.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/extract_api.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/fonts.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/fonts.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/images.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/images.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/mod.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/mod.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/objects.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/objects.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/pages.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/pages.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/paths.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/paths.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/reading_order.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/reading_order.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/span_postprocess.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/span_postprocess.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/spans_text.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/spans_text.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/tables.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/tables.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/document/text_assembly.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/document/text_assembly.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/elements/path.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/elements/path.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/encryption/algorithms.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/encryption/algorithms.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/encryption/mod.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/encryption/mod.rs"
 values = ["function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/images.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/images.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/text/advance.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/text/advance.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/text/mod.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/text/mod.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/text/operators.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/text/operators.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/text/span_merging.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/text/span_merging.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/extractors/text/xobjects.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/extractors/text/xobjects.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/fonts/font_dict.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/fonts/font_dict.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/functions/mod.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/functions/mod.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/parser.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/parser.rs"
 values = ["function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/pipeline/reading_order/xycut.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/pipeline/reading_order/xycut.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/mesh_shading.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/mesh_shading.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/page_renderer.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/page_renderer.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/resolution/color.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/resolution/color.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/separation_renderer.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/separation_renderer.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/sidecar.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/sidecar.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/rendering/text_rasterizer.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/rendering/text_rasterizer.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/structure/parser.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/structure/parser.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/structure/spatial_table_detector.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/structure/spatial_table_detector.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/structure/table_extractor.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/structure/table_extractor.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/structure/traversal.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/structure/traversal.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/text/bidi.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/text/bidi.rs"
 values = ["cyclomatic-complexity"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/xfa/parser.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/xfa/parser.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-native-pdf/src/xref.rs"
+key_path = "per_file_ignores.crates/xberg-native-pdf/src/xref.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-node/**"
+key_path = "per_file_ignores.crates/xberg-node/**"
 values = [
   "comment",
   "doc-comment",
@@ -1032,62 +1032,62 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-node/index.js"
+key_path = "per_file_ignores.crates/xberg-node/index.js"
 values = ["no-unused-vars"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-paddle-ocr/src/ocr_lite.rs"
+key_path = "per_file_ignores.crates/xberg-paddle-ocr/src/ocr_lite.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/bindgen/pdfium_7678.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/bindgen/pdfium_7678.rs"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/bindings.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/bindings.rs"
 values = ["file-too-long", "too-many-parameters", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/bindings/dynamic_bindings.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/bindings/dynamic_bindings.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/bindings/static_bindings.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/bindings/static_bindings.rs"
 values = ["file-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/font_provider.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/font_provider.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/pdf/document/page.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/pdf/document/page.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/pdf/document/page/object/path.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/pdf/document/page/object/path.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/pdf/document/page/objects/common.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/pdf/document/page/objects/common.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-pdfium-render/src/pdf/quad_points.rs"
+key_path = "per_file_ignores.crates/xberg-pdfium-render/src/pdf/quad_points.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-php/**"
+key_path = "per_file_ignores.crates/xberg-php/**"
 values = [
   "comment",
   "doc-comment",
@@ -1102,7 +1102,7 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-py/src/lib.rs"
+key_path = "per_file_ignores.crates/xberg-py/src/lib.rs"
 values = [
   "comment",
   "doc-comment",
@@ -1116,22 +1116,22 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-tesseract/build.rs"
+key_path = "per_file_ignores.crates/xberg-tesseract/build.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-tesseract/src/api.rs"
+key_path = "per_file_ignores.crates/xberg-tesseract/src/api.rs"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-wasm/scripts/**"
+key_path = "per_file_ignores.crates/xberg-wasm/scripts/**"
 values = ["no-console"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg-wasm/src/lib.rs"
+key_path = "per_file_ignores.crates/xberg-wasm/src/lib.rs"
 values = [
   "comment",
   "doc-comment",
@@ -1145,452 +1145,452 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/api/handlers.rs"
+key_path = "per_file_ignores.crates/xberg/src/api/handlers.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/config/extraction/core.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/config/extraction/core.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/config/ocr.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/config/ocr.rs"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/extractor/file.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/extractor/file.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/mime.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/mime.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/pipeline/features.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/pipeline/features.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/pipeline/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/pipeline/mod.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/pipeline/tests.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/pipeline/tests.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/core/split.rs"
+key_path = "per_file_ignores.crates/xberg/src/core/split.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/embeddings/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/embeddings/mod.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/engine/extract_impl.rs"
+key_path = "per_file_ignores.crates/xberg/src/engine/extract_impl.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/engine/structured/prompts.rs"
+key_path = "per_file_ignores.crates/xberg/src/engine/structured/prompts.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extraction/docx/parser.rs"
+key_path = "per_file_ignores.crates/xberg/src/extraction/docx/parser.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extraction/ppt/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extraction/ppt/mod.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/archive.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/archive.rs"
 values = ["function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/djot_format/extractor.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/djot_format/extractor.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/docbook.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/docbook.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/docx.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/docx.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/email.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/email.rs"
 values = ["cyclomatic-complexity", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/epub/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/epub/mod.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/excel.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/excel.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/fictionbook.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/fictionbook.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/html.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/html.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/hwpx.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/hwpx.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/image.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/image.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/iwork/numbers.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/iwork/numbers.rs"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/jats/elements.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/jats/elements.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/jats/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/jats/mod.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/jats/parser.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/jats/parser.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/jupyter.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/jupyter.rs"
 values = ["file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/latex/commands.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/latex/commands.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/latex/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/latex/mod.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/markdown.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/markdown.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/myst.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/myst.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/odp.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/odp.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/odt.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/odt.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/orgmode.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/orgmode.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/extraction.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/extraction.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/layout_runner.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/layout_runner.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/mod.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/ocr/document.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/ocr/document.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/ocr/pipeline.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/ocr/pipeline.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/ocr/scoring.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/ocr/scoring.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/ocr/tests.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/ocr/tests.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pdf/reading_order.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pdf/reading_order.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/pptx.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/pptx.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/rst.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/rst.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/rtf/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/rtf/mod.rs"
 values = ["cyclomatic-complexity", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/extractors/typst.rs"
+key_path = "per_file_ignores.crates/xberg/src/extractors/typst.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/layout/models/slanet.rs"
+key_path = "per_file_ignores.crates/xberg/src/layout/models/slanet.rs"
 values = ["cyclomatic-complexity", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/mcp/server.rs"
+key_path = "per_file_ignores.crates/xberg/src/mcp/server.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/model_download.rs"
+key_path = "per_file_ignores.crates/xberg/src/model_download.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/ocr/hocr_parser.rs"
+key_path = "per_file_ignores.crates/xberg/src/ocr/hocr_parser.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/ocr/processor/execution.rs"
+key_path = "per_file_ignores.crates/xberg/src/ocr/processor/execution.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/ocr/tesseract_backend.rs"
+key_path = "per_file_ignores.crates/xberg/src/ocr/tesseract_backend.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/onnx/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/onnx/mod.rs"
 values = ["function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/paddle_ocr/backend.rs"
+key_path = "per_file_ignores.crates/xberg/src/paddle_ocr/backend.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/paddle_ocr/model_manager.rs"
+key_path = "per_file_ignores.crates/xberg/src/paddle_ocr/model_manager.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/native/hierarchy.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/native/hierarchy.rs"
 values = ["cyclomatic-complexity", "file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/native/table.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/native/table.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/native/text.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/native/text.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/render.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/render.rs"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/adapters.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/adapters.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/assembly.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/assembly.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/classify.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/classify.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/layout_classify.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/layout_classify.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/paragraphs.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/paragraphs.rs"
 values = ["cyclomatic-complexity", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/pipeline.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/pipeline.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/pipeline/tests.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/pipeline/tests.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/regions/table_recognition.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/regions/table_recognition.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/regions/tables.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/regions/tables.rs"
 values = ["cyclomatic-complexity", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/structure/text_repair.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/structure/text_repair.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/pdf/table_reconstruct.rs"
+key_path = "per_file_ignores.crates/xberg/src/pdf/table_reconstruct.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/rendering/comrak_bridge.rs"
+key_path = "per_file_ignores.crates/xberg/src/rendering/comrak_bridge.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long", "nesting-too-deep"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/rendering/djot.rs"
+key_path = "per_file_ignores.crates/xberg/src/rendering/djot.rs"
 values = ["cyclomatic-complexity", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/reranking/mod.rs"
+key_path = "per_file_ignores.crates/xberg/src/reranking/mod.rs"
 values = ["file-too-long", "function-too-long", "too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/table_core.rs"
+key_path = "per_file_ignores.crates/xberg/src/table_core.rs"
 values = ["file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/text/redaction/engine.rs"
+key_path = "per_file_ignores.crates/xberg/src/text/redaction/engine.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/types/extraction.rs"
+key_path = "per_file_ignores.crates/xberg/src/types/extraction.rs"
 values = ["file-too-long", "type-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/types/internal_builder.rs"
+key_path = "per_file_ignores.crates/xberg/src/types/internal_builder.rs"
 values = ["too-many-parameters"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.crates/xberg/src/types/metadata.rs"
+key_path = "per_file_ignores.crates/xberg/src/types/metadata.rs"
 values = ["cyclomatic-complexity", "file-too-long", "function-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.docker/**"
+key_path = "per_file_ignores.docker/**"
 values = ["DL3006", "DL3059"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.docs-site/src/content/docs/changelog-1.0-1.2.md"
+key_path = "per_file_ignores.docs-site/src/content/docs/changelog-1.0-1.2.md"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.docs-site/src/content/docs/changelog.md"
+key_path = "per_file_ignores.docs-site/src/content/docs/changelog.md"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.docs-site/src/content/docs/reference/**"
+key_path = "per_file_ignores.docs-site/src/content/docs/reference/**"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.e2e/**/*.py"
+key_path = "per_file_ignores.e2e/**/*.py"
 values = ["A001", "N801"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.integrations/node/llamaindex-xberg/src/nodeParser.ts"
+key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/nodeParser.ts"
 values = ["no-console"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.integrations/node/llamaindex-xberg/src/reader.ts"
+key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/reader.ts"
 values = ["no-console"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.integrations/node/llamaindex-xberg/src/readerMapping.ts"
+key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/readerMapping.ts"
 values = ["no-console"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.packages/**"
+key_path = "per_file_ignores.packages/**"
 values = [
   "comment",
   "doc-comment",
@@ -1604,32 +1604,32 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.packages/python/**/api.py"
+key_path = "per_file_ignores.packages/python/**/api.py"
 values = ["RET504"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.packages/python/xberg/__init__.py"
+key_path = "per_file_ignores.packages/python/xberg/__init__.py"
 values = ["F811"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.packages/python/xberg/options.py"
+key_path = "per_file_ignores.packages/python/xberg/options.py"
 values = ["UP042"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.poly.toml"
+key_path = "per_file_ignores.poly.toml"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.scripts/**"
+key_path = "per_file_ignores.scripts/**"
 values = ["no-console"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.scripts/**/*.py"
+key_path = "per_file_ignores.scripts/**/*.py"
 values = [
   "B023",
   "C901",
@@ -1659,22 +1659,22 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.scripts/ci/docker/test_docker.py"
+key_path = "per_file_ignores.scripts/ci/docker/test_docker.py"
 values = ["EXE001", "file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.tools/benchmark-harness/baselines/initial_baseline.json"
+key_path = "per_file_ignores.tools/benchmark-harness/baselines/initial_baseline.json"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.tools/benchmark-harness/guardrails.json"
+key_path = "per_file_ignores.tools/benchmark-harness/guardrails.json"
 values = ["file-too-long"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.tools/benchmark-harness/scripts/*.py"
+key_path = "per_file_ignores.tools/benchmark-harness/scripts/*.py"
 values = [
   "ANN001",
   "ANN201",
@@ -1716,10 +1716,10 @@ values = [
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.tools/generate_test_fixtures/**/*.py"
+key_path = "per_file_ignores.tools/generate_test_fixtures/**/*.py"
 values = ["D301", "ERA001", "PERF401", "PLC0415", "PT001", "S101", "SIM117", "T201", "TC003"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per-file-ignores.tools/perf/*.py"
+key_path = "per_file_ignores.tools/perf/*.py"
 values = ["D103", "T201"]

@@ -9127,7 +9127,7 @@ dependencies = [
 
 [[package]]
 name = "xberg_nif"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
