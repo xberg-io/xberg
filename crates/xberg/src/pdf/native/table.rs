@@ -1018,6 +1018,9 @@ pub(crate) fn extract_tables_heuristic(
     })
 }
 
+/// A reconstructed table, its grid, and whether the definition-grid path produced it.
+type RegionTable = (Table, Option<crate::types::TableGrid>, bool);
+
 /// Reconstruct a page's candidate regions, returning the tables and, in
 /// parallel, whether each one came from the definition-grid path.
 ///
@@ -1031,7 +1034,7 @@ fn reconstruct_page_region_tables(
     allow_single_column: bool,
     region_rules: &[usize],
     column_rules: &source_columns::PageRules<'_>,
-) -> (Vec<(Table, Option<crate::types::TableGrid>, bool)>, Vec<bool>) {
+) -> (Vec<RegionTable>, Vec<bool>) {
     let ruling_paths = column_rules.paths();
     let mut tables = Vec::new();
     let mut definition_tables = Vec::new();
