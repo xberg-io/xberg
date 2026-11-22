@@ -552,8 +552,41 @@ impl<'a> PdfFonts<'a> {
 
     /// Drops every font in this registry. Must run before `FPDF_CloseDocument()`, because
     /// `FPDFFont_Close()` on a font of an already-closed document reads freed memory.
+    ///
+    /// `fonts_mut()` lets safe code swap registries between documents. A registry that does not
+    /// belong to `document` may hold fonts of a document that is already closed, so those fonts
+    /// are leaked rather than closed.
     #[inline]
-    pub(crate) fn clear(&mut self) {
-        self.fonts.clear();
+    pub(crate) fn release_for(&mut self, document: FPDF_DOCUMENT) {
+        if self.document_handle == document {
+            self.fonts.clear();
+        } else {
+            for (_, font) in self.fonts.drain() {
+                std::mem::forget(font);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+    use crate::utils::test::test_bind_to_pdfium;
+
+    #[test]
+    fn swapped_font_registries_do_not_close_fonts_of_a_closed_document() -> Result<(), PdfiumError> {
+        let pdfium = test_bind_to_pdfium();
+
+        let mut first = pdfium.create_new_pdf()?;
+        let mut second = pdfium.create_new_pdf()?;
+        first.fonts_mut().times_roman();
+        second.fonts_mut().helvetica();
+
+        std::mem::swap(first.fonts_mut(), second.fonts_mut());
+
+        drop(second);
+        drop(first);
+
+        Ok(())
     }
 }
