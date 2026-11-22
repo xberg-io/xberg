@@ -1251,6 +1251,9 @@ public func pageStructureFromJson<GenericIntoRustString: IntoRustString>(_ json:
 public func pageViewportFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PageViewport {
     try { let val = __swift_bridge__$page_viewport_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PageViewport(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
+public func parsedScaleFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ParsedScale {
+    try { let val = __swift_bridge__$parsed_scale_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ParsedScale(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
 public func pdfAnnotationFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PdfAnnotation {
     try { let val = __swift_bridge__$pdf_annotation_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PdfAnnotation(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
@@ -1334,6 +1337,9 @@ public func securityLimitsFromJson<GenericIntoRustString: IntoRustString>(_ json
 }
 public func serverConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ServerConfig {
     try { let val = __swift_bridge__$server_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ServerConfig(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
+public func sheetMetadataFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> SheetMetadata {
+    try { let val = __swift_bridge__$sheet_metadata_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return SheetMetadata(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
 public func sitemapUrlFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> SitemapUrl {
     try { let val = __swift_bridge__$sitemap_url_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return SitemapUrl(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
@@ -1544,6 +1550,9 @@ public func patternMatchFromJson<GenericIntoRustString: IntoRustString>(_ json: 
 }
 public func pdfMetadataFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PdfMetadata {
     try { let val = __swift_bridge__$pdf_metadata_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PdfMetadata(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
+public func polygonAnnotationInputFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PolygonAnnotationInput {
+    try { let val = __swift_bridge__$polygon_annotation_input_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PolygonAnnotationInput(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
 public func pptxAppPropertiesFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PptxAppProperties {
     try { let val = __swift_bridge__$pptx_app_properties_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PptxAppProperties(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
@@ -23069,6 +23078,10 @@ public class PolygonAnnotationInputRef {
     }
 }
 extension PolygonAnnotationInputRef {
+    public func __alef_owned_vec_vertices() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$PolygonAnnotationInput$vertices(ptr))
+    }
+
     public func rect() -> Optional<BoundingBox> {
         { let val = __swift_bridge__$PolygonAnnotationInput$rect(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
