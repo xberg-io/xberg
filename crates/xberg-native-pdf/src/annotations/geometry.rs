@@ -105,7 +105,6 @@ impl PolygonAnnotation {
 }
 
 /// Flatten a number format array (possibly nested) into its numeric leaves.
-
 fn flatten_number_array(object: &Object) -> Option<Vec<f64>> {
     let mut numbers = Vec::new();
     flatten_numbers_into(object, &mut numbers);
@@ -202,7 +201,8 @@ impl PdfDocument {
                 _ => None,
             })
             .collect();
-        let points: Vec<[f64; 2]> = numbers.chunks_exact(2).map(|pair| [pair[0], pair[1]]).collect();
+        let (pairs, _) = numbers.as_chunks::<2>();
+        let points: Vec<[f64; 2]> = pairs.to_vec();
         (!points.is_empty()).then_some(points)
     }
 
