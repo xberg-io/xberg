@@ -12,7 +12,7 @@ use crate::object::Object;
 ///
 /// This struct manages the encryption state and provides methods for
 /// authenticating passwords and decrypting content.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EncryptionHandler {
     /// Encryption dictionary
     dict: EncryptDict,
@@ -20,8 +20,30 @@ pub struct EncryptionHandler {
     encryption_key: Option<Vec<u8>>,
     /// File identifier (first element of /ID array)
     file_id: Vec<u8>,
-    /// Encryption algorithm
+    /// Encryption algorithm for streams (/StmF)
     algorithm: Algorithm,
+    /// Encryption algorithm for strings (/StrF)
+    string_algorithm: Algorithm,
+}
+
+impl std::fmt::Debug for EncryptionHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EncryptionHandler")
+            .field("algorithm", &self.algorithm)
+            .field("string_algorithm", &self.string_algorithm)
+            .field("version", &self.dict.version)
+            .field("revision", &self.dict.revision)
+            .field("authenticated", &self.encryption_key.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for EncryptionHandler {
+    fn drop(&mut self) {
+        if let Some(key) = self.encryption_key.as_mut() {
+            zeroize::Zeroize::zeroize(key);
+        }
+    }
 }
 
 impl EncryptionHandler {
@@ -38,6 +60,7 @@ impl EncryptionHandler {
     pub fn new(encrypt_obj: &Object, file_id: Vec<u8>) -> Result<Self> {
         let dict = EncryptDict::from_object(encrypt_obj)?;
         let algorithm = dict.algorithm()?;
+        let string_algorithm = dict.string_algorithm()?;
 
         tracing::info!(
             algorithm = ?algorithm,
@@ -95,6 +118,7 @@ impl EncryptionHandler {
             encryption_key: None,
             file_id,
             algorithm,
+            string_algorithm,
         })
     }
 
@@ -126,6 +150,7 @@ impl EncryptionHandler {
         ) {
             self.encryption_key = Some(key);
             tracing::info!("authenticated with user password");
+            self.warn_on_perms_mismatch();
             return Ok(true);
         }
 
@@ -144,11 +169,26 @@ impl EncryptionHandler {
         )? {
             self.encryption_key = Some(key);
             tracing::info!("authenticated with owner password");
+            self.warn_on_perms_mismatch();
             return Ok(true);
         }
 
         tracing::warn!("password authentication failed");
         Ok(false)
+    }
+
+    fn warn_on_perms_mismatch(&self) {
+        if self.dict.revision < 5 {
+            return;
+        }
+        let (Some(key), Some(perms)) = (self.encryption_key.as_deref(), self.dict.perms.as_deref()) else {
+            return;
+        };
+        if !algorithms::verify_perms(key, perms, self.dict.permissions, self.dict.encrypt_metadata) {
+            tracing::warn!(
+                "encryption /Perms does not match /P or /EncryptMetadata; permissions may have been altered"
+            );
+        }
     }
 
     /// Check if the handler has been authenticated.
@@ -195,12 +235,16 @@ impl EncryptionHandler {
     ///
     /// The decrypted stream data, or an error if decryption fails
     pub fn decrypt_stream(&self, data: &[u8], obj_num: u32, gen_num: u32) -> Result<Vec<u8>> {
+        self.decrypt_with(self.algorithm, data, obj_num, gen_num)
+    }
+
+    fn decrypt_with(&self, algorithm: Algorithm, data: &[u8], obj_num: u32, gen_num: u32) -> Result<Vec<u8>> {
         let key = self
             .encryption_key
             .as_ref()
             .ok_or_else(|| Error::InvalidPdf("Not authenticated".to_string()))?;
 
-        match self.algorithm {
+        match algorithm {
             Algorithm::None => return Ok(data.to_vec()),
             Algorithm::Aes256 => {
                 // AES-256 uses the file encryption key directly (no per-object key derivation)
@@ -222,10 +266,10 @@ impl EncryptionHandler {
         }
 
         // Per-object key derivation via MD5 — required for RC4 and AES-128 (R≤4). ~keep
-        let obj_key = self.compute_object_key(key, obj_num, gen_num)?;
+        let obj_key = Self::compute_object_key(algorithm, key, obj_num, gen_num)?;
 
         // Decrypt based on algorithm (AES-256 and None already handled above) ~keep
-        match self.algorithm {
+        match algorithm {
             Algorithm::RC4_40 | Algorithm::Rc4_128 => super::rc4::rc4_crypt(&obj_key, data),
             Algorithm::Aes128 => {
                 if obj_key.len() < 16 {
@@ -257,8 +301,7 @@ impl EncryptionHandler {
     ///
     /// The decrypted string data
     pub fn decrypt_string(&self, data: &[u8], obj_num: u32, gen_num: u32) -> Result<Vec<u8>> {
-        // Strings are decrypted the same way as streams ~keep
-        self.decrypt_stream(data, obj_num, gen_num)
+        self.decrypt_with(self.string_algorithm, data, obj_num, gen_num)
     }
 
     /// Compute the object-specific encryption key.
@@ -274,7 +317,7 @@ impl EncryptionHandler {
     /// # Returns
     ///
     /// The object-specific key
-    fn compute_object_key(&self, base_key: &[u8], obj_num: u32, gen_num: u32) -> Result<Vec<u8>> {
+    fn compute_object_key(algorithm: Algorithm, base_key: &[u8], obj_num: u32, gen_num: u32) -> Result<Vec<u8>> {
         // #230 Phase C: route the Algorithm-1 per-object-key MD5
         // through the governed provider (byte-identical under the
         // default `compat` policy; a strict/FIPS policy denies it
@@ -287,7 +330,7 @@ impl EncryptionHandler {
         hasher.update(&gen_num.to_le_bytes()[..2]);
 
         // Step b: For AES, add "sAlT" string ~keep
-        if self.algorithm.is_aes() {
+        if algorithm.is_aes() {
             hasher.update(b"sAlT");
         }
 
@@ -312,7 +355,7 @@ mod tests {
         let base_key = &[0x01, 0x23, 0x45, 0x67, 0x89];
         let handler = create_test_handler(Algorithm::RC4_40);
 
-        let obj_key = handler.compute_object_key(base_key, 1, 0).unwrap();
+        let obj_key = EncryptionHandler::compute_object_key(handler.algorithm, base_key, 1, 0).unwrap();
 
         // Key should be (5 + 5).min(16) = 10 bytes ~keep
         assert_eq!(obj_key.len(), 10);
@@ -323,7 +366,7 @@ mod tests {
         let base_key = &[0x01; 16];
         let handler = create_test_handler(Algorithm::Aes128);
 
-        let obj_key = handler.compute_object_key(base_key, 1, 0).unwrap();
+        let obj_key = EncryptionHandler::compute_object_key(handler.algorithm, base_key, 1, 0).unwrap();
 
         // Key should be (16 + 5).min(16) = 16 bytes ~keep
         assert_eq!(obj_key.len(), 16);
@@ -406,10 +449,12 @@ mod tests {
                 user_encryption: None,
                 perms: None,
                 stream_crypt_method: None,
+                string_crypt_method: None,
             },
             encryption_key: Some(vec![0x01; 16]),
             file_id: b"test_id".to_vec(),
             algorithm,
+            string_algorithm: algorithm,
         }
     }
 }

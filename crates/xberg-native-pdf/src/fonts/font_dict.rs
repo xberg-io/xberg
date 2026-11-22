@@ -18,6 +18,9 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Expanded `cfirst clast` entries a single font's /W or /W2 may spend. ~keep
+const MAX_CID_RANGE_INSERTS: usize = 1_000_000;
+
 pub(crate) fn record_missing_tounicode_warning(doc: &PdfDocument, base_font: &str) {
     use crate::extractors::warnings::{Warning, WarningCategory};
 
@@ -968,25 +971,22 @@ impl FontInfo {
                 };
 
                 resolved.as_array().map(|arr| {
+                    // An unreadable entry keeps its slot so later codes do not shift. ~keep
                     arr.iter()
-                        .filter_map(|obj| {
-                            obj.as_integer()
-                                .map(|i| i as f32)
-                                .or_else(|| obj.as_real().map(|r| r as f32))
-                        })
+                        .map(|obj| Self::resolve_number(doc, obj).unwrap_or(0.0))
                         .collect::<Vec<f32>>()
                 })
             });
 
             let first = font_dict
                 .get("FirstChar")
-                .and_then(|obj| obj.as_integer())
-                .map(|i| i as u32);
+                .and_then(|obj| Self::resolve_number(doc, obj))
+                .map(|n| n as u32);
 
             let last = font_dict
                 .get("LastChar")
-                .and_then(|obj| obj.as_integer())
-                .map(|i| i as u32);
+                .and_then(|obj| Self::resolve_number(doc, obj))
+                .map(|n| n as u32);
 
             if widths_opt.is_some() {
                 tracing::debug!(
@@ -1026,6 +1026,16 @@ impl FontInfo {
         // multiplying by font_matrix_a still get the intended em-fraction result. ~keep
         let default_width = if subtype == "Type3" && font_matrix_a != 0.001 {
             default_width * 0.001 / font_matrix_a
+        } else {
+            default_width
+        };
+
+        // A zero /MissingWidth is the placeholder most producers emit, not a measured advance, so only a
+        // positive value overrides the heuristic. ~keep
+        let default_width = if subtype != "Type0" {
+            Self::descriptor_missing_width(doc, font_dict)
+                .filter(|missing| *missing > 0.0)
+                .unwrap_or(default_width)
         } else {
             default_width
         };
@@ -2640,6 +2650,7 @@ impl FontInfo {
         }
 
         let mut metrics: HashMap<u16, VerticalMetrics> = HashMap::new();
+        let mut range_budget = MAX_CID_RANGE_INSERTS;
         let mut i = 0;
 
         while i < w2_array.len() {
@@ -2702,6 +2713,14 @@ impl FontInfo {
                     };
                     i += 3;
                     let metric = VerticalMetrics { w1y, v_x, v_y };
+                    if !Self::spend_cid_range_budget(
+                        &mut range_budget,
+                        cid_start,
+                        cid_end,
+                        "parse_cid_vertical_metrics",
+                    ) {
+                        break;
+                    }
                     for cid in cid_start..=cid_end {
                         metrics.insert(cid, metric);
                     }
@@ -2720,6 +2739,42 @@ impl FontInfo {
         }
 
         if metrics.is_empty() { None } else { Some(metrics) }
+    }
+
+    fn resolve_number(doc: &PdfDocument, obj: &Object) -> Option<f32> {
+        match obj.as_reference() {
+            Some(reference) => doc.load_number(reference),
+            None => obj
+                .as_integer()
+                .map(|i| i as f32)
+                .or_else(|| obj.as_real().map(|r| r as f32)),
+        }
+    }
+
+    fn descriptor_missing_width(doc: &PdfDocument, font_dict: &HashMap<String, Object>) -> Option<f32> {
+        let descriptor = font_dict.get("FontDescriptor")?;
+        let descriptor = match descriptor.as_reference() {
+            Some(reference) => doc.load_object(reference).ok()?,
+            None => descriptor.clone(),
+        };
+        Self::resolve_number(doc, descriptor.as_dict()?.get("MissingWidth")?)
+    }
+
+    /// Charges one `cfirst clast` range against the per-font insert budget. Each range can touch 65536 CIDs, so
+    /// an unbounded run of them costs billions of inserts into a map that never exceeds 65536 keys. ~keep
+    fn spend_cid_range_budget(budget: &mut usize, cid_start: u16, cid_end: u16, operation: &str) -> bool {
+        let span = (cid_end as usize).saturating_sub(cid_start as usize) + 1;
+        if span > *budget {
+            tracing::warn!(
+                target: crate::LOG_TARGET_ROOT,
+                operation,
+                error_code = "range_budget_exhausted",
+                "stopping CID range parsing after {MAX_CID_RANGE_INSERTS} expanded entries"
+            );
+            return false;
+        }
+        *budget -= span;
+        true
     }
 
     /// Applies the `/W` array-form width group `c [w1 w2 …]` for one CID range.
@@ -2746,6 +2801,7 @@ impl FontInfo {
         }
 
         let mut widths: HashMap<u16, f32> = HashMap::new();
+        let mut range_budget = MAX_CID_RANGE_INSERTS;
         let mut i = 0;
 
         while i < w_array.len() {
@@ -2811,6 +2867,9 @@ impl FontInfo {
                     };
                     i += 1;
 
+                    if !Self::spend_cid_range_budget(&mut range_budget, cid_start, cid_end, "parse_cid_widths") {
+                        break;
+                    }
                     for cid in cid_start..=cid_end {
                         widths.insert(cid, width);
                     }
@@ -12139,6 +12198,115 @@ mod tests {
             .load_object(crate::object::ObjectRef::new(4, 0))
             .expect("load Type0 font dict");
         FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict")
+    }
+
+    fn pdf_from_object_bodies(bodies: &[&str]) -> Vec<u8> {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (index, body) in bodies.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+        for offset in offsets.iter() {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+                offsets.len() + 1
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    #[test]
+    fn indirect_widths_first_char_and_missing_width_are_resolved() {
+        let pdf = pdf_from_object_bodies(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>",
+            "<< /Type /Font /Subtype /TrueType /BaseFont /Foo /FirstChar 6 0 R /LastChar 66 \
+             /Widths [4 0 R 5 0 R] /FontDescriptor 7 0 R >>",
+            "420",
+            "610.5",
+            "65",
+            "<< /Type /FontDescriptor /FontName /Foo /Flags 32 /MissingWidth 250 >>",
+        ]);
+        let doc = crate::document::PdfDocument::from_bytes(pdf).expect("synthetic PDF must parse");
+        let font_obj = doc.load_object(crate::object::ObjectRef::new(3, 0)).unwrap();
+
+        let font = FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict");
+
+        assert_eq!(font.first_char, Some(65));
+        assert_eq!(font.get_glyph_width(65), 420.0);
+        assert_eq!(font.get_glyph_width(66), 610.5);
+        assert_eq!(font.get_glyph_width(32), 250.0);
+    }
+
+    #[test]
+    fn indirect_width_entries_do_not_clone_non_numeric_targets() {
+        let refs = "4 0 R ".repeat(1_000);
+        let array = format!("[{refs}]");
+        let pdf = pdf_from_object_bodies(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>",
+            "<< /Type /Font /Subtype /TrueType /BaseFont /Foo /FirstChar 65 /LastChar 65 /Widths [4 0 R] >>",
+            &array,
+        ]);
+        let doc = crate::document::PdfDocument::from_bytes(pdf).expect("synthetic PDF must parse");
+        let font_obj = doc.load_object(crate::object::ObjectRef::new(3, 0)).unwrap();
+        doc.load_object(crate::object::ObjectRef::new(4, 0)).unwrap();
+        let clones_before = doc.cached_object_clone_count();
+
+        FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict");
+
+        assert_eq!(doc.cached_object_clone_count(), clones_before);
+    }
+
+    #[test]
+    fn cid_width_ranges_cannot_expand_without_bound() {
+        let mut w = Vec::new();
+        for _ in 0..5_000 {
+            w.extend([Object::Integer(0), Object::Integer(65535), Object::Integer(500)]);
+        }
+        let dict = HashMap::from([("W".to_string(), Object::Array(w))]);
+
+        let started = std::time::Instant::now();
+        let widths = FontInfo::parse_cid_widths(&dict, "Foo").expect("widths");
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+        assert_eq!(widths.get(&7), Some(&500.0));
+    }
+
+    #[test]
+    fn cid_vertical_metric_ranges_cannot_expand_without_bound() {
+        let mut w2 = Vec::new();
+        for _ in 0..5_000 {
+            w2.extend([
+                Object::Integer(0),
+                Object::Integer(65535),
+                Object::Integer(-1000),
+                Object::Integer(500),
+                Object::Integer(880),
+            ]);
+        }
+        let dict = HashMap::from([("W2".to_string(), Object::Array(w2))]);
+
+        let started = std::time::Instant::now();
+        let metrics = FontInfo::parse_cid_vertical_metrics(&dict, "Foo").expect("metrics");
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+        assert!(metrics.contains_key(&7));
     }
 
     /// Control: an Identity-H predefined name with no font program is flagged

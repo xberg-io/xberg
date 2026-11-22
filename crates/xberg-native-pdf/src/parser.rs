@@ -40,6 +40,7 @@ use std::collections::HashMap;
 /// this module — out of scope for this fix. Those two config fields remain
 /// dead; do not assume changing them affects this guard.
 const MAX_OBJECT_NESTING_DEPTH: usize = 100;
+const MAX_CONTAINER_ENTRIES: usize = 1_000_000;
 
 /// Decode escape sequences in PDF literal strings.
 ///
@@ -502,6 +503,13 @@ fn parse_array(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], Objec
                     return Ok((inp, Object::Array(objects)));
                 }
 
+                if objects.len() >= MAX_CONTAINER_ENTRIES {
+                    return Err(nom::Err::Failure(nom::error::Error::new(
+                        remaining,
+                        nom::error::ErrorKind::TooLarge,
+                    )));
+                }
+
                 // Otherwise, we need to parse this as an object
                 // Put the token back by re-parsing from remaining ~keep
                 match parse_object_at_depth(remaining, depth + 1, strict) {
@@ -584,6 +592,13 @@ fn parse_dictionary(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], 
             Ok((inp, tok)) => {
                 if tok == Token::DictEnd {
                     return Ok((inp, Object::Dictionary(dict)));
+                }
+
+                if dict.len() >= MAX_CONTAINER_ENTRIES {
+                    return Err(nom::Err::Failure(nom::error::Error::new(
+                        remaining,
+                        nom::error::ErrorKind::TooLarge,
+                    )));
                 }
 
                 match tok {

@@ -597,3 +597,24 @@ fn lazy_cmap_memoizes_a_parse_failure_and_warns_once() {
     );
     assert!(!format!("{logs:?}").contains(CONFIDENTIAL_MARKER));
 }
+
+#[test]
+fn test_bfrange_lines_cannot_expand_past_the_total_mapping_cap() {
+    let lines = 1_200u32;
+    let mut data = String::from("beginbfrange\n");
+    for i in 0..lines {
+        let start = i * 10_001;
+        data.push_str(&format!("<{start:08X}> <{:08X}> <0041>\n", start + 10_000));
+    }
+    data.push_str("endbfrange");
+
+    let started = std::time::Instant::now();
+    let cmap = parse_tounicode_cmap(data.as_bytes()).unwrap();
+
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert!(cmap.get(&5).is_some(), "mappings below the cap must survive");
+    assert!(
+        cmap.get(&((lines - 1) * 10_001 + 5)).is_none(),
+        "mappings past the cap must be dropped"
+    );
+}

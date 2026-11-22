@@ -916,6 +916,15 @@ fn parse_xref_stream<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Cros
         vec![(0, size)]
     };
 
+    // Each entry costs a map slot, so the declared entry count is bounded before the stream is decoded. ~keep
+    const MAX_XREF_STREAM_ENTRIES: u64 = 8 * 1024 * 1024;
+    let declared_entries: u64 = index_ranges.iter().map(|&(_, count)| u64::from(count)).sum();
+    if declared_entries > MAX_XREF_STREAM_ENTRIES || declared_entries > u64::from(size) {
+        return Err(Error::InvalidPdf(format!(
+            "xref stream declares {declared_entries} entries (/Size {size}, limit {MAX_XREF_STREAM_ENTRIES})"
+        )));
+    }
+
     let decode_params = if let Some(decode_params_obj) = stream_dict.get("DecodeParms") {
         extract_decode_params(decode_params_obj)?
     } else {
@@ -1153,6 +1162,51 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    fn xref_stream_bytes(dict_entries: &str, entries: usize) -> Vec<u8> {
+        let data: Vec<u8> = std::iter::repeat_n([1u8, 0u8], entries).flatten().collect();
+        let mut pdf = format!(
+            "5 0 obj\n<< /Type /XRef /W [1 1 0] {dict_entries} /Length {} >>\nstream\n",
+            data.len()
+        )
+        .into_bytes();
+        pdf.extend_from_slice(&data);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        pdf
+    }
+
+    #[test]
+    fn xref_stream_declaring_billions_of_entries_is_rejected_before_decoding() {
+        let pdf = xref_stream_bytes("/Size 4000000000", 3_000_000);
+
+        let started = std::time::Instant::now();
+        let error = parse_xref_stream(&mut Cursor::new(pdf), 0).unwrap_err();
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(1),
+            "took {:?}",
+            started.elapsed()
+        );
+        assert!(error.to_string().contains("declares 4000000000 entries"), "{error}");
+    }
+
+    #[test]
+    fn xref_stream_index_counts_beyond_size_are_rejected() {
+        let pdf = xref_stream_bytes("/Size 2 /Index [0 3]", 3);
+
+        let error = parse_xref_stream(&mut Cursor::new(pdf), 0).unwrap_err();
+
+        assert!(error.to_string().contains("declares 3 entries"), "{error}");
+    }
+
+    #[test]
+    fn xref_stream_within_size_is_parsed() {
+        let pdf = xref_stream_bytes("/Size 3", 3);
+
+        let table = parse_xref_stream(&mut Cursor::new(pdf), 0).unwrap();
+
+        assert_eq!(table.len(), 3);
+    }
 
     #[test]
     fn test_xref_entry_creation() {

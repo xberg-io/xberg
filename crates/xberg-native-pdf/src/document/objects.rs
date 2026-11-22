@@ -650,6 +650,15 @@ impl PdfDocument {
         })
     }
 
+    /// Numeric value of the object at `obj_ref`, read without cloning a cached non-numeric object.
+    pub(crate) fn load_number(&self, obj_ref: ObjectRef) -> Option<f32> {
+        match self.load_object_for_read(obj_ref).ok()?.as_ref() {
+            Object::Integer(value) => Some(*value as f32),
+            Object::Real(value) => Some(*value as f32),
+            _ => None,
+        }
+    }
+
     /// Like [`Self::load_object`] but shares a cached object instead of deep-copying it.
     pub(crate) fn load_object_shared(&self, obj_ref: ObjectRef) -> Result<Arc<Object>> {
         self.load_object_for_read(obj_ref).map(|loaded| match loaded {
