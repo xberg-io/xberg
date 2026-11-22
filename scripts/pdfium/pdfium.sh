@@ -128,11 +128,11 @@ cmd_provision() {
     "https://github.com/${upstream}/releases/download/chromium/${version}/${asset}" ||
     die "download failed (offline?); a missing libpdfium is a failure, not a skip"
   bash "$verify_archive" "$tmp/$archive_name" "$checksums" >&2 || die "checksum verification failed; nothing was installed"
-  tar -xzf "$tmp/$archive_name" -C "$tmp/extracted"
+  tar -xzf "$tmp/$archive_name" -C "$tmp/extracted" || die "extraction failed; nothing was installed"
   [ -f "$tmp/extracted/$(lib_subdir)/$(lib_file)" ] || die "archive does not contain $(lib_subdir)/$(lib_file)"
-  printf '%s\n' "$sha" >"$tmp/extracted/.verified-sha256"
-  rm -rf "$dest"
-  mv "$tmp/extracted" "$dest"
+  printf '%s\n' "$sha" >"$tmp/extracted/.verified-sha256" || die "could not write the verification stamp"
+  rm -rf "$dest" || die "could not remove the previous install at $dest"
+  mv "$tmp/extracted" "$dest" || die "could not install pdfium into $dest"
   printf '%s\n' "$(lib_dir)"
 }
 
@@ -215,7 +215,6 @@ cmd_bump() {
   done
   [[ "$build" =~ ^[0-9]+$ ]] || die "invalid Chromium build '$build'"
   command -v gh >/dev/null || die "gh is required"
-  local candidate scratch_cache
   candidate="$(mktemp)"
   scratch_cache="$(mktemp -d)"
   trap 'rm -rf "$candidate" "$scratch_cache"' EXIT

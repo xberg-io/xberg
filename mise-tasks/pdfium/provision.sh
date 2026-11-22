@@ -7,8 +7,9 @@ set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 args=()
-[ -n "${usage_version:-}" ] && args+=(--version "$usage_version")
-[ -n "${usage_platform:-}" ] && args+=(--platform "$usage_platform")
+hint=""
+[ -n "${usage_version:-}" ] && args+=(--version "$usage_version") && hint+=" --version $(printf '%q' "$usage_version")"
+[ -n "${usage_platform:-}" ] && args+=(--platform "$usage_platform") && hint+=" --platform $(printf '%q' "$usage_platform")"
 dir="$(bash "$root/scripts/pdfium/pdfium.sh" provision ${args[@]+"${args[@]}"})"
 echo "$dir"
-echo "Use it: eval \"\$(mise run -q pdfium:env)\"   (exports PDFIUM_DYNAMIC_LIB_PATH=$dir)" >&2
+echo "Use it: eval \"\$(mise run -q pdfium:env${hint})\"   (exports PDFIUM_DYNAMIC_LIB_PATH=$dir)" >&2

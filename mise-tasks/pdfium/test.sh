@@ -8,7 +8,8 @@ set -euo pipefail
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
 # XBERG_REQUIRE_PDFIUM=1 turns a missing library or fixture into a failure instead of a skip.
-eval "$(bash scripts/pdfium/pdfium.sh env)"
+env_exports="$(bash scripts/pdfium/pdfium.sh env)"
+eval "$env_exports"
 echo "pdfium: PDFIUM_DYNAMIC_LIB_PATH=$PDFIUM_DYNAMIC_LIB_PATH" >&2
 
 run() {

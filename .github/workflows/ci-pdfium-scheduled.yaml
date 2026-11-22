@@ -72,6 +72,7 @@ jobs:
         with:
           include: |
             pdf/**
+            vendored/pdfium-render/**
       - uses: xberg-io/actions/setup-rust@v1
         with:
           cache-key-prefix: pdfium-scheduled
@@ -108,6 +109,7 @@ jobs:
         with:
           include: |
             pdf/**
+            vendored/pdfium-render/**
       - uses: xberg-io/actions/setup-rust@v1
         with:
           cache-key-prefix: pdfium-scheduled
