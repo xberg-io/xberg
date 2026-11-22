@@ -230,10 +230,10 @@ fn authenticate_user_password_r5_r6(
 /// carry /P, the /EncryptMetadata flag and the literal `adb`. A mismatch means /P or /EncryptMetadata was
 /// altered after encryption.
 pub fn verify_perms(file_key: &[u8], perms: &[u8], permissions: i32, encrypt_metadata: bool) -> bool {
-    if file_key.len() < 32 || perms.len() < 16 {
+    if file_key.len() < 32 || perms.len() != 16 {
         return false;
     }
-    let Ok(block) = super::aes::aes256_decrypt_no_padding(&file_key[..32], &[0u8; 16], &perms[..16]) else {
+    let Ok(block) = super::aes::aes256_decrypt_no_padding(&file_key[..32], &[0u8; 16], perms) else {
         return false;
     };
     block.len() == 16

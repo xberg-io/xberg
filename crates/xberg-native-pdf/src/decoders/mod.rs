@@ -207,26 +207,28 @@ impl StreamDecoder for CryptDecoder {
     }
 }
 
-/// True when the stream's first filter is `/Crypt` naming the `/Identity` filter (or no filter): the stream
-/// is stored unencrypted even in an encrypted document (ISO 32000-1 §7.4.10).
-pub(crate) fn has_identity_crypt_filter(dict: &std::collections::HashMap<String, Object>) -> bool {
+/// The first filter's `/DecodeParms` entry (unresolved) when the stream's first filter is `/Crypt`; the outer
+/// `None` means the first filter is not `/Crypt`.
+pub(crate) fn first_crypt_decode_parms(dict: &std::collections::HashMap<String, Object>) -> Option<Option<&Object>> {
     let first_filter = match dict.get("Filter") {
         Some(Object::Name(name)) => Some(name.as_str()),
         Some(Object::Array(filters)) => filters.first().and_then(Object::as_name),
         _ => None,
     };
     if first_filter != Some("Crypt") {
-        return false;
+        return None;
     }
-    let first_params = match dict.get("DecodeParms").or_else(|| dict.get("DP")) {
+    Some(match dict.get("DecodeParms").or_else(|| dict.get("DP")) {
         Some(Object::Array(params)) => params.first(),
         other => other,
-    };
-    match first_params
-        .and_then(Object::as_dict)
-        .and_then(|params| params.get("Name"))
-    {
-        None => true,
+    })
+}
+
+/// True when resolved `/Crypt` parameters name the `/Identity` filter; an absent or null `/Name` defaults to it,
+/// so the stream is stored unencrypted even in an encrypted document (ISO 32000-1 §7.4.10).
+pub(crate) fn names_identity_crypt_filter(params: Option<&Object>) -> bool {
+    match params.and_then(Object::as_dict).and_then(|params| params.get("Name")) {
+        None | Some(Object::Null) => true,
         Some(name) => name.as_name() == Some("Identity"),
     }
 }
@@ -361,7 +363,7 @@ fn filter_output_limit(max_size: usize, max_ratio: u32, compressed_size: usize, 
         return max_size;
     }
     let ratio_limit = compressed_size
-        .saturating_mul(max_ratio as usize + 1)
+        .saturating_mul((max_ratio as usize).saturating_add(1))
         .saturating_sub(1)
         .max(exempt_size.unwrap_or(0));
     if max_size == 0 {
@@ -541,6 +543,15 @@ mod tests {
     use flate2::Compression;
     use flate2::write::ZlibEncoder;
     use std::io::Write;
+
+    #[test]
+    fn output_limit_does_not_wrap_for_the_largest_ratio() {
+        assert_eq!(
+            filter_output_limit(0, u32::MAX, 10, None),
+            10 * (u32::MAX as usize + 1) - 1
+        );
+        assert_eq!(filter_output_limit(100, u32::MAX, 10, None), 100);
+    }
 
     #[test]
     fn form_decoder_propagates_zlib_checksum_and_completion_errors() {

@@ -800,7 +800,17 @@ mod crypt_filters {
         encrypted_pdf_with_metadata(stm_f, false)
     }
 
+    const IDENTITY_CRYPT_XMP_DICT: &str =
+        "/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [<< /Name /Identity >>]";
+
     fn encrypted_pdf_with_metadata(stm_f: &str, encrypt_xmp: bool) -> Vec<u8> {
+        let xmp_dict = (!encrypt_xmp).then_some(IDENTITY_CRYPT_XMP_DICT);
+        encrypted_pdf_custom(Some(stm_f), xmp_dict, None)
+    }
+
+    fn encrypted_pdf_custom(stm_f: Option<&str>, plain_xmp_dict: Option<&str>, extra_object: Option<&str>) -> Vec<u8> {
+        let encrypt_xmp = plain_xmp_dict.is_none();
+        let stm_f = stm_f.map(|name| format!("/StmF /{name} ")).unwrap_or_default();
         let owner = algorithms::compute_owner_password_hash(b"owner", b"", 4, 16).unwrap();
         let key = algorithms::compute_encryption_key(b"", &owner, PERMISSIONS, FILE_ID, 4, 16, true).unwrap();
         let user = algorithms::compute_user_password_hash(&key, FILE_ID, 4).unwrap();
@@ -837,25 +847,22 @@ mod crypt_filters {
                 stream("/Type /Metadata /Subtype /XML", &aes128_string(&key, 6, ENCRYPTED_XMP)),
             );
         } else {
-            push(
-                &mut pdf,
-                stream(
-                    "/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [<< /Name /Identity >>]",
-                    PLAIN_METADATA,
-                ),
-            );
+            push(&mut pdf, stream(plain_xmp_dict.unwrap(), PLAIN_METADATA));
         }
         push(
             &mut pdf,
             format!(
                 "<< /Filter /Standard /V 4 /R 4 /Length 128 /P {PERMISSIONS} /O <{}> /U <{}> \
                  /CF << /StdCF << /CFM /AESV2 /AuthEvent /DocOpen /Length 16 >> >> \
-                 /StmF /{stm_f} /StrF /StdCF >>",
+                 {stm_f}/StrF /StdCF >>",
                 hex(&owner),
                 hex(&user)
             )
             .into_bytes(),
         );
+        if let Some(extra) = extra_object {
+            push(&mut pdf, extra.as_bytes().to_vec());
+        }
 
         let xref = pdf.len();
         pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
@@ -895,6 +902,64 @@ mod crypt_filters {
         let decoded = doc.decode_stream_with_encryption(&metadata, metadata_ref).unwrap();
 
         assert_eq!(decoded, PLAIN_METADATA);
+    }
+
+    fn decode_plain_metadata(pdf: Vec<u8>) -> Result<Vec<u8>> {
+        let doc = PdfDocument::from_bytes(pdf).unwrap();
+        let metadata_ref = ObjectRef::new(6, 0);
+        let metadata = doc.load_object(metadata_ref).unwrap();
+        doc.decode_stream_with_encryption(&metadata, metadata_ref)
+    }
+
+    #[test]
+    fn named_non_identity_crypt_filter_is_rejected_instead_of_decrypted_with_stmf() {
+        let pdf = encrypted_pdf_custom(
+            Some("StdCF"),
+            Some("/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [<< /Name /Other >>]"),
+            None,
+        );
+
+        assert!(matches!(decode_plain_metadata(pdf), Err(Error::UnsupportedFilter(_))));
+    }
+
+    #[test]
+    fn indirect_crypt_decode_parms_are_resolved_before_the_identity_check() {
+        let named = encrypted_pdf_custom(
+            Some("StdCF"),
+            Some("/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [8 0 R]"),
+            Some("<< /Name /Other >>"),
+        );
+        assert!(matches!(decode_plain_metadata(named), Err(Error::UnsupportedFilter(_))));
+
+        let identity = encrypted_pdf_custom(
+            Some("StdCF"),
+            Some("/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [8 0 R]"),
+            Some("<< /Name /Identity >>"),
+        );
+        assert_eq!(decode_plain_metadata(identity).unwrap(), PLAIN_METADATA);
+    }
+
+    #[test]
+    fn null_crypt_name_is_treated_as_absent() {
+        let pdf = encrypted_pdf_custom(
+            Some("StdCF"),
+            Some("/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [<< /Name null >>]"),
+            None,
+        );
+
+        assert_eq!(decode_plain_metadata(pdf).unwrap(), PLAIN_METADATA);
+    }
+
+    #[test]
+    fn absent_stmf_defaults_to_identity_while_strf_still_decrypts_strings() {
+        let doc = PdfDocument::from_bytes(encrypted_pdf_custom(None, Some(IDENTITY_CRYPT_XMP_DICT), None)).unwrap();
+
+        assert!(doc.extract_text(0).unwrap().contains("Plain body"));
+        let info = doc.load_object(ObjectRef::new(5, 0)).unwrap();
+        assert_eq!(
+            info.as_dict().and_then(|d| d.get("Title")),
+            Some(&Object::String(SECRET_TITLE.to_vec()))
+        );
     }
 
     #[test]
@@ -940,6 +1005,10 @@ mod crypt_filters {
         assert!(algorithms::verify_perms(&file_key, &perms, PERMISSIONS, true));
         assert!(!algorithms::verify_perms(&file_key, &perms, -1, true));
         assert!(!algorithms::verify_perms(&file_key, &perms, PERMISSIONS, false));
+
+        let mut padded = perms.clone();
+        padded.push(0);
+        assert!(!algorithms::verify_perms(&file_key, &padded, PERMISSIONS, true));
     }
 
     #[test]

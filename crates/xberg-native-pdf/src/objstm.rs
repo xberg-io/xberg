@@ -197,6 +197,13 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
     let mut seen_offsets = std::collections::HashSet::new();
     let mut parsed_bytes = 0usize;
     let parse_budget = objects_data.len().saturating_mul(2);
+    let mut starts: Vec<usize> = pairs
+        .iter()
+        .map(|&(_, offset)| offset)
+        .filter(|&offset| offset < objects_data.len())
+        .collect();
+    starts.sort_unstable();
+    starts.dedup();
 
     for (obj_num, offset_in_data) in pairs {
         // The offset is relative to the start of objects_data ~keep
@@ -211,7 +218,11 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
             continue;
         }
 
-        let obj_data = &objects_data[offset_in_data..];
+        // An object ends before the next one starts, so bounding the slice keeps a failed parse from rescanning
+        // the whole tail once per pair.
+        let next_start = starts.partition_point(|&start| start <= offset_in_data);
+        let end = starts.get(next_start).copied().unwrap_or(objects_data.len());
+        let obj_data = &objects_data[offset_in_data..end];
         match parse_object(obj_data) {
             Ok((remaining, obj)) => {
                 parsed_bytes = parsed_bytes.saturating_add(obj_data.len() - remaining.len());
@@ -330,6 +341,26 @@ fn read_integer_string(data: &[u8]) -> Option<(&[u8], &str)> {
 mod tests {
     use super::*;
     use bytes::Bytes;
+
+    #[test]
+    fn failed_parses_do_not_rescan_the_tail_once_per_pair() {
+        let mut objects_data = vec![b' '; 5_000];
+        objects_data.push(b'[');
+        for _ in 0..5_000 {
+            objects_data.extend_from_slice(b"0 ");
+        }
+        objects_data.extend_from_slice(b">>");
+        let pairs: Vec<(u32, usize)> = (0..5_000usize).map(|offset| (offset as u32 + 1, offset)).collect();
+
+        let started = std::time::Instant::now();
+        let outcome = parse_embedded_objects(&objects_data, pairs);
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "failed parses rescanned the tail"
+        );
+        assert!(outcome.objects.is_empty());
+    }
 
     #[test]
     fn aliased_offsets_do_not_reparse_one_object_per_pair() {

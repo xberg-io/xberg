@@ -243,12 +243,19 @@ impl EncryptDict {
 
         // V=4/5: /StmF and /StrF each name a crypt filter whose /CFM selects the cipher (PDF Spec Table 25):
         // "V2" = RC4-128, "AESV2" = AES-128, "AESV3" = AES-256, "None" = unencrypted. A name of /Identity
-        // means no encryption. An absent name keeps the legacy AES default. ~keep
+        // means no encryption, and an absent or null name defaults to it (ISO 32000-2 Table 21) when the other entry is present; with both absent the legacy AES default is kept. ~keep
         let crypt_filter_method = |key: &str| -> Option<String> {
             if version != 4 && version != 5 {
                 return None;
             }
-            let filter_name = dict.get(key).and_then(|o| o.as_name())?;
+            let other_key = if key == "StmF" { "StrF" } else { "StmF" };
+            let filter_name = match dict.get(key) {
+                None | Some(Object::Null) if dict.get(other_key).is_some_and(|o| !matches!(o, Object::Null)) => {
+                    return Some("Identity".to_string());
+                }
+                None | Some(Object::Null) => return None,
+                Some(entry) => entry.as_name()?,
+            };
             if filter_name == "Identity" {
                 return Some("Identity".to_string());
             }

@@ -2708,14 +2708,13 @@ impl FontInfo {
     }
 
     fn resolve_number(doc: &PdfDocument, obj: &Object) -> Option<f32> {
-        let resolved = match obj.as_reference() {
-            Some(reference) => doc.load_object(reference).ok()?,
-            None => obj.clone(),
-        };
-        resolved
-            .as_integer()
-            .map(|i| i as f32)
-            .or_else(|| resolved.as_real().map(|r| r as f32))
+        match obj.as_reference() {
+            Some(reference) => doc.load_number(reference),
+            None => obj
+                .as_integer()
+                .map(|i| i as f32)
+                .or_else(|| obj.as_real().map(|r| r as f32)),
+        }
     }
 
     fn descriptor_missing_width(doc: &PdfDocument, font_dict: &HashMap<String, Object>) -> Option<f32> {
@@ -11965,6 +11964,26 @@ mod tests {
         assert_eq!(font.get_glyph_width(65), 420.0);
         assert_eq!(font.get_glyph_width(66), 610.5);
         assert_eq!(font.get_glyph_width(32), 250.0);
+    }
+
+    #[test]
+    fn indirect_width_entries_do_not_clone_non_numeric_targets() {
+        let refs = "4 0 R ".repeat(1_000);
+        let array = format!("[{refs}]");
+        let pdf = pdf_from_object_bodies(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>",
+            "<< /Type /Font /Subtype /TrueType /BaseFont /Foo /FirstChar 65 /LastChar 65 /Widths [4 0 R] >>",
+            &array,
+        ]);
+        let doc = crate::document::PdfDocument::from_bytes(pdf).expect("synthetic PDF must parse");
+        let font_obj = doc.load_object(crate::object::ObjectRef::new(3, 0)).unwrap();
+        doc.load_object(crate::object::ObjectRef::new(4, 0)).unwrap();
+        let clones_before = doc.cached_object_clone_count();
+
+        FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict");
+
+        assert_eq!(doc.cached_object_clone_count(), clones_before);
     }
 
     #[test]
