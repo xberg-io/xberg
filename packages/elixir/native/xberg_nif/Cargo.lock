@@ -8836,7 +8836,7 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -8978,7 +8978,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "base64 0.23.1",
  "candle-core",
@@ -8998,7 +8998,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
@@ -9012,7 +9012,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "enumn",
  "four-cc",
@@ -9022,7 +9022,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libwpd"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "cc",
  "flate2",
@@ -9035,7 +9035,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-native-pdf"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -9080,7 +9080,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -9095,7 +9095,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-pdfium-render"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -9112,7 +9112,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "cc",
  "cmake",
