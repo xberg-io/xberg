@@ -98,3 +98,21 @@ fn test_run_continuation_leaves_vertical_writing_mode_alone() {
     assert!(TextExtractor::run_continuation_along(upright, 1, 60.0, 500.0, fs, 0.0).is_none());
     assert!(TextExtractor::run_continuation_along(upright, 1, 140.0, 460.0, fs, 0.0).is_none());
 }
+
+/// The same layout at `Tf 12` with an identity `Tm` and at `Tf 1` with a 12x `Tm` must reach the
+/// same decision: the 30 pt floor applies in user space, after the font size is scaled.
+#[test]
+fn test_run_continuation_limit_is_the_same_for_equivalent_font_and_matrix_scales() {
+    let m = |scale: f32| Matrix {
+        a: scale,
+        b: 0.0,
+        c: 0.0,
+        d: scale,
+        e: 100.0,
+        f: 500.0,
+    };
+    let identity_tf12 = TextExtractor::run_continuation_along(m(1.0), 0, 200.0, 500.0, 12.0, 0.0);
+    let scaled_tf1 = TextExtractor::run_continuation_along(m(12.0), 0, 200.0, 500.0, 1.0, 0.0);
+    assert!(identity_tf12.is_none(), "a 100 pt gap exceeds the 36 pt limit");
+    assert!(scaled_tf1.is_none(), "the same gap must end the run under a scaled Tm");
+}

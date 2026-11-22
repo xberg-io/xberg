@@ -385,7 +385,11 @@ impl<'doc> TextExtractor<'doc> {
         span: &TextSpan,
         seen_content: &std::collections::HashMap<String, Vec<(f32, f32)>>,
     ) -> bool {
-        let per_glyph_width = (span.bbox.width / span.text.chars().count().max(1) as f32).max(0.1);
+        // A quarter-turned run advances along the page's Y axis, so the overlap
+        // bar applies to Y and the 2 pt line tolerance to X. ~keep
+        let vertical = (span.rotation_degrees.rem_euclid(180.0) - 90.0).abs() < 45.0;
+        let advance_extent = if vertical { span.bbox.height } else { span.bbox.width };
+        let per_glyph_width = (advance_extent / span.text.chars().count().max(1) as f32).max(0.1);
         let x_bar = if span.text.len() >= 5 {
             5.0
         } else {
@@ -393,7 +397,12 @@ impl<'doc> TextExtractor<'doc> {
         };
         seen_content.get(&span.text).is_some_and(|seen| {
             seen.iter().any(|(prev_x_val, prev_y_val)| {
-                (span.bbox.y - prev_y_val).abs() < 2.0 && (span.bbox.x - prev_x_val).abs() < x_bar
+                let (along, cross) = if vertical {
+                    ((span.bbox.y - prev_y_val).abs(), (span.bbox.x - prev_x_val).abs())
+                } else {
+                    ((span.bbox.x - prev_x_val).abs(), (span.bbox.y - prev_y_val).abs())
+                };
+                cross < 2.0 && along < x_bar
             })
         })
     }
@@ -419,7 +428,7 @@ impl<'doc> TextExtractor<'doc> {
         let mut prev_y_rounded: Option<i32> = None;
         let mut prev_x: Option<f32> = None;
         let mut prev_text: Option<String> = None;
-        // Every position a string was kept at: one slot misses an overprint. ~keep
+        // The most recent positions a string was kept at: one slot misses an overprint. ~keep
         const MAX_TRACKED_POSITIONS: usize = 32;
         let mut seen_content: std::collections::HashMap<String, Vec<(f32, f32)>> = std::collections::HashMap::new();
 
@@ -444,9 +453,10 @@ impl<'doc> TextExtractor<'doc> {
                 prev_text = Some(span.text.clone());
 
                 let at = seen_content.entry(span.text.clone()).or_default();
-                if at.len() < MAX_TRACKED_POSITIONS {
-                    at.push((span.bbox.x, span.bbox.y));
+                if at.len() == MAX_TRACKED_POSITIONS {
+                    at.remove(0);
                 }
+                at.push((span.bbox.x, span.bbox.y));
                 deduplicated.push(span);
             }
         }

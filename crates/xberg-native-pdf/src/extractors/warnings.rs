@@ -234,8 +234,8 @@ impl WarningSink {
     pub fn clear(&self) {
         if let Ok(mut v) = self.warnings.lock() {
             v.clear();
+            self.dropped.store(0, Ordering::Relaxed);
         }
-        self.dropped.store(0, Ordering::Relaxed);
     }
 
     /// Push multiple warnings under a single lock acquisition.
@@ -249,9 +249,11 @@ impl WarningSink {
 
     /// Drain and return all accumulated warnings.
     pub fn take(&self) -> Vec<Warning> {
-        self.dropped.store(0, Ordering::Relaxed);
         match self.warnings.lock() {
-            Ok(mut v) => std::mem::take(&mut *v),
+            Ok(mut v) => {
+                self.dropped.store(0, Ordering::Relaxed);
+                std::mem::take(&mut *v)
+            }
             _ => Vec::new(),
         }
     }
@@ -487,5 +489,27 @@ mod sink_bound_tests {
         }
         sink.push(w("first"));
         assert_eq!(sink.len(), REPEAT_WINDOW + 2);
+    }
+
+    #[test]
+    fn test_take_resets_the_drop_count_under_the_vector_lock() {
+        let sink = WarningSink::new();
+        for i in 0..MAX_SINK_ENTRIES + 25 {
+            sink.push(w(&format!("distinct {i}")));
+        }
+        let mut held = sink.warnings.lock().unwrap();
+        let drainer = {
+            let sink = sink.clone();
+            std::thread::spawn(move || sink.take())
+        };
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        sink.insert(&mut held, w("overflow while draining"));
+        drop(held);
+        let out = drainer.join().unwrap();
+        let sentinel = out.last().expect("sentinel");
+        assert!(
+            sentinel.message.starts_with("diagnostics_truncated: 26 further"),
+            "{sentinel:?}"
+        );
     }
 }

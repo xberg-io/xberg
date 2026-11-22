@@ -791,7 +791,7 @@ impl<'doc> TextExtractor<'doc> {
             (1.0, 0.0)
         };
         let along = ux * (e - start.e) + uy * (f - start.f);
-        let limit = ((font_size * 3.0).max(30.0) * axis.max(1e-6)).abs();
+        let limit = (font_size * axis * 3.0).abs().max(30.0);
         (along - accumulated <= limit).then_some(along)
     }
 
