@@ -1,0 +1,115 @@
+xberg-gliner
+This crate is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It contains code derived from the third-party projects below. Modifications
+are described in ATTRIBUTIONS.md at the root of the xberg repository
+(section "xberg-gliner") and in the module headers of the affected files.
+
+
+gline-rs
+https://github.com/fbilhaut/gline-rs
+Licensed under the Apache License, Version 2.0.
+Author: Frederik Bilhaut <frederik.bilhaut@gmail.com> (per upstream Cargo.toml).
+Upstream ships no NOTICE file and its LICENSE.txt carries only the unfilled
+Apache-2.0 appendix template ("Copyright [yyyy] [name of copyright owner]").
+Used for: span-mode text splitting, prompt construction, tensor construction,
+logits decoding and greedy overlap filtering (src/*.rs outside src/candle
+and src/v2).
+
+
+anno
+https://github.com/arclabs561/anno
+Dual-licensed under MIT OR Apache-2.0. xberg-gliner uses it under the
+Apache-2.0 option; the upstream MIT notice is retained below.
+Used for: the Candle GLiNER2 backend (src/candle/), ported from
+anno::backends::gliner2_fastino_candle and, for entity decoding,
+anno::backends::gliner2_fastino (anno commit 036e102a93, 2026-06-10, first
+contained in tag v0.11.0).
+
+    MIT License
+
+    Copyright (c) 2025 Arc
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+gliner2-rs (via anno)
+https://github.com/SemplificaAI/gliner2-rs
+Licensed under the Apache License, Version 2.0.
+anno's gliner2_fastino modules, on which the Candle decode path is based, are
+marked as adapted from this project, with the line "Original: Copyright 2026
+Dario Finardi, Semplifica s.r.l." The current upstream NOTICE and per-file
+headers name "Dario Finardi. Published by Jugaad s.r.l." instead; the upstream
+RELEASE_NOTES state that every reference to Semplifica was removed when the
+repositories were transferred. The upstream NOTICE file, as published at commit
+7626d237d8c58f0fcfadd094e8360e7d5ae9c8ee, follows verbatim.
+
+    gliner2-rs
+    Copyright 2026 Dario Finardi. Published by Jugaad s.r.l.
+
+    Licensed under the Apache License, Version 2.0 — see LICENSE.
+
+    This is an independent Rust implementation, not a port of existing code: the
+    inference engine was written from scratch against ONNX Runtime. The per-file
+    copyright headers state the same.
+
+
+    MODEL OWNERSHIP
+
+    The models this project converts and runs are not ours, and converting a model
+    does not change its licence or its ownership.
+
+      - GLiNER2 is developed by Fastino (https://fastino.ai). See arXiv:2507.18546.
+        The weights this engine loads originate from https://huggingface.co/fastino
+        and remain subject to the licence their publisher sets. Check it before
+        redistributing them with an application.
+
+      - GLiNER (Generalist Model for Named Entity Recognition), the line these
+        models descend from, is the work of Urchade Zaratiana et al.
+        See arXiv:2311.08526.
+
+      - No model weights are distributed from this repository. The ONNX exports
+        published under https://huggingface.co/jugaadsrl are derived artefacts of
+        upstream checkpoints and carry their licence; the conversion adds no
+        ownership claim over the model.
+
+      - The conversion scripts under onnx_conversion_scripts/ operate on those
+        upstream models and produce derived artefacts. Converting a model does not
+        change its licence.
+
+    This project implements inference for those models and claims no ownership
+    over them. What is ours is the engine, the exporters and the tests.
+
+
+    THIRD-PARTY DEPENDENCIES
+
+      - ONNX Runtime (https://github.com/microsoft/onnxruntime) — MIT, linked at
+        runtime, not redistributed from here.
+      - The Rust crates listed in rust_component/Cargo.toml, each under its own
+        licence.
+
+
+fastino/gliner2
+https://huggingface.co/fastino
+Reference model and preprocessing (schema-prompt format) that the v2 and
+Candle backends implement. The reference implementation is
+https://github.com/fastino-ai/GLiNER2 (Apache-2.0). No code from it is
+included, except that the v2 word-splitter regular expression is the same
+pattern as its gliner2/processing/word_splitter.py (see ATTRIBUTIONS.md,
+section "GLiNER2 ONNX engine"). Weights are not distributed with this crate.
