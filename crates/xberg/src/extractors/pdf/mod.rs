@@ -2502,6 +2502,15 @@ fn wants_dot_output(config: &ExtractionConfig) -> bool {
     matches!(&config.output_format, crate::core::config::OutputFormat::Custom(name) if name == "dot")
 }
 
+#[cfg(feature = "pdf")]
+fn inline_image_ocr_enabled(config: &ExtractionConfig) -> bool {
+    !config.effective_disable_ocr()
+        && config
+            .pdf_options
+            .as_ref()
+            .is_some_and(|options| options.ocr_inline_images)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 async fn apply_inline_image_ocr(imgs: &mut [crate::types::ExtractedImage], config: &ExtractionConfig) -> Result<()> {
     let resolved_ocr_config = ocr::resolve_ocr_config(config);
@@ -3191,7 +3200,7 @@ impl PdfExtractor {
         ) = native_output.extraction;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if config.pdf_options.as_ref().is_some_and(|p| p.ocr_inline_images)
+        if inline_image_ocr_enabled(config)
             && let Some(ref mut imgs) = extracted_images
             && !imgs.is_empty()
         {

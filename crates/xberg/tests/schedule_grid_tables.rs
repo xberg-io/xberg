@@ -174,7 +174,6 @@ fn a_rotated_schedule_is_one_table_and_does_not_absorb_plan_walls() {
 }
 
 #[test]
-#[ignore = "blocked by #3377: side-by-side ruled schedules merge into one table"]
 fn two_schedules_on_one_sheet_each_come_back_as_their_own_table() {
     let mut lines = grid_lines(0.0, 0.0, 4, 3, 30.0, 20.0);
     let mut spans = grid_spans(0.0, 0.0, 4, 3, 30.0, 20.0, 90.0);
