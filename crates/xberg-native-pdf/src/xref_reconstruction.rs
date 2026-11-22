@@ -213,6 +213,54 @@ pub fn reconstruct_xref<R: Read + Seek>(reader: &mut R) -> Result<(CrossRefTable
     Ok((xref, trailer, synthetic))
 }
 
+/// Whether the outermost `<<` of `bytes` is closed by a `>>` inside it, skipping
+/// strings, hex strings and comments so a nested dictionary's `>>` does not count.
+fn dictionary_closes(bytes: &[u8]) -> bool {
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' => {
+                let mut nesting = 1usize;
+                i += 1;
+                while i < bytes.len() && nesting > 0 {
+                    match bytes[i] {
+                        b'\\' => i += 1,
+                        b'(' => nesting += 1,
+                        b')' => nesting -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            b'%' => {
+                while i < bytes.len() && !matches!(bytes[i], b'\n' | b'\r') {
+                    i += 1;
+                }
+            }
+            b'<' if bytes.get(i + 1) == Some(&b'<') => {
+                depth += 1;
+                i += 2;
+            }
+            b'<' => {
+                while i < bytes.len() && bytes[i] != b'>' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            b'>' if bytes.get(i + 1) == Some(&b'>') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return true;
+                }
+                i += 2;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 /// Parse one `trailer` keyword match: if it parses to a /Root-bearing
 /// dictionary, record it as the new `best_trailer`; otherwise salvage any
 /// /Encrypt, /ID, /Info entries it carries. Split out of [`find_trailer`] to
@@ -239,7 +287,7 @@ fn process_trailer_match(
 
     // The lenient parser treats the window edge as end of input, so a dictionary cut off
     // there parses "successfully" without its closing `>>`. ~keep
-    if window_end < contents.len() && !input[..input.len() - rest.len()].trim_ascii_end().ends_with(b">>") {
+    if window_end < contents.len() && !dictionary_closes(&input[..input.len() - rest.len()]) {
         tracing::debug!(
             offset = trailer_start,
             "trailer dictionary exceeds the parse window; skipping"
@@ -969,6 +1017,25 @@ mod tests {
         let mut salvaged = HashMap::new();
         process_trailer_match(&contents, mat, &mut best, &mut salvaged);
         assert!(best.is_none(), "a window-truncated trailer must not be accepted");
+    }
+
+    #[test]
+    fn trailer_cut_off_after_a_nested_dictionary_is_not_accepted() {
+        let head = b"<</Root 1 0 R /N <</A 1 >> /K (";
+        let tail = b") /M <</B 2 >>";
+        let mut contents = b"%PDF-1.4\ntrailer".to_vec();
+        contents.extend_from_slice(head);
+        contents.extend(std::iter::repeat_n(b'a', MAX_TRAILER_WINDOW - head.len() - tail.len()));
+        contents.extend_from_slice(tail);
+        contents.extend_from_slice(b" /Encrypt 5 0 R >>\n");
+        let mat = RE_TRAILER.find(&contents).expect("trailer keyword");
+        let mut best = None;
+        let mut salvaged = HashMap::new();
+        process_trailer_match(&contents, mat, &mut best, &mut salvaged);
+        assert!(
+            best.is_none(),
+            "a trailer whose outer dictionary is cut off must not be accepted"
+        );
     }
 
     #[test]
