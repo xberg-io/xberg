@@ -562,6 +562,26 @@ fn test_bounded_object_cache_byte_budget_eviction() {
 }
 
 #[test]
+fn test_bounded_object_cache_evicts_every_entry_a_large_insert_needs() {
+    let small = Object::Integer(1);
+    let unit = BoundedObjectCache::estimate_size(&small);
+    let mut c = BoundedObjectCache::new(unit * 8);
+    for n in 1..=8 {
+        c.insert(ObjectRef::new(n, 0), small.clone());
+    }
+    assert_eq!(c.len(), 8);
+    let big = Object::String(vec![0u8; unit * 6]);
+    let big_size = BoundedObjectCache::estimate_size(&big);
+    c.insert(ObjectRef::new(99, 0), big);
+    assert!(
+        c.current_bytes <= unit * 8,
+        "cache holds {} bytes against a budget of {} after inserting a {big_size}-byte entry",
+        c.current_bytes,
+        unit * 8
+    );
+}
+
+#[test]
 fn object_stream_cache_rejects_oversized_entries_and_evicts_to_budget() {
     let first = Arc::new(HashMap::from([(1, Object::String(vec![0; 64]))]));
     let second = Arc::new(HashMap::from([(2, Object::String(vec![0; 64]))]));
@@ -642,4 +662,93 @@ fn test_estimate_size_depth_bottoms_out() {
     // Should return a finite value without panicking ~keep
     let size = BoundedObjectCache::estimate_size(&obj);
     assert!(size > 0);
+}
+
+#[test]
+fn pinned_cache_entries_survive_eviction_pressure() {
+    let mut cache = BoundedObjectCache::new(4096);
+    let synthetic = ObjectRef::new(9999, 0);
+    cache.insert_pinned(synthetic, Object::Integer(42));
+
+    for i in 0..500u32 {
+        cache.insert(ObjectRef::new(i, 0), Object::String(vec![b'x'; 256]));
+    }
+
+    assert!(
+        cache.get(&synthetic).is_some(),
+        "the pinned synthetic object was evicted and is now unreachable"
+    );
+    assert!(
+        cache.len() < 500,
+        "eviction should still be reclaiming ordinary entries"
+    );
+}
+
+#[test]
+fn test_unpinned_entry_is_evicted_under_the_same_pressure() {
+    let mut cache = BoundedObjectCache::new(4096);
+    let ordinary = ObjectRef::new(9999, 0);
+    cache.insert(ordinary, Object::Integer(42));
+
+    for i in 0..500u32 {
+        cache.insert(ObjectRef::new(i, 0), Object::String(vec![b'x'; 256]));
+    }
+
+    assert!(cache.get(&ordinary).is_none());
+}
+
+#[test]
+fn clearing_the_cache_keeps_pinned_entries() {
+    let mut cache = BoundedObjectCache::new(1 << 20);
+    let synthetic = ObjectRef::new(9999, 0);
+    cache.insert_pinned(synthetic, Object::Integer(7));
+    cache.insert(ObjectRef::new(1, 0), Object::Integer(1));
+
+    cache.clear();
+
+    assert!(cache.get(&synthetic).is_some());
+    assert!(cache.get(&ObjectRef::new(1, 0)).is_none());
+}
+
+#[test]
+fn test_all_pinned_cache_does_not_spin() {
+    let mut cache = BoundedObjectCache::new(512);
+    for i in 0..8u32 {
+        cache.insert_pinned(ObjectRef::new(i, 0), Object::String(vec![b'y'; 256]));
+    }
+    assert_eq!(cache.len(), 8);
+}
+
+#[test]
+fn pinned_entries_stay_out_of_the_eviction_queue() {
+    let mut cache = BoundedObjectCache::new(512);
+    for i in 0..100u32 {
+        cache.insert_pinned(ObjectRef::new(i, 0), Object::String(vec![b'y'; 256]));
+    }
+    assert_eq!(cache.len(), 100);
+    assert!(
+        cache.insertion_order.is_empty(),
+        "pinned keys must not be queued for the eviction scan"
+    );
+
+    cache.insert(ObjectRef::new(500, 0), Object::Integer(1));
+    cache.insert(ObjectRef::new(501, 0), Object::Integer(2));
+    assert_eq!(
+        cache.insertion_order.len(),
+        1,
+        "the over-budget cache evicts ordinary entries only"
+    );
+    assert!((0..100u32).all(|i| cache.get(&ObjectRef::new(i, 0)).is_some()));
+    assert!(cache.get(&ObjectRef::new(501, 0)).is_some());
+}
+
+#[test]
+fn pinning_an_already_cached_entry_dequeues_it() {
+    let mut cache = BoundedObjectCache::new(4096);
+    let key = ObjectRef::new(7, 0);
+    cache.insert(key, Object::Integer(1));
+    cache.insert_pinned(key, Object::Integer(2));
+    assert!(cache.insertion_order.is_empty());
+    cache.clear();
+    assert!(cache.get(&key).is_some());
 }
