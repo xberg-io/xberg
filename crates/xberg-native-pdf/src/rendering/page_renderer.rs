@@ -1962,6 +1962,7 @@ impl PageRenderer {
             let mut paint = tiny_skia::Paint::default();
             paint.shader = shader;
             paint.anti_alias = true;
+            paint.blend_mode = crate::rendering::pdf_blend_mode_to_skia(&gs.blend_mode);
 
             let rect = tiny_skia::Rect::from_xywh(0.0, 0.0, pixmap.width() as f32, pixmap.height() as f32).unwrap();
             let path = PathBuilder::from_rect(rect);
@@ -2035,16 +2036,9 @@ impl PageRenderer {
         // result is a familiar centred radial; non-concentric inputs
         // produce off-centre / cone gradients that real PDFs use for
         // highlight, spotlight, and lens effects. ~keep
-        let mut center0 = tiny_skia::Point { x: x0, y: y0 };
-        let mut edge0 = tiny_skia::Point { x: x0 + r0, y: y0 };
-        let mut center1 = tiny_skia::Point { x: x1, y: y1 };
-        let mut edge1 = tiny_skia::Point { x: x1 + r1, y: y1 };
-        transform.map_point(&mut center0);
-        transform.map_point(&mut edge0);
-        transform.map_point(&mut center1);
-        transform.map_point(&mut edge1);
-        let radius0 = ((edge0.x - center0.x).powi(2) + (edge0.y - center0.y).powi(2)).sqrt();
-        let radius1 = ((edge1.x - center1.x).powi(2) + (edge1.y - center1.y).powi(2)).sqrt();
+        let center0 = tiny_skia::Point { x: x0, y: y0 };
+        let center1 = tiny_skia::Point { x: x1, y: y1 };
+        let (radius0, radius1) = (r0, r1);
 
         // Per ISO 32000-1 §8.7.4.5.4 the `/Extend` array names whether
         // the gradient paints past the start (inner) and end (outer)
@@ -2055,6 +2049,7 @@ impl PageRenderer {
         // circle and `Extend[0]=false` clips inside the inner circle. ~keep
         let radial_clip_mask = build_radial_extend_clip(
             pixmap,
+            transform,
             (center0, radius0),
             (center1, radius1),
             extend_start,
@@ -2068,21 +2063,22 @@ impl PageRenderer {
                 x: center0.x,
                 y: center0.y,
             },
-            radius0, // start_radius (inner circle, in device space) ~keep
+            radius0, // start_radius (inner circle, in shading space) ~keep
             tiny_skia::Point {
                 x: center1.x,
                 y: center1.y,
             },
-            radius1, // end_radius (outer circle, in device space) ~keep
+            radius1, // end_radius (outer circle, in shading space) ~keep
             ramp,
             tiny_skia::SpreadMode::Pad,
-            Transform::identity(),
+            transform,
         );
 
         if let Some(shader) = gradient {
             let mut paint = tiny_skia::Paint::default();
             paint.shader = shader;
             paint.anti_alias = true;
+            paint.blend_mode = crate::rendering::pdf_blend_mode_to_skia(&gs.blend_mode);
             let rect = tiny_skia::Rect::from_xywh(0.0, 0.0, pixmap.width() as f32, pixmap.height() as f32).unwrap();
             let path = PathBuilder::from_rect(rect);
             pixmap.fill_path(
@@ -3003,7 +2999,9 @@ impl PageRenderer {
         // §8.7.4.1: a shading pattern may paint "with an image mask", so the stencil becomes the
         // coverage the gradient is painted through rather than a flat-colour image.
         let (pattern_base, pattern_resources) = pattern_frame;
-        let shading_pattern = self.fill_shading_pattern(gs, pattern_resources, doc)?;
+        let shading_pattern = self
+            .fill_shading_pattern(gs, pattern_resources, doc)?
+            .filter(|pattern| pattern.as_dict().is_some_and(|dict| dict.get("Shading").is_some()));
         let (pr, pg, pb, pa) = if shading_pattern.is_some() {
             (255, 255, 255, 255)
         } else {
@@ -3298,7 +3296,7 @@ impl PageRenderer {
             // The caller's clip is applied once, when the group is composited; painting under it
             // as well would apply an anti-aliased edge's coverage twice.
             let bbox_clip = clip_to_bbox
-                .then(|| form_bbox_clip(dict, &group_pixmap, combined_transform))
+                .then(|| form_bbox_clip(dict, doc, &group_pixmap, combined_transform))
                 .flatten();
             // A group's alpha constant and blend mode apply once, when it is composited
             // (Table 58); inheriting them would apply them a second time inside.
@@ -3417,7 +3415,7 @@ impl PageRenderer {
                 gs: invocation.map(|context| context.gs.clone()),
                 clip: intersect_clips(
                     clip_to_bbox
-                        .then(|| form_bbox_clip(dict, pixmap, combined_transform))
+                        .then(|| form_bbox_clip(dict, doc, pixmap, combined_transform))
                         .flatten(),
                     invocation.and_then(|context| context.clip),
                 ),
@@ -6240,9 +6238,16 @@ impl PageRenderer {
                                 let old_fonts = self.fonts.clone();
                                 let old_cs = self.color_spaces.clone();
                                 if let Some(res) = dict.get("Resources") {
-                                    if let Ok(res_obj) = doc.resolve_object(res) {
-                                        self.load_resources(doc, &res_obj)?;
-                                    }
+                                    let res_obj = match doc.resolve_object(res) {
+                                        Ok(res_obj) => res_obj,
+                                        Err(error) => {
+                                            tracing::debug!(
+                                                "skipping widget appearance whose resources cannot be read: {error}"
+                                            );
+                                            continue;
+                                        }
+                                    };
+                                    self.load_resources(doc, &res_obj)?;
                                 }
 
                                 self.render_form_xobject_unclipped(
@@ -7212,7 +7217,23 @@ fn evaluate_pdf_function_at(doc: &PdfDocument, func: &Object, t: f32, depth: u8)
             let c1 = numbers("C1").unwrap_or_else(|| vec![1.0]);
             let exponent = dict.get("N").and_then(obj_to_f32).unwrap_or(1.0);
             let k = t.powf(exponent);
-            Some(c0.iter().zip(c1.iter()).map(|(a, b)| a + k * (b - a)).collect())
+            let range = numbers("Range").filter(|range| range.len() >= 2 && range.len() % 2 == 0);
+            Some(
+                c0.iter()
+                    .zip(c1.iter())
+                    .enumerate()
+                    .map(|(j, (a, b))| {
+                        let value = a + k * (b - a);
+                        match range
+                            .as_ref()
+                            .and_then(|range| Some((*range.get(2 * j)?, *range.get(2 * j + 1)?)))
+                        {
+                            Some((low, high)) if low <= high => value.clamp(low, high),
+                            _ => value,
+                        }
+                    })
+                    .collect(),
+            )
         }
         // §7.10.4: /Bounds partitions /Domain; the sub-domain holding t is remapped onto the
         // matching /Encode pair before its sub-function is evaluated.
@@ -8479,17 +8500,22 @@ fn intersect_clips(own: Option<tiny_skia::Mask>, caller: Option<&tiny_skia::Mask
 ///
 /// Returns `None` when there is nothing usable to clip to: no box, a zero-extent box (honouring it
 /// would erase the form) or a box that cannot be rasterised.
-fn form_bbox_clip(dict: &HashMap<String, Object>, pixmap: &Pixmap, transform: Transform) -> Option<tiny_skia::Mask> {
-    let Some(Object::Array(arr)) = dict.get("BBox") else {
+fn form_bbox_clip(
+    dict: &HashMap<String, Object>,
+    doc: &PdfDocument,
+    pixmap: &Pixmap,
+    transform: Transform,
+) -> Option<tiny_skia::Mask> {
+    let Ok(Object::Array(arr)) = doc.resolve_object(dict.get("BBox")?) else {
         return None;
     };
     if arr.len() < 4 {
         return None;
     }
     let number = |i: usize| -> Option<f32> {
-        match arr.get(i) {
-            Some(Object::Real(v)) => Some(*v as f32),
-            Some(Object::Integer(v)) => Some(*v as f32),
+        match doc.resolve_object(arr.get(i)?).ok()? {
+            Object::Real(v) => Some(v as f32),
+            Object::Integer(v) => Some(v as f32),
             _ => None,
         }
     };
@@ -8675,6 +8701,7 @@ fn build_axial_extend_clip(
 ///   (forms an annulus when combined with the outer exclusion).
 fn build_radial_extend_clip(
     pixmap: &Pixmap,
+    transform: Transform,
     start: (tiny_skia::Point, f32),
     end: (tiny_skia::Point, f32),
     extend_start: bool,
@@ -8698,6 +8725,7 @@ fn build_radial_extend_clip(
     // (subtract it via an even-odd fill rule). ~keep
     let mut mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height())?;
 
+    let outer_in_device_space = extend_end;
     let outer_path = {
         let mut pb = PathBuilder::new();
         if !extend_end {
@@ -8718,7 +8746,11 @@ fn build_radial_extend_clip(
         &outer_path,
         tiny_skia::FillRule::Winding,
         true,
-        Transform::identity(),
+        if outer_in_device_space {
+            Transform::identity()
+        } else {
+            transform
+        },
     );
 
     if !extend_start && r0 > 1.0e-3 {
@@ -8735,7 +8767,7 @@ fn build_radial_extend_clip(
                 &inner_path,
                 tiny_skia::FillRule::Winding,
                 true,
-                Transform::identity(),
+                transform,
             );
             let outer_data = mask.data_mut();
             let inner_data = inner_mask.data();
@@ -10022,17 +10054,24 @@ mod tests {
     #[test]
     fn form_bbox_beyond_precision_and_off_the_raster_clips_everything() {
         let pixmap = Pixmap::new(200, 200).unwrap();
+        let doc = minimal_pdf_doc();
         let bbox = |x0: i64, x1: i64| {
             HashMap::from([(
                 "BBox".to_string(),
                 Object::Array([x0, 0, x1, 200].into_iter().map(Object::Integer).collect()),
             )])
         };
-        let off_raster = form_bbox_clip(&bbox(300, 2_000_000_000), &pixmap, Transform::identity())
+        let off_raster = form_bbox_clip(&bbox(300, 2_000_000_000), &doc, &pixmap, Transform::identity())
             .expect("a box wholly past the raster edge clips everything");
         assert!(off_raster.data().iter().all(|&v| v == 0));
         assert!(
-            form_bbox_clip(&bbox(-2_000_000_000, 2_000_000_000), &pixmap, Transform::identity()).is_none(),
+            form_bbox_clip(
+                &bbox(-2_000_000_000, 2_000_000_000),
+                &doc,
+                &pixmap,
+                Transform::identity()
+            )
+            .is_none(),
             "a box enclosing the raster restricts nothing"
         );
     }

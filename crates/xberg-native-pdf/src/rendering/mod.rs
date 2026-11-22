@@ -769,18 +769,24 @@ pub fn render_page_region(
     let min_y = corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
     let max_x = corners.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
     let max_y = corners.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
-    let crop_x_px = min_x.round().max(0.0) as u32;
-    let crop_y_px = min_y.round().max(0.0) as u32;
-    let crop_w_px = (max_x - min_x).round().max(1.0) as u32;
-    let crop_h_px = (max_y - min_y).round().max(1.0) as u32;
-
     // Decode, crop, re-encode using the `image` crate (already a dep). ~keep
     let full_img = image::load_from_memory(&full.data)
         .map_err(|e| crate::Error::InvalidPdf(format!("render output decode: {e}")))?;
-    let x = crop_x_px.min(full_img.width().saturating_sub(1));
-    let y = crop_y_px.min(full_img.height().saturating_sub(1));
-    let w = crop_w_px.min(full_img.width() - x);
-    let h = crop_h_px.min(full_img.height() - y);
+    // Both endpoints are clipped to the raster, so a region that overhangs an edge keeps only the part
+    // inside it and one wholly outside is an error rather than the nearest pixel. ~keep
+    let clipped_x0 = min_x.max(0.0);
+    let clipped_y0 = min_y.max(0.0);
+    let clipped_x1 = max_x.min(full_img.width() as f32);
+    let clipped_y1 = max_y.min(full_img.height() as f32);
+    if !(clipped_x1 > clipped_x0 && clipped_y1 > clipped_y0) {
+        return Err(crate::Error::InvalidPdf(format!(
+            "crop rect lies outside the rendered page: {crop_rect_pt:?}"
+        )));
+    }
+    let x = (clipped_x0.round() as u32).min(full_img.width() - 1);
+    let y = (clipped_y0.round() as u32).min(full_img.height() - 1);
+    let w = ((clipped_x1 - clipped_x0).round().max(1.0) as u32).min(full_img.width() - x);
+    let h = ((clipped_y1 - clipped_y0).round().max(1.0) as u32).min(full_img.height() - y);
     let cropped = full_img.crop_imm(x, y, w, h);
 
     let mut buf = Vec::new();
