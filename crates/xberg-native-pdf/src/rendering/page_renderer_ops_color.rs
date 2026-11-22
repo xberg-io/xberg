@@ -42,7 +42,7 @@ impl PageRenderer {
             // records the components on gs.fill_color_components
             // above; the pipeline reads those when the paint op
             // fires. See `resolve_generic_fill_color`. ~keep
-            _ => match resolve_generic_fill_color(resolved_space, doc, components) {
+            _ => match resolve_generic_fill_color(resolved_space, doc, components, Some(&self.icc_transform_cache)) {
                 FillColorSpaceResolution::Rgb(r, g, b) => gs.fill_color_rgb = (r, g, b),
                 FillColorSpaceResolution::HandledNoChange => {}
                 FillColorSpaceResolution::Unhandled => {

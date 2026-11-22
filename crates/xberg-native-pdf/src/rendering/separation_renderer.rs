@@ -2180,7 +2180,7 @@ fn execute_separation_operators(
             }
             Operator::TJ { array } => {
                 if in_text_object {
-                    let advance = render_tj_to_plate(
+                    render_tj_to_plate(
                         pixmaps,
                         array,
                         base_transform,
@@ -2193,7 +2193,6 @@ fn execute_separation_operators(
                         target_inks,
                         excluded_layer_depth > 0,
                     )?;
-                    gs_stack.current_mut().advance_text_matrix(advance);
                 }
             }
             Operator::Quote { text } => {
