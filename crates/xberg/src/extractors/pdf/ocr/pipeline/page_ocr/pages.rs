@@ -15,6 +15,11 @@ impl PageOcrContext<'_> {
         rendered: &RenderedBatch<'_>,
         reads: &mut BatchReads,
     ) -> OcrRunResult<Self> {
+        debug_assert_eq!(
+            rendered.encoded.len(),
+            reads.results.len(),
+            "the render and read phases disagree on the batch"
+        );
         let count = reads.results.len();
         let mut this = self;
         for offset in 0..count {

@@ -246,14 +246,7 @@ impl PageOcrContext<'_> {
         ))]
         let number_config = detached_number_source.map_or(config, |source| &source.config);
         let batch_slice = rendered.slice.as_deref();
-        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-        let encoded = if let Some(scan) = stored_scan {
-            vec![(0, Arc::clone(&scan.data), scan.render.0, scan.render.1)]
-        } else {
-            rendered.encoded.clone()
-        };
-        #[cfg(not(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
-        let encoded = rendered.encoded.clone();
+        let encoded = rendered.encoded.as_slice();
         let batch_count = encoded.len();
         #[cfg(all(
             feature = "ocr",
@@ -293,7 +286,7 @@ impl PageOcrContext<'_> {
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         {
             let mut join_set = JoinSet::new();
-            for (page_idx, image_data, width, height) in &encoded {
+            for (page_idx, image_data, width, height) in encoded {
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
                 if cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
@@ -904,7 +897,7 @@ impl PageOcrContext<'_> {
         }
         #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
         {
-            for (page_idx, image_data, width, height) in &encoded {
+            for (page_idx, image_data, width, height) in encoded {
                 #[cfg(feature = "pdf")]
                 let page_rotation_degrees = if page_rotation_override != 0 {
                     page_rotation_override

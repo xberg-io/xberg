@@ -326,6 +326,15 @@ impl<'a> PageOcrContext<'a> {
             (None::<Cow<'_, [image::DynamicImage]>>, encoded)
         };
 
+        // A stored scan is this batch's whole read, so substitute it here: the read and page
+        // phases both index this one-entry set, never the render the substitution replaced. ~keep
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let encoded = if let Some(scan) = stored_scan {
+            vec![(0, Arc::clone(&scan.data), scan.render.0, scan.render.1)]
+        } else {
+            encoded
+        };
+
         Ok((
             Self {
                 content,
