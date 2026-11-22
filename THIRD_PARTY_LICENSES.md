@@ -11,7 +11,7 @@ native build scripts, the Dockerfiles, the OCR build scripts, the vendored sourc
 the pinned asset checksum manifests — so this file describes the release it ships with rather
 than a hand-maintained snapshot.
 
-It covers 16 non-Rust components and 903 Rust crates
+It covers 16 non-Rust components and 894 Rust crates
 resolved from 13 shipped dependency graphs (normal and build dependencies, all
 platforms). The Rust crate texts are collected from the same graphs `cargo deny` audits:
 
@@ -173,9 +173,9 @@ upstream tarballs untouched.
 
 | Artifact | Copyleft components | Build and patches | Upstream source |
 | --- | --- | --- | --- |
-| macOS and Linux CLI archives, Docker images and manylinux wheels | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh, docker/Dockerfile.*` at release 1.4.2 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
-| macOS arm64 Elixir NIF archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.3, x265 4.3 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh` at release 1.4.2 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz> (sha256 12c01dc731ed7b5a999e28120b45bf58a002ba3435a4ba2cfbc1e084a27c9c04); x265: <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz> (sha256 83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121) |
-| macOS arm64 PHP extension archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs, statically linked by `scripts/ci/build-macos-heif-deps.sh` at release 1.4.2 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
+| macOS and Linux CLI archives, Docker images and manylinux wheels | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh, docker/Dockerfile.*` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
+| macOS arm64 Elixir NIF archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.3, x265 4.3 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz> (sha256 12c01dc731ed7b5a999e28120b45bf58a002ba3435a4ba2cfbc1e084a27c9c04); x265: <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz> (sha256 83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121) |
+| macOS arm64 PHP extension archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs, statically linked by `scripts/ci/build-macos-heif-deps.sh` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
 | xberg-cli-x86_64-pc-windows-msvc.zip | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | vcpkg port set at baseline `5363acb796e576328288fae60c25304e227e9839`: libheif patched (`cxx-linkage-pkgconfig.diff`, `find-modules.diff`, `gdk-pixbuf.patch`, `symbol-exports.diff`, `vvc-pkgconfig.patch`); libde265 patched (`fix-linkage.patch`); libaom patched (`aom-rename-static.diff`) | libheif: <https://github.com/strukturag/libheif> (e3b59c0ab6da9a86273d3f6de693d5d1fc955c84d97ca5514c58c62b6ff8ece44e81e215a126d6dbb4248b1e344f60251443c520058033fd71a7282263492180); libde265: <https://github.com/strukturag/libde265> (58eabdac466c0b59e0bc82e4d2b6d4fc9cbf6ee0af9562e36d63c0601c92c2fe21bd3dfca2a119934ee4a9dcc73e7207f6ea25dba78382752e901374896c4471); libaom: <https://aomedia.googlesource.com/aom> (commit af3dc9aadc793c1b00edc003e3fc19a44fdeb574) |
 
 ### Written offers of Corresponding Source
@@ -270,7 +270,7 @@ with their digests:
 
 ## Rust crate dependencies
 
-903 crates from 13 shipped dependency graphs, 520 distinct license texts. Each crate
+894 crates from 13 shipped dependency graphs, 520 distinct license texts. Each crate
 appears under every distinct license text it ships, and a crate that ships no license file of its
 own is covered by the canonical SPDX text for its declared expression. Build-only dependencies are
 listed because they are part of the audited graph, not because their code is redistributed.
@@ -29534,7 +29534,7 @@ Applies to: libsqlite3-sys 0.40.0, rusqlite 0.43.0
 
 ### T-c16f8dcf1a36
 
-Source: `license-apache-2.0`. Applies to 31 entries.
+Source: `license-apache-2.0`. Applies to 22 entries.
 
 ```text
                                  Apache License
@@ -29740,7 +29740,7 @@ Source: `license-apache-2.0`. Applies to 31 entries.
    limitations under the License.
 ```
 
-Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.48.0, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.48.5, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.48.5, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.48.5, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.48.5, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.48.5, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.48.5, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.48.5, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.48.5, windows_x86_64_msvc 0.52.6
+Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.52.6
 
 ### T-c1d06dd041ab
 
@@ -29924,7 +29924,7 @@ Applies to: ppmd-rust 1.5.2
 
 ### T-c2cfccb812fe
 
-Source: `license-mit`. Applies to 31 entries.
+Source: `license-mit`. Applies to 22 entries.
 
 ```text
     MIT License
@@ -29950,7 +29950,7 @@ Source: `license-mit`. Applies to 31 entries.
     SOFTWARE
 ```
 
-Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.48.0, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.48.5, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.48.5, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.48.5, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.48.5, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.48.5, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.48.5, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.48.5, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.48.5, windows_x86_64_msvc 0.52.6
+Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.52.6
 
 ### T-c3fbe6b3ba4f
 
