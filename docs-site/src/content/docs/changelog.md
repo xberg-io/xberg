@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
-## [Unreleased]
+## [1.5.0] - 2026-11-22
 
 ### Added
 
@@ -91,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** measured annotation and viewport data. `PdfAnnotation` now carries `vertices` for Line, Polygon and PolyLine annotations, `ink_list` for Ink, and `measure` for the `/Measure` dictionary (producer scale text plus the `/X`, `/Y`, `/D`, `/A`, `/T` and `/S` number-format arrays). `pages[].viewports` carries every `/VP` page viewport with its bounds, name and measure. A native writer appends a Polygon annotation with a copied measure dictionary to an existing PDF as an incremental update, preserving every original byte and other object. (#2966)
 - **pdf:** `pdf_options.plan_regions` (opt-in `plan-regions` Cargo feature, default off) closes line segments from the vector geometry into a planar graph, bridges door-sized gaps up to `gap_tolerance`, splits crossings and returns each bounded face on `pages[].geometry.regions` with its area in square page points and the page text inside it. `snap_tolerance`, `gap_tolerance` and `max_segments` are settings; work is bounded and degeneracies are skipped. The one added dependency is `geo` (MIT OR Apache-2.0), reachable only through that feature. (#2966)
 - **pdf:** `extraction::plan_geometry::DrawingSetText` parses the text conventions of a construction drawing set: title-block sheet number, title and revision; feet-and-inch dimension strings (`12'-0 5/8"` to 144.625 inches) paired with the caller's text position; and architectural or ratio scale notes (`3/8" = 1'-0"` to 1:32, `1:100` to 100). Every field is optional and no parser invents a value. (#2966)
-- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
+- **ocr:** `OrtSessionOptions` (`memory_pattern`, `cpu_arena`) now applies to PaddleOCR detection, classification and recognition ONNX Runtime sessions (`max_threads` does not affect PaddleOCR), and `set_ort_session_options` / `ort_session_options` are exposed to the language bindings, so variable-size documents can run with a bounded memory footprint. PaddleOCR engines are pooled per option set. (#3284)
+- **api:** `XBERG_API_TOKEN` enables bearer-token authentication on every REST route except `GET /health`, and on the MCP HTTP transport (`xberg mcp --transport http`). The token must be ASCII. The Helm chart takes the token from a Secret (`xberg.apiTokenSecret`).
 
 ### Changed
 
@@ -105,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** A fixed-arity operator reads its trailing operands, as other readers apply them, so an operand leaked by an unknown operator ahead of it (`bcolor [0]`, `pagesize width 597.5pt height 845pt`) no longer shifts a matrix or drops the operator. `[0] 1 0 0 1 -72 -779 cm` applies the documented translate instead of a shifted matrix, and a page whose text it places no longer extracts empty. (#3383)
+- **pdf:** A Form XObject's text survives the large-stream prescan: a `Do` region now includes the `/Name` operand that precedes it, so pages over 256 KiB of glyph outlines with an invisible OCR text layer in a form extract their text instead of nothing. (#3384)
 - **pdf:** Separately titled tables printed as one band are split at each title again, both when a ruled detector joins stacked tables whose rules line up and when three titled tables sit side by side in one borderless band. Each title stays a full-width row and the header band that follows it stays with its own table; a spanning row inside a body and a header band that repeats without a title do not split. (#3348)
 - **pdf:** A ruled table split by a taller row gap under a subtotal is rejoined into one table when adjacent bands repeat their column tracks and one family of long rules spans both, keeping the wrapped header and the first-column row span. (#3349)
 - **pdf:** A two-column page letterhead in the top band is no longer emitted as a table; it stays text, while ruled tables and tables with retained grids remain tables. (#3350)
