@@ -14,8 +14,8 @@ task_sets = [
 ]
 
 [overrides."github:xberg-io/alef"]
-version = "0.130.4"
-reason = "alef.toml alef_version pins the 0.130.x maintenance line; move both together"
+version = "0.132.0"
+reason = "alef.toml alef_version pins the 0.132.x line; 1.5.0 needs bundled_notices (AAR) and additional_licenses (POM); move both together"
 
 [task_overrides]
 "plugin:generate" = "Refresh plugin source and root served-skill pins after Xberg public skill export"

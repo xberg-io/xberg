@@ -656,6 +656,7 @@ fn place_alone(
         ocr_confidence,
         native_content: None,
         geometry: None,
+        viewports: None,
     }]);
 }
 

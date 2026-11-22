@@ -2594,6 +2594,17 @@ const CELL_RULE_SPAN_TOL: f32 = 6.0;
 /// above both without reintroducing the unbounded scan. ~keep
 const MAX_HEADER_CELL_WIDENING_CANDIDATES: usize = 8;
 
+/// Widest horizontal span `build_cells_from_intersections` closes when no H rule crosses it.
+///
+/// Two ruled grids side by side on one sheet that share row bands put a crossing at each corner
+/// of the graphics-free strip between them, so the strip reads as one very wide cell and joins
+/// the grids into one table (xberg-io/xberg#3377). A cell's top and bottom are its H rules: a
+/// span wider than this with no rule across it is a gap between grids, not a cell. Narrower
+/// spans stay closed because a rule is often drawn a few points short of a cell edge; 60pt
+/// clears that slop and the widest ordinary column separation. A real bridging rule — a shared
+/// banded table's row rule or a merged cell's boundary — keeps its span at any width. ~keep
+const MAX_UNRULED_CELL_X_GAP: f32 = 60.0;
+
 /// Build cells from intersection points.
 /// A cell exists when all four corners (x1,y1), (x2,y1), (x1,y2), (x2,y2) are present
 /// and there is no intermediate intersection between them on either axis.
@@ -2647,6 +2658,16 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
         h_edges
             .iter()
             .find(|edge| (edge.coord - y).abs() <= SNAP_TOL && edge.start <= x1 + SNAP_TOL && edge.end >= x2 - SNAP_TOL)
+    };
+
+    // An H rule drawn across both X ends of a candidate cell bounds one continuous row. ~keep
+    let h_rule_spans = |x1: f32, x2: f32, y_lo: f32, y_hi: f32| -> bool {
+        h_edges.iter().any(|edge| {
+            edge.coord >= y_lo - SNAP_TOL
+                && edge.coord <= y_hi + SNAP_TOL
+                && edge.start <= x1 + SNAP_TOL
+                && edge.end >= x2 - SNAP_TOL
+        })
     };
     let band_is_ruled = |x1: f32, x2: f32, y_lo: f32, y_hi: f32| -> bool {
         let (Some(top), Some(bottom)) = (h_edge_across(y_lo, x1, x2), h_edge_across(y_hi, x1, x2)) else {
@@ -2718,6 +2739,12 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                             && v_edge_spans(xs[nxi], ys[yi], ys[nyi])
                             && h_edge_across(ys[yi], xs[xi], xs[nxi]).is_some()
                             && h_edge_across(ys[nyi], xs[xi], xs[nxi]).is_some()))
+                    // An over-wide span with no H rule across it is the graphics-free gap
+                    // between two side-by-side grids, not a cell. Callers that supply only
+                    // crossings and V edges keep the corner-only contract. ~keep
+                    && (h_edges.is_empty()
+                        || xs[nxi] - xs[xi] <= MAX_UNRULED_CELL_X_GAP
+                        || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi]))
                 {
                     cells.push(IntersectionCell {
                         x1: xs[xi],
@@ -8257,6 +8284,135 @@ mod tests {
         assert!(
             cells.is_empty(),
             "a 40pt graphics-free gap must still be rejected under the looser CELL_RULE_SPAN_TOL, got: {cells:?}"
+        );
+    }
+
+    /// xberg-io/xberg#3377: two side-by-side ruled grids that share row bands but are separated
+    /// by a wide graphics-free X gap must not produce a cell across the gap. Crossings exist at
+    /// all four corners of that strip, but neither grid's H rules run across it, so each grid is
+    /// its own cell cluster.
+    #[test]
+    fn an_unruled_x_gap_between_side_by_side_groups_splits_them_into_two_clusters() {
+        let edge = |coord, start, end| Edge { coord, start, end };
+        // Left grid x=[0,40], right grid x=[240,280], both on row band y=[0,20]. ~keep
+        let pts = vec![
+            Intersection { x: 0.0, y: 0.0 },
+            Intersection { x: 40.0, y: 0.0 },
+            Intersection { x: 240.0, y: 0.0 },
+            Intersection { x: 280.0, y: 0.0 },
+            Intersection { x: 0.0, y: 20.0 },
+            Intersection { x: 40.0, y: 20.0 },
+            Intersection { x: 240.0, y: 20.0 },
+            Intersection { x: 280.0, y: 20.0 },
+        ];
+        let h_edges = [
+            edge(0.0, 0.0, 40.0),
+            edge(0.0, 240.0, 280.0),
+            edge(20.0, 0.0, 40.0),
+            edge(20.0, 240.0, 280.0),
+        ];
+        let v_edges = [
+            edge(0.0, 0.0, 20.0),
+            edge(40.0, 0.0, 20.0),
+            edge(240.0, 0.0, 20.0),
+            edge(280.0, 0.0, 20.0),
+        ];
+
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        assert!(
+            cells.iter().all(|cell| cell.x2 - cell.x1 <= MAX_UNRULED_CELL_X_GAP),
+            "no cell may span the unrulled gap between the two grids, got: {cells:?}"
+        );
+        assert_eq!(
+            group_cells_into_tables(&cells).len(),
+            2,
+            "each side-by-side grid must stay its own cell cluster, got: {cells:?}"
+        );
+    }
+
+    /// Companion to the split: one H rule that runs across the gap bounds a continuous row, so
+    /// the two vertical groups are one ruled band (a shared banded table) and stay one cluster.
+    #[test]
+    fn a_bridging_horizontal_rule_keeps_an_x_gap_in_one_cluster() {
+        let edge = |coord, start, end| Edge { coord, start, end };
+        let pts = vec![
+            Intersection { x: 0.0, y: 0.0 },
+            Intersection { x: 40.0, y: 0.0 },
+            Intersection { x: 240.0, y: 0.0 },
+            Intersection { x: 280.0, y: 0.0 },
+            Intersection { x: 0.0, y: 20.0 },
+            Intersection { x: 40.0, y: 20.0 },
+            Intersection { x: 240.0, y: 20.0 },
+            Intersection { x: 280.0, y: 20.0 },
+        ];
+        // Both the top and bottom rules run the full width. ~keep
+        let h_edges = [edge(0.0, 0.0, 280.0), edge(20.0, 0.0, 280.0)];
+        let v_edges = [
+            edge(0.0, 0.0, 20.0),
+            edge(40.0, 0.0, 20.0),
+            edge(240.0, 0.0, 20.0),
+            edge(280.0, 0.0, 20.0),
+        ];
+
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        assert!(
+            cells.iter().any(|cell| cell.x2 - cell.x1 > MAX_UNRULED_CELL_X_GAP),
+            "a rule across the gap must still license the wide cell, got: {cells:?}"
+        );
+        assert_eq!(
+            group_cells_into_tables(&cells).len(),
+            1,
+            "a bridged band must stay one cell cluster, got: {cells:?}"
+        );
+    }
+
+    /// The threshold itself: a gap wider than an ordinary column but narrower than
+    /// `MAX_UNRULED_CELL_X_GAP` is rule-slop, not two grids, so it stays one cluster.
+    #[test]
+    fn an_x_gap_under_the_threshold_keeps_side_by_side_groups_in_one_cluster() {
+        let edge = |coord, start, end| Edge { coord, start, end };
+        let near_gap = MAX_UNRULED_CELL_X_GAP - 10.0;
+        let right_x = 50.0 + near_gap;
+        let pts = vec![
+            Intersection { x: 0.0, y: 0.0 },
+            Intersection { x: 50.0, y: 0.0 },
+            Intersection { x: right_x, y: 0.0 },
+            Intersection {
+                x: right_x + 50.0,
+                y: 0.0,
+            },
+            Intersection { x: 0.0, y: 20.0 },
+            Intersection { x: 50.0, y: 20.0 },
+            Intersection { x: right_x, y: 20.0 },
+            Intersection {
+                x: right_x + 50.0,
+                y: 20.0,
+            },
+        ];
+        let h_edges = [
+            edge(0.0, 0.0, 50.0),
+            edge(0.0, right_x, right_x + 50.0),
+            edge(20.0, 0.0, 50.0),
+            edge(20.0, right_x, right_x + 50.0),
+        ];
+        let v_edges = [
+            edge(0.0, 0.0, 20.0),
+            edge(50.0, 0.0, 20.0),
+            edge(right_x, 0.0, 20.0),
+            edge(right_x + 50.0, 0.0, 20.0),
+        ];
+
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        assert!(
+            cells
+                .iter()
+                .any(|cell| (cell.x1 - 50.0).abs() <= SNAP_TOL && (cell.x2 - right_x).abs() <= SNAP_TOL),
+            "a near gap must stay a cell, got: {cells:?}"
+        );
+        assert_eq!(
+            group_cells_into_tables(&cells).len(),
+            1,
+            "a near gap must not split the grid into two clusters, got: {cells:?}"
         );
     }
 

@@ -958,6 +958,7 @@ fn insert_clones_the_read_before_waiting_for_the_state_lock() {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }]),
         ..Default::default()
     };

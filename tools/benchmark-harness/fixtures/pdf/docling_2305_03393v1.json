@@ -1,0 +1,13 @@
+{
+  "document": "../../../../test_documents/vendored/docling/pdf/2305.03393v1.pdf",
+  "file_type": "pdf",
+  "file_size": 4318934,
+  "expected_frameworks": ["xberg", "docling"],
+  "metadata": {
+    "description": "Two-column academic paper (Optimized Table Tokenization for Table Structure Recognition) from the docling test suite",
+    "source": "docling",
+    "redistribute": "vendor",
+    "size_category": "medium",
+    "pages": 14
+  }
+}

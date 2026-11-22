@@ -88,7 +88,7 @@ pub(super) fn validate_config(config: &LocalCaptioningConfig) -> crate::Result<(
     }
     if config.model.format == LocalCaptioningFormat::Florence2 {
         return Err(invalid(
-            "Florence-2 captioning is staged in the inventory but not enabled by this adapter: its merged decoder fails on cached decoder steps in the bundled ONNX Runtime. Only SmolVLM is wired; no other family is substituted.",
+            "Florence-2 captioning is staged in the inventory but not enabled by this adapter: its encoder-decoder, task-token and per-task post-processing pipeline is not implemented, so only SmolVLM is wired and no other family is substituted.",
         ));
     }
     if let Some(prompt) = &config.prompt

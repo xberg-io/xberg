@@ -182,6 +182,76 @@ pub struct PdfConfig {
     /// be parsed.
     #[serde(default)]
     pub extract_vector_geometry: bool,
+
+    /// Closed-region recovery over each page's vector paths.
+    ///
+    /// When enabled (default off), line segments are joined into a planar graph,
+    /// door-sized gaps are closed and every closed face is returned on
+    /// `pages[].geometry.regions` with its area in square page points and the
+    /// page text inside it. `snap_tolerance` and `gap_tolerance` control how
+    /// aggressively endpoints are merged and gaps are bridged.
+    ///
+    /// Requires the `plan-regions` Cargo feature; enabling it without that
+    /// feature is rejected during validation. Asking for regions also turns on
+    /// vector-geometry extraction internally, but the raw paths are only
+    /// reported when [`extract_vector_geometry`](Self::extract_vector_geometry)
+    /// is set.
+    #[serde(default)]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.5.0"))]
+    pub plan_regions: Option<PlanRegionConfig>,
+}
+
+/// Settings for closed-region recovery on a PDF page's vector paths.
+#[cfg(feature = "pdf")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlanRegionConfig {
+    /// Run the closed-region pass. Off by default per page/document.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Endpoints within this many page points of each other are treated as one
+    /// node. Default `0.5`, half a point.
+    #[serde(default = "default_snap_tolerance")]
+    pub snap_tolerance: f32,
+
+    /// Open wall ends up to this many page points apart are joined (door
+    /// openings). Default `24.0` (two feet at 12 points per foot); set `0.0` to
+    /// disable gap closing.
+    #[serde(default = "default_gap_tolerance")]
+    pub gap_tolerance: f32,
+
+    /// Maximum line segments considered on one page. A denser sheet is skipped
+    /// rather than allowed to dominate the extraction. Default `20_000`.
+    #[serde(default = "default_max_segments")]
+    pub max_segments: usize,
+}
+
+#[cfg(feature = "pdf")]
+impl Default for PlanRegionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            snap_tolerance: default_snap_tolerance(),
+            gap_tolerance: default_gap_tolerance(),
+            max_segments: default_max_segments(),
+        }
+    }
+}
+
+#[cfg(feature = "pdf")]
+fn default_snap_tolerance() -> f32 {
+    0.5
+}
+
+#[cfg(feature = "pdf")]
+fn default_gap_tolerance() -> f32 {
+    24.0
+}
+
+#[cfg(feature = "pdf")]
+fn default_max_segments() -> usize {
+    20_000
 }
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
@@ -226,6 +296,7 @@ impl Default for PdfConfig {
             reading_order: false,
             backend: PdfBackend::default(),
             extract_vector_geometry: false,
+            plan_regions: None,
         }
     }
 }
@@ -248,6 +319,22 @@ impl PdfConfig {
     pub fn validate(&self) -> crate::Result<()> {
         validate_margin_fraction("pdf_options.top_margin_fraction", self.top_margin_fraction)?;
         validate_margin_fraction("pdf_options.bottom_margin_fraction", self.bottom_margin_fraction)?;
+
+        if let Some(regions) = &self.plan_regions {
+            validate_tolerance("pdf_options.plan_regions.snap_tolerance", regions.snap_tolerance)?;
+            validate_tolerance("pdf_options.plan_regions.gap_tolerance", regions.gap_tolerance)?;
+            if regions.max_segments == 0 {
+                return Err(crate::XbergError::validation(
+                    "pdf_options.plan_regions.max_segments must be greater than zero",
+                ));
+            }
+            #[cfg(not(feature = "plan-regions"))]
+            if regions.enabled {
+                return Err(crate::XbergError::validation(
+                    "pdf_options.plan_regions requires the plan-regions feature",
+                ));
+            }
+        }
 
         if let Some(hierarchy) = &self.hierarchy
             && !(1..=7).contains(&hierarchy.k_clusters)
@@ -286,6 +373,16 @@ fn validate_margin_fraction(field: &str, value: Option<f32>) -> crate::Result<()
         )));
     }
 
+    Ok(())
+}
+
+#[cfg(feature = "pdf")]
+fn validate_tolerance(field: &str, value: f32) -> crate::Result<()> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(crate::XbergError::validation(format!(
+            "{field} must be finite and non-negative, got {value}"
+        )));
+    }
     Ok(())
 }
 
@@ -464,6 +561,82 @@ mod tests {
 
     #[test]
     #[cfg(feature = "pdf")]
+    fn plan_regions_is_off_by_default_and_reads_its_key() {
+        assert!(
+            PdfConfig::default().plan_regions.is_none(),
+            "closed regions are an opt-in output"
+        );
+
+        let with_key: PdfConfig = serde_json::from_str(
+            r#"{"plan_regions": {"enabled": true, "snap_tolerance": 0.25, "gap_tolerance": 12.0}}"#,
+        )
+        .expect("a config with the key parses");
+        let regions = with_key.plan_regions.expect("the plan-regions config is present");
+        assert!(regions.enabled);
+        assert_eq!(regions.snap_tolerance, 0.25);
+        assert_eq!(regions.gap_tolerance, 12.0);
+        assert_eq!(regions.max_segments, 20_000, "the cap keeps its documented default");
+    }
+
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn should_reject_invalid_plan_region_settings() {
+        for (snap, gap, max_segments) in [
+            (f32::NAN, 24.0, 20_000),
+            (-0.5, 24.0, 20_000),
+            (0.5, f32::INFINITY, 20_000),
+            (0.5, -1.0, 20_000),
+            (0.5, 24.0, 0),
+        ] {
+            let config = PdfConfig {
+                plan_regions: Some(PlanRegionConfig {
+                    enabled: true,
+                    snap_tolerance: snap,
+                    gap_tolerance: gap,
+                    max_segments,
+                }),
+                ..PdfConfig::default()
+            };
+            assert!(
+                config.validate().is_err(),
+                "snap={snap}, gap={gap}, max_segments={max_segments} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "pdf", not(feature = "plan-regions")))]
+    fn should_reject_plan_regions_without_the_feature() {
+        let config = PdfConfig {
+            plan_regions: Some(PlanRegionConfig::default()),
+            ..PdfConfig::default()
+        };
+        let config = PdfConfig {
+            plan_regions: config.plan_regions.map(|regions| PlanRegionConfig {
+                enabled: true,
+                ..regions
+            }),
+            ..config
+        };
+        let error = config.validate().expect_err("the feature is required");
+        assert!(error.to_string().contains("plan-regions"), "got: {error}");
+    }
+
+    #[test]
+    #[cfg(all(feature = "pdf", feature = "plan-regions"))]
+    fn should_accept_plan_regions_with_the_feature() {
+        let config = PdfConfig {
+            plan_regions: Some(PlanRegionConfig {
+                enabled: true,
+                ..PlanRegionConfig::default()
+            }),
+            ..PdfConfig::default()
+        };
+        config.validate().expect("the feature is available");
+    }
+
+    #[test]
+    #[cfg(feature = "pdf")]
     fn test_pdf_config_custom_margins() {
         let config = PdfConfig {
             extract_images: false,
@@ -480,6 +653,7 @@ mod tests {
             reading_order: false,
             backend: PdfBackend::Native,
             extract_vector_geometry: false,
+            plan_regions: None,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));
