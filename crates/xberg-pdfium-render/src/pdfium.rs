@@ -183,6 +183,45 @@ impl Pdfium {
         path.as_ref().join(Pdfium::pdfium_platform_library_name())
     }
 
+    /// Whether this build links pdfium statically (`PDFIUM_STATIC_LIB_PATH` at build time).
+    ///
+    /// Static builds have no `bind_to_system_library` / `bind_to_library`; the cfg lives in this
+    /// crate's build script, so dependents cannot test it themselves.
+    pub const fn is_statically_linked() -> bool {
+        cfg!(pdfium_use_static)
+    }
+
+    /// Binds to the statically linked pdfium in a static build, or to the platform library on the
+    /// system search path otherwise.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn bind_to_linked_or_system_library() -> Result<Box<dyn PdfiumLibraryBindings>, PdfiumError> {
+        #[cfg(pdfium_use_static)]
+        {
+            Self::bind_to_statically_linked_library()
+        }
+        #[cfg(not(pdfium_use_static))]
+        {
+            Self::bind_to_system_library()
+        }
+    }
+
+    /// Binds to the platform-named pdfium library inside `dir`. Always an error in a static build,
+    /// where there is no runtime library to load.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn bind_to_library_in_dir(dir: &Path) -> Result<Box<dyn PdfiumLibraryBindings>, PdfiumError> {
+        #[cfg(pdfium_use_static)]
+        {
+            let _ = dir;
+            Err(PdfiumError::LoadLibraryFunctionNameError(
+                "this build links pdfium statically, so a runtime library directory does not apply".to_string(),
+            ))
+        }
+        #[cfg(not(pdfium_use_static))]
+        {
+            Self::bind_to_library(Self::pdfium_platform_library_name_at_path(dir))
+        }
+    }
+
     /// Creates a new [Pdfium] instance from the given external Pdfium library bindings.
     #[inline]
     pub fn new(bindings: Box<dyn PdfiumLibraryBindings>) -> Self {

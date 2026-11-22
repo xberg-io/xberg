@@ -18,8 +18,9 @@ set -euo pipefail
 # `DynamicPdfiumBindings::new` probes all 446 required symbols, so a missing one fails cleanly; a
 # symbol that is still present but whose signature or struct layout changed is NOT detected
 # (`build.rs` sets `layout_tests(false)`), and that is the case worth fearing. ~keep
-version="${PDFIUM_VERSION:-${1:-7678}}"
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The pin lives in scripts/pdfium-version; override with PDFIUM_VERSION or the first argument.
+version="${PDFIUM_VERSION:-${1:-$(tr -d '[:space:]' <"$root_dir/scripts/pdfium-version")}}"
 dest_release="$root_dir/target/release"
 dest_debug="$root_dir/target/debug"
 

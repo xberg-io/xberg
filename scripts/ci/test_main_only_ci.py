@@ -142,7 +142,10 @@ class MainOnlyCiTests(unittest.TestCase):
         assert len(setup_mise) == 1
         assert setup_mise[0]["with"]["install-args"] == "cargo-deny"
         assert any(step.get("uses") == "xberg-io/actions/setup-rust@v1" for step in job["steps"])
-        assert [step["run"] for step in job["steps"] if "run" in step] == ["mise run rust:check:licenses"]
+        assert [step["run"] for step in job["steps"] if "run" in step] == [
+            "mise run rust:check:licenses",
+            "mise run notices:check",
+        ]
         triggers = workflow.get("on", workflow.get(True))
         for event in ("pull_request", "push"):
             assert "packages/**" in triggers[event]["paths"]

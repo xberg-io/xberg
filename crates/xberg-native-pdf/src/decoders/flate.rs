@@ -126,6 +126,23 @@ fn accept_as_partial(output: &[u8], limit: u64) -> Result<bool> {
     Ok(!output.is_empty() && looks_like_real_stream(output))
 }
 
+/// A deflate stream that stops without its final block marker, as opposed to
+/// one with corrupt bits. flate2 >= 1.1.10 rejects these at EOF, but the
+/// decoded prefix is valid and binary xref/object streams fail the
+/// content-stream heuristic in [`looks_like_real_stream`]. ~keep
+fn is_truncation(e: &std::io::Error) -> bool {
+    if e.kind() == std::io::ErrorKind::UnexpectedEof {
+        return true;
+    }
+    let msg = e.to_string();
+    msg.contains("incomplete deflate stream") || msg.contains("unexpected end")
+}
+
+fn accept_truncated_or_plausible(output: &[u8], limit: u64, e: &std::io::Error) -> Result<bool> {
+    check_limit(output, limit)?;
+    Ok(!output.is_empty() && (is_truncation(e) || looks_like_real_stream(output)))
+}
+
 /// Outcome of a primary (non-fallback) decode attempt: accepted output — a
 /// clean decode or an accepted partial recovery — or a failure whose error is
 /// kept for the final "all strategies failed" message.
@@ -149,7 +166,7 @@ fn try_zlib_decode(input: &[u8], limit: u64) -> Result<PrimaryAttempt> {
             Ok(PrimaryAttempt::Recovered(output))
         }
         Err(e) => {
-            if accept_as_partial(&output, limit)? {
+            if accept_truncated_or_plausible(&output, limit, &e)? {
                 tracing::warn!(
                     filter = "FlateDecode",
                     bytes = output.len(),
@@ -181,7 +198,7 @@ fn try_raw_deflate(input: &[u8], limit: u64) -> Result<PrimaryAttempt> {
             Ok(PrimaryAttempt::Recovered(output))
         }
         Err(deflate_err) => {
-            if accept_as_partial(&output, limit)? {
+            if accept_truncated_or_plausible(&output, limit, &deflate_err)? {
                 tracing::warn!(
                     filter = "FlateDecode",
                     bytes = output.len(),
@@ -255,6 +272,10 @@ impl FlateDecoder {
 
 impl StreamDecoder for FlateDecoder {
     fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        if input.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let limit = if max_output_bytes == 0 {
             self.max_decompressed_bytes
         } else {
@@ -523,6 +544,32 @@ mod tests {
 
         let decoded = decoder.decode(&compressed, 0).unwrap();
         assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn test_empty_stream_decodes_to_no_bytes() {
+        let decoded = FlateDecoder::default()
+            .decode(&[], 0)
+            .expect("an empty stream must decode to zero bytes, not fail");
+        assert!(decoded.is_empty());
+    }
+
+    #[test]
+    fn test_truncated_deflate_stream_yields_its_decoded_prefix() {
+        let original: Vec<u8> = (0u16..600).map(|i| (i % 251) as u8).collect();
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&original).unwrap();
+        let complete = encoder.finish().unwrap();
+
+        let truncated = &complete[..complete.len() * 3 / 4];
+        assert!(truncated.len() < complete.len());
+
+        let decoded = FlateDecoder::default()
+            .decode(truncated, 0)
+            .expect("a truncated deflate stream must still yield its decoded prefix");
+
+        assert!(!decoded.is_empty(), "recovery returned nothing for a truncated stream");
+        assert!(original.starts_with(&decoded));
     }
 
     #[test]

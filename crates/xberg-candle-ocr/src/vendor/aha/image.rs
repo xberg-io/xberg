@@ -1,4 +1,5 @@
 // Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+// Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 
 //! Subset of `aha::utils::{img_utils, video_utils, interpolate}` covering image loading,
 //! smart-resize, and bilinear interpolation used by DeepSeek-OCR / PaddleOCR-VL 1.5

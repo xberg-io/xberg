@@ -442,12 +442,12 @@ fn a_lone_ligature_then_actual_text_merges_into_an_unmarked_span() {
 }
 
 /// A fixed-pitch word gap pushes a space into the run, so the run is longer than one glyph. No glyph
-/// follows the gap here, so only the longer run can end the mark.
+/// follows the gap here, so only the longer run can end the mark. The gap stays under the column gap that ends a run.
 #[test]
 fn a_fixed_pitch_space_after_a_lone_ligature_leaves_the_span_unmarked() {
     let mut font = simple_ff_font();
     font.flags = Some(1);
-    let stream = b"BT /F1 12 Tf 1 0 0 1 100 700 Tm (A) Tj 1 0 0 1 160 700 Tm ET";
+    let stream = b"BT /F1 12 Tf 1 0 0 1 100 700 Tm (A) Tj 1 0 0 1 125 700 Tm ET";
     let spans = spans_of(font, stream);
     assert_eq!(spans.len(), 1, "{spans:?}");
     assert!(spans[0].0.starts_with("ff"), "{spans:?}");

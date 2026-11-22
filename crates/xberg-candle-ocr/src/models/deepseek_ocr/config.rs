@@ -1,3 +1,6 @@
+//! Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
+//!
 //! DeepSeek-OCR model configuration.
 //!
 //! Defines configuration structures for the DeepSeek-OCR vision-language model,

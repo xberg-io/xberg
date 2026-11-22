@@ -57,13 +57,12 @@ pin_fixture_archive() {
 	xberg_assert_file "$RUNNER_TEMP/pdfium-prebuilt/lib/libpdfium.so" 'actual archive payload'
 }
 
-@test "PDFium download should reject a missing release version before network access" {
+@test "PDFium download should fall back to the committed pin when no version is given" {
 	unset PDFIUM_VERSION
+	printf '7678\n' >"$XBERG_WORK/scripts/pdfium-version"
 	run bash "$DOWNLOAD_SCRIPT"
-	xberg_assert_status 2
-	xberg_assert_output_contains 'PDFIUM_VERSION env var required'
-	xberg_assert_github_output ''
-	[ ! -e "$XBERG_TRACE" ]
+	xberg_assert_status 0
+	grep -Fq 'chromium/7678/pdfium-linux-arm64.tgz' "$XBERG_TRACE"
 }
 
 @test "PDFium download should reject unsupported detected operating systems before network access" {

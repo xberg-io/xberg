@@ -104,22 +104,31 @@ fn build_minimal_pdf(content: &[u8]) -> Vec<u8> {
     pdf
 }
 
-/// KNOWN DEFECT: a proportional-font Tm-per-glyph run glues across ANY gap,
-/// including a 100pt gap that is unambiguously two separate tokens by any
-/// geometric standard. This is the current, unfixed behaviour — GH#1770's
-/// fix does not touch this path (it is gated to monospace fonts only). Filed
-/// separately; this test exists to give that issue a runnable repro.
+/// KNOWN DEFECT: a proportional-font Tm-per-glyph run glues across any gap
+/// under the column gap (`max(3 x font size, 30 pt)` = 36 pt here). This is the
+/// current, unfixed behaviour for those gaps; a jump past the column gap now
+/// ends the run (see `jump_past_the_column_gap_ends_the_run`).
 #[test]
 fn known_defect_proportional_tm_per_glyph_glues_across_any_gap() {
-    for gap in [7.2f32, 20.0, 50.0, 100.0] {
+    for gap in [7.2f32, 20.0] {
         let doc = PdfDocument::from_bytes(two_glyphs_pdf(gap)).expect("open fixture");
         let text = doc.extract_text(0).expect("extract_text");
         assert_eq!(
             text.trim(),
             "AB",
             "expected the current (buggy) glued single token \"AB\" at gap={gap}pt, got {text:?} — \
-             if this now reads \"A B\", the general Tm-continuation gap defect has been fixed and \
+             if this now reads \"A B\", the sub-column Tm-continuation gap defect has been fixed and \
              this test (and the issue it documents) should be closed/updated, not silently left red"
         );
+    }
+}
+
+/// A jump past the column gap is a new run, so the glyphs read as two tokens.
+#[test]
+fn jump_past_the_column_gap_ends_the_run() {
+    for gap in [50.0f32, 100.0] {
+        let doc = PdfDocument::from_bytes(two_glyphs_pdf(gap)).expect("open fixture");
+        let text = doc.extract_text(0).expect("extract_text");
+        assert_eq!(text.trim(), "A B", "gap={gap}pt must not glue, got {text:?}");
     }
 }
