@@ -248,27 +248,6 @@ fn test_algorithm_detection_v2_r3() {
 }
 
 #[test]
-fn test_algorithm_detection_v4_r4() {
-    let obj = make_encrypt_dict_obj("Standard", 4, 4, &[0u8; 32], &[0u8; 32], -1);
-    let ed = EncryptDict::from_object(&obj).unwrap();
-    assert_eq!(ed.algorithm().unwrap(), Algorithm::Aes128);
-}
-
-#[test]
-fn test_algorithm_detection_v5_r5() {
-    let obj = make_encrypt_dict_obj("Standard", 5, 5, &[0u8; 32], &[0u8; 32], -1);
-    let ed = EncryptDict::from_object(&obj).unwrap();
-    assert_eq!(ed.algorithm().unwrap(), Algorithm::Aes256);
-}
-
-#[test]
-fn test_algorithm_detection_v5_r6() {
-    let obj = make_encrypt_dict_obj("Standard", 5, 6, &[0u8; 32], &[0u8; 32], -1);
-    let ed = EncryptDict::from_object(&obj).unwrap();
-    assert_eq!(ed.algorithm().unwrap(), Algorithm::Aes256);
-}
-
-#[test]
 fn test_algorithm_detection_lenient_v1_r3() {
     // Non-standard R for V=1 should still return RC4_40 ~keep
     let obj = make_encrypt_dict_obj("Standard", 1, 3, &[0u8; 32], &[0u8; 32], -1);
@@ -284,12 +263,132 @@ fn test_algorithm_detection_lenient_v2_r4() {
     assert_eq!(ed.algorithm().unwrap(), Algorithm::Rc4_128);
 }
 
+#[derive(Clone, Copy)]
+enum FilterEntry {
+    Absent,
+    Null,
+    Named,
+    Identity,
+}
+
+struct CryptFilterCase {
+    name: &'static str,
+    version: i64,
+    revision: i64,
+    lenient: bool,
+    stm_f: FilterEntry,
+    str_f: FilterEntry,
+    stream: Algorithm,
+    string: Algorithm,
+}
+
+fn crypt_filter_dict_obj(case: &CryptFilterCase) -> Object {
+    let Object::Dictionary(mut dict) =
+        make_encrypt_dict_obj("Standard", case.version, case.revision, &[0u8; 32], &[0u8; 32], -1)
+    else {
+        unreachable!()
+    };
+    let cfm = if case.version == 5 { "AESV3" } else { "AESV2" };
+    let mut std_cf = HashMap::new();
+    std_cf.insert("CFM".to_string(), Object::Name(cfm.to_string()));
+    let mut cf = HashMap::new();
+    cf.insert("StdCF".to_string(), Object::Dictionary(std_cf));
+    dict.insert("CF".to_string(), Object::Dictionary(cf));
+    for (key, entry) in [("StmF", case.stm_f), ("StrF", case.str_f)] {
+        match entry {
+            FilterEntry::Absent => {}
+            FilterEntry::Null => {
+                dict.insert(key.to_string(), Object::Null);
+            }
+            FilterEntry::Named => {
+                dict.insert(key.to_string(), Object::Name("StdCF".to_string()));
+            }
+            FilterEntry::Identity => {
+                dict.insert(key.to_string(), Object::Name("Identity".to_string()));
+            }
+        }
+    }
+    Object::Dictionary(dict)
+}
+
 #[test]
-fn test_algorithm_detection_lenient_v4_r5() {
-    // Non-standard R for V=4 should still return Aes128 ~keep
-    let obj = make_encrypt_dict_obj("Standard", 4, 5, &[0u8; 32], &[0u8; 32], -1);
-    let ed = EncryptDict::from_object(&obj).unwrap();
-    assert_eq!(ed.algorithm().unwrap(), Algorithm::Aes128);
+fn test_algorithm_detection_v4_v5_crypt_filter_defaults() {
+    use Algorithm::{Aes128, Aes256, None as Plain};
+    use FilterEntry::{Absent, Identity, Named, Null};
+    let case = |name, version, revision, lenient, stm_f, str_f, stream, string| CryptFilterCase {
+        name,
+        version,
+        revision,
+        lenient,
+        stm_f,
+        str_f,
+        stream,
+        string,
+    };
+    let cases = [
+        case("v4_r4_both_absent", 4, 4, false, Absent, Absent, Plain, Plain),
+        case("v5_r5_both_absent", 5, 5, false, Absent, Absent, Plain, Plain),
+        case("v5_r6_both_absent", 5, 6, false, Absent, Absent, Plain, Plain),
+        case("lenient_v4_r5_both_absent", 4, 5, true, Absent, Absent, Plain, Plain),
+        case("v4_r4_both_null", 4, 4, false, Null, Null, Plain, Plain),
+        case("v4_r4_only_strf_present", 4, 4, false, Absent, Named, Plain, Aes128),
+        case("v4_r4_only_stmf_present", 4, 4, false, Named, Absent, Aes128, Plain),
+        case("v5_r6_only_strf_present", 5, 6, false, Absent, Named, Plain, Aes256),
+        case("v5_r6_only_stmf_present", 5, 6, false, Named, Absent, Aes256, Plain),
+        case(
+            "lenient_v4_r5_only_stmf_present",
+            4,
+            5,
+            true,
+            Named,
+            Absent,
+            Aes128,
+            Plain,
+        ),
+        case("v4_r4_both_named", 4, 4, false, Named, Named, Aes128, Aes128),
+        case("v5_r5_both_named", 5, 5, false, Named, Named, Aes256, Aes256),
+        case("v5_r6_both_named", 5, 6, false, Named, Named, Aes256, Aes256),
+        case("lenient_v4_r5_both_named", 4, 5, true, Named, Named, Aes128, Aes128),
+        case(
+            "v4_r4_explicit_identity_both",
+            4,
+            4,
+            false,
+            Identity,
+            Identity,
+            Plain,
+            Plain,
+        ),
+        case(
+            "v5_r6_explicit_identity_stmf_named_strf",
+            5,
+            6,
+            false,
+            Identity,
+            Named,
+            Plain,
+            Aes256,
+        ),
+        case(
+            "v4_r4_named_stmf_explicit_identity_strf",
+            4,
+            4,
+            false,
+            Named,
+            Identity,
+            Aes128,
+            Plain,
+        ),
+    ];
+    assert_eq!(cases.len(), 17, "case table was truncated");
+
+    for c in &cases {
+        let standard = matches!((c.version, c.revision), (4, 4) | (5, 5) | (5, 6));
+        assert_eq!(c.lenient, !standard, "{}: lenient flag disagrees with (V, R)", c.name);
+        let ed = EncryptDict::from_object(&crypt_filter_dict_obj(c)).unwrap();
+        assert_eq!(ed.algorithm().unwrap(), c.stream, "{}: stream algorithm", c.name);
+        assert_eq!(ed.string_algorithm().unwrap(), c.string, "{}: string algorithm", c.name);
+    }
 }
 
 #[test]
