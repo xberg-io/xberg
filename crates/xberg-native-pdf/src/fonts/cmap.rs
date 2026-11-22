@@ -213,9 +213,19 @@ impl CMap {
 
     /// Insert individual character mapping.
     fn insert(&mut self, code: u32, unicode: String) {
+        if self.is_full() && !self.chars.contains_key(&code) {
+            return;
+        }
         self.chars.insert(code, unicode);
     }
+
+    fn is_full(&self) -> bool {
+        self.chars.len() >= MAX_CMAP_CHAR_MAPPINGS
+    }
 }
+
+/// Upper bound on expanded per-code mappings; a hostile ToUnicode stream cannot pay for more with a few KB. ~keep
+const MAX_CMAP_CHAR_MAPPINGS: usize = 1_000_000;
 
 /// Key for indexing into the global CMap cache.
 ///
@@ -677,6 +687,12 @@ fn apply_bfchar_section(cmap: &mut CMap, section: &str) {
     let mut attempted = 0usize;
     let mut malformed = 0usize;
     for line in section.lines().map(bfchar_line_code) {
+        if cmap.is_full() {
+            tracing::warn!(
+                "ToUnicode bfchar section exceeds {MAX_CMAP_CHAR_MAPPINGS} mappings; remaining lines ignored"
+            );
+            break;
+        }
         let code = line.trim();
         if code.is_empty() {
             continue;
@@ -702,7 +718,12 @@ fn apply_bfchar_section(cmap: &mut CMap, section: &str) {
 fn apply_bfrange_section(cmap: &mut CMap, section: &str) {
     let mut attempted = 0usize;
     let mut malformed = 0usize;
+    let mut capped = false;
     for_each_bfrange_record(section, |record| {
+        if cmap.is_full() {
+            capped = true;
+            return;
+        }
         attempted += 1;
         let Some(mappings) = parse_bfrange_line(record) else {
             malformed += 1;
@@ -713,6 +734,11 @@ fn apply_bfrange_section(cmap: &mut CMap, section: &str) {
             cmap.insert(src, dst);
         }
     });
+    if capped {
+        tracing::warn!(
+            "ToUnicode bfrange section exceeds {MAX_CMAP_CHAR_MAPPINGS} mappings; remaining records ignored"
+        );
+    }
     warn_on_malformed_lines("bfrange", attempted, malformed);
 }
 
@@ -734,6 +760,9 @@ fn apply_notdefrange_section(cmap: &mut CMap, section: &str) {
     let mut attempted = 0usize;
     let mut malformed = 0usize;
     for line in significant_lines(section) {
+        if cmap.is_full() {
+            break;
+        }
         attempted += 1;
         let Some(mappings) = parse_notdefrange_line(line) else {
             malformed += 1;

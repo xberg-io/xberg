@@ -198,6 +198,23 @@ fn resolve_xmp_reference(reference: &quick_xml::events::BytesRef<'_>) -> String 
     format!("&{name};")
 }
 
+/// Decode an XMP packet to text, honouring a UTF-8/UTF-16 byte-order mark and the BOM-less UTF-16 forms
+/// the XMP specification allows (a `<` followed or preceded by a NUL byte).
+fn decode_xmp_bytes(bytes: &[u8]) -> String {
+    if let Some((encoding, _)) = encoding_rs::Encoding::for_bom(bytes) {
+        return encoding.decode_with_bom_removal(bytes).0.into_owned();
+    }
+    let encoding = match bytes {
+        [0, b'<', ..] => Some(encoding_rs::UTF_16BE),
+        [b'<', 0, ..] => Some(encoding_rs::UTF_16LE),
+        _ => None,
+    };
+    match encoding {
+        Some(encoding) => encoding.decode_without_bom_handling(bytes).0.into_owned(),
+        None => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
 impl XmpExtractor {
     /// Helper function to resolve an Object (handles indirect references).
     fn resolve_object(doc: &PdfDocument, obj: &Object) -> Result<Object> {
@@ -249,16 +266,14 @@ impl XmpExtractor {
         let metadata_resolved = Self::resolve_object(doc, &metadata_obj)?;
 
         let xml_bytes = match &metadata_resolved {
-            Object::Stream { .. } => {
-                // XMP metadata streams are typically not filtered (or use FlateDecode)
-                // Try to decode the stream ~keep
-                let decoded = metadata_resolved.decode_stream_data()?;
-                decoded.to_vec()
-            }
+            Object::Stream { .. } => match metadata_obj.as_reference() {
+                Some(metadata_ref) => doc.decode_stream_with_encryption(&metadata_resolved, metadata_ref)?,
+                None => metadata_resolved.decode_stream_data()?.to_vec(),
+            },
             _ => return Err(Error::InvalidPdf("Metadata is not a stream".to_string())),
         };
 
-        let xml_str = String::from_utf8_lossy(&xml_bytes).to_string();
+        let xml_str = decode_xmp_bytes(&xml_bytes);
 
         Self::parse_xmp(&xml_str)
     }
@@ -291,15 +306,24 @@ impl XmpExtractor {
         let mut reader = XmpEventReader::from_str(xmp_content);
 
         let mut element_stack: Vec<String> = Vec::new();
+        let mut list_item_is_default = false;
 
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
                     let name = e.name().as_ref().to_string();
+                    match name.as_str() {
+                        "rdf:Description" => apply_description_attributes(&mut metadata, &e),
+                        "rdf:li" => list_item_is_default = has_default_language(&e),
+                        _ => {}
+                    }
                     element_stack.push(name);
                 }
-                Ok(Event::Empty(_)) => {
-                    // Empty elements don't have text content ~keep
+                Ok(Event::Empty(e)) => {
+                    // Property attributes are the compact form of child property elements. ~keep
+                    if e.name().as_ref() == "rdf:Description" {
+                        apply_description_attributes(&mut metadata, &e);
+                    }
                 }
                 Ok(Event::Text(e)) => {
                     let text = e.xml11_content().trim().to_string();
@@ -310,11 +334,13 @@ impl XmpExtractor {
                     // Find the relevant property element (skip rdf:li, rdf:Seq, rdf:Bag, rdf:Alt)
                     // ~keep
                     if let Some(prop) = current_xmp_property(&element_stack) {
-                        apply_xmp_property_text(&mut metadata, &prop, text);
+                        apply_xmp_property_text(&mut metadata, &prop, text, list_item_is_default);
                     }
                 }
                 Ok(Event::End(_)) => {
-                    element_stack.pop();
+                    if element_stack.pop().as_deref() == Some("rdf:li") {
+                        list_item_is_default = false;
+                    }
                 }
                 Ok(Event::Eof) => break,
                 Err(_) => {
@@ -357,14 +383,37 @@ fn current_xmp_property(element_stack: &[String]) -> Option<String> {
         .cloned()
 }
 
+fn has_default_language(element: &quick_xml::events::BytesStart<'_>) -> bool {
+    element
+        .attributes()
+        .flatten()
+        .any(|attribute| attribute.key.as_ref() == "xml:lang" && attribute.value.as_ref() == "x-default")
+}
+
+/// Applies the property attributes of an `rdf:Description` (`<rdf:Description pdf:Producer="…"/>`), the
+/// compact form of child property elements. ~keep
+fn apply_description_attributes(metadata: &mut XmpMetadata, element: &quick_xml::events::BytesStart<'_>) {
+    for attribute in element.attributes().flatten() {
+        let key = attribute.key.as_ref();
+        if key.starts_with("xmlns") || key.starts_with("xml:") || key.starts_with("rdf:") {
+            continue;
+        }
+        let Ok(value) = attribute.normalized_value(quick_xml::XmlVersion::Implicit1_0) else {
+            continue;
+        };
+        apply_xmp_property_text(metadata, key, value.trim().to_string(), false);
+    }
+}
+
 /// Records a text node's value against the [`XmpMetadata`] field its
 /// namespaced property name maps to, falling back to `custom` for anything
 /// unrecognized. Split out of [`XmpExtractor::parse_xmp`] purely to keep that
 /// function's event loop short. ~keep
-fn apply_xmp_property_text(metadata: &mut XmpMetadata, prop: &str, text: String) {
+fn apply_xmp_property_text(metadata: &mut XmpMetadata, prop: &str, text: String, is_default_language: bool) {
+    // Language alternatives: the `x-default` entry wins over whichever entry came first. ~keep
     match prop {
         "dc:title" => {
-            if metadata.dc_title.is_none() {
+            if is_default_language || metadata.dc_title.is_none() {
                 metadata.dc_title = Some(text);
             }
         }
@@ -372,7 +421,7 @@ fn apply_xmp_property_text(metadata: &mut XmpMetadata, prop: &str, text: String)
             metadata.dc_creator.push(text);
         }
         "dc:description" => {
-            if metadata.dc_description.is_none() {
+            if is_default_language || metadata.dc_description.is_none() {
                 metadata.dc_description = Some(text);
             }
         }
@@ -381,7 +430,7 @@ fn apply_xmp_property_text(metadata: &mut XmpMetadata, prop: &str, text: String)
         }
         "dc:language" => metadata.dc_language = Some(text),
         "dc:rights" => {
-            if metadata.dc_rights.is_none() {
+            if is_default_language || metadata.dc_rights.is_none() {
                 metadata.dc_rights = Some(text);
             }
         }
@@ -398,7 +447,7 @@ fn apply_xmp_property_text(metadata: &mut XmpMetadata, prop: &str, text: String)
         "pdf:Trapped" => metadata.pdf_trapped = Some(text),
 
         "xmpRights:UsageTerms" => {
-            if metadata.xmp_rights_usage_terms.is_none() {
+            if is_default_language || metadata.xmp_rights_usage_terms.is_none() {
                 metadata.xmp_rights_usage_terms = Some(text);
             }
         }
@@ -608,6 +657,55 @@ mod tests {
         let metadata = XmpExtractor::parse_xmp(xmp).unwrap().unwrap();
 
         assert_eq!(metadata.dc_creator, vec!["Jane & John #1", "Smith"]);
+    }
+
+    #[test]
+    fn parse_xmp_reads_attribute_form_properties() {
+        let xmp = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+            <rdf:Description rdf:about="" xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
+                xmlns:xmp="http://ns.adobe.com/xap/1.0/" pdf:Producer="Acme &amp; Sons"
+                xmp:CreatorTool="Writer" xmp:CreateDate="2024-01-15T10:30:00Z"/>
+        </rdf:RDF></x:xmpmeta>"#;
+
+        let metadata = XmpExtractor::parse_xmp(xmp).unwrap().unwrap();
+
+        assert_eq!(metadata.pdf_producer.as_deref(), Some("Acme & Sons"));
+        assert_eq!(metadata.xmp_creator_tool.as_deref(), Some("Writer"));
+        assert_eq!(metadata.xmp_create_date.as_deref(), Some("2024-01-15T10:30:00Z"));
+        assert!(!metadata.custom.contains_key("rdf:about"));
+    }
+
+    #[test]
+    fn parse_xmp_prefers_the_x_default_language_alternative() {
+        for alternatives in [
+            r#"<rdf:li xml:lang="de">Titel</rdf:li><rdf:li xml:lang="x-default">Title</rdf:li>"#,
+            r#"<rdf:li xml:lang="x-default">Title</rdf:li><rdf:li xml:lang="de">Titel</rdf:li>"#,
+        ] {
+            let xmp = format!(
+                r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <rdf:Description><dc:title><rdf:Alt>{alternatives}</rdf:Alt></dc:title></rdf:Description></rdf:RDF>"#
+            );
+
+            let metadata = XmpExtractor::parse_xmp(&xmp).unwrap().unwrap();
+
+            assert_eq!(metadata.dc_title.as_deref(), Some("Title"), "{alternatives}");
+        }
+    }
+
+    #[test]
+    fn decode_xmp_bytes_sniffs_utf16_and_utf8_bom() {
+        let text = "<x:xmpmeta>t\u{e4}st \u{20ac}</x:xmpmeta>";
+        let utf16le_bom: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain(text.encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        let utf16be_bom_less: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        let utf8_bom: Vec<u8> = [0xEF, 0xBB, 0xBF].into_iter().chain(text.bytes()).collect();
+
+        assert_eq!(decode_xmp_bytes(&utf16le_bom), text);
+        assert_eq!(decode_xmp_bytes(&utf16be_bom_less), text);
+        assert_eq!(decode_xmp_bytes(&utf8_bom), text);
+        assert_eq!(decode_xmp_bytes(text.as_bytes()), text);
     }
 
     #[test]

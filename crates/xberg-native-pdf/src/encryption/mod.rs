@@ -164,6 +164,9 @@ pub struct EncryptDict {
     /// Stream crypt filter method (CFM from /CF dictionary, for V=4).
     /// "V2" = RC4-128, "AESV2" = AES-128. None means not specified (defaults to AES-128).
     pub stream_crypt_method: Option<String>,
+    /// String crypt filter method (CFM of /StrF, for V=4/5). `"Identity"` and `"None"` mean strings are
+    /// stored unencrypted; None means not specified (follows the stream algorithm).
+    pub string_crypt_method: Option<String>,
 }
 
 impl EncryptDict {
@@ -238,21 +241,27 @@ impl EncryptDict {
 
         let perms = dict.get("Perms").and_then(|o| o.as_string()).map(|s| s.to_vec());
 
-        // V=4: Parse /CF crypt filter dictionary to determine the actual algorithm.
-        // /StmF names the crypt filter for streams; look up its /CFM entry.
-        // CFM "V2" = RC4-128, "AESV2" = AES-128 (PDF Spec Table 25). ~keep
-        let stream_crypt_method = if version == 4 {
-            let stm_filter_name = dict.get("StmF").and_then(|o| o.as_name()).unwrap_or("Identity");
+        // V=4/5: /StmF and /StrF each name a crypt filter whose /CFM selects the cipher (PDF Spec Table 25):
+        // "V2" = RC4-128, "AESV2" = AES-128, "AESV3" = AES-256, "None" = unencrypted. A name of /Identity
+        // means no encryption. An absent name keeps the legacy AES default. ~keep
+        let crypt_filter_method = |key: &str| -> Option<String> {
+            if version != 4 && version != 5 {
+                return None;
+            }
+            let filter_name = dict.get(key).and_then(|o| o.as_name())?;
+            if filter_name == "Identity" {
+                return Some("Identity".to_string());
+            }
             dict.get("CF")
                 .and_then(|cf| cf.as_dict())
-                .and_then(|cf_dict| cf_dict.get(stm_filter_name))
+                .and_then(|cf_dict| cf_dict.get(filter_name))
                 .and_then(|filter_obj| filter_obj.as_dict())
                 .and_then(|filter_dict| filter_dict.get("CFM"))
                 .and_then(|cfm| cfm.as_name())
                 .map(|s| s.to_string())
-        } else {
-            None
         };
+        let stream_crypt_method = crypt_filter_method("StmF");
+        let string_crypt_method = crypt_filter_method("StrF");
 
         Ok(EncryptDict {
             filter,
@@ -268,6 +277,7 @@ impl EncryptDict {
             user_encryption,
             perms,
             stream_crypt_method,
+            string_crypt_method,
         })
     }
 
@@ -275,6 +285,19 @@ impl EncryptDict {
     ///
     /// PDF Spec: Table 20 - Encryption dictionary entries
     pub fn algorithm(&self) -> Result<Algorithm> {
+        self.algorithm_for_method(self.stream_crypt_method.as_deref())
+    }
+
+    /// Determine the algorithm that protects strings (the /StrF crypt filter), which may differ from the
+    /// stream algorithm.
+    pub fn string_algorithm(&self) -> Result<Algorithm> {
+        match self.string_crypt_method.as_deref() {
+            None => self.algorithm(),
+            method => self.algorithm_for_method(method),
+        }
+    }
+
+    fn algorithm_for_method(&self, method: Option<&str>) -> Result<Algorithm> {
         match (self.version, self.revision) {
             (1, 2) => Ok(Algorithm::RC4_40),
             (2, 3) => Ok(Algorithm::Rc4_128),
@@ -283,7 +306,7 @@ impl EncryptDict {
                 // is determined by /CFM in the /CF dictionary (PDF Spec Table 25):
                 //   "V2" = RC4-128
                 //   "AESV2" = AES-128 ~keep
-                match self.stream_crypt_method.as_deref() {
+                match method {
                     Some("V2") => {
                         tracing::debug!(
                             revision = self.revision,
@@ -292,6 +315,7 @@ impl EncryptDict {
                         );
                         Ok(Algorithm::Rc4_128)
                     }
+                    Some("Identity") | Some("None") => Ok(Algorithm::None),
                     Some("AESV2") | None => {
                         // None: /CF missing or unparseable — default to AES-128
                         // for backward compatibility. ~keep
@@ -307,6 +331,7 @@ impl EncryptDict {
                     }
                 }
             }
+            (5, 5) | (5, 6) if matches!(method, Some("Identity") | Some("None")) => Ok(Algorithm::None),
             (5, 5) | (5, 6) => Ok(Algorithm::Aes256),
             // Lenient: V determines algorithm, R may be non-standard ~keep
             (1, r) => {
@@ -539,6 +564,7 @@ impl EncryptDictBuilder {
                 user_encryption: Some(user_encryption),
                 perms: None,
                 stream_crypt_method: None,
+                string_crypt_method: None,
             });
         }
 
@@ -571,6 +597,7 @@ impl EncryptDictBuilder {
             user_encryption: None,
             perms: None,
             stream_crypt_method: None,
+            string_crypt_method: None,
         })
     }
 }

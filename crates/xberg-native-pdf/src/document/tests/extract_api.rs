@@ -537,3 +537,56 @@ fn test_extract_page_text_dimensions_unchanged_for_zero_origin() {
     assert!((page_text.page_width - 612.0).abs() < 0.1);
     assert!((page_text.page_height - 792.0).abs() < 0.1);
 }
+
+fn build_pdf_with_repeated_contents_ref(stream: &[u8], repeats: usize) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for body in [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents [{}] /Resources << >> >>",
+            "4 0 R ".repeat(repeats)
+        ),
+    ] {
+        offsets.push(pdf.len());
+        let number = offsets.len();
+        pdf.extend_from_slice(format!("{number} 0 obj\n{body}\nendobj\n").as_bytes());
+    }
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", stream.len()).as_bytes());
+    pdf.extend_from_slice(stream);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    let xref_pos = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for offset in &offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n",
+            offsets.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+#[test]
+fn repeated_contents_refs_cannot_exceed_the_per_page_decoded_budget() {
+    let stream = vec![b' '; 5 * 1024 * 1024];
+    let doc = PdfDocument::from_bytes(build_pdf_with_repeated_contents_ref(&stream, 64)).unwrap();
+
+    let result = doc.cached_page_content(0);
+
+    assert!(result.is_err(), "64 x 5 MiB of page content was concatenated");
+}
+
+#[test]
+fn repeated_contents_refs_within_budget_are_still_concatenated() {
+    let doc = PdfDocument::from_bytes(build_pdf_with_repeated_contents_ref(b"q Q", 3)).unwrap();
+
+    let content = doc.cached_page_content(0).unwrap();
+
+    assert_eq!(content.as_slice(), b"q Q\nq Q\nq Q\n");
+}

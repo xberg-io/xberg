@@ -6,6 +6,9 @@
 
 use super::*;
 
+const MAX_PAGE_CONTENT_BYTES: usize = 256 * 1024 * 1024;
+const MAX_PAGE_CONTENT_ITEMS: usize = 100_000;
+
 #[derive(Clone, Copy)]
 enum ScriptGeometry {
     Flatten,
@@ -2263,74 +2266,12 @@ impl PdfDocument {
             let contents = self.load_object(contents_ref_val)?;
 
             if let Some(contents_array) = contents.as_array() {
-                let mut combined = Vec::new();
-
-                for content_item in contents_array.iter() {
-                    if matches!(content_item, Object::Null) {
-                        continue;
-                    }
-                    match (|| -> Result<Vec<u8>> {
-                        if let Some(ref_val) = content_item.as_reference() {
-                            let content_obj = self.load_object(ref_val)?;
-                            self.decode_stream_with_encryption(&content_obj, ref_val)
-                        } else {
-                            content_item.decode_stream_data()
-                        }
-                    })() {
-                        Ok(decoded) => {
-                            combined.extend_from_slice(&decoded);
-                            combined.push(b'\n');
-                        }
-                        Err(error) => {
-                            tracing::warn!(
-                                target: crate::LOG_TARGET_ROOT,
-                                operation = "decode_optional_page_content",
-                                page_index,
-                                error_code = error.telemetry_code(),
-                                error_offset = ?error.telemetry_offset(),
-                                "skipping corrupt optional page content stream"
-                            );
-                        }
-                    }
-                }
-
-                combined
+                self.combine_content_array(contents_array, page_index)?
             } else {
                 self.decode_stream_with_encryption(&contents, contents_ref_val)?
             }
         } else if let Some(contents_array) = contents_ref.as_array() {
-            let mut combined = Vec::new();
-
-            for content_item in contents_array.iter() {
-                if matches!(content_item, Object::Null) {
-                    continue;
-                }
-                match (|| -> Result<Vec<u8>> {
-                    if let Some(ref_val) = content_item.as_reference() {
-                        let content_obj = self.load_object(ref_val)?;
-                        self.decode_stream_with_encryption(&content_obj, ref_val)
-                    } else {
-                        content_item.decode_stream_data()
-                    }
-                })() {
-                    Ok(decoded) => {
-                        combined.extend_from_slice(&decoded);
-                        combined.push(b'\n');
-                    }
-                    Err(error) => {
-                        tracing::warn!(
-                            target: crate::LOG_TARGET_ROOT,
-                            operation = "decode_optional_page_content",
-                            page_index,
-                            error_code = error.telemetry_code(),
-                            error_offset = ?error.telemetry_offset(),
-                            "skipping corrupt optional page content stream"
-                        );
-                    }
-                }
-            }
-
-            combined
+            self.combine_content_array(contents_array, page_index)?
         } else {
             // Direct stream object (rare but possible)
             // For direct objects, use regular decoding (no encryption key) ~keep
@@ -2349,6 +2290,69 @@ impl PdfDocument {
             .insert(page_index, std::sync::Arc::clone(&content_data));
 
         Ok(content_data)
+    }
+
+    /// Concatenate a /Contents array, decoding each distinct reference once and bounding the combined size.
+    fn combine_content_array(&self, contents_array: &[Object], page_index: usize) -> Result<Vec<u8>> {
+        if contents_array.len() > MAX_PAGE_CONTENT_ITEMS {
+            return Err(Error::InvalidPdf(format!(
+                "page {page_index} /Contents array has {} entries (limit {MAX_PAGE_CONTENT_ITEMS})",
+                contents_array.len()
+            )));
+        }
+        let mut combined = Vec::new();
+        let mut decoded_by_ref: std::collections::HashMap<ObjectRef, Option<std::sync::Arc<Vec<u8>>>> =
+            std::collections::HashMap::new();
+
+        for content_item in contents_array.iter() {
+            if matches!(content_item, Object::Null) {
+                continue;
+            }
+            let decoded = if let Some(ref_val) = content_item.as_reference() {
+                if let Some(cached) = decoded_by_ref.get(&ref_val) {
+                    cached.clone()
+                } else {
+                    let result = self
+                        .load_object(ref_val)
+                        .and_then(|content_obj| self.decode_stream_with_encryption(&content_obj, ref_val));
+                    let entry = self
+                        .page_content_item_or_warn(result, page_index)
+                        .map(std::sync::Arc::new);
+                    decoded_by_ref.insert(ref_val, entry.clone());
+                    entry
+                }
+            } else {
+                self.page_content_item_or_warn(content_item.decode_stream_data(), page_index)
+                    .map(std::sync::Arc::new)
+            };
+            if let Some(decoded) = decoded {
+                if combined.len().saturating_add(decoded.len()).saturating_add(1) > MAX_PAGE_CONTENT_BYTES {
+                    return Err(Error::InvalidPdf(format!(
+                        "page {page_index} content streams exceed the {MAX_PAGE_CONTENT_BYTES} byte limit"
+                    )));
+                }
+                combined.extend_from_slice(&decoded);
+                combined.push(b'\n');
+            }
+        }
+        Ok(combined)
+    }
+
+    fn page_content_item_or_warn(&self, result: Result<Vec<u8>>, page_index: usize) -> Option<Vec<u8>> {
+        match result {
+            Ok(decoded) => Some(decoded),
+            Err(error) => {
+                tracing::warn!(
+                    target: crate::LOG_TARGET_ROOT,
+                    operation = "decode_optional_page_content",
+                    page_index,
+                    error_code = error.telemetry_code(),
+                    error_offset = ?error.telemetry_offset(),
+                    "skipping corrupt optional page content stream"
+                );
+                None
+            }
+        }
     }
 }
 

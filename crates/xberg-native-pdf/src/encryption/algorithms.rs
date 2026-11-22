@@ -159,11 +159,13 @@ pub fn authenticate_user_password(
         compute_user_key_r2(&key).ok()?
     };
 
-    // Compare first 16 bytes (constant-time comparison) ~keep
-    if user_key.len() < 16 || expected_user_key.len() < 16 {
+    // R2 compares the whole 32-byte RC4 output; R3+ pads /U with arbitrary bytes after the first 16
+    // (Algorithm 5), so only those 16 are significant. ~keep
+    let compared = if revision >= 3 { 16 } else { 32 };
+    if user_key.len() < compared || expected_user_key.len() < compared {
         return None;
     }
-    let matches = constant_time_compare(&user_key[..16], &expected_user_key[..16]);
+    let matches = constant_time_compare(&user_key[..compared], &expected_user_key[..compared]);
 
     if matches { Some(key) } else { None }
 }
@@ -222,6 +224,23 @@ fn authenticate_user_password_r5_r6(
     };
     let iv = [0u8; 16];
     super::aes::aes256_decrypt_no_padding(&intermediate_key[..32], &iv, &ue[..32]).ok()
+}
+
+/// Check the /Perms entry of an R>=5 document (ISO 32000-2 Algorithm 13): decrypted with the file key it must
+/// carry /P, the /EncryptMetadata flag and the literal `adb`. A mismatch means /P or /EncryptMetadata was
+/// altered after encryption.
+pub fn verify_perms(file_key: &[u8], perms: &[u8], permissions: i32, encrypt_metadata: bool) -> bool {
+    if file_key.len() < 32 || perms.len() < 16 {
+        return false;
+    }
+    let Ok(block) = super::aes::aes256_decrypt_no_padding(&file_key[..32], &[0u8; 16], &perms[..16]) else {
+        return false;
+    };
+    block.len() == 16
+        && block[..4] == permissions.to_le_bytes()
+        && block[4..8] == [0xFF; 4]
+        && block[8] == if encrypt_metadata { b'T' } else { b'F' }
+        && &block[9..12] == b"adb"
 }
 
 /// Apply SASLprep (RFC 4013) normalization to a password.

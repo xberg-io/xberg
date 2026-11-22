@@ -367,6 +367,7 @@ fn test_to_object_basic() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = ed.to_object();
     let dict = obj.as_dict().unwrap();
@@ -396,6 +397,7 @@ fn test_to_object_with_sub_filter() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = ed.to_object();
     let dict = obj.as_dict().unwrap();
@@ -420,6 +422,7 @@ fn test_to_object_v4_has_crypt_filters() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = ed.to_object();
     let dict = obj.as_dict().unwrap();
@@ -444,6 +447,7 @@ fn test_to_object_v5_has_crypt_filters() {
         user_encryption: Some(vec![0u8; 32]),
         perms: Some(vec![0u8; 16]),
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = ed.to_object();
     let dict = obj.as_dict().unwrap();
@@ -676,6 +680,7 @@ fn test_encrypt_dict_roundtrip_v1() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = original.to_object();
     let parsed = EncryptDict::from_object(&obj).unwrap();
@@ -703,6 +708,7 @@ fn test_encrypt_dict_roundtrip_v4() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: None,
+        string_crypt_method: None,
     };
     let obj = original.to_object();
     let parsed = EncryptDict::from_object(&obj).unwrap();
@@ -730,6 +736,7 @@ fn test_v4_cfm_v2_selects_rc4_128() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: Some("V2".to_string()),
+        string_crypt_method: None,
     };
     assert_eq!(ed.algorithm().unwrap(), Algorithm::Rc4_128);
 }
@@ -750,10 +757,209 @@ fn test_v4_cfm_v2_roundtrip() {
         user_encryption: None,
         perms: None,
         stream_crypt_method: Some("V2".to_string()),
+        string_crypt_method: None,
     };
     let obj = original.to_object();
     let parsed = EncryptDict::from_object(&obj).unwrap();
     assert_eq!(parsed.version, 4);
     assert_eq!(parsed.stream_crypt_method.as_deref(), Some("V2"));
     assert_eq!(parsed.algorithm().unwrap(), Algorithm::Rc4_128);
+}
+
+mod crypt_filters {
+    use super::*;
+    use crate::document::PdfDocument;
+    use crate::object::ObjectRef;
+    use md5::{Digest, Md5};
+
+    const FILE_ID: &[u8] = b"0123456789abcdef";
+    const PERMISSIONS: i32 = -4;
+    const SECRET_TITLE: &[u8] = b"Secret Title";
+    const ENCRYPTED_XMP: &[u8] = b"<x:xmpmeta><rdf:RDF><rdf:Description xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\" \
+        pdf:Producer=\"Hidden Producer\"/></rdf:RDF></x:xmpmeta>";
+    const PLAIN_METADATA: &[u8] = b"<x:xmpmeta>plain packet</x:xmpmeta>";
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02X}")).collect()
+    }
+
+    fn aes128_string(key: &[u8], obj_num: u32, plaintext: &[u8]) -> Vec<u8> {
+        let mut hasher = Md5::new();
+        hasher.update(key);
+        hasher.update(&obj_num.to_le_bytes()[..3]);
+        hasher.update([0u8, 0u8]);
+        hasher.update(b"sAlT");
+        let object_key = hasher.finalize();
+        let iv = [7u8; 16];
+        let mut out = iv.to_vec();
+        out.extend(aes::aes128_encrypt(&object_key[..16], &iv, plaintext).unwrap());
+        out
+    }
+
+    fn encrypted_pdf(stm_f: &str) -> Vec<u8> {
+        encrypted_pdf_with_metadata(stm_f, false)
+    }
+
+    fn encrypted_pdf_with_metadata(stm_f: &str, encrypt_xmp: bool) -> Vec<u8> {
+        let owner = algorithms::compute_owner_password_hash(b"owner", b"", 4, 16).unwrap();
+        let key = algorithms::compute_encryption_key(b"", &owner, PERMISSIONS, FILE_ID, 4, 16, true).unwrap();
+        let user = algorithms::compute_user_password_hash(&key, FILE_ID, 4).unwrap();
+        let title = aes128_string(&key, 5, SECRET_TITLE);
+        let content = b"BT /F1 12 Tf 10 10 Td (Plain body) Tj ET";
+
+        let mut pdf = b"%PDF-1.6\n".to_vec();
+        let mut offsets = Vec::new();
+        let mut push = |pdf: &mut Vec<u8>, body: Vec<u8>| {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n", offsets.len()).as_bytes());
+            pdf.extend_from_slice(&body);
+            pdf.extend_from_slice(b"\nendobj\n");
+        };
+        let stream = |dict: &str, data: &[u8]| {
+            let mut body = format!("<< {dict} /Length {} >>\nstream\n", data.len()).into_bytes();
+            body.extend_from_slice(data);
+            body.extend_from_slice(b"\nendstream");
+            body
+        };
+        push(&mut pdf, b"<< /Type /Catalog /Pages 2 0 R /Metadata 6 0 R >>".to_vec());
+        push(&mut pdf, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec());
+        push(
+            &mut pdf,
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R \
+              /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>"
+                .to_vec(),
+        );
+        push(&mut pdf, stream("", content));
+        push(&mut pdf, format!("<< /Title <{}> >>", hex(&title)).into_bytes());
+        if encrypt_xmp {
+            push(
+                &mut pdf,
+                stream("/Type /Metadata /Subtype /XML", &aes128_string(&key, 6, ENCRYPTED_XMP)),
+            );
+        } else {
+            push(
+                &mut pdf,
+                stream(
+                    "/Type /Metadata /Subtype /XML /Filter [/Crypt] /DecodeParms [<< /Name /Identity >>]",
+                    PLAIN_METADATA,
+                ),
+            );
+        }
+        push(
+            &mut pdf,
+            format!(
+                "<< /Filter /Standard /V 4 /R 4 /Length 128 /P {PERMISSIONS} /O <{}> /U <{}> \
+                 /CF << /StdCF << /CFM /AESV2 /AuthEvent /DocOpen /Length 16 >> >> \
+                 /StmF /{stm_f} /StrF /StdCF >>",
+                hex(&owner),
+                hex(&user)
+            )
+            .into_bytes(),
+        );
+
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+        for offset in &offsets {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R /Info 5 0 R /Encrypt 7 0 R /ID [<{id}> <{id}>] >>\n\
+                 startxref\n{xref}\n%%EOF\n",
+                offsets.len() + 1,
+                id = hex(FILE_ID)
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    #[test]
+    fn identity_stream_filter_with_aes_string_filter_reads_plain_streams_and_decrypts_strings() {
+        let doc = PdfDocument::from_bytes(encrypted_pdf("Identity")).unwrap();
+
+        assert!(doc.extract_text(0).unwrap().contains("Plain body"));
+        let info = doc.load_object(ObjectRef::new(5, 0)).unwrap();
+        assert_eq!(
+            info.as_dict().and_then(|d| d.get("Title")),
+            Some(&Object::String(SECRET_TITLE.to_vec()))
+        );
+    }
+
+    #[test]
+    fn crypt_filter_identity_stream_bypasses_document_decryption() {
+        let doc = PdfDocument::from_bytes(encrypted_pdf("StdCF")).unwrap();
+        let metadata_ref = ObjectRef::new(6, 0);
+        let metadata = doc.load_object(metadata_ref).unwrap();
+
+        let decoded = doc.decode_stream_with_encryption(&metadata, metadata_ref).unwrap();
+
+        assert_eq!(decoded, PLAIN_METADATA);
+    }
+
+    #[test]
+    fn explicit_identity_and_none_methods_select_no_encryption() {
+        let obj = make_encrypt_dict_obj("Standard", 4, 4, &[0u8; 32], &[0u8; 32], -1);
+        let mut ed = EncryptDict::from_object(&obj).unwrap();
+
+        ed.stream_crypt_method = Some("Identity".to_string());
+        ed.string_crypt_method = Some("None".to_string());
+
+        assert_eq!(ed.algorithm().unwrap(), Algorithm::None);
+        assert_eq!(ed.string_algorithm().unwrap(), Algorithm::None);
+    }
+
+    #[test]
+    fn r2_user_key_mismatch_in_the_second_half_is_rejected() {
+        let key = algorithms::compute_encryption_key(b"", &[1u8; 32], PERMISSIONS, FILE_ID, 2, 5, true).unwrap();
+        let mut user = algorithms::compute_user_password_hash(&key, FILE_ID, 2).unwrap();
+        assert!(
+            algorithms::authenticate_user_password(b"", &user, &[1u8; 32], PERMISSIONS, FILE_ID, 2, 5, true, None)
+                .is_some()
+        );
+
+        user[24] ^= 0xFF;
+
+        assert!(
+            algorithms::authenticate_user_password(b"", &user, &[1u8; 32], PERMISSIONS, FILE_ID, 2, 5, true, None)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn perms_block_verification_detects_altered_permissions() {
+        let file_key = [0x42u8; 32];
+        let mut block = Vec::new();
+        block.extend_from_slice(&PERMISSIONS.to_le_bytes());
+        block.extend_from_slice(&[0xFF; 4]);
+        block.push(b'T');
+        block.extend_from_slice(b"adb");
+        block.extend_from_slice(&[9u8; 4]);
+        let perms = aes::aes256_encrypt_no_padding(&file_key, &[0u8; 16], &block).unwrap();
+
+        assert!(algorithms::verify_perms(&file_key, &perms, PERMISSIONS, true));
+        assert!(!algorithms::verify_perms(&file_key, &perms, -1, true));
+        assert!(!algorithms::verify_perms(&file_key, &perms, PERMISSIONS, false));
+    }
+
+    #[test]
+    fn handler_debug_output_omits_key_material() {
+        let obj = make_encrypt_dict_obj("Standard", 4, 4, &[0xAB; 32], &[0xCD; 32], -1);
+        let mut handler = handler::EncryptionHandler::new(&obj, FILE_ID.to_vec()).unwrap();
+        let _ = handler.authenticate(b"");
+
+        let rendered = format!("{handler:?}");
+
+        assert!(!rendered.contains("171") && !rendered.contains("205"), "{rendered}");
+        assert!(rendered.contains("EncryptionHandler"));
+    }
+
+    #[test]
+    fn encrypted_xmp_stream_is_decrypted_before_parsing() {
+        let doc = PdfDocument::from_bytes(encrypted_pdf_with_metadata("StdCF", true)).unwrap();
+
+        let xmp = crate::extractors::xmp::XmpExtractor::extract(&doc).unwrap().unwrap();
+
+        assert_eq!(xmp.pdf_producer.as_deref(), Some("Hidden Producer"));
+    }
 }

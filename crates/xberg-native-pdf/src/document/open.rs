@@ -593,9 +593,13 @@ impl PdfDocument {
             false
         };
 
+        let is_identity_crypt_stream =
+            matches!(stream_obj, Object::Stream { dict, .. } if crate::decoders::has_identity_crypt_filter(dict));
+
         let handler_ref = self.encryption_handler.lock_or_recover();
         if let Some(handler) = handler_ref.as_ref()
             && !is_unencrypted_stream_type
+            && !is_identity_crypt_stream
         {
             let decrypt_fn = |data: &[u8]| -> Result<Vec<u8>> {
                 handler.decrypt_stream(data, obj_ref.id, obj_ref.generation as u32)

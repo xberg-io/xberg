@@ -8,6 +8,9 @@ use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
 
+const MAX_XFA_ARRAY_ENTRIES: usize = 100_000;
+const MAX_XFA_DECODED_BYTES: usize = 256 * 1024 * 1024;
+
 /// XFA data extractor.
 ///
 /// Provides static methods to detect and extract XFA form data from PDF documents.
@@ -86,13 +89,13 @@ impl XfaExtractor {
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("AcroForm is not a dictionary".to_string()))?;
 
-        let xfa_obj = acroform_dict
+        let xfa_raw = acroform_dict
             .get("XFA")
             .ok_or_else(|| Error::InvalidPdf("No XFA entry in AcroForm".to_string()))?;
-        let xfa_obj = Self::resolve_object(doc, xfa_obj)?;
+        let xfa_obj = Self::resolve_object(doc, xfa_raw)?;
 
         match &xfa_obj {
-            Object::Stream { dict, data } => Self::decode_stream_data(dict, data),
+            Object::Stream { .. } => Self::decode_xfa_stream(doc, xfa_raw, &xfa_obj),
             Object::Array(arr) => Self::extract_xfa_array(doc, arr),
             _ => Err(Error::InvalidPdf("XFA entry is neither stream nor array".to_string())),
         }
@@ -116,14 +119,14 @@ impl XfaExtractor {
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("AcroForm is not a dictionary".to_string()))?;
 
-        let xfa_obj = acroform_dict
+        let xfa_raw = acroform_dict
             .get("XFA")
             .ok_or_else(|| Error::InvalidPdf("No XFA entry in AcroForm".to_string()))?;
-        let xfa_obj = Self::resolve_object(doc, xfa_obj)?;
+        let xfa_obj = Self::resolve_object(doc, xfa_raw)?;
 
         match &xfa_obj {
-            Object::Stream { dict, data } => {
-                let decoded = Self::decode_stream_data(dict, data)?;
+            Object::Stream { .. } => {
+                let decoded = Self::decode_xfa_stream(doc, xfa_raw, &xfa_obj)?;
                 Ok(vec![("xdp".to_string(), decoded)])
             }
             Object::Array(arr) => Self::extract_xfa_packets_from_array(doc, arr),
@@ -163,48 +166,82 @@ impl XfaExtractor {
         }
     }
 
-    /// Extract and combine XFA data from an array of packets.
-    fn extract_xfa_array(doc: &mut PdfDocument, arr: &[Object]) -> Result<Vec<u8>> {
-        let mut combined = Vec::new();
+    /// Decode an XFA stream through the document's decryption when it is an indirect object.
+    fn decode_xfa_stream(doc: &PdfDocument, raw: &Object, resolved: &Object) -> Result<Vec<u8>> {
+        match (raw.as_reference(), resolved) {
+            (Some(obj_ref), _) => doc.decode_stream_with_encryption(resolved, obj_ref),
+            (None, Object::Stream { dict, data }) => Self::decode_stream_data(dict, data),
+            _ => Err(Error::InvalidPdf("XFA packet is not a stream".to_string())),
+        }
+    }
+
+    /// Decode every stream in an alternating name/stream array, decoding each distinct reference once and
+    /// bounding both the array length and the total decoded size.
+    fn decode_xfa_array(doc: &mut PdfDocument, arr: &[Object]) -> Result<Vec<(Option<String>, Vec<u8>)>> {
+        if arr.len() > MAX_XFA_ARRAY_ENTRIES {
+            return Err(Error::InvalidPdf(format!(
+                "XFA array has {} entries (limit {MAX_XFA_ARRAY_ENTRIES})",
+                arr.len()
+            )));
+        }
+        let mut decoded_by_ref: std::collections::HashMap<crate::object::ObjectRef, std::sync::Arc<Vec<u8>>> =
+            std::collections::HashMap::new();
+        let mut total = 0usize;
+        let mut packets = Vec::new();
 
         let mut i = 0;
-        while i < arr.len() {
-            if i + 1 < arr.len() {
-                let stream_obj = Self::resolve_object(doc, &arr[i + 1])?;
-                if let Object::Stream { dict, data } = &stream_obj {
-                    let decoded = Self::decode_stream_data(dict, data)?;
-                    combined.extend_from_slice(&decoded);
+        while i + 1 < arr.len() {
+            let name = match &arr[i] {
+                Object::Name(n) => Some(n.clone()),
+                Object::String(s) => Some(String::from_utf8_lossy(s).to_string()),
+                _ => None,
+            };
+            let raw = &arr[i + 1];
+            let cached = raw.as_reference().and_then(|r| decoded_by_ref.get(&r).cloned());
+            let decoded = match cached {
+                Some(decoded) => decoded,
+                None => {
+                    let stream_obj = Self::resolve_object(doc, raw)?;
+                    if !matches!(stream_obj, Object::Stream { .. }) {
+                        i += 2;
+                        continue;
+                    }
+                    let decoded = std::sync::Arc::new(Self::decode_xfa_stream(doc, raw, &stream_obj)?);
+                    if let Some(r) = raw.as_reference() {
+                        decoded_by_ref.insert(r, std::sync::Arc::clone(&decoded));
+                    }
+                    decoded
                 }
+            };
+            total = total.saturating_add(decoded.len());
+            if total > MAX_XFA_DECODED_BYTES {
+                return Err(Error::InvalidPdf(format!(
+                    "XFA packets exceed the {MAX_XFA_DECODED_BYTES} byte decoded limit"
+                )));
             }
+            packets.push((name, decoded.as_ref().clone()));
             i += 2;
         }
 
+        Ok(packets)
+    }
+
+    /// Extract and combine XFA data from an array of packets.
+    fn extract_xfa_array(doc: &mut PdfDocument, arr: &[Object]) -> Result<Vec<u8>> {
+        let mut combined = Vec::new();
+        for (_, decoded) in Self::decode_xfa_array(doc, arr)? {
+            combined.extend_from_slice(&decoded);
+        }
         Ok(combined)
     }
 
     /// Extract packets from XFA array with names preserved.
     fn extract_xfa_packets_from_array(doc: &mut PdfDocument, arr: &[Object]) -> Result<Vec<(String, Vec<u8>)>> {
-        let mut packets = Vec::new();
-
-        let mut i = 0;
-        while i < arr.len() {
-            if i + 1 < arr.len() {
-                let name = match &arr[i] {
-                    Object::Name(n) => n.clone(),
-                    Object::String(s) => String::from_utf8_lossy(s).to_string(),
-                    _ => format!("packet_{}", i / 2),
-                };
-
-                let stream_obj = Self::resolve_object(doc, &arr[i + 1])?;
-                if let Object::Stream { dict, data } = &stream_obj {
-                    let decoded = Self::decode_stream_data(dict, data)?;
-                    packets.push((name, decoded));
-                }
-            }
-            i += 2;
-        }
-
-        Ok(packets)
+        Ok(Self::decode_xfa_array(doc, arr)?
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, decoded))| (name.unwrap_or_else(|| format!("packet_{index}")), decoded))
+            .collect())
     }
 }
 
@@ -348,5 +385,56 @@ mod tests {
             let name = String::from_utf8_lossy(s).to_string();
             assert!(name.contains('\u{FFFD}'));
         }
+    }
+
+    fn build_pdf_with_xfa_array(stream: &[u8], repeats: usize) -> Vec<u8> {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for body in [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [] /Count 0 >>".to_string(),
+            "<< >>".to_string(),
+            format!("<< /XFA [{}] >>", "(template) 5 0 R ".repeat(repeats)),
+        ] {
+            offsets.push(pdf.len());
+            let number = offsets.len();
+            pdf.extend_from_slice(format!("{number} 0 obj\n{body}\nendobj\n").as_bytes());
+        }
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("5 0 obj\n<< /Length {} >>\nstream\n", stream.len()).as_bytes());
+        pdf.extend_from_slice(stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        let xref_pos = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+        for offset in &offsets {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n",
+                offsets.len() + 1
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    #[test]
+    fn repeated_xfa_packet_refs_cannot_exceed_the_decoded_budget() {
+        let stream = vec![b' '; 5 * 1024 * 1024];
+        let mut doc = PdfDocument::from_bytes(build_pdf_with_xfa_array(&stream, 64)).unwrap();
+
+        assert!(XfaExtractor::extract_xfa(&mut doc).is_err());
+        assert!(XfaExtractor::extract_xfa_packets(&mut doc).is_err());
+    }
+
+    #[test]
+    fn repeated_xfa_packet_refs_within_budget_are_all_returned() {
+        let mut doc = PdfDocument::from_bytes(build_pdf_with_xfa_array(b"<xdp/>", 3)).unwrap();
+
+        assert_eq!(XfaExtractor::extract_xfa(&mut doc).unwrap(), b"<xdp/><xdp/><xdp/>");
+        let packets = XfaExtractor::extract_xfa_packets(&mut doc).unwrap();
+        assert_eq!(packets.len(), 3);
+        assert_eq!(packets[0].0, "template");
     }
 }

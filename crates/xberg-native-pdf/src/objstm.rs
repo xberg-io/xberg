@@ -194,6 +194,9 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
     let mut result = HashMap::new();
     let mut invalid_offset_count = 0usize;
     let mut parse_failure_count = 0usize;
+    let mut seen_offsets = std::collections::HashSet::new();
+    let mut parsed_bytes = 0usize;
+    let parse_budget = objects_data.len().saturating_mul(2);
 
     for (obj_num, offset_in_data) in pairs {
         // The offset is relative to the start of objects_data ~keep
@@ -202,9 +205,16 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
             continue;
         }
 
+        // Distinct objects cannot share an offset; aliased pairs would re-parse one object /N times.
+        if !seen_offsets.insert(offset_in_data) || parsed_bytes > parse_budget {
+            invalid_offset_count += 1;
+            continue;
+        }
+
         let obj_data = &objects_data[offset_in_data..];
         match parse_object(obj_data) {
-            Ok((_remaining, obj)) => {
+            Ok((remaining, obj)) => {
+                parsed_bytes = parsed_bytes.saturating_add(obj_data.len() - remaining.len());
                 result.insert(obj_num, obj);
             }
             Err(_) => {
@@ -320,6 +330,25 @@ fn read_integer_string(data: &[u8]) -> Option<(&[u8], &str)> {
 mod tests {
     use super::*;
     use bytes::Bytes;
+
+    #[test]
+    fn aliased_offsets_do_not_reparse_one_object_per_pair() {
+        let mut objects_data = b"[".to_vec();
+        for _ in 0..25_000 {
+            objects_data.extend_from_slice(b"0 ");
+        }
+        objects_data.push(b']');
+        let pairs: Vec<(u32, usize)> = (1..=50_000u32).map(|n| (n, 0usize)).collect();
+
+        let started = std::time::Instant::now();
+        let outcome = parse_embedded_objects(&objects_data, pairs);
+
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "aliased pairs re-parsed the object"
+        );
+        assert_eq!(outcome.objects.len(), 1);
+    }
     use std::collections::{BTreeMap, HashMap};
     use std::sync::{Arc, Mutex};
     use tracing_subscriber::Layer;

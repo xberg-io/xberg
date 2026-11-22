@@ -614,3 +614,34 @@ fn strict_stream_header_still_requires_an_unpadded_standard_line_ending() {
     assert!(parse_stream_header(b"<< /Length 5 >> stream \t\n\t ABC").is_none());
     assert!(parse_stream_header(b"<< /Length 5 >> stream\t \r\n\t ABC").is_none());
 }
+
+#[test]
+fn array_beyond_the_entry_cap_is_rejected() {
+    let mut data = b"[".to_vec();
+    data.extend(std::iter::repeat_n(*b"0 ", MAX_CONTAINER_ENTRIES + 1).flatten());
+    data.push(b']');
+
+    assert!(parse_object(&data).is_err());
+}
+
+#[test]
+fn array_at_the_entry_cap_is_accepted() {
+    let mut data = b"[".to_vec();
+    data.extend(std::iter::repeat_n(*b"0 ", MAX_CONTAINER_ENTRIES).flatten());
+    data.push(b']');
+
+    let (_, object) = parse_object(&data).unwrap();
+
+    assert_eq!(object.as_array().map(Vec::len), Some(MAX_CONTAINER_ENTRIES));
+}
+
+#[test]
+fn dictionary_beyond_the_entry_cap_is_rejected() {
+    let mut data = b"<<".to_vec();
+    for i in 0..=MAX_CONTAINER_ENTRIES {
+        data.extend_from_slice(format!("/K{i} 0 ").as_bytes());
+    }
+    data.extend_from_slice(b">>");
+
+    assert!(parse_object(&data).is_err());
+}
