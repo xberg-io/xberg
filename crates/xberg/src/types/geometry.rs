@@ -29,6 +29,40 @@ pub struct PageGeometry {
     /// Clipping paths alone are not painted and are therefore not listed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<VectorPath>,
+
+    /// Closed faces recovered from the page's line segments.
+    ///
+    /// Set only when `pdf_options.plan_regions` is enabled and the
+    /// `plan-regions` feature is compiled in. Each face carries its polygon, its
+    /// area in square page points, and the page text inside it. Ordering is
+    /// deterministic: largest area first, then by the face's upper-left corner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.5.0"))]
+    pub regions: Vec<PlanRegion>,
+}
+
+/// One closed face recovered from a page's line segments.
+///
+/// Coordinates are in PDF page points with y increasing upwards. The area is in
+/// square page points; convert it with the view's scale to get a real-world
+/// quantity.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct PlanRegion {
+    /// Polygon vertices in drawing order, without a repeated closing point.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polygon: Vec<VectorPoint>,
+
+    /// Area of the face in square page points (always non-negative).
+    pub area: f64,
+
+    /// Axis-aligned bounds of the face.
+    pub bounding_box: BoundingBox,
+
+    /// Page text whose span centre lies inside the face, in reading order and
+    /// joined by single spaces. Empty when no text is inside.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
 }
 
 /// One painted vector path, in page coordinates.

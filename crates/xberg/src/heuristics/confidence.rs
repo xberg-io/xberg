@@ -751,6 +751,7 @@ mod tests {
             }),
             native_content: None,
             geometry: None,
+            viewports: None,
         }
     }
 

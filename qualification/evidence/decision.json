@@ -1,0 +1,183 @@
+{
+  "schema": 1,
+  "issue": 2334,
+  "qualified": false,
+  "defaults_changed": false,
+  "prereg_sha256": "8a2daad7a22309f600f26e3c9869351fc4c8d2574508dde4a1f34f0a9e5245a8",
+  "corpus_digests": {
+    "captioning": "1bf64e698dbc64ea7a2c3ecbe1ceb6596bd0e1edfa3525810e45065c2f721ba6",
+    "classification": "19ec5bb7b332ff89be30eed720d446fd138670144e4f8fb0b7ea02d78d68eba2"
+  },
+  "decisions": [
+    {
+      "workload": "classification",
+      "verdict": "no_go",
+      "checks": [
+        {
+          "name": "nli-minilm2-l6-h768 / int8 macro-F1",
+          "threshold": 0.65,
+          "observed": 0.3213675213675214,
+          "passed": false,
+          "detail": "point estimate on held-out documents, abstentions counted as errors"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 macro-F1 CI lower bound",
+          "threshold": 0.5,
+          "observed": 0.2305437352245863,
+          "passed": false,
+          "detail": "source-family cluster bootstrap"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 recall final rule",
+          "threshold": 0.45,
+          "observed": 0.02040816326530612,
+          "passed": false,
+          "detail": "per-class recall on held-out documents"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 recall proposed rule",
+          "threshold": 0.45,
+          "observed": 0.4583333333333333,
+          "passed": true,
+          "detail": "per-class recall on held-out documents"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 recall public notice",
+          "threshold": 0.45,
+          "observed": 0.2195121951219512,
+          "passed": false,
+          "detail": "per-class recall on held-out documents"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 ECE",
+          "threshold": 0.2,
+          "observed": 0.20442897230386736,
+          "passed": false,
+          "detail": "ten-bin top-1 calibration error"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 abstention on known classes",
+          "threshold": 0.4,
+          "observed": 0.7101449275362319,
+          "passed": false,
+          "detail": "abstention is allowed up to this rate"
+        },
+        {
+          "name": "nli-minilm2-l6-h768 / int8 unknown-class rejection",
+          "threshold": 0.7,
+          "observed": 0.7916666666666666,
+          "passed": true,
+          "detail": "held-out documents outside the vocabulary"
+        }
+      ],
+      "reasons": [
+        "nli-minilm2-l6-h768 / int8 macro-F1 observed 0.3214 (threshold 0.65)",
+        "nli-minilm2-l6-h768 / int8 macro-F1 CI lower bound observed 0.2305 (threshold 0.5)",
+        "nli-minilm2-l6-h768 / int8 recall final rule observed 0.0204 (threshold 0.45)",
+        "nli-minilm2-l6-h768 / int8 recall public notice observed 0.2195 (threshold 0.45)",
+        "nli-minilm2-l6-h768 / int8 ECE observed 0.2044 (threshold 0.2)",
+        "nli-minilm2-l6-h768 / int8 abstention on known classes observed 0.7101 (threshold 0.4)"
+      ]
+    },
+    {
+      "workload": "captioning",
+      "verdict": "no_go",
+      "checks": [
+        {
+          "name": "smolvlm-256m-instruct / fp32 reference-number recall",
+          "threshold": 0.2,
+          "observed": 0.05,
+          "passed": false,
+          "detail": "numbers from the five reference captions found in the generated caption"
+        },
+        {
+          "name": "smolvlm-256m-instruct / fp32 reference-term recall",
+          "threshold": 0.35,
+          "observed": 0.22215608925728167,
+          "passed": false,
+          "detail": "reference content words found in the generated caption; an omission proxy"
+        },
+        {
+          "name": "smolvlm-256m-instruct / fp32 images with an invented number",
+          "threshold": 0.6,
+          "observed": 0.13333333333333333,
+          "passed": true,
+          "detail": "generated numbers absent from every reference caption; unverified, needs a rater"
+        },
+        {
+          "name": "smolvlm-256m-instruct / int8 reference-number recall",
+          "threshold": 0.2,
+          "observed": 0.0,
+          "passed": false,
+          "detail": "numbers from the five reference captions found in the generated caption"
+        },
+        {
+          "name": "smolvlm-256m-instruct / int8 reference-term recall",
+          "threshold": 0.35,
+          "observed": 0.2180409256933221,
+          "passed": false,
+          "detail": "reference content words found in the generated caption; an omission proxy"
+        },
+        {
+          "name": "smolvlm-256m-instruct / int8 images with an invented number",
+          "threshold": 0.6,
+          "observed": 0.03333333333333333,
+          "passed": true,
+          "detail": "generated numbers absent from every reference caption; unverified, needs a rater"
+        },
+        {
+          "name": "smolvlm-500m-instruct / fp32 reference-number recall",
+          "threshold": 0.2,
+          "observed": 0.0,
+          "passed": false,
+          "detail": "numbers from the five reference captions found in the generated caption"
+        },
+        {
+          "name": "smolvlm-500m-instruct / fp32 reference-term recall",
+          "threshold": 0.35,
+          "observed": 0.2255318348056902,
+          "passed": false,
+          "detail": "reference content words found in the generated caption; an omission proxy"
+        },
+        {
+          "name": "smolvlm-500m-instruct / fp32 images with an invented number",
+          "threshold": 0.6,
+          "observed": 0.06666666666666667,
+          "passed": true,
+          "detail": "generated numbers absent from every reference caption; unverified, needs a rater"
+        },
+        {
+          "name": "smolvlm-500m-instruct / int8 reference-number recall",
+          "threshold": 0.2,
+          "observed": 0.0,
+          "passed": false,
+          "detail": "numbers from the five reference captions found in the generated caption"
+        },
+        {
+          "name": "smolvlm-500m-instruct / int8 reference-term recall",
+          "threshold": 0.35,
+          "observed": 0.19712930816502017,
+          "passed": false,
+          "detail": "reference content words found in the generated caption; an omission proxy"
+        },
+        {
+          "name": "smolvlm-500m-instruct / int8 images with an invented number",
+          "threshold": 0.6,
+          "observed": 0.06666666666666667,
+          "passed": true,
+          "detail": "generated numbers absent from every reference caption; unverified, needs a rater"
+        }
+      ],
+      "reasons": [
+        "smolvlm-256m-instruct / fp32 reference-number recall observed 0.0500 (threshold 0.2)",
+        "smolvlm-256m-instruct / fp32 reference-term recall observed 0.2222 (threshold 0.35)",
+        "smolvlm-256m-instruct / int8 reference-number recall observed 0.0000 (threshold 0.2)",
+        "smolvlm-256m-instruct / int8 reference-term recall observed 0.2180 (threshold 0.35)",
+        "smolvlm-500m-instruct / fp32 reference-number recall observed 0.0000 (threshold 0.2)",
+        "smolvlm-500m-instruct / fp32 reference-term recall observed 0.2255 (threshold 0.35)",
+        "smolvlm-500m-instruct / int8 reference-number recall observed 0.0000 (threshold 0.2)",
+        "smolvlm-500m-instruct / int8 reference-term recall observed 0.1971 (threshold 0.35)"
+      ]
+    }
+  ]
+}

@@ -44,6 +44,7 @@ fn attach_page_handoff(document: &mut InternalDocument, reads: &[String]) -> Str
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             })
             .collect(),
     );

@@ -92,3 +92,8 @@ CONTENTS="$(tar -tzf "$ARCHIVE")"
 grep -q "/lib/$SHARED_NAME$" <<<"$CONTENTS"
 grep -q "/lib/$STATIC_NAME$" <<<"$CONTENTS"
 grep -q "/lib/native-static-libs.txt$" <<<"$CONTENTS"
+
+# The archive redistributes the FFI library, so the canonical notices travel with it, exactly as
+# the musl path stages them. alef writes the archive, so inject into its single root and verify. ~keep
+NOTICE_TOOL="$(cd "$(dirname "$0")" && pwd)/package-notices.py"
+python3 "$NOTICE_TOOL" inject --format go --expected-count 1 "$ARCHIVE"

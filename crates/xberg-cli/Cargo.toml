@@ -152,6 +152,10 @@ liter-llm = ["legacy-base", "ocr-surface", "xberg/liter-llm"]
 # containers built with `--features all` ship it. It stays opt-in at runtime —
 # it runs only when a classification LLM config is supplied.
 classification = ["legacy-base", "xberg/classification"]
+# Experimental local CPU ONNX adapters. Deliberately absent from `default`/`all`: they link ONNX
+# Runtime and load multi-gigabyte, unqualified candidate artifacts only when explicitly selected.
+classification-onnx = ["classification", "xberg/classification-onnx"]
+captioning-onnx = ["captioning", "xberg/captioning-onnx"]
 # VLM image captioning (issue #1382): like classification it rides the already-
 # enabled `liter-llm` HTTP path (no ORT/model deps). It was silently absent from
 # container builds — `all` never enabled it, so the processor was compiled out and

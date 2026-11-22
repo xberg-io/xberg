@@ -637,7 +637,8 @@ pdf-ocr)
   run_exact no_leader_picture_keeps_its_rows_in_html --test ocr_six_column_html_2503
   run_exact nine_pixel_tinted_scan_keeps_every_source_row --test ocr_low_ppi_scan_replay_3337
   run_exact seven_pixel_tinted_scan_keeps_its_measured_baseline --test ocr_low_ppi_scan_replay_3337
-  expected=$((expected + 13))
+  run_exact low_ppi_table_rows_keep_their_measured_floors --test ocr_ppi_rows_2503
+  expected=$((expected + 14))
   ;;
 pdf-sparse-paddle)
   expected=16

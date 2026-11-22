@@ -26,6 +26,7 @@ pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
 pub(crate) mod source_members;
+mod titled_sections;
 mod trailing_notes;
 mod wrapped_labels;
 
@@ -318,6 +319,7 @@ pub(crate) fn extract_ruled_tables(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_page_tables(
     doc: &NativeDocument,
     page_idx: usize,
@@ -331,64 +333,90 @@ fn append_page_tables(
         return;
     }
     let source_spans = scripts::page_spans(doc, page_idx, warnings);
-    let capture_members = extracted.len() <= source_members::MAX_CAPTURE_TABLES;
-    let source_chars = std::cell::OnceCell::new();
-    for mut extracted_table in extracted {
-        if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
-            continue;
+    let context = PageTableContext {
+        doc,
+        page_idx,
+        ownership,
+        source_paths,
+        source_spans: &source_spans,
+        capture_members: extracted.len() <= source_members::MAX_CAPTURE_TABLES,
+        source_chars: std::cell::OnceCell::new(),
+    };
+    for extracted_table in extracted {
+        // A ruled detector joins adjacent tables when their rules line up; each
+        // table's own title then survives as a full-width row. Split before the
+        // row repairs and grid conversion so every section keeps its own spans.
+        for section in titled_sections::split_ruled_sections(extracted_table) {
+            append_extracted_table(&context, section, tables);
         }
-        let repaired = restore_ruled_decimal_rows(&mut extracted_table, || {
-            (
-                source_chars
-                    .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
-                    .as_slice(),
-                source_paths,
-            )
-        });
-        let recovered_sources = restore_open_year_columns(&mut extracted_table, &source_spans.spans, || {
-            (
-                source_chars
-                    .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
-                    .as_slice(),
-                source_paths,
-            )
-        });
-        let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
-        if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
-            continue;
-        }
-        let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
-            x0: rect.x as f64,
-            y0: rect.y as f64,
-            x1: (rect.x + rect.width) as f64,
-            y1: (rect.y + rect.height) as f64,
-        });
-        let table = Table {
-            cells,
-            markdown,
-            page_number: (page_idx + 1) as u32,
-            bounding_box,
-            ..Default::default()
-        };
-        tables.push(NativeTable {
-            scripts: scripts::capture(&extracted_table, &table.cells, &source_spans),
-            complete_leading_header: complete_leading_header(&extracted_table),
-            source_members: capture_members
-                .then(|| {
-                    source_members::capture_with_redistributed_spans(
-                        &extracted_table,
-                        &table,
-                        ownership,
-                        &repaired,
-                        &source_spans,
-                        &recovered_sources,
-                    )
-                })
-                .flatten(),
-            table,
-            grid,
-        });
     }
+}
+
+/// Everything one page's ruled tables share while they are converted.
+struct PageTableContext<'a> {
+    doc: &'a NativeDocument,
+    page_idx: usize,
+    ownership: Option<&'a xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
+    source_paths: &'a [PathContent],
+    source_spans: &'a scripts::PageSpans,
+    capture_members: bool,
+    source_chars: std::cell::OnceCell<Vec<xberg_native_pdf::layout::TextChar>>,
+}
+
+fn append_extracted_table(
+    context: &PageTableContext<'_>,
+    mut extracted_table: xberg_native_pdf::structure::table_extractor::Table,
+    tables: &mut Vec<NativeTable>,
+) {
+    if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
+        return;
+    }
+    let characters = || {
+        context
+            .source_chars
+            .get_or_init(|| context.doc.doc.extract_chars(context.page_idx).unwrap_or_default())
+            .as_slice()
+    };
+    let repaired = restore_ruled_decimal_rows(&mut extracted_table, || (characters(), context.source_paths));
+    let recovered_sources = restore_open_year_columns(&mut extracted_table, &context.source_spans.spans, || {
+        (characters(), context.source_paths)
+    });
+    let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
+    if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
+        return;
+    }
+    let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
+        x0: rect.x as f64,
+        y0: rect.y as f64,
+        x1: (rect.x + rect.width) as f64,
+        y1: (rect.y + rect.height) as f64,
+    });
+    let table = Table {
+        cells,
+        markdown,
+        page_number: (context.page_idx + 1) as u32,
+        bounding_box,
+        ..Default::default()
+    };
+    tables.push(NativeTable {
+        scripts: scripts::capture(&extracted_table, &table.cells, context.source_spans),
+        complete_leading_header: complete_leading_header(&extracted_table),
+        source_members: context
+            .capture_members
+            .then(|| {
+                source_members::capture_with_redistributed_spans(
+                    &extracted_table,
+                    &table,
+                    context.ownership,
+                    &repaired,
+                    context.source_spans,
+                    &recovered_sources,
+                )
+            })
+            .flatten(),
+        table,
+        grid,
+    });
 }
 
 fn restore_open_year_columns<'a>(
@@ -1010,6 +1038,44 @@ fn reconstruct_page_region_tables(
     let mut index = 0;
     while index < regions.len() {
         let horizontal_rules = region_rules.get(index).copied().unwrap_or(0);
+        // Several separately titled tables share one slab of aligned columns:
+        // each title row, followed by a fresh header band, starts its own table.
+        // Splitting is all-or-nothing — a section that does not reconstruct as a
+        // whole table leaves the region as it was.
+        if let Some(sections) = titled_sections::split_titled_region(&regions[index], page_height) {
+            let expected = sections.len();
+            let mut built = Vec::with_capacity(expected);
+            for section in sections {
+                let mut reconstructed = reconstruct_region_tables(
+                    &section.words,
+                    page_height,
+                    page_number,
+                    allow_single_column,
+                    horizontal_rules,
+                    column_rules,
+                );
+                if reconstructed.len() != 1 {
+                    built.clear();
+                    break;
+                }
+                let Some(mut table) = reconstructed.pop() else {
+                    built.clear();
+                    break;
+                };
+                if !titled_sections::prepend_titles(&mut table, &section.titles) {
+                    built.clear();
+                    break;
+                }
+                titled_sections::include_bounds(&mut table, section.bounds);
+                built.push(table);
+            }
+            if built.len() == expected {
+                definition_tables.extend(std::iter::repeat_n(false, built.len()));
+                tables.extend(built.into_iter().map(|table| (table, None, false)));
+                index += 1;
+                continue;
+            }
+        }
         // A ruled table can have a taller row gap at a section boundary (the
         // blank line under a subtotal) than the page's normal row pitch, which
         // cuts one table into one word region per ruled band. Rejoin those

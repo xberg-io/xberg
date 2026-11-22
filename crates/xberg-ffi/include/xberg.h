@@ -104,6 +104,11 @@ typedef struct XBERGAccelerationConfig XBERGAccelerationConfig;
  */
 typedef struct XBERGAnnotationKind XBERGAnnotationKind;
 /**
+ * One point of an annotation's geometry, in PDF page points with y increasing
+ * upwards.
+ */
+typedef struct XBERGAnnotationPoint XBERGAnnotationPoint;
+/**
  * A single file extracted from an archive.
  *
  * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
@@ -768,6 +773,13 @@ typedef struct XBERGDocxAppProperties XBERGDocxAppProperties;
  * Integrates with `office_metadata` module for core/app/custom properties.
  */
 typedef struct XBERGDocxMetadata XBERGDocxMetadata;
+/**
+ * The drawing-set text parsers.
+ *
+ * Keeping them on one type gives every caller a single entry point and keeps
+ * the accepted/rejected grammar in one place.
+ */
+typedef uint64_t XBERGDrawingSetText;
 /**
  * Semantic element extracted from document.
  *
@@ -1570,6 +1582,15 @@ typedef struct XBERGMarkdownCodeBlock XBERGMarkdownCodeBlock;
  */
 typedef struct XBERGMarkdownLink XBERGMarkdownLink;
 /**
+ * A PDF measurement dictionary (PDF `/Measure`, ISO 32000-1 Â§12.9).
+ *
+ * Number format arrays are exposed as their flattened numeric entries because
+ * the PDF specification allows nested arrays and the meaning of the entries is
+ * producer-specific. `scale_ratio` (Self::scale_ratio) keeps the producer's
+ * own scale text, which the drawing-set parser can turn into a number.
+ */
+typedef struct XBERGMeasureData XBERGMeasureData;
+/**
  * How partial results from multiple model calls (e.g. per page batch) are combined.
  *
  * Canonical home for the merge strategy referenced by presets and by the
@@ -2070,6 +2091,21 @@ typedef struct XBERGPageStructure XBERGPageStructure;
  */
 typedef struct XBERGPageUnitType XBERGPageUnitType;
 /**
+ * A page viewport (PDF `/VP`, ISO 32000-1 Â§12.5.6.19).
+ *
+ * Construction drawings use one viewport per plan, detail or elevation, and
+ * the viewport's measure dictionary carries that view's scale.
+ */
+typedef struct XBERGPageViewport XBERGPageViewport;
+/**
+ * A dimension string paired with the page position of its text.
+ */
+typedef struct XBERGParsedDimension XBERGParsedDimension;
+/**
+ * A parsed scale note.
+ */
+typedef struct XBERGParsedScale XBERGParsedScale;
+/**
  * One detected PII span in the input text.
  */
 typedef struct XBERGPatternMatch XBERGPatternMatch;
@@ -2124,6 +2160,18 @@ typedef struct XBERGPiiCategory XBERGPiiCategory;
  */
 typedef struct XBERGPixelDimensions XBERGPixelDimensions;
 /**
+ * One closed face recovered from a page's line segments.
+ *
+ * Coordinates are in PDF page points with y increasing upwards. The area is in
+ * square page points; convert it with the view's scale to get a real-world
+ * quantity.
+ */
+typedef struct XBERGPlanRegion XBERGPlanRegion;
+/**
+ * Settings for closed-region recovery on a PDF page's vector paths.
+ */
+typedef struct XBERGPlanRegionConfig XBERGPlanRegionConfig;
+/**
  * Base trait that all plugins must implement.
  *
  * This trait provides common functionality for plugin lifecycle management,
@@ -2165,6 +2213,10 @@ typedef struct XBERGPixelDimensions XBERGPixelDimensions;
  * \endcode
  */
 typedef uint64_t XBERGPlugin;
+/**
+ * A Polygon annotation to append to an existing PDF.
+ */
+typedef struct XBERGPolygonAnnotationInput XBERGPolygonAnnotationInput;
 /**
  * Trait for post-processor plugins.
  *
@@ -2571,6 +2623,10 @@ typedef struct XBERGSecurityLimits XBERGSecurityLimits;
  * - `job_timeout_secs`: 600 (10 minutes)
  */
 typedef struct XBERGServerConfig XBERGServerConfig;
+/**
+ * Metadata read from a drawing set's title block.
+ */
+typedef struct XBERGSheetMetadata XBERGSheetMetadata;
 /**
  * A URL entry from a sitemap.
  */
@@ -4095,6 +4151,43 @@ XBERGAlefHandle xberg_acceleration_config_provider(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 uint32_t xberg_acceleration_config_device_id(XBERGAlefHandle handle);
+
+/**
+ * Create a `AnnotationPoint` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_annotation_point_free`.
+ */
+XBERGAlefHandle xberg_annotation_point_from_json(const char *json);
+
+/**
+ * Serialize a `AnnotationPoint` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_annotation_point_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `AnnotationPoint` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_annotation_point_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `x` field from a `AnnotationPoint`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_annotation_point_x(XBERGAlefHandle handle);
+
+/**
+ * Get the `y` field from a `AnnotationPoint`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_annotation_point_y(XBERGAlefHandle handle);
 
 /**
  * Create a `ArchiveEntry` from a JSON string. Returns null on failure.
@@ -9793,6 +9886,77 @@ XBERGAlefHandle xberg_docx_metadata_app_properties(XBERGAlefHandle handle);
  */
 char *xberg_docx_metadata_custom_properties(XBERGAlefHandle handle);
 #endif
+
+/**
+ * Free a `DrawingSetText` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_drawing_set_text_free(XBERGAlefHandle handle);
+
+/**
+ * Parse a dimension string to inches.
+ *
+ * Accepts feet-and-inches (`12'-0 5/8"`), inches alone (`6"`), feet alone
+ * (`12'`) and a bare decimal or fractional inch value (`144.625`, `5/8`).
+ * Rejects scale notes, ratios, sheet numbers, alphabetic text and anything
+ * with trailing junk.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+double xberg_drawing_set_text_parse_dimension(const char *text);
+
+/**
+ * Report whether `DrawingSetText::parse_dimension` returned `Some`.
+ *
+ * `xberg_drawing_set_text_parse_dimension` cannot distinguish a `None` result from a legitimate
+ * zero-valued `Some` at the C ABI boundary. Call this function first: `1` means the sibling
+ * getter's return value is meaningful, `0` means the result was absent and the getter's sentinel
+ * must be ignored, `-1` reports an invalid handle or a call error (see `xberg_last_error_code`).
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+int32_t xberg_drawing_set_text_parse_dimension_has_result(const char *text);
+
+/**
+ * Parse a scale note to a real-world-to-paper ratio.
+ *
+ * `3/8" = 1'-0"` gives `32.0`, `1" = 10'` gives `120.0` and `1:100` gives
+ * `100.0`. Both sides of an `=` form must name a length; a bare number
+ * without a unit is rejected rather than assumed.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_drawing_set_text_parse_scale(const char *text);
+
+/**
+ * Read a sheet number such as `A5.01`, `A-101` or `E102`.    ///
+ * A bare two-character token such as `A5` is not accepted: it is far more
+ * likely a paper size or a room label than a sheet number.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+char *xberg_drawing_set_text_parse_sheet_number(const char *text);
+
+/**
+ * Read a revision code from a line that labels it.
+ *
+ * Only an explicit `REV`/`REVISION` label counts; a lone letter elsewhere in
+ * the title block is not treated as a revision.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+char *xberg_drawing_set_text_parse_revision(const char *text);
+
+/**
+ * Read a drawing set's title block.
+ *
+ * Each field is independent: a title block that carries only a sheet
+ * number returns a sheet number and `None` for the rest.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_drawing_set_text_parse_title_block(const char *text);
 
 /**
  * Create a `Element` from a JSON string. Returns null on failure.
@@ -17458,6 +17622,110 @@ char *xberg_markdown_link_text(XBERGAlefHandle handle);
  */
 char *xberg_markdown_link_url(XBERGAlefHandle handle);
 
+/**
+ * Create a `MeasureData` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_measure_data_free`.
+ */
+XBERGAlefHandle xberg_measure_data_from_json(const char *json);
+
+/**
+ * Serialize a `MeasureData` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_measure_data_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `MeasureData` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_measure_data_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `subtype` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_subtype(XBERGAlefHandle handle);
+
+/**
+ * Get the `scale_ratio` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_scale_ratio(XBERGAlefHandle handle);
+
+/**
+ * Get the `x` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_x(XBERGAlefHandle handle);
+
+/**
+ * Get the `y` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_y(XBERGAlefHandle handle);
+
+/**
+ * Get the `distance` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_distance(XBERGAlefHandle handle);
+
+/**
+ * Get the `area` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_area(XBERGAlefHandle handle);
+
+/**
+ * Get the `angle` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_angle(XBERGAlefHandle handle);
+
+/**
+ * Get the `slope` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_slope(XBERGAlefHandle handle);
+
+/**
+ * Get the `origin` field from a `MeasureData`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_measure_data_origin(XBERGAlefHandle handle);
+
 #if defined(XBERG_FEATURE_PRESETS)
 /**
  * Free a `MetaSchema` handle.
@@ -20088,6 +20356,15 @@ char *xberg_page_content_native_content(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_page_content_geometry(XBERGAlefHandle handle);
 
 /**
+ * Get the `viewports` field from a `PageContent`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_page_content_viewports(XBERGAlefHandle handle);
+
+/**
  * Create a `PageDimensions` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -20155,6 +20432,15 @@ void xberg_page_geometry_free(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 char *xberg_page_geometry_paths(XBERGAlefHandle handle);
+
+/**
+ * Get the `regions` field from a `PageGeometry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_page_geometry_regions(XBERGAlefHandle handle);
 
 /**
  * Create a `PageHierarchy` from a JSON string. Returns null on failure.
@@ -20647,6 +20933,158 @@ char *xberg_page_structure_boundaries(XBERGAlefHandle handle);
 char *xberg_page_structure_pages(XBERGAlefHandle handle);
 
 /**
+ * Create a `PageViewport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_page_viewport_free`.
+ */
+XBERGAlefHandle xberg_page_viewport_from_json(const char *json);
+
+/**
+ * Serialize a `PageViewport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_page_viewport_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `PageViewport` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_page_viewport_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `bounding_box` field from a `PageViewport`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_bounding_box_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_page_viewport_bounding_box(XBERGAlefHandle handle);
+
+/**
+ * Get the `name` field from a `PageViewport`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_page_viewport_name(XBERGAlefHandle handle);
+
+/**
+ * Get the `measure` field from a `PageViewport`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_measure_data_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_page_viewport_measure(XBERGAlefHandle handle);
+
+/**
+ * Free a `ParsedDimension` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_parsed_dimension_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `text` field from a `ParsedDimension`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_parsed_dimension_text(XBERGAlefHandle handle);
+
+/**
+ * Get the `inches` field from a `ParsedDimension`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_parsed_dimension_inches(XBERGAlefHandle handle);
+
+/**
+ * Get the `position` field from a `ParsedDimension`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_vector_point_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_parsed_dimension_position(XBERGAlefHandle handle);
+
+/**
+ * Create a `ParsedScale` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_parsed_scale_free`.
+ */
+XBERGAlefHandle xberg_parsed_scale_from_json(const char *json);
+
+/**
+ * Serialize a `ParsedScale` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_parsed_scale_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `ParsedScale` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_parsed_scale_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `drawing_inches` field from a `ParsedScale`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_parsed_scale_drawing_inches(XBERGAlefHandle handle);
+
+/**
+ * Report whether the `drawing_inches` field on a `ParsedScale` is `Some`.
+ *
+ * `xberg_parsed_scale_drawing_inches` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_parsed_scale_has_drawing_inches(XBERGAlefHandle handle);
+
+/**
+ * Get the `real_inches` field from a `ParsedScale`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_parsed_scale_real_inches(XBERGAlefHandle handle);
+
+/**
+ * Report whether the `real_inches` field on a `ParsedScale` is `Some`.
+ *
+ * `xberg_parsed_scale_real_inches` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_parsed_scale_has_real_inches(XBERGAlefHandle handle);
+
+/**
+ * Get the `ratio` field from a `ParsedScale`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_parsed_scale_ratio(XBERGAlefHandle handle);
+
+/**
  * Create a `PatternMatch` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -20811,6 +21249,33 @@ char *xberg_pdf_annotation_quad_points(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 char *xberg_pdf_annotation_marked_text(XBERGAlefHandle handle);
+
+/**
+ * Get the `vertices` field from a `PdfAnnotation`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_pdf_annotation_vertices(XBERGAlefHandle handle);
+
+/**
+ * Get the `ink_list` field from a `PdfAnnotation`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_pdf_annotation_ink_list(XBERGAlefHandle handle);
+
+/**
+ * Get the `measure` field from a `PdfAnnotation`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_measure_data_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_pdf_annotation_measure(XBERGAlefHandle handle);
 
 #if defined(XBERG_FEATURE_PDF)
 /**
@@ -21001,6 +21466,17 @@ XBERGAlefHandle xberg_pdf_config_backend(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_pdf_config_extract_vector_geometry(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `plan_regions` field from a `PdfConfig`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_plan_region_config_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_pdf_config_plan_regions(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_PDF)
@@ -21419,6 +21895,213 @@ uintptr_t xberg_pixel_dimensions_width(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 uintptr_t xberg_pixel_dimensions_height(XBERGAlefHandle handle);
+
+/**
+ * Create a `PlanRegion` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_plan_region_free`.
+ */
+XBERGAlefHandle xberg_plan_region_from_json(const char *json);
+
+/**
+ * Serialize a `PlanRegion` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_plan_region_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `PlanRegion` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_plan_region_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `polygon` field from a `PlanRegion`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_plan_region_polygon(XBERGAlefHandle handle);
+
+/**
+ * Get the `area` field from a `PlanRegion`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double xberg_plan_region_area(XBERGAlefHandle handle);
+
+/**
+ * Get the `bounding_box` field from a `PlanRegion`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_bounding_box_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_plan_region_bounding_box(XBERGAlefHandle handle);
+
+/**
+ * Get the `text` field from a `PlanRegion`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_plan_region_text(XBERGAlefHandle handle);
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Create a `PlanRegionConfig` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_plan_region_config_free`.
+ */
+XBERGAlefHandle xberg_plan_region_config_from_json(const char *json);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Serialize a `PlanRegionConfig` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_plan_region_config_to_json(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Free a `PlanRegionConfig` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_plan_region_config_free(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `enabled` field from a `PlanRegionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_plan_region_config_enabled(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `snap_tolerance` field from a `PlanRegionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_plan_region_config_snap_tolerance(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `gap_tolerance` field from a `PlanRegionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_plan_region_config_gap_tolerance(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `max_segments` field from a `PlanRegionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_plan_region_config_max_segments(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_plan_region_config_default(void);
+#endif
+
+/**
+ * Create a `PolygonAnnotationInput` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_polygon_annotation_input_free`.
+ */
+XBERGAlefHandle xberg_polygon_annotation_input_from_json(const char *json);
+
+/**
+ * Serialize a `PolygonAnnotationInput` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_polygon_annotation_input_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `PolygonAnnotationInput` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_polygon_annotation_input_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `vertices` field from a `PolygonAnnotationInput`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_polygon_annotation_input_vertices(XBERGAlefHandle handle);
+
+/**
+ * Get the `rect` field from a `PolygonAnnotationInput`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_bounding_box_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_polygon_annotation_input_rect(XBERGAlefHandle handle);
+
+/**
+ * Get the `contents` field from a `PolygonAnnotationInput`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_polygon_annotation_input_contents(XBERGAlefHandle handle);
+
+/**
+ * Get the `subject` field from a `PolygonAnnotationInput`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_polygon_annotation_input_subject(XBERGAlefHandle handle);
+
+/**
+ * Get the `measure` field from a `PolygonAnnotationInput`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_measure_data_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_polygon_annotation_input_measure(XBERGAlefHandle handle);
+
+/**
+ * Get the `color` field from a `PolygonAnnotationInput`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_polygon_annotation_input_color(XBERGAlefHandle handle);
 
 /**
  * Create a `PostProcessorConfig` from a JSON string. Returns null on failure.
@@ -23888,6 +24571,56 @@ uintptr_t xberg_server_config_max_request_body_mb(XBERGAlefHandle this_);
  */
 uintptr_t xberg_server_config_max_multipart_field_mb(XBERGAlefHandle this_);
 #endif
+
+/**
+ * Create a `SheetMetadata` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_sheet_metadata_free`.
+ */
+XBERGAlefHandle xberg_sheet_metadata_from_json(const char *json);
+
+/**
+ * Serialize a `SheetMetadata` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_sheet_metadata_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `SheetMetadata` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_sheet_metadata_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `sheet_number` field from a `SheetMetadata`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_sheet_metadata_sheet_number(XBERGAlefHandle handle);
+
+/**
+ * Get the `title` field from a `SheetMetadata`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_sheet_metadata_title(XBERGAlefHandle handle);
+
+/**
+ * Get the `revision` field from a `SheetMetadata`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_sheet_metadata_revision(XBERGAlefHandle handle);
 
 /**
  * Create a `SitemapUrl` from a JSON string. Returns null on failure.
@@ -30974,6 +31707,20 @@ int32_t xberg_cancel_token_cancel(XBERGAlefHandle token);
  * `token` must be `0` or a handle returned by `xberg_cancel_token_new` that has not been freed.
  */
 void xberg_cancel_token_free(XBERGAlefHandle token);
+
+/**
+ * Append `annotation` to `page_index` (zero-based) and return the complete PDF.
+ * \note Returns an error when the input is not a readable PDF, the page does not
+ * exist, the document is encrypted (writing unencrypted bytes would not open in
+ * the source context), or the geometry is not representable: fewer than three
+ * vertices, a non-finite vertex or rect, or a colour component outside
+ * `0.0..=1.0`.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+int32_t xberg_append_polygon_annotation(const uint8_t *pdf, uintptr_t pdf_len, uintptr_t page_index,
+                                        XBERGAlefHandle annotation, uint8_t **out_ptr,
+                                        uintptr_t *out_len, uintptr_t *out_cap);
 
 /**
  * Classify a document's chunks and return the updated document.

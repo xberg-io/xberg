@@ -330,6 +330,24 @@ class PackageNoticesTests(unittest.TestCase):
             names = {Path(member.name).name for member in archive.getmembers()}
             assert set(NOTICES) <= names
 
+    def test_should_inject_go_notices_under_the_archive_root_and_reject_multiple_roots(self) -> None:
+        tarball = build_tarball(self.root, roots=("linux-x86_64",))
+        result = run_script("inject", "--format", "go", "--expected-count", "1", str(tarball))
+        assert result.returncode == 0, result.stderr
+        with tarfile.open(tarball) as archive:
+            contents = {
+                member.name: archive.extractfile(member).read() for member in archive.getmembers() if member.isfile()
+            }
+        for name in NOTICES:
+            assert contents[f"linux-x86_64/{name}"] == notice_bytes(name)
+
+        multi = self.root / "multi"
+        multi.mkdir()
+        broken = build_tarball(multi, roots=("first", "second"))
+        result = run_script("inject", "--format", "go", "--expected-count", "1", str(broken))
+        assert result.returncode == 1
+        assert "must have one root" in result.stderr
+
     def test_should_refresh_gem_data_and_checksums(self) -> None:
         gem = build_gem(self.root)
         result = run_script("inject", "--format", "gem", "--expected-count", "1", str(gem))

@@ -403,7 +403,20 @@ mod tests {
         assert_eq!(split[0], 0..183);
         assert!(split.iter().all(|band| band.end - band.start <= PLAN_CUT_BAND_ROWS));
         assert_eq!(split.last().unwrap().end, 12_000);
-        assert!(split.windows(2).all(|pair| pair[0].end == pair[1].start));
+        // The bands are blank margins and stay disjoint: a band's own pieces tile
+        // it, and the gap between bands stays a gap because ink rows live there.
+        for band in &bands {
+            let pieces: Vec<_> = split
+                .iter()
+                .filter(|piece| piece.start >= band.start && piece.end <= band.end)
+                .collect();
+            assert_eq!(pieces.first().map(|piece| piece.start), Some(band.start));
+            assert_eq!(pieces.last().map(|piece| piece.end), Some(band.end));
+            assert!(
+                pieces.windows(2).all(|pair| pair[0].end == pair[1].start),
+                "a band's pieces must tile it without gaps: {pieces:?}"
+            );
+        }
     }
 
     #[test]
