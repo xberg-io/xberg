@@ -7,9 +7,10 @@
 
 use crate::types::{AnnotationPoint, BoundingBox, MeasureData};
 use crate::{Result, XbergError};
+use serde::{Deserialize, Serialize};
 
 /// A Polygon annotation to append to an existing PDF.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PolygonAnnotationInput {
     /// Vertices in PDF page points with y increasing upwards. At least three are
     /// required.
