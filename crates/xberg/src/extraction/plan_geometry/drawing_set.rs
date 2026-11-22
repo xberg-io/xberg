@@ -15,9 +15,10 @@
 //! number; the parser never fabricates one from unrelated tokens.
 
 use crate::types::{PageViewport, VectorPoint};
+use serde::{Deserialize, Serialize};
 
 /// Metadata read from a drawing set's title block.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SheetMetadata {
     /// Sheet number such as `A5.01`. `None` when the text carries no match.
     pub sheet_number: Option<String>,
@@ -41,7 +42,7 @@ pub struct ParsedDimension {
 }
 
 /// A parsed scale note.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ParsedScale {
     /// Paper length in inches when both sides of the note name a length.
     /// `None` for a pure ratio such as `1:100`.
