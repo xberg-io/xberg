@@ -60,3 +60,41 @@ fn sampled_tint_transform_past_the_dimension_cap_is_rejected() {
         "a {dims}-dimension /Domain must be rejected before the 2^{dims} corner loop"
     );
 }
+
+/// `/Domain` and `/Range` pairs come from the document and feed `clamp`, which panics on reversed
+/// bounds.
+#[test]
+fn sampled_function_with_reversed_domain_or_range_is_rejected() {
+    for key in ["Domain", "Range"] {
+        let (obj, mut dict) = all_ones_type0_function(1);
+        dict.insert(
+            key.to_string(),
+            Object::Array(vec![Object::Integer(1), Object::Integer(0)]),
+        );
+        assert_eq!(evaluate_type0_multi(&obj, &dict, &[0.5]), None, "{key}");
+    }
+}
+
+/// `/Bounds` must hold one entry fewer than `/Functions`; indexing it by the selected interval
+/// otherwise runs off the end.
+#[test]
+fn stitching_function_with_short_bounds_is_rejected() {
+    let doc = tests::minimal_pdf_doc();
+    let sub = Object::Dictionary(std::collections::HashMap::from([
+        ("FunctionType".to_string(), Object::Integer(2)),
+        ("N".to_string(), Object::Integer(1)),
+    ]));
+    let stitching = Object::Dictionary(std::collections::HashMap::from([
+        ("FunctionType".to_string(), Object::Integer(3)),
+        (
+            "Domain".to_string(),
+            Object::Array(vec![Object::Integer(0), Object::Integer(1)]),
+        ),
+        (
+            "Functions".to_string(),
+            Object::Array(vec![sub.clone(), sub.clone(), sub]),
+        ),
+        ("Bounds".to_string(), Object::Array(vec![])),
+    ]));
+    assert_eq!(evaluate_pdf_function_at(&doc, &stitching, 0.9, 0), None);
+}

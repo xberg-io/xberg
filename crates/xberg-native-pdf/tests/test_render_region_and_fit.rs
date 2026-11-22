@@ -102,3 +102,67 @@ fn render_page_fit_never_exceeds_box() {
         assert!(img.height <= fh, "fit ({fw}×{fh}): height {} exceeds {fh}", img.height);
     }
 }
+
+fn red_corner_region(page_dict: &[u8], origin: (f32, f32)) -> image::RgbaImage {
+    let content = format!("1 0 0 rg {} {} 50 50 re f", origin.0, origin.1);
+    let bytes = common::build_pdf_with_standard_fonts(content.as_bytes(), page_dict);
+    let doc = PdfDocument::from_bytes(bytes).unwrap();
+    let mut options = RenderOptions::with_dpi(72);
+    options.honor_crop_box = true;
+    let region = render_page_region(&doc, 0, (origin.0, origin.1, 50.0, 50.0), &options).unwrap();
+    image::load_from_memory(&region.data).unwrap().to_rgba8()
+}
+
+fn assert_all_red(img: &image::RgbaImage) {
+    assert!(
+        img.width() >= 49 && img.height() >= 49,
+        "{}x{}",
+        img.width(),
+        img.height()
+    );
+    for px in img.pixels() {
+        assert_eq!(px.0, [255, 0, 0, 255]);
+    }
+}
+
+#[test]
+fn render_page_region_follows_a_crop_box_offset() {
+    let img = red_corner_region(
+        b"/Type /Page /Parent 2 0 R /MediaBox [0 0 400 400] /CropBox [100 100 300 300]",
+        (100.0, 100.0),
+    );
+    assert_all_red(&img);
+}
+
+#[test]
+fn render_page_region_follows_the_page_rotation() {
+    let img = red_corner_region(
+        b"/Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Rotate 90",
+        (0.0, 0.0),
+    );
+    assert_all_red(&img);
+}
+
+fn cropped_page_region(
+    request: (f32, f32, f32, f32),
+) -> xberg_native_pdf::Result<xberg_native_pdf::rendering::RenderedImage> {
+    let bytes = common::build_pdf_with_standard_fonts(
+        b"1 0 0 rg 0 0 400 400 re f",
+        b"/Type /Page /Parent 2 0 R /MediaBox [0 0 400 400] /CropBox [100 100 300 300]",
+    );
+    let doc = PdfDocument::from_bytes(bytes).unwrap();
+    let mut options = RenderOptions::with_dpi(72);
+    options.honor_crop_box = true;
+    render_page_region(&doc, 0, request, &options)
+}
+
+#[test]
+fn render_page_region_clips_a_region_overhanging_the_raster_edge() {
+    let region = cropped_page_region((90.0, 110.0, 20.0, 20.0)).unwrap();
+    assert_eq!((region.width, region.height), (10, 20));
+}
+
+#[test]
+fn render_page_region_rejects_a_region_outside_the_raster() {
+    assert!(cropped_page_region((0.0, 0.0, 50.0, 50.0)).is_err());
+}

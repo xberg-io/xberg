@@ -269,7 +269,7 @@ impl PageRenderer {
         Ok(Some(Self::extract_alpha_as_coverage(&scratch)))
     }
 
-    fn draw_text(
+    pub(super) fn draw_text(
         &self,
         dest: &mut Pixmap,
         text: TextRun<'_>,

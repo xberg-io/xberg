@@ -335,6 +335,7 @@ fn blended_form_result(knockout: bool, nested: bool, headroom: u64) -> (Vec<u8>,
                 mask_transform: tiny_skia::Transform::identity(),
                 mask_resources: &resources,
             }),
+            true,
         )
         .expect("blended group and alpha recovery");
     renderer.knockout_resources.check().expect("no swallowed work failure");

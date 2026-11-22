@@ -85,7 +85,10 @@ impl PageRenderer {
         data: &[u8],
     ) -> Result<()> {
         let OpEnv {
-            base_transform, doc, ..
+            base_transform,
+            doc,
+            resources,
+            ..
         } = env;
         if st.excluded_layer_depth == 0 {
             let gs_clone = st.gs_stack.current().clone();
@@ -104,7 +107,16 @@ impl PageRenderer {
                 self.collect_inline_image_shape(&synthetic, transform, &gs_clone, doc, clip, is_image_mask)?;
             }
             if is_image_mask {
-                if let Err(error) = self.render_image_mask(pixmap, &synthetic, None, transform, doc, clip, &gs_clone) {
+                if let Err(error) = self.render_image_mask(
+                    pixmap,
+                    &synthetic,
+                    None,
+                    transform,
+                    doc,
+                    clip,
+                    &gs_clone,
+                    (base_transform, resources),
+                ) {
                     tracing::warn!(
                         error_code = error.telemetry_code(),
                         error_offset = ?error.telemetry_offset(),
