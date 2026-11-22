@@ -1363,7 +1363,10 @@ fn prescan_text_regions(data: &[u8]) -> Option<PrescanResult> {
     let mut needs_forward_ctm = false;
 
     for &tp in &text_positions {
-        let (region_start, hit_limit) = find_region_start(data, tp);
+        let (mut region_start, hit_limit) = find_region_start(data, tp);
+        if data[tp] == b'D' {
+            region_start = region_start.min(do_operand_start(data, tp));
+        }
 
         if hit_limit {
             needs_forward_ctm = true;
@@ -1443,7 +1446,11 @@ fn build_ctm_regions(data: &[u8], text_positions: &[usize]) -> Option<PrescanRes
 
     let mut ctm_regions: Vec<(usize, usize)> = Vec::new();
     for &tp in text_positions {
-        let region_start = find_preceding_marked_content(data, tp);
+        let region_start = if data[tp] == b'D' {
+            find_preceding_marked_content(data, tp).min(do_operand_start(data, tp))
+        } else {
+            find_preceding_marked_content(data, tp)
+        };
         let region_end = if data[tp] == b'B' {
             let et_end = find_matching_et(data, tp + 2).unwrap_or(len);
             find_following_emc(data, et_end)
@@ -1493,6 +1500,24 @@ fn build_ctm_regions(data: &[u8], text_positions: &[usize]) -> Option<PrescanRes
 /// 4KB scan window didn't reach the beginning of the data. When `hit_limit`
 /// is true, there may be additional enclosing `q`/`cm` operators beyond
 /// the window that affect the CTM.
+/// Start of the XObject name immediately preceding a `Do` at `pos`.
+///
+/// A prescan region that begins at the operator leaves the `/Name` behind, so
+/// the region parses as a bare `Do` with no operand, the Form XObject is never
+/// executed and its text is lost (xberg-io/xberg#3384). Returns `pos` when no
+/// name precedes the operator.
+fn do_operand_start(data: &[u8], pos: usize) -> usize {
+    let mut end = pos;
+    while end > 0 && data[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    let mut start = end;
+    while start > 0 && !is_boundary(data[start - 1]) {
+        start -= 1;
+    }
+    if start > 0 && data[start - 1] == b'/' { start - 1 } else { pos }
+}
+
 fn find_region_start(data: &[u8], pos: usize) -> (usize, bool) {
     // Simple backward scan: find the nearest line that starts with 'q' or
     // the beginning of data. We limit backward scan to 4KB for performance. ~keep
