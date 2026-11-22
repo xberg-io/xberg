@@ -118,6 +118,10 @@ fn warm_output(
     #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
     candidates: &[super::onnx_candidates::CandidateSummary],
 ) -> Result<serde_json::Value> {
+    #[cfg_attr(
+        not(any(feature = "classification-onnx", feature = "captioning-onnx")),
+        expect(unused_mut, reason = "the feature-gated candidates field is the only mutation")
+    )]
     let mut output = json!({
         "cache_dir": cache_base.to_string_lossy(),
         "xberg_cache_dir": cache_base.to_string_lossy(),

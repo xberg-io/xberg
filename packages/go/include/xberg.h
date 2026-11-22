@@ -9930,8 +9930,7 @@ int32_t xberg_drawing_set_text_parse_dimension_has_result(const char *text);
 XBERGAlefHandle xberg_drawing_set_text_parse_scale(const char *text);
 
 /**
- * Read a sheet number such as `A5.01`, `A-101` or `E102`.
- *
+ * Read a sheet number such as `A5.01`, `A-101` or `E102`.    ///
  * A bare two-character token such as `A5` is not accepted: it is far more
  * likely a paper size or a room label than a sheet number.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
@@ -21016,6 +21015,22 @@ double xberg_parsed_dimension_inches(XBERGAlefHandle handle);
 XBERGAlefHandle xberg_parsed_dimension_position(XBERGAlefHandle handle);
 
 /**
+ * Create a `ParsedScale` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_parsed_scale_free`.
+ */
+XBERGAlefHandle xberg_parsed_scale_from_json(const char *json);
+
+/**
+ * Serialize a `ParsedScale` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_parsed_scale_to_json(XBERGAlefHandle handle);
+
+/**
  * Free a `ParsedScale` handle.
  * # Safety
  * Handle must have been returned by this library, or be zero.
@@ -22010,6 +22025,22 @@ uintptr_t xberg_plan_region_config_max_segments(XBERGAlefHandle handle);
  */
 XBERGAlefHandle xberg_plan_region_config_default(void);
 #endif
+
+/**
+ * Create a `PolygonAnnotationInput` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_polygon_annotation_input_free`.
+ */
+XBERGAlefHandle xberg_polygon_annotation_input_from_json(const char *json);
+
+/**
+ * Serialize a `PolygonAnnotationInput` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_polygon_annotation_input_to_json(XBERGAlefHandle handle);
 
 /**
  * Free a `PolygonAnnotationInput` handle.
@@ -24540,6 +24571,22 @@ uintptr_t xberg_server_config_max_request_body_mb(XBERGAlefHandle this_);
  */
 uintptr_t xberg_server_config_max_multipart_field_mb(XBERGAlefHandle this_);
 #endif
+
+/**
+ * Create a `SheetMetadata` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_sheet_metadata_free`.
+ */
+XBERGAlefHandle xberg_sheet_metadata_from_json(const char *json);
+
+/**
+ * Serialize a `SheetMetadata` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_sheet_metadata_to_json(XBERGAlefHandle handle);
 
 /**
  * Free a `SheetMetadata` handle.
@@ -31665,7 +31712,9 @@ void xberg_cancel_token_free(XBERGAlefHandle token);
  * Append `annotation` to `page_index` (zero-based) and return the complete PDF.
  * \note Returns an error when the input is not a readable PDF, the page does not
  * exist, the document is encrypted (writing unencrypted bytes would not open in
- * the source context), or fewer than three vertices are supplied.
+ * the source context), or the geometry is not representable: fewer than three
+ * vertices, a non-finite vertex or rect, or a colour component outside
+ * `0.0..=1.0`.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
  * be freed with the appropriate free function.
  */
