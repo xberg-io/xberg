@@ -59,6 +59,7 @@ fn subset_type0_font() -> FontInfo {
         font_matrix_a: 0.001,
         default_width: 1000.0,
         cff_gid_map: None,
+        cff_cid_to_gid: None,
         multi_char_map: HashMap::new(),
         byte_to_char_table: std::sync::OnceLock::new(),
         byte_to_width_table: std::sync::OnceLock::new(),

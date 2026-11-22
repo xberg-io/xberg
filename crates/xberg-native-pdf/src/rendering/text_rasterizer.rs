@@ -831,7 +831,10 @@ impl TextRasterizer {
                         && info.embedded_cid_map.is_none()
                         && (decode_drops.reason().is_some()
                             || unicode_text.chars().count() != TextCharIter::new(text, Some(info)).count());
-                    if has_unicode_cmap && !lost_identity_run {
+                    // An OpenType CIDFontType0 must carry a cmap (ISO 32000-1 Table 126), but its CIDs
+                    // resolve through the CFF (§9.7.4.2), not the Unicode cmap. ~keep
+                    let cid_keyed_cff = info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0");
+                    if has_unicode_cmap && !lost_identity_run && !cid_keyed_cff {
                         tracing::trace!("Using embedded PDF font data");
                         Some((None, Arc::clone(embedded), 0, false))
                     } else if cid_truetype {
@@ -1733,7 +1736,12 @@ impl TextRasterizer {
                 match &font_info.cid_to_gid_map {
                     Some(crate::fonts::CIDToGIDMap::Identity) => char_code,
                     Some(crate::fonts::CIDToGIDMap::Explicit(map)) => *map.get(char_code as usize).unwrap_or(&0),
-                    None => char_code,
+                    // A CID-keyed CFF resolves CIDs through its charset (§9.7.4.2); otherwise the CID is the GID. ~keep
+                    None => font_info
+                        .cff_cid_to_gid
+                        .as_ref()
+                        .and_then(|m| m.get(&char_code).copied())
+                        .unwrap_or(char_code),
                 }
             } else if let Some(cff_map) = &font_info.cff_gid_map {
                 *cff_map.get(&(char_code as u8)).unwrap_or(&0)
@@ -2566,6 +2574,7 @@ mod tests {
             cid_default_width: 1000.0,
             has_explicit_dw: true,
             cff_gid_map: None,
+            cff_cid_to_gid: None,
             multi_char_map: HashMap::new(),
             byte_to_char_table: std::sync::OnceLock::new(),
             type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),

@@ -231,7 +231,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += ws_hs;
                     }
                     w_sum += w;
-                    let chars_added = buffer.unicode.len() - len_before;
+                    let chars_added = buffer.unicode[len_before..].chars().count();
                     buffer.ligature_tail = chars_added > 1;
                     if chars_added == 1 {
                         buffer.char_widths.push(w);
@@ -462,7 +462,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += ws_hs;
                     }
                     w_sum += w;
-                    let chars_added = buffer.unicode.len() - len_before;
+                    let chars_added = buffer.unicode[len_before..].chars().count();
                     buffer.ligature_tail = chars_added > 1;
                     if chars_added == 1 {
                         buffer.char_widths.push(w);

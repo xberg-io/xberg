@@ -587,6 +587,41 @@ impl PdfDocument {
                     }
                     true
                 }
+                // The mirror of `take_one`'s containment case: one span token
+                // may be the concatenation of several budget tokens. Word
+                // clustering and the flow assembler split at different
+                // distances, so a cell yielding {"abc", "def"} faces a flow
+                // span "abcdef" that no single budget token contains. Consumes
+                // the covering sequence only when the whole token is covered
+                // exactly, so nothing is spent on a partial match. ~keep
+                fn take_concatenation(work: &mut std::collections::HashMap<&str, usize>, tok: &str) -> bool {
+                    // Longest available prefix first, ties by text: HashMap
+                    // iteration order is not stable and this decides what the
+                    // page emits. ~keep
+                    fn cover<'a>(work: &mut std::collections::HashMap<&'a str, usize>, rest: &str) -> bool {
+                        if rest.is_empty() {
+                            return true;
+                        }
+                        let mut candidates: Vec<&'a str> = work
+                            .iter()
+                            .filter(|(k, n)| **n > 0 && !k.is_empty() && rest.starts_with(**k))
+                            .map(|(k, _)| *k)
+                            .collect();
+                        candidates.sort_by_key(|k| (std::cmp::Reverse(k.len()), *k));
+                        for cand in candidates {
+                            if let Some(slot) = work.get_mut(cand) {
+                                *slot -= 1;
+                            }
+                            if cover(work, &rest[cand.len()..]) {
+                                return true;
+                            }
+                            *work.entry(cand).or_insert(0) += 1;
+                        }
+                        false
+                    }
+
+                    cover(work, tok)
+                }
                 // Test plus decrement, in one place so the containment and
                 // text-fallback paths cannot drift apart — they must draw on
                 // the SAME accounting. All-or-nothing: a span either fits
@@ -599,12 +634,57 @@ impl PdfDocument {
                     let mut work = remaining.clone();
                     for (tok, n) in span_tokens {
                         for _ in 0..*n {
-                            if !take_one(&mut work, tok, allow_fragment) {
+                            if !take_one(&mut work, tok, allow_fragment)
+                                && !(allow_fragment && take_concatenation(&mut work, tok))
+                            {
                                 return false;
                             }
                         }
                     }
                     *remaining = work;
+                    true
+                }
+
+                // A flow span can run across a column rule and so lie inside no
+                // single cell (one text run drawn cell after cell on a row).
+                // Such a span is absorbed from the pooled budgets of the cells
+                // it covers, so the table's rendering stays the only copy.
+                // Spending is leftmost-first and a fragment remainder returns
+                // to the leftmost cell, so the pool is conserved. ~keep
+                fn try_consume_across<'a>(
+                    remaining: &mut [std::collections::HashMap<&'a str, usize>],
+                    cells: &[usize],
+                    span_tokens: &[(&str, usize)],
+                ) -> bool {
+                    let mut pooled: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
+                    for &ci in cells {
+                        for (tok, n) in &remaining[ci] {
+                            *pooled.entry(*tok).or_insert(0) += n;
+                        }
+                    }
+                    let before = pooled.clone();
+                    if !try_consume(&mut pooled, span_tokens, true) {
+                        return false;
+                    }
+                    for (tok, was) in &before {
+                        let mut spend = was.saturating_sub(pooled.get(tok).copied().unwrap_or(0));
+                        for &ci in cells {
+                            if spend == 0 {
+                                break;
+                            }
+                            if let Some(left) = remaining[ci].get_mut(tok) {
+                                let taken = (*left).min(spend);
+                                *left -= taken;
+                                spend -= taken;
+                            }
+                        }
+                    }
+                    for (tok, now) in &pooled {
+                        let was = before.get(tok).copied().unwrap_or(0);
+                        if *now > was {
+                            *remaining[cells[0]].entry(*tok).or_insert(0) += *now - was;
+                        }
+                    }
                     true
                 }
 
@@ -697,6 +777,37 @@ impl PdfDocument {
                                 if try_consume(&mut cell_remaining[ci], &span_tokens, true) {
                                     decided = true;
                                     break 'cells;
+                                }
+                            }
+                        }
+                        if !decided {
+                            let (sx0, sx1) = (s.bbox.x, s.bbox.x + s.bbox.width);
+                            let mut spanned: Vec<usize> = Vec::new();
+                            for bin in slo..=shi {
+                                for &ci in cell_y_index.get(&bin).into_iter().flatten() {
+                                    let (b, _) = &flushed_cells[ci];
+                                    if !spanned.contains(&ci)
+                                        && b.y - RETAIN_TOLERANCE <= s.bbox.y
+                                        && s.bbox.y + s.bbox.height <= b.y + b.height + RETAIN_TOLERANCE
+                                        && b.x < sx1
+                                        && b.x + b.width > sx0
+                                    {
+                                        spanned.push(ci);
+                                    }
+                                }
+                            }
+                            spanned.sort_by(|&a, &b| {
+                                crate::utils::safe_float_cmp(flushed_cells[a].0.x, flushed_cells[b].0.x)
+                            });
+                            if spanned.len() > 1 {
+                                let right = spanned
+                                    .iter()
+                                    .map(|&ci| flushed_cells[ci].0.x + flushed_cells[ci].0.width)
+                                    .fold(f32::MIN, f32::max);
+                                if flushed_cells[spanned[0]].0.x <= sx0 + RETAIN_TOLERANCE
+                                    && right >= sx1 - RETAIN_TOLERANCE
+                                {
+                                    decided = try_consume_across(&mut cell_remaining, &spanned, &span_tokens);
                                 }
                             }
                         }

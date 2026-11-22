@@ -583,21 +583,21 @@ impl PdfDocument {
             }
         };
         if let Some(ref struct_tree) = struct_tree_opt {
-            if self.table_elements_cache.lock_or_recover().is_none() {
-                let all = crate::structure::find_table_elements_all_pages(struct_tree);
-                *self.table_elements_cache.lock_or_recover() = Some(all);
-            }
-            let table_elems: Vec<crate::structure::StructElem> = self
-                .table_elements_cache
-                .lock_or_recover()
-                .as_ref()
-                .and_then(|c| c.get(&(page_index as u32)))
-                .cloned()
-                .unwrap_or_default();
+            let by_page = {
+                let mut cache = self.table_elements_cache.lock_or_recover();
+                Arc::clone(cache.get_or_insert_with(|| {
+                    Arc::new(crate::structure::table_extractor::find_table_elements_all_pages_shared(
+                        struct_tree,
+                    ))
+                }))
+            };
+            let table_elems: &[Arc<crate::structure::StructElem>] =
+                by_page.get(&(page_index as u32)).map(Vec::as_slice).unwrap_or_default();
             if !table_elems.is_empty() {
                 let mut tables = Vec::new();
-                for table_elem in &table_elems {
-                    match crate::structure::extract_table_from_spans(table_elem, spans) {
+                for table_elem in table_elems {
+                    match crate::structure::extract_table_from_spans_on_page(table_elem, spans, Some(page_index as u32))
+                    {
                         Ok(mut table) if !table.is_empty() => {
                             if table.bbox.is_none() {
                                 let all_mcids: HashSet<u32> = table
@@ -659,7 +659,6 @@ impl PdfDocument {
         // Chart/plot pages often have hundreds of curves and fills that
         // extract_edges ignores anyway — passing them through the full
         // detection pipeline wastes O(n²) time. ~keep
-        const LINE_TOL: f32 = 2.0;
         // GH#1656: same page-frame furniture filter as extract_tables_with_config
         // above — required here too, since this entry point builds its own
         // `table_paths` and feeds them straight into detect_tables_with_lines
@@ -667,7 +666,7 @@ impl PdfDocument {
         let media_box = self.get_page_media_box(page_index).ok();
         let table_paths: Vec<_> = paths
             .into_iter()
-            .filter(|p| p.is_horizontal_line(LINE_TOL) || p.is_vertical_line(LINE_TOL) || p.is_rectangle())
+            .filter(|p| p.is_table_primitive())
             .filter(|p| match media_box {
                 Some(mb) => !p.is_page_frame_rectangle(mb),
                 None => true,
@@ -710,6 +709,25 @@ impl PdfDocument {
         let word_spans = self.extract_table_word_spans(page_index).unwrap_or_default();
 
         let input_spans = if !word_spans.is_empty() { &word_spans } else { spans };
+
+        // Bounding one cell takes two rules on each axis, so fewer than four
+        // primitives cannot describe a grid. The RTL guard further down only
+        // gates the retry, after this call has already produced a table from
+        // aligned diacritics. ~keep
+        const MIN_PRIMITIVES_FOR_A_GRID: usize = 4;
+        if config.text_fallback && paths.len() < MIN_PRIMITIVES_FOR_A_GRID {
+            let rtl_fraction = spans.iter().filter(|s| crate::text::bidi::looks_rtl(&s.text)).count() as f32
+                / spans.len().max(1) as f32;
+            if rtl_fraction > 0.30 {
+                tracing::debug!(target: LOG_TARGET,
+                    "Declining spatial table detection on page {} — {:.0}% RTL spans and only {} table primitives",
+                    page_index,
+                    rtl_fraction * 100.0,
+                    paths.len()
+                );
+                return Vec::new();
+            }
+        }
 
         let raw_tables =
             crate::structure::spatial_table_detector::detect_tables_with_lines(input_spans, &paths, &config);
@@ -941,3 +959,7 @@ mod header_source_diagnostic_tests;
 #[cfg(test)]
 #[path = "tables/wrapped_header_text_tests.rs"]
 mod wrapped_header_text_tests;
+
+#[cfg(test)]
+#[path = "tables/rtl_guard_tests.rs"]
+mod rtl_guard_tests;

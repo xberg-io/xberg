@@ -5395,7 +5395,9 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
         // edge artifact, not a word separator.
         return span_entries.remove(0).2.trim().to_string();
     }
-    span_entries.sort_by(|a, b| crate::utils::safe_float_cmp(b.0, a.0));
+    // Row band then x, not centre-y alone: a centre moves with font size, so a
+    // raised marker in a smaller font would sort ahead of the text it follows. ~keep
+    span_entries.sort_by(|a, b| crate::utils::row_aware_span_cmp(a.1.bbox.y, a.1.bbox.x, b.1.bbox.y, b.1.bbox.x));
 
     // Group into rows by y proximity, then within a row decide separator per
     // pair of spans using the same gap/CJK rules as inline text assembly. ~keep
@@ -11552,6 +11554,15 @@ mod tests {
 
             assert_eq!(extract_cell_text(&[0, 1], &spans), format!("59{separator}804"));
         }
+    }
+
+    #[test]
+    fn cell_text_keeps_a_raised_marker_after_the_text_it_follows() {
+        let spans = vec![
+            ts("59.19*^", 143.0, 202.0, 30.0, 5.0),
+            ts("142.56 \u{b1}", 100.0, 200.0, 40.0, 8.0),
+        ];
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "142.56 \u{b1} 59.19*^");
     }
 
     #[test]
