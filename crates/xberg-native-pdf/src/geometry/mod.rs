@@ -89,14 +89,12 @@ impl Rect {
     /// assert_eq!(rect.y, 20.0);
     /// assert_eq!(rect.width, 100.0);
     /// assert_eq!(rect.height, 50.0);
+    ///
+    /// let swapped = Rect::from_points(110.0, 70.0, 10.0, 20.0);
+    /// assert_eq!((swapped.x, swapped.y, swapped.width, swapped.height), (10.0, 20.0, 100.0, 50.0));
     /// ```
     pub fn from_points(x0: f32, y0: f32, x1: f32, y1: f32) -> Self {
-        Self {
-            x: x0,
-            y: y0,
-            width: x1 - x0,
-            height: y1 - y0,
-        }
+        Self::new(x0, y0, x1 - x0, y1 - y0)
     }
 
     /// Get the left edge x-coordinate.
@@ -292,6 +290,12 @@ pub fn euclidean_distance(p1: &Point, p2: &Point) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_rect_from_points_normalises_opposite_diagonal() {
+        let r = Rect::from_points(110.0, 70.0, 10.0, 20.0);
+        assert_eq!((r.x, r.y, r.width, r.height), (10.0, 20.0, 100.0, 50.0));
+    }
 
     #[test]
     fn test_point_creation() {
