@@ -546,10 +546,11 @@ mod tests {
 
     #[test]
     fn output_limit_does_not_wrap_for_the_largest_ratio() {
-        assert_eq!(
-            filter_output_limit(0, u32::MAX, 10, None),
-            10 * (u32::MAX as usize + 1) - 1
-        );
+        #[cfg(target_pointer_width = "64")]
+        let expected = 10 * (u32::MAX as usize + 1) - 1;
+        #[cfg(not(target_pointer_width = "64"))]
+        let expected = usize::MAX - 1;
+        assert_eq!(filter_output_limit(0, u32::MAX, 10, None), expected);
         assert_eq!(filter_output_limit(100, u32::MAX, 10, None), 100);
     }
 
