@@ -10,8 +10,8 @@ name: xberg
 
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1
-Source-Hash: blake3:c222fc982b9c5f3485c2b4b74087e923da7345e4b5eea4b8df8db4810fba1d76
+Content-Hash: blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d
+Source-Hash: blake3:349da3cd7af45e537dbb8e8aa6b033a84afccc9dd0f9ad1552d37ae18780228d
 Schema-Version: v1
 -->
 
@@ -62,9 +62,6 @@ tokio = { version = "1", features = ["full"] }
 
 ```bash
 brew install xberg-io/tap/xberg
-# or run without a persistent install (the CLI proxy package self-installs the binary):
-npx @xberg-io/xberg-cli@1.3.10 --help
-uvx --from xberg-cli==1.3.8 xberg --help
 # or download a prebuilt binary from the latest GitHub release:
 #   https://github.com/xberg-io/xberg/releases/latest
 # or build from source:

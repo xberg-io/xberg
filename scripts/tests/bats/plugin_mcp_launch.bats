@@ -2,13 +2,10 @@
 #
 # Contract tests for plugin/scripts/mcp-launch.sh.
 #
-# FAN-OUT SHARED: byte-identical in xberg, crawlberg, html-to-markdown, liter-llm and
-# tree-sitter-language-pack. Unlike the scripts/lib suites, the five launchers are NOT one script
-# plus a token -- they have diverged into different internal function names (`runnable` vs
-# `runs_ok`, `try_download` vs `download_install`), different log wording and different download
-# integrity postures. What has NOT diverged is what the script does when you run it.
+# This launcher pins the release it ships with (PINNED_VERSION) and has no npx or uvx tier, so the
+# suite is no longer byte-identical with the sibling repositories' copies.
 #
-# So this suite tests strictly through the process boundary: it runs the script and asserts the
+# The suite tests strictly through the process boundary: it runs the script and asserts the
 # exit status, which launcher was exec'd, and that argv arrives intact. Internal names never
 # appear, which is what lets one file cover five divergent implementations. Every parameter it
 # needs is read out of the script in setup_file, so it names no product.
@@ -26,16 +23,15 @@ setup_file() {
 		return 1
 	}
 
-	# Read the four per-product parameters out of the script itself. Deriving them is what keeps
+	# Read the per-product parameters out of the script itself. Deriving them is what keeps
 	# this file identical across repos; an empty derivation would silently turn most assertions
 	# below into comparisons between two empty strings, so each one is checked. ~keep
 	BINARY_NAME="$(sed -n 's/^BINARY_NAME="\(.*\)"$/\1/p' "$SCRIPT" | head -n 1)"
-	NPM_PKG="$(sed -n 's/^NPM_PKG="\(.*\)"$/\1/p' "$SCRIPT" | head -n 1)"
-	PYPI_PKG="$(sed -n 's/^PYPI_PKG="\(.*\)"$/\1/p' "$SCRIPT" | head -n 1)"
+	PINNED_VERSION="$(sed -n 's/^PINNED_VERSION="\(.*\)"[[:space:]]*\(#.*\)\{0,1\}$/\1/p' "$SCRIPT" | head -n 1)"
 	LAUNCHER_VAR="$(sed -n 's/^LAUNCHER="\${\([A-Z_]*\):-auto}"$/\1/p' "$SCRIPT" | head -n 1)"
 
 	local name
-	for name in BINARY_NAME NPM_PKG PYPI_PKG LAUNCHER_VAR; do
+	for name in BINARY_NAME PINNED_VERSION LAUNCHER_VAR; do
 		[ -n "${!name}" ] || {
 			echo "could not read ${name} out of ${SCRIPT}; the suite would assert nothing" >&2
 			return 1
@@ -43,13 +39,13 @@ setup_file() {
 	done
 
 	# The launchers must be genuinely absent, not merely shadowed by a stub: the script decides
-	# what to do by probing `command -v npx`, so a prepended stub directory cannot express "this
-	# machine has no npx" and the probe would find the developer's real copy. The product binary
+	# what to do by probing `command -v brew`, so a prepended stub directory cannot express "this
+	# machine has no brew" and the probe would find the developer's real copy. The product binary
 	# is excluded for the same reason -- a developer with it installed would otherwise take the
 	# PATH branch in every test. ~keep
-	xberg_shadow_system_path_without npx uvx brew curl wget "$BINARY_NAME"
+	xberg_shadow_system_path_without brew curl wget "$BINARY_NAME"
 
-	export REPO_ROOT SCRIPT BINARY_NAME NPM_PKG PYPI_PKG LAUNCHER_VAR
+	export REPO_ROOT SCRIPT BINARY_NAME PINNED_VERSION LAUNCHER_VAR
 }
 
 setup() {
@@ -91,18 +87,11 @@ make_cli() {
 	mkdir -p "$(dirname "$target")"
 	printf '%s\n' \
 		'#!/usr/bin/env bash' \
+		"if [ \"\$1\" = \"--version\" ]; then printf '%s\\n' \"${VERSION_REPORTED:-$PINNED_VERSION}\"; exit 0; fi" \
 		"printf '${marker}:ran\\n'" \
 		"for a in \"\$@\"; do printf '${marker}[%s]\\n' \"\$a\"; done" \
 		'exit 0' >"$target"
 	chmod +x "$target"
-}
-
-make_npx() {
-	local binary="$XBERG_WORK/npm-package/$BINARY_NAME"
-	make_cli "$binary" NPX
-	xberg_stub npx \
-		"[[ \"\$*\" == *'$NPM_PKG@latest'* ]] || exit 1" \
-		"printf '%s\\n' '$binary'"
 }
 
 # An executable that refuses to report a version, which is how the script decides a binary it
@@ -128,12 +117,12 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 
 	xberg_assert_status 1
 	xberg_assert_output_contains "invalid ${LAUNCHER_VAR}='wget-please'"
-	xberg_assert_output_contains "auto|npx|uvx|brew|download"
+	xberg_assert_output_contains "auto|brew|download"
 }
 
 @test "mcp-launch should_accept_every_documented_launcher_value" {
 	local mode
-	for mode in auto npx uvx brew download; do
+	for mode in auto brew download; do
 		LAUNCH_MODE="$mode"
 		launch
 		# Each of these still fails -- nothing is installed -- but it must fail at the end, not
@@ -210,61 +199,46 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 	[[ "$output" != *"ONPATH:ran"* ]]
 }
 
-# --- npx, uvx and brew --------------------------------------------------------------------------
+# --- version gate -------------------------------------------------------------------------------
 
-@test "mcp-launch should_launch_through_npx_when_npx_can_run_the_package" {
-	make_npx
-	launch --stdio
-
-	xberg_assert_status 0
-	xberg_assert_output_contains "NPX:ran"
-	# The user's own argv, not just the package the script names. Asserting only the package
-	# passes against a launcher that drops "$@" entirely. ~keep
-	xberg_assert_output_contains "NPX[--stdio]"
-}
-
-@test "mcp-launch should_fall_through_when_the_npx_probe_fails" {
-	xberg_stub_exit npx 1
+@test "mcp-launch should_ignore_a_cached_binary_older_than_the_pinned_version" {
+	VERSION_REPORTED="0.0.1"
+	make_cli "$(cached_binary)" CACHED
 	launch
 
 	xberg_assert_status 1
-	xberg_assert_output_contains "falling through"
+	[[ "$output" != *"CACHED:ran"* ]]
+	xberg_assert_output_contains "older than the pinned ${PINNED_VERSION}"
 }
 
-@test "mcp-launch should_launch_through_uvx_when_uvx_can_run_the_package" {
-	make_cli "$XBERG_STUB_BIN/uvx" UVX
-	launch --stdio
-
-	xberg_assert_status 0
-	xberg_assert_output_contains "UVX[${PYPI_PKG}]"
-	xberg_assert_output_contains "UVX[--stdio]"
-}
-
-@test "mcp-launch should_not_consult_npx_when_the_launcher_is_pinned_to_uvx" {
-	LAUNCH_MODE="uvx"
-	xberg_stub_trace npx
-	make_cli "$XBERG_STUB_BIN/uvx" UVX
-	launch
-
-	xberg_assert_status 0
-	[[ "$output" == *"UVX:ran"* ]]
-	# The trace file is created only by a call. Its absence is the evidence. ~keep
-	xberg_assert_trace_empty
-}
-
-@test "mcp-launch should_not_consult_uvx_when_the_launcher_is_pinned_to_npx" {
-	LAUNCH_MODE="npx"
-	# npx must be present but UNABLE to run the package. A working npx would exec and end the
-	# script before uvx was ever reachable, so the assertion would hold whether or not the gate
-	# existed -- measured: removing the uvx gate left this test green until npx was made to
-	# fail here. ~keep
-	xberg_stub_exit npx 1
-	xberg_stub_trace uvx
+@test "mcp-launch should_ignore_a_path_binary_older_than_the_pinned_version" {
+	VERSION_REPORTED="0.0.1"
+	make_cli "$XBERG_STUB_BIN/$BINARY_NAME" ONPATH
 	launch
 
 	xberg_assert_status 1
-	xberg_assert_trace_empty
+	[[ "$output" != *"ONPATH:ran"* ]]
 }
+
+@test "mcp-launch should_ignore_a_prerelease_of_the_pinned_version" {
+	VERSION_REPORTED="${PINNED_VERSION}-rc.1"
+	make_cli "$(cached_binary)" CACHED
+	launch
+
+	xberg_assert_status 1
+	[[ "$output" != *"CACHED:ran"* ]]
+}
+
+@test "mcp-launch should_exec_a_binary_newer_than_the_pinned_version" {
+	VERSION_REPORTED="999.0.0"
+	make_cli "$(cached_binary)" CACHED
+	launch
+
+	xberg_assert_status 0
+	[[ "$output" == *"CACHED:ran"* ]]
+}
+
+# --- brew ---------------------------------------------------------------------------------------
 
 @test "mcp-launch should_install_through_brew_and_exec_what_it_put_on_path" {
 	LAUNCH_MODE="brew"
@@ -273,7 +247,7 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 	# the result. ~keep
 	xberg_stub brew \
 		"cat >\"\$0.called\" <<<\"\$*\"" \
-		"printf '%s\\n' '#!/usr/bin/env bash' 'for a in \"\$@\"; do printf \"BREWED[%s]\\\\n\" \"\$a\"; done' 'exit 0' >\"$XBERG_STUB_BIN/$BINARY_NAME\"" \
+		"printf '%s\\n' '#!/usr/bin/env bash' 'if [ \"\$1\" = \"--version\" ]; then echo $PINNED_VERSION; exit 0; fi' 'for a in \"\$@\"; do printf \"BREWED[%s]\\\\n\" \"\$a\"; done' 'exit 0' >\"$XBERG_STUB_BIN/$BINARY_NAME\"" \
 		"chmod +x \"$XBERG_STUB_BIN/$BINARY_NAME\"" \
 		'exit 0'
 	launch serve
