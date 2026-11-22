@@ -1230,7 +1230,7 @@ impl PdfDocument {
             .strip_suffix('\u{00AD}')
             .is_some_and(|t| t.ends_with(char::is_alphabetic))
             && span.text.starts_with(char::is_alphabetic);
-        if !marker_seam {
+        if !marker_seam || (prev.rotation_degrees - span.rotation_degrees).abs() > 0.5 {
             return false;
         }
         let em = prev.font_size.max(span.font_size).max(6.0);

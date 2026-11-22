@@ -2095,6 +2095,14 @@ impl PdfDocument {
                 }
             }
         }
+        // A quarter-turn span's glyphs advance along x in `to_chars` while the
+        // span carries one shared y, so a word's own start along the writing
+        // axis is the span's y plus its x offset inside the span. ~keep
+        let rotated_span_origin: std::collections::HashMap<usize, (f32, f32)> = spans
+            .iter()
+            .filter(|s| s.rotation_degrees != 0.0)
+            .map(|s| (s.sequence, (s.bbox.x, s.bbox.y)))
+            .collect();
         lines.extend(rotated_lines.into_iter().flat_map(|(rot, off, mut line)| {
             // A merged quarter-turn line collects its runs in arrival order,
             // which is content-stream order: a subscript drawn after the
@@ -2117,7 +2125,14 @@ impl PdfDocument {
             // measured along its own writing axis (ISO 32000-1:2008 §9.4.4). A
             // word's `width` is its advance along that axis and `bbox.y` its
             // origin. ~keep
-            let along = |w: &crate::layout::Word| if rot > 0.0 { w.bbox.y } else { -w.bbox.y };
+            let sign = if rot > 0.0 { 1.0 } else { -1.0 };
+            let along = |w: &crate::layout::Word| {
+                let (span_x, span_y) = rotated_span_origin
+                    .get(&w.sequence)
+                    .copied()
+                    .unwrap_or((w.bbox.x, w.bbox.y));
+                sign * span_y + (w.bbox.x - span_x)
+            };
             let mut split: Vec<Vec<crate::layout::Word>> = Vec::new();
             let mut current: Vec<crate::layout::Word> = Vec::new();
             for word in line {

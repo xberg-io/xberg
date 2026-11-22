@@ -64,6 +64,13 @@ impl ReadingFrame {
         }
     }
 
+    /// A widget's `/Rect` is a page-space rectangle, so its extents turn with
+    /// the frame, unlike a rotated run's text-local ones.
+    fn map_widget_span(&self, span: &mut crate::layout::TextSpan) {
+        span.bbox = self.map_rect(&span.bbox);
+        span.rotation_degrees = 0.0;
+    }
+
     /// Rotated spans store text-local extents (origin, advance-along-the-run as
     /// `width`, font size as `height`) that already describe the run in its own
     /// upright frame, so only the origin moves.
@@ -180,7 +187,7 @@ impl PdfDocument {
         let mut spans = self.extract_widget_spans(page_index);
         if let Some(f) = frame {
             for s in &mut spans {
-                f.map_span_origin(s);
+                f.map_widget_span(s);
             }
         }
         spans
@@ -405,12 +412,20 @@ impl PdfDocument {
         }
 
         let base_spans = Self::apply_region_filters(base_spans, options);
+        // Table detection reads page-space words and paths, and a tagged table
+        // derives its box from the spans it is given, so it runs on the
+        // unmapped spans and its result moves into the frame afterwards. ~keep
+        let page_tables = options.extract_tables.then(|| {
+            // text_fallback=false: extract_text preserves the prior behaviour
+            // where line-less pages return no tables. Only the structured-output
+            // converters (to_markdown, to_html) opt in to text-only spatial fallback. ~keep
+            self.extract_page_tables(page_index, &base_spans, options, false)
+        });
         // Dominant text-matrix rotation (a landscape table typeset on a
         // portrait page): the row-major assembler groups lines in the
         // portrait frame and interleaves every rotated row. Assemble such
         // pages in their rotated reading frame instead — after the region
-        // filters, whose rects select in page space, and before table
-        // detection, which consumes the geometry this maps. ~keep
+        // filters, whose rects select in page space. ~keep
         let (base_spans, reading_frame) = self.spans_in_reading_frame(page_index, base_spans);
         // Struct-tree-scope `/ActualText` is applied per branch below
         // — the structure-order assembler handles it natively via the
@@ -429,17 +444,7 @@ impl PdfDocument {
         let cached_tree = self.struct_tree_trustworthy();
         let widget_spans = self.widget_spans_in_frame(page_index, reading_frame);
 
-        let tables = if options.extract_tables {
-            // text_fallback=false: extract_text preserves the prior behaviour
-            // where line-less pages return no tables. Only the structured-output
-            // converters (to_markdown, to_html) opt in to text-only spatial fallback. ~keep
-            Self::tables_in_frame(
-                self.extract_page_tables(page_index, &base_spans, options, false),
-                reading_frame,
-            )
-        } else {
-            Vec::new()
-        };
+        let tables = page_tables.map_or_else(Vec::new, |t| Self::tables_in_frame(t, reading_frame));
 
         let mut all_spans = base_spans;
         all_spans.extend(widget_spans);
@@ -1623,5 +1628,29 @@ mod cell_budget_tests {
         assert_eq!(cells[1].get("c"), Some(&1), "remainder must return to the right cell");
         assert_eq!(cells[0].get("c"), None);
         assert_eq!(cells[0].get("x"), Some(&1));
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::ReadingFrame;
+
+    #[test]
+    fn widget_rect_extents_turn_with_the_frame() {
+        let frame = ReadingFrame {
+            rot: 90,
+            llx: 0.0,
+            lly: 0.0,
+            w: 612.0,
+            h: 792.0,
+        };
+        let mut span = crate::layout::TextSpan {
+            bbox: crate::geometry::Rect::new(100.0, 200.0, 80.0, 20.0),
+            ..Default::default()
+        };
+
+        frame.map_widget_span(&mut span);
+
+        assert_eq!((span.bbox.width, span.bbox.height), (20.0, 80.0));
     }
 }

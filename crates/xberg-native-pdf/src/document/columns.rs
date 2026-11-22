@@ -2625,10 +2625,10 @@ impl PdfDocument {
                 return false;
             };
             let positions: Vec<(usize, crate::geometry::Rect)> = occs.iter().map(|&(pi, bbox, _)| (pi, bbox)).collect();
-            let Some(winning) = Self::cluster_by_position(&positions)
-                .into_iter()
-                .max_by_key(|cluster| cluster.len())
-            else {
+            let Some(winning) = Self::cluster_by_position(&positions).into_iter().max_by_key(|cluster| {
+                let pages: std::collections::HashSet<usize> = cluster.iter().map(|&i| occs[i].0).collect();
+                (pages.intersection(body_content_pages).count(), cluster.len())
+            }) else {
                 return false;
             };
             let cluster_pages: std::collections::HashSet<usize> = winning.iter().map(|&i| occs[i].0).collect();
@@ -2682,10 +2682,11 @@ impl PdfDocument {
         let mut signature_positions: std::collections::HashMap<String, Vec<(usize, crate::geometry::Rect, String)>> =
             std::collections::HashMap::new();
         for pi in 0..page_count {
-            let spans = match self.extract_spans_raw(pi) {
+            let mut spans = match self.extract_spans_raw(pi) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
+            self.map_spans_into_displayed_frame(pi, &mut spans);
             let (page_width, page_height) = match self.get_page_media_box(pi) {
                 Ok((_, _, w, h)) if h > 0.0 => (w, h),
                 _ => continue,

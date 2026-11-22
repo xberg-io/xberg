@@ -651,6 +651,19 @@ pub(crate) mod utils {
             by_baseline.min((a_top - b_top).abs())
         };
 
+        // Leading shrinks with the type, so a flat 3 pt would join the lines
+        // of 2.5 pt text; half the larger size caps it, and 3 pt still bounds
+        // larger text. ~keep
+        const ROW_TOLERANCE_FONT_FRACTION: f32 = 0.5;
+        let row_tolerance = |a: usize, b: usize| -> f32 {
+            let scale = all_spans[a].font_size.max(all_spans[b].font_size);
+            if scale.is_finite() && scale > 0.0 {
+                ROW_BAND_TOLERANCE_PT.min(scale * ROW_TOLERANCE_FONT_FRACTION)
+            } else {
+                ROW_BAND_TOLERANCE_PT
+            }
+        };
+
         let mut snapped: Vec<f32> = indices.iter().map(|&i| all_spans[i].bbox.y).collect();
         if indices.is_empty() {
             return snapped;
@@ -792,7 +805,8 @@ pub(crate) mod utils {
                 // a row of its own, which is what it needs.
                 match best {
                     Some((d, r, seed))
-                        if d <= ROW_BAND_TOLERANCE_PT && !members[r].iter().any(|&m| occupies_the_same_space(i, m)) =>
+                        if d <= row_tolerance(i, seed)
+                            && !members[r].iter().any(|&m| occupies_the_same_space(i, m)) =>
                     {
                         row_of[pos] = Some(seed);
                         members[r].push(i);
@@ -898,6 +912,20 @@ pub(crate) mod utils {
                 rows[0], rows[1],
                 "runs of similar height still join on whichever edge agrees"
             );
+        }
+
+        /// Lines of 2.5 pt text sit 3 pt apart. The flat 3 pt row tolerance
+        /// joined them, and the left-to-right sort then emitted the lower line
+        /// first.
+        #[test]
+        fn small_text_lines_at_normal_leading_stay_on_separate_rows() {
+            let spans = vec![
+                row_span_at(20.0, 720.0, 2.5, "upper"),
+                row_span_at(0.0, 717.0, 2.5, "lower"),
+            ];
+            let idx: Vec<usize> = (0..spans.len()).collect();
+            let rows = snap_baselines_to_rows(&spans, &idx);
+            assert_ne!(rows[0], rows[1], "3 pt leading at 2.5 pt text is two lines");
         }
 
         /// The cached-key sort must produce the identical permutation to

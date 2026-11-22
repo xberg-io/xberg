@@ -373,6 +373,17 @@ mod soft_hyphen_seam {
     }
 
     #[test]
+    fn test_wrap_geometry_across_rotations_is_not_a_seam() {
+        let prev = seam_span("admini\u{00AD}", 430.0, 700.0, 30.0, 10.0);
+        let mut span = seam_span("stration", 72.0, 686.0, 38.0, 10.0);
+        span.rotation_degrees = 90.0;
+        let mut text = String::from("the admini\u{00AD}");
+
+        assert!(!PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span));
+        assert_eq!(text, "the admini\u{00AD}", "a run on another axis must not be joined");
+    }
+
+    #[test]
     fn contiguous_unpainted_runs_are_left_to_the_existing_rule() {
         let prev = seam_span("recon\u{00AD}", 72.0, 700.0, 28.0, 10.0);
         let span = seam_span("struction", 100.0, 700.0, 42.0, 10.0);

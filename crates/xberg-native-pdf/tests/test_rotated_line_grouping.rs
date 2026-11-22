@@ -250,3 +250,23 @@ fn test_merged_rotated_line_reads_in_writing_axis_order() {
         "members must read along the writing axis, not in drawing order: {text:?}"
     );
 }
+
+/// Both words of the first run advance along y from one shared span origin.
+/// The run "Alpha Bravo" ends about 20 pt before "Charlie" starts, a word gap
+/// well inside the 30 pt column threshold, so the three words are one line.
+#[test]
+fn test_rotated_multiword_run_is_not_split_from_its_continuation() {
+    let content = b"BT /F1 10 Tf\n0 1 -1 0 200 200 Tm (Alpha Bravo) Tj\n0 1 -1 0 200 270 Tm (Charlie) Tj\nET";
+    let pdf = build_minimal_pdf_raw(content, b"/Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]");
+    let doc = PdfDocument::from_bytes(pdf).expect("parse fixture");
+
+    assert_eq!(doc.extract_words(0).expect("extract words").len(), 3);
+    let lines = doc.extract_text_lines(0).expect("extract lines");
+    assert_eq!(
+        lines.len(),
+        1,
+        "one visual line came back as {} lines: {:?}",
+        lines.len(),
+        lines.iter().map(|l| l.text.trim()).collect::<Vec<_>>()
+    );
+}

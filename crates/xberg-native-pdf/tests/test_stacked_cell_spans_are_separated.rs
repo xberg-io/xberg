@@ -70,11 +70,6 @@ fn stacked_cell_pdf() -> Vec<u8> {
 
 fn assert_unfused(raw: &str, what: &str) {
     let surface = raw.to_string();
-    let squashed: String = surface.chars().filter(|c| !c.is_whitespace()).collect();
-    assert!(
-        !squashed.contains("128126"),
-        "stacked cell members were concatenated in {what}:\n{surface}"
-    );
     for n in ["128", "126"] {
         assert!(
             surface

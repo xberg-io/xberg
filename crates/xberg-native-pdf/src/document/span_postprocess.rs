@@ -38,6 +38,24 @@ impl PdfDocument {
         crate::geometry::Rect::new(ax.min(bx), ay.min(by), (ax - bx).abs(), (ay - by).abs())
     }
 
+    /// The map `postprocess_spans` applies to content spans on a `/Rotate`d page,
+    /// for callers that compare positions against its output.
+    pub(super) fn map_spans_into_displayed_frame(&self, page_index: usize, spans: &mut [crate::layout::TextSpan]) {
+        let Ok((llx, lly, urx, ury)) = self.get_page_media_box(page_index) else {
+            return;
+        };
+        let rot = self.get_page_rotation(page_index).unwrap_or(0).rem_euclid(360);
+        if !matches!(rot, 90 | 180 | 270) {
+            return;
+        }
+        for s in spans.iter_mut() {
+            if rot != 180 && s.rotation_degrees == 0.0 {
+                continue;
+            }
+            Self::map_span_into_rotated_frame(s, rot, llx, lly, urx - llx, ury - lly);
+        }
+    }
+
     /// Map a single span's bbox into the displayed frame for a `/Rotate`d page
     /// (translate to origin → [`rotate_span_bbox`] → translate back).
     ///

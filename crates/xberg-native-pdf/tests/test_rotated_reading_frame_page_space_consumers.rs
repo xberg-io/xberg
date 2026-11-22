@@ -133,9 +133,10 @@ fn form_page(rotated: bool) -> Vec<u8> {
     let content = content.into_bytes();
 
     // Page-space rectangles. Under the 90° map (x, y) -> (y, 612 - x), the
-    // rotated page's two rects land to the right of their own labels.
+    // rotated page's two rects land beside their own labels, each with its
+    // bottom edge on the label's baseline and clear of a column gutter.
     let (r1, r2) = if rotated {
-        ("[115 395 135 460]", "[165 395 185 460]")
+        ("[100 350 120 415]", "[150 346 170 411]")
     } else {
         ("[160 315 260 335]", "[210 315 310 335]")
     };
