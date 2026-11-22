@@ -300,6 +300,9 @@ struct BoundedObjectCache {
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
+    /// Synthetic recovery objects have no byte offset to re-read from, so
+    /// evicting one makes it permanently unreachable. ~keep
+    pinned: HashSet<ObjectRef>,
 }
 
 /// Byte-accounted FIFO cache for decoded object-stream maps.
@@ -436,7 +439,13 @@ impl BoundedObjectCache {
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
+            pinned: HashSet::new(),
         }
+    }
+
+    fn insert_pinned(&mut self, key: ObjectRef, value: Object) {
+        self.pinned.insert(key);
+        self.insert(key, value);
     }
 
     fn get(&self, key: &ObjectRef) -> Option<&Object> {
@@ -463,9 +472,18 @@ impl BoundedObjectCache {
         // larger replacement doesn't leave the cache over budget — keep
         // evicting other entries instead. ~keep
         let mut skipped_self = false;
+        let mut examined = 0usize;
         while self.current_bytes + entry_size > self.max_bytes {
+            if examined > self.insertion_order.len() {
+                break;
+            }
             match self.insertion_order.pop_front() {
                 Some(old_key) => {
+                    examined += 1;
+                    if self.pinned.contains(&old_key) {
+                        self.insertion_order.push_back(old_key);
+                        continue;
+                    }
                     if old_key == key {
                         if skipped_self {
                             self.insertion_order.push_front(old_key);
@@ -498,9 +516,11 @@ impl BoundedObjectCache {
     }
 
     fn clear(&mut self) {
-        self.map.clear();
-        self.insertion_order.clear();
-        self.current_bytes = 0;
+        let pinned = std::mem::take(&mut self.pinned);
+        self.map.retain(|k, _| pinned.contains(k));
+        self.insertion_order.retain(|k| pinned.contains(k));
+        self.current_bytes = self.map.values().map(|v| Self::estimate_size(v)).sum();
+        self.pinned = pinned;
     }
 
     fn estimate_size(obj: &Object) -> usize {

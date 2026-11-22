@@ -500,7 +500,12 @@ fn synthesize_catalog_from_pages<R: Read + Seek>(
 ) -> Result<(ObjectRef, Vec<(ObjectRef, Object)>)> {
     // Free object numbers for the objects we invent: above every surviving one. ~keep
     let max_obj = xref.all_object_numbers().max().unwrap_or(0);
-    let catalog_num = max_obj + 1;
+    let Some(catalog_num) = max_obj.checked_add(1) else {
+        return Err(Error::InvalidPdf(
+            "Cannot reconstruct: the file's object numbering leaves no free number for a synthesized Catalog"
+                .to_string(),
+        ));
+    };
 
     // Look for a surviving /Type /Pages node - prefer a genuine ROOT (no /Parent). ~keep
     let (pages_root, pages_any, mut page_objs) = find_surviving_pages_and_page_objects(reader, xref);
@@ -538,7 +543,12 @@ fn synthesize_catalog_from_pages<R: Read + Seek>(
         count = page_objs.len(),
         "recovery: synthesizing flat /Pages over orphan pages"
     );
-    let pages_num = max_obj + 2;
+    let Some(pages_num) = max_obj.checked_add(2) else {
+        return Err(Error::InvalidPdf(
+            "Cannot reconstruct: the file's object numbering leaves no free number for a synthesized /Pages node"
+                .to_string(),
+        ));
+    };
     let catalog = catalog_dict(ObjectRef::new(pages_num, 0));
     Ok((
         ObjectRef::new(catalog_num, 0),
@@ -691,7 +701,7 @@ fn recover_from_objstms<R: Read + Seek>(
         .iter()
         .map(|(r, _)| r.id)
         .max()
-        .map_or(catalog_num, |m| m.max(catalog_num - 1) + 1);
+        .map_or(catalog_num, |m| m.max(catalog_num.saturating_sub(1)).saturating_add(1));
 
     if let Some(root) = pages_root.or(pages_any) {
         injected.push((ObjectRef::new(free_base, 0), catalog_dict(ObjectRef::new(root, 0))));
@@ -706,7 +716,7 @@ fn recover_from_objstms<R: Read + Seek>(
         "recovery: synthesizing flat /Pages over ObjStm-packed pages"
     );
     let synth_catalog = free_base;
-    let pages_num = free_base + 1;
+    let pages_num = free_base.checked_add(1)?;
     injected.push((ObjectRef::new(pages_num, 0), build_objstm_pages_dict(&page_objs)));
     injected.push((
         ObjectRef::new(synth_catalog, 0),
