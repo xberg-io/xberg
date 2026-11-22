@@ -3262,6 +3262,18 @@ impl FontInfo {
         }
     }
 
+    /// Whether [`Self::code_to_cid`] resolves this Type0 font's codes to CIDs
+    /// rather than returning the raw code. `false` for a predefined CMap this
+    /// crate carries no table for (`90ms-RKSJ-H`, `GBK-EUC-H`, ...), where the
+    /// code is not a CID and CID-keyed glyph lookups would select wrong glyphs.
+    pub(crate) fn resolves_codes_to_cids(&self) -> bool {
+        self.embedded_cid_map.is_some()
+            || match &self.encoding {
+                Encoding::Standard(name) => is_unicode_keyed_predefined_cmap_name(name),
+                _ => true,
+            }
+    }
+
     /// [`Self::code_to_cid`], guarded for callers that read a raw
     /// content-stream code (from `TextCharIter`/`char_codes`) without
     /// already knowing whether this font is Type0.
@@ -3405,7 +3417,7 @@ impl FontInfo {
         let ellipsis = emdash;
         let quotedbl = match (is_times, is_bold, is_italic) {
             (true, false, true) => 556.0,
-            (true, true, true) => 500.0,
+            (true, true, _) => 500.0,
             (true, _, _) => 444.0,
             (false, true, _) => 500.0,
             (false, false, _) => 333.0,
@@ -11358,6 +11370,45 @@ mod tests {
         assert_eq!(width("Times-Roman", "WinAnsiEncoding", 39), 180.0);
         assert_eq!(width("Helvetica", "StandardEncoding", 39), 222.0);
         assert_eq!(width("Helvetica", "StandardEncoding", 96), 222.0);
+    }
+
+    /// A four-byte code in a mixed-width embedded codespace keeps all 32 bits,
+    /// so it reaches the CID lookup instead of collapsing to code 0.
+    #[test]
+    fn text_char_iter_keeps_four_byte_codespace_codes_whole() {
+        let cmap = crate::fonts::cid_cmap::parse_cid_cmap(
+            b"2 begincodespacerange\n<41> <5A>\n<80000000> <8FFFFFFF>\nendcodespacerange\n\
+              1 begincidrange\n<80010000> <8001FFFF> 1\nendcidrange\n",
+        )
+        .unwrap();
+        let font = make_font(|f| {
+            f.subtype = "Type0".to_string();
+            f.embedded_cid_map = Some(std::sync::Arc::new(cmap));
+        });
+        let codes: Vec<(u32, usize)> =
+            crate::fonts::unicode_decode::TextCharIter::new(&[0x41, 0x80, 0x01, 0x00, 0x01], Some(&font)).collect();
+        assert_eq!(codes, vec![(0x41, 1), (0x8001_0001, 4)]);
+        assert_eq!(font.code_to_cid(0x8001_0001), 2);
+    }
+
+    #[test]
+    fn winansi_double_quotes_use_the_times_family_standard_14_widths() {
+        let width = |base: &str, enc: &str, code: u16| {
+            make_font(|f| {
+                f.base_font = base.to_string();
+                f.encoding = Encoding::Standard(enc.to_string());
+            })
+            .get_glyph_width(code)
+        };
+        for code in [147, 148] {
+            assert_eq!(width("Times-Roman", "WinAnsiEncoding", code), 444.0);
+            assert_eq!(width("Times-Bold", "WinAnsiEncoding", code), 500.0);
+            assert_eq!(width("Times-BoldItalic", "WinAnsiEncoding", code), 500.0);
+            assert_eq!(width("Times-Italic", "WinAnsiEncoding", code), 556.0);
+        }
+        for code in [170, 186] {
+            assert_eq!(width("Times-Bold", "StandardEncoding", code), 500.0);
+        }
     }
 
     /// Build a minimal ToUnicode CMap stream that maps codes 0x0041–0x005A
