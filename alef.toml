@@ -33,6 +33,19 @@ languages = [
 python_package_manager = "uv"
 node_package_manager = "pnpm"
 
+# Extra licenses declared in a generated Maven POM's <licenses> block, after the
+# project's MIT entry: the native libraries the Java and Kotlin packages bundle.
+# The notice bundle (THIRD_PARTY_LICENSES.md) carries every license text and the
+# written offer for the LGPL components. ~keep
+[workspace.package_metadata]
+additional_licenses = [
+  { name = "LGPL-3.0-or-later", url = "https://www.gnu.org/licenses/lgpl-3.0.html", comments = "libheif and libde265, bundled for HEIC/AVIF" },
+  { name = "MPL-2.0", url = "https://www.mozilla.org/MPL/2.0/", comments = "libwpd and librevenge, statically linked for WordPerfect" },
+  { name = "Apache-2.0", url = "https://www.apache.org/licenses/LICENSE-2.0", comments = "Tesseract OCR, bundled on the OCR channels" },
+  { name = "BSD-3-Clause", url = "https://opensource.org/license/bsd-3-clause", comments = "PDFium, bundled for PDF rendering" },
+  { name = "MIT", url = "https://opensource.org/license/mit", comments = "ONNX Runtime, bundled for OCR and ML" },
+]
+
 [workspace.ownership]
 user_owned = [
   "e2e/csharp/Xberg.E2eTests.csproj",
@@ -2633,6 +2646,9 @@ default_features = false
 [crates.kotlin_android]
 package = "io.xberg"
 namespace = "io.xberg"
+# Copy the project license and the generated third-party notice bundle into the
+# AAR's META-INF so a consumer of the packaged SO receives them. ~keep
+bundled_notices = ["LICENSE", "THIRD_PARTY_LICENSES.md"]
 artifact_id = "xberg-android"
 group_id = "io.xberg"
 abis = ["arm64-v8a", "x86_64"]
