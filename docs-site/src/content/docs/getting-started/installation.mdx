@@ -438,6 +438,9 @@ but they do **not** bundle `libpdfium` — you supply it.
    than at link time, so a library whose exported symbols disagree with the bindings
    can abort the process instead of returning a clean error.
 
+   From a source checkout, `mise run pdfium:provision` downloads that release and
+   verifies it against the committed SHA-256 digests.
+
 2. Point `PDFIUM_DYNAMIC_LIB_PATH` at the **directory** holding
    `libpdfium.so` / `libpdfium.dylib` / `pdfium.dll`:
 

@@ -1348,18 +1348,17 @@ fn prescan_text_regions(data: &[u8]) -> Option<PrescanResult> {
         return Some(PrescanResult::Empty);
     }
 
-    // Drop Do positions when Do dominates BT (chart/figure graphics that
-    // would merge prescan regions across the entire stream). ~keep
+    // `Do` dominating `BT` means chart/figure graphics whose regions would
+    // merge across the whole stream. Give up and let the caller parse in full:
+    // dropping the `Do` positions would lose every Form XObject's text, which
+    // is where CAD sheets keep their schedules, notes and title block. ~keep
     let bt_count = text_positions
         .iter()
         .filter(|&&p| p + 1 < len && data[p] == b'B')
         .count();
     let do_count = text_positions.len() - bt_count;
     if do_count > 50 && do_count > bt_count * 10 {
-        text_positions.retain(|&p| p + 1 < len && data[p] == b'B');
-        if text_positions.is_empty() {
-            return Some(PrescanResult::Empty);
-        }
+        return None;
     }
 
     let mut regions: Vec<(usize, usize)> = Vec::new();
@@ -1445,21 +1444,38 @@ fn is_bounded_two_byte_operator(data: &[u8], pos: usize, second_byte: u8) -> boo
 /// state of the first). Pure code motion out of prescan_text_regions. ~keep
 fn build_ctm_regions(data: &[u8], text_positions: &[usize]) -> Option<PrescanResult> {
     let len = data.len();
-    let states = forward_scan_ctm(data, text_positions)?;
+    // The state must be the one in force at the region start, not at the BT:
+    // anything between the two is replayed when the region is parsed. A start
+    // whose window holds an unbalanced `Q` falls back to the BT/Do itself, since
+    // that `Q` would pop the SaveState wrapping the region. A `Do` region needs
+    // its /Name operand, which the marked-content extension may not reach. ~keep
+    let region_starts: Vec<usize> = text_positions
+        .iter()
+        .map(|&tp| {
+            let mc = find_preceding_marked_content(data, tp);
+            let start = if has_unbalanced_restore(data, mc, tp) { tp } else { mc };
+            if data[tp] == b'D' {
+                start.min(do_operand_start(data, tp))
+            } else {
+                start
+            }
+        })
+        .collect();
+    let states = forward_scan_ctm(data, &region_starts)?;
 
     let mut ctm_regions: Vec<(usize, usize)> = Vec::new();
-    for &tp in text_positions {
-        let region_start = if data[tp] == b'D' {
-            find_preceding_marked_content(data, tp).min(do_operand_start(data, tp))
-        } else {
-            find_preceding_marked_content(data, tp)
-        };
+    for (&tp, &region_start) in text_positions.iter().zip(&region_starts) {
         let region_end = if data[tp] == b'B' {
             let et_end = find_matching_et(data, tp + 2).unwrap_or(len);
             find_following_emc(data, et_end)
         } else {
             tp + 2
         };
+        // A `Q` inside the region would pop a `q` the region does not contain,
+        // so its text could not be parsed under the right graphics state. ~keep
+        if has_unbalanced_restore(data, region_start, region_end) {
+            return None;
+        }
         ctm_regions.push((region_start, region_end.min(len)));
     }
 
@@ -1640,6 +1656,75 @@ fn find_preceding_marked_content(data: &[u8], pos: usize) -> usize {
     pos
 }
 
+/// Offset just past the `EI` closing the inline-image payload that starts at
+/// `payload`, or `end` when the payload is not closed within `data[..end]`.
+fn inline_image_end(data: &[u8], payload: usize, end: usize) -> usize {
+    match find_ei_operator(&data[payload..end]) {
+        Ok((_, ei_pos)) => payload + ei_pos + 3,
+        Err(_) => end,
+    }
+}
+
+/// Whether `data[start..end]` contains a `Q` operator with no matching `q`
+/// before it. Strings, names, comments and inline-image payloads are skipped,
+/// so a `Q` inside a string operand or a `/Q` name is not counted.
+fn has_unbalanced_restore(data: &[u8], start: usize, end: usize) -> bool {
+    let end = end.min(data.len());
+    let mut depth: i32 = 0;
+    let mut i = start;
+    while i < end {
+        match data[i] {
+            b'(' => {
+                let mut nesting = 1u32;
+                i += 1;
+                while i < end && nesting > 0 {
+                    match data[i] {
+                        b'\\' => i += 1,
+                        b'(' => nesting += 1,
+                        b')' => nesting -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            b'%' => {
+                while i < end && !matches!(data[i], b'\r' | b'\n') {
+                    i += 1;
+                }
+            }
+            b'/' => {
+                i += 1;
+                while i < end && !is_whitespace_or_delimiter(data[i]) {
+                    i += 1;
+                }
+            }
+            b'I' if data.get(i + 1) == Some(&b'D')
+                && (i == 0 || is_whitespace_or_delimiter(data[i - 1]))
+                && data.get(i + 2).is_some_and(|&b| is_whitespace(b)) =>
+            {
+                i = inline_image_end(data, i + 2, end);
+            }
+            b'q' | b'Q' => {
+                let before_ok = i == 0 || is_whitespace_or_delimiter(data[i - 1]);
+                let after_ok = i + 1 >= data.len() || is_whitespace_or_delimiter(data[i + 1]);
+                if before_ok && after_ok {
+                    if data[i] == b'q' {
+                        depth += 1;
+                    } else {
+                        depth -= 1;
+                        if depth < 0 {
+                            return true;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 /// Scan forward from `pos` to find any immediately following EMC operator.
 /// Returns the position after the EMC if found within 256 bytes, otherwise `pos`.
 fn find_following_emc(data: &[u8], pos: usize) -> usize {
@@ -1751,7 +1836,7 @@ where
         if ts.render_mode != 0 {
             handler(Operator::Tr { render: ts.render_mode })?;
         }
-        parse_region_text_only(&data[*start..*end], handler)?;
+        parse_region_text_only(&data[*start..*end], handler, true)?;
         handler(Operator::RestoreState)?;
     }
     Ok(())
@@ -1783,7 +1868,7 @@ where
             PrescanResult::Empty => return Ok(()),
             PrescanResult::Regions(regions) => {
                 for (start, end) in &regions {
-                    parse_region_text_only(&data[*start..*end], &mut handler)?;
+                    parse_region_text_only(&data[*start..*end], &mut handler, false)?;
                 }
                 return Ok(());
             }
@@ -1993,7 +2078,7 @@ where
 /// safer half of a full cross-region marked-content-state carry, which
 /// isn't needed for the reported failure mode: it can only ever end scopes
 /// this region opened, never fabricate a scope's original tag/properties).
-fn parse_region_text_only<F>(data: &[u8], handler: &mut F) -> Result<()>
+fn parse_region_text_only<F>(data: &[u8], handler: &mut F, bracketed: bool) -> Result<()>
 where
     F: FnMut(Operator) -> Result<()>,
 {
@@ -2002,6 +2087,7 @@ where
     let mut inside_text = false;
     let mut op_count: usize = 0;
     let mut mc_depth: u32 = 0;
+    let mut q_depth: u32 = 0;
     let mut call = |op: Operator, handler: &mut F| -> Result<()> {
         match &op {
             Operator::BeginMarkedContent { .. } | Operator::BeginMarkedContentDict { .. } => {
@@ -2009,6 +2095,18 @@ where
             }
             Operator::EndMarkedContent => {
                 mc_depth = mc_depth.saturating_sub(1);
+            }
+            Operator::SaveState if bracketed => {
+                q_depth += 1;
+            }
+            Operator::RestoreState if bracketed => {
+                // A `Q` whose `q` lies outside this region would pop the
+                // SaveState the caller wrapped it in and leak this region's
+                // CTM into every later region.
+                if q_depth == 0 {
+                    return Ok(());
+                }
+                q_depth -= 1;
             }
             _ => {}
         }
@@ -2072,6 +2170,10 @@ where
     // open when the region started. ~keep
     for _ in 0..mc_depth {
         handler(Operator::EndMarkedContent)?;
+    }
+
+    for _ in 0..q_depth {
+        handler(Operator::RestoreState)?;
     }
 
     Ok(())
@@ -6222,6 +6324,68 @@ mod tests {
             .rposition(|op| matches!(op, Operator::SaveState))
             .expect("no SaveState before last BeginText");
         &ops[save..last_bt]
+    }
+
+    fn padded_prescan_stream(head: &[u8], tail: &[u8]) -> Vec<u8> {
+        let mut cs = head.to_vec();
+        for i in 0..14000u32 {
+            cs.extend_from_slice(
+                format!("{}.0 {}.0 m {}.0 {}.0 l n\n", i % 500, (i * 7) % 500, i % 97, i % 89).as_bytes(),
+            );
+        }
+        cs.extend_from_slice(tail);
+        assert!(cs.len() > 256 * 1024, "stream must exceed 256KB prescan threshold");
+        cs
+    }
+
+    fn prescan_ops(cs: &[u8]) -> Vec<Operator> {
+        let mut ops = Vec::new();
+        parse_and_execute_text_only(cs, |op| {
+            ops.push(op);
+            Ok(())
+        })
+        .unwrap();
+        ops
+    }
+
+    #[test]
+    fn test_prescan_keeps_marked_content_when_a_string_operand_holds_q() {
+        let cs = padded_prescan_stream(b"", b"/PlacedPDF << /Label (Q) >> BDC BT (x) Tj ET EMC\n");
+        let ops = prescan_ops(&cs);
+        assert!(
+            ops.iter()
+                .any(|op| matches!(op, Operator::BeginMarkedContentDict { tag, .. } if tag == "PlacedPDF")),
+            "the PlacedPDF tag was discarded: {ops:?}"
+        );
+    }
+
+    #[test]
+    fn test_prescan_recovers_a_form_name_glued_to_q() {
+        let cs = padded_prescan_stream(b"BT (a) Tj ET\n", b"q/Fm0 Do Q\n");
+        let ops = prescan_ops(&cs);
+        assert!(
+            ops.iter()
+                .any(|op| matches!(op, Operator::Do { name } if name == "Fm0")),
+            "the Do lost its name: {ops:?}"
+        );
+    }
+
+    #[test]
+    fn test_prescan_keeps_a_restore_that_pops_an_inherited_save() {
+        let cs = padded_prescan_stream(b"q 2 0 0 2 0 0 cm\n", b"/Span BMC BT (a) Tj ET Q BT (b) Tj ET EMC\n");
+        let ops = prescan_ops(&cs);
+        let first_tj = ops.iter().position(|op| matches!(op, Operator::Tj { .. })).expect("Tj");
+        let second_tj = ops
+            .iter()
+            .rposition(|op| matches!(op, Operator::Tj { .. }))
+            .expect("Tj");
+        assert_ne!(first_tj, second_tj);
+        assert!(
+            ops[first_tj..second_tj]
+                .iter()
+                .any(|op| matches!(op, Operator::RestoreState)),
+            "the Q between the text objects was suppressed: {ops:?}"
+        );
     }
 
     #[test]

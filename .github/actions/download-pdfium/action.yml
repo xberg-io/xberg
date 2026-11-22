@@ -2,12 +2,11 @@ name: Download Pdfium Runtime
 description: Download Pdfium binaries for the current platform and expose the location via XBERG_PDFIUM_PREBUILT
 inputs:
   pdfium-version:
-    # Defaults to the binding set compiled into xberg-pdfium-render (src/lib.rs includes
-    # bindgen/pdfium_7678.rs). Callers should omit this input so there is one place to change it;
-    # it stays overridable for a deliberate compatibility experiment.
-    description: Pdfium version to download. Defaults to the version the checked-in bindings target.
+    # Empty reads scripts/pdfium-version, the single pin (it matches the bindgen set compiled into
+    # xberg-pdfium-render). Callers should omit this input.
+    description: Pdfium version to download. Defaults to scripts/pdfium-version.
     required: false
-    default: "7678"
+    default: ""
   platform-id:
     description: Override platform id (linux|mac|win). Defaults to runner platform.
     required: false

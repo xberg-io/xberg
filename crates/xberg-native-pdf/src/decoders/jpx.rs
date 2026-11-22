@@ -79,6 +79,23 @@ fn alpha_is_droppable(codestream_says_alpha: bool, num_components: usize, declar
         && declared_components.is_none_or(|declared| usize::from(declared) != num_components)
 }
 
+/// Largest decoded image, in pixels, that is decoded. The header declares the size before any
+/// sample is produced, and hayro-jpeg2000 holds a 32-bit float plane per component, so a
+/// hostile or merely enormous codestream (one real 12608 x 16806 file peaks at 11 GB) must be
+/// refused up front rather than allocated. A caller that can decode at a reduced resolution
+/// (`target`) brings such an image under the cap. ~keep
+const MAX_DECODED_PIXELS: u64 = 100_000_000;
+
+fn check_decoded_pixel_cap(width: u32, height: u32) -> Result<()> {
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels > MAX_DECODED_PIXELS {
+        return Err(Error::UnsupportedFilter(format!(
+            "JPXDecode: a {width}x{height} image ({pixels} pixels) exceeds the {MAX_DECODED_PIXELS}-pixel decode cap"
+        )));
+    }
+    Ok(())
+}
+
 /// `SOC`, the marker that opens every JPEG 2000 codestream (ISO/IEC 15444-1 A.4.1). ~keep
 const SOC_MARKER: [u8; 2] = [0xFF, 0x4F];
 /// `SOC` immediately followed by `SIZ` (`0xFF51`), which A.5.1 requires of every codestream: the
@@ -192,15 +209,33 @@ fn undeclared_component_count(bytes: &[u8]) -> Option<u8> {
 /// to tell a 4-component CMYK codestream from an RGBA one -- see the alpha decision below. When it
 /// is `None`, [`undeclared_component_count`] supplies the codestream's own `Csiz` in its place for
 /// the one shape where that is sound. ~keep
+#[cfg(test)]
 pub fn decode_jpx(bytes: &[u8], declared_components: Option<u8>) -> Result<JpxImage> {
+    decode_jpx_at(bytes, declared_components, None)
+}
+
+/// [`decode_jpx`], decoding no larger than `target` where the codestream allows it.
+///
+/// JPEG 2000 stores successive resolution levels, so a caller that already knows the image is
+/// painted smaller than its stored size can have the decoder skip the finest levels instead of
+/// materialising full-resolution samples that are resampled away. `target` is a hint: the decoder
+/// takes the smallest level that still covers it, so the result is never smaller than asked for,
+/// and the returned `width`/`height` describe the samples actually produced. A codestream with a
+/// palette box ignores it. ~keep
+pub fn decode_jpx_at(bytes: &[u8], declared_components: Option<u8>, target: Option<(u32, u32)>) -> Result<JpxImage> {
     use hayro_jpeg2000::{DecodeSettings, DecoderContext, Image};
 
     // Nothing declared a count, so fall back to the codestream's own `SIZ` header where that is
     // meaningful. See [`undeclared_component_count`]. ~keep
     let declared_components = declared_components.or_else(|| undeclared_component_count(bytes));
 
-    let image = Image::new(bytes, &DecodeSettings::default())
+    let settings = DecodeSettings {
+        target_resolution: target,
+        ..DecodeSettings::default()
+    };
+    let image = Image::new(bytes, &settings)
         .map_err(|e| Error::UnsupportedFilter(format!("JPXDecode: JPEG 2000 decode failed: {e:?}")))?;
+    check_decoded_pixel_cap(image.width(), image.height())?;
 
     let width = image.width();
     let height = image.height();
@@ -250,6 +285,12 @@ pub fn decode_jpx(bytes: &[u8], declared_components: Option<u8>) -> Result<JpxIm
     decode_subsampled(comps, width, height, colour_components)
 }
 
+/// The size the codestream itself declares, which a reduced decode of it does not report. ~keep
+pub fn codestream_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let image = hayro_jpeg2000::Image::new(bytes, &hayro_jpeg2000::DecodeSettings::default()).ok()?;
+    Some((image.width(), image.height()))
+}
+
 /// Decode the palette indices of a JPEG 2000 image whose dictionary names an `/Indexed` colour
 /// space, one byte per pixel, for the caller to look up in the dictionary's own palette. The
 /// result is a one-component [`JpxImage`] at the codestream's own size, which the caller uses in
@@ -267,6 +308,9 @@ pub fn decode_jpx(bytes: &[u8], declared_components: Option<u8>) -> Result<JpxIm
 /// and clears its alpha flag, even when a second component is the image's opacity. So the channel
 /// count, not the component count, says whether the image is an index plane; any component after
 /// the first is opacity and is dropped, as [`decode_jpx`] drops it for every other image. ~keep
+///
+/// It always decodes at full resolution: a lower resolution level averages neighbouring samples,
+/// and an average of two palette indices is another entry's index, not a blend of their colours. ~keep
 pub fn decode_jpx_indices(bytes: &[u8], highest_index: u8) -> Result<JpxImage> {
     use hayro_jpeg2000::{DecodeSettings, DecoderContext, Image};
 
@@ -276,6 +320,7 @@ pub fn decode_jpx_indices(bytes: &[u8], highest_index: u8) -> Result<JpxImage> {
     };
     let image = Image::new(bytes, &settings)
         .map_err(|e| Error::UnsupportedFilter(format!("JPXDecode: JPEG 2000 decode failed: {e:?}")))?;
+    check_decoded_pixel_cap(image.width(), image.height())?;
 
     let mut ctx = DecoderContext::default();
     let decoded = image
@@ -444,7 +489,10 @@ fn upsample_nearest_u8(sub: &[f32], sw: usize, sh: usize, fw: usize, fh: usize) 
 
 #[cfg(test)]
 mod tests {
-    use super::{alpha_is_droppable, decode_jpx, decode_jpx_indices, upsample_nearest_u8};
+    use super::{
+        MAX_DECODED_PIXELS, alpha_is_droppable, check_decoded_pixel_cap, decode_jpx, decode_jpx_at, decode_jpx_indices,
+        upsample_nearest_u8,
+    };
 
     /// Grayscale JP2 codestream from the minimal repro (816x1056 DeviceGray).
     const SAMPLE_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/sample_gray.jp2");
@@ -987,5 +1035,41 @@ mod tests {
         extended.extend_from_slice(&[5, 6]);
         assert_eq!(super::find_box(&extended, b"pclr"), Some(&[5u8, 6][..]));
         assert_eq!(super::find_box(&extended, b"cmap"), None);
+    }
+
+    /// A target resolution decodes fewer levels, and the reported geometry follows the samples
+    /// rather than the codestream's full size.
+    #[test]
+    fn test_target_resolution_decodes_a_smaller_image() {
+        let full = decode_jpx_at(SAMPLE_JP2, None, None).expect("decode at full size");
+        assert_eq!((full.width, full.height), (816, 1056), "test premise");
+
+        let small = decode_jpx_at(SAMPLE_JP2, None, Some((200, 260))).expect("decode at a reduced resolution");
+
+        assert!(
+            small.width >= 200 && small.height >= 260,
+            "reduced decode {}x{} is below the requested 200x260",
+            small.width,
+            small.height
+        );
+        assert!(
+            small.width < full.width && small.height < full.height,
+            "target resolution had no effect: still {}x{}",
+            small.width,
+            small.height
+        );
+        assert_eq!(
+            small.samples.len(),
+            small.width as usize * small.height as usize * usize::from(small.num_components),
+            "reported geometry does not match the sample count"
+        );
+    }
+
+    #[test]
+    fn the_pixel_cap_refuses_an_oversized_image_and_admits_the_cap_itself() {
+        assert!(check_decoded_pixel_cap(12_608, 16_806).is_err());
+        assert!(check_decoded_pixel_cap(u32::MAX, u32::MAX).is_err());
+        assert!(check_decoded_pixel_cap(10_000, (MAX_DECODED_PIXELS / 10_000) as u32).is_ok());
+        assert!(check_decoded_pixel_cap(816, 1056).is_ok());
     }
 }

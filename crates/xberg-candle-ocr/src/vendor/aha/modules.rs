@@ -1,4 +1,5 @@
 // Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+// Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 
 //! Subset of `aha::models::common::modules` covering the attention/MLP primitives
 // Phase 4 model impls will consume all symbols here; suppress dead-code until then.

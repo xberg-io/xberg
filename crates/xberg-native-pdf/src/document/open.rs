@@ -134,7 +134,7 @@ impl PdfDocument {
         if !synthetic_objects.is_empty() {
             let mut cache = document.object_cache.lock_or_recover();
             for (obj_ref, obj) in synthetic_objects {
-                cache.insert(obj_ref, obj);
+                cache.insert_pinned(obj_ref, obj);
             }
         }
 

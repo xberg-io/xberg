@@ -645,3 +645,30 @@ fn dictionary_beyond_the_entry_cap_is_rejected() {
 
     assert!(parse_object(&data).is_err());
 }
+
+#[test]
+fn stream_without_length_finds_endstream_only_within_the_scan_window() {
+    let mut near = b"<< >>\nstream\n".to_vec();
+    near.extend(std::iter::repeat_n(b'x', 1024));
+    near.extend_from_slice(b"\nendstream");
+    assert!(parse_object(&near).is_ok());
+
+    let mut far = b"<< >>\nstream\n".to_vec();
+    far.extend(std::iter::repeat_n(b'x', MAX_ENDSTREAM_SCAN + 1024));
+    far.extend_from_slice(b"\nendstream");
+    assert!(parse_object(&far).is_err());
+}
+
+#[test]
+fn lenient_out_of_range_reference_is_null_not_an_aliased_object() {
+    assert_eq!(
+        parse_object(b"4294967297 0 R").unwrap().1,
+        Object::Null,
+        "4294967297 0 R must not alias object 1"
+    );
+    assert_eq!(parse_object(b"1 65537 R").unwrap().1, Object::Null);
+    assert_eq!(
+        parse_object(b"1 0 R").unwrap().1,
+        Object::Reference(ObjectRef::new(1, 0))
+    );
+}

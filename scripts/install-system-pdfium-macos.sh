@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#   ./scripts/install-system-pdfium-macos.sh                    # uses defaults: version=7678, prefix=/usr/local
+#   ./scripts/install-system-pdfium-macos.sh                    # uses defaults: version=scripts/pdfium-version, prefix=/usr/local
 #   PDFIUM_VERSION=7763 PDFIUM_CHECKSUMS_FILE=/path/to/trusted.sha256 ./scripts/install-system-pdfium-macos.sh
 
 set -euo pipefail
@@ -9,10 +9,10 @@ set -euo pipefail
 # the tree). Bump it only together with a regenerated binding set at the same version, and
 # verify by loading the library and resolving symbols -- never by the download alone, which
 # succeeds regardless. ~keep
-readonly PDFIUM_VERSION="${PDFIUM_VERSION:-7678}"
-readonly PREFIX="${PREFIX:-/usr/local}"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
+readonly PDFIUM_VERSION="${PDFIUM_VERSION:-$(tr -d '[:space:]' <"$SCRIPT_DIR/pdfium-version")}"
+readonly PREFIX="${PREFIX:-/usr/local}"
 readonly VERIFY_ARCHIVE="$SCRIPT_DIR/ci/actions/setup-onnx-runtime/verify-archive.sh"
 readonly CHECKSUMS="${PDFIUM_CHECKSUMS_FILE:-$SCRIPT_DIR/pdfium-runtime-checksums.sha256}"
 

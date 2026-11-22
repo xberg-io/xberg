@@ -1,6 +1,7 @@
 //! DeepSeek-OCR vision-language model.
 //!
 //! Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 //!
 //! Combines a SAM-based vision encoder, CLIP embeddings, and a Qwen2/DeepSeek V2
 //! language decoder for optical character recognition with vision-language understanding.

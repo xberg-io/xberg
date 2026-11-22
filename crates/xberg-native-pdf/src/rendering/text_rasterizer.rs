@@ -453,6 +453,16 @@ fn render_cjk_fallback_face() -> Option<Arc<CachedFace>> {
         .clone()
 }
 
+/// Whether painting nothing is the expected outcome for a run, so a drop tally
+/// would be a false positive: invisible text (render modes 3 and 7, an OCR layer
+/// under a scanned image) and the glyphless fonts OCR tools emit, whose glyphs
+/// all have empty outlines. `outline_glyph` cannot tell an empty glyph from a
+/// missing one. Mirrors the gate `extractors/text` applies to the same
+/// population. ~keep
+fn drop_tally_is_expected(gs: &GraphicsState, base_font: &str) -> bool {
+    gs.render_mode == 3 || gs.render_mode == 7 || base_font.to_uppercase().contains("GLYPHLESS")
+}
+
 /// Rasterizer for PDF text operations.
 pub struct TextRasterizer {
     /// Font database for system font fallback.
@@ -642,7 +652,10 @@ impl TextRasterizer {
     /// Emit the tally's warning for codes the decode could not map, so the
     /// shaped text never carried them. Only paths that paint from the
     /// decoded string may call this.
-    fn report_omitted_drops(&self, tally: &GlyphDropTally, font: &crate::fonts::FontInfo) {
+    fn report_omitted_drops(&self, tally: &GlyphDropTally, font: &crate::fonts::FontInfo, gs: &GraphicsState) {
+        if drop_tally_is_expected(gs, &font.base_font) {
+            return;
+        }
         self.record_type0_ink_loss(tally, Some(font));
         self.emit_drop_warning(tally, &font.base_font, tally.warning_omitted("redacted"));
     }
@@ -906,7 +919,7 @@ impl TextRasterizer {
                         );
                         if let Some((fb_id, fallback_data, fallback_idx)) = self.load_font_data(pdf_font_name) {
                             if let Some(ref info) = font_info {
-                                self.report_omitted_drops(&decode_drops, info);
+                                self.report_omitted_drops(&decode_drops, info, gs);
                             }
                             return self.render_unicode_text(
                                 target,
@@ -927,7 +940,7 @@ impl TextRasterizer {
                 }
             }
             if let Some(ref info) = font_info {
-                self.report_omitted_drops(&decode_drops, info);
+                self.report_omitted_drops(&decode_drops, info, gs);
             }
             Ok(self.render_unicode_text(
                 target,
@@ -947,7 +960,7 @@ impl TextRasterizer {
             let font_name = font_info.as_ref().map(|i| i.base_font.as_str()).unwrap_or("unknown");
             Self::warn_font_not_found(font_name);
             if let Some(ref info) = font_info {
-                self.report_omitted_drops(&decode_drops, info);
+                self.report_omitted_drops(&decode_drops, info, gs);
             }
             Ok(self.render_text_fallback(target, &unicode_text, base_transform, gs)?)
         }
@@ -1660,11 +1673,11 @@ impl TextRasterizer {
             }
         }
 
-        self.record_type0_ink_loss(&unicode_dropped, font_info);
-        self.report_drops(
-            &unicode_dropped,
-            font_info.map(|f| f.base_font.as_str()).unwrap_or("<system fallback>"),
-        );
+        let base_font = font_info.map(|f| f.base_font.as_str()).unwrap_or("<system fallback>");
+        if !drop_tally_is_expected(gs, base_font) {
+            self.record_type0_ink_loss(&unicode_dropped, font_info);
+            self.report_drops(&unicode_dropped, base_font);
+        }
 
         // Return the magnitude of the accumulated advance along the active
         // writing axis. Callers that drive the text matrix forward consume
@@ -1828,8 +1841,10 @@ impl TextRasterizer {
                 }
             }
         }
-        self.record_type0_ink_loss(&dropped, Some(font_info));
-        self.report_drops(&dropped, &font_info.base_font);
+        if !drop_tally_is_expected(gs, &font_info.base_font) {
+            self.record_type0_ink_loss(&dropped, Some(font_info));
+            self.report_drops(&dropped, &font_info.base_font);
+        }
 
         Ok(if wmode == 0 { x_cursor * h_scale } else { y_cursor })
     }
@@ -2386,8 +2401,8 @@ mod tests {
             })
             .count();
         assert_eq!(
-            mine, 4,
-            "report_drops must push one structured warning per font name, with the redacted message"
+            mine, 1,
+            "report_drops pushes the redacted message; the sink collapses the identical repeats of it that other font names produce"
         );
         let rendered = format!("{events:?}");
         assert!(!rendered.contains(SECRET_FONT));

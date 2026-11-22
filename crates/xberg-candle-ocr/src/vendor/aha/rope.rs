@@ -1,4 +1,5 @@
 // Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+// Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 //! Subset of `aha::position_embed::rope` covering 1D, 2D, and M-RoPE position
 //! embeddings used by Qwen2 / PaddleOCR-VL 1.5.
 //!

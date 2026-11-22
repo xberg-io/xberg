@@ -1174,17 +1174,19 @@ fn resolve_image_dimensions(
         }
     };
 
-    let width = dict
-        .get("Width")
-        .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Width".to_string()))
-        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Width {n} is out of range"))))?;
+    let dimension = |key: &str| -> Result<u32> {
+        let value = dict
+            .get(key)
+            .and_then(resolve_int)
+            .ok_or_else(|| Error::Image(format!("Image missing /{key}")))?;
+        match u32::try_from(value) {
+            Ok(n) if n > 0 => Ok(n),
+            _ => Err(Error::Image(format!("Image /{key} must be a positive integer"))),
+        }
+    };
 
-    let height = dict
-        .get("Height")
-        .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Height".to_string()))
-        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Height {n} is out of range"))))?;
+    let width = dimension("Width")?;
+    let height = dimension("Height")?;
 
     let is_image_mask = dict
         .get("ImageMask")
@@ -1220,6 +1222,7 @@ struct ImageFilterInfo {
 /// Classify an image dictionary's `/Filter` chain and, for CCITT, parse its
 /// `/DecodeParms`. See [`ImageFilterInfo`] for why this is split out.
 fn resolve_image_filter_info(
+    doc: Option<&crate::document::PdfDocument>,
     dict: &std::collections::HashMap<String, crate::object::Object>,
     width: u32,
     height: u32,
@@ -1251,8 +1254,20 @@ fn resolve_image_filter_info(
             .iter()
             .position(|name| name.eq_ignore_ascii_case("CCITTFaxDecode"))
             .unwrap_or(0);
+        // /DecodeParms, or its array elements, may be indirect references; left
+        // unresolved, K defaults to 0 and a Group 4 stream decodes as Group 3.
+        let decode_parms = dict.get("DecodeParms").map(|parms| {
+            let resolve = |value: &Object| match (doc, value) {
+                (Some(d), Object::Reference(_)) => d.resolve_object(value).unwrap_or_else(|_| value.clone()),
+                _ => value.clone(),
+            };
+            match resolve(parms) {
+                Object::Array(values) => Object::Array(values.iter().map(resolve).collect()),
+                other => other,
+            }
+        });
         let mut params =
-            crate::object::extract_ccitt_params_with_width_at_index(dict.get("DecodeParms"), ccitt_index, Some(width))
+            crate::object::extract_ccitt_params_with_width_at_index(decode_parms.as_ref(), ccitt_index, Some(width))
                 .unwrap_or(crate::decoders::CcittParams {
                     columns: width,
                     rows: Some(height),
@@ -1384,7 +1399,7 @@ fn resolve_image_xobject_metadata(
         is_jpeg_chain,
         is_ccitt,
         ccitt_params,
-    } = resolve_image_filter_info(dict, width, height);
+    } = resolve_image_filter_info(doc, dict, width, height);
 
     let default_mask_color_space = Object::Name("DeviceGray".to_string());
     // ISO 32000-1 Table 89 permits /ColorSpace to be omitted for a JPXDecode
@@ -1437,12 +1452,37 @@ fn resolve_image_xobject_metadata(
     })
 }
 
+fn invert_bytes(bytes: &mut [u8]) {
+    for byte in bytes {
+        *byte = !*byte;
+    }
+}
+
 /// Extract an image from an XObject stream.
 pub fn extract_image_from_xobject(
     doc: Option<&crate::document::PdfDocument>,
     xobject: &crate::object::Object,
     obj_ref: Option<ObjectRef>,
     color_space_map: Option<&std::collections::HashMap<String, crate::object::Object>>,
+) -> Result<PdfImage> {
+    extract_image_from_xobject_at(doc, xobject, obj_ref, color_space_map, None)
+}
+
+/// Extract an image XObject, decoding no larger than `target` where the format allows it.
+///
+/// An image is mapped to the unit square whatever its sample count (ISO 32000-1 §8.9.5.1), so
+/// decoding past the painted size buys nothing. JPEG 2000 stores successive resolution levels, so a
+/// caller that knows the painted footprint can have the decoder stop early: one real 12608 x 16806
+/// image peaks at 11 GB decoded in full. `target` is a hint that other formats ignore, and JPEG 2000
+/// returns the smallest level that still covers it. The returned [`PdfImage`] reports the geometry
+/// of the samples it holds, which for a reduced decode is below the dictionary's `/Width` and
+/// `/Height`. ~keep
+pub fn extract_image_from_xobject_at(
+    doc: Option<&crate::document::PdfDocument>,
+    xobject: &crate::object::Object,
+    obj_ref: Option<ObjectRef>,
+    color_space_map: Option<&std::collections::HashMap<String, crate::object::Object>>,
+    target: Option<(u32, u32)>,
 ) -> Result<PdfImage> {
     #[cfg(test)]
     DECODE_CALL_COUNT.with(|count| count.set(count.get() + 1));
@@ -1511,7 +1551,24 @@ pub fn extract_image_from_xobject(
         .filter(|value| matches!(value, 1 | 2));
     let mut jpx_opacity = None;
     let data = if is_jbig2 {
-        decode_jbig2_image(xobject, obj_ref, dict, doc, width, height)?
+        let decoded = decode_jbig2_image(xobject, obj_ref, dict, doc, width, height)?;
+        // The JBIG2 decoder expands straight to 8-bit gray, bypassing the packed-sample
+        // block below that otherwise applies /Decode (Table 90; Table 145 permits it on
+        // a soft-mask image). Scanners write [1 0] to normalise encoder polarity. ~keep
+        if decode_array_inverts_1bpc(dict.get("Decode")) {
+            decode_folded_in = true;
+            match decoded {
+                ImageData::Raw { mut pixels, format } => {
+                    for b in &mut pixels {
+                        *b = !*b;
+                    }
+                    ImageData::Raw { pixels, format }
+                }
+                other => other,
+            }
+        } else {
+            decoded
+        }
     } else if is_jpx {
         let JpxDecoded {
             data: jpx_data,
@@ -1526,6 +1583,7 @@ pub fn extract_image_from_xobject(
             jpx_color_space_is_placeholder,
             (width, height),
             indexed_resolution.as_ref(),
+            target,
         )?;
         // The codestream's size is authoritative for a /JPXDecode image (ISO 32000-1 §7.4.9,
         // GH#1900); decode_jpx_image already warned if it disagreed with the dictionary's
@@ -1719,7 +1777,8 @@ pub fn extract_image_from_xobject(
             // 1/2/4/8 bpc on this raw-sample path (ISO 32000-1 §8.9.5.2).
             // DCT- and JPX-coded images keep their encoded stream and do
             // not pass through here, so /Decode is not applied to them. ~keep
-            let unpacked = if keep_raw || (bpc_after_reduce == 8 && ranges.is_none()) {
+            let attempted_unpack = !(keep_raw || (bpc_after_reduce == 8 && ranges.is_none()));
+            let unpacked = if !attempted_unpack {
                 None
             } else {
                 samples_to_decoded_bytes(&reduced, width, height, ncomp, bpc_after_reduce, ranges.as_deref())
@@ -1744,7 +1803,22 @@ pub fn extract_image_from_xobject(
                     }
                     samples
                 }
-                None => reduced,
+                None => {
+                    // The unpack was refused (size cap, undefined bpc), leaving the buffer packed
+                    // and /Decode unapplied. A per-component [1 0] at 1 bpc is a pure inversion, a
+                    // byte-wise NOT needing no unpack; skipping it renders the exact negative. A
+                    // CCITT buffer never reaches here, so its polarity is not applied twice. ~keep
+                    let mut reduced = reduced;
+                    let inverts = ranges
+                        .as_deref()
+                        .is_some_and(|r| r.iter().all(|&(lo, hi)| lo == 1.0 && hi == 0.0));
+                    if attempted_unpack && bpc_after_reduce == 1 && inverts {
+                        invert_bytes(&mut reduced);
+                        samples_are_raw = false;
+                        decode_folded_in = true;
+                    }
+                    reduced
+                }
             };
             ImageData::Raw {
                 pixels,
@@ -2298,6 +2372,12 @@ fn decode_indexed_pixels(
     n: usize,
     out: &mut Vec<u8>,
 ) {
+    // The palette defines the valid index range: its last complete entry is `hival`.
+    let last_entry = if n == 0 {
+        0
+    } else {
+        (params.palette.len() / n).saturating_sub(1)
+    };
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(params.raw.len());
@@ -2307,7 +2387,9 @@ fn decode_indexed_pixels(
             &[]
         };
         for x in 0..w {
-            let idx = read_indexed_pixel(row, x, params.bpc);
+            // ISO 32000-1 §8.6.6.3: an index outside 0..hival "shall be adjusted to the
+            // nearest value within that range", not rendered as a colour the file never named. ~keep
+            let idx = read_indexed_pixel(row, x, params.bpc).min(last_entry);
             let off = idx * n;
             if off + n > params.palette.len() {
                 out.extend_from_slice(&[0, 0, 0]);
@@ -2403,6 +2485,11 @@ pub(crate) fn expand_indexed_to_base_samples(
     validate_indexed_input_len(raw, bytes_per_row, h)?;
 
     let mut out = Vec::with_capacity(output_bytes);
+    let last_entry = if n == 0 {
+        0
+    } else {
+        (palette.len() / n).saturating_sub(1)
+    };
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(raw.len());
@@ -2412,7 +2499,7 @@ pub(crate) fn expand_indexed_to_base_samples(
             &[]
         };
         for x in 0..w {
-            let idx = read_indexed_pixel(row, x, bpc);
+            let idx = read_indexed_pixel(row, x, bpc).min(last_entry);
             let off = idx * n;
             if off + n > palette.len() {
                 out.resize(out.len() + n, 0);
@@ -2492,6 +2579,7 @@ pub(crate) fn decode_indexed_image_in_base_space(
             jpx_color_space_is_placeholder,
             (width, height),
             Some(&ir),
+            None,
         )?;
         let ImageData::Raw { pixels: indices, .. } = data else {
             return Ok(None);
@@ -2741,8 +2829,9 @@ fn checked_cmyk_jpeg_pixel_count<R: std::io::Read>(decoder: &mut jpeg_decoder::D
 /// - `color_transform = 2` (YCCK, Adobe Illustrator default) - the decoder
 ///   ran YCbCr->RGB plus `255 - K`; the same `255 - x` on all four channels
 ///   recovers the raw CMYK plane.
-/// - no APP14 marker - the samples are used as-is (non-Adobe convention),
-///   left unchanged to avoid disturbing non-Adobe JPEG handling.
+/// - no APP14 marker - ISO 32000-1 Table 13 makes the default ColorTransform
+///   0 for four components, so the same undo applies; only an explicit marker
+///   declaring another transform opts out.
 ///
 /// The jpeg-decoder inversion contract is pinned by
 /// `tests/test_jpeg_decoder_cmyk_contract.rs`; the Adobe decode path is
@@ -2771,12 +2860,20 @@ pub(crate) fn decode_cmyk_jpeg_to_raw_cmyk(jpeg_data: &[u8]) -> Result<Vec<u8>> 
 
     let mut raw = cmyk;
     raw.truncate(expected);
-    if matches!(scan_app14_color_transform(jpeg_data), Some(0) | Some(2)) {
+    if cmyk_jpeg_samples_are_inverted(jpeg_data) {
         for b in raw.iter_mut() {
             *b = 255 - *b;
         }
     }
     Ok(raw)
+}
+
+/// Whether `jpeg-decoder`'s output for this 4-component JPEG carries its
+/// `255 - x` inversion: true without an Adobe APP14 marker (Table 13 defaults
+/// ColorTransform to 0 for four components, and the decoder returns identical
+/// samples with and without the marker) and for transform 0 or 2.
+fn cmyk_jpeg_samples_are_inverted(jpeg_data: &[u8]) -> bool {
+    matches!(scan_app14_color_transform(jpeg_data), None | Some(0) | Some(2))
 }
 
 /// Like [`decode_cmyk_jpeg_to_rgb`] but applies the given ICC transform
@@ -2788,7 +2885,7 @@ pub(crate) fn decode_cmyk_jpeg_to_raw_cmyk(jpeg_data: &[u8]) -> Result<Vec<u8>> 
 /// APP14 handling matches `decode_cmyk_jpeg_to_raw_cmyk`: when an Adobe
 /// marker is present (CMYK transform 0 or YCCK transform 2), jpeg-decoder's
 /// `255 - x` inversion is undone to recover the raw DCT samples poppler
-/// treats as straight CMYK; without a marker the samples pass through.
+/// treats as straight CMYK; a missing marker counts as transform 0.
 pub fn decode_cmyk_jpeg_to_rgb_with_profile(
     jpeg_data: &[u8],
     transform: Option<&crate::color::Transform>,
@@ -2807,7 +2904,7 @@ pub fn decode_cmyk_jpeg_to_rgb_with_profile(
         )));
     }
 
-    let straight_cmyk: Vec<u8> = if matches!(scan_app14_color_transform(jpeg_data), Some(0) | Some(2)) {
+    let straight_cmyk: Vec<u8> = if cmyk_jpeg_samples_are_inverted(jpeg_data) {
         cmyk[..expected].iter().map(|b| 255 - *b).collect()
     } else {
         cmyk[..expected].to_vec()
@@ -3328,6 +3425,7 @@ fn decode_jpx_image(
     color_space_is_placeholder: bool,
     declared_size: (u32, u32),
     indexed: Option<&IndexedResolution>,
+    target: Option<(u32, u32)>,
 ) -> Result<JpxDecoded> {
     let codestream: Vec<u8> = if let (Some(d), Some(ref_id)) = (doc.as_ref(), obj_ref) {
         d.decode_stream_with_encryption(xobject, ref_id)?
@@ -3377,7 +3475,7 @@ fn decode_jpx_image(
     } else {
         u8::try_from(color_space.components()).ok().filter(|&n| n > 0)
     };
-    let img = crate::decoders::jpx::decode_jpx(&codestream, declared_components)?;
+    let img = crate::decoders::jpx::decode_jpx_at(&codestream, declared_components, target)?;
 
     // ISO 32000-1 §7.4.9 says /Width and /Height are informative for a /JPXDecode image -- the
     // codestream is authoritative for its own size, unlike the component count above, which has no
@@ -3386,7 +3484,13 @@ fn decode_jpx_image(
     // trusts `width * height * components` either read a scrambled prefix at the wrong stride or
     // rejected the buffer outright as the wrong length, and neither recorded why (GH#1900).
     // Returning the codestream's own size keeps the two in agreement for every consumer. ~keep
-    warn_on_jpx_size_mismatch(doc, declared_size, (img.width, img.height));
+    // A reduced decode reports the reduced samples' size, which is not what the codestream declares.
+    let codestream_size = if target.is_some() {
+        crate::decoders::jpx::codestream_size(&codestream).unwrap_or((img.width, img.height))
+    } else {
+        (img.width, img.height)
+    };
+    warn_on_jpx_size_mismatch(doc, declared_size, codestream_size);
 
     let format = match img.num_components {
         1 => PixelFormat::Grayscale,
@@ -3709,11 +3813,20 @@ mod indexed_tests {
         let palette = vec![10, 20, 30, 40, 50, 60];
         let raw = vec![0, 5];
         let out = expand_indexed_to_rgb(&raw, &palette, PixelFormat::RGB, 2, 1, 8).unwrap();
-        assert_eq!(out, vec![10, 20, 30, 0, 0, 0]);
+        assert_eq!(out, vec![10, 20, 30, 40, 50, 60]);
+    }
+
+    #[test]
+    fn expand_indexed_out_of_range_index_clamps_to_the_last_entry() {
+        // §8.6.6.3: an index past hival is adjusted to the nearest valid one, not zeroed.
+        let palette = vec![10, 20, 30, 40, 50, 60, 70, 80, 90];
+        let raw = vec![2, 3, 200];
+        let out = expand_indexed_to_rgb(&raw, &palette, PixelFormat::RGB, 3, 1, 8).unwrap();
+        assert_eq!(out, vec![70, 80, 90, 70, 80, 90, 70, 80, 90]);
     }
 
     /// The highest index is the last entry the lookup actually holds, the same boundary the
-    /// expander paints black past: `hival` for a full lookup, lower for a short one.
+    /// expander clamps to: `hival` for a full lookup, lower for a short one.
     #[test]
     fn highest_index_is_the_last_entry_the_palette_holds() {
         use crate::object::Object;
@@ -3760,7 +3873,7 @@ mod indexed_tests {
 
         let raw = vec![0, 1, 2];
         let out = expand_indexed_to_rgb(&raw, &palette, fmt, 3, 1, 8).unwrap();
-        assert_eq!(out, vec![10, 20, 30, 40, 50, 60, 0, 0, 0]);
+        assert_eq!(out, vec![10, 20, 30, 40, 50, 60, 40, 50, 60]);
     }
 
     /// GH#1913: a palette over a `/DeviceN` base holds one byte per colorant in each entry, and the
@@ -5717,6 +5830,44 @@ mod palette_expansion_tests {
             (PixelFormat::RGB, &[255, 0, 0, 0, 0, 255][..])
         );
         assert_eq!(image.bits_per_component(), 8);
+    }
+
+    fn grey_jpx_xobject(
+        codestream: &'static [u8],
+        width: i64,
+        height: i64,
+        color_space: crate::object::Object,
+    ) -> crate::object::Object {
+        use crate::object::Object;
+        let mut dict = std::collections::HashMap::new();
+        dict.insert("Subtype".to_string(), Object::Name("Image".to_string()));
+        dict.insert("Width".to_string(), Object::Integer(width));
+        dict.insert("Height".to_string(), Object::Integer(height));
+        dict.insert("ColorSpace".to_string(), color_space);
+        dict.insert("Filter".to_string(), Object::Name("JPXDecode".to_string()));
+        Object::Stream {
+            dict,
+            data: bytes::Bytes::from_static(codestream),
+        }
+    }
+
+    /// Palette indices are not a quantity a lower resolution level may average, so an `/Indexed`
+    /// JPEG 2000 image decodes at the codestream's own size whatever the painted footprint.
+    #[test]
+    fn an_indexed_jpx_image_ignores_a_reduced_target() {
+        use crate::object::Object;
+        const SAMPLE_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/sample_gray.jp2");
+        let palette = (0..=255u8).flat_map(|i| [i, i, i]).collect();
+        let indexed = Object::Array(vec![
+            Object::Name("Indexed".to_string()),
+            Object::Name("DeviceRGB".to_string()),
+            Object::Integer(255),
+            Object::String(palette),
+        ]);
+        let xobject = grey_jpx_xobject(SAMPLE_JP2, 816, 1056, indexed);
+        let image = extract_image_from_xobject_at(None, &xobject, None, None, Some((200, 260)))
+            .expect("an /Indexed JPEG 2000 image");
+        assert_eq!((image.width(), image.height()), (816, 1056));
     }
 
     /// A JPEG 2000 image with no palette reports the 8 bits per component its decoded samples have,

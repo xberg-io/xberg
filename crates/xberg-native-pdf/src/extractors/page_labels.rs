@@ -11,7 +11,10 @@
 
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
-use crate::object::Object;
+use crate::object::{Object, ObjectRef};
+use std::collections::HashSet;
+
+const MAX_NUMBER_TREE_DEPTH: usize = 100;
 
 /// Page numbering style as defined in PDF specification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,6 +221,25 @@ impl PageLabelExtractor {
     /// - /Nums array: direct array of [key, value, key, value, ...]
     /// - /Kids array: array of intermediate nodes
     fn parse_number_tree(doc: &PdfDocument, tree_obj: &Object) -> Result<Vec<PageLabelRange>> {
+        let mut visited = HashSet::new();
+        Self::parse_number_tree_inner(doc, tree_obj, &mut visited, 0)
+    }
+
+    fn parse_number_tree_inner(
+        doc: &PdfDocument,
+        tree_obj: &Object,
+        visited: &mut HashSet<ObjectRef>,
+        depth: usize,
+    ) -> Result<Vec<PageLabelRange>> {
+        // A /Kids entry may name an ancestor; recursion without these guards overflows the stack. ~keep
+        if depth > MAX_NUMBER_TREE_DEPTH {
+            return Ok(Vec::new());
+        }
+        if let Some(node_ref) = tree_obj.as_reference()
+            && !visited.insert(node_ref)
+        {
+            return Ok(Vec::new());
+        }
         let tree_resolved = Self::resolve_object(doc, tree_obj)?;
         let tree_dict = tree_resolved
             .as_dict()
@@ -251,7 +273,7 @@ impl PageLabelExtractor {
             let kids_resolved = Self::resolve_object(doc, kids_obj)?;
             if let Some(kids_arr) = kids_resolved.as_array() {
                 for kid_obj in kids_arr {
-                    let kid_ranges = Self::parse_number_tree(doc, kid_obj)?;
+                    let kid_ranges = Self::parse_number_tree_inner(doc, kid_obj, visited, depth + 1)?;
                     ranges.extend(kid_ranges);
                 }
             }

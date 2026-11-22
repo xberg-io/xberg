@@ -503,6 +503,9 @@ pub struct PageSignals {
     /// Path-ish ops ÷ all content ops — outlined/vectorised text
     /// (case F).
     pub vector_path_density: f32,
+    /// How many painted paths the page carries; the density saturates at 1.0
+    /// on a page with no glyphs and no images, so it cannot tell artwork from outlines.
+    pub vector_path_count: usize,
     /// `MarkInfo.marked && !suspects` — high-precision digital prior.
     pub has_reliable_structure: bool,
     /// Scanner-vs-authoring producer prior (weak).
@@ -654,7 +657,8 @@ pub fn classify_from_signals(s: &PageSignals, cfg: &AutoExtractOptions) -> (Page
     let usable_text = s.text_glyph_count >= min_glyphs && s.garbled_ratio <= 0.20 && s.fragmented_word_ratio <= 0.80;
 
     // Outlined/vectorised text (case F): paths dominate, ~no text/raster. ~keep
-    if !usable_text && s.vector_path_density > 0.60 && s.image_area_ratio < 0.20 {
+    // The count matters: outlined glyphs emit a path each; a logo has a handful. ~keep
+    if !usable_text && s.vector_path_density > 0.60 && s.vector_path_count >= min_glyphs && s.image_area_ratio < 0.20 {
         return (PageKind::Scanned, 0.80, ReasonCode::NoTextLayerPresent);
     }
 
@@ -680,6 +684,11 @@ pub fn classify_from_signals(s: &PageSignals, cfg: &AutoExtractOptions) -> (Page
         return low_glyph_count_verdict(s);
     }
 
+    // No raster leaves OCR nothing to read; the codec is tested too since an
+    // unplaceable image has area 0. ~keep
+    if s.codec == ImageCodecClass::None && s.image_area_ratio <= 0.0 {
+        return (PageKind::Empty, 0.80, ReasonCode::Empty);
+    }
     let conf = match s.producer_prior {
         ProducerPrior::Scanner => 0.85,
         _ => 0.70,

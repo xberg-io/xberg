@@ -948,3 +948,73 @@ fn test_detect_span_columns_empty() {
     let columns = extractor.detect_span_columns();
     assert!(columns.is_empty());
 }
+
+fn dedup_span(text: &str, bbox: Rect, rotation_degrees: f32, sequence: usize) -> TextSpan {
+    TextSpan {
+        provenance: None,
+        text_rise: 0.0,
+        artifact_type: None,
+        text: text.to_string(),
+        bbox,
+        font_name: "F1".to_string(),
+        font_size: 8.0,
+        font_weight: FontWeight::Normal,
+        color: Color::black(),
+        mcid: None,
+        mcid_scope: None,
+        sequence,
+        split_boundary_before: false,
+        offset_semantic: false,
+        is_italic: false,
+        is_monospace: false,
+        char_spacing: 0.0,
+        word_spacing: 0.0,
+        horizontal_scaling: 100.0,
+        primary_detected: false,
+        char_widths: vec![],
+        char_x_offsets: Vec::new(),
+        heading_level: None,
+        rotation_degrees,
+        wmode: 0,
+        rtl_draw_logical: false,
+        ligature_glyph: false,
+        mirrored: false,
+        page_rotation_applied: 0,
+    }
+}
+
+#[test]
+fn test_deduplicate_keeps_rotated_glyphs_one_advance_apart() {
+    let mut extractor = TextExtractor::new();
+    extractor.spans = vec![
+        dedup_span("l", Rect::new(100.0, 300.0, 8.0, 1.776), 90.0, 0),
+        dedup_span("l", Rect::new(100.0, 301.776, 8.0, 1.776), 90.0, 1),
+    ];
+    extractor.deduplicate_overlapping_spans();
+    assert_eq!(extractor.spans.len(), 2, "glyphs one advance apart are distinct");
+
+    let mut overprint = TextExtractor::new();
+    overprint.spans = vec![
+        dedup_span("l", Rect::new(100.0, 300.0, 8.0, 1.776), 90.0, 0),
+        dedup_span("l", Rect::new(100.0, 300.2, 8.0, 1.776), 90.0, 1),
+    ];
+    overprint.deduplicate_overlapping_spans();
+    assert_eq!(overprint.spans.len(), 1, "a same-position overprint still collapses");
+}
+
+#[test]
+fn test_deduplicate_remembers_recent_positions_past_the_history_limit() {
+    let mut extractor = TextExtractor::new();
+    let mut spans: Vec<TextSpan> = (0..40)
+        .map(|i| dedup_span("Total", Rect::new(100.0, 10.0 + 30.0 * i as f32, 20.0, 8.0), 0.0, i))
+        .collect();
+    spans.push(dedup_span("Total", Rect::new(100.0, 1400.0, 20.0, 8.0), 0.0, 40));
+    spans.push(dedup_span("Total", Rect::new(100.0, 1401.5, 20.0, 8.0), 0.0, 41));
+    extractor.spans = spans;
+    extractor.deduplicate_overlapping_spans();
+    assert_eq!(
+        extractor.spans.len(),
+        41,
+        "the second copy of the latest position is dropped"
+    );
+}

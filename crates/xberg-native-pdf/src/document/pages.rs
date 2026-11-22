@@ -145,12 +145,51 @@ impl PdfDocument {
         // [4 0 R 5 0 R 6 0 R 7 0 R]`). Resolve each element before
         // coercing — otherwise an unresolved Reference reads as 0.0 and
         // the page collapses to a zero-area box that clips all content. ~keep
-        Ok((
+        let (x0, y0, x1, y1) = (
             to_f32(&self.resolve_obj_ref(&media_box[0])),
             to_f32(&self.resolve_obj_ref(&media_box[1])),
             to_f32(&self.resolve_obj_ref(&media_box[2])),
             to_f32(&self.resolve_obj_ref(&media_box[3])),
-        ))
+        );
+
+        // §7.9.5: any two diagonally opposite corners are valid. Callers compute
+        // `urx - llx`, so a `[612 792 0 0]` box must not leak negative extents. ~keep
+        Ok((x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)))
+    }
+
+    /// The region of a page a reader can see: its CropBox reduced to the
+    /// MediaBox, as normalised corners `(llx, lly, urx, ury)`.
+    ///
+    /// A CropBox that is missing, malformed, degenerate or disjoint from the
+    /// MediaBox falls back to the MediaBox so it never blanks a page.
+    pub fn get_page_visible_box(&self, page_index: usize) -> Result<(f32, f32, f32, f32)> {
+        let (mx0, my0, mx1, my1) = self.get_page_media_box(page_index)?;
+        let page = self.get_page(page_index)?;
+        let Some(crop) = page
+            .as_dict()
+            .and_then(|d| d.get("CropBox"))
+            .map(|o| self.resolve_obj_ref(o))
+            .as_ref()
+            .and_then(|o| o.as_array().map(|a| a.to_owned()))
+            .filter(|a| a.len() >= 4)
+        else {
+            return Ok((mx0, my0, mx1, my1));
+        };
+        let coord = |o: &Object| match self.resolve_obj_ref(o) {
+            Object::Integer(v) => Some(v as f32),
+            Object::Real(v) => Some(v as f32),
+            _ => None,
+        };
+        let (Some(a), Some(b), Some(c), Some(d)) = (coord(&crop[0]), coord(&crop[1]), coord(&crop[2]), coord(&crop[3]))
+        else {
+            return Ok((mx0, my0, mx1, my1));
+        };
+        let (cx0, cy0, cx1, cy1) = (a.min(c), b.min(d), a.max(c), b.max(d));
+        let (x0, y0, x1, y1) = (cx0.max(mx0), cy0.max(my0), cx1.min(mx1), cy1.min(my1));
+        if x1 <= x0 || y1 <= y0 {
+            return Ok((mx0, my0, mx1, my1));
+        }
+        Ok((x0, y0, x1, y1))
     }
 
     /// Page `/UserUnit` (ISO 32000-1 §14.11.2): the size of a default user space unit in
@@ -303,11 +342,16 @@ impl PdfDocument {
             .as_reference()
             .ok_or_else(|| Error::InvalidPdf("/Pages is not a reference".to_string()))?;
 
-        self.count_pages_recursive(pages_ref, 0)
+        self.count_pages_recursive(pages_ref, 0, &mut HashSet::new())
     }
 
     /// Recursively count pages in the page tree
-    pub(super) fn count_pages_recursive(&self, node_ref: ObjectRef, depth: u32) -> Result<usize> {
+    pub(super) fn count_pages_recursive(
+        &self,
+        node_ref: ObjectRef,
+        depth: u32,
+        visited: &mut HashSet<ObjectRef>,
+    ) -> Result<usize> {
         if depth >= MAX_PAGE_TREE_DEPTH {
             tracing::warn!(target: LOG_TARGET,
                 object_id = node_ref.id,
@@ -315,6 +359,9 @@ impl PdfDocument {
                 "page tree depth limit exceeded while counting pages"
             );
             return Err(Error::RecursionLimitExceeded(MAX_PAGE_TREE_DEPTH));
+        }
+        if !visited.insert(node_ref) {
+            return Ok(0);
         }
 
         let node = match self.load_object(node_ref) {
@@ -339,7 +386,7 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict.get("Type").and_then(|obj| obj.as_name());
+        let node_type = page_tree_node_type(node_dict);
 
         match node_type {
             Some("Page") => Ok(1),
@@ -355,7 +402,7 @@ impl PdfDocument {
                 let mut count = 0;
                 for kid in kids {
                     if let Some(kid_ref) = kid.as_reference() {
-                        match self.count_pages_recursive(kid_ref, depth + 1) {
+                        match self.count_pages_recursive(kid_ref, depth + 1, visited) {
                             Ok(page_count) => count += page_count,
                             Err(Error::CircularReference(obj_ref)) => {
                                 tracing::warn!(target: LOG_TARGET, "Circular reference in page tree at object {}, skipping", obj_ref);
@@ -623,7 +670,7 @@ impl PdfDocument {
             None => return Ok(()),
         };
 
-        let node_type = node_dict.get("Type").and_then(|obj| obj.as_name()).unwrap_or("");
+        let node_type = page_tree_node_type(node_dict).unwrap_or("");
 
         match node_type {
             "Page" => {
@@ -754,6 +801,8 @@ impl PdfDocument {
                 // Also handle /Type that is an unresolvable reference (Null) ~keep
                 let type_is_null = dict.get("Type").is_some_and(|t| matches!(t, Object::Null));
                 if (has_no_type || type_is_null)
+                    && dict.contains_key("Parent")
+                    && !dict.contains_key("Subtype")
                     && (dict.contains_key("MediaBox")
                         || dict.contains_key("Contents")
                         || (dict.contains_key("Resources") && dict.contains_key("Parent")))
@@ -880,10 +929,8 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict
-            .get("Type")
-            .and_then(|obj| obj.as_name())
-            .ok_or_else(|| Error::InvalidPdf("Page tree node missing /Type".to_string()))?;
+        let node_type = page_tree_node_type(node_dict)
+            .ok_or_else(|| Error::InvalidPdf("Page tree node /Type is not a name".to_string()))?;
 
         match node_type {
             "Pages" if *current_index < target_index => {
@@ -1067,10 +1114,8 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict
-            .get("Type")
-            .and_then(|t| t.as_name())
-            .ok_or_else(|| Error::InvalidPdf("Node missing Type".to_string()))?;
+        let node_type =
+            page_tree_node_type(node_dict).ok_or_else(|| Error::InvalidPdf("Node /Type is not a name".to_string()))?;
 
         match node_type {
             "Page" => {
@@ -1116,5 +1161,14 @@ impl PdfDocument {
             .iter()
             .position(|candidate| *candidate == page_ref)
             .ok_or_else(|| Error::InvalidPdf(format!("object {} is not a page in the page tree", page_ref.id)))
+    }
+}
+
+/// A page-tree node's kind: its /Type name, or when /Type is absent (a common
+/// producer defect) `Pages` for a node with /Kids and `Page` otherwise.
+fn page_tree_node_type(dict: &HashMap<String, Object>) -> Option<&str> {
+    match dict.get("Type") {
+        None => Some(if dict.contains_key("Kids") { "Pages" } else { "Page" }),
+        Some(value) => value.as_name(),
     }
 }

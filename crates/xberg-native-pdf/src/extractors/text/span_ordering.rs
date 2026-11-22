@@ -378,26 +378,33 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Content-based deduplication — require positions to OVERLAP. Split out
-    /// of `deduplicate_overlapping_spans` unchanged, for file size. ~keep
+    /// of `deduplicate_overlapping_spans`. Short runs are included so a fake-bold
+    /// overprint is deduplicated, on the per-glyph advance bar PHASE 1 uses, so
+    /// repeated letters a full advance apart are not confused with one. ~keep
     fn is_content_duplicate_span(
         span: &TextSpan,
-        seen_content: &std::collections::HashMap<String, (f32, f32)>,
+        seen_content: &std::collections::HashMap<String, Vec<(f32, f32)>>,
     ) -> bool {
-        if span.text.len() < 5 {
-            return false;
-        }
-        let Some((prev_x_val, prev_y_val)) = seen_content.get(&span.text) else {
-            return false;
+        // A quarter-turned run advances along the page's Y axis, so the overlap
+        // bar applies to Y and the 2 pt line tolerance to X. ~keep
+        let vertical = (span.rotation_degrees.rem_euclid(180.0) - 90.0).abs() < 45.0;
+        let advance_extent = if vertical { span.bbox.height } else { span.bbox.width };
+        let per_glyph_width = (advance_extent / span.text.chars().count().max(1) as f32).max(0.1);
+        let x_bar = if span.text.len() >= 5 {
+            5.0
+        } else {
+            (per_glyph_width * Self::DEDUP_OVERLAP_RATIO).min(Self::DEDUP_OVERLAP_CAP_PT)
         };
-        let y_diff = (span.bbox.y - prev_y_val).abs();
-        let x_diff = (span.bbox.x - prev_x_val).abs();
-
-        // Only dedup when spans overlap geometrically (X within 5pt)
-        // NOT when they're at different positions on the same line ~keep
-        let same_line = y_diff < 2.0;
-        let overlapping_position = x_diff < 5.0;
-
-        same_line && overlapping_position
+        seen_content.get(&span.text).is_some_and(|seen| {
+            seen.iter().any(|(prev_x_val, prev_y_val)| {
+                let (along, cross) = if vertical {
+                    ((span.bbox.y - prev_y_val).abs(), (span.bbox.x - prev_x_val).abs())
+                } else {
+                    ((span.bbox.x - prev_x_val).abs(), (span.bbox.y - prev_y_val).abs())
+                };
+                cross < 2.0 && along < x_bar
+            })
+        })
     }
 
     pub(super) fn deduplicate_overlapping_spans(&mut self) {
@@ -421,7 +428,9 @@ impl<'doc> TextExtractor<'doc> {
         let mut prev_y_rounded: Option<i32> = None;
         let mut prev_x: Option<f32> = None;
         let mut prev_text: Option<String> = None;
-        let mut seen_content: std::collections::HashMap<String, (f32, f32)> = std::collections::HashMap::new();
+        // The most recent positions a string was kept at: one slot misses an overprint. ~keep
+        const MAX_TRACKED_POSITIONS: usize = 32;
+        let mut seen_content: std::collections::HashMap<String, Vec<(f32, f32)>> = std::collections::HashMap::new();
 
         let mut geometric_skips = 0;
         let mut content_skips = 0;
@@ -443,9 +452,11 @@ impl<'doc> TextExtractor<'doc> {
                 prev_x = Some(x);
                 prev_text = Some(span.text.clone());
 
-                if span.text.len() >= 5 {
-                    seen_content.insert(span.text.clone(), (span.bbox.x, span.bbox.y));
+                let at = seen_content.entry(span.text.clone()).or_default();
+                if at.len() == MAX_TRACKED_POSITIONS {
+                    at.remove(0);
                 }
+                at.push((span.bbox.x, span.bbox.y));
                 deduplicated.push(span);
             }
         }

@@ -355,17 +355,6 @@ impl PdfDocument {
             }
         };
 
-        // Fast path: flat subtree — every kid is a leaf when /Count == kids.len(). ~keep
-        let count = dict.get("Count").and_then(|c| c.as_integer()).unwrap_or(-1);
-        if count >= 0 && (count as usize) == kids.len() {
-            for kid in kids {
-                if let Some(kid_ref) = kid.as_reference() {
-                    out.push(kid_ref);
-                }
-            }
-            return Ok(());
-        }
-
         // GH#1755: degrade rather than abort. One unloadable branch (corrupt object,
         // recursion limit, ...) must not cost the caller every OTHER page in the
         // document. Matches `collect_all_pages`'s per-kid handling in `pages.rs`, and
@@ -668,6 +657,14 @@ impl PdfDocument {
             Object::Real(value) => Some(*value as f32),
             _ => None,
         }
+    }
+
+    /// Like [`Self::load_object`] but shares a cached object instead of deep-copying it.
+    pub(crate) fn load_object_shared(&self, obj_ref: ObjectRef) -> Result<Arc<Object>> {
+        self.load_object_for_read(obj_ref).map(|loaded| match loaded {
+            LoadedObject::Cached(object) => object,
+            LoadedObject::Owned(object) => Arc::new(object),
+        })
     }
 
     #[cfg(test)]
