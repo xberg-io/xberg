@@ -562,6 +562,26 @@ fn test_bounded_object_cache_byte_budget_eviction() {
 }
 
 #[test]
+fn test_bounded_object_cache_evicts_every_entry_a_large_insert_needs() {
+    let small = Object::Integer(1);
+    let unit = BoundedObjectCache::estimate_size(&small);
+    let mut c = BoundedObjectCache::new(unit * 8);
+    for n in 1..=8 {
+        c.insert(ObjectRef::new(n, 0), small.clone());
+    }
+    assert_eq!(c.len(), 8);
+    let big = Object::String(vec![0u8; unit * 6]);
+    let big_size = BoundedObjectCache::estimate_size(&big);
+    c.insert(ObjectRef::new(99, 0), big);
+    assert!(
+        c.current_bytes <= unit * 8,
+        "cache holds {} bytes against a budget of {} after inserting a {big_size}-byte entry",
+        c.current_bytes,
+        unit * 8
+    );
+}
+
+#[test]
 fn object_stream_cache_rejects_oversized_entries_and_evicts_to_budget() {
     let first = Arc::new(HashMap::from([(1, Object::String(vec![0; 64]))]));
     let second = Arc::new(HashMap::from([(2, Object::String(vec![0; 64]))]));

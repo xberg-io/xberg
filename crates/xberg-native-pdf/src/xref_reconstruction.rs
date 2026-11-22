@@ -701,7 +701,9 @@ fn recover_from_objstms<R: Read + Seek>(
         .iter()
         .map(|(r, _)| r.id)
         .max()
-        .map_or(catalog_num, |m| m.max(catalog_num.saturating_sub(1)).saturating_add(1));
+        .map_or(Some(catalog_num), |m| {
+            m.max(catalog_num.saturating_sub(1)).checked_add(1)
+        })?;
 
     if let Some(root) = pages_root.or(pages_any) {
         injected.push((ObjectRef::new(free_base, 0), catalog_dict(ObjectRef::new(root, 0))));
@@ -909,5 +911,27 @@ mod tests {
         let result = reconstruct_xref(&mut cursor);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_objstm_pages_root_at_top_of_range_is_not_shadowed_by_the_catalog() {
+        let member = "<< /Type /Pages /Kids [] /Count 0 >>";
+        let header = "4294967295 0 ";
+        let body = format!("{header}{member}");
+        let pdf = format!(
+            "%PDF-1.5\n5 0 obj\n<< /Type /ObjStm /N 1 /First {} /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
+            header.len(),
+            body.len()
+        );
+        let mut cursor = Cursor::new(pdf.into_bytes());
+        let result = reconstruct_xref(&mut cursor);
+        let (_, _, synthetic) = match result {
+            Ok(recovered) => recovered,
+            Err(_) => return,
+        };
+        let mut seen = std::collections::HashSet::new();
+        for (obj_ref, _) in &synthetic {
+            assert!(seen.insert(obj_ref.id), "object {} injected twice", obj_ref.id);
+        }
     }
 }

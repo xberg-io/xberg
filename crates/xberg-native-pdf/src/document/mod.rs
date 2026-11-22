@@ -473,8 +473,11 @@ impl BoundedObjectCache {
         // evicting other entries instead. ~keep
         let mut skipped_self = false;
         let mut examined = 0usize;
+        // Fixed up front: each eviction shortens the queue, and a live bound would
+        // stop the scan before it had evicted what the new entry needs. ~keep
+        let scan_limit = self.insertion_order.len();
         while self.current_bytes + entry_size > self.max_bytes {
-            if examined > self.insertion_order.len() {
+            if examined > scan_limit {
                 break;
             }
             match self.insertion_order.pop_front() {

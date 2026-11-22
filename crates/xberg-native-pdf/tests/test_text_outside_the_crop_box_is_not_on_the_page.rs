@@ -104,3 +104,36 @@ fn test_media_box_on_the_opposite_diagonal_is_normalised() {
     let doc = PdfDocument::from_bytes(page("612 792 0 0", None, "BT /F1 10 Tf 100 100 Td (x) Tj ET\n")).expect("open");
     assert_eq!(doc.get_page_media_box(0).expect("media box"), (0.0, 0.0, 612.0, 792.0));
 }
+
+#[test]
+fn test_annotation_text_in_the_cropped_margin_is_not_on_the_page() {
+    let objects: Vec<&str> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 480 678] /CropBox [40 40 440 640] /Annots [4 0 R 5 0 R] >>",
+        "<< /Type /Annot /Subtype /FreeText /Rect [100 300 200 320] /Contents (inside note) >>",
+        "<< /Type /Annot /Subtype /FreeText /Rect [450 300 475 320] /Contents (margin note) >>",
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    let n = objects.len() + 1;
+    pdf.extend_from_slice(format!("xref\n0 {n}\n0000000000 65535 f \n").as_bytes());
+    for off in &offsets {
+        pdf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size {n} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+    let text = text_of(pdf);
+    assert!(
+        text.contains("inside note"),
+        "visible annotation text stays; got:\n{text}"
+    );
+    assert!(
+        !text.contains("margin note"),
+        "annotation text outside the CropBox is not on the page; got:\n{text}"
+    );
+}

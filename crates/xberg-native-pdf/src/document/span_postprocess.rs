@@ -461,7 +461,9 @@ impl PdfDocument {
         // Annotation text is horizontal (rotation_degrees == 0), so on a 90°/270°
         // page it stays raw, matching the horizontal content spans above. ~keep
         let pre_annotation_len = spans.len();
-        spans.extend(self.annotation_content_spans(page_index));
+        let mut annotation_spans = self.annotation_content_spans(page_index);
+        self.drop_offpage_spans(page_index, &mut annotation_spans);
+        spans.extend(annotation_spans);
         if let Some((rot, llx, lly, w, h)) = page_rotation {
             for s in spans[pre_annotation_len..].iter_mut() {
                 if rot != 180 && s.rotation_degrees == 0.0 {

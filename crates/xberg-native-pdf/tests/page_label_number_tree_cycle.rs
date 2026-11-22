@@ -11,8 +11,8 @@
 //! Page labelling is an extraction feature, so a malformed tree degrades to
 //! the ranges recovered so far with a warning rather than failing the open.
 
-use xberg_native_pdf::extractors::PageLabelExtractor;
 use xberg_native_pdf::PdfDocument;
+use xberg_native_pdf::extractors::PageLabelExtractor;
 
 /// Assemble a one-page PDF whose catalog carries `/PageLabels 5 0 R`, with
 /// objects 5.. supplied as raw dictionary bodies.
@@ -26,7 +26,12 @@ fn pdf_with_page_labels(label_objects: &[&str]) -> Vec<u8> {
     };
 
     buf.extend_from_slice(b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
-    obj(&mut buf, &mut off, 1, "<< /Type /Catalog /Pages 2 0 R /PageLabels 5 0 R >>");
+    obj(
+        &mut buf,
+        &mut off,
+        1,
+        "<< /Type /Catalog /Pages 2 0 R /PageLabels 5 0 R >>",
+    );
     obj(&mut buf, &mut off, 2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
     obj(
         &mut buf,
@@ -46,12 +51,10 @@ fn pdf_with_page_labels(label_objects: &[&str]) -> Vec<u8> {
 
     let xref = buf.len();
     buf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", total + 1).as_bytes());
-    for id in 1..=total {
-        buf.extend_from_slice(format!("{:010} 00000 n \n", off[id]).as_bytes());
+    for offset in off.iter().take(total + 1).skip(1) {
+        buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
     }
-    buf.extend_from_slice(
-        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n", total + 1).as_bytes(),
-    );
+    buf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n", total + 1).as_bytes());
     buf.extend_from_slice(format!("{xref}\n%%EOF\n").as_bytes());
     buf
 }
@@ -87,7 +90,10 @@ fn ranges_before_a_cycle_are_still_returned() {
     let labels = PageLabelExtractor::extract(&doc).expect("extract must return, not abort");
     assert_eq!(labels.len(), 1, "the leaf before the cycle should survive");
     assert_eq!(labels[0].start_page, 0);
-    assert_eq!(labels[0].style, xberg_native_pdf::extractors::PageLabelStyle::RomanLower);
+    assert_eq!(
+        labels[0].style,
+        xberg_native_pdf::extractors::PageLabelStyle::RomanLower
+    );
 }
 
 /// The guards must not truncate a legal tree: a well-formed two-level tree
