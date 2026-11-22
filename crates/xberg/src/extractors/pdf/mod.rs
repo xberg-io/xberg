@@ -34,7 +34,7 @@ pub(crate) mod ocr;
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 mod outline_ocr;
 mod pages;
-#[cfg(all(feature = "pdf", feature = "pdf-pdfium"))]
+#[cfg(all(feature = "pdf", feature = "pdf-pdfium", not(target_arch = "wasm32")))]
 mod pdfium_engine;
 #[cfg(feature = "layout-detection")]
 pub(crate) mod reading_order;
@@ -3040,7 +3040,7 @@ impl PdfExtractor {
     /// `extract_core_native`: silently reusing `xberg_native_pdf` output under a caller's
     /// `PdfBackend::Pdfium` selection would produce a document the caller believes
     /// came from pdfium, which is worse than an error.
-    #[cfg(all(feature = "pdf", not(feature = "pdf-pdfium")))]
+    #[cfg(all(feature = "pdf", not(all(feature = "pdf-pdfium", not(target_arch = "wasm32")))))]
     async fn extract_core_pdfium(
         &self,
         _content: &[u8],
@@ -3048,12 +3048,16 @@ impl PdfExtractor {
         _config: &ExtractionConfig,
         _path: Option<&std::path::Path>,
     ) -> Result<InternalDocument> {
-        Err(crate::XbergError::validation(
-            "PDF extraction requested backend 'pdfium', but this build was compiled \
-             without the 'pdf-pdfium' Cargo feature, so no pdfium extraction engine is \
-             available. Use the default 'native' backend instead, or rebuild with \
-             --features pdf-pdfium to enable pdfium extraction.",
-        ))
+        let reason = if cfg!(target_arch = "wasm32") {
+            "the pdfium engine is not available on wasm32 targets"
+        } else {
+            "this build was compiled without the 'pdf-pdfium' Cargo feature"
+        };
+        Err(crate::XbergError::validation(format!(
+            "PDF extraction requested backend 'pdfium', but {reason}, so no pdfium extraction \
+             engine is available. Use the default 'native' backend instead, or on a native \
+             target rebuild with --features pdf-pdfium to enable pdfium extraction."
+        )))
     }
 
     /// Dispatch target for `PdfBackend::Pdfium` when the `pdf-pdfium` feature is
@@ -3066,7 +3070,7 @@ impl PdfExtractor {
     /// runtime concern -- see `pdfium_engine::bind_once` -- so this can still fail
     /// with an actionable `XbergError::MissingDependency` even though the feature
     /// compiled cleanly.
-    #[cfg(all(feature = "pdf", feature = "pdf-pdfium"))]
+    #[cfg(all(feature = "pdf", feature = "pdf-pdfium", not(target_arch = "wasm32")))]
     async fn extract_core_pdfium(
         &self,
         content: &[u8],

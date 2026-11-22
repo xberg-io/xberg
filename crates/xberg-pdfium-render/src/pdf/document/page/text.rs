@@ -371,6 +371,34 @@ impl<'a> PdfPageText<'a> {
         self.inside_rect(self.page.page_size())
     }
 
+    /// Returns every character on the page via `FPDFText_GetText`, without a bounding rectangle.
+    ///
+    /// Unlike [`all()`], which clips to `(0, 0, width, height)` through `FPDFText_GetBoundedText`,
+    /// this does not depend on the page's box origin or `/Rotate` matching that rectangle, so it
+    /// cannot drop characters whose boxes fall outside it.
+    pub fn whole_page(&self) -> String {
+        let char_count = self.len();
+
+        if char_count <= 0 {
+            return String::new();
+        }
+
+        // FPDFText_GetText writes `count` characters plus a terminating NUL.
+        let mut buffer = create_sized_buffer(char_count as usize + 1);
+
+        let written = self
+            .bindings()
+            .FPDFText_GetText(self.text_page_handle(), 0, char_count, buffer.as_mut_ptr());
+
+        if written <= 1 {
+            return String::new();
+        }
+
+        // `written` counts the terminator.
+        let units = (written as usize - 1).min(buffer.len());
+        get_string_from_pdfium_utf16le_bytes(cast_slice(&buffer[..units]).to_vec()).unwrap_or_default()
+    }
+
     /// Returns all page text with corrected word spacing, filtering out spurious
     /// spaces that pdfium inserts mid-word due to aggressive inter-glyph heuristics.
     ///
