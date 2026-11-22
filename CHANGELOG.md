@@ -98,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** A fixed-arity operator reads its trailing operands, as other readers apply them, so an operand leaked by an unknown operator ahead of it (`bcolor [0]`, `pagesize width 597.5pt height 845pt`) no longer shifts a matrix or drops the operator. `[0] 1 0 0 1 -72 -779 cm` applies the documented translate instead of a shifted matrix, and a page whose text it places no longer extracts empty. (#3383)
+- **pdf:** A Form XObject's text survives the large-stream prescan: a `Do` region now includes the `/Name` operand that precedes it, so pages over 256 KiB of glyph outlines with an invisible OCR text layer in a form extract their text instead of nothing. (#3384)
 - **pdf:** A ruled table split by a taller row gap under a subtotal is rejoined into one table when adjacent bands repeat their column tracks and one family of long rules spans both, keeping the wrapped header and the first-column row span. (#3349)
 - **pdf:** A two-column page letterhead in the top band is no longer emitted as a table; it stays text, while ruled tables and tables with retained grids remain tables. (#3350)
 - **ocr:** Default preprocessing measures a raster's own paper level instead of comparing it with a fixed near-white value, so a lightly tinted or shaded scan page is still read as a page and takes the 300 DPI resample. A 100 DPI tinted table with 9 px digits keeps 72 of its 72 numbers instead of 65, and its 7 px variant 71 of 72 instead of 49, while a 300 DPI page is not resampled. (#3337)
