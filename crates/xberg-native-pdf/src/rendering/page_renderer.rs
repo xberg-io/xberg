@@ -1925,10 +1925,11 @@ impl PageRenderer {
         // panicking or rendering nothing. ~keep
         let ramp = shading_gradient_stops(resolved_endpoints, gs.fill_alpha);
 
-        let mut p0 = tiny_skia::Point { x: x0, y: y0 };
-        let mut p1 = tiny_skia::Point { x: x1, y: y1 };
-        transform.map_point(&mut p0);
-        transform.map_point(&mut p1);
+        // The axis stays in shading space and the transform rides on the shader: mapping only the
+        // endpoints would make the colour bands perpendicular to the axis on the page, which a
+        // non-uniform scale or a skew in the CTM or pattern matrix does not preserve. ~keep
+        let p0 = tiny_skia::Point { x: x0, y: y0 };
+        let p1 = tiny_skia::Point { x: x1, y: y1 };
 
         // Per ISO 32000-1 §8.7.4.5.3 the `/Extend` array names whether
         // the gradient paints past its geometric endpoints with the
@@ -1944,7 +1945,8 @@ impl PageRenderer {
         // perpendicular lines through `p0` and `p1`; for asymmetric
         // `/Extend`, one side of the strip is the page boundary, the
         // other is the perpendicular. ~keep
-        let slab_clip_mask = build_axial_extend_clip(pixmap, p0, p1, extend_start, extend_end, clip_mask);
+        let slab_clip_mask =
+            build_axial_extend_clip(pixmap, transform, [p0, p1], [extend_start, extend_end], clip_mask);
         let effective_clip = slab_clip_mask.as_ref().or(clip_mask);
 
         let gradient = tiny_skia::LinearGradient::new(
@@ -1952,7 +1954,7 @@ impl PageRenderer {
             tiny_skia::Point { x: p1.x, y: p1.y },
             ramp,
             spread,
-            Transform::identity(),
+            transform,
         );
 
         if let Some(shader) = gradient {
@@ -3292,12 +3294,11 @@ impl PageRenderer {
             if parent_shape.is_some() {
                 self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
             }
-            let bbox_clip = intersect_clips(
-                clip_to_bbox
-                    .then(|| form_bbox_clip(dict, &group_pixmap, combined_transform))
-                    .flatten(),
-                invocation.and_then(|context| context.clip),
-            );
+            // The caller's clip is applied once, when the group is composited; painting under it
+            // as well would apply an anti-aliased edge's coverage twice.
+            let bbox_clip = clip_to_bbox
+                .then(|| form_bbox_clip(dict, &group_pixmap, combined_transform))
+                .flatten();
             // A group's alpha constant and blend mode apply once, when it is composited
             // (Table 58); inheriting them would apply them a second time inside.
             let group_entry = FormEntry {
@@ -3457,11 +3458,18 @@ impl PageRenderer {
             .filter(|values: &Vec<f32>| values.len() == 6)
             .unwrap_or_else(|| vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
         let pattern_matrix = Transform::from_row(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+        // §8.7.4.3: the pattern's /ExtGState is in effect only while it is painted. ~keep
+        let pattern_gs = pattern.get("ExtGState").and_then(|entry| {
+            let parsed = parse_ext_g_state_inner(entry, doc).ok()?;
+            let mut temporary = gs.clone();
+            parsed.apply(&mut temporary);
+            Some(temporary)
+        });
         self.render_shading_object(
             pixmap,
             &shading_obj,
             base_transform.pre_concat(pattern_matrix),
-            gs,
+            pattern_gs.as_ref().unwrap_or(gs),
             doc,
             Some(mask),
         )?;
@@ -6195,16 +6203,31 @@ impl PageRenderer {
                                 else {
                                     continue;
                                 };
-                                (selected.clone(), doc.resolve_object(selected)?)
+                                match doc.resolve_object(selected) {
+                                    Ok(resolved) => (selected.clone(), resolved),
+                                    Err(error) => {
+                                        tracing::debug!(
+                                            "skipping widget appearance state that cannot be read: {error}"
+                                        );
+                                        continue;
+                                    }
+                                }
                             }
                             _ => (n_entry.clone(), n_stream_obj),
                         };
                         let n_entry = &n_entry;
                         if let Object::Stream { ref dict, .. } = n_stream_obj {
-                            let ap_data = if let Some(r) = n_entry.as_reference() {
-                                doc.decode_stream_with_encryption(&n_stream_obj, r)?
+                            let decoded = if let Some(r) = n_entry.as_reference() {
+                                doc.decode_stream_with_encryption(&n_stream_obj, r)
                             } else {
-                                n_stream_obj.decode_stream_data()?
+                                n_stream_obj.decode_stream_data()
+                            };
+                            let ap_data = match decoded {
+                                Ok(data) => data,
+                                Err(error) => {
+                                    tracing::debug!("skipping annotation appearance that cannot be decoded: {error}");
+                                    continue;
+                                }
                             };
 
                             if let Some(rect) = annot.rect {
@@ -7198,6 +7221,9 @@ fn evaluate_pdf_function_at(doc: &PdfDocument, func: &Object, t: f32, depth: u8)
                 return None;
             }
             let bounds = numbers("Bounds").unwrap_or_default();
+            if bounds.len() + 1 != functions.len() {
+                return None;
+            }
             let encode = numbers("Encode").unwrap_or_default();
             let k = bounds
                 .iter()
@@ -7272,6 +7298,14 @@ fn evaluate_type0_multi(
     let n_out = range_arr.len() / 2;
     if n_in == 0 || n_out == 0 || bc.len() < n_in || n_in > MAX_SAMPLED_FUNCTION_DIMS {
         return None;
+    }
+
+    // `clamp` panics on reversed or NaN bounds, and both arrays come from the document.
+    for [lo, hi] in domain_arr.as_chunks::<2>().0.iter().chain(range_arr.as_chunks::<2>().0) {
+        let (lo, hi) = (obj_to_f32(lo)?, obj_to_f32(hi)?);
+        if lo.partial_cmp(&hi).is_none_or(|order| order.is_gt()) {
+            return None;
+        }
     }
 
     let size_arr = dict.get("Size").and_then(|o| o.as_array())?;
@@ -8462,6 +8496,11 @@ fn form_bbox_clip(dict: &HashMap<String, Object>, pixmap: &Pixmap, transform: Tr
     builder.push_rect(rect);
     let path = builder.finish()?;
     if !device_bounds_rasterizable(&path, transform) {
+        // A box wholly off the raster shows nothing of the form; one that merely exceeds
+        // the precision limit but reaches the raster restricts nothing visible. ~keep
+        if crate::rendering::device_bounds_miss_pixmap(&path, transform, pixmap.width(), pixmap.height()) {
+            return tiny_skia::Mask::new(pixmap.width(), pixmap.height());
+        }
         return None;
     }
     let mut mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height())?;
@@ -8542,10 +8581,9 @@ fn apply_pending_clip(
 /// the intersection of the slab with the inherited `clip_mask`.
 fn build_axial_extend_clip(
     pixmap: &Pixmap,
-    p0: tiny_skia::Point,
-    p1: tiny_skia::Point,
-    extend_start: bool,
-    extend_end: bool,
+    transform: Transform,
+    [p0, p1]: [tiny_skia::Point; 2],
+    [extend_start, extend_end]: [bool; 2],
     inherited: Option<&tiny_skia::Mask>,
 ) -> Option<tiny_skia::Mask> {
     if extend_start && extend_end {
@@ -8572,8 +8610,11 @@ fn build_axial_extend_clip(
 
     // Far perpendicular extent — large enough to cover the pixmap
     // diagonal from any axis position. Using 4× the diagonal stays
-    // robust against off-page axis endpoints. ~keep
-    let diag = (w * w + h * h).sqrt();
+    // robust against off-page axis endpoints. The slab is built in shading
+    // space, so the diagonal is carried back through the inverse transform. ~keep
+    let inverse = transform.invert()?;
+    let to_shading = inverse.sx.abs() + inverse.kx.abs() + inverse.ky.abs() + inverse.sy.abs();
+    let diag = (w * w + h * h).sqrt() * to_shading;
     let far_perp = 4.0 * diag;
 
     // The "axis-direction" extent must reach past the pixmap from
@@ -8598,13 +8639,7 @@ fn build_axial_extend_clip(
     let path = pb.finish()?;
 
     let mut mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height())?;
-    guarded_mask_fill_path(
-        &mut mask,
-        &path,
-        tiny_skia::FillRule::Winding,
-        true,
-        Transform::identity(),
-    );
+    guarded_mask_fill_path(&mut mask, &path, tiny_skia::FillRule::Winding, true, transform);
     Some(intersect_with_inherited(mask, inherited))
 }
 
@@ -9959,6 +9994,25 @@ mod tests {
             assert_eq!(found, (24..38).collect::<Vec<_>>(), "{show}");
             assert_eq!(rows, (56..70).collect::<Vec<_>>(), "{show}");
         }
+    }
+
+    /// A form `/BBox` wholly off the raster shows nothing, even when it is too large to rasterize.
+    #[test]
+    fn form_bbox_beyond_precision_and_off_the_raster_clips_everything() {
+        let pixmap = Pixmap::new(200, 200).unwrap();
+        let bbox = |x0: i64, x1: i64| {
+            HashMap::from([(
+                "BBox".to_string(),
+                Object::Array([x0, 0, x1, 200].into_iter().map(Object::Integer).collect()),
+            )])
+        };
+        let off_raster = form_bbox_clip(&bbox(300, 2_000_000_000), &pixmap, Transform::identity())
+            .expect("a box wholly past the raster edge clips everything");
+        assert!(off_raster.data().iter().all(|&v| v == 0));
+        assert!(
+            form_bbox_clip(&bbox(-2_000_000_000, 2_000_000_000), &pixmap, Transform::identity()).is_none(),
+            "a box enclosing the raster restricts nothing"
+        );
     }
 }
 

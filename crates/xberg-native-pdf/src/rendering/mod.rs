@@ -752,16 +752,27 @@ pub fn render_page_region(
         &page_info.media_box,
         page_info.crop_box.as_ref().filter(|_| options.honor_crop_box),
     );
-    let page_h_pt = page_box.height;
-
-    // Points → pixels at the render DPI. ~keep
+    // Map the rect through the same transform as the full raster so a crop box
+    // offset and a /Rotate turn place it where the full render drew that content. ~keep
     let scale = options.dpi as f32 / 72.0;
-    let crop_x_px = (crop_x_pt * scale).round().max(0.0) as u32;
-    // Image Y is top-left origin; PDF Y is bottom-left. Flip. ~keep
-    let top_y_pt = page_h_pt - (crop_y_pt + crop_h_pt);
-    let crop_y_px = (top_y_pt * scale).round().max(0.0) as u32;
-    let crop_w_px = (crop_w_pt * scale).round().max(1.0) as u32;
-    let crop_h_px = (crop_h_pt * scale).round().max(1.0) as u32;
+    let corners = {
+        let mut points = [
+            tiny_skia::Point::from_xy(crop_x_pt, crop_y_pt),
+            tiny_skia::Point::from_xy(crop_x_pt + crop_w_pt, crop_y_pt),
+            tiny_skia::Point::from_xy(crop_x_pt, crop_y_pt + crop_h_pt),
+            tiny_skia::Point::from_xy(crop_x_pt + crop_w_pt, crop_y_pt + crop_h_pt),
+        ];
+        page_base_transform(&page_box, page_info.rotation, scale).map_points(&mut points);
+        points
+    };
+    let min_x = corners.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
+    let min_y = corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let max_x = corners.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
+    let max_y = corners.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+    let crop_x_px = min_x.round().max(0.0) as u32;
+    let crop_y_px = min_y.round().max(0.0) as u32;
+    let crop_w_px = (max_x - min_x).round().max(1.0) as u32;
+    let crop_h_px = (max_y - min_y).round().max(1.0) as u32;
 
     // Decode, crop, re-encode using the `image` crate (already a dep). ~keep
     let full_img = image::load_from_memory(&full.data)

@@ -20,6 +20,11 @@ use xberg_native_pdf::rendering::{ImageFormat, RenderOptions, render_page};
 /// A page with one widget annotation. `ap` is the `/AP` value, `extra` any
 /// further annotation entries (e.g. `/AS`, `/F`).
 fn widget_pdf(ap: &str, extra: &str) -> Vec<u8> {
+    widget_pdf_with_off_dict(ap, extra, "")
+}
+
+/// As [`widget_pdf`], with `off_dict` added to the dictionary of the "off" appearance stream.
+fn widget_pdf_with_off_dict(ap: &str, extra: &str, off_dict: &str) -> Vec<u8> {
     // Appearance streams: object 6 paints a black square, object 7 paints
     // nothing at all (the "off" state).
     let on = b"0 0 0 rg 0 0 20 20 re f\n";
@@ -31,11 +36,11 @@ fn widget_pdf(ap: &str, extra: &str) -> Vec<u8> {
         off_tbl[id] = buf.len();
         buf.extend_from_slice(format!("{id} 0 obj\n{body}\nendobj\n").as_bytes());
     };
-    let form = |buf: &mut Vec<u8>, off_tbl: &mut Vec<usize>, id: usize, data: &[u8]| {
+    let form = |buf: &mut Vec<u8>, off_tbl: &mut Vec<usize>, id: usize, data: &[u8], dict: &str| {
         off_tbl[id] = buf.len();
         buf.extend_from_slice(
             format!(
-                "{id} 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] \
+                "{id} 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] {dict} \
                  /Length {} >>\nstream\n",
                 data.len()
             )
@@ -69,8 +74,8 @@ fn widget_pdf(ap: &str, extra: &str) -> Vec<u8> {
              /AP {ap} {extra} >>"
         ),
     );
-    form(&mut buf, &mut off_tbl, 6, on);
-    form(&mut buf, &mut off_tbl, 7, off);
+    form(&mut buf, &mut off_tbl, 6, on, "");
+    form(&mut buf, &mut off_tbl, 7, off, off_dict);
 
     let xref = buf.len();
     buf.extend_from_slice(b"xref\n0 8\n0000000000 65535 f \n");
@@ -174,4 +179,15 @@ fn noview_annotations_are_not_drawn() {
 #[test]
 fn printable_annotations_are_still_drawn() {
     assert!(widget_is_painted(widget_pdf("<< /N 6 0 R >>", "/F 4")));
+}
+
+/// One widget whose appearance cannot be decoded costs that widget, not the page.
+#[test]
+fn test_undecodable_appearance_stream_does_not_fail_the_page() {
+    let pdf = widget_pdf_with_off_dict(
+        "<< /N << /Off 7 0 R /Yes 6 0 R >> >>",
+        "/AS /Off",
+        "/Filter /FlateDecode",
+    );
+    assert!(!widget_is_painted(pdf), "an unreadable appearance paints nothing");
 }

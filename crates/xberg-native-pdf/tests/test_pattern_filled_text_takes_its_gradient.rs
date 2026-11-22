@@ -159,12 +159,19 @@ fn broken_subset_font() -> Vec<u8> {
 /// initial black — the same shape as the path-side fixture, which makes the
 /// failure unambiguous.
 fn pattern_filled_text(render_mode: u8) -> Vec<u8> {
+    pattern_filled_text_under(render_mode, None)
+}
+
+/// The same page with a luminosity soft mask in force, whose group paints the whole page with
+/// `mask_paint` (`0 g` hides everything, `1 g` shows everything).
+fn pattern_filled_text_under(render_mode: u8, mask_paint: Option<&str>) -> Vec<u8> {
     let font = broken_subset_font();
-    let content = format!("BT /F1 96 Tf {render_mode} Tr /Pattern cs /P0 scn 1 0 0 1 10 20 Tm (A) Tj ET\n");
+    let state = if mask_paint.is_some() { "/GS0 gs " } else { "" };
+    let content = format!("{state}BT /F1 96 Tf {render_mode} Tr /Pattern cs /P0 scn 1 0 0 1 10 20 Tm (A) Tj ET\n");
     let content = content.into_bytes();
 
     let mut pdf: Vec<u8> = Vec::new();
-    let last = 9usize;
+    let last = 11usize;
     let mut off = vec![0usize; last + 1];
     let obj = |pdf: &mut Vec<u8>, off: &mut Vec<usize>, id: usize, body: &str| {
         off[id] = pdf.len();
@@ -179,7 +186,7 @@ fn pattern_filled_text(render_mode: u8) -> Vec<u8> {
         &mut off,
         3,
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R \
-         /Resources << /Font << /F1 7 0 R >> /Pattern << /P0 5 0 R >> >> >>",
+         /Resources << /Font << /F1 7 0 R >> /Pattern << /P0 5 0 R >> /ExtGState << /GS0 10 0 R >> >> >>",
     );
     off[4] = pdf.len();
     pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
@@ -227,6 +234,22 @@ fn pattern_filled_text(render_mode: u8) -> Vec<u8> {
     );
     pdf.extend_from_slice(&font);
     pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    obj(
+        &mut pdf,
+        &mut off,
+        10,
+        "<< /Type /ExtGState /SMask << /Type /Mask /S /Luminosity /G 11 0 R >> >>",
+    );
+    let mask_content = format!("{} 0 0 200 100 re f", mask_paint.unwrap_or("1 g"));
+    off[11] = pdf.len();
+    pdf.extend_from_slice(
+        format!(
+            "11 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 200 100] \
+             /Group << /S /Transparency /CS /DeviceGray >> /Length {} >>\nstream\n{mask_content}\nendstream\nendobj\n",
+            mask_content.len()
+        )
+        .as_bytes(),
+    );
 
     let xref = pdf.len();
     pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \r\n", last + 1).as_bytes());
@@ -310,5 +333,19 @@ fn test_invisible_show_paints_no_pattern() {
     assert!(
         glyph_pixels(&px).is_empty(),
         "mode 3 is invisible, but the pattern painted anyway"
+    );
+}
+
+/// The soft mask in force at the show bounds a pattern-filled glyph like any other paint: a mask
+/// that is black everywhere hides it, and one that is white everywhere leaves it.
+#[test]
+fn test_pattern_filled_text_honours_the_soft_mask() {
+    let shown = glyph_pixels(&render(pattern_filled_text_under(0, Some("1 g"))));
+    assert!(!shown.is_empty(), "a fully open mask must leave the glyph painted");
+    let hidden = glyph_pixels(&render(pattern_filled_text_under(0, Some("0 g"))));
+    assert!(
+        hidden.is_empty(),
+        "a fully closed soft mask left {} glyph pixels painted",
+        hidden.len()
     );
 }

@@ -193,6 +193,7 @@ impl PageRenderer {
         // A shading pattern paints the glyphs through their own coverage; the advance still comes
         // from the rasteriser so the text matrix keeps moving.
         let through_pattern = if self.text_takes_a_fill_pattern(gs) {
+            let soft_mask = self.paint_mask_snapshots(pixmap, gs)?;
             let coverage_gs = Self::coverage_only_gs(gs);
             let mut scratch = Pixmap::new(pixmap.width(), pixmap.height());
             let advance = match scratch.as_mut() {
@@ -210,8 +211,31 @@ impl PageRenderer {
             match (scratch, advance) {
                 (Some(scratch), Some(advance)) => {
                     let mask = tiny_skia::Mask::from_pixmap(scratch.as_ref(), tiny_skia::MaskType::Alpha);
-                    self.paint_pattern_through_mask_from_resources(pixmap, &mask, base_transform, gs, doc, resources)?
-                        .then_some(advance)
+                    let painted = self.paint_pattern_through_mask_from_resources(
+                        pixmap,
+                        &mask,
+                        base_transform,
+                        gs,
+                        doc,
+                        resources,
+                    )?;
+                    // Only a painted pattern is masked here; the fallback below masks its own paint. ~keep
+                    if let (true, Some(snapshot)) = (painted, soft_mask) {
+                        self.apply_paint_mask(
+                            pixmap,
+                            snapshot,
+                            PaintModulatorContext {
+                                gs,
+                                doc,
+                                page_num,
+                                resources,
+                                base_transform,
+                                fill_side: true,
+                                knockout_coverage: None,
+                            },
+                        )?;
+                    }
+                    painted.then_some(advance)
                 }
                 _ => None,
             }
