@@ -509,6 +509,22 @@ impl PdfDocument {
         )
     }
 
+    /// `None` when the stream's first filter is not `/Crypt`; otherwise whether its parameters name `/Identity`.
+    /// Resolved before the encryption handler is locked because loading an object may lock it.
+    fn first_crypt_filter_is_identity(&self, stream_obj: &Object) -> Result<Option<bool>> {
+        let Object::Stream { dict, .. } = stream_obj else {
+            return Ok(None);
+        };
+        let Some(params) = crate::decoders::first_crypt_decode_parms(dict) else {
+            return Ok(None);
+        };
+        let resolved = match params {
+            Some(params) if params.as_reference().is_some() => Some(self.resolve_object(params)?),
+            other => other.cloned(),
+        };
+        Ok(Some(crate::decoders::names_identity_crypt_filter(resolved.as_ref())))
+    }
+
     fn resolve_form_decode_parms(&self, params: &Object, filters: Option<&Object>) -> Result<Option<Object>> {
         let is_lzw_stage = |index| {
             match filters {
@@ -593,9 +609,18 @@ impl PdfDocument {
             false
         };
 
+        let crypt_names_identity = self.first_crypt_filter_is_identity(stream_obj)?;
+        let is_identity_crypt_stream = crypt_names_identity == Some(true);
+
         let handler_ref = self.encryption_handler.lock_or_recover();
+        if handler_ref.is_some() && !is_unencrypted_stream_type && crypt_names_identity == Some(false) {
+            return Err(Error::UnsupportedFilter(
+                "Crypt filter naming a non-Identity crypt filter".to_string(),
+            ));
+        }
         if let Some(handler) = handler_ref.as_ref()
             && !is_unencrypted_stream_type
+            && !is_identity_crypt_stream
         {
             let decrypt_fn = |data: &[u8]| -> Result<Vec<u8>> {
                 handler.decrypt_stream(data, obj_ref.id, obj_ref.generation as u32)

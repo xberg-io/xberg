@@ -267,6 +267,17 @@ pub struct EmbeddingPreset {
     /// prefixed. `None` for symmetric models.
     #[serde(default)]
     pub query_prefix: Option<String>,
+    /// Instruction prefix prepended to *document-side* text (chunks) before
+    /// encoding. E5 models are trained with `"passage: "` on documents and
+    /// `"query: "` on queries. `None` for models that take documents verbatim.
+    #[serde(default)]
+    pub document_prefix: Option<String>,
+    /// Whether the ONNX file is dynamically quantized (`DynamicQuantizeLinear`
+    /// activations). Activation scales are computed per batch tensor, so a
+    /// text's vector depends on the rest of its batch; the engine embeds such
+    /// presets one text per run.
+    #[serde(default)]
+    pub dynamic_quantized: bool,
 }
 
 /// All available embedding presets.
@@ -296,6 +307,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: Vec::new(),
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: true,
         },
         EmbeddingPreset {
             name: "balanced".to_string(),
@@ -309,6 +322,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: Vec::new(),
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "quality".to_string(),
@@ -322,6 +337,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: Vec::new(),
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "multilingual".to_string(),
@@ -331,10 +348,12 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             pooling: "mean".to_string(),
             model_file: "multilingual-e5-base/model.onnx".to_string(),
             dimensions: 768,
-            description: "Multilingual support (768 dims, 100+ languages). Best for: International documents, mixed-language content, global applications.".to_string(),
+            description: "Multilingual E5 (768 dims, 100+ languages). Asymmetric retrieval: queries are prefixed with \"query: \" and documents with \"passage: \". Best for: International documents, mixed-language content, global applications.".to_string(),
             backend: EmbeddingBackend::Onnx,
             additional_files: Vec::new(),
-            query_prefix: None,
+            query_prefix: Some("query: ".to_string()),
+            document_prefix: Some("passage: ".to_string()),
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "gte-modernbert-base".to_string(),
@@ -348,6 +367,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: Vec::new(),
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "lightweight".to_string(),
@@ -361,6 +382,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Static,
             additional_files: Vec::new(),
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "arctic-embed-m-v2.0".to_string(),
@@ -374,6 +397,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: vec!["arctic-embed-m-v2.0/model.onnx.data".to_string()],
             query_prefix: Some("query: ".to_string()),
+            document_prefix: None,
+            dynamic_quantized: false,
         },
         EmbeddingPreset {
             name: "qwen3-embedding-0.6b".to_string(),
@@ -387,6 +412,8 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             backend: EmbeddingBackend::Onnx,
             additional_files: vec!["qwen3-embedding-0.6b/model.onnx.data".to_string()],
             query_prefix: None,
+            document_prefix: None,
+            dynamic_quantized: false,
         },
     ]
 });
@@ -409,6 +436,39 @@ pub fn embedding_query_prefix(config: &crate::core::config::EmbeddingConfig) -> 
         crate::core::config::EmbeddingModelType::Preset { name } => get_preset(name).and_then(|p| p.query_prefix),
         _ => None,
     }
+}
+
+/// Document-side instruction prefix for the given embedding config, if the
+/// resolved preset defines one (E5 models take `"passage: "` on chunks).
+///
+/// Applied when chunks are embedded; queries use [`embedding_query_prefix`].
+#[cfg(feature = "embeddings")]
+fn embedding_document_prefix(config: &crate::core::config::EmbeddingConfig) -> Option<String> {
+    match &config.model {
+        crate::core::config::EmbeddingModelType::Preset { name } => get_preset(name).and_then(|p| p.document_prefix),
+        _ => None,
+    }
+}
+
+/// Prepend `prefix` to every text; borrowed texts are copied only when a prefix is set.
+#[cfg(feature = "embeddings")]
+fn prefixed_texts<'a>(texts: &[&'a str], prefix: Option<&str>) -> Vec<std::borrow::Cow<'a, str>> {
+    texts
+        .iter()
+        .map(|&text| match prefix {
+            // An empty text stays empty so `embed_texts` still rejects it.
+            Some(prefix) if !text.is_empty() => std::borrow::Cow::Owned(format!("{prefix}{text}")),
+            _ => std::borrow::Cow::Borrowed(text),
+        })
+        .collect()
+}
+
+/// Whether the ONNX file `model_file` of `repo` is a dynamically quantized preset.
+#[cfg(feature = "embeddings")]
+fn is_dynamic_quantized(repo: &str, model_file: &str) -> bool {
+    EMBEDDING_PRESETS
+        .iter()
+        .any(|p| p.dynamic_quantized && p.model_repo == repo && p.model_file == model_file)
 }
 
 /// Get the chunk_size for a preset by name.
@@ -518,7 +578,8 @@ fn get_or_init_engine(
         let tokenizer = crate::onnx::load_tokenizer(&files, max_sequence_length, embed_err)?;
         let session = crate::onnx::build_session(&files.model, accel.as_ref(), embed_err)?;
 
-        Ok(EmbeddingEngine::new(tokenizer, session, pooling))
+        let dynamic_quantized = is_dynamic_quantized(repo_name, model_file);
+        Ok(EmbeddingEngine::new(tokenizer, session, pooling, dynamic_quantized))
     })
 }
 
@@ -692,7 +753,10 @@ pub(crate) fn generate_embeddings_for_chunks(
         | crate::core::config::EmbeddingModelType::Plugin { .. } => chunks.len(),
     };
 
-    let Some(embeddings_result) = embed_in_windows(chunks, window, stop, &mut |texts| embed_texts(texts, config))?
+    let document_prefix = embedding_document_prefix(config);
+    let Some(embeddings_result) = embed_in_windows(chunks, window, stop, &mut |texts| {
+        embed_texts(&prefixed_texts(texts, document_prefix.as_deref()), config)
+    })?
     else {
         return Ok(false);
     };
@@ -1320,6 +1384,39 @@ mod tests {
         assert!(presets.iter().any(|n| n == "lightweight"));
         assert!(presets.iter().any(|n| n == "arctic-embed-m-v2.0"));
         assert!(presets.iter().any(|n| n == "qwen3-embedding-0.6b"));
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn e5_preset_prefixes_queries_and_documents() {
+        let preset = get_preset("multilingual").expect("multilingual preset must exist");
+        assert_eq!(preset.query_prefix.as_deref(), Some("query: "));
+        assert_eq!(preset.document_prefix.as_deref(), Some("passage: "));
+        assert_eq!(get_preset("balanced").unwrap().document_prefix, None);
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn prefixed_texts_prefixes_documents_but_keeps_empty_text_rejectable() {
+        let out = prefixed_texts(&["alpha", ""], Some("passage: "));
+        assert_eq!(out, ["passage: alpha", ""]);
+        let verbatim = prefixed_texts(&["alpha"], None);
+        assert_eq!(verbatim, ["alpha"]);
+        assert!(matches!(verbatim[0], std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn only_the_quantized_fast_preset_is_dynamic_quantized() {
+        let fast = get_preset("fast").unwrap();
+        assert!(fast.dynamic_quantized);
+        assert!(is_dynamic_quantized(&fast.model_repo, &fast.model_file));
+        assert!(!is_dynamic_quantized(&fast.model_repo, "bge-base-en-v1.5/model.onnx"));
+        assert!(!is_dynamic_quantized("custom/repo", &fast.model_file));
+        let others = EMBEDDING_PRESETS
+            .iter()
+            .filter(|p| p.name != "fast" && p.dynamic_quantized);
+        assert_eq!(others.count(), 0);
     }
 
     #[test]

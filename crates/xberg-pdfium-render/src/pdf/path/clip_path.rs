@@ -50,7 +50,14 @@ impl<'a> PdfClipPath<'a> {
     /// Returns the number of path objects inside this [PdfClipPath] instance.
     #[inline]
     pub fn len(&self) -> PdfClipPathSegmentIndex {
-        self.bindings().FPDFClipPath_CountPaths(self.handle()) as PdfClipPathSegmentIndex
+        let path_count = self.bindings().FPDFClipPath_CountPaths(self.handle());
+
+        // FPDFClipPath_CountPaths() returns -1 on failure; a plain cast would wrap to a huge count.
+        if path_count < 0 {
+            return 0;
+        }
+
+        path_count as PdfClipPathSegmentIndex
     }
 
     /// Returns `true` if this [PdfClipPath] instance is empty.

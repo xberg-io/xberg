@@ -9171,6 +9171,7 @@ dependencies = [
  "unicode-normalization",
  "uuid",
  "weezl 0.2.1",
+ "zeroize",
 ]
 
 [[package]]

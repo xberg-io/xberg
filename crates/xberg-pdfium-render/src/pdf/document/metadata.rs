@@ -119,18 +119,22 @@ impl<'a> PdfMetadata<'a> {
 
     /// Returns one metadata tag from this [PdfMetadata] collection, if it is defined.
     pub fn get(&self, tag: PdfDocumentMetadataTagType) -> Option<PdfDocumentMetadataTag> {
-        let result = match tag {
-            PdfDocumentMetadataTagType::Title => self.get_raw_metadata_tag("Title"),
-            PdfDocumentMetadataTagType::Author => self.get_raw_metadata_tag("Author"),
-            PdfDocumentMetadataTagType::Subject => self.get_raw_metadata_tag("Subject"),
-            PdfDocumentMetadataTagType::Keywords => self.get_raw_metadata_tag("Keywords"),
-            PdfDocumentMetadataTagType::Creator => self.get_raw_metadata_tag("Creator"),
-            PdfDocumentMetadataTagType::Producer => self.get_raw_metadata_tag("Producer"),
-            PdfDocumentMetadataTagType::CreationDate => self.get_raw_metadata_tag("CreationDate"),
-            PdfDocumentMetadataTagType::ModificationDate => self.get_raw_metadata_tag("ModificationDate"),
-        };
+        self.get_raw_metadata_tag(Self::info_dictionary_key(tag))
+            .map(|value| PdfDocumentMetadataTag::new(tag, value))
+    }
 
-        result.map(|value| PdfDocumentMetadataTag::new(tag, value))
+    /// Returns the Info dictionary key under which the given tag is stored in a PDF document.
+    fn info_dictionary_key(tag: PdfDocumentMetadataTagType) -> &'static str {
+        match tag {
+            PdfDocumentMetadataTagType::Title => "Title",
+            PdfDocumentMetadataTagType::Author => "Author",
+            PdfDocumentMetadataTagType::Subject => "Subject",
+            PdfDocumentMetadataTagType::Keywords => "Keywords",
+            PdfDocumentMetadataTagType::Creator => "Creator",
+            PdfDocumentMetadataTagType::Producer => "Producer",
+            PdfDocumentMetadataTagType::CreationDate => "CreationDate",
+            PdfDocumentMetadataTagType::ModificationDate => "ModDate",
+        }
     }
 
     #[inline]
@@ -161,5 +165,22 @@ impl<'a> PdfMetadata<'a> {
     #[inline]
     pub fn iter(&self) -> Iter<'_, PdfDocumentMetadataTag> {
         self.tags.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PdfDocumentMetadataTagType, PdfMetadata};
+
+    #[test]
+    fn modification_date_uses_the_moddate_info_key() {
+        assert_eq!(
+            PdfMetadata::info_dictionary_key(PdfDocumentMetadataTagType::ModificationDate),
+            "ModDate"
+        );
+        assert_eq!(
+            PdfMetadata::info_dictionary_key(PdfDocumentMetadataTagType::CreationDate),
+            "CreationDate"
+        );
     }
 }

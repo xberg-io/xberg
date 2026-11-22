@@ -78,8 +78,8 @@ fn ccitt_pdf(by_reference: bool) -> Vec<u8> {
 
     let xref = pdf.len();
     push!(format!("xref\n0 {}\n0000000000 65535 f \r\n", n + 1));
-    for id in 1..=n {
-        push!(format!("{:010} 00000 n \r\n", off[id]));
+    for offset in &off[1..=n] {
+        push!(format!("{:010} 00000 n \r\n", offset));
     }
     push!(format!(
         "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",

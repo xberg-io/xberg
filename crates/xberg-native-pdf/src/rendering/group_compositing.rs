@@ -1,4 +1,4 @@
-use super::PageRenderer;
+use super::{FormEntry, PageRenderer};
 use crate::content::GraphicsState;
 use crate::content::operators::Operator;
 use crate::document::PdfDocument;
@@ -274,6 +274,7 @@ pub(super) struct GroupReplay<'a> {
     pub(super) page_num: usize,
     pub(super) resources: &'a crate::object::Object,
     pub(super) knockout: bool,
+    pub(super) entry: &'a FormEntry,
 }
 
 pub(super) fn sidecar_replay_bytes(renderer: &PageRenderer) -> Option<usize> {
@@ -338,6 +339,7 @@ impl PageRenderer {
         self.cmyk_sidecar = saved_sidecar
             .as_ref()
             .map(|sidecar| CmykSidecar::new(alpha.width(), alpha.height(), sidecar.spot_names().to_vec()));
+        self.form_entry = Some(replay.entry.clone());
         let rendered = if replay.knockout {
             self.execute_knockout_group(
                 alpha,
@@ -377,6 +379,7 @@ impl PageRenderer {
             backdrop.restore(self);
         }
         let shape = self.knockout_shape.take();
+        self.form_entry = Some(replay.entry.clone());
         let result = self.execute_operators(
             group,
             replay.transform,

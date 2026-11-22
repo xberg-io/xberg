@@ -7,19 +7,15 @@ use super::super::ChunkSizer;
 /// Compute the number of tokens that exist within an entire [`Encoding`] object.
 ///
 /// Take into account [`Encoding::get_overflowing`] for cases where the [`Tokenizer`] producing the [`Encoding`] has truncation parameters set.
-fn num_tokens_with_overflow(encoding: &Encoding, pad_id: Option<u32>) -> usize {
+fn num_tokens_with_overflow(encoding: &Encoding) -> usize {
     let base = encoding
-        .get_ids()
+        .get_attention_mask()
         .iter()
-        .skip_while(|&id| pad_id.is_some_and(|pad_id| id == &pad_id))
-        .take_while(|&id| pad_id.is_none_or(|pad_id| id != &pad_id))
+        // Padding has a zero mask; real content may share its token ID.
+        .filter(|&&attention| attention != 0)
         .count();
 
-    let overflow: usize = encoding
-        .get_overflowing()
-        .iter()
-        .map(|enc| num_tokens_with_overflow(enc, pad_id))
-        .sum();
+    let overflow: usize = encoding.get_overflowing().iter().map(num_tokens_with_overflow).sum();
 
     base + overflow
 }
@@ -36,13 +32,17 @@ impl ChunkSizer for Tokenizer {
             .encode_fast(chunk, false)
             .expect("Unable to tokenize the following string {chunk}");
 
-        let pad_id = self.get_padding().map(|params| params.pad_id);
-        num_tokens_with_overflow(&encoding, pad_id)
+        num_tokens_with_overflow(&encoding)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use tokenizers::{
+        PaddingDirection, PaddingParams, PaddingStrategy, Token, models::wordlevel::WordLevel,
+        pre_tokenizers::whitespace::WhitespaceSplit,
+    };
+
     use super::*;
 
     fn tokenizer(repo: &str, revision: &str) -> Tokenizer {
@@ -50,6 +50,76 @@ mod tests {
             .unwrap_or_else(|error| panic!("Could not resolve tokenizer '{repo}@{revision}': {error}"));
         Tokenizer::from_file(&path)
             .unwrap_or_else(|error| panic!("Could not load tokenizer '{}': {error}", path.display()))
+    }
+
+    fn local_tokenizer(direction: PaddingDirection) -> Tokenizer {
+        let model = WordLevel::builder()
+            .vocab(
+                [
+                    ("[PAD]".into(), 0),
+                    ("[UNK]".into(), 1),
+                    ("first".into(), 2),
+                    ("second".into(), 3),
+                    ("third".into(), 4),
+                ]
+                .into_iter()
+                .collect(),
+            )
+            .unk_token("[UNK]".into())
+            .build()
+            .unwrap();
+        let mut tokenizer = Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(WhitespaceSplit));
+        tokenizer.with_padding(Some(PaddingParams {
+            strategy: PaddingStrategy::Fixed(8),
+            direction,
+            pad_id: 0,
+            pad_token: "[PAD]".into(),
+            ..Default::default()
+        }));
+        tokenizer
+    }
+
+    #[test]
+    fn content_padding_ids_are_counted() {
+        for direction in [PaddingDirection::Left, PaddingDirection::Right] {
+            let mut tokenizer = local_tokenizer(direction);
+            for padding in [true, false] {
+                if !padding {
+                    tokenizer.with_padding(None);
+                }
+                for (text, expected) in [
+                    ("", 0),
+                    ("first second third", 3),
+                    ("[PAD]", 1),
+                    ("[PAD] first second third", 4),
+                    ("first [PAD] second third", 4),
+                    ("first second third [PAD]", 4),
+                ] {
+                    assert_eq!(
+                        tokenizer.size(text),
+                        expected,
+                        "{direction:?}, padding={padding}, {text:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn content_padding_ids_in_overflow_are_counted() {
+        let mut encoding = Encoding::from_tokens(vec![Token::new(0, "[PAD]".into(), (0, 5))], 0);
+        let mut overflow = Encoding::from_tokens(
+            vec![
+                Token::new(0, "[PAD]".into(), (0, 5)),
+                Token::new(2, "first".into(), (6, 11)),
+            ],
+            0,
+        );
+        overflow.pad(8, 0, 0, "[PAD]", PaddingDirection::Left);
+        encoding.set_overflowing(vec![overflow]);
+        encoding.pad(8, 0, 0, "[PAD]", PaddingDirection::Right);
+        assert_eq!(num_tokens_with_overflow(&encoding), 3);
     }
 
     #[test]

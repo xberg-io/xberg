@@ -13,6 +13,7 @@
 //! Decoders can be chained together in a filter pipeline.
 
 use crate::error::{Error, Result};
+use crate::object::Object;
 use crate::parser_config::ParserOptions;
 
 mod ascii85;
@@ -160,6 +161,7 @@ fn normalize_filter_name(name: &str) -> Result<&'static str> {
         "JBIG2Decode" => return Ok("JBIG2Decode"),
         "JPXDecode" => return Ok("JPXDecode"),
         "BrotliDecode" => return Ok("BrotliDecode"),
+        "Crypt" => return Ok("Crypt"),
         _ => {}
     }
 
@@ -191,6 +193,46 @@ fn normalize_filter_name(name: &str) -> Result<&'static str> {
     }
 }
 
+/// The Crypt filter only selects which crypt filter decrypts the stream; the data is already decrypted (or
+/// is /Identity) by the time the filter chain runs. ~keep
+struct CryptDecoder;
+
+impl StreamDecoder for CryptDecoder {
+    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
+        Ok(input.to_vec())
+    }
+
+    fn name(&self) -> &str {
+        "Crypt"
+    }
+}
+
+/// The first filter's `/DecodeParms` entry (unresolved) when the stream's first filter is `/Crypt`; the outer
+/// `None` means the first filter is not `/Crypt`.
+pub(crate) fn first_crypt_decode_parms(dict: &std::collections::HashMap<String, Object>) -> Option<Option<&Object>> {
+    let first_filter = match dict.get("Filter") {
+        Some(Object::Name(name)) => Some(name.as_str()),
+        Some(Object::Array(filters)) => filters.first().and_then(Object::as_name),
+        _ => None,
+    };
+    if first_filter != Some("Crypt") {
+        return None;
+    }
+    Some(match dict.get("DecodeParms").or_else(|| dict.get("DP")) {
+        Some(Object::Array(params)) => params.first(),
+        other => other,
+    })
+}
+
+/// True when resolved `/Crypt` parameters name the `/Identity` filter; an absent or null `/Name` defaults to it,
+/// so the stream is stored unencrypted even in an encrypted document (ISO 32000-1 §7.4.10).
+pub(crate) fn names_identity_crypt_filter(params: Option<&Object>) -> bool {
+    match params.and_then(Object::as_dict).and_then(|params| params.get("Name")) {
+        None | Some(Object::Null) => true,
+        Some(name) => name.as_name() == Some("Identity"),
+    }
+}
+
 fn create_decoder(filter_name: &str) -> Result<Box<dyn StreamDecoder>> {
     let canonical = normalize_filter_name(filter_name)?;
     Ok(match canonical {
@@ -204,6 +246,7 @@ fn create_decoder(filter_name: &str) -> Result<Box<dyn StreamDecoder>> {
         "JBIG2Decode" => Box::new(Jbig2Decoder),
         "JPXDecode" => Box::new(jpx::JpxDecoder),
         "BrotliDecode" => Box::new(BrotliDecoder),
+        "Crypt" => Box::new(CryptDecoder),
         // normalize_filter_name already returns Err for unknown filters ~keep
         _ => unreachable!(),
     })
@@ -309,7 +352,24 @@ fn decode_complete_form_filter(filter: &str, input: &[u8], limit: usize, lzw_ear
             create_decoder(canonical)?.decode(payload, limit)
         }
         "BrotliDecode" => brotli::decode(input, limit, true),
+        "Crypt" => Ok(input.to_vec()),
         _ => Err(Error::UnsupportedFilter(format!("{canonical} in Form content"))),
+    }
+}
+
+/// Largest output a filter may produce before the ratio or size check would reject it (`0` = unbounded).
+fn filter_output_limit(max_size: usize, max_ratio: u32, compressed_size: usize, exempt_size: Option<usize>) -> usize {
+    if max_ratio == 0 || compressed_size == 0 {
+        return max_size;
+    }
+    let ratio_limit = compressed_size
+        .saturating_mul((max_ratio as usize).saturating_add(1))
+        .saturating_sub(1)
+        .max(exempt_size.unwrap_or(0));
+    if max_size == 0 {
+        ratio_limit
+    } else {
+        max_size.min(ratio_limit)
     }
 }
 
@@ -345,12 +405,27 @@ fn decode_stream_with_options_and_expected_size(
     let mut current = data.to_vec();
 
     for (filter_index, filter_name) in filters.iter().enumerate() {
-        current = if let Some(early_changes) = form_lzw_early_changes {
-            let early_change = early_changes.get(filter_index).copied().unwrap_or(true);
-            decode_complete_form_filter(filter_name, &current, max_size, early_change)?
+        // Hand the decoder the ratio bound too so a bomb aborts at ratio * len instead of after full inflation. ~keep
+        let exempt_size = if filter_index + 1 == filters.len() {
+            expected_filter_output_size
         } else {
-            create_decoder(filter_name)?.decode(&current, max_size)?
+            None
         };
+        let output_limit = filter_output_limit(max_size, max_ratio, compressed_size, exempt_size);
+        let decoded = if let Some(early_changes) = form_lzw_early_changes {
+            let early_change = early_changes.get(filter_index).copied().unwrap_or(true);
+            decode_complete_form_filter(filter_name, &current, output_limit, early_change)
+        } else {
+            create_decoder(filter_name).and_then(|decoder| decoder.decode(&current, output_limit))
+        };
+        current = decoded.map_err(|error| match error {
+            Error::Decode(message) if message.contains("limit") && (max_size == 0 || output_limit < max_size) => {
+                Error::Decode(format!(
+                    "Decompression bomb detected: ratio exceeds limit {max_ratio}:1 (compressed: {compressed_size} bytes): {message}"
+                ))
+            }
+            other => other,
+        })?;
 
         // SECURITY: Check decompression ratio after each filter. Image callers may
         // provide the exact byte count implied by Width x Height x components x bpc
@@ -468,6 +543,16 @@ mod tests {
     use flate2::Compression;
     use flate2::write::ZlibEncoder;
     use std::io::Write;
+
+    #[test]
+    fn output_limit_does_not_wrap_for_the_largest_ratio() {
+        #[cfg(target_pointer_width = "64")]
+        let expected = 10 * (u32::MAX as usize + 1) - 1;
+        #[cfg(not(target_pointer_width = "64"))]
+        let expected = usize::MAX - 1;
+        assert_eq!(filter_output_limit(0, u32::MAX, 10, None), expected);
+        assert_eq!(filter_output_limit(100, u32::MAX, 10, None), 100);
+    }
 
     #[test]
     fn form_decoder_propagates_zlib_checksum_and_completion_errors() {

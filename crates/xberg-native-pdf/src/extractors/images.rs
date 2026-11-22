@@ -2373,11 +2373,11 @@ fn decode_indexed_pixels(
     out: &mut Vec<u8>,
 ) {
     // The palette defines the valid index range: its last complete entry is `hival`.
-    let last_entry = if n == 0 {
-        0
-    } else {
-        (params.palette.len() / n).saturating_sub(1)
-    };
+    let last_entry = params
+        .palette
+        .len()
+        .checked_div(n)
+        .map_or(0, |entries| entries.saturating_sub(1));
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(params.raw.len());
@@ -2485,11 +2485,10 @@ pub(crate) fn expand_indexed_to_base_samples(
     validate_indexed_input_len(raw, bytes_per_row, h)?;
 
     let mut out = Vec::with_capacity(output_bytes);
-    let last_entry = if n == 0 {
-        0
-    } else {
-        (palette.len() / n).saturating_sub(1)
-    };
+    let last_entry = palette
+        .len()
+        .checked_div(n)
+        .map_or(0, |entries| entries.saturating_sub(1));
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(raw.len());
@@ -2789,6 +2788,28 @@ pub fn decode_cmyk_jpeg_to_rgb(jpeg_data: &[u8]) -> Result<Vec<u8>> {
     decode_cmyk_jpeg_to_rgb_with_profile(jpeg_data, None)
 }
 
+/// Read the frame header and bound the 4-channel buffer a CMYK decode will allocate before decoding any scan
+/// data: a tiny file can declare a 65535 x 65535 frame. ~keep
+fn checked_cmyk_jpeg_pixel_count<R: std::io::Read>(decoder: &mut jpeg_decoder::Decoder<R>) -> Result<usize> {
+    const MAX_CMYK_JPEG_PIXEL_BYTES: usize = 256 * 1024 * 1024;
+    decoder
+        .read_info()
+        .map_err(|e| Error::Decode(format!("Failed to decode CMYK JPEG: {}", e)))?;
+    let info = decoder
+        .info()
+        .ok_or_else(|| Error::Decode("JPEG info unavailable".to_string()))?;
+    let pixel_count = (info.width as usize) * (info.height as usize);
+    if pixel_count.saturating_mul(4) > MAX_CMYK_JPEG_PIXEL_BYTES {
+        return Err(Error::Decode(format!(
+            "CMYK JPEG {}x{} would decode to {} pixel bytes, exceeds guard limit of {MAX_CMYK_JPEG_PIXEL_BYTES} bytes",
+            info.width,
+            info.height,
+            pixel_count.saturating_mul(4)
+        )));
+    }
+    Ok(pixel_count)
+}
+
 /// Decode a DeviceCMYK JPEG to raw 8-bpc CMYK samples (W*H*4 bytes,
 /// channel order C, M, Y, K). Output is the raw DCT sample plane treated
 /// as straight CMYK ink (0 = no ink, 255 = full coverage), matching how
@@ -2823,14 +2844,10 @@ pub fn decode_cmyk_jpeg_to_rgb(jpeg_data: &[u8]) -> Result<Vec<u8>> {
 /// without it the function would be dead code under `-D warnings`.
 pub(crate) fn decode_cmyk_jpeg_to_raw_cmyk(jpeg_data: &[u8]) -> Result<Vec<u8>> {
     let mut decoder = jpeg_decoder::Decoder::new(std::io::Cursor::new(jpeg_data));
+    let pixel_count = checked_cmyk_jpeg_pixel_count(&mut decoder)?;
     let cmyk = decoder
         .decode()
         .map_err(|e| Error::Decode(format!("Failed to decode CMYK JPEG: {}", e)))?;
-    let info = decoder
-        .info()
-        .ok_or_else(|| Error::Decode("JPEG info unavailable".to_string()))?;
-
-    let pixel_count = (info.width as usize) * (info.height as usize);
     let expected = pixel_count * 4;
     if cmyk.len() < expected {
         return Err(Error::Decode(format!(
@@ -2873,14 +2890,10 @@ pub fn decode_cmyk_jpeg_to_rgb_with_profile(
     transform: Option<&crate::color::Transform>,
 ) -> Result<Vec<u8>> {
     let mut decoder = jpeg_decoder::Decoder::new(std::io::Cursor::new(jpeg_data));
+    let pixel_count = checked_cmyk_jpeg_pixel_count(&mut decoder)?;
     let cmyk = decoder
         .decode()
         .map_err(|e| Error::Decode(format!("Failed to decode CMYK JPEG: {}", e)))?;
-    let info = decoder
-        .info()
-        .ok_or_else(|| Error::Decode("JPEG info unavailable".to_string()))?;
-
-    let pixel_count = (info.width as usize) * (info.height as usize);
     let expected = pixel_count * 4;
     if cmyk.len() < expected {
         return Err(Error::Decode(format!(
@@ -3150,36 +3163,69 @@ fn decode_jbig2_image(
     let image = hayro_jbig2::Page::new_embedded(&jbig2_bytes, globals.as_ref(), &settings)
         .map_err(|e| Error::Image(format!("JBIG2 decode error: {e}")))?;
 
+    // The codestream's page-information segment sizes the decoded page independently of the dictionary. ~keep
+    let page_pixel_count = checked_jbig2_pixel_capacity(image.width(), image.height())?;
+
     struct PixelCollector {
         pixels: Vec<u8>,
         row_buf: Vec<u8>,
+        limit: usize,
+        overflowed: bool,
+    }
+
+    impl PixelCollector {
+        fn has_room(&mut self, extra: usize) -> bool {
+            if self
+                .pixels
+                .len()
+                .saturating_add(self.row_buf.len())
+                .saturating_add(extra)
+                > self.limit
+            {
+                self.overflowed = true;
+            }
+            !self.overflowed
+        }
     }
 
     impl hayro_jbig2::Decoder for PixelCollector {
         fn push_pixel(&mut self, black: bool) {
-            self.row_buf.push(if black { 0 } else { 255 });
+            if self.has_room(1) {
+                self.row_buf.push(if black { 0 } else { 255 });
+            }
         }
 
         // chunk_count is the number of 8-pixel groups, not individual pixels. ~keep
         fn push_pixel_chunk(&mut self, black: bool, chunk_count: u32) {
             let v = if black { 0u8 } else { 255u8 };
             let n = chunk_count as usize * 8;
-            self.row_buf.extend(std::iter::repeat_n(v, n));
+            if self.has_room(n) {
+                self.row_buf.extend(std::iter::repeat_n(v, n));
+            }
         }
 
         fn next_line(&mut self) {
-            self.pixels.append(&mut self.row_buf);
+            if !self.overflowed {
+                self.pixels.append(&mut self.row_buf);
+            }
         }
     }
 
     let mut collector = PixelCollector {
-        pixels: Vec::with_capacity(pixel_count),
+        pixels: Vec::with_capacity(pixel_count.min(page_pixel_count)),
         row_buf: Vec::with_capacity(width as usize),
+        limit: pixel_count.max(page_pixel_count),
+        overflowed: false,
     };
 
     image
         .decode(&mut collector)
         .map_err(|e| Error::Image(format!("JBIG2 pixel decode error: {e}")))?;
+    if collector.overflowed {
+        return Err(Error::Image(
+            "JBIG2 decode produced more pixels than the page bound".to_string(),
+        ));
+    }
 
     Ok(ImageData::Raw {
         pixels: collector.pixels,
@@ -3188,8 +3234,40 @@ fn decode_jbig2_image(
 }
 
 #[cfg(test)]
+mod cmyk_jpeg_budget_tests {
+    use super::{decode_cmyk_jpeg_to_raw_cmyk, decode_cmyk_jpeg_to_rgb_with_profile};
+
+    fn jpeg_with_oversized_cmyk_frame() -> Vec<u8> {
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x14, 8, 0xFF, 0xFF, 0xFF, 0xFF, 4];
+        for id in 1..=4u8 {
+            jpeg.extend_from_slice(&[id, 0x11, 0]);
+        }
+        jpeg.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x0E, 4]);
+        for id in 1..=4u8 {
+            jpeg.extend_from_slice(&[id, 0x00]);
+        }
+        jpeg.extend_from_slice(&[0, 63, 0, 0xFF, 0xD9]);
+        jpeg
+    }
+
+    #[test]
+    fn oversized_cmyk_frame_is_rejected_before_decoding_scan_data() {
+        let jpeg = jpeg_with_oversized_cmyk_frame();
+
+        for error in [
+            decode_cmyk_jpeg_to_raw_cmyk(&jpeg).unwrap_err().to_string(),
+            decode_cmyk_jpeg_to_rgb_with_profile(&jpeg, None)
+                .unwrap_err()
+                .to_string(),
+        ] {
+            assert!(error.contains("pixel bytes"), "{error}");
+        }
+    }
+}
+
+#[cfg(test)]
 mod jbig2_pixel_capacity_tests {
-    use super::checked_jbig2_pixel_capacity;
+    use super::{checked_jbig2_pixel_capacity, decode_jbig2_image};
 
     #[test]
     fn should_accept_an_ordinary_scanned_page_size() {
@@ -3207,6 +3285,38 @@ mod jbig2_pixel_capacity_tests {
         let result = checked_jbig2_pixel_capacity(20_000, 20_000);
 
         assert!(result.is_err(), "oversized JBIG2 image must be rejected, not decoded");
+    }
+
+    #[test]
+    fn should_reject_a_codestream_page_larger_than_its_tiny_dictionary() {
+        let mut page_info = Vec::new();
+        page_info.extend_from_slice(&20_000u32.to_be_bytes());
+        page_info.extend_from_slice(&16_000u32.to_be_bytes());
+        page_info.extend_from_slice(&[0u8; 8]);
+        page_info.push(0);
+        page_info.extend_from_slice(&[0u8; 2]);
+        let mut codestream = Vec::new();
+        codestream.extend_from_slice(&1u32.to_be_bytes());
+        codestream.push(48);
+        codestream.push(0);
+        codestream.push(1);
+        codestream.extend_from_slice(&(page_info.len() as u32).to_be_bytes());
+        codestream.extend_from_slice(&page_info);
+
+        let dict = std::collections::HashMap::new();
+        let xobject = crate::object::Object::Stream {
+            dict: dict.clone(),
+            data: bytes::Bytes::from(codestream),
+        };
+
+        let started = std::time::Instant::now();
+        let result = decode_jbig2_image(&xobject, None, &dict, None, 8, 8);
+
+        assert!(
+            result.is_err(),
+            "320 Mpixel codestream page decoded against an 8x8 dictionary"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 
     #[test]

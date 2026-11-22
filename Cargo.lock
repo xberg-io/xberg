@@ -11615,6 +11615,7 @@ dependencies = [
  "uuid",
  "weezl 0.2.1",
  "xberg-child-test",
+ "zeroize",
 ]
 
 [[package]]
