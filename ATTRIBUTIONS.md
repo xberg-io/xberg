@@ -236,7 +236,7 @@ Text embedding inference pipeline vendored into `crates/xberg/src/embeddings/eng
 - **Author**: Anush008 and contributors
 - **Vendored Version**: not recorded in the file. Best evidence: `fastembed` 5.12.1 was the locked dependency (`Cargo.lock`, `fastembed = "5.12"`) in the commit immediately before `2c189df8ae` ("chore: vendor fastembed", 2026-03-15) removed it. The earlier "0.2.x" was wrong. The current `engine.rs` shares almost no lines with fastembed 5.12.1 `src/` (at most 16 of 256 normalised lines with any single upstream file), so it has been largely rewritten and the extent of derivation cannot be verified by diff
 - **Copyright**: the `LICENSE` of fastembed 5.12.1 is the unfilled Apache-2.0 template (`Copyright [yyyy] [name of copyright owner]`); upstream's current `LICENSE` (<https://github.com/Anush008/fastembed-rs> commit `1cde83b4426c1afe9ae4af22a02833e7ec723184`) reads `Copyright 2026 Anush008`. The crates.io `authors` list is Anush008, Josh Niemelä, GrisiaEvy, George MacKerron, Timon Vonk, Luya Wang, Tri, Denny Wong, Alex Rozgo
-- **Header status**: the vendored `engine.rs` does not retain an upstream copyright header (its header only points to this file). The upstream notice is recorded here and the Apache-2.0 text is reproduced in `crates/xberg/LICENSE-THIRD-PARTY`
+- **Header status**: the vendored `engine.rs` does not retain an upstream copyright header. Its header names fastembed-rs and its copyright holder and carries the statement of changes, so both ship inside the published `xberg` crate (this file does not); the Apache-2.0 text is reproduced in `crates/xberg/LICENSE-THIRD-PARTY`
 - **Location**: `crates/xberg/src/embeddings/engine.rs`
 - **Purpose**: ONNX-based text embedding inference with thread-safe concurrent embedding generation
 
@@ -250,7 +250,7 @@ The vendored code has been modified from the original fastembed-rs:
 
 ### License Compatibility
 
-The upstream code is Apache-2.0. Redistribution in Xberg requires the Apache-2.0 text, upstream copyright and attribution notices and a statement of changes (above) to accompany the derived file. The engine header only points to this file and does not reproduce an upstream copyright line; the notice is recorded in this entry and in `crates/xberg/LICENSE-THIRD-PARTY`. The derived file stays Apache-2.0.
+The upstream code is Apache-2.0. Redistribution in Xberg requires the Apache-2.0 text, upstream copyright and attribution notices and a statement of changes (above) to accompany the derived file. The engine header names the upstream project and states the changes, so the statement of changes travels with the published crate; the notice is also recorded in this entry and in `crates/xberg/LICENSE-THIRD-PARTY`. The derived file stays Apache-2.0.
 
 ---
 
@@ -625,7 +625,7 @@ The overlap column is the share of a local file's non-comment lines (longer than
 
 ### License Compatibility
 
-The vendored files stay Apache-2.0. They carry a "Vendored from jhqxxx/aha (Apache-2.0)" header and the changes are listed under Modifications above. The crate ships the upstream Apache-2.0 text as `LICENSE-aha` (upstream has no NOTICE file and no filled-in copyright line, so there is nothing further to reproduce).
+The vendored files stay Apache-2.0. Each derived file carries a "Vendored from jhqxxx/aha (Apache-2.0)" or "Adapted from aha" header and a notice that Xberg modified it, and the changes are listed under Modifications above. The crate ships the upstream Apache-2.0 text as `LICENSE-aha` (upstream has no NOTICE file and no filled-in copyright line, so there is nothing further to reproduce).
 
 **Last Updated**: 2026-11-22
 

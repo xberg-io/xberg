@@ -1,6 +1,9 @@
 //! Subset of jhqxxx/aha (Apache-2.0) tailored to xberg's three
 //! VLM-OCR backends. Populated as Phase 3 lands shared infra.
 //!
+//! Modified by Xberg from the upstream aha source; the changes are listed in repo-root
+//! `ATTRIBUTIONS.md` § jhqxxx/aha (Modifications).
+//!
 //! See repo-root `ATTRIBUTIONS.md` § jhqxxx/aha for full attribution,
 //! modifications, and license compatibility notes.
 //!

@@ -4,7 +4,11 @@
 //! `embed()` takes `&self` so one engine can be shared via `Arc`; the session
 //! sits behind a mutex because `ort::Session::run()` takes `&mut self`.
 //!
-//! See ATTRIBUTIONS.md for original source attribution.
+//! Derived from fastembed-rs (Apache-2.0, Copyright 2026 Anush008 and contributors), and
+//! modified by Xberg: `embed()` takes `&self` instead of `&mut self` for concurrent
+//! inference without mutex contention, and the engine is adapted to Xberg's ONNX Runtime
+//! integration, error handling, embedding configuration and model management. The
+//! Apache-2.0 text ships in `LICENSE-THIRD-PARTY`; see also the repository ATTRIBUTIONS.md.
 
 use ndarray::{Array2, ArrayView, Dim, Dimension, IxDynImpl, s};
 use ort::session::Session;
