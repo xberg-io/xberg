@@ -371,6 +371,34 @@ impl<'a> PdfPageText<'a> {
         self.inside_rect(self.page.page_size())
     }
 
+    /// Returns every character on the page via `FPDFText_GetText`, without a bounding rectangle.
+    ///
+    /// Unlike [`all()`], which clips to `(0, 0, width, height)` through `FPDFText_GetBoundedText`,
+    /// this does not depend on the page's box origin or `/Rotate` matching that rectangle, so it
+    /// cannot drop characters whose boxes fall outside it.
+    pub fn whole_page(&self) -> String {
+        let char_count = self.len();
+
+        if char_count <= 0 {
+            return String::new();
+        }
+
+        // FPDFText_GetText writes `count` characters plus a terminating NUL.
+        let mut buffer = create_sized_buffer(char_count as usize + 1);
+
+        let written = self
+            .bindings()
+            .FPDFText_GetText(self.text_page_handle(), 0, char_count, buffer.as_mut_ptr());
+
+        if written <= 1 {
+            return String::new();
+        }
+
+        // `written` counts the terminator.
+        let units = (written as usize - 1).min(buffer.len());
+        get_string_from_pdfium_utf16le_bytes(cast_slice(&buffer[..units]).to_vec()).unwrap_or_default()
+    }
+
     /// Returns all page text with corrected word spacing, filtering out spurious
     /// spaces that pdfium inserts mid-word due to aggressive inter-glyph heuristics.
     ///
@@ -595,6 +623,41 @@ mod tests {
         assert!(test_one_overlapping_text_object_results(&txt1, &page_text, "AAAAAA")?);
         assert!(test_one_overlapping_text_object_results(&txt2, &page_text, "BBBBBB")?);
         assert!(test_one_overlapping_text_object_results(&txt3, &page_text, "CDCDCDE")?);
+
+        Ok(())
+    }
+
+    // Glyph A maps through ToUnicode to U+20000, a surrogate pair in UTF-16. The cross-reference table is
+    // omitted; pdfium rebuilds it by scanning the objects.
+    const SUPPLEMENTARY_PLANE_PDF: &[u8] = b"%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R
+  /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 33 >> stream
+BT /F1 24 Tf 50 700 Td (AB) Tj ET
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 6 0 R >> endobj
+6 0 obj << /Length 160 >> stream
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap
+1 begincodespacerange <00> <FF> endcodespacerange
+2 beginbfchar
+<41> <D840DC00>
+<42> <0042>
+endbfchar
+endcmap end end
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF
+";
+
+    #[test]
+    fn whole_page_keeps_supplementary_plane_characters() -> Result<(), PdfiumError> {
+        let pdfium = test_bind_to_pdfium();
+        let document = pdfium.load_pdf_from_byte_slice(SUPPLEMENTARY_PLANE_PDF, None)?;
+        let page = document.pages().get(0)?;
+
+        assert_eq!(page.text()?.whole_page().trim(), "\u{20000}B");
 
         Ok(())
     }

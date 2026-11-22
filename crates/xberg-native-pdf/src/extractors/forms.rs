@@ -6,6 +6,20 @@
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::{Object, ObjectRef};
+use std::collections::HashSet;
+
+const MAX_FIELD_DEPTH: usize = 64;
+const MAX_FIELD_COUNT: usize = 100_000;
+const MAX_PARENT_DEPTH: usize = 64;
+
+/// Traversal state shared across one AcroForm field-tree walk. ~keep
+#[derive(Default)]
+struct FieldWalk {
+    visited: HashSet<ObjectRef>,
+    visited_fields: usize,
+    /// Keep choice values as export values (what FDF/XFDF `/V` must carry) instead of display text.
+    export_values: bool,
+}
 
 /// A form field extracted from a PDF AcroForm.
 #[derive(Debug, Clone)]
@@ -286,14 +300,14 @@ impl FormExtractor {
     /// ```
     #[tracing::instrument(name = "pdf.extract_fields", skip_all)]
     pub fn extract_fields(doc: &PdfDocument) -> Result<Vec<FormField>> {
-        let result = Self::extract_fields_impl(doc);
+        let result = Self::extract_fields_impl(doc, false);
         if let Err(error) = &result {
             crate::error::trace_failure("extract_form_fields", error);
         }
         result
     }
 
-    fn extract_fields_impl(doc: &PdfDocument) -> Result<Vec<FormField>> {
+    fn extract_fields_impl(doc: &PdfDocument, export_values: bool) -> Result<Vec<FormField>> {
         let catalog = doc.catalog()?;
         let catalog_dict = catalog
             .as_dict()
@@ -324,8 +338,14 @@ impl FormExtractor {
             .ok_or_else(|| Error::InvalidPdf("AcroForm /Fields is not an array".to_string()))?;
 
         let mut result = Vec::new();
+        let mut walk = FieldWalk {
+            export_values,
+            ..FieldWalk::default()
+        };
         for field_ref in fields_array {
-            Self::extract_field_recursive(doc, field_ref, "", &mut result)?;
+            if let Err(error) = Self::extract_field_recursive(doc, field_ref, "", 0, &mut walk, &mut result) {
+                tracing::warn!("skipping unreadable form field: {error}");
+            }
         }
 
         Ok(result)
@@ -349,9 +369,20 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_ref: &Object,
         parent_name: &str,
+        depth: usize,
+        walk: &mut FieldWalk,
         result: &mut Vec<FormField>,
     ) -> Result<()> {
         let object_ref = field_ref.as_reference();
+        if depth > MAX_FIELD_DEPTH || walk.visited_fields >= MAX_FIELD_COUNT {
+            return Ok(());
+        }
+        if let Some(r) = object_ref
+            && !walk.visited.insert(r)
+        {
+            return Ok(());
+        }
+        walk.visited_fields += 1;
 
         let field = Self::resolve_object(doc, field_ref)?;
         let field_dict = match field.as_dict() {
@@ -360,11 +391,9 @@ impl FormExtractor {
         };
 
         let (partial_name, full_name) = Self::resolve_field_names(doc, field_dict, parent_name);
-        let has_kids = Self::recurse_into_kids(doc, field_dict, &full_name, result)?;
+        let has_kids = Self::recurse_into_kids(doc, field_dict, &full_name, depth, walk, result)?;
 
-        let field_type = field_dict
-            .get("FT")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let field_type = Self::inherited_attr(doc, field_dict, "FT")
             .and_then(|obj| obj.as_name().map(|s| s.to_string()))
             .map(|name| Self::parse_field_type(&name))
             .unwrap_or(FieldType::Unknown("".to_string()));
@@ -383,7 +412,7 @@ impl FormExtractor {
             return Ok(());
         }
 
-        let attrs = Self::extract_field_attributes(doc, field_dict, &field_type);
+        let attrs = Self::extract_field_attributes(doc, field_dict, &field_type, !walk.export_values);
 
         let form_field = FormField {
             name: partial_name,
@@ -445,6 +474,8 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_dict: &std::collections::HashMap<String, Object>,
         full_name: &str,
+        depth: usize,
+        walk: &mut FieldWalk,
         result: &mut Vec<FormField>,
     ) -> Result<bool> {
         let Some(kids_ref) = field_dict.get("Kids") else {
@@ -455,9 +486,81 @@ impl FormExtractor {
             return Ok(false);
         };
         for kid_ref in kids_array {
-            Self::extract_field_recursive(doc, kid_ref, full_name, result)?;
+            if let Err(error) = Self::extract_field_recursive(doc, kid_ref, full_name, depth + 1, walk, result) {
+                tracing::warn!("skipping unreadable form field {full_name:?}: {error}");
+            }
         }
         Ok(true)
+    }
+
+    /// Looks up an inheritable field attribute (ISO 32000-1 §12.7.3.1) on the
+    /// field itself, then up its /Parent chain, bounded and cycle-safe.
+    fn inherited_attr(
+        doc: &PdfDocument,
+        field_dict: &std::collections::HashMap<String, Object>,
+        key: &str,
+    ) -> Option<Object> {
+        if let Some(value) = field_dict.get(key) {
+            return Self::resolve_object(doc, value).ok();
+        }
+        let mut seen = HashSet::new();
+        let mut parent = field_dict.get("Parent").cloned();
+        for _ in 0..MAX_PARENT_DEPTH {
+            let parent_obj = parent.take()?;
+            let resolved = match parent_obj.as_reference() {
+                Some(r) => {
+                    if !seen.insert(r) {
+                        return None;
+                    }
+                    doc.load_object_shared(r).ok()?
+                }
+                None => std::sync::Arc::new(parent_obj),
+            };
+            let dict = resolved.as_dict()?;
+            if let Some(value) = dict.get(key) {
+                return Self::resolve_object(doc, value).ok();
+            }
+            parent = dict.get("Parent").cloned();
+        }
+        None
+    }
+
+    /// Maps a choice field's export value(s) to display text through /Opt
+    /// `[export display]` pairs; plain-string options and unmatched values pass through.
+    fn map_choice_value(
+        doc: &PdfDocument,
+        field_dict: &std::collections::HashMap<String, Object>,
+        value: FieldValue,
+    ) -> FieldValue {
+        let Some(Object::Array(opts)) = Self::inherited_attr(doc, field_dict, "Opt") else {
+            return value;
+        };
+        let mut displays: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for opt in &opts {
+            let pair = Self::resolve_object(doc, opt)
+                .ok()
+                .and_then(|resolved| resolved.as_array().cloned());
+            let Some(pair) = pair else { continue };
+            let key = pair
+                .first()
+                .and_then(|k| Self::resolve_object(doc, k).ok())
+                .and_then(|k| k.as_string().and_then(Self::decode_text_string));
+            let shown = pair
+                .get(1)
+                .and_then(|v| Self::resolve_object(doc, v).ok())
+                .and_then(|v| v.as_string().and_then(Self::decode_text_string));
+            if let (Some(key), Some(shown)) = (key, shown) {
+                displays.entry(key).or_insert(shown);
+            }
+        }
+        let display_for = |export: &str| -> Option<String> { displays.get(export).cloned() };
+        match value {
+            FieldValue::Text(t) => FieldValue::Text(display_for(&t).unwrap_or(t)),
+            FieldValue::Array(items) => {
+                FieldValue::Array(items.into_iter().map(|t| display_for(&t).unwrap_or(t)).collect())
+            }
+            other => other,
+        }
     }
 
     /// Resolves the remaining per-field attributes (/V, /TU, /Rect, /Ff,
@@ -469,12 +572,16 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_dict: &std::collections::HashMap<String, Object>,
         field_type: &FieldType,
+        map_choices: bool,
     ) -> FieldAttributes {
-        let value = field_dict
-            .get("V")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let value = Self::inherited_attr(doc, field_dict, "V")
             .map(|obj| Self::parse_field_value(&obj, field_type))
             .unwrap_or(FieldValue::None);
+        let value = if map_choices && *field_type == FieldType::Choice {
+            Self::map_choice_value(doc, field_dict, value)
+        } else {
+            value
+        };
 
         let tooltip = field_dict
             .get("TU")
@@ -485,18 +592,14 @@ impl FormExtractor {
         let bounds = Self::parse_field_bounds(doc, field_dict);
         let flags = Self::field_dict_integer(doc, field_dict, "Ff");
 
-        let default_value = field_dict
-            .get("DV")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
-            .map(|obj| Self::parse_field_value(&obj, field_type));
+        let default_value =
+            Self::inherited_attr(doc, field_dict, "DV").map(|obj| Self::parse_field_value(&obj, field_type));
 
         let max_length = Self::field_dict_integer(doc, field_dict, "MaxLen");
         // Extract text alignment /Q (0=left, 1=center, 2=right) ~keep
         let alignment = Self::field_dict_integer(doc, field_dict, "Q");
 
-        let default_appearance = field_dict
-            .get("DA")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let default_appearance = Self::inherited_attr(doc, field_dict, "DA")
             .and_then(|obj| obj.as_string().map(|s| s.to_vec()))
             .and_then(|bytes| Self::decode_text_string(&bytes));
 
@@ -556,13 +659,10 @@ impl FormExtractor {
         field_dict: &std::collections::HashMap<String, Object>,
         key: &str,
     ) -> Option<u32> {
-        field_dict
-            .get(key)
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
-            .and_then(|obj| match obj {
-                Object::Integer(i) => Some(i as u32),
-                _ => None,
-            })
+        Self::inherited_attr(doc, field_dict, key).and_then(|obj| match obj {
+            Object::Integer(i) => Some(i as u32),
+            _ => None,
+        })
     }
 
     /// Parse field type from /FT value.
@@ -745,7 +845,7 @@ impl FormExtractor {
     /// FormExtractor::export_fdf(&mut doc, "form_data.fdf")?;
     /// ```
     pub fn export_fdf(doc: &PdfDocument, output_path: impl AsRef<std::path::Path>) -> Result<()> {
-        let fields = Self::extract_fields(doc)?;
+        let fields = Self::extract_fields_impl(doc, true)?;
         let writer = crate::fdf::FdfWriter::from_fields(fields);
         writer.write_to_file(output_path)
     }
@@ -769,7 +869,7 @@ impl FormExtractor {
     /// FormExtractor::export_xfdf(&mut doc, "form_data.xfdf")?;
     /// ```
     pub fn export_xfdf(doc: &PdfDocument, output_path: impl AsRef<std::path::Path>) -> Result<()> {
-        let fields = Self::extract_fields(doc)?;
+        let fields = Self::extract_fields_impl(doc, true)?;
         let writer = crate::fdf::XfdfWriter::from_fields(fields);
         writer.write_to_file(output_path)
     }

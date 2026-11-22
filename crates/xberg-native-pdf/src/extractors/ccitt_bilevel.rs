@@ -26,6 +26,18 @@ use crate::error::{Error, Result};
 /// Each byte contains 8 pixels (MSB = leftmost pixel, LSB = rightmost pixel).
 /// Pixels are encoded as: 0 = white, 1 = black (unless /BlackIs1=true, then inverted).
 pub fn decompress_ccitt(data: &[u8], params: &CcittParams) -> Result<Vec<u8>> {
+    decompress_ccitt_reporting(data, params).map(|(out, _)| out)
+}
+
+/// As [`decompress_ccitt`], but also returns `rows_valid`, the number of leading
+/// rows that came from the stream.
+///
+/// The blank fallback is a substitute, not a decode result: for an `/ImageMask`
+/// the all-zero buffer reads as "paint every pixel" under `/Decode [1 0]`, so a
+/// caller that must not paint what it could not read overwrites rows at and
+/// beyond `rows_valid` with a value that draws nothing under the mask's own
+/// `/Decode`.
+pub fn decompress_ccitt_reporting(data: &[u8], params: &CcittParams) -> Result<(Vec<u8>, usize)> {
     if params.columns == 0 {
         return Err(Error::Decode(
             "CCITT decompression requires /Columns parameter".to_string(),
@@ -41,11 +53,11 @@ pub fn decompress_ccitt(data: &[u8], params: &CcittParams) -> Result<Vec<u8>> {
     let fax_result = decode_ccitt_with_fallback(data, width, params);
 
     match fax_result {
-        Ok(mut output) => {
+        Ok((mut output, rows_valid)) => {
             if params.black_is_1 {
                 invert_bilevel_pixels(&mut output);
             }
-            Ok(output)
+            Ok((output, rows_valid))
         }
         Err(e) => {
             // Both decoders failed. Do NOT silently return an all-white page
@@ -61,7 +73,7 @@ pub fn decompress_ccitt(data: &[u8], params: &CcittParams) -> Result<Vec<u8>> {
                 params.encoded_byte_align,
                 e
             );
-            build_blank_fallback(width, params)
+            build_blank_fallback(width, params).map(|fallback| (fallback, 0))
         }
     }
 }
@@ -87,7 +99,7 @@ fn log_ccitt_decompress_start(data: &[u8], params: &CcittParams) {
 /// Tries the in-house CCITT decoder first, falling back to the `fax` crate
 /// when it cannot make progress. Split out of [`decompress_ccitt`] to keep
 /// that function focused on the overall decode-then-fallback flow. ~keep
-fn decode_ccitt_with_fallback(data: &[u8], width: u32, params: &CcittParams) -> Result<Vec<u8>> {
+fn decode_ccitt_with_fallback(data: &[u8], width: u32, params: &CcittParams) -> Result<(Vec<u8>, usize)> {
     let height_opt = params.rows;
 
     // Primary: the in-house decoder (Group 4 T.6, and Group 3 T.4 for K >= 0).
@@ -106,13 +118,14 @@ fn decode_ccitt_with_fallback(data: &[u8], width: u32, params: &CcittParams) -> 
                     data.len()
                 );
             }
-            Ok(decoded.data)
+            Ok((decoded.data, decoded.rows_decoded))
         }
         Err(in_house_err) => {
             // A stream the in-house decoder couldn't make progress on: fall
             // back to the legacy fax crate before giving up. ~keep
             tracing::debug!("CCITT in-house decode declined ({in_house_err}); trying fax crate");
-            decompress_with_fax(data, width, height_opt, params)
+            // The fax crate reports no row count; it decodes the whole image or errors.
+            decompress_with_fax(data, width, height_opt, params).map(|out| (out, usize::MAX))
         }
     }
 }
@@ -351,6 +364,8 @@ pub fn decompress_ccitt_group4(data: &[u8], width: u32, height: u32) -> Result<V
     let params = CcittParams {
         columns: width,
         rows: Some(height),
+        // Table 11: K < 0 is Group 4; the default K = 0 is Group 3 one-dimensional.
+        k: -1,
         ..Default::default()
     };
     decompress_ccitt(data, &params)
@@ -512,6 +527,56 @@ mod tests {
         assert!(
             row[..65_536 / 8].iter().all(|&b| b == 0),
             "everything before must stay white"
+        );
+    }
+}
+
+#[cfg(test)]
+mod group4_entry_point_tests {
+    use super::*;
+
+    /// A Group 4 stream is two-dimensional only; an EOFB alone decodes to zero
+    /// rows under Group 4 and is rejected by the Group 3 decoder, so the
+    /// reported row count tells which decoder the legacy entry point asked for.
+    #[test]
+    #[allow(deprecated)]
+    fn test_group4_entry_point_requests_group4() {
+        let params = CcittParams {
+            columns: 8,
+            rows: Some(1),
+            k: -1,
+            ..Default::default()
+        };
+        assert!(params.is_group_4());
+        assert!(!params.is_group_3());
+
+        let defaulted = CcittParams {
+            columns: 8,
+            rows: Some(1),
+            ..Default::default()
+        };
+        assert!(defaulted.is_group_3(), "the filter default is Group 3");
+
+        // All-white 8x1 row in T.6: vertical mode V0 (bit "1") then EOFB.
+        let g4 = [0b1000_0000, 0b0001_0000, 0b0000_0001];
+        let (_, rows_valid) = decompress_ccitt_reporting(&g4, &params).expect("group 4 decode");
+        assert_eq!(rows_valid, 1, "one all-white row decodes under Group 4");
+        let legacy = decompress_ccitt_group4(&g4, 8, 1).expect("legacy entry point");
+        assert_eq!(legacy, vec![0x00], "legacy entry point must decode as Group 4");
+
+        // An all-white row is also what a failed decode falls back to, so a row with ink is what
+        // tells decoding from blank substitution. Horizontal mode: white run 2, black run 6, EOFB.
+        let g4_ink = [0x2E, 0x40, 0x04, 0x00, 0x80];
+        let (reported, rows_valid) = decompress_ccitt_reporting(&g4_ink, &params).expect("group 4 decode");
+        assert_eq!(
+            (reported.as_slice(), rows_valid),
+            (&[0x3F][..], 1),
+            "test premise: the row carries ink"
+        );
+        let legacy = decompress_ccitt_group4(&g4_ink, 8, 1).expect("legacy entry point");
+        assert_eq!(
+            legacy, reported,
+            "legacy entry point must decode a row with ink as Group 4"
         );
     }
 }

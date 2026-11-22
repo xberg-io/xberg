@@ -101,13 +101,22 @@ impl<'doc> TextExtractor<'doc> {
                                 && c == buffer.start_matrix.c
                                 && d == buffer.start_matrix.d
                                 && e >= buffer.start_matrix.e
-                                && Self::advances_along_writing_axis(
+                                && Self::run_continuation_along(
                                     buffer.start_matrix,
                                     buffer.wmode,
                                     e,
                                     f,
                                     cur_font_size,
-                                ) =>
+                                    {
+                                        let axis = buffer.start_matrix.a.hypot(buffer.start_matrix.b);
+                                        if axis > 0.0 {
+                                            buffer.accumulated_width * axis
+                                        } else {
+                                            buffer.accumulated_width
+                                        }
+                                    },
+                                )
+                                .is_some() =>
                         {
                             // Fixed-pitch word-gap recovery (GH#1770). This
                             // continuation path glues consecutive Tm+Tj glyph

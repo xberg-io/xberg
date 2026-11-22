@@ -1,0 +1,176 @@
+name: CI Pdfium Scheduled
+
+# Weekly drift watch for the pdfium backend. The pin lives in scripts/pdfium-version; every leg
+# provisions through the same `mise run pdfium:*` tasks a developer runs locally. A newer upstream
+# build is tested here against the checked-in bindings and, on failure, reported as one issue. It is
+# never auto-bumped: a new pin needs regenerated bindings (`mise run pdfium:bump <build>`).
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pdfium-scheduled
+  cancel-in-progress: false
+
+env:
+  XBERG_REQUIRE_PDFIUM: "1"
+
+jobs:
+  latest:
+    name: Newest pdfium-binaries build
+    if: ${{ github.repository == 'xberg-io/xberg' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pinned: ${{ steps.latest.outputs.pinned }}
+      latest: ${{ steps.latest.outputs.latest }}
+      newer: ${{ steps.latest.outputs.newer }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+          cache: "false"
+      - name: Compare the newest upstream build with the pin
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mise run -q pdfium:latest --write-checksums "$RUNNER_TEMP/pdfium-latest.sha256" | tee -a "$GITHUB_OUTPUT"
+          {
+            echo "### pdfium drift watch"
+            grep -E '^(pinned|latest|newer)=' "$GITHUB_OUTPUT" | sed 's/=/: /; s/^/- /'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pdfium-latest-checksums
+          path: ${{ runner.temp }}/pdfium-latest.sha256
+          if-no-files-found: error
+
+  pinned:
+    name: Pinned build (${{ matrix.os }})
+    if: ${{ github.repository == 'xberg-io/xberg' && github.ref == 'refs/heads/main' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: |
+            pdf/**
+            vendored/pdfium-render/**
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: pdfium-scheduled
+          use-sccache: "true"
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+          cache: "false"
+      - name: Test against the pinned build
+        run: mise run pdfium:test --log "$RUNNER_TEMP/pdfium-pinned.log"
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: pdfium-pinned-${{ runner.os }}
+          path: ${{ runner.temp }}/pdfium-pinned.log
+          if-no-files-found: ignore
+
+  newest:
+    name: Newest build ${{ needs.latest.outputs.latest }} (${{ matrix.os }})
+    needs: latest
+    if: ${{ needs.latest.outputs.newer == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: |
+            pdf/**
+            vendored/pdfium-render/**
+      - uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: pdfium-scheduled
+          use-sccache: "true"
+      - uses: xberg-io/actions/setup-mise@v1
+        with:
+          install: "false"
+          cache: "false"
+      - uses: actions/download-artifact@v8
+        with:
+          name: pdfium-latest-checksums
+          path: ${{ runner.temp }}/latest
+      # The manifest holds release-API digests, a channel separate from the archive download. The
+      # committed manifest only covers the pinned build.
+      - name: Test against the newest build
+        env:
+          PDFIUM_VERSION: ${{ needs.latest.outputs.latest }}
+          PDFIUM_CHECKSUMS_FILE: ${{ runner.temp }}/latest/pdfium-latest.sha256
+        run: mise run pdfium:test --log "$RUNNER_TEMP/pdfium-newest.log"
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: pdfium-newest-${{ runner.os }}
+          path: ${{ runner.temp }}/pdfium-newest.log
+          if-no-files-found: ignore
+
+  report:
+    name: Report drift
+    needs: [latest, newest]
+    if: ${{ always() && needs.latest.outputs.newer == 'true' && needs.newest.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Summarize or open one drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD: ${{ needs.latest.outputs.latest }}
+          PINNED: ${{ needs.latest.outputs.pinned }}
+          RESULT: ${{ needs.newest.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ "$RESULT" = success ]; then
+            {
+              echo "pdfium build $BUILD passes the real-pdfium tests on every leg."
+              echo "Candidate bump (needs regenerated bindings first): \`mise run pdfium:bump $BUILD\`"
+            } >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          title="pdfium drift: build $BUILD breaks tests"
+          body="The scheduled pdfium run found build $BUILD failing the real-pdfium tests while the pinned build ($PINNED) is the one the bindings target. Logs: $RUN_URL"
+          gh label create pdfium-drift --color D93F0B --description "Upstream pdfium build breaks tests" 2>/dev/null || true
+          existing="$(gh issue list --state open --label pdfium-drift --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title"
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label pdfium-drift --body "$body"
+          fi
+          echo "$title" >>"$GITHUB_STEP_SUMMARY"

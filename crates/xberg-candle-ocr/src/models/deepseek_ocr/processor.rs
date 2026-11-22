@@ -1,3 +1,6 @@
+//! Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
+//!
 //! Image preprocessing and tokenization for DeepSeek-OCR.
 //!
 //! Handles dynamic image preprocessing (resizing with edge padding and cropping),

@@ -11,7 +11,7 @@ PREFIX="${1:-${PREFIX:-/usr/local}}"
 # the tree). Bump it only together with a regenerated binding set at the same version, and
 # verify by loading the library and resolving symbols -- never by the download alone, which
 # succeeds regardless. ~keep
-PDFIUM_VERSION="${2:-${PDFIUM_VERSION:-7678}}"
+PDFIUM_VERSION="${2:-${PDFIUM_VERSION:-$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/pdfium-version")}}"
 PDFIUM_PLATFORM="linux-x64"
 if [[ ! "$PDFIUM_VERSION" =~ ^[0-9]+$ ]]; then
   echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2

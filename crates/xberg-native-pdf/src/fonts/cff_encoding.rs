@@ -309,7 +309,7 @@ fn parse_charset(data: &[u8], offset: usize, num_glyphs: usize) -> Option<Vec<u1
                     if sids.len() >= num_glyphs {
                         break;
                     }
-                    sids.push(first_sid + i);
+                    sids.push(first_sid.saturating_add(i));
                 }
             }
         }
@@ -323,7 +323,7 @@ fn parse_charset(data: &[u8], offset: usize, num_glyphs: usize) -> Option<Vec<u1
                     if sids.len() >= num_glyphs {
                         break;
                     }
-                    sids.push(first_sid + i);
+                    sids.push(first_sid.saturating_add(i));
                 }
             }
         }

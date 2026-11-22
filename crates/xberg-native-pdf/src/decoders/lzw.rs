@@ -79,8 +79,10 @@ fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize, complete_early_change
     let mut remaining = input;
 
     loop {
-        let chunk_len = if complete {
-            chunk.len().min((max_output_bytes - output.len()).saturating_add(1))
+        let chunk_len = if complete && max_output_bytes > 0 {
+            chunk
+                .len()
+                .min(max_output_bytes.saturating_sub(output.len()).saturating_add(1))
         } else {
             chunk.len()
         };
@@ -305,6 +307,14 @@ mod tests {
 
         let decoded = decoder.decode(&compressed, 0).unwrap();
         assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn complete_decode_with_no_cap_does_not_underflow() {
+        let original = b"The quick brown fox jumps over the lazy dog. ".repeat(10);
+        let mut encoder = LzwEncoder::new(BitOrder::Msb, 8);
+        let compressed = encoder.encode(&original).unwrap();
+        assert_eq!(decode_complete(&compressed, 0, false).unwrap(), original);
     }
 
     #[test]

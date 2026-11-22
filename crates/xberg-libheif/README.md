@@ -16,10 +16,7 @@ on upstream `libheif-sys` from crates.io for the underlying C bindings.
 ## Modifications from upstream
 
 - Workspace dependency alignment (`libc`, `image` pinned via workspace).
-- Pinned to Rust edition 2021 (matches upstream); the rest of the workspace is
-  edition 2024 but this crate keeps the upstream pattern because libheif-rs
-  uses unwrapped unsafe operations inside `unsafe fn`, which is a hard error
-  under edition 2024.
+- Rust edition 2024 (upstream is 2021), as in the rest of the workspace.
 - Workspace lints applied via `[lints] workspace = true`.
 - Trimmed README to focus on the Xberg use case.
 
@@ -37,9 +34,10 @@ HEVC and AV1 codec backends (`libde265`, `libaom`):
   `VCPKGRS_TRIPLET=x64-windows` and `VCPKGRS_DYNAMIC=1` so `libheif-sys` links
   the import library (the DLLs must be on `PATH` at run time)
 
-`libheif` is LGPL-licensed and is therefore linked **dynamically only** — it is
-never statically linked or vendored into Xberg binaries. Release archives ship
-the shared libraries and the LGPL-3.0 and GPL-3.0 texts beside the executable.
+`libheif` is LGPL-licensed and is linked dynamically everywhere except the
+macOS PHP extension, which links it statically (see `THIRD_PARTY_LICENSES.md`).
+Release archives ship the shared libraries and the LGPL-3.0 and GPL-3.0 texts
+beside the executable.
 
 ## License
 

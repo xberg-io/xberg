@@ -300,6 +300,9 @@ struct BoundedObjectCache {
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
+    /// Synthetic recovery objects have no byte offset to re-read from, so
+    /// evicting one makes it permanently unreachable. ~keep
+    pinned: HashSet<ObjectRef>,
 }
 
 /// Byte-accounted FIFO cache for decoded object-stream maps.
@@ -436,7 +439,17 @@ impl BoundedObjectCache {
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
+            pinned: HashSet::new(),
         }
+    }
+
+    fn insert_pinned(&mut self, key: ObjectRef, value: Object) {
+        self.pinned.insert(key);
+        // Pinned keys stay out of the eviction queue so scans never rotate them. ~keep
+        if let Some(position) = self.insertion_order.iter().position(|candidate| *candidate == key) {
+            self.insertion_order.remove(position);
+        }
+        self.insert(key, value);
     }
 
     fn get(&self, key: &ObjectRef) -> Option<&Object> {
@@ -463,9 +476,17 @@ impl BoundedObjectCache {
         // larger replacement doesn't leave the cache over budget — keep
         // evicting other entries instead. ~keep
         let mut skipped_self = false;
+        let mut examined = 0usize;
+        // Fixed up front: each eviction shortens the queue, and a live bound would
+        // stop the scan before it had evicted what the new entry needs. ~keep
+        let scan_limit = self.insertion_order.len();
         while self.current_bytes + entry_size > self.max_bytes {
+            if examined > scan_limit {
+                break;
+            }
             match self.insertion_order.pop_front() {
                 Some(old_key) => {
+                    examined += 1;
                     if old_key == key {
                         if skipped_self {
                             self.insertion_order.push_front(old_key);
@@ -483,7 +504,7 @@ impl BoundedObjectCache {
             }
         }
 
-        if self.map.insert(key, Arc::new(value)).is_none() {
+        if self.map.insert(key, Arc::new(value)).is_none() && !self.pinned.contains(&key) {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;
@@ -498,9 +519,11 @@ impl BoundedObjectCache {
     }
 
     fn clear(&mut self) {
-        self.map.clear();
+        let pinned = std::mem::take(&mut self.pinned);
+        self.map.retain(|k, _| pinned.contains(k));
         self.insertion_order.clear();
-        self.current_bytes = 0;
+        self.current_bytes = self.map.values().map(|v| Self::estimate_size(v)).sum();
+        self.pinned = pinned;
     }
 
     fn estimate_size(obj: &Object) -> usize {

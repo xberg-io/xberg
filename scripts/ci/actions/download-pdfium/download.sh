@@ -38,8 +38,7 @@ if [ -z "$arch_id" ]; then
 fi
 
 if [ -z "$version" ]; then
-  echo "PDFIUM_VERSION env var required" >&2
-  exit 2
+  version="$(tr -d '[:space:]' <"$(dirname -- "${BASH_SOURCE[0]}")/../../../pdfium-version")"
 fi
 
 if [[ ! "$version" =~ ^[0-9]+$ ]]; then

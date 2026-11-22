@@ -174,7 +174,7 @@ PyPI release job. GitHub hosts the remaining plugin bundles and marketplace inde
 
 ## License
 
-MIT. The skill content uses Elastic-2.0 references to the upstream [xberg](https://github.com/xberg-io/xberg) repository.
+MIT, matching the upstream [xberg](https://github.com/xberg-io/xberg) repository.
 
 ## See also
 

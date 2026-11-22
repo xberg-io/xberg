@@ -98,3 +98,55 @@ fn decode_array_applied_to_eight_bit_gray() {
     let expected: Vec<u8> = (0..64u16).map(|s| (255 - s) as u8).collect();
     assert_eq!(pixels, expected, "/Decode [1 0] ignored: samples extracted un-inverted");
 }
+
+/// A 1-bpc image over the unpack size cap stays packed. `/Decode [1 0]` is a
+/// pure inversion there, so it must still be applied as a byte-wise NOT rather
+/// than leaving the exact negative of the picture.
+fn oversized_one_bit_image(decode: Option<&str>) -> xberg_native_pdf::extractors::PdfImage {
+    use std::collections::HashMap;
+    use xberg_native_pdf::extractors::extract_image_from_xobject;
+    use xberg_native_pdf::object::Object;
+
+    let (width, height) = (20_000i64, 14_000i64);
+    let mut dict = HashMap::new();
+    dict.insert("Subtype".to_string(), Object::Name("Image".to_string()));
+    dict.insert("Width".to_string(), Object::Integer(width));
+    dict.insert("Height".to_string(), Object::Integer(height));
+    dict.insert("ColorSpace".to_string(), Object::Name("DeviceGray".to_string()));
+    dict.insert("BitsPerComponent".to_string(), Object::Integer(1));
+    if let Some(decode) = decode {
+        let values = decode.split(' ').map(|v| Object::Integer(v.parse().unwrap())).collect();
+        dict.insert("Decode".to_string(), Object::Array(values));
+    }
+    let row_bytes = (width as usize).div_ceil(8);
+    let xobject = Object::Stream {
+        dict,
+        data: bytes::Bytes::from(vec![0x55u8; row_bytes * height as usize]),
+    };
+    extract_image_from_xobject(None, &xobject, None, None).expect("oversized image extracts")
+}
+
+#[test]
+fn oversized_one_bit_image_with_decode_1_0_is_inverted() {
+    let image = oversized_one_bit_image(Some("1 0"));
+    assert_eq!(image.bits_per_component(), 1, "over the cap the samples stay packed");
+    assert!(image.decode_folded_in(), "the inversion is the /Decode mapping");
+    let ImageData::Raw { pixels, .. } = image.data() else {
+        panic!("expected Raw image data");
+    };
+    assert!(
+        pixels.iter().all(|&b| b == 0xAA),
+        "0x55 under /Decode [1 0] must read 0xAA"
+    );
+}
+
+#[test]
+fn oversized_one_bit_image_without_decode_stays_as_stored() {
+    let image = oversized_one_bit_image(None);
+    assert_eq!(image.bits_per_component(), 1);
+    assert!(!image.decode_folded_in());
+    let ImageData::Raw { pixels, .. } = image.data() else {
+        panic!("expected Raw image data");
+    };
+    assert!(pixels.iter().all(|&b| b == 0x55));
+}

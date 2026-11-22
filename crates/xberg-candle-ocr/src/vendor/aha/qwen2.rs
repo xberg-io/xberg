@@ -1,6 +1,7 @@
 //! Qwen2 decoder vendored for DeepSeek-OCR's vision-language fusion.
 //!
 //! Vendored from jhqxxx/aha (Apache-2.0). See repo-root ATTRIBUTIONS.md § jhqxxx/aha.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 //!
 //! DeepSeek-OCR uses a `forward_no_cache` path where the full sequence is processed
 //! at once without maintaining a mutable KV cache across decode steps. This variant

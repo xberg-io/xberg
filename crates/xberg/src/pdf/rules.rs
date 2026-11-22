@@ -90,23 +90,23 @@ fn painted_rule_bar(path: &xberg_native_pdf::elements::PathContent) -> bool {
     if !path.has_fill() || path.has_stroke() {
         return false;
     }
-    match path.operations.as_slice() {
-        [PathOperation::Rectangle(..)] => true,
-        [
-            PathOperation::MoveTo(..),
-            PathOperation::LineTo(..),
-            PathOperation::LineTo(..),
-            PathOperation::LineTo(..),
-        ]
-        | [
-            PathOperation::MoveTo(..),
-            PathOperation::LineTo(..),
-            PathOperation::LineTo(..),
-            PathOperation::LineTo(..),
-            PathOperation::ClosePath,
-        ] => true,
-        _ => false,
-    }
+    matches!(
+        path.operations.as_slice(),
+        [PathOperation::Rectangle(..)]
+            | [
+                PathOperation::MoveTo(..),
+                PathOperation::LineTo(..),
+                PathOperation::LineTo(..),
+                PathOperation::LineTo(..),
+            ]
+            | [
+                PathOperation::MoveTo(..),
+                PathOperation::LineTo(..),
+                PathOperation::LineTo(..),
+                PathOperation::LineTo(..),
+                PathOperation::ClosePath,
+            ]
+    )
 }
 #[cfg(test)]
 mod tests {
