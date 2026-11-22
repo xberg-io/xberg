@@ -247,6 +247,7 @@ The vendored code has been modified from the original fastembed-rs:
 - Changed `embed()` method signature from `&mut self` to `&self` for thread-safe concurrent inference without mutex contention
 - Adapted to Xberg's ONNX Runtime integration and error handling
 - Integrated with Xberg's embedding configuration and model management
+- Reconciled with fastembed-rs fixes up to v7.7.1: dynamically quantized models run one text per batch (51686c3), the model output is selected by name with the upstream precedence instead of taking the first, `max_sequence_length` below the tokenizer's special-token count is rejected, the pad token is read from the object form and the pad id falls back to the vocabulary, special tokens the tokenizer already flags are not re-added, SPLADE pooling uses `ln_1p`, and CLS/last-token pooling reject a zero-token output instead of panicking
 
 ### License Compatibility
 
@@ -295,7 +296,7 @@ The files derived from yake-rust stay MIT; the upstream copyright and permission
 
 ## text-splitter (inlined)
 
-The chunking submodule `crates/xberg/src/chunking/text_splitter/` is a trimmed inline copy of [text-splitter](https://github.com/benbrandt/text-splitter) v0.30.1 by Benjamin Brandt. We inlined it because upstream pins `tokenizers = "0.22"`, which conflicts with xberg's direct `tokenizers 0.23` dependency and pulls a duplicate copy of `tokenizers` into the build graph (breaking the `Tokenizer: ChunkSizer` bound in `chunking::core`).
+The chunking submodule `crates/xberg/src/chunking/text_splitter/` is a trimmed inline copy of [text-splitter](https://github.com/benbrandt/text-splitter) v0.30.1 by Benjamin Brandt. We inlined it because upstream's `tokenizers` feature enables the `onig` C regex backend, while xberg builds `tokenizers` with `fancy-regex`, and to carry local fixes. Upstream supports `tokenizers 0.23` since v0.31.0, so the version conflict that originally motivated inlining no longer applies.
 
 - **Source**: <https://github.com/benbrandt/text-splitter> @ v0.30.1
 - **License**: MIT
@@ -307,6 +308,7 @@ The chunking submodule `crates/xberg/src/chunking/text_splitter/` is a trimmed i
 - Dropped the `code` (tree-sitter) splitter — xberg has its own tree-sitter integration and does not use the upstream code splitter.
 - Dropped the `tiktoken-rs` sizer — unused.
 - Rebuilt against `tokenizers 0.23`.
+- Reconciled with upstream fixes up to v0.33.5: probed chunks are cached at their starting offset (b961563), and the `tokenizers` sizer counts tokens by attention mask so content sharing the padding id is counted (e461f1a). Tokenizers loaded through `chunking::tokenizer_cache` have embedded truncation disabled, as upstream v0.31.0 advises.
 - Renamed feature gate `tokenizers` → `chunking-tokenizers`; the `markdown` splitter is always available because `pulldown-cmark` is already a non-optional xberg dependency.
 - Tightened visibility on internal types to `pub(crate)`.
 - Path rewiring: upstream `crate::*` paths inside the inlined module rewritten relative to the new submodule root.

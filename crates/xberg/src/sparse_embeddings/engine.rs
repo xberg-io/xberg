@@ -130,8 +130,10 @@ impl SparseEmbeddingEngine {
 
         let output_value = {
             let mut session = self.session.lock();
-            let outputs = session.run(session_inputs).map_err(SparseEmbedError::Ort)?;
-            outputs.into_iter().next().map(|(_, value)| value)
+            let mut outputs = session.run(session_inputs).map_err(SparseEmbedError::Ort)?;
+            let names: Vec<&str> = outputs.keys().collect();
+            let selected = crate::onnx::select_output_name(&names, &["logits"]).map(str::to_owned);
+            selected.and_then(|name| outputs.remove(name))
         }
         .ok_or(SparseEmbedError::NoOutput)?;
         let logits: ArrayView<f32, Dim<IxDynImpl>> = output_value.try_extract_array().map_err(SparseEmbedError::Ort)?;
@@ -178,7 +180,7 @@ fn splade_pool(
             for s in 0..seq {
                 let masked = if mask_b[s] != 0 {
                     let x = logits_b[[s, v]];
-                    (1.0_f32 + x.max(0.0)).ln()
+                    x.max(0.0).ln_1p()
                 } else {
                     0.0_f32
                 };
@@ -252,6 +254,15 @@ mod tests {
         assert_eq!(se.indices, vec![0]);
         assert_eq!(se.values.len(), 1);
         assert!((se.values[0] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn splade_pool_keeps_terms_below_f32_epsilon() {
+        let logits = Array3::from_shape_vec((1, 1, 2), vec![5e-8, 1.0]).unwrap();
+        let mask = Array2::from_shape_vec((1, 1), vec![1_i64]).unwrap();
+        let out = splade_pool(&logits.view(), &mask).unwrap();
+        assert_eq!(out[0].indices, vec![0, 1]);
+        assert!(out[0].values[0] > 0.0);
     }
 
     #[test]

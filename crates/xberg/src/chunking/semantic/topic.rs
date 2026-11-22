@@ -10,18 +10,24 @@
 pub(crate) fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     debug_assert_eq!(a.len(), b.len(), "vectors must have equal length");
 
-    let mut dot = 0.0_f32;
-    let mut norm_a = 0.0_f32;
-    let mut norm_b = 0.0_f32;
+    // Accumulate in f64: squared f32 components overflow f32 above ~1.8e19.
+    let mut dot = 0.0_f64;
+    let mut norm_a = 0.0_f64;
+    let mut norm_b = 0.0_f64;
 
     for (&ai, &bi) in a.iter().zip(b.iter()) {
+        let (ai, bi) = (f64::from(ai), f64::from(bi));
         dot += ai * bi;
         norm_a += ai * ai;
         norm_b += bi * bi;
     }
 
     let denom = norm_a.sqrt() * norm_b.sqrt();
-    if denom < f32::EPSILON { 0.0 } else { dot / denom }
+    if denom < f64::from(f32::EPSILON) {
+        0.0
+    } else {
+        (dot / denom).clamp(-1.0, 1.0) as f32
+    }
 }
 
 /// Detect topic boundaries across a sequence of text segments.
@@ -177,6 +183,16 @@ mod tests {
         let b = vec![1e-20_f32, 1e-20, 1e-20];
         let sim = cosine_similarity(&a, &b);
         assert!(!sim.is_nan(), "should not be NaN for very small values");
+    }
+
+    #[test]
+    fn cosine_similarity_stays_finite_on_large_finite_vectors() {
+        let a = vec![1e30_f32; 3];
+        let b = vec![-1e30_f32; 3];
+        let same = cosine_similarity(&a, &a);
+        let opposite = cosine_similarity(&a, &b);
+        assert!(same.is_finite() && (same - 1.0).abs() < 1e-6, "got {same}");
+        assert!(opposite.is_finite() && (opposite + 1.0).abs() < 1e-6, "got {opposite}");
     }
 
     #[test]
