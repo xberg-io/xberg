@@ -265,6 +265,7 @@ impl PdfDocument {
             fragmented_word_ratio,
             consecutive_repeat_ratio,
             vector_path_density,
+            vector_path_count: path_count,
             has_reliable_structure,
             producer_prior,
             page_is_empty,

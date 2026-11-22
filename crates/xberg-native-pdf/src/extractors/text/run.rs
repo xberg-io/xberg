@@ -167,6 +167,10 @@ impl<'doc> TextExtractor<'doc> {
         }
     }
 
+    fn has_emission_filter(&self) -> bool {
+        !self.excluded_inks.is_empty() || !self.excluded_layers.is_empty()
+    }
+
     /// Feed a content stream's operators to `execute_operator`.
     ///
     /// The single parser dispatch for every extraction mode (chars, spans,
@@ -180,12 +184,13 @@ impl<'doc> TextExtractor<'doc> {
     /// a 90°-rotated chart axis: char mode returned 2322 glyphs, all at
     /// rotation 0, where span mode saw 2590 glyphs, 122 at 90°.
     pub(super) fn run_content_stream(&mut self, content_stream: &[u8]) -> Result<()> {
-        if self.excluded_inks.is_empty() {
+        if !self.has_emission_filter() {
             parse_and_execute_text_only(content_stream, |op| self.execute_operator(op))
         } else {
-            // Ink filtering needs the color operators (cs, rg, g, k). The
-            // text-only parser does not guarantee their delivery — its >256KB
-            // prescan route parses only text regions — so use the full parser. ~keep
+            // Ink filtering needs the color operators (cs, rg, g, k) and layer
+            // filtering needs BDC/EMC. The text-only parser does not guarantee
+            // either — its >256KB prescan route parses only text regions — so
+            // use the full parser. ~keep
             let operators = parse_content_stream(content_stream)?;
             for op in operators {
                 self.execute_operator(op)?;
