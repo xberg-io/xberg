@@ -146,6 +146,36 @@
       ],
       "type": "string"
     },
+    "AdditionalLicenseConfig": {
+      "additionalProperties": false,
+      "description": "One extra `<license>` entry in a generated Maven POM.",
+      "properties": {
+        "comments": {
+          "default": null,
+          "description": "Free-form note shown in the POM, e.g. which bundled component the\nlicense covers.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "SPDX expression or license name, e.g. `\"LGPL-2.1-or-later\"`.",
+          "type": "string"
+        },
+        "url": {
+          "default": null,
+          "description": "URL of the license text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ArgMapping": {
       "additionalProperties": false,
       "description": "Maps a fixture input field to a function argument.",
@@ -3776,6 +3806,29 @@
       },
       "type": "object"
     },
+    "HarperConfig": {
+      "additionalProperties": false,
+      "description": "harper prose checks, emitted as `[engines.harper]`.\n\n```toml\n[workspace.poly.harper]\n```",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether harper runs. Emitted as `enabled`.",
+          "type": "boolean"
+        },
+        "ignore": {
+          "default": null,
+          "description": "harper rules to switch off. Absent emits the org's default list (title case, Oxford comma\nand the technical-shorthand expansions); a list replaces it.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "HomebrewCliTest": {
       "additionalProperties": false,
       "description": "A single CLI test entry for the Homebrew test_app generator.\n\nEach entry describes one test step in `run_tests.sh`.  The `command`\nfield is a verbatim shell fragment; the following variables are already\nexported by `run_tests.sh` when the fragment is evaluated:\n\n- `$CLI_FORMULA` — the CLI binary name (from `cli_formula`)\n- `$VERSION` — the package version\n- `$TAP` — the Homebrew tap (e.g. `\"myorg/tap\"`)\n- `$SCRIPT_DIR` — absolute directory of `run_tests.sh`\n\nIf `expect_contains` is set the test passes only when the command's\ncombined stdout+stderr contains the given substring; otherwise a zero\nexit code is sufficient.\n\nExample `alef.toml`:\n\n```toml\n[[crates.e2e.registry.packages.homebrew.cli_tests]]\nname = \"version\"\ncommand = \"$CLI_FORMULA --version\"\nexpect_contains = \"1.2.3\"\n\n[[crates.e2e.registry.packages.homebrew.cli_tests]]\nname = \"convert-h1\"\ncommand = \"echo '<h1>Hi</h1>' | $CLI_FORMULA\"\nexpect_contains = \"# Hi\"\n```",
@@ -4113,6 +4166,25 @@
       },
       "type": "object"
     },
+    "JsEngineConfig": {
+      "additionalProperties": false,
+      "description": "A poly engine scoped to one JS/TS workspace, emitted as `[engines.skif]`.\n\n```toml\n[workspace.poly.skif]\ndir = \"docs-site\"\n```",
+      "properties": {
+        "dir": {
+          "description": "The workspace directory holding the `package.json`, relative to the repository root.\nEmitted as `dir`.",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Whether the engine runs. Emitted as `enabled`.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dir"
+      ],
+      "type": "object"
+    },
     "KotlinAndroidConfig": {
       "additionalProperties": false,
       "description": "Configuration for the dedicated Kotlin/Android backend (`alef-backend-kotlin-android`).\n\nDistinct from [`crate::core::config::languages::KotlinConfig`] (Kotlin/JVM). When a crate targets the\n`kotlin_android` language slug, this struct controls the emitted\n`build.gradle.kts`, `AndroidManifest.xml`, namespace, Maven publish\ncoordinates, ABI list, and the bundled Java facade emitted into\n`src/main/java/` so the AAR is self-contained.",
@@ -4135,6 +4207,14 @@
             "string",
             "null"
           ]
+        },
+        "bundled_notices": {
+          "default": [],
+          "description": "Workspace-root-relative files (e.g. `\"LICENSE\"`, `\"THIRD_PARTY_LICENSES.md\"`)\ncopied into the generated AAR at `META-INF/<path>`. Every path is\nchecked to exist when alef generates the project.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "capsule_types": {
           "additionalProperties": {
@@ -4871,6 +4951,14 @@
       "additionalProperties": false,
       "description": "Shared package metadata used by language package manifests.\n\nValues can be set at `[workspace.package_metadata]` and overridden per\n`[[crates]]` entry with `[crates.package_metadata]`.",
       "properties": {
+        "additional_licenses": {
+          "default": [],
+          "description": "Extra licenses shipped inside the generated package, declared after the\nproject license in a generated Maven POM's `<licenses>` block (for\nexample the license of a bundled native library).",
+          "items": {
+            "$ref": "#/$defs/AdditionalLicenseConfig"
+          },
+          "type": "array"
+        },
         "authors": {
           "default": [],
           "items": {
@@ -5248,6 +5336,18 @@
           },
           "type": "array"
         },
+        "harper": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarperConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Opt-in harper prose and grammar checks, emitted as `[engines.harper]`. Absent (the\ndefault) emits nothing; an empty `[workspace.poly.harper]` table enables it with the org's\ndefault `ignore` list."
+        },
         "hooks-sources": {
           "default": [],
           "description": "External git-sourced pre-commit hook sources, emitted as `[[hooks.sources]]`\nblocks in the generated `poly.toml`. Each entry pins a hook repository (e.g.\nan `ai-rulez` validation hook) by git URL + revision.\n\nEmpty (the default) emits no `[[hooks.sources]]` blocks, leaving the output\nbyte-identical to the pre-feature default.",
@@ -5258,7 +5358,7 @@
         },
         "lint-workspace": {
           "default": null,
-          "description": "Whether `poly lint` runs its whole-project lint phase, emitted as `[lint] workspace`.\n\nAbsent (the default) emits no `[lint]` table, matching poly's own default of `true`.\nSet to `false` for repos whose CI installs only a subset of toolchains, so the\nwhole-workspace linters that cannot run there are skipped — equivalent to always passing\n`poly lint --no-workspace`.",
+          "description": "Whether `poly lint` runs its whole-project lint phase, emitted as `[workspace] run`\n(`\"never\"` for `false`, `\"auto\"` for `true`).\n\nAbsent (the default) emits no `[workspace]` table, leaving poly's own default (`\"auto\"`).\nSet to `false` for repos whose CI installs only a subset of toolchains, so the\nwhole-workspace linters that cannot run there are skipped — equivalent to always passing\n`poly lint --workspace never`.",
           "type": [
             "boolean",
             "null"
@@ -5272,7 +5372,7 @@
             "type": "array"
           },
           "default": {},
-          "description": "Repo-specific cross-engine per-file rule suppressions merged into the\nemitted `[per-file-ignores]` table.\n\nKeys are gitignore-style glob patterns; values are lists of rule codes.\nRule codes are engine-agnostic — an unknown code simply no-ops on files\nof other languages.\n\nUses [`BTreeMap`] so entries are written to `poly.toml` in\ndeterministic (alphabetical key) order.",
+          "description": "Repo-specific cross-engine per-file rule suppressions merged into the\nemitted `[per_file_ignores]` table.\n\nKeys are gitignore-style glob patterns; values are lists of rule codes.\nRule codes are engine-agnostic — an unknown code simply no-ops on files\nof other languages.\n\nUses [`BTreeMap`] so entries are written to `poly.toml` in\ndeterministic (alphabetical key) order.",
           "type": "object"
         },
         "pyrefly-sub-configs": {
@@ -5296,7 +5396,31 @@
             }
           ],
           "default": null,
-          "description": "Optional shell formatter (`shfmt`) opt-in emitted as a `[fmt.shell.shfmt]`\ntable.\n\nAbsent (the default) emits NO `[fmt.shell.shfmt]` table, keeping alef's\npure-Rust-tooling policy intact and the output byte-identical to the\npre-feature default. When present, a `[fmt.shell.shfmt]` table is\nemitted with the configured `enabled` / `indent_width` values."
+          "description": "Optional shell formatter (`shfmt`) opt-in emitted as a `[engines.shfmt.format]`\ntable.\n\nAbsent (the default) emits NO `[engines.shfmt.format]` table, keeping alef's\npure-Rust-tooling policy intact and the output byte-identical to the\npre-feature default. When present, a `[engines.shfmt.format]` table is\nemitted with the configured `enabled` / `indent_width` values."
+        },
+        "skif": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsEngineConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Opt-in skif JS/TS project analysis (unused files, exports and dependencies), emitted as\n`[engines.skif]`. Absent (the default) emits nothing."
+        },
+        "tsrs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TsrsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Opt-in tsrs TypeScript type check, emitted as `[engines.tsrs]`. Absent (the default) emits\nnothing."
         },
         "typos": {
           "$ref": "#/$defs/TyposConfig",
@@ -5304,7 +5428,7 @@
             "extend-identifiers": {},
             "extend-words": {}
           },
-          "description": "Typos spell-checker word and identifier allowlists.\n\nMerged into `[lint.typos.extend_words]` and\n`[lint.typos.extend_identifiers]` in the generated poly.toml.\nWhen all sub-tables are empty, no `[lint.typos.*]` sections are emitted."
+          "description": "Typos spell-checker word and identifier allowlists.\n\nMerged into `[engines.typos.extend_words]` and\n`[engines.typos.extend_identifiers]` in the generated poly.toml.\nWhen all sub-tables are empty, no `[engines.typos.*]` sections are emitted."
         },
         "uncomment": {
           "anyOf": [
@@ -5316,7 +5440,7 @@
             }
           ],
           "default": null,
-          "description": "Optional uncomment-linter configuration emitted as a `[lint.uncomment]`\ntable.\n\nAbsent (the default) emits NO `[lint.uncomment]` table, leaving the\noutput byte-identical to the pre-feature default. When present — even as\nan empty `[workspace.poly.uncomment]` table — a `[lint.uncomment]` table\nis emitted with poly-default values filled in."
+          "description": "Optional uncomment-linter configuration emitted as a `[engines.uncomment]`\ntable.\n\nAbsent (the default) emits NO `[engines.uncomment]` table, leaving the\noutput byte-identical to the pre-feature default. When present — even as\nan empty `[workspace.poly.uncomment]` table — a `[engines.uncomment]` table\nis emitted with poly-default values filled in."
         }
       },
       "type": "object"
@@ -7089,16 +7213,16 @@
     },
     "ShellFormatterConfig": {
       "additionalProperties": false,
-      "description": "Shell formatter (`shfmt`) opt-in emitted under `[fmt.shell.shfmt]`.\n\nDeclared under `[workspace.poly.shell-formatter]` in `alef.toml`. Absent\n(the default) emits NO `[fmt.shell.shfmt]` table, leaving the output\nbyte-identical to the pre-feature default and preserving alef's\npure-Rust-tooling policy (see `poly_toml_never_enables_system_native_formatters`).\nA consumer repo that needs shell scripts formatted opts in explicitly.\n\n```toml\n[workspace.poly.shell-formatter]\nenabled = true\nindent-width = 2\n```",
+      "description": "Shell formatter (`shfmt`) opt-in emitted under `[engines.shfmt.format]`.\n\nDeclared under `[workspace.poly.shell-formatter]` in `alef.toml`. Absent\n(the default) emits NO `[engines.shfmt.format]` table, leaving the output\nbyte-identical to the pre-feature default and preserving alef's\npure-Rust-tooling policy (see `poly_toml_never_enables_system_native_formatters`).\nA consumer repo that needs shell scripts formatted opts in explicitly.\n\n```toml\n[workspace.poly.shell-formatter]\nenabled = true\nindent-width = 2\n```",
       "properties": {
         "enabled": {
           "default": true,
-          "description": "Whether the shfmt catalog tool runs at all.\n\nEmitted as `enabled` in the generated `[fmt.shell.shfmt]` table.",
+          "description": "Whether the shfmt catalog tool runs at all.\n\nEmitted as `enabled` in the generated `[engines.shfmt.format]` table.",
           "type": "boolean"
         },
         "indent-width": {
           "default": null,
-          "description": "Indent width (in spaces) shfmt uses to reformat shell scripts.\n\nEmitted as `indent_width` in the generated `[fmt.shell.shfmt]` table\nwhen set. Absent leaves the key unset, so shfmt falls back to its own\ndefault (tabs).",
+          "description": "Indent width (in spaces) shfmt uses to reformat shell scripts.\n\nEmitted as `indent_width` in the generated `[engines.shfmt.format]` table\nwhen set. Absent leaves the key unset, so shfmt falls back to its own\ndefault (tabs).",
           "format": "uint8",
           "maximum": 255,
           "minimum": 0,
@@ -7859,16 +7983,43 @@
       ],
       "type": "object"
     },
+    "TsrsConfig": {
+      "additionalProperties": false,
+      "description": "The tsrs TypeScript type check, emitted as `[engines.tsrs]`.\n\n```toml\n[workspace.poly.tsrs]\ndir = \"docs-site\"\n```",
+      "properties": {
+        "dir": {
+          "description": "The directory holding the `tsconfig.json`, relative to the repository root. Emitted as\n`dir`.",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Whether the type check runs. Emitted as `enabled`.",
+          "type": "boolean"
+        },
+        "project": {
+          "default": null,
+          "description": "A `tsconfig` other than `<dir>/tsconfig.json`. Emitted as `project` when set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "dir"
+      ],
+      "type": "object"
+    },
     "TyposConfig": {
       "additionalProperties": false,
-      "description": "Typos spell-checker customisations emitted under `[lint.typos.*]`.\n\nDeclared under `[workspace.poly.typos]` in `alef.toml`. When all\nsub-tables are absent or empty, no `[lint.typos.*]` tables are emitted.\n\n```toml\n[workspace.poly.typos.extend-words]\n# \"typo\" = \"correct\" — set both equal to suppress without correcting.\nflate = \"flate\"\ndelocate = \"delocate\"\n\n[workspace.poly.typos.extend-identifiers]\nPyMuPDF = \"PyMuPDF\"\nPDFium  = \"PDFium\"\n```",
+      "description": "Typos spell-checker customisations emitted under `[engines.typos.*]`.\n\nDeclared under `[workspace.poly.typos]` in `alef.toml`. When all\nsub-tables are absent or empty, no `[engines.typos.*]` tables are emitted.\n\n```toml\n[workspace.poly.typos.extend-words]\n# \"typo\" = \"correct\" — set both equal to suppress without correcting.\nflate = \"flate\"\ndelocate = \"delocate\"\n\n[workspace.poly.typos.extend-identifiers]\nPyMuPDF = \"PyMuPDF\"\nPDFium  = \"PDFium\"\n```",
       "properties": {
         "extend-identifiers": {
           "additionalProperties": {
             "type": "string"
           },
           "default": {},
-          "description": "Extra identifier corrections for the typos spell-checker.\n\nSame semantics as `extend_words` but applied to CamelCase / PascalCase\nidentifiers in source code.\n\nUses [`BTreeMap`] so entries are written in deterministic order.\n\nEmitted as `[lint.typos.extend_identifiers]` in the generated poly.toml.",
+          "description": "Extra identifier corrections for the typos spell-checker.\n\nSame semantics as `extend_words` but applied to CamelCase / PascalCase\nidentifiers in source code.\n\nUses [`BTreeMap`] so entries are written in deterministic order.\n\nEmitted as `[engines.typos.extend_identifiers]` in the generated poly.toml.",
           "type": "object"
         },
         "extend-words": {
@@ -7876,7 +8027,7 @@
             "type": "string"
           },
           "default": {},
-          "description": "Extra word corrections for the typos spell-checker.\n\nKey = the \"incorrect\" spelling typos would flag; value = the intended\nspelling. Set both equal to suppress a false-positive without\nauto-correcting it (e.g. `flate = \"flate\"` keeps `flate` unchanged).\n\nUses [`BTreeMap`] so entries are written to `poly.toml` in\ndeterministic (alphabetical key) order.\n\nEmitted as `[lint.typos.extend_words]` in the generated poly.toml.",
+          "description": "Extra word corrections for the typos spell-checker.\n\nKey = the \"incorrect\" spelling typos would flag; value = the intended\nspelling. Set both equal to suppress a false-positive without\nauto-correcting it (e.g. `flate = \"flate\"` keeps `flate` unchanged).\n\nUses [`BTreeMap`] so entries are written to `poly.toml` in\ndeterministic (alphabetical key) order.\n\nEmitted as `[engines.typos.extend_words]` in the generated poly.toml.",
           "type": "object"
         }
       },
@@ -7884,16 +8035,16 @@
     },
     "UncommentConfig": {
       "additionalProperties": false,
-      "description": "Uncomment linter customisations emitted under `[lint.uncomment]`.\n\nDeclared under `[workspace.poly.uncomment]` in `alef.toml`. When the section\nis absent, no `[lint.uncomment]` table is emitted (the generated output is\nbyte-identical to the default). When present, a `[lint.uncomment]` table is\nemitted with each field rendered under its snake_case poly key.\n\nField defaults mirror poly's own `uncomment` defaults so declaring an empty\n`[workspace.poly.uncomment]` table opts the linter in with poly-default\nbehaviour.\n\n```toml\n[workspace.poly.uncomment]\nenabled = true\nremove-todos = false\npreserve-patterns = [\"allow(\", \"SAFETY:\"]\n```",
+      "description": "Uncomment linter customisations emitted under `[engines.uncomment]`.\n\nDeclared under `[workspace.poly.uncomment]` in `alef.toml`. When the section\nis absent, no `[engines.uncomment]` table is emitted (the generated output is\nbyte-identical to the default). When present, a `[engines.uncomment]` table is\nemitted with each field rendered under its snake_case poly key.\n\nField defaults mirror poly's own `uncomment` defaults so declaring an empty\n`[workspace.poly.uncomment]` table opts the linter in with poly-default\nbehaviour.\n\n```toml\n[workspace.poly.uncomment]\nenabled = true\nremove-todos = false\npreserve-patterns = [\"allow(\", \"SAFETY:\"]\n```",
       "properties": {
         "enabled": {
           "default": true,
-          "description": "Whether the uncomment linter runs at all.\n\nEmitted as `enabled` in the generated `[lint.uncomment]` table.",
+          "description": "Whether the uncomment linter runs at all.\n\nEmitted as `enabled` in the generated `[engines.uncomment]` table.",
           "type": "boolean"
         },
         "preserve-patterns": {
           "default": [],
-          "description": "Extra comment-content substrings that exempt a comment from removal.\n\nEmitted as `preserve_patterns` in the generated `[lint.uncomment]`\ntable. Order is preserved as written. An empty list still emits an empty\narray so the key round-trips.",
+          "description": "Extra comment-content substrings that exempt a comment from removal.\n\nEmitted as `preserve_patterns` in the generated `[engines.uncomment]`\ntable. Order is preserved as written. An empty list still emits an empty\narray so the key round-trips.",
           "items": {
             "type": "string"
           },
@@ -7901,22 +8052,22 @@
         },
         "remove-docs": {
           "default": false,
-          "description": "Whether documentation comments are stripped.\n\nEmitted as `remove_docs` in the generated `[lint.uncomment]` table.",
+          "description": "Whether documentation comments are stripped.\n\nEmitted as `remove_docs` in the generated `[engines.uncomment]` table.",
           "type": "boolean"
         },
         "remove-fixme": {
           "default": false,
-          "description": "Whether `FIXME` comments are stripped.\n\nEmitted as `remove_fixme` in the generated `[lint.uncomment]` table.",
+          "description": "Whether `FIXME` comments are stripped.\n\nEmitted as `remove_fixme` in the generated `[engines.uncomment]` table.",
           "type": "boolean"
         },
         "remove-todos": {
           "default": false,
-          "description": "Whether `TODO` comments are stripped.\n\nEmitted as `remove_todos` in the generated `[lint.uncomment]` table.",
+          "description": "Whether `TODO` comments are stripped.\n\nEmitted as `remove_todos` in the generated `[engines.uncomment]` table.",
           "type": "boolean"
         },
         "use-default-ignores": {
           "default": true,
-          "description": "Whether poly's built-in ignore patterns apply.\n\nEmitted as `use_default_ignores` in the generated `[lint.uncomment]`\ntable.",
+          "description": "Whether poly's built-in ignore patterns apply.\n\nEmitted as `use_default_ignores` in the generated `[engines.uncomment]`\ntable.",
           "type": "boolean"
         }
       },
@@ -8512,11 +8663,14 @@
           "default": {
             "exclude": [],
             "file-safety-exclude": [],
+            "harper": null,
             "hooks-sources": [],
             "lint-workspace": null,
             "per-file-ignores": {},
             "pyrefly-sub-configs": {},
             "shell-formatter": null,
+            "skif": null,
+            "tsrs": null,
             "typos": {
               "extend-identifiers": {},
               "extend-words": {}
@@ -8741,7 +8895,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.130.4/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.132.0/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8838,11 +8992,14 @@
         "poly": {
           "exclude": [],
           "file-safety-exclude": [],
+          "harper": null,
           "hooks-sources": [],
           "lint-workspace": null,
           "per-file-ignores": {},
           "pyrefly-sub-configs": {},
           "shell-formatter": null,
+          "skif": null,
+          "tsrs": null,
           "typos": {
             "extend-identifiers": {},
             "extend-words": {}
@@ -8873,6 +9030,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.130.4",
-  "x-alef-version": "0.130.4"
+  "version": "0.132.0",
+  "x-alef-version": "0.132.0"
 }

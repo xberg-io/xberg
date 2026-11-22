@@ -130,7 +130,14 @@ pub(crate) fn extract_text_and_metadata(
     let cut_short = extraction_config
         .and_then(|config| config.cancel_token.as_ref())
         .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
-    let scan_grading = (!cut_short).then_some(super::metadata::ScanGrading {
+    // The grade feeds OCR routing and published PDF metadata. Avoid the extra page
+    // pass when neither can use it, while retaining the basic metadata used internally.
+    let can_route_ocr = cfg!(any(feature = "ocr", feature = "ocr-pipeline"));
+    let scan_grade_unused = extraction_config.is_some_and(|config| {
+        (!can_route_ocr || config.effective_disable_ocr())
+            && config.pdf_options.as_ref().is_some_and(|pdf| !pdf.extract_metadata)
+    });
+    let scan_grading = (!cut_short && !scan_grade_unused).then_some(super::metadata::ScanGrading {
         min_confidence: scanned_min_confidence,
         quality_thresholds: &ocr_quality_thresholds,
         provenance_counts: evidence.provenance_counts.as_deref(),
@@ -472,6 +479,7 @@ fn extract_text_with_tracking(
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             });
         }
     }
@@ -7908,6 +7916,40 @@ mod tests {
             Some(3),
             "the cheap metadata is still read"
         );
+    }
+
+    #[test]
+    fn scan_grade_is_kept_when_ocr_or_pdf_metadata_can_use_it() {
+        let pdf = build_paged_text_pdf(2, 10);
+        let mut expected_text = None;
+        for (disable_ocr, ocr_enabled, extract_metadata, graded) in [
+            (false, None, true, true),
+            (false, None, false, cfg!(any(feature = "ocr", feature = "ocr-pipeline"))),
+            (true, None, true, true),
+            (true, None, false, false),
+            (false, Some(false), false, false),
+        ] {
+            let config = ExtractionConfig {
+                disable_ocr,
+                ocr: ocr_enabled.map(|enabled| crate::core::config::OcrConfig {
+                    enabled,
+                    ..Default::default()
+                }),
+                pdf_options: Some(crate::core::config::PdfConfig {
+                    extract_metadata,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let mut doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+            let (text, _, _, metadata, _) =
+                extract_text_and_metadata(&mut doc, Some(&config)).expect("extraction must succeed");
+            assert_eq!(metadata.pdf_specific.scanned_confidence.is_some(), graded);
+            assert_eq!(metadata.pdf_specific.scanned_pages.is_some(), graded);
+            assert_eq!(metadata.pdf_specific.page_count, Some(2));
+            assert!(!text.trim().is_empty());
+            assert_eq!(&text, expected_text.get_or_insert_with(|| text.clone()));
+        }
     }
 
     /// #1744: the provenance pass in `pdf/scan_detect.rs` used to read every page's text a

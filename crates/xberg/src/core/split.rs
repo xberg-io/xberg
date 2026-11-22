@@ -472,6 +472,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }
     }
 
@@ -670,6 +671,7 @@ mod enrichment_preservation_tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }
     }
 
@@ -723,6 +725,9 @@ mod enrichment_preservation_tests {
             subject: None,
             quad_points: None,
             marked_text: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
         }
     }
 

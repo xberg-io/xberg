@@ -288,6 +288,18 @@ pub struct PageContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "api", schema(nullable = false))]
     pub geometry: Option<PageGeometry>,
+
+    /// Page viewport dictionaries (PDF `/VP`), when the page defines any.
+    ///
+    /// A construction drawing uses one viewport per plan, detail or elevation;
+    /// each carries its bounds, name and measure dictionary (the view's scale).
+    /// Read for every PDF page regardless of `extract_vector_geometry`, because
+    /// the entries are a page-level annotation aid rather than path output.
+    /// `None` on every other format and on a page without `/VP`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "api", schema(nullable = false))]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.5.0"))]
+    pub viewports: Option<Vec<super::annotations::PageViewport>>,
 }
 
 /// Aggregate OCR legibility score for a page, reported by the backend that produced its text.
@@ -643,6 +655,7 @@ mod binding_value_serde_tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }
     }
 
@@ -750,6 +763,7 @@ mod binding_value_serde_tests {
                 },
                 ..Default::default()
             }],
+            regions: Vec::new(),
         });
 
         let present = serde_json::to_value(&page).expect("the page serializes");

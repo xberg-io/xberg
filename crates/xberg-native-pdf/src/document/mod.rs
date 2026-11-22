@@ -1895,6 +1895,7 @@ mod ink_dict_extractor_tests;
 #[cfg(test)]
 mod open_signals_tests;
 
+mod annotation_write;
 mod annotations;
 mod catalog;
 mod classify;

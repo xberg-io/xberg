@@ -7,7 +7,7 @@ fn staged(id: &str, precision: LocalCaptioningPrecision) -> LocalCaptioningModel
     LocalCaptioningModel::staged(id, precision).unwrap()
 }
 
-fn config(model: LocalCaptioningModel) -> LocalCaptioningConfig {
+pub(super) fn config(model: LocalCaptioningModel) -> LocalCaptioningConfig {
     LocalCaptioningConfig {
         model,
         limits: LocalCaptioningLimits::default(),
@@ -172,7 +172,7 @@ fn captioning_config_rejects_florence_and_loose_bounds() {
         .unwrap_err()
         .to_string();
     assert!(error.contains("not enabled by this adapter"), "{error}");
-    assert!(error.contains("fails on cached decoder steps"), "{error}");
+    assert!(error.contains("pipeline is not implemented"), "{error}");
 
     let smolvlm = staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized);
     let mut limits = config(smolvlm.clone());
@@ -276,12 +276,12 @@ fn staged_florence_is_refused_explicitly() {
         Err(error) => error.to_string(),
     };
     assert!(error.contains("not enabled by this adapter"), "{error}");
-    assert!(error.contains("Only SmolVLM is wired"), "{error}");
+    assert!(error.contains("only SmolVLM is wired"), "{error}");
 }
 
 #[test]
 fn smolvlm_prompt_closes_the_image_block_before_the_question() {
-    let text = super::generation::smolvlm_prompt_text(1, None, 64).expect("one global frame");
+    let text = super::generation::smolvlm_prompt_text(0, 0, None, 64).expect("one global frame");
     let opening = text.find("<global-img>").expect("global image tag");
     let closing = text.rfind("<fake_token_around_image>").expect("closing fake image tag");
     assert!(opening < closing, "{text}");
@@ -292,6 +292,154 @@ fn smolvlm_prompt_closes_the_image_block_before_the_question() {
         "{text}"
     );
     assert!(text.ends_with("<end_of_utterance>\nAssistant:"), "{text}");
+}
+
+#[test]
+fn split_prompt_matches_the_pinned_processor_row_and_column_expansion() {
+    let text = super::generation::smolvlm_prompt_text(2, 2, Some("What is shown?"), 4).expect("2x2 tiles");
+    let tiles = "<fake_token_around_image><row_1_col_1><image><image><image><image>\
+<fake_token_around_image><row_1_col_2><image><image><image><image>\n\
+<fake_token_around_image><row_2_col_1><image><image><image><image>\
+<fake_token_around_image><row_2_col_2><image><image><image><image>\n";
+    let global = "\n<fake_token_around_image><global-img><image><image><image><image>\
+<fake_token_around_image>";
+    assert_eq!(
+        text,
+        format!("<|im_start|>User:{tiles}{global}What is shown?<end_of_utterance>\nAssistant:")
+    );
+    // The processor emits the tiles in row-major order and the global frame last.
+    let rows: Vec<usize> = ["<row_1_col_1>", "<row_1_col_2>", "<row_2_col_1>", "<row_2_col_2>"]
+        .iter()
+        .map(|tag| text.find(tag).expect("row tag"))
+        .collect();
+    assert!(rows.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+    assert!(rows[3] < text.find("<global-img>").unwrap(), "{text}");
+    assert_eq!(text.matches("<image>").count(), 20);
+}
+
+#[test]
+fn tile_geometry_follows_the_pinned_processor_resize_ladder() {
+    use super::preprocess::tile_geometry;
+
+    // The pinned SmolVLM processor resizes the longest edge to 2048 and tiles at 512, so a 4:3
+    // image rounds to 2048x1536 and splits into three rows by four columns.
+    let pinned = tile_geometry(800, 600, 512, 2048);
+    assert_eq!(pinned.resize, (1536, 2048));
+    assert_eq!(pinned.tiled, (1536, 2048));
+    assert_eq!((pinned.rows, pinned.cols), (3, 4));
+    assert_eq!(pinned.frames(), 13);
+
+    // The same image with a 2x2 geometry (896 longest edge, 448 tiles) needs exactly four tiles.
+    let square = tile_geometry(800, 600, 448, 896);
+    assert_eq!(square.resize, (672, 896));
+    assert_eq!(square.tiled, (896, 896));
+    assert_eq!((square.rows, square.cols), (2, 2));
+    assert_eq!(square.frames(), 5);
+
+    // A portrait image swaps the roles without losing the aspect ratio.
+    let portrait = tile_geometry(600, 800, 448, 896);
+    assert_eq!((portrait.rows, portrait.cols), (2, 2));
+    assert_eq!(portrait.frames(), 5);
+}
+
+#[test]
+fn preprocessing_emits_tiles_in_row_major_order_then_the_global_frame() {
+    use super::LocalCaptioningFormat;
+    use super::preprocess::{PreprocessConfig, preprocess};
+
+    let preprocessor = serde_json::json!({
+        "do_image_splitting": true,
+        "max_image_size": {"longest_edge": 448},
+        "size": {"longest_edge": 896},
+        "image_mean": [0.5, 0.5, 0.5],
+        "image_std": [0.5, 0.5, 0.5],
+        "rescale_factor": 0.00392156862745098,
+        "resample": 1
+    });
+    let config = PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor,
+        &serde_json::json!({"image_seq_len": 64}),
+    )
+    .expect("bounded 2x2 geometry");
+    assert_eq!(config.edge, 448);
+    assert_eq!(config.resize_edge, 896);
+    assert!(config.do_image_splitting);
+
+    // Four quadrants with distinct values prove the row-major tile order, not just the count.
+    let mut source = image::RgbImage::from_pixel(800, 600, image::Rgb([0, 0, 0]));
+    for y in 0..600 {
+        for x in 0..800 {
+            let quadrant = u8::from(x >= 400) + 2 * u8::from(y >= 300);
+            source.put_pixel(x, y, image::Rgb([quadrant * 60, 0, 0]));
+        }
+    }
+    let captioning = LocalCaptioningConfig {
+        model: staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized),
+        limits: LocalCaptioningLimits::default(),
+        prompt: None,
+        cache_directory: None,
+    };
+    let batch = preprocess(&captioning, LocalCaptioningFormat::SmolVlm, &config, &source).unwrap();
+    assert_eq!((batch.rows, batch.cols), (2, 2));
+    assert_eq!(batch.num_images, 5);
+    assert_eq!(batch.edge, 448);
+    assert_eq!(
+        batch.pixels.len(),
+        5 * 3 * 448usize * 448usize,
+        "every frame must be a normalized 448x448 CHW tensor"
+    );
+    // Tiles keep the row-major quadrant order (top-left, top-right, bottom-left, bottom-right)
+    // and the global frame is last.
+    let plane = 448usize * 448;
+    let tile_center = |tile: usize| batch.pixels[tile * 3 * plane + 224 * 448 + 224];
+    let centers: Vec<f32> = (0..4).map(tile_center).collect();
+    assert!(
+        centers.windows(2).all(|pair| pair[0] < pair[1]),
+        "tiles must follow the source quadrants in row-major order: {centers:?}"
+    );
+    let global = 4 * 3 * plane;
+    assert!(batch.pixels[global + 224 * 448 + 224] < batch.pixels[global + 224 * 448 + 672]);
+    assert!(
+        batch.pixels[global] < batch.pixels[global + 447 * 448],
+        "the global frame keeps the whole image, not one tile"
+    );
+}
+
+#[test]
+fn a_processor_config_whose_grid_exceeds_the_tile_budget_is_rejected() {
+    use super::LocalCaptioningFormat;
+    use super::preprocess::{MAX_TILES, PreprocessConfig};
+
+    let preprocessor = |max_edge: u32, resize_edge: u32| {
+        serde_json::json!({
+            "do_image_splitting": true,
+            "max_image_size": {"longest_edge": max_edge},
+            "size": {"longest_edge": resize_edge},
+            "image_mean": [0.5, 0.5, 0.5],
+            "image_std": [0.5, 0.5, 0.5]
+        })
+    };
+    // 4096 / 256 = 16 per side, far beyond the pinned 4x4 grid.
+    let error = PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor(256, 4096),
+        &serde_json::json!({"image_seq_len": 64}),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("tiles"), "{error}");
+    assert!(MAX_TILES >= 16);
+
+    // A tile grid that fits but whose prompt expansion would exceed the token ceiling.
+    let error = PreprocessConfig::from_json(
+        LocalCaptioningFormat::SmolVlm,
+        &preprocessor(448, 896),
+        &serde_json::json!({"image_seq_len": 1024}),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("image tokens"), "{error}");
 }
 
 /// Compares the built prompt against the pinned processor's single-frame expansion. It needs the
@@ -318,7 +466,7 @@ fn smolvlm_prompt_matches_the_pinned_processor_token_expansion() {
     .expect("stage the pinned tokenizer first");
     let tokenizer = tokenizers::Tokenizer::from_file(path).expect("load the pinned tokenizer");
 
-    let text = super::generation::smolvlm_prompt_text(1, None, 64).expect("one global frame");
+    let text = super::generation::smolvlm_prompt_text(0, 0, None, 64).expect("one global frame");
     let ids = tokenizer
         .encode(text.as_str(), false)
         .expect("prompt")
@@ -345,6 +493,72 @@ fn smolvlm_prompt_matches_the_pinned_processor_token_expansion() {
             .get_ids(),
     );
     assert_eq!(ids, expected);
+}
+
+/// Golden `input_ids` from `Idefics3Processor` (transformers 4.57.6, the pinned export's processor
+/// class and the pinned tokenizer) for the 2x2 geometry: an 800x600 image with
+/// `size.longest_edge = 896` and `max_image_size.longest_edge = 448`, text
+/// `<|im_start|>User:<image>Can you describe this image?<end_of_utterance>\nAssistant:`.
+/// The pinned 2048/512 geometry always rounds any input up to a 4x4 grid, so a 2x2 expansion is
+/// exercised through the processor's supported geometry override rather than a different class.
+const GOLDEN_2X2_INPUT_IDS: [i64; 347] = [
+    1, 11126, 42, 49189, 49153, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49189, 49154, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 198, 49189, 49159, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49189, 49160, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 1116, 49189, 49152, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190,
+    49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49190, 49189, 7306, 346,
+    5125, 451, 2443, 47, 49279, 198, 9519, 9531, 42,
+];
+
+/// Compares a 2x2 tiled prompt's token ids against the pinned processor. It needs the pinned
+/// tokenizer from the Hugging Face cache, so it is ignored by default and fails loudly when run
+/// without the staged artifact.
+#[test]
+#[ignore = "requires the pinned SmolVLM tokenizer in the Hugging Face cache"]
+fn smolvlm_tiled_prompt_matches_the_pinned_processor_token_expansion() {
+    let model = LocalCaptioningModel::staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized)
+        .expect("the SmolVLM candidate must stay in the inventory");
+    let tokenizer_file = model
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("/tokenizer.json"))
+        .expect("the descriptor must pin tokenizer.json");
+    let client = crate::model_download::hf_client(None).expect("Hugging Face client");
+    let path = crate::model_download::hf_cached_revision_with_client(
+        &client,
+        &model.repository,
+        &tokenizer_file.path,
+        Some(&model.revision),
+    )
+    .expect("cache lookup")
+    .expect("stage the pinned tokenizer first");
+    let tokenizer = tokenizers::Tokenizer::from_file(path).expect("load the pinned tokenizer");
+
+    let text = super::generation::smolvlm_prompt_text(2, 2, None, 64).expect("2x2 tiles");
+    let ids: Vec<i64> = tokenizer
+        .encode(text.as_str(), false)
+        .expect("prompt")
+        .get_ids()
+        .iter()
+        .map(|id| i64::from(*id))
+        .collect();
+    assert_eq!(ids, GOLDEN_2X2_INPUT_IDS);
 }
 
 #[test]
@@ -385,4 +599,184 @@ fn preprocessor_dimensions_are_bounded() {
     .unwrap_err()
     .to_string();
     assert!(error.contains("image token count must be in"), "{error}");
+}
+
+fn artifact_fixture() -> (tempfile::TempDir, LocalCaptioningModel) {
+    use sha2::{Digest, Sha256};
+
+    let directory = tempfile::tempdir().unwrap();
+    let revision = "a".repeat(40);
+    let snapshot = directory
+        .path()
+        .join("models--owner--captioner/snapshots")
+        .join(&revision);
+    std::fs::create_dir_all(snapshot.join("smolvlm-256m-instruct/onnx")).unwrap();
+    let mut files = Vec::new();
+    for (path, bytes) in [
+        ("smolvlm-256m-instruct/onnx/vision_encoder.onnx", b"vision".as_slice()),
+        ("smolvlm-256m-instruct/onnx/embed_tokens.onnx", b"embed".as_slice()),
+        (
+            "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            b"decoder".as_slice(),
+        ),
+        ("smolvlm-256m-instruct/tokenizer.json", b"tokenizer".as_slice()),
+        (
+            "smolvlm-256m-instruct/tokenizer_config.json",
+            b"tokenizer-config".as_slice(),
+        ),
+        (
+            "smolvlm-256m-instruct/preprocessor_config.json",
+            b"preprocessor".as_slice(),
+        ),
+        ("smolvlm-256m-instruct/processor_config.json", b"processor".as_slice()),
+        ("smolvlm-256m-instruct/config.json", b"config".as_slice()),
+        ("smolvlm-256m-instruct/generation_config.json", b"generation".as_slice()),
+    ] {
+        std::fs::write(snapshot.join(path), bytes).unwrap();
+        files.push(LocalCaptioningFile {
+            path: path.to_owned(),
+            sha256: hex::encode(Sha256::digest(bytes)),
+            size_bytes: bytes.len() as u64,
+        });
+    }
+    let model = LocalCaptioningModel {
+        repository: "owner/captioner".to_owned(),
+        revision,
+        format: LocalCaptioningFormat::SmolVlm,
+        vision_encoder_file: "smolvlm-256m-instruct/onnx/vision_encoder.onnx".to_owned(),
+        embed_tokens_file: "smolvlm-256m-instruct/onnx/embed_tokens.onnx".to_owned(),
+        text_encoder_file: None,
+        decoder_file: "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx".to_owned(),
+        files,
+    };
+    (directory, model)
+}
+
+#[test]
+fn the_offline_artifact_report_distinguishes_staged_missing_and_mismatched_files() {
+    let (directory, model) = artifact_fixture();
+    let cache = directory.path().to_str().unwrap();
+
+    let report = LocalCaptioningArtifactReport::for_model(&model, Some(cache)).unwrap();
+    assert!(report.complete());
+    assert_eq!(report.staged(), model.files.len());
+    assert_eq!(
+        report.total_bytes,
+        model.files.iter().map(|file| file.size_bytes).sum::<u64>()
+    );
+    assert_eq!(report.staged_bytes, report.total_bytes);
+    assert_eq!(report.selected_backend, LocalCaptioningBackend::OnnxCpu);
+    assert_eq!(report.effective_backend, LocalCaptioningBackend::OnnxCpu);
+    let decoder = report
+        .artifacts
+        .iter()
+        .find(|artifact| artifact.path == model.decoder_file)
+        .unwrap();
+    assert_eq!(decoder.sha256, model.files[2].sha256);
+    assert_eq!(decoder.state, LocalCaptioningArtifactState::Staged);
+
+    // A present file of the wrong size is corrupt; a deleted one is missing.
+    let decoder_path = directory
+        .path()
+        .join("models--owner--captioner/snapshots")
+        .join(&model.revision)
+        .join(&model.decoder_file);
+    std::fs::write(&decoder_path, b"decoder-but-longer").unwrap();
+    let embed_path = directory
+        .path()
+        .join("models--owner--captioner/snapshots")
+        .join(&model.revision)
+        .join(&model.embed_tokens_file);
+    std::fs::remove_file(embed_path).unwrap();
+    let report = LocalCaptioningArtifactReport::for_model(&model, Some(cache)).unwrap();
+    assert!(!report.complete());
+    assert_eq!(report.staged(), model.files.len() - 2);
+    let states: Vec<_> = report
+        .artifacts
+        .iter()
+        .map(|artifact| (artifact.path.as_str(), artifact.state))
+        .collect();
+    assert!(states.contains(&(model.decoder_file.as_str(), LocalCaptioningArtifactState::SizeMismatch)));
+    assert!(states.contains(&(model.embed_tokens_file.as_str(), LocalCaptioningArtifactState::Missing)));
+}
+
+#[test]
+fn a_candidate_report_from_an_empty_cache_is_offline_and_fully_missing() {
+    let directory = tempfile::tempdir().unwrap();
+    let report = LocalCaptioningArtifactReport::for_candidate(
+        "smolvlm-256m-instruct",
+        LocalCaptioningPrecision::Quantized,
+        Some(directory.path().to_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(report.candidate.as_deref(), Some("smolvlm-256m-instruct"));
+    assert_eq!(report.repository, "xberg-io/captioning-models");
+    assert_eq!(report.revision, crate::candidate_models::CAPTIONING_MODELS_REVISION);
+    assert!(report.empty());
+    assert_eq!(report.staged(), 0);
+    assert!(report.total_bytes > 0);
+    assert!(report.artifacts.iter().all(|artifact| artifact.sha256.len() == 64));
+    // The inventory adds the notice and model-card files, so the report is the full artifact set.
+    assert!(
+        report
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.path.ends_with("/LICENSE"))
+    );
+}
+
+#[tokio::test]
+async fn preparing_without_staged_artifacts_fails_offline_and_names_the_pinned_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = config(staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Quantized));
+    config.cache_directory = Some(directory.path().to_str().unwrap().to_owned());
+    let captioner = LocalImageCaptioner::new(config).unwrap();
+    let error = captioner.prepare(&Default::default()).await.unwrap_err().to_string();
+    assert!(error.contains("missing from the pre-staged cache"), "{error}");
+    assert!(error.contains("xberg-io/captioning-models@"));
+
+    let image = TINY_PNG.to_vec();
+    let error = captioner
+        .caption(&image, &Default::default())
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("requires explicit prepare"), "{error}");
+}
+
+/// Alternating quantizations of the pinned candidate prepare independent sessions and keep their
+/// own identity, and a prepared captioner serves concurrent requests without re-reading artifacts.
+#[tokio::test]
+#[ignore = "requires staged pinned artifacts"]
+async fn alternating_captioning_models_and_concurrent_requests_stay_independent() {
+    use std::sync::Arc;
+
+    let quantized = LocalImageCaptioner::new(config(staged(
+        "smolvlm-256m-instruct",
+        LocalCaptioningPrecision::Quantized,
+    )))
+    .unwrap();
+    let fp32 =
+        LocalImageCaptioner::new(config(staged("smolvlm-256m-instruct", LocalCaptioningPrecision::Fp32))).unwrap();
+    let quantized_info = quantized.prepare(&Default::default()).await.unwrap();
+    let fp32_info = fp32.prepare(&Default::default()).await.unwrap();
+    assert_eq!(quantized_info.precision, LocalCaptioningPrecision::Quantized);
+    assert_eq!(fp32_info.precision, LocalCaptioningPrecision::Fp32);
+    assert_ne!(quantized_info.manifest_sha256, fp32_info.manifest_sha256);
+
+    let captioner = Arc::new(quantized);
+    let image = TINY_PNG.to_vec();
+    let mut workers = Vec::new();
+    for _ in 0..2 {
+        let captioner = Arc::clone(&captioner);
+        let image = image.clone();
+        workers.push(tokio::spawn(async move {
+            captioner.caption(&image, &Default::default()).await
+        }));
+    }
+    for worker in workers {
+        let result = worker.await.unwrap().expect("concurrent captions");
+        assert!(!result.caption.is_empty());
+        assert_eq!(result.model.precision, LocalCaptioningPrecision::Quantized);
+    }
 }

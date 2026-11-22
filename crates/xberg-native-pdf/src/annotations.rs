@@ -17,6 +17,9 @@ use crate::document::PdfDocument;
 use crate::error::Result;
 use crate::object::{Object, decode_pdf_text_string};
 
+mod geometry;
+pub use geometry::{MeasureDictionary, PageViewport, PolygonAnnotation};
+
 /// A PDF annotation.
 ///
 /// Represents all PDF annotation types per ISO 32000-1:2008, Section 12.5.
@@ -98,6 +101,24 @@ pub struct Annotation {
 
     /// Appearance state for checkboxes/radios (AS entry)
     pub appearance_state: Option<String>,
+
+    /// Geometry vertices for Line, Polygon and PolyLine annotations.
+    ///
+    /// `Line` annotations use their `/L` entry (one segment, two points);
+    /// `Polygon` and `PolyLine` use `/Vertices`. Coordinates are in default user
+    /// space, the same frame as [`rect`](Self::rect). `None` for every other
+    /// subtype.
+    pub vertices: Option<Vec<[f64; 2]>>,
+
+    /// One point list per stroke of an Ink annotation (PDF `/InkList`, ISO
+    /// 32000-1 §12.5.6.13). Each inner vector is one freehand stroke in default
+    /// user space. `None` for every other subtype.
+    pub ink_list: Option<Vec<Vec<[f64; 2]>>>,
+
+    /// Measurement dictionary carried by a geometric annotation (PDF `/Measure`,
+    /// ISO 32000-1 §12.9). Measured takeoff tools use it to turn a polygon's
+    /// page-space coordinates into a real-world quantity.
+    pub measure: Option<MeasureDictionary>,
 
     /// Raw annotation dictionary for preserving unknown properties during round-trip.
     ///
@@ -248,6 +269,20 @@ impl PdfDocument {
             } else {
                 (None, None, None, None, None, None, None)
             };
+        let vertices = if matches!(
+            f.subtype_enum,
+            AnnotationSubtype::Line | AnnotationSubtype::Polygon | AnnotationSubtype::PolyLine
+        ) {
+            Self::parse_annotation_vertices(dict, f.subtype_enum)
+        } else {
+            None
+        };
+        let ink_list = if f.subtype_enum == AnnotationSubtype::Ink {
+            self.parse_ink_list(dict)
+        } else {
+            None
+        };
+        let measure = Self::parse_measure_dictionary(dict.get("Measure"));
 
         Ok(Annotation {
             annotation_type: f.annotation_type,
@@ -274,85 +309,11 @@ impl PdfDocument {
             field_flags,
             options,
             appearance_state,
+            vertices,
+            ink_list,
+            measure,
             raw_dict: Some(dict.clone()),
         })
-    }
-
-    fn parse_flat_annotation_fields(dict: &std::collections::HashMap<String, Object>) -> FlatAnnotationFields {
-        let annotation_type = dict
-            .get("Type")
-            .and_then(|t| t.as_name())
-            .unwrap_or("Unknown")
-            .to_string();
-        let subtype = dict.get("Subtype").and_then(|s| s.as_name()).map(|s| s.to_string());
-        let subtype_enum = subtype
-            .as_deref()
-            .map(AnnotationSubtype::from_pdf_name)
-            .unwrap_or(AnnotationSubtype::Unknown);
-        let contents = Self::pdf_string_field(dict, "Contents");
-        let rect = dict.get("Rect").and_then(|r| match r {
-            Object::Array(arr) if arr.len() == 4 => {
-                let mut rect_arr = [0.0; 4];
-                for (i, obj) in arr.iter().enumerate() {
-                    rect_arr[i] = match obj {
-                        Object::Integer(n) => *n as f64,
-                        Object::Real(f) => *f,
-                        _ => 0.0,
-                    };
-                }
-                Some(rect_arr)
-            }
-            _ => None,
-        });
-        let author = Self::pdf_string_field(dict, "T");
-        let creation_date = Self::pdf_string_field(dict, "CreationDate");
-        let modification_date = Self::pdf_string_field(dict, "M");
-        let subject = Self::pdf_string_field(dict, "Subj");
-        let flags = dict
-            .get("F")
-            .and_then(|f| match f {
-                Object::Integer(n) => Some(AnnotationFlags::new(*n as u32)),
-                _ => None,
-            })
-            .unwrap_or_default();
-        let color = Self::parse_number_array(dict.get("C"));
-        let opacity = dict.get("CA").and_then(|o| match o {
-            Object::Real(f) => Some(*f),
-            Object::Integer(n) => Some(*n as f64),
-            _ => None,
-        });
-        let border = dict.get("Border").and_then(|b| match b {
-            Object::Array(arr) if arr.len() >= 3 => {
-                let mut border_arr = [0.0; 3];
-                for (i, obj) in arr.iter().take(3).enumerate() {
-                    border_arr[i] = match obj {
-                        Object::Integer(n) => *n as f64,
-                        Object::Real(f) => *f,
-                        _ => 0.0,
-                    };
-                }
-                Some(border_arr)
-            }
-            _ => None,
-        });
-        let interior_color = Self::parse_number_array(dict.get("IC"));
-
-        FlatAnnotationFields {
-            annotation_type,
-            subtype,
-            subtype_enum,
-            contents,
-            rect,
-            author,
-            creation_date,
-            modification_date,
-            subject,
-            flags,
-            color,
-            opacity,
-            border,
-            interior_color,
-        }
     }
 
     fn parse_link_destination_and_action(
@@ -745,6 +706,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -782,6 +746,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -858,6 +825,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -894,6 +864,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: Some("Yes".to_string()),
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -939,6 +912,9 @@ mod tests {
                 "Option C".to_string(),
             ]),
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -994,3 +970,6 @@ mod tests {
         assert!(PdfDocument::parse_options_array(None).is_none());
     }
 }
+
+#[cfg(test)]
+mod geometry_tests;

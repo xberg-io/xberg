@@ -27,8 +27,9 @@ pub enum LocalCaptioningFormat {
     /// `inputs_embeds`.
     SmolVlm,
     /// Florence-2: vision encoder, text encoder and a merged encoder-decoder. The inventory pins
-    /// this family and the descriptor validates it, but the current adapter refuses it explicitly
-    /// because its merged decoder fails on cached decoder steps in the bundled ONNX Runtime.
+    /// this family and the descriptor validates it, but the adapter refuses it explicitly because
+    /// its encoder-decoder, task-token and per-task post-processing pipeline is not implemented;
+    /// the pinned graphs themselves run on the bundled ONNX Runtime (see the module docs).
     Florence2,
 }
 

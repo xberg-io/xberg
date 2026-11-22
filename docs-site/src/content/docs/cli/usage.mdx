@@ -538,7 +538,7 @@ xberg extract document.pdf --extract-images true --target-dpi 300
 | -------------------------------------- | ------------------------------------------------------------------------------------ |
 | `--pdf-password <PASSWORD>`            | Password for encrypted PDFs. Can be specified multiple times for multiple passwords. |
 | `--pdf-extract-images <true\|false>`   | Extract images embedded in PDF pages.                                                |
-| `--pdf-extract-metadata <true\|false>` | Extract PDF metadata (title, author, etc.).                                          |
+| `--pdf-extract-metadata <true\|false>` | Extract PDF metadata (title, author, etc.). With the native PDF backend, setting this to `false` skips scan detection if OCR is disabled or the build has no OCR support. |
 
 ```bash title="Terminal"
 xberg extract encrypted.pdf --pdf-password "secret"

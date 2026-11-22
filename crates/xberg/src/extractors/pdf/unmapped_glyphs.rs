@@ -389,6 +389,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         assert_eq!(strip_page(&mut page), 3);

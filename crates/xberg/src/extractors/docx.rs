@@ -1425,6 +1425,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                         ocr_confidence: None,
                         native_content: None,
                         geometry: None,
+                        viewports: None,
                     });
                 }
                 Some(pages)
@@ -1444,6 +1445,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                     ocr_confidence: None,
                     native_content: None,
                     geometry: None,
+                    viewports: None,
                 }])
             }
         };

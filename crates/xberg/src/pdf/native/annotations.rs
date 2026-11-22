@@ -4,7 +4,7 @@
 //! extracting content text, bounding boxes, and link URIs.
 
 use super::NativeDocument;
-use crate::types::{BoundingBox, PdfAnnotation, PdfAnnotationType, ProcessingWarning};
+use crate::types::{AnnotationPoint, BoundingBox, MeasureData, PdfAnnotation, PdfAnnotationType, ProcessingWarning};
 
 /// Extract annotations from all pages of a PDF document using xberg_native_pdf.
 ///
@@ -164,6 +164,17 @@ fn build_pdf_annotation(
         subject: annot.subject.clone().filter(|s| !s.is_empty()),
         quad_points,
         marked_text,
+        vertices: annot
+            .vertices
+            .as_ref()
+            .map(|vertices| vertices.iter().map(|[x, y]| AnnotationPoint { x: *x, y: *y }).collect()),
+        ink_list: annot.ink_list.as_ref().map(|strokes| {
+            strokes
+                .iter()
+                .map(|stroke| stroke.iter().map(|[x, y]| AnnotationPoint { x: *x, y: *y }).collect())
+                .collect()
+        }),
+        measure: annot.measure.as_ref().map(MeasureData::from),
     }
 }
 
@@ -636,6 +647,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 
@@ -670,6 +684,9 @@ mod tests {
             field_flags: None,
             options: None,
             appearance_state: None,
+            vertices: None,
+            ink_list: None,
+            measure: None,
             raw_dict: None,
         };
 

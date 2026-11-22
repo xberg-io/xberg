@@ -1,0 +1,995 @@
+{
+  "variants": [
+    {
+      "candidate": "nli-minilm2-l6-h768",
+      "arm": "int8",
+      "held_out": {
+        "headline_repeat": 1,
+        "repeat_stability": 0.0,
+        "repeats": [
+          {
+            "repeat": 1,
+            "known_documents": 138,
+            "unknown_documents": 48,
+            "abstentions_on_known": 98,
+            "errors": 106,
+            "macro_f1": { "value": 0.3213675213675214, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.2318840579710145, "observations": 138, "reason": null },
+            "selective_accuracy": { "value": 0.8, "observations": 40, "reason": null },
+            "abstention_rate_on_known": { "value": 0.7101449275362319, "observations": 138, "reason": null },
+            "unknown_rejection": { "value": 0.7916666666666666, "observations": 48, "reason": null },
+            "unknown_forced_prediction": { "value": 0.20833333333333334, "observations": 48, "reason": null },
+            "ece": { "value": 0.20442897230386736, "observations": 40, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 49,
+                "recall": { "value": 0.02040816326530612, "observations": 49, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.039999999999999994
+              },
+              "proposed rule": {
+                "support": 48,
+                "recall": { "value": 0.4583333333333333, "observations": 48, "reason": null },
+                "precision": { "value": 0.7333333333333333, "observations": 30, "reason": null },
+                "f1": 0.5641025641025641
+              },
+              "public notice": {
+                "support": 41,
+                "recall": { "value": 0.21951219512195122, "observations": 41, "reason": null },
+                "precision": { "value": 1.0, "observations": 9, "reason": null },
+                "f1": 0.36
+              }
+            },
+            "confusion": [
+              { "gold": null, "predicted": null, "count": 38 },
+              { "gold": null, "predicted": "public notice", "count": 10 },
+              { "gold": "final rule", "predicted": null, "count": 45 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 3 },
+              { "gold": "proposed rule", "predicted": null, "count": 26 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 22 },
+              { "gold": "public notice", "predicted": null, "count": 27 },
+              { "gold": "public notice", "predicted": "proposed rule", "count": 5 },
+              { "gold": "public notice", "predicted": "public notice", "count": 9 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.2525302804048448, "observations": 85, "reason": null },
+              "cue_present": { "value": 0.2744744744744745, "observations": 53, "reason": null }
+            },
+            "ci": {
+              "lower": 0.2305437352245863,
+              "upper": 0.38487440551056373,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 24
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17874",
+                "family": "homeland-security-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5472115278244019
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18048",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5638603568077087
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18830",
+                "family": "environmental-protection-agency",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5336729884147644
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-19047",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5395654439926147
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20089",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5439963936805725
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20620",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5460955500602722
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22204",
+                "family": "appraisal-subcommittee-of-the-federal-financial-institutions-examination-council",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5685771703720093
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-23050",
+                "family": "labor-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218740701675415
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17840",
+                "family": "transportation-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17863",
+                "family": "agriculture-department",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17876",
+                "family": "federal-maritime-commission",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17884",
+                "family": "postal-service",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          },
+          {
+            "repeat": 2,
+            "known_documents": 138,
+            "unknown_documents": 48,
+            "abstentions_on_known": 98,
+            "errors": 106,
+            "macro_f1": { "value": 0.3213675213675214, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.2318840579710145, "observations": 138, "reason": null },
+            "selective_accuracy": { "value": 0.8, "observations": 40, "reason": null },
+            "abstention_rate_on_known": { "value": 0.7101449275362319, "observations": 138, "reason": null },
+            "unknown_rejection": { "value": 0.7916666666666666, "observations": 48, "reason": null },
+            "unknown_forced_prediction": { "value": 0.20833333333333334, "observations": 48, "reason": null },
+            "ece": { "value": 0.20442897230386736, "observations": 40, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 49,
+                "recall": { "value": 0.02040816326530612, "observations": 49, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.039999999999999994
+              },
+              "proposed rule": {
+                "support": 48,
+                "recall": { "value": 0.4583333333333333, "observations": 48, "reason": null },
+                "precision": { "value": 0.7333333333333333, "observations": 30, "reason": null },
+                "f1": 0.5641025641025641
+              },
+              "public notice": {
+                "support": 41,
+                "recall": { "value": 0.21951219512195122, "observations": 41, "reason": null },
+                "precision": { "value": 1.0, "observations": 9, "reason": null },
+                "f1": 0.36
+              }
+            },
+            "confusion": [
+              { "gold": null, "predicted": null, "count": 38 },
+              { "gold": null, "predicted": "public notice", "count": 10 },
+              { "gold": "final rule", "predicted": null, "count": 45 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 3 },
+              { "gold": "proposed rule", "predicted": null, "count": 26 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 22 },
+              { "gold": "public notice", "predicted": null, "count": 27 },
+              { "gold": "public notice", "predicted": "proposed rule", "count": 5 },
+              { "gold": "public notice", "predicted": "public notice", "count": 9 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.2525302804048448, "observations": 85, "reason": null },
+              "cue_present": { "value": 0.2744744744744745, "observations": 53, "reason": null }
+            },
+            "ci": {
+              "lower": 0.2305437352245863,
+              "upper": 0.38487440551056373,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 24
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17874",
+                "family": "homeland-security-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5472115278244019
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18048",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5638603568077087
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18830",
+                "family": "environmental-protection-agency",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5336729884147644
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-19047",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5395654439926147
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20089",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5439963936805725
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20620",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5460955500602722
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22204",
+                "family": "appraisal-subcommittee-of-the-federal-financial-institutions-examination-council",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5685771703720093
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-23050",
+                "family": "labor-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218740701675415
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17840",
+                "family": "transportation-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17863",
+                "family": "agriculture-department",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17876",
+                "family": "federal-maritime-commission",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17884",
+                "family": "postal-service",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          },
+          {
+            "repeat": 3,
+            "known_documents": 138,
+            "unknown_documents": 48,
+            "abstentions_on_known": 98,
+            "errors": 106,
+            "macro_f1": { "value": 0.3213675213675214, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.2318840579710145, "observations": 138, "reason": null },
+            "selective_accuracy": { "value": 0.8, "observations": 40, "reason": null },
+            "abstention_rate_on_known": { "value": 0.7101449275362319, "observations": 138, "reason": null },
+            "unknown_rejection": { "value": 0.7916666666666666, "observations": 48, "reason": null },
+            "unknown_forced_prediction": { "value": 0.20833333333333334, "observations": 48, "reason": null },
+            "ece": { "value": 0.20442897230386736, "observations": 40, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 49,
+                "recall": { "value": 0.02040816326530612, "observations": 49, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.039999999999999994
+              },
+              "proposed rule": {
+                "support": 48,
+                "recall": { "value": 0.4583333333333333, "observations": 48, "reason": null },
+                "precision": { "value": 0.7333333333333333, "observations": 30, "reason": null },
+                "f1": 0.5641025641025641
+              },
+              "public notice": {
+                "support": 41,
+                "recall": { "value": 0.21951219512195122, "observations": 41, "reason": null },
+                "precision": { "value": 1.0, "observations": 9, "reason": null },
+                "f1": 0.36
+              }
+            },
+            "confusion": [
+              { "gold": null, "predicted": null, "count": 38 },
+              { "gold": null, "predicted": "public notice", "count": 10 },
+              { "gold": "final rule", "predicted": null, "count": 45 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 3 },
+              { "gold": "proposed rule", "predicted": null, "count": 26 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 22 },
+              { "gold": "public notice", "predicted": null, "count": 27 },
+              { "gold": "public notice", "predicted": "proposed rule", "count": 5 },
+              { "gold": "public notice", "predicted": "public notice", "count": 9 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.2525302804048448, "observations": 85, "reason": null },
+              "cue_present": { "value": 0.2744744744744745, "observations": 53, "reason": null }
+            },
+            "ci": {
+              "lower": 0.2305437352245863,
+              "upper": 0.38487440551056373,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 24
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17874",
+                "family": "homeland-security-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5472115278244019
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18048",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5638603568077087
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18830",
+                "family": "environmental-protection-agency",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5336729884147644
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-19047",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5395654439926147
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20089",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5439963936805725
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-20620",
+                "family": "committee-for-purchase-from-people-who-are-blind-or-severely-disabled",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5460955500602722
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22204",
+                "family": "appraisal-subcommittee-of-the-federal-financial-institutions-examination-council",
+                "gold": ["public notice"],
+                "predicted": "proposed rule",
+                "confidence": 0.5685771703720093
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-23050",
+                "family": "labor-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218740701675415
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17840",
+                "family": "transportation-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17863",
+                "family": "agriculture-department",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17876",
+                "family": "federal-maritime-commission",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17884",
+                "family": "postal-service",
+                "gold": ["final rule"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          }
+        ],
+        "baseline": {
+          "rule": "always predict the most frequent gold class",
+          "predicted_class": "final rule",
+          "macro_f1": { "value": 0.1746880570409982, "observations": 3, "reason": null },
+          "micro_accuracy": { "value": 0.35507246376811596, "observations": 138, "reason": null }
+        },
+        "limitations": [
+          "Abstentions count as recall errors; the abstention rate and selective accuracy are reported separately.",
+          "Top-1 confidence is a softmax over three NLI entailment logits, not a calibrated probability over the task labels; ECE is descriptive.",
+          "Cue-free sensitivity stratum: 85 held-out documents whose retained text does not contain their label phrase (macro-F1 0.2525).",
+          "Cue-present stratum: 53 held-out documents whose text contains their label phrase; the classifier can read the type off the page, so this is an upper bound.",
+          "The unknown-class cohort is drawn from 1 source family/families, so rejection is clustered rather than independent."
+        ]
+      },
+      "calibration": {
+        "headline_repeat": 1,
+        "repeat_stability": 0.0,
+        "repeats": [
+          {
+            "repeat": 1,
+            "known_documents": 87,
+            "unknown_documents": 0,
+            "abstentions_on_known": 64,
+            "errors": 73,
+            "macro_f1": { "value": 0.2513708513708514, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.16091954022988506, "observations": 87, "reason": null },
+            "selective_accuracy": { "value": 0.6086956521739131, "observations": 23, "reason": null },
+            "abstention_rate_on_known": { "value": 0.735632183908046, "observations": 87, "reason": null },
+            "unknown_rejection": { "value": null, "observations": 0, "reason": "no held-out unknown-class documents" },
+            "unknown_forced_prediction": {
+              "value": null,
+              "observations": 0,
+              "reason": "no held-out unknown-class documents"
+            },
+            "ece": { "value": 0.09556320957515552, "observations": 23, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 34,
+                "recall": { "value": 0.029411764705882353, "observations": 34, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.05714285714285715
+              },
+              "proposed rule": {
+                "support": 27,
+                "recall": { "value": 0.25925925925925924, "observations": 27, "reason": null },
+                "precision": { "value": 0.4666666666666667, "observations": 15, "reason": null },
+                "f1": 0.33333333333333337
+              },
+              "public notice": {
+                "support": 26,
+                "recall": { "value": 0.23076923076923078, "observations": 26, "reason": null },
+                "precision": { "value": 0.8571428571428571, "observations": 7, "reason": null },
+                "f1": 0.36363636363636365
+              }
+            },
+            "confusion": [
+              { "gold": "final rule", "predicted": null, "count": 25 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 8 },
+              { "gold": "proposed rule", "predicted": null, "count": 19 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 7 },
+              { "gold": "proposed rule", "predicted": "public notice", "count": 1 },
+              { "gold": "public notice", "predicted": null, "count": 20 },
+              { "gold": "public notice", "predicted": "public notice", "count": 6 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.15833333333333333, "observations": 57, "reason": null },
+              "cue_present": { "value": 0.33522727272727276, "observations": 30, "reason": null }
+            },
+            "ci": {
+              "lower": 0.10148584244463134,
+              "upper": 0.4021548821548822,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 12
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17871",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": "public notice",
+                "confidence": 0.5276508927345276
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18104",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5072270631790161
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18212",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5703473091125488
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18431",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5168753266334534
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18432",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5506636500358582
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18433",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5534912347793579
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-21319",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5162004232406616
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22093",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218285322189331
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22402",
+                "family": "federal-election-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.6283095479011536
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17799",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17822",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-18065",
+                "family": "civil-rights-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          },
+          {
+            "repeat": 2,
+            "known_documents": 87,
+            "unknown_documents": 0,
+            "abstentions_on_known": 64,
+            "errors": 73,
+            "macro_f1": { "value": 0.2513708513708514, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.16091954022988506, "observations": 87, "reason": null },
+            "selective_accuracy": { "value": 0.6086956521739131, "observations": 23, "reason": null },
+            "abstention_rate_on_known": { "value": 0.735632183908046, "observations": 87, "reason": null },
+            "unknown_rejection": { "value": null, "observations": 0, "reason": "no held-out unknown-class documents" },
+            "unknown_forced_prediction": {
+              "value": null,
+              "observations": 0,
+              "reason": "no held-out unknown-class documents"
+            },
+            "ece": { "value": 0.09556320957515552, "observations": 23, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 34,
+                "recall": { "value": 0.029411764705882353, "observations": 34, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.05714285714285715
+              },
+              "proposed rule": {
+                "support": 27,
+                "recall": { "value": 0.25925925925925924, "observations": 27, "reason": null },
+                "precision": { "value": 0.4666666666666667, "observations": 15, "reason": null },
+                "f1": 0.33333333333333337
+              },
+              "public notice": {
+                "support": 26,
+                "recall": { "value": 0.23076923076923078, "observations": 26, "reason": null },
+                "precision": { "value": 0.8571428571428571, "observations": 7, "reason": null },
+                "f1": 0.36363636363636365
+              }
+            },
+            "confusion": [
+              { "gold": "final rule", "predicted": null, "count": 25 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 8 },
+              { "gold": "proposed rule", "predicted": null, "count": 19 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 7 },
+              { "gold": "proposed rule", "predicted": "public notice", "count": 1 },
+              { "gold": "public notice", "predicted": null, "count": 20 },
+              { "gold": "public notice", "predicted": "public notice", "count": 6 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.15833333333333333, "observations": 57, "reason": null },
+              "cue_present": { "value": 0.33522727272727276, "observations": 30, "reason": null }
+            },
+            "ci": {
+              "lower": 0.10148584244463134,
+              "upper": 0.4021548821548822,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 12
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17871",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": "public notice",
+                "confidence": 0.5276508927345276
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18104",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5072270631790161
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18212",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5703473091125488
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18431",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5168753266334534
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18432",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5506636500358582
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18433",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5534912347793579
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-21319",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5162004232406616
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22093",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218285322189331
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22402",
+                "family": "federal-election-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.6283095479011536
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17799",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17822",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-18065",
+                "family": "civil-rights-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          },
+          {
+            "repeat": 3,
+            "known_documents": 87,
+            "unknown_documents": 0,
+            "abstentions_on_known": 64,
+            "errors": 73,
+            "macro_f1": { "value": 0.2513708513708514, "observations": 3, "reason": null },
+            "micro_accuracy": { "value": 0.16091954022988506, "observations": 87, "reason": null },
+            "selective_accuracy": { "value": 0.6086956521739131, "observations": 23, "reason": null },
+            "abstention_rate_on_known": { "value": 0.735632183908046, "observations": 87, "reason": null },
+            "unknown_rejection": { "value": null, "observations": 0, "reason": "no held-out unknown-class documents" },
+            "unknown_forced_prediction": {
+              "value": null,
+              "observations": 0,
+              "reason": "no held-out unknown-class documents"
+            },
+            "ece": { "value": 0.09556320957515552, "observations": 23, "reason": null },
+            "per_class": {
+              "final rule": {
+                "support": 34,
+                "recall": { "value": 0.029411764705882353, "observations": 34, "reason": null },
+                "precision": { "value": 1.0, "observations": 1, "reason": null },
+                "f1": 0.05714285714285715
+              },
+              "proposed rule": {
+                "support": 27,
+                "recall": { "value": 0.25925925925925924, "observations": 27, "reason": null },
+                "precision": { "value": 0.4666666666666667, "observations": 15, "reason": null },
+                "f1": 0.33333333333333337
+              },
+              "public notice": {
+                "support": 26,
+                "recall": { "value": 0.23076923076923078, "observations": 26, "reason": null },
+                "precision": { "value": 0.8571428571428571, "observations": 7, "reason": null },
+                "f1": 0.36363636363636365
+              }
+            },
+            "confusion": [
+              { "gold": "final rule", "predicted": null, "count": 25 },
+              { "gold": "final rule", "predicted": "final rule", "count": 1 },
+              { "gold": "final rule", "predicted": "proposed rule", "count": 8 },
+              { "gold": "proposed rule", "predicted": null, "count": 19 },
+              { "gold": "proposed rule", "predicted": "proposed rule", "count": 7 },
+              { "gold": "proposed rule", "predicted": "public notice", "count": 1 },
+              { "gold": "public notice", "predicted": null, "count": 20 },
+              { "gold": "public notice", "predicted": "public notice", "count": 6 }
+            ],
+            "cue_strata": {
+              "cue_absent": { "value": 0.15833333333333333, "observations": 57, "reason": null },
+              "cue_present": { "value": 0.33522727272727276, "observations": 30, "reason": null }
+            },
+            "ci": {
+              "lower": 0.10148584244463134,
+              "upper": 0.4021548821548822,
+              "level": 0.95,
+              "replicates": 2000,
+              "clusters": 12
+            },
+            "adverse_examples": [
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-17871",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": "public notice",
+                "confidence": 0.5276508927345276
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18104",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5072270631790161
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18212",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5703473091125488
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18431",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5168753266334534
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18432",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5506636500358582
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-18433",
+                "family": "health-and-human-services-department",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5534912347793579
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-21319",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5162004232406616
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22093",
+                "family": "personnel-management-office",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.5218285322189331
+              },
+              {
+                "kind": "misclassified",
+                "document": "fr-2026-22402",
+                "family": "federal-election-commission",
+                "gold": ["final rule"],
+                "predicted": "proposed rule",
+                "confidence": 0.6283095479011536
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17799",
+                "family": "commodity-futures-trading-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-17822",
+                "family": "treasury-department",
+                "gold": ["proposed rule"],
+                "predicted": null,
+                "confidence": null
+              },
+              {
+                "kind": "abstained",
+                "document": "fr-2026-18065",
+                "family": "civil-rights-commission",
+                "gold": ["public notice"],
+                "predicted": null,
+                "confidence": null
+              }
+            ]
+          }
+        ],
+        "baseline": {
+          "rule": "not computed for the calibration split",
+          "predicted_class": null,
+          "macro_f1": { "value": null, "observations": 0, "reason": "the baseline is reported on held-out work only" },
+          "micro_accuracy": {
+            "value": null,
+            "observations": 0,
+            "reason": "the baseline is reported on held-out work only"
+          }
+        },
+        "limitations": ["Calibration-split scores never enter the go/no-go decision."]
+      }
+    }
+  ],
+  "assertions": [
+    { "name": "plan documents", "expected": 273, "observed": 273 },
+    { "name": "plan candidates", "expected": 1, "observed": 1 },
+    { "name": "plan arms", "expected": 1, "observed": 1 },
+    { "name": "plan repeats", "expected": 3, "observed": 3 },
+    { "name": "report rows", "expected": 819, "observed": 819 },
+    { "name": "declared vocabulary", "expected": 3, "observed": 3 },
+    { "name": "nli-minilm2-l6-h768 / int8 / repeat 1 rows", "expected": 273, "observed": 273 },
+    { "name": "nli-minilm2-l6-h768 / int8 / repeat 2 rows", "expected": 273, "observed": 273 },
+    { "name": "nli-minilm2-l6-h768 / int8 / repeat 3 rows", "expected": 273, "observed": 273 }
+  ],
+  "documents_in_plan": 273,
+  "corpus_digest": "19ec5bb7b332ff89be30eed720d446fd138670144e4f8fb0b7ea02d78d68eba2",
+  "plan_sha256": "4a71679b3a0ff0409ffdec969e16e4488157ff30b20431d83b567720b019215b",
+  "report_sha256": "27886afc863372091329ccf788b7cd6fe3c882470f551bc88a598a3bd684df12"
+}
