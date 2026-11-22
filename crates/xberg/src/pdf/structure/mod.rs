@@ -12,6 +12,7 @@ pub(crate) mod layout_classify;
 pub(crate) mod layout_debug;
 pub(crate) mod lines;
 mod list_marker;
+mod math_inline;
 pub(crate) mod page_number;
 mod paragraphs;
 pub(crate) mod pipeline;

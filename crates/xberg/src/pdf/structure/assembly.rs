@@ -31,6 +31,22 @@ pub(crate) fn assemble_internal_document(
     image_positions: &[(u32, u32)],
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> InternalDocument {
+    assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false)
+}
+
+/// [`assemble_internal_document`] with inline math written into native paragraph text.
+///
+/// OCR text is excluded: recognition output is checked against the native ink it
+/// replaces (`did not recover the N glyphs`), and rewriting it would break that
+/// accounting.
+pub(crate) fn assemble_internal_document_with_inline_math(
+    pages: Vec<Vec<PdfParagraph>>,
+    tables: &[crate::types::Table],
+    images: Option<&[crate::types::ExtractedImage]>,
+    image_positions: &[(u32, u32)],
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+    inline_math: bool,
+) -> InternalDocument {
     tracing::debug!(
         page_count = pages.len(),
         table_count = tables.len(),
@@ -39,6 +55,7 @@ pub(crate) fn assemble_internal_document(
         "assemble_internal_document: start"
     );
     let mut builder = InternalDocumentBuilder::new("pdf");
+    builder.set_inline_math(inline_math);
 
     let mut tables_by_page: std::collections::BTreeMap<u32, Vec<&crate::types::Table>> =
         std::collections::BTreeMap::new();
@@ -1264,20 +1281,65 @@ fn push_paragraph_element_by_kind(
     }
 
     if !para.text.is_empty() && !paragraph_has_scripts(para) {
-        let annotations = if para.is_bold {
-            vec![TextAnnotation {
-                start: 0,
-                end: para.text.len() as u32,
-                kind: AnnotationKind::Bold,
-            }]
-        } else {
-            vec![]
-        };
-        builder.push_paragraph(&para.text, annotations, page, bbox)
+        let annotations = para.is_bold.then(|| TextAnnotation {
+            start: 0,
+            end: para.text.len() as u32,
+            kind: AnnotationKind::Bold,
+        });
+        push_text_with_inline_math(builder, &para.text, annotations.into_iter().collect(), page, bbox)
     } else {
         let (text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
-        builder.push_paragraph(&text, annotations, page, bbox)
+        push_text_with_inline_math(builder, &text, annotations, page, bbox)
     }
+}
+
+/// Push a paragraph, writing `$..$` around each inline math run in `text`.
+///
+/// The Markdown, HTML and Djot renderers accept a math annotation only over a span
+/// that carries its delimiters (`rendering::common::annotated_math`), so the
+/// delimiters are written into the text and the element's plain projection keeps
+/// the undelimited source.
+fn push_text_with_inline_math(
+    builder: &mut InternalDocumentBuilder,
+    text: &str,
+    mut annotations: Vec<TextAnnotation>,
+    page: Option<u32>,
+    bbox: Option<BoundingBox>,
+) -> u32 {
+    let spans = if !builder.inline_math()
+        || text.contains('$')
+        || annotations
+            .iter()
+            .any(|annotation| annotation.kind.math_display().is_some())
+    {
+        Vec::new()
+    } else {
+        super::math_inline::inline_math_annotations(text)
+    };
+    if spans.is_empty() {
+        return builder.push_paragraph(text, annotations, page, bbox);
+    }
+
+    let mut marked = String::with_capacity(text.len() + 2 * spans.len());
+    let mut cursor = 0usize;
+    for (start, end) in spans {
+        let (start, end) = (start as usize, end as usize);
+        marked.push_str(&text[cursor..start]);
+        let delimited_start = marked.len();
+        marked.push('$');
+        marked.push_str(&text[start..end]);
+        marked.push('$');
+        annotations.push(TextAnnotation {
+            start: delimited_start as u32,
+            end: marked.len() as u32,
+            kind: AnnotationKind::math(false),
+        });
+        cursor = end;
+    }
+    marked.push_str(&text[cursor..]);
+    let index = builder.push_paragraph(&marked, annotations, page, bbox);
+    builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
+    index
 }
 
 // The caller has matched a source CMSY glyph. Require the complete bounded

@@ -4466,16 +4466,27 @@ pub(super) fn heuristically_restructured_ocr_pages(
     if config.output_format == crate::core::config::OutputFormat::Plain && config.content_filter.is_none() {
         return None;
     }
-    let strip_repeating_text = config
-        .content_filter
-        .as_ref()
-        .is_some_and(|filter| filter.strip_repeating_text);
+    let filter = config.content_filter.clone().unwrap_or_default();
     if pages.iter().any(|page| ocr_paragraphs_already_structured(page)) {
-        if !strip_repeating_text {
+        // A structured page keeps its classification; only an explicit strip makes this
+        // pass the one that assembles it. The caller's fallback strips by default.
+        if !config
+            .content_filter
+            .as_ref()
+            .is_some_and(|configured| configured.strip_repeating_text)
+        {
             return None;
         }
         let mut filtered_pages = pages.to_vec();
-        crate::pdf::structure::pipeline::strip_repeating_text_from_pages(&mut filtered_pages, page_heights);
+        crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+            &mut filtered_pages,
+            page_heights,
+            filter.include_headers,
+            filter.include_footers,
+        );
+        for page in &mut filtered_pages {
+            apply_ocr_text_list_fallback(page);
+        }
         return Some(crate::pdf::structure::assemble_internal_document(
             filtered_pages,
             collected_tables,
@@ -4485,6 +4496,24 @@ pub(super) fn heuristically_restructured_ocr_pages(
         ));
     }
 
+    // Furniture leaves the OCR paragraphs before the document-global pass reads them:
+    // that pass is later checked against the same paragraphs, and its prose-retention
+    // guard would read a deliberately dropped header as lost content.
+    let stripped_pages;
+    let pages = if filter.strip_repeating_text {
+        let mut stripped = pages.to_vec();
+        crate::pdf::structure::pipeline::strip_repeating_text_from_pages(
+            &mut stripped,
+            page_heights,
+            filter.include_headers,
+            filter.include_footers,
+        );
+        stripped_pages = stripped;
+        stripped_pages.as_slice()
+    } else {
+        pages
+    };
+
     let all_page_segments = crate::pdf::structure::adapters::segments_from_ocr_pages(pages);
     let k_clusters = config
         .pdf_options
@@ -4492,19 +4521,12 @@ pub(super) fn heuristically_restructured_ocr_pages(
         .and_then(|opts| opts.hierarchy.as_ref())
         .map(|hierarchy| hierarchy.k_clusters)
         .unwrap_or_else(|| crate::core::config::HierarchyConfig::default().k_clusters);
-    let (strip_repeating_text, include_headers, include_footers, include_footnotes, include_watermarks) = config
-        .content_filter
-        .as_ref()
-        .map(|filter| {
-            (
-                filter.strip_repeating_text,
-                filter.include_headers,
-                filter.include_footers,
-                filter.include_footnotes,
-                filter.include_watermarks,
-            )
-        })
-        .unwrap_or((false, false, false, false, false));
+    let (include_headers, include_footers, include_footnotes, include_watermarks) = (
+        filter.include_headers,
+        filter.include_footers,
+        filter.include_footnotes,
+        filter.include_watermarks,
+    );
 
     let result = crate::pdf::structure::extract_document_structure_from_segments(
         all_page_segments,
@@ -4512,7 +4534,8 @@ pub(super) fn heuristically_restructured_ocr_pages(
             k_clusters,
             tables: collected_tables,
             outline_entries: &[],
-            strip_repeating_text,
+            // Furniture was already removed above, so the pass must not mark twice.
+            strip_repeating_text: false,
             include_headers,
             include_footers,
             include_footnotes,
