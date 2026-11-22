@@ -129,7 +129,7 @@ impl PageRenderer {
         // §8.7.3: retain the pattern name for the Fill path when the
         // active fill space is /Pattern; clear it otherwise so a
         // later device-colour scn cannot paint a stale pattern. ~keep
-        gs.fill_pattern_name = if space_name == "Pattern" {
+        gs.fill_pattern_name = if self.is_pattern_space(&space_name) {
             name.map(str::to_string)
         } else {
             None

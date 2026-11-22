@@ -163,7 +163,8 @@ impl ColorResolver {
 
         match type_name {
             "DeviceGray" | "G" | "CalGray" => Ok(first_as_gray(components, alpha)),
-            "DeviceRGB" | "RGB" | "CalRGB" => Ok(three_as_rgb(components, alpha)),
+            "DeviceRGB" | "RGB" => Ok(three_as_rgb(components, alpha)),
+            "CalRGB" => Ok(resolve_calrgb(arr, components, ctx, alpha)),
             "DeviceCMYK" | "CMYK" => Ok(four_as_cmyk_native(components, alpha)),
             "ICCBased" => self.resolve_iccbased(arr, components, ctx, alpha),
             "Separation" | "DeviceN" => self.resolve_separation_or_devicen(arr, components, ctx, alpha),
@@ -361,9 +362,9 @@ impl ColorResolver {
         // composite projection routes through ctx.output_intent_cmyk
         // (which is the spec default when no embedded ICC is available). ~keep
         match n {
-            1 if !components.is_empty() => Ok(first_as_gray(components, alpha)),
-            3 if components.len() >= 3 => Ok(three_as_rgb(components, alpha)),
-            4 if components.len() >= 4 => Ok(four_as_cmyk_native(components, alpha)),
+            1 => Ok(first_as_gray(components, alpha)),
+            3 => Ok(three_as_rgb(components, alpha)),
+            4 => Ok(four_as_cmyk_native(components, alpha)),
             _ => Ok(first_as_gray(components, alpha)),
         }
     }
@@ -528,16 +529,9 @@ impl ColorResolver {
         &self,
         arr: &[Object],
         components: &[f32],
-        _ctx: &ResolutionContext,
+        ctx: &ResolutionContext,
         alpha: f32,
     ) -> Result<ResolvedColor> {
-        // Indexed: [/Indexed base hival lookup]. The component is the
-        // palette index, scaled 0..255 inside the renderer's existing
-        // inline path. We replicate that fallback (gray = index/255) since
-        // the full lookup path requires palette-stream decoding the pilot
-        // operator doesn't need yet. Image extraction handles indexed
-        // images through a richer path in `src/extractors/images.rs`. ~keep
-        let _ = arr;
         if components.is_empty() {
             return Ok(ResolvedColor::Rgba {
                 r: 0.0,
@@ -546,13 +540,127 @@ impl ColorResolver {
                 a: alpha,
             });
         }
-        let g = (components[0] / 255.0).clamp(0.0, 1.0);
-        Ok(ResolvedColor::Rgba {
-            r: g,
-            g,
-            b: g,
-            a: alpha,
-        })
+        if arr.len() < 4 {
+            return Ok(first_as_gray(components, alpha));
+        }
+
+        let base = ctx.doc.resolve_object(&arr[1]).unwrap_or_else(|_| arr[1].clone());
+        let hival = ctx
+            .doc
+            .resolve_object(&arr[2])
+            .unwrap_or_else(|_| arr[2].clone())
+            .as_integer()
+            .unwrap_or(0)
+            .max(0) as usize;
+
+        // ISO 32000-1 8.6.6.3: a real index is rounded to the nearest integer
+        // and an out-of-range one is adjusted to the nearest value in 0..=hival. ~keep
+        let idx = (components[0].round().max(0.0) as usize).min(hival);
+
+        let lookup = ctx.doc.resolve_object(&arr[3]).unwrap_or_else(|_| arr[3].clone());
+        let palette: Vec<u8> = match &lookup {
+            Object::String(bytes) => bytes.clone(),
+            Object::Stream { .. } => match lookup.decode_stream_data() {
+                Ok(b) => b,
+                Err(_) => return Ok(first_as_gray(components, alpha)),
+            },
+            _ => return Ok(first_as_gray(components, alpha)),
+        };
+
+        let n = base_component_count(&base, ctx);
+        if n == 0 {
+            return Ok(first_as_gray(components, alpha));
+        }
+        let off = idx * n;
+        if off + n > palette.len() {
+            return Ok(first_as_gray(components, alpha));
+        }
+
+        let base_components: Vec<f32> = palette[off..off + n].iter().map(|b| f32::from(*b) / 255.0).collect();
+        self.resolve_spaced(&base, &base_components, ctx, alpha)
+    }
+}
+
+/// ISO 32000-1 8.6.5.3 CalRGB: apply `/Gamma`, then `/Matrix`, then project
+/// XYZ to sRGB. Sharing the DeviceRGB arm skipped the transfer entirely, which
+/// renders the common `/Gamma [1 1 1]` (linear) components too dark.
+fn resolve_calrgb(arr: &[Object], components: &[f32], ctx: &ResolutionContext, alpha: f32) -> ResolvedColor {
+    let [a, b, c] = match components {
+        [a, b, c, ..] => [*a, *b, *c],
+        _ => return first_as_gray(components, alpha),
+    };
+
+    let dict = arr
+        .get(1)
+        .map(|o| ctx.doc.resolve_object(o).unwrap_or_else(|_| o.clone()));
+    let dict = dict.as_ref().and_then(|o| o.as_dict());
+
+    let nums = |key: &str, want: usize| -> Option<Vec<f32>> {
+        let v: Vec<f32> = dict?
+            .get(key)?
+            .as_array()?
+            .iter()
+            .filter_map(|o| {
+                o.as_real()
+                    .map(|r| r as f32)
+                    .or_else(|| o.as_integer().map(|i| i as f32))
+            })
+            .collect();
+        (v.len() == want).then_some(v)
+    };
+
+    let g = nums("Gamma", 3).unwrap_or_else(|| vec![1.0, 1.0, 1.0]);
+    let m = nums("Matrix", 9).unwrap_or_else(|| vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+
+    let ag = a.max(0.0).powf(g[0]);
+    let bg = b.max(0.0).powf(g[1]);
+    let cg = c.max(0.0).powf(g[2]);
+
+    // Matrix is [XA YA ZA XB YB ZB XC YC ZC].
+    let x = m[0] * ag + m[3] * bg + m[6] * cg;
+    let y = m[1] * ag + m[4] * bg + m[7] * cg;
+    let z = m[2] * ag + m[5] * bg + m[8] * cg;
+
+    let (r, gg, bb) = crate::rendering::page_renderer::xyz_to_srgb(x, y, z);
+    ResolvedColor::Rgba {
+        r: r.clamp(0.0, 1.0),
+        g: gg.clamp(0.0, 1.0),
+        b: bb.clamp(0.0, 1.0),
+        a: alpha,
+    }
+}
+
+/// Component count of an `/Indexed` base space. Returns 0 for an unrecognised
+/// family so the caller falls back instead of striding the palette wrongly.
+fn base_component_count(base: &Object, ctx: &ResolutionContext) -> usize {
+    if let Some(name) = base.as_name() {
+        return match name {
+            "DeviceGray" | "G" | "CalGray" => 1,
+            "DeviceRGB" | "RGB" | "CalRGB" | "Lab" => 3,
+            "DeviceCMYK" | "CMYK" => 4,
+            _ => 0,
+        };
+    }
+    let Some(arr) = base.as_array() else {
+        return 0;
+    };
+    match arr.first().and_then(|o| o.as_name()) {
+        Some("DeviceGray" | "G" | "CalGray") => 1,
+        Some("DeviceRGB" | "RGB" | "CalRGB" | "Lab") => 3,
+        Some("DeviceCMYK" | "CMYK") => 4,
+        Some("ICCBased") => arr
+            .get(1)
+            .map(|o| ctx.doc.resolve_object(o).unwrap_or_else(|_| o.clone()))
+            .and_then(|st| st.as_dict().and_then(|d| d.get("N").and_then(|n| n.as_integer())))
+            .map(|n| n.clamp(0, 4) as usize)
+            .unwrap_or(0),
+        Some("Separation") => 1,
+        Some("DeviceN") => arr
+            .get(1)
+            .and_then(|o| o.as_array())
+            .map(|names| names.len())
+            .unwrap_or(0),
+        _ => 0,
     }
 }
 
@@ -583,9 +691,9 @@ fn device_to_rgba(dev: DeviceColor, alpha: f32) -> ResolvedColor {
 
 fn resolve_device_alias(name: &str, components: &[f32], alpha: f32) -> ResolvedColor {
     match name {
-        "DeviceGray" | "G" | "CalGray" if !components.is_empty() => first_as_gray(components, alpha),
-        "DeviceRGB" | "RGB" | "CalRGB" if components.len() >= 3 => three_as_rgb(components, alpha),
-        "DeviceCMYK" | "CMYK" if components.len() >= 4 => four_as_cmyk_native(components, alpha),
+        "DeviceGray" | "G" | "CalGray" => first_as_gray(components, alpha),
+        "DeviceRGB" | "RGB" | "CalRGB" => three_as_rgb(components, alpha),
+        "DeviceCMYK" | "CMYK" => four_as_cmyk_native(components, alpha),
         _ => first_as_gray(components, alpha),
     }
 }
@@ -601,10 +709,14 @@ fn first_as_gray(components: &[f32], alpha: f32) -> ResolvedColor {
 }
 
 fn three_as_rgb(components: &[f32], alpha: f32) -> ResolvedColor {
+    let [r, g, b] = match components {
+        [r, g, b, ..] => [*r, *g, *b],
+        _ => return first_as_gray(components, alpha),
+    };
     ResolvedColor::Rgba {
-        r: components[0].clamp(0.0, 1.0),
-        g: components[1].clamp(0.0, 1.0),
-        b: components[2].clamp(0.0, 1.0),
+        r: r.clamp(0.0, 1.0),
+        g: g.clamp(0.0, 1.0),
+        b: b.clamp(0.0, 1.0),
         a: alpha,
     }
 }
@@ -627,11 +739,15 @@ fn four_as_cmyk(components: &[f32], alpha: f32, ctx: &ResolutionContext) -> Reso
 /// component rule); the composite path projects to RGBA via the
 /// process-ink `cmyk_to_rgb_via_intent` in `run_pipeline_for_logical`.
 fn four_as_cmyk_native(components: &[f32], alpha: f32) -> ResolvedColor {
+    let [c, m, y, k] = match components {
+        [c, m, y, k, ..] => [*c, *m, *y, *k],
+        _ => return first_as_gray(components, alpha),
+    };
     ResolvedColor::Cmyk {
-        c: components[0].clamp(0.0, 1.0),
-        m: components[1].clamp(0.0, 1.0),
-        y: components[2].clamp(0.0, 1.0),
-        k: components[3].clamp(0.0, 1.0),
+        c: c.clamp(0.0, 1.0),
+        m: m.clamp(0.0, 1.0),
+        y: y.clamp(0.0, 1.0),
+        k: k.clamp(0.0, 1.0),
         a: alpha,
     }
 }
@@ -807,6 +923,38 @@ fn evaluate_tint_function(
 /// for an attacker-controlled `N`.
 const MAX_SAMPLED_FUNCTION_DIMS: usize = 8;
 
+const DEFAULT_ARRAY_EPSILON: f64 = 1e-9;
+
+/// Whether `/Encode` is absent or holds its default `[0 (Size_0 - 1) 0 (Size_1 - 1) ...]`.
+fn encode_is_default(dict: &std::collections::HashMap<String, Object>, sizes: &[usize]) -> bool {
+    let Some(encode) = dict.get("Encode").and_then(|o| o.as_array()) else {
+        return true;
+    };
+    if encode.len() != sizes.len() * 2 {
+        return false;
+    }
+    sizes.iter().enumerate().all(|(i, &size)| {
+        let lo = object_to_f64(&encode[i * 2]);
+        let hi = object_to_f64(&encode[i * 2 + 1]);
+        lo.abs() < DEFAULT_ARRAY_EPSILON && (hi - (size as f64 - 1.0)).abs() < DEFAULT_ARRAY_EPSILON
+    })
+}
+
+/// Whether `/Decode` is absent or equals `/Range`, its default.
+fn decode_is_default(dict: &std::collections::HashMap<String, Object>, range: &[[f64; 2]]) -> bool {
+    let Some(decode) = dict.get("Decode").and_then(|o| o.as_array()) else {
+        return true;
+    };
+    if decode.len() != range.len() * 2 {
+        return false;
+    }
+    range.iter().enumerate().all(|(i, pair)| {
+        let lo = object_to_f64(&decode[i * 2]);
+        let hi = object_to_f64(&decode[i * 2 + 1]);
+        (lo - pair[0]).abs() < DEFAULT_ARRAY_EPSILON && (hi - pair[1]).abs() < DEFAULT_ARRAY_EPSILON
+    })
+}
+
 /// Evaluate a Type 0 (sampled) function (SS 7.10.2) for one or more inputs:
 /// N-dimensional multilinear interpolation across the `2^N` sample-grid
 /// corners nearest the input point, 8- or 16-bit samples, outputs mapped
@@ -834,15 +982,16 @@ fn evaluate_type0_sampled(func_obj: &Object, inputs: &[f32]) -> Option<Vec<f32>>
     if !(bps == 8 || bps == 16) {
         return None;
     }
-    // Non-default /Encode or /Decode changes the sample mapping; falling back
-    // beats silently evaluating with default semantics. ~keep
-    if dict.contains_key("Encode") || dict.contains_key("Decode") {
-        return None;
-    }
     let range = dict.get("Range").and_then(|o| o.as_array())?;
     let range = array_to_pairs(range);
     let n_out = range.len();
     if n_out == 0 {
+        return None;
+    }
+    // Only the default sample mapping is implemented, so a non-default
+    // /Encode or /Decode declines; one that merely spells out the Table 39
+    // defaults means the same as an absent entry. ~keep
+    if !encode_is_default(dict, &sizes) || !decode_is_default(dict, &range) {
         return None;
     }
     let domain = dict
@@ -1564,5 +1713,27 @@ mod tests {
         assert!((r - 0.75).abs() < 0.01, "got r={r}");
         assert!((g - 0.9196).abs() < 0.01, "got g={g}");
         assert!((b - 0.9843).abs() < 0.01, "got b={b}");
+    }
+
+    #[test]
+    fn three_as_rgb_degrades_when_operands_are_short() {
+        assert_rgba(three_as_rgb(&[0.5], 1.0), 0.5, 0.5, 0.5, 1.0);
+        assert_rgba(three_as_rgb(&[], 1.0), 0.0, 0.0, 0.0, 1.0);
+        assert_rgba(three_as_rgb(&[0.25, 0.5], 1.0), 0.25, 0.25, 0.25, 1.0);
+    }
+
+    #[test]
+    fn four_as_cmyk_native_degrades_when_operands_are_short() {
+        assert_rgba(four_as_cmyk_native(&[0.5], 1.0), 0.5, 0.5, 0.5, 1.0);
+        assert_rgba(four_as_cmyk_native(&[], 1.0), 0.0, 0.0, 0.0, 1.0);
+        assert_rgba(four_as_cmyk_native(&[0.1, 0.2, 0.3], 1.0), 0.1, 0.1, 0.1, 1.0);
+    }
+
+    #[test]
+    fn projection_helpers_still_use_the_operands_they_have() {
+        assert_rgba(three_as_rgb(&[1.0, 0.0, 0.0], 1.0), 1.0, 0.0, 0.0, 1.0);
+        assert_rgba(three_as_rgb(&[1.0, 0.0, 0.0, 0.9], 1.0), 1.0, 0.0, 0.0, 1.0);
+        let (r, g, b) = super::cmyk_to_rgb(0.0, 0.0, 0.0, 1.0);
+        assert_rgba(four_as_cmyk_native(&[0.0, 0.0, 0.0, 1.0], 1.0), r, g, b, 1.0);
     }
 }

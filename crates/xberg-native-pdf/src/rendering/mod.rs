@@ -169,6 +169,22 @@ pub(crate) fn device_bounds_rasterizable(path: &tiny_skia::Path, transform: tiny
     device_bounds(path, transform).is_some_and(|b| b.iter().all(|c| c.abs() <= MAX_DEVICE_COORD))
 }
 
+/// Whether a path's device bounds lie wholly outside a `width` x `height`
+/// pixmap. Tells an unrasterizable clip that excludes the whole page (which must
+/// hide everything, ISO 32000-1 8.5.4) from one that is merely enormous but still
+/// reaches the page (which restricts nothing visible and is safe to drop).
+/// Non-finite bounds conclude nothing and are not "outside".
+pub(crate) fn device_bounds_miss_pixmap(
+    path: &tiny_skia::Path,
+    transform: tiny_skia::Transform,
+    width: u32,
+    height: u32,
+) -> bool {
+    device_bounds(path, transform).is_some_and(|[min_x, min_y, max_x, max_y]| {
+        max_x < 0.0 || max_y < 0.0 || min_x > f64::from(width) || min_y > f64::from(height)
+    })
+}
+
 /// Whether a draw is worth handing to tiny_skia for a `width` x `height`
 /// pixmap. Two independent questions that must not be conflated:
 ///

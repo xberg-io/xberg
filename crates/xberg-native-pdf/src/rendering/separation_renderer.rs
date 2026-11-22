@@ -133,7 +133,7 @@
 //! the inherent behavior of real separation devices.
 #![allow(clippy::field_reassign_with_default, clippy::ptr_arg, clippy::only_used_in_recursion)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use tiny_skia::{FillRule, Mask, PathBuilder, Pixmap, Transform};
@@ -147,6 +147,7 @@ use crate::fonts::FontInfo;
 use crate::object::Object;
 
 use super::ext_gstate::{ParsedExtGState, parse_ext_g_state_inner};
+use super::page_renderer::MAX_FORM_DEPTH;
 use super::resolution::{
     InkName, PaintBackend, PaintIntent, PaintKind, PaintSide, ResolutionContext, ResolutionPipeline, SeparationBackend,
     SeparationSurface,
@@ -289,10 +290,14 @@ fn render_plates_for_inks(
         let content_data = doc.cached_page_content(page_num)?;
         let operators = parse_content_stream(&content_data)?;
 
+        let excluded_layers = crate::optional_content::compute_default_off_ocgs(doc);
+
         let mut ctx = SeparationContext {
             doc,
             text_rasterizer: &text_rasterizer,
             fonts: &fonts,
+            excluded_layers: &excluded_layers,
+            form_depth: 0,
         };
 
         execute_separation_operators(
@@ -794,11 +799,11 @@ fn compute_page_extent(doc: &PdfDocument, page_num: usize, dpi: u32) -> Result<(
             .post_translate(media_box.width * scale, 0.0),
         270 => Transform::from_translate(-media_box.x, -media_box.y).post_concat(Transform::from_row(
             0.0,
-            scale,
+            -scale,
             -scale,
             0.0,
             media_box.height * scale,
-            0.0,
+            media_box.width * scale,
         )),
         _ => Transform::from_translate(-media_box.x, -media_box.y)
             .post_scale(scale, -scale)
@@ -1423,6 +1428,8 @@ struct SeparationContext<'a> {
     doc: &'a PdfDocument,
     text_rasterizer: &'a TextRasterizer,
     fonts: &'a HashMap<String, Arc<FontInfo>>,
+    excluded_layers: &'a HashSet<String>,
+    form_depth: u32,
 }
 
 /// Color state tracked alongside the graphics state for separation rendering.
@@ -1568,8 +1575,71 @@ fn execute_separation_operators(
     let mut backend = SeparationBackend::new();
     let target_inks_owned: Vec<InkName> = target_inks.iter().map(|s| InkName::new(*s)).collect();
 
+    let mut excluded_layer_depth: u32 = 0;
+    let mut marked_content_is_excluded: Vec<bool> = Vec::new();
+    let excluded_layers: &HashSet<String> = ctx.excluded_layers;
+
     for op in operators {
+        // ISO 32000-1 8.11.3: hidden content is not drawn but state operators
+        // still apply, so painting operators become the path-clearing `n`.
+        let op = if excluded_layer_depth > 0 {
+            match op {
+                Operator::Fill
+                | Operator::FillEvenOdd
+                | Operator::Stroke
+                | Operator::CloseStroke
+                | Operator::FillStroke
+                | Operator::CloseFillStroke
+                | Operator::FillStrokeEvenOdd
+                | Operator::CloseFillStrokeEvenOdd => &Operator::EndPath,
+                other => other,
+            }
+        } else {
+            op
+        };
+
+        if excluded_layer_depth > 0
+            && matches!(
+                op,
+                Operator::Do { .. }
+                    | Operator::Tj { .. }
+                    | Operator::TJ { .. }
+                    | Operator::Quote { .. }
+                    | Operator::DoubleQuote { .. }
+                    | Operator::PaintShading { .. }
+                    | Operator::InlineImage { .. }
+            )
+        {
+            continue;
+        }
+
         match op {
+            Operator::BeginMarkedContent { .. } => {
+                marked_content_is_excluded.push(false);
+            }
+            Operator::BeginMarkedContentDict { tag, properties } => {
+                let mut is_excluded = false;
+                if tag == "OC" {
+                    is_excluded = crate::optional_content::resolve_and_check_ocg_excluded(
+                        properties,
+                        Some(resources),
+                        Some(ctx.doc),
+                        excluded_layers,
+                    );
+                }
+                if is_excluded {
+                    excluded_layer_depth += 1;
+                }
+                marked_content_is_excluded.push(is_excluded);
+            }
+            Operator::EndMarkedContent => {
+                if let Some(was_excluded) = marked_content_is_excluded.pop()
+                    && was_excluded
+                    && excluded_layer_depth > 0
+                {
+                    excluded_layer_depth -= 1;
+                }
+            }
             Operator::SaveState => {
                 gs_stack.save();
                 let cs = color_state_stack
@@ -2221,7 +2291,7 @@ fn execute_separation_operators(
                             clip_stack.last().and_then(|c| c.as_ref()),
                             target_inks,
                         )?;
-                    } else if subtype == "Form" {
+                    } else if subtype == "Form" && ctx.form_depth < MAX_FORM_DEPTH {
                         let xobj_ref = xobj_ref_obj.as_reference();
                         let stream_data = if let Some(r) = xobj_ref {
                             ctx.doc.decode_stream_with_encryption(&xobj, r)?
@@ -2260,7 +2330,8 @@ fn execute_separation_operators(
                         };
 
                         let form_ops = parse_content_stream(&stream_data)?;
-                        execute_separation_operators(
+                        ctx.form_depth += 1;
+                        let result = execute_separation_operators(
                             pixmaps,
                             combined,
                             &form_ops,
@@ -2269,7 +2340,9 @@ fn execute_separation_operators(
                             &merged_cs,
                             Some(&inherited),
                             target_inks,
-                        )?;
+                        );
+                        ctx.form_depth -= 1;
+                        result?;
                     }
                 }
             }
