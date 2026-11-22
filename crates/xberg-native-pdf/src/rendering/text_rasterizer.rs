@@ -1720,7 +1720,7 @@ impl TextRasterizer {
         // visible without one line per glyph. ~keep
         let mut dropped = GlyphDropTally::default();
 
-        for (char_code, bytes_consumed) in TextCharIter::new(bytes, Some(font_info)) {
+        for (char_code, bytes_consumed) in char_codes_with_len(bytes, font_info) {
             // Map character code to GID based on font type:
             // - Type0 (CID-keyed) without CIDToGIDMap → CID is GID
             //   (Identity-H/Identity-V emission, the case our writer
@@ -2833,6 +2833,20 @@ mod tests {
 
         let present = painted_bounds(&font, &100u16.to_be_bytes());
         assert_eq!(present.len(), 1, "a CID the charset names still paints");
+    }
+
+    #[test]
+    fn render_cid_direct_keeps_utf8_segmentation_for_a_utf8_named_cmap_without_a_codespace() {
+        let mut font = make_uni_cns_ucs2_test_font();
+        font.encoding = Encoding::Standard("Custom-UTF8-H".to_string());
+        font.embedded_cid_map = Some(Arc::new(
+            crate::fonts::cid_cmap::parse_cid_cmap(b"1 begincidchar\n<E4B8AD> 100\nendcidchar\n").unwrap(),
+        ));
+        let mut map = vec![0u16; 0x100];
+        map[100] = dejavu_gid(b'A');
+        font.cid_to_gid_map = Some(crate::fonts::CIDToGIDMap::Explicit(map));
+
+        assert_eq!(painted_bounds(&font, "\u{4E2D}".as_bytes()).len(), 1);
     }
 
     /// Identity-H/V non-regression: CID == code is the common case (it is
