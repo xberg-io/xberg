@@ -34,11 +34,14 @@ pub struct EmbeddingEngine {
     session: Mutex<Session>,
     pooling: Pooling,
     need_token_type_ids: bool,
+    /// Dynamically quantized graphs scale activations per batch tensor, so a text's vector
+    /// depends on its batch mates; such models run one text per batch.
+    dynamic_quantized: bool,
 }
 
 impl EmbeddingEngine {
     /// Create a new embedding engine from a pre-built session and tokenizer.
-    pub(crate) fn new(tokenizer: Tokenizer, session: Session, pooling: Pooling) -> Self {
+    pub(crate) fn new(tokenizer: Tokenizer, session: Session, pooling: Pooling, dynamic_quantized: bool) -> Self {
         let need_token_type_ids = session.inputs().iter().any(|input| input.name() == "token_type_ids");
 
         Self {
@@ -46,6 +49,7 @@ impl EmbeddingEngine {
             session: Mutex::new(session),
             pooling,
             need_token_type_ids,
+            dynamic_quantized,
         }
     }
 
@@ -58,7 +62,7 @@ impl EmbeddingEngine {
             return Ok(Vec::new());
         }
 
-        let batch_size = if batch_size == 0 { 32 } else { batch_size };
+        let batch_size = effective_batch_size(self.dynamic_quantized, batch_size);
 
         let mut all_embeddings = Vec::with_capacity(texts.len());
 
@@ -120,8 +124,10 @@ impl EmbeddingEngine {
 
         let output_value = {
             let mut session = self.session.lock();
-            let outputs = session.run(session_inputs).map_err(EmbedError::Ort)?;
-            outputs.into_iter().next().map(|(_, value)| value)
+            let mut outputs = session.run(session_inputs).map_err(EmbedError::Ort)?;
+            let names: Vec<&str> = outputs.keys().collect();
+            let selected = crate::onnx::select_output_name(&names, DENSE_OUTPUT_PRECEDENCE).map(str::to_owned);
+            selected.and_then(|name| outputs.remove(name))
         }
         .ok_or(EmbedError::NoOutput)?;
 
@@ -151,10 +157,32 @@ impl EmbeddingEngine {
     }
 }
 
+/// Output names a dense embedding model may expose its pooled or token embeddings under, best first.
+/// A model with a single output uses it regardless of name; otherwise the first output is the fallback.
+const DENSE_OUTPUT_PRECEDENCE: &[&str] = &["text_embeds", "last_hidden_state", "sentence_embedding"];
+
+/// Texts per ONNX run: one for dynamically quantized models, the caller's size (default 32) otherwise.
+///
+/// Running a dynamically quantized model on one text keeps its vector independent of the other
+/// texts and of `batch_size`, and bounds memory; one batch over the whole input would not.
+fn effective_batch_size(dynamic_quantized: bool, requested: usize) -> usize {
+    if dynamic_quantized {
+        1
+    } else if requested == 0 {
+        32
+    } else {
+        requested
+    }
+}
+
 /// CLS pooling — extract the first token's embedding.
 fn cls_pool(tensor: &ArrayView<f32, Dim<IxDynImpl>>) -> Result<Array2<f32>, EmbedError> {
     match tensor.dim().ndim() {
         2 => Ok(tensor.slice(s![.., ..]).to_owned()),
+        3 if tensor.dim()[1] == 0 => Err(EmbedError::Shape(format!(
+            "Cannot CLS-pool a tensor with zero tokens, got {:?}",
+            tensor.dim()
+        ))),
         3 => Ok(tensor.slice(s![.., 0, ..]).to_owned()),
         _ => Err(EmbedError::Shape(format!(
             "Expected 2D or 3D tensor, got {:?}",
@@ -217,6 +245,12 @@ fn last_pool(tensor: &ArrayView<f32, Dim<IxDynImpl>>, attention_mask: Array2<i64
 
     let tensor3 = tensor.slice(s![.., .., ..]);
     let (batch, seq_len, hidden) = tensor3.dim();
+    if seq_len == 0 {
+        return Err(EmbedError::Shape(format!(
+            "Cannot last-token-pool a tensor with zero tokens, got {:?}",
+            tensor3.dim()
+        )));
+    }
     let mut pooled = Array2::<f32>::zeros((batch, hidden));
     for b in 0..batch {
         let last_index = (0..seq_len)
@@ -288,6 +322,29 @@ mod tests {
     fn embedding_engine_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<EmbeddingEngine>();
+    }
+
+    #[test]
+    fn dynamic_quantized_models_run_one_text_per_batch() {
+        assert_eq!(effective_batch_size(true, 0), 1);
+        assert_eq!(effective_batch_size(true, 64), 1);
+        assert_eq!(effective_batch_size(false, 0), 32);
+        assert_eq!(effective_batch_size(false, 8), 8);
+    }
+
+    #[test]
+    fn cls_pool_rejects_a_tensor_with_zero_tokens() {
+        let tensor = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[2, 0, 4]));
+        let err = cls_pool(&tensor.view()).expect_err("zero-token tensor must error, not panic");
+        assert!(matches!(err, EmbedError::Shape(_)));
+    }
+
+    #[test]
+    fn last_pool_rejects_a_tensor_with_zero_tokens() {
+        let tensor = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[1, 0, 4]));
+        let mask = Array2::<i64>::zeros((1, 0));
+        let err = last_pool(&tensor.view(), mask).expect_err("zero-token tensor must error, not panic");
+        assert!(matches!(err, EmbedError::Shape(_)));
     }
 
     /// Test normalization of a known vector produces unit vector (L2 norm ≈ 1.0).

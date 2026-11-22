@@ -437,8 +437,6 @@ pub(crate) fn load_tokenizer(
     max_length: usize,
     err: ErrCtor,
 ) -> crate::Result<tokenizers::Tokenizer> {
-    use tokenizers::{AddedToken, PaddingParams, PaddingStrategy, TruncationParams};
-
     let config: serde_json::Value = serde_json::from_slice(
         &std::fs::read(&files.config).map_err(|e| err(format!("Failed to read config.json: {e}")))?,
     )
@@ -450,13 +448,60 @@ pub(crate) fn load_tokenizer(
     )
     .map_err(|e| err(format!("Failed to parse tokenizer_config.json: {e}")))?;
 
-    let mut tokenizer = tokenizers::Tokenizer::from_file(&files.tokenizer)
+    let tokenizer = tokenizers::Tokenizer::from_file(&files.tokenizer)
         .map_err(|e| err(format!("Failed to load tokenizer: {e}")))?;
+
+    let special_tokens = std::fs::read(&files.special_tokens)
+        .ok()
+        .and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
+
+    configure_tokenizer(
+        tokenizer,
+        &config,
+        &tokenizer_config,
+        special_tokens.as_ref(),
+        max_length,
+        err,
+    )
+}
+
+/// Apply padding, truncation and declared special tokens to a loaded tokenizer.
+///
+/// Fails when `max_length` is below the number of special tokens the post-processor adds to a
+/// single text: `tokenizers` subtracts that count from the truncation length unchecked.
+#[cfg(onnx_retrieval)]
+fn configure_tokenizer(
+    mut tokenizer: tokenizers::Tokenizer,
+    config: &serde_json::Value,
+    tokenizer_config: &serde_json::Value,
+    special_tokens: Option<&serde_json::Value>,
+    max_length: usize,
+    err: ErrCtor,
+) -> crate::Result<tokenizers::Tokenizer> {
+    use tokenizers::{AddedToken, PaddingParams, PaddingStrategy, PostProcessor, TruncationParams};
 
     let model_max_length = tokenizer_config["model_max_length"].as_f64().unwrap_or(512.0) as usize;
     let max_length = max_length.min(model_max_length);
-    let pad_id = config["pad_token_id"].as_u64().unwrap_or(0) as u32;
-    let pad_token = tokenizer_config["pad_token"].as_str().unwrap_or("[PAD]").to_string();
+
+    let special_token_count = tokenizer.get_post_processor().map_or(0, |p| p.added_tokens(false));
+    if max_length < special_token_count {
+        return Err(err(format!(
+            "max_sequence_length is {max_length} and must be at least {special_token_count}, \
+             the number of special tokens the tokenizer adds to a text"
+        )));
+    }
+
+    let pad_token_value = &tokenizer_config["pad_token"];
+    let pad_token = pad_token_value
+        .as_str()
+        .or_else(|| pad_token_value["content"].as_str())
+        .unwrap_or("[PAD]")
+        .to_string();
+    let pad_id = config["pad_token_id"]
+        .as_u64()
+        .map(|id| id as u32)
+        .or_else(|| tokenizer.token_to_id(&pad_token))
+        .unwrap_or(0);
 
     tokenizer
         .with_padding(Some(PaddingParams {
@@ -471,11 +516,13 @@ pub(crate) fn load_tokenizer(
         }))
         .map_err(|e| err(format!("Failed to configure tokenizer: {e}")))?;
 
-    if let Ok(special_tokens_data) = std::fs::read(&files.special_tokens)
-        && let Ok(serde_json::Value::Object(map)) = serde_json::from_slice(&special_tokens_data)
-    {
-        for (_, value) in &map {
+    if let Some(serde_json::Value::Object(map)) = special_tokens {
+        for value in map.values() {
             if let Some(content) = value.as_str() {
+                // tokenizer.json already carries the token with the flags to match it by.
+                if tokenizer.get_added_vocabulary().is_special_token(content) {
+                    continue;
+                }
                 let _ = tokenizer.add_special_tokens([AddedToken {
                     content: content.to_string(),
                     special: true,
@@ -490,6 +537,9 @@ pub(crate) fn load_tokenizer(
                     value["normalized"].as_bool(),
                 )
             {
+                if tokenizer.get_added_vocabulary().is_special_token(content) {
+                    continue;
+                }
                 let _ = tokenizer.add_special_tokens([AddedToken {
                     content: content.to_string(),
                     special: true,
@@ -503,6 +553,19 @@ pub(crate) fn load_tokenizer(
     }
 
     Ok(tokenizer)
+}
+
+/// Pick the model output to read: the only output if there is one, else the first name in
+/// `precedence` that the model exposes, else the first output.
+pub(crate) fn select_output_name<'a>(names: &[&'a str], precedence: &[&str]) -> Option<&'a str> {
+    if let [only] = names {
+        return Some(only);
+    }
+    precedence
+        .iter()
+        .find_map(|wanted| names.iter().find(|name| *name == wanted))
+        .or_else(|| names.first())
+        .copied()
 }
 
 /// Intra-op thread count for `options`: the explicit cap, else the default budget.
@@ -614,6 +677,126 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(intra_thread_count(&negative), 1);
+    }
+
+    #[test]
+    fn select_output_name_follows_precedence() {
+        let precedence = ["text_embeds", "last_hidden_state", "sentence_embedding"];
+        assert_eq!(select_output_name(&["only"], &precedence), Some("only"));
+        assert_eq!(
+            select_output_name(
+                &["token_embeddings", "sentence_embedding", "last_hidden_state"],
+                &precedence
+            ),
+            Some("last_hidden_state")
+        );
+        assert_eq!(
+            select_output_name(&["last_hidden_state", "text_embeds"], &precedence),
+            Some("text_embeds")
+        );
+        assert_eq!(select_output_name(&["pooler", "other"], &precedence), Some("pooler"));
+        assert_eq!(select_output_name(&[], &precedence), None);
+    }
+
+    #[cfg(onnx_retrieval)]
+    mod tokenizer_config {
+        use super::*;
+        use serde_json::json;
+        use tokenizers::{
+            Tokenizer, models::wordlevel::WordLevel, pre_tokenizers::whitespace::WhitespaceSplit,
+            processors::template::TemplateProcessing,
+        };
+
+        fn bert_like() -> Tokenizer {
+            let model = WordLevel::builder()
+                .vocab(
+                    [
+                        ("[UNK]", 0),
+                        ("[CLS]", 1),
+                        ("[SEP]", 2),
+                        ("<pad>", 7),
+                        ("hello", 4),
+                        ("world", 5),
+                    ]
+                    .into_iter()
+                    .map(|(token, id)| (token.to_string(), id))
+                    .collect(),
+                )
+                .unk_token("[UNK]".into())
+                .build()
+                .unwrap();
+            let mut tokenizer = Tokenizer::new(model);
+            tokenizer.with_pre_tokenizer(Some(WhitespaceSplit));
+            tokenizer.with_post_processor(Some(
+                TemplateProcessing::builder()
+                    .try_single("[CLS] $A [SEP]")
+                    .unwrap()
+                    .special_tokens(vec![("[CLS]", 1), ("[SEP]", 2)])
+                    .build()
+                    .unwrap(),
+            ));
+            tokenizer
+        }
+
+        #[test]
+        fn rejects_max_length_below_the_special_token_count() {
+            let result = configure_tokenizer(bert_like(), &json!({}), &json!({}), None, 1, embed_err);
+            let message = result
+                .expect_err("max_length 1 cannot hold [CLS] and [SEP]")
+                .to_string();
+            assert!(message.contains("at least 2"), "got {message}");
+        }
+
+        #[test]
+        fn accepts_max_length_equal_to_the_special_token_count() {
+            let tokenizer = configure_tokenizer(bert_like(), &json!({}), &json!({}), None, 2, embed_err).unwrap();
+            let encoding = tokenizer.encode("hello world", true).unwrap();
+            assert_eq!(encoding.get_ids(), [1, 2]);
+        }
+
+        #[test]
+        fn reads_the_pad_token_object_form_and_resolves_its_id_from_the_vocab() {
+            let tokenizer_config = json!({"pad_token": {"content": "<pad>", "lstrip": false}});
+            let tokenizer =
+                configure_tokenizer(bert_like(), &json!({}), &tokenizer_config, None, 512, embed_err).unwrap();
+            let padding = tokenizer.get_padding().unwrap();
+            assert_eq!(padding.pad_token, "<pad>");
+            assert_eq!(padding.pad_id, 7);
+        }
+
+        #[test]
+        fn config_pad_token_id_wins_over_the_vocab() {
+            let tokenizer_config = json!({"pad_token": "<pad>"});
+            let tokenizer = configure_tokenizer(
+                bert_like(),
+                &json!({"pad_token_id": 3}),
+                &tokenizer_config,
+                None,
+                512,
+                embed_err,
+            )
+            .unwrap();
+            assert_eq!(tokenizer.get_padding().unwrap().pad_id, 3);
+        }
+
+        #[test]
+        fn special_tokens_map_does_not_overwrite_tokens_the_tokenizer_already_flags() {
+            let mut base = bert_like();
+            base.add_special_tokens([tokenizers::AddedToken {
+                content: "[CLS]".into(),
+                special: true,
+                lstrip: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            let map = json!({"cls_token": "[CLS]"});
+            let tokenizer = configure_tokenizer(base, &json!({}), &json!({}), Some(&map), 512, embed_err).unwrap();
+            let added = tokenizer.get_added_tokens_decoder();
+            assert!(
+                added.values().any(|t| t.content == "[CLS]" && t.lstrip),
+                "lstrip flag was overwritten"
+            );
+        }
     }
 
     #[test]
