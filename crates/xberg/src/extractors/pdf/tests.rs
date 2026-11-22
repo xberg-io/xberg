@@ -3374,12 +3374,12 @@ impl crate::plugins::OcrBackend for MockPdfOcrBackend {
     }
 }
 
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 struct RegisteredOcrBackendGuard {
     name: &'static str,
 }
 
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 impl Drop for RegisteredOcrBackendGuard {
     fn drop(&mut self) {
         let _ = crate::plugins::unregister_ocr_backend(self.name);
@@ -8573,14 +8573,14 @@ fn test_all_pages_failing_routes_to_run_fallback_not_mixed() {
 
 /// Mock backend that records the OcrConfig it receives so tests can assert
 /// that fields like output_format are forwarded correctly.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 struct ConfigCapturingBackend {
     name: &'static str,
     sentinel: &'static str,
     received_config: std::sync::Arc<std::sync::Mutex<Option<crate::core::config::OcrConfig>>>,
 }
 
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 impl crate::plugins::Plugin for ConfigCapturingBackend {
     fn name(&self) -> &str {
         self.name
@@ -8596,7 +8596,7 @@ impl crate::plugins::Plugin for ConfigCapturingBackend {
     }
 }
 
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[async_trait::async_trait]
 impl crate::plugins::OcrBackend for ConfigCapturingBackend {
     fn backend_type(&self) -> crate::plugins::OcrBackendType {
@@ -8621,6 +8621,72 @@ impl crate::plugins::OcrBackend for ConfigCapturingBackend {
             }]),
             ..Default::default()
         })
+    }
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_ocr_inline_images_respects_global_disable() {
+    use crate::core::config::{OcrConfig, PdfConfig};
+    use std::sync::{Arc, Mutex};
+
+    const BACKEND_NAME: &str = "mock-inline-ocr-global-disable";
+    const SENTINEL: &str = "inline image OCR ran";
+    let received_config = Arc::new(Mutex::new(None));
+    crate::plugins::register_ocr_backend(Arc::new(ConfigCapturingBackend {
+        name: BACKEND_NAME,
+        sentinel: SENTINEL,
+        received_config: Arc::clone(&received_config),
+    }))
+    .unwrap();
+    let _guard = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+    let content = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf"
+    ));
+    let extractor = PdfExtractor::new();
+
+    for (disable_ocr, ocr_enabled) in [(true, true), (false, false), (false, true)] {
+        let expect_ocr = !disable_ocr && ocr_enabled;
+        for extract_images in [false, true] {
+            let config = ExtractionConfig {
+                disable_ocr,
+                ocr: Some(OcrConfig {
+                    backend: BACKEND_NAME.to_string(),
+                    enabled: ocr_enabled,
+                    ..Default::default()
+                }),
+                ocr_embedded_images: Some(false),
+                ocr_near_empty_fallback: Some(false),
+                use_cache: false,
+                pdf_options: Some(PdfConfig {
+                    extract_images,
+                    extract_tables: false,
+                    ocr_inline_images: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let result = extractor
+                .extract_content(content, "application/pdf", &config)
+                .await
+                .expect("PDF extraction must succeed");
+
+            assert_eq!(received_config.lock().unwrap().take().is_some(), expect_ocr);
+            if extract_images || expect_ocr {
+                assert!(!result.images.is_empty(), "fixture must yield an embedded image");
+                for image in &result.images {
+                    assert!(!image.data.is_empty(), "the extracted image must contain data");
+                    assert_eq!(
+                        image.ocr_result.as_ref().map(|result| result.content.as_str()),
+                        expect_ocr.then_some(SENTINEL)
+                    );
+                }
+            } else {
+                assert!(result.images.is_empty(), "OCR-only images must not be loaded");
+            }
+        }
     }
 }
 
