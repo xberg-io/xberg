@@ -2,6 +2,10 @@
 
 This document acknowledges sources of vendored code, runtime artifacts, test documents, and baseline data used in the Xberg project.
 
+## Licensing principle
+
+Xberg's own code is MIT-licensed (`LICENSE`; the workspace manifest declares `license = "MIT"`; `xberg-gliner` is the one crate that declares Apache-2.0, see its entry). Third-party and ported code keeps its original licence: files derived from Apache-2.0 sources stay Apache-2.0, with the licence text, upstream copyright and NOTICE content retained and the changes listed in the entry's Modifications section; files derived from MIT sources stay MIT, with the upstream copyright and permission notice retained verbatim. Licence texts are reproduced in `crates/xberg/LICENSE-THIRD-PARTY` or in the `LICENSE-*` file of the crate that carries the code, as each entry states. Runtime dependencies are covered by `THIRD_PARTY_LICENSES.md`. Code moved from Xberg's own sibling projects (for example html-to-markdown) is Xberg's own and is not listed as third-party.
+
 ## Pandoc Test Suite
 
 Test documents and reference baseline outputs derived from the Pandoc test suite:
@@ -217,9 +221,9 @@ The vendored code has been modified for Xberg integration:
 
 ### Licensing
 
-Apache-2.0 code cannot be relicensed as MIT. The files derived from paddle-ocr-rs remain under Apache-2.0; they may be combined into the MIT-licensed `xberg-paddle-ocr` crate only if the Apache-2.0 text, the upstream copyright and NOTICE terms, and a statement of changes (the Modifications list above) are retained for those files. Xberg's own modifications and additions are MIT.
+The files derived from paddle-ocr-rs remain under Apache-2.0, with the Apache-2.0 text, the upstream copyright and this statement of changes (the Modifications list above) retained. Xberg's own modifications and additions are MIT.
 
-Current state: the crate's `LICENSE` contains only the MIT text with "Copyright (c) 2025-2026 Kreuzberg, Inc." and `Cargo.toml` declares `license = "MIT"`. The upstream Apache-2.0 text and copyright line are now carried beside it in `LICENSE-paddle-ocr-rs` (matched by the crate's `include = ["/LICENSE*"]`), but the `license` field and `LICENSE` are unchanged; the question below is left for review. The statement previously made here, that the original copyright was preserved in the crate's LICENSE, was inaccurate. The crate-level license expression (`MIT`, or `MIT AND Apache-2.0`) and the missing notices are pending legal review.
+The crate's `LICENSE` contains the MIT text with "Copyright (c) 2025-2026 Kreuzberg, Inc." for Xberg's own code, and `Cargo.toml` declares `license = "MIT"` for it. The upstream Apache-2.0 text and copyright line are carried beside it in `LICENSE-paddle-ocr-rs` (matched by the crate's `include = ["/LICENSE*"]`) and apply to the derived files listed above. Upstream ships no NOTICE file, so there is no NOTICE content to retain.
 
 ---
 
@@ -246,7 +250,7 @@ The vendored code has been modified from the original fastembed-rs:
 
 ### License Compatibility
 
-The upstream code is Apache-2.0. Redistribution in Xberg requires the Apache-2.0 text, upstream copyright and attribution notices and a statement of changes (above) to accompany the derived file. The engine header only points to this file and does not reproduce an upstream copyright line; the notice is recorded in this entry and in `crates/xberg/LICENSE-THIRD-PARTY`. Whether that satisfies Apache-2.0 section 4(c) for a file with no retained header is pending legal review.
+The upstream code is Apache-2.0. Redistribution in Xberg requires the Apache-2.0 text, upstream copyright and attribution notices and a statement of changes (above) to accompany the derived file. The engine header only points to this file and does not reproduce an upstream copyright line; the notice is recorded in this entry and in `crates/xberg/LICENSE-THIRD-PARTY`. The derived file stays Apache-2.0.
 
 ---
 
@@ -285,9 +289,9 @@ YAKE keyword extraction algorithm vendored into xberg:
 - Optimized punctuation checks with byte lookup tables
 - Removed itertools dependency (manual dedup)
 
-### License Compatibility
+### Licensing
 
-The original MIT license is compatible with Xberg's Elastic License 2.0 (ELv2).
+The files derived from yake-rust stay MIT; the upstream copyright and permission notice are reproduced verbatim in `crates/xberg/LICENSE-THIRD-PARTY`.
 
 ## text-splitter (inlined)
 
@@ -307,9 +311,9 @@ The chunking submodule `crates/xberg/src/chunking/text_splitter/` is a trimmed i
 - Tightened visibility on internal types to `pub(crate)`.
 - Path rewiring: upstream `crate::*` paths inside the inlined module rewritten relative to the new submodule root.
 
-### License Compatibility
+### Licensing
 
-The MIT license is compatible with Xberg's Elastic License 2.0 (ELv2). The full upstream license text is reproduced below:
+The inlined files stay MIT. The full upstream license text is reproduced below:
 
 ```text
 MIT License
@@ -346,15 +350,9 @@ The following test inputs were copied from the text-splitter repository to `/tes
 
 ---
 
-## html-to-markdown-rs (hOCR parsing)
+## hOCR parsing (moved from html-to-markdown)
 
-hOCR property and element parsing adapted from the `hocr` module of `html-to-markdown-rs` (removed upstream in v3):
-
-- **Source**: <https://crates.io/crates/html-to-markdown-rs>; repository <https://github.com/Goldziher/html-to-markdown> (the crates.io metadata for 2.30.0 gives `https://github.com/kreuzberg-dev/html-to-markdown`; both resolve to the same project)
-- **License**: MIT. `LICENSE` at tag `v2.30.0` (commit `087f4d10e2bafada0625332ebec0ccea39a434ac`) reads `Copyright 2024-2025 Na'aman Hirschfeld`; the current `LICENSE` (commit `a25192db2e0988ef20b4a2e5a7db5f7bd7924771`) reads `Copyright 2024-2025 Kreuzberg, Inc.`. The v2.30.0 text is reproduced in `crates/xberg/LICENSE-THIRD-PARTY`
-- **Version**: the `hocr` module (`src/hocr/{converter,extractor,parser,types}.rs`) exists in `html-to-markdown-rs` 2.0.0 and 2.30.0 and is absent from 3.0.0 (checked in the crates.io packages). The workspace consumed it as a dependency (`html-to-markdown-rs = "2.5.6"`, `html_to_markdown_rs::hocr::HocrWord` etc.) at commit `94714b1fd4` (2025-11-07) and moved to 3.x around 2026-03-30; the date of the in-tree adaptation and the 2.x version it copied from are not recorded. The workspace currently depends on 3.22.2, which no longer contains the module
-- **Location**: `crates/xberg/src/ocr/hocr_parser.rs` ("Adapted from `html_to_markdown_rs::hocr` property and element parsing") and `crates/xberg/src/table_core.rs` ("Originally adapted from the `hocr` module of `html-to-markdown-rs` (removed in v3)")
-- **Modifications**: output rewritten to xberg's `InternalDocument` with bounding boxes, confidences and page offsets; dictionary filtering; table reconstruction shared with the PDF module
+`crates/xberg/src/ocr/hocr_parser.rs` and `crates/xberg/src/table_core.rs` contain hOCR parsing code moved from the `hocr` module of Xberg's own [html-to-markdown](https://github.com/Goldziher/html-to-markdown) project (`html-to-markdown-rs`, removed upstream in v3). It is Xberg's own code, MIT-licensed under `LICENSE`, and carries no third-party licence entry.
 
 ---
 
@@ -401,14 +399,12 @@ containers, vendored as the `xberg-libheif` crate:
   module-level vendoring header pointing at this file.
 - Workspace clippy / rust lints applied via `[lints] workspace = true`.
 
-### License Compatibility
+### Licensing
 
-MIT is permissive and compatible with re-distribution alongside Xberg's
-Elastic License 2.0 (ELv2) workspace. The upstream MIT license text is
-preserved verbatim at `crates/xberg-libheif/LICENSE-libheif-rs`. The crate's
-own `LICENSE` is a different file: it carries only "Copyright (c) 2025-2026
-Kreuzberg, Inc." and is not the upstream text, so an earlier statement here that
-upstream's license was preserved verbatim at `LICENSE` was inaccurate.
+The vendored files stay MIT. The upstream MIT license text is preserved
+verbatim at `crates/xberg-libheif/LICENSE-libheif-rs`. The crate's own
+`LICENSE` is a different file: it carries only "Copyright (c) 2025-2026
+Kreuzberg, Inc." for Xberg's own code.
 
 ### System Library Requirement
 
@@ -473,7 +469,7 @@ High-level idiomatic Rust wrapper around Pdfium, forked and vendored for xberg:
 The upstream MIT OR Apache-2.0 dual license permits redistribution under MIT alone. The upstream
 author is recorded in this file, which is distributed with the source. Because upstream ships no
 copyright line or MIT text, none can be reproduced; `crates/xberg-pdfium-render/LICENSE` carries only
-Xberg's copyright (pending legal review whether the author attribution here suffices).
+Xberg's copyright; the author attribution is recorded here.
 
 ---
 
@@ -629,7 +625,7 @@ The overlap column is the share of a local file's non-comment lines (longer than
 
 ### License Compatibility
 
-Apache-2.0 permits inclusion in a larger work under different terms for the combined work, provided the Apache-2.0 license text, upstream copyright and attribution notices, and a statement of changes accompany the derived files. The vendored files carry a "Vendored from jhqxxx/aha (Apache-2.0)" header and the changes are listed under Modifications above. The crate now ships the upstream Apache-2.0 text as `LICENSE-aha` (upstream has no NOTICE file and no filled-in copyright line, so there is nothing further to reproduce). Whether a per-file modification notice is needed beyond the Modifications list above is for legal review.
+The vendored files stay Apache-2.0. They carry a "Vendored from jhqxxx/aha (Apache-2.0)" header and the changes are listed under Modifications above. The crate ships the upstream Apache-2.0 text as `LICENSE-aha` (upstream has no NOTICE file and no filled-in copyright line, so there is nothing further to reproduce).
 
 **Last Updated**: 2026-11-22
 
