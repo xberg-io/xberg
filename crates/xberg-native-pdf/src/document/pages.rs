@@ -342,11 +342,16 @@ impl PdfDocument {
             .as_reference()
             .ok_or_else(|| Error::InvalidPdf("/Pages is not a reference".to_string()))?;
 
-        self.count_pages_recursive(pages_ref, 0)
+        self.count_pages_recursive(pages_ref, 0, &mut HashSet::new())
     }
 
     /// Recursively count pages in the page tree
-    pub(super) fn count_pages_recursive(&self, node_ref: ObjectRef, depth: u32) -> Result<usize> {
+    pub(super) fn count_pages_recursive(
+        &self,
+        node_ref: ObjectRef,
+        depth: u32,
+        visited: &mut HashSet<ObjectRef>,
+    ) -> Result<usize> {
         if depth >= MAX_PAGE_TREE_DEPTH {
             tracing::warn!(target: LOG_TARGET,
                 object_id = node_ref.id,
@@ -354,6 +359,9 @@ impl PdfDocument {
                 "page tree depth limit exceeded while counting pages"
             );
             return Err(Error::RecursionLimitExceeded(MAX_PAGE_TREE_DEPTH));
+        }
+        if !visited.insert(node_ref) {
+            return Ok(0);
         }
 
         let node = match self.load_object(node_ref) {
@@ -378,7 +386,7 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict.get("Type").and_then(|obj| obj.as_name());
+        let node_type = page_tree_node_type(node_dict);
 
         match node_type {
             Some("Page") => Ok(1),
@@ -394,7 +402,7 @@ impl PdfDocument {
                 let mut count = 0;
                 for kid in kids {
                     if let Some(kid_ref) = kid.as_reference() {
-                        match self.count_pages_recursive(kid_ref, depth + 1) {
+                        match self.count_pages_recursive(kid_ref, depth + 1, visited) {
                             Ok(page_count) => count += page_count,
                             Err(Error::CircularReference(obj_ref)) => {
                                 tracing::warn!(target: LOG_TARGET, "Circular reference in page tree at object {}, skipping", obj_ref);
@@ -662,7 +670,7 @@ impl PdfDocument {
             None => return Ok(()),
         };
 
-        let node_type = node_dict.get("Type").and_then(|obj| obj.as_name()).unwrap_or("");
+        let node_type = page_tree_node_type(node_dict).unwrap_or("");
 
         match node_type {
             "Page" => {
@@ -793,6 +801,8 @@ impl PdfDocument {
                 // Also handle /Type that is an unresolvable reference (Null) ~keep
                 let type_is_null = dict.get("Type").is_some_and(|t| matches!(t, Object::Null));
                 if (has_no_type || type_is_null)
+                    && dict.contains_key("Parent")
+                    && !dict.contains_key("Subtype")
                     && (dict.contains_key("MediaBox")
                         || dict.contains_key("Contents")
                         || (dict.contains_key("Resources") && dict.contains_key("Parent")))
@@ -919,10 +929,8 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict
-            .get("Type")
-            .and_then(|obj| obj.as_name())
-            .ok_or_else(|| Error::InvalidPdf("Page tree node missing /Type".to_string()))?;
+        let node_type = page_tree_node_type(node_dict)
+            .ok_or_else(|| Error::InvalidPdf("Page tree node /Type is not a name".to_string()))?;
 
         match node_type {
             "Pages" if *current_index < target_index => {
@@ -1106,10 +1114,8 @@ impl PdfDocument {
             }
         };
 
-        let node_type = node_dict
-            .get("Type")
-            .and_then(|t| t.as_name())
-            .ok_or_else(|| Error::InvalidPdf("Node missing Type".to_string()))?;
+        let node_type =
+            page_tree_node_type(node_dict).ok_or_else(|| Error::InvalidPdf("Node /Type is not a name".to_string()))?;
 
         match node_type {
             "Page" => {
@@ -1155,5 +1161,14 @@ impl PdfDocument {
             .iter()
             .position(|candidate| *candidate == page_ref)
             .ok_or_else(|| Error::InvalidPdf(format!("object {} is not a page in the page tree", page_ref.id)))
+    }
+}
+
+/// A page-tree node's kind: its /Type name, or when /Type is absent (a common
+/// producer defect) `Pages` for a node with /Kids and `Page` otherwise.
+fn page_tree_node_type(dict: &HashMap<String, Object>) -> Option<&str> {
+    match dict.get("Type") {
+        None => Some(if dict.contains_key("Kids") { "Pages" } else { "Page" }),
+        Some(value) => value.as_name(),
     }
 }

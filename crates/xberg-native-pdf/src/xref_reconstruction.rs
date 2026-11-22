@@ -18,6 +18,11 @@ static RE_OBJ_PATTERN: LazyLock<regex::bytes::Regex> =
     LazyLock::new(|| regex::bytes::Regex::new(r"(\d+)\s+(\d+)\s+obj").unwrap());
 static RE_TRAILER: LazyLock<regex::bytes::Regex> = LazyLock::new(|| regex::bytes::Regex::new(r"trailer\s*<<").unwrap());
 
+/// Bytes parsed after a `trailer` keyword. A real trailer dictionary is a few
+/// hundred bytes; without a bound, every `trailer<<` match in a hostile file
+/// re-parses to end of file.
+const MAX_TRAILER_WINDOW: usize = 64 * 1024;
+
 fn trace_trailer_parse_failure(error: &nom::Err<nom::error::Error<&[u8]>>, input_len: usize, input_offset: usize) {
     match error {
         nom::Err::Error(parse_error) | nom::Err::Failure(parse_error) => {
@@ -208,6 +213,54 @@ pub fn reconstruct_xref<R: Read + Seek>(reader: &mut R) -> Result<(CrossRefTable
     Ok((xref, trailer, synthetic))
 }
 
+/// Whether the outermost `<<` of `bytes` is closed by a `>>` inside it, skipping
+/// strings, hex strings and comments so a nested dictionary's `>>` does not count.
+fn dictionary_closes(bytes: &[u8]) -> bool {
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' => {
+                let mut nesting = 1usize;
+                i += 1;
+                while i < bytes.len() && nesting > 0 {
+                    match bytes[i] {
+                        b'\\' => i += 1,
+                        b'(' => nesting += 1,
+                        b')' => nesting -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            b'%' => {
+                while i < bytes.len() && !matches!(bytes[i], b'\n' | b'\r') {
+                    i += 1;
+                }
+            }
+            b'<' if bytes.get(i + 1) == Some(&b'<') => {
+                depth += 1;
+                i += 2;
+            }
+            b'<' => {
+                while i < bytes.len() && bytes[i] != b'>' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            b'>' if bytes.get(i + 1) == Some(&b'>') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return true;
+                }
+                i += 2;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 /// Parse one `trailer` keyword match: if it parses to a /Root-bearing
 /// dictionary, record it as the new `best_trailer`; otherwise salvage any
 /// /Encrypt, /ID, /Info entries it carries. Split out of [`find_trailer`] to
@@ -222,14 +275,25 @@ fn process_trailer_match(
     tracing::debug!(offset = trailer_start, "found trailer keyword");
 
     let trailer_keyword_end = trailer_start + 7; // len("trailer") ~keep
-    let input = &contents[trailer_keyword_end..];
-    let (_, obj) = match parse_object(input) {
+    let window_end = contents.len().min(trailer_keyword_end + MAX_TRAILER_WINDOW);
+    let input = &contents[trailer_keyword_end..window_end];
+    let (rest, obj) = match parse_object(input) {
         Ok(parsed) => parsed,
         Err(e) => {
             trace_trailer_parse_failure(&e, input.len(), trailer_keyword_end);
             return;
         }
     };
+
+    // The lenient parser treats the window edge as end of input, so a dictionary cut off
+    // there parses "successfully" without its closing `>>`. ~keep
+    if window_end < contents.len() && !dictionary_closes(&input[..input.len() - rest.len()]) {
+        tracing::debug!(
+            offset = trailer_start,
+            "trailer dictionary exceeds the parse window; skipping"
+        );
+        return;
+    }
 
     // Only accept a parsed trailer that actually carries /Root.
     // A Linearized file's sparse end-of-file trailer legitimately
@@ -731,16 +795,21 @@ fn recover_from_objstms<R: Read + Seek>(
 ///
 /// This is a standalone function that doesn't require the full PdfDocument
 /// context, used during trailer reconstruction.
-fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Object> {
+pub(crate) fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Object> {
     reader.seek(SeekFrom::Start(offset))?;
 
-    let mut buf_reader = BufReader::new(reader);
+    const MAX_OBJECT_SIZE: usize = 1024 * 1024; // 1MB ~keep
+
+    // `read_until` buffers a whole line, so the reader itself must be bounded. ~keep
+    let mut buf_reader = BufReader::new(reader.take(MAX_OBJECT_SIZE as u64 + 1));
     let mut content = Vec::new();
 
     // Read up to 1MB or until we find endobj
     // This is a conservative limit to avoid memory issues ~keep
     let mut bytes_read = 0;
-    const MAX_OBJECT_SIZE: usize = 1024 * 1024; // 1MB ~keep
+
+    // The keyword has no line break, so only the line just read can newly contain it. ~keep
+    const ENDOBJ: &[u8] = b"endobj";
 
     loop {
         let mut line = Vec::new();
@@ -754,7 +823,7 @@ fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<
                     return Err(Error::InvalidPdf("Object too large".to_string()));
                 }
 
-                if content.windows(6).any(|w| w == b"endobj") {
+                if memchr::memmem::find(&line, ENDOBJ).is_some() {
                     break;
                 }
             }
@@ -887,6 +956,108 @@ mod tests {
         } else {
             panic!("Trailer is not a dictionary");
         }
+    }
+
+    #[test]
+    fn object_without_endobj_is_read_in_linear_time() {
+        let mut body = b"1 0 obj\n".to_vec();
+        body.extend(std::iter::repeat_n(b'\n', 900_000));
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(load_object_at_offset(&mut Cursor::new(body), 0).is_err());
+        });
+        let finished = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("load_object_at_offset did not finish");
+        assert!(finished);
+    }
+
+    #[test]
+    fn newline_free_object_is_not_read_past_the_size_cap() {
+        struct Counting {
+            inner: Cursor<Vec<u8>>,
+            read: usize,
+        }
+        impl Read for Counting {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let n = self.inner.read(buf)?;
+                self.read += n;
+                Ok(n)
+            }
+        }
+        impl Seek for Counting {
+            fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+                self.inner.seek(pos)
+            }
+        }
+        let mut body = b"1 0 obj\n<< /K (".to_vec();
+        body.extend(std::iter::repeat_n(b'a', 4 * 1024 * 1024));
+        let mut reader = Counting {
+            inner: Cursor::new(body),
+            read: 0,
+        };
+        assert!(load_object_at_offset(&mut reader, 0).is_err());
+        assert!(reader.read <= 1024 * 1024 + 1, "read {} bytes", reader.read);
+    }
+
+    #[test]
+    fn unclosed_trailers_do_not_reparse_to_end_of_file() {
+        let mut pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n".to_vec();
+        for _ in 0..4_000 {
+            pdf.extend_from_slice(b"trailer<</K (");
+            pdf.extend(std::iter::repeat_n(b'a', 300));
+            pdf.push(b'\n');
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(reconstruct_xref(&mut Cursor::new(pdf)).is_ok());
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(20))
+            .expect("reconstruct_xref did not finish");
+    }
+
+    #[test]
+    fn trailer_cut_off_by_the_parse_window_is_not_accepted() {
+        let head = b"<</Root 1 0 R /K (";
+        let mut contents = b"%PDF-1.4\ntrailer".to_vec();
+        contents.extend_from_slice(head);
+        contents.extend(std::iter::repeat_n(b'a', MAX_TRAILER_WINDOW - head.len() - 1));
+        contents.push(b')');
+        contents.extend_from_slice(b" /Encrypt 5 0 R /ID [(a) (b)] >>\n");
+        let mat = RE_TRAILER.find(&contents).expect("trailer keyword");
+        let mut best = None;
+        let mut salvaged = HashMap::new();
+        process_trailer_match(&contents, mat, &mut best, &mut salvaged);
+        assert!(best.is_none(), "a window-truncated trailer must not be accepted");
+    }
+
+    #[test]
+    fn trailer_cut_off_after_a_nested_dictionary_is_not_accepted() {
+        let head = b"<</Root 1 0 R /N <</A 1 >> /K (";
+        let tail = b") /M <</B 2 >>";
+        let mut contents = b"%PDF-1.4\ntrailer".to_vec();
+        contents.extend_from_slice(head);
+        contents.extend(std::iter::repeat_n(b'a', MAX_TRAILER_WINDOW - head.len() - tail.len()));
+        contents.extend_from_slice(tail);
+        contents.extend_from_slice(b" /Encrypt 5 0 R >>\n");
+        let mat = RE_TRAILER.find(&contents).expect("trailer keyword");
+        let mut best = None;
+        let mut salvaged = HashMap::new();
+        process_trailer_match(&contents, mat, &mut best, &mut salvaged);
+        assert!(
+            best.is_none(),
+            "a trailer whose outer dictionary is cut off must not be accepted"
+        );
+    }
+
+    #[test]
+    fn complete_trailer_inside_the_parse_window_is_accepted() {
+        let contents = b"%PDF-1.4\ntrailer\n<< /Root 1 0 R /Size 2 >>\nstartxref\n0\n%%EOF\n".to_vec();
+        let mat = RE_TRAILER.find(&contents).expect("trailer keyword");
+        let mut best = None;
+        let mut salvaged = HashMap::new();
+        process_trailer_match(&contents, mat, &mut best, &mut salvaged);
+        assert!(best.is_some());
     }
 
     #[test]
