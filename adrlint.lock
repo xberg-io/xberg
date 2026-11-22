@@ -80,3 +80,8 @@ blake3 = "594a0e191e5d87c4ac154cb6f77badb9b56574d352b3fb68ed387b54fcceb5c0"
 number = 15
 status = "accepted"
 blake3 = "adbf417a76fe2e0775cf1b163b00220b70016ed9828384c98e9f9b32cb59cad5"
+
+[adrs."adrs/0016-link-the-windows-libheif-decoders-dynamically-to-meet-lgpl-3-0.md"]
+number = 16
+status = "accepted"
+blake3 = "cb1a4dc988aae0b82f8ec6a63254406c16ef6c35bc537789e2e2586fccef5c49"
