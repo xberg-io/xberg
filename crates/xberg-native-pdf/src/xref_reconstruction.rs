@@ -18,6 +18,11 @@ static RE_OBJ_PATTERN: LazyLock<regex::bytes::Regex> =
     LazyLock::new(|| regex::bytes::Regex::new(r"(\d+)\s+(\d+)\s+obj").unwrap());
 static RE_TRAILER: LazyLock<regex::bytes::Regex> = LazyLock::new(|| regex::bytes::Regex::new(r"trailer\s*<<").unwrap());
 
+/// Bytes parsed after a `trailer` keyword. A real trailer dictionary is a few
+/// hundred bytes; without a bound, every `trailer<<` match in a hostile file
+/// re-parses to end of file.
+const MAX_TRAILER_WINDOW: usize = 64 * 1024;
+
 fn trace_trailer_parse_failure(error: &nom::Err<nom::error::Error<&[u8]>>, input_len: usize, input_offset: usize) {
     match error {
         nom::Err::Error(parse_error) | nom::Err::Failure(parse_error) => {
@@ -222,7 +227,7 @@ fn process_trailer_match(
     tracing::debug!(offset = trailer_start, "found trailer keyword");
 
     let trailer_keyword_end = trailer_start + 7; // len("trailer") ~keep
-    let input = &contents[trailer_keyword_end..];
+    let input = &contents[trailer_keyword_end..contents.len().min(trailer_keyword_end + MAX_TRAILER_WINDOW)];
     let (_, obj) = match parse_object(input) {
         Ok(parsed) => parsed,
         Err(e) => {
@@ -719,7 +724,7 @@ fn recover_from_objstms<R: Read + Seek>(
 ///
 /// This is a standalone function that doesn't require the full PdfDocument
 /// context, used during trailer reconstruction.
-fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Object> {
+pub(crate) fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Object> {
     reader.seek(SeekFrom::Start(offset))?;
 
     let mut buf_reader = BufReader::new(reader);
@@ -729,6 +734,9 @@ fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<
     // This is a conservative limit to avoid memory issues ~keep
     let mut bytes_read = 0;
     const MAX_OBJECT_SIZE: usize = 1024 * 1024; // 1MB ~keep
+
+    // The keyword has no line break, so only the line just read can newly contain it. ~keep
+    const ENDOBJ: &[u8] = b"endobj";
 
     loop {
         let mut line = Vec::new();
@@ -742,7 +750,7 @@ fn load_object_at_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<
                     return Err(Error::InvalidPdf("Object too large".to_string()));
                 }
 
-                if content.windows(6).any(|w| w == b"endobj") {
+                if memchr::memmem::find(&line, ENDOBJ).is_some() {
                     break;
                 }
             }
@@ -875,6 +883,36 @@ mod tests {
         } else {
             panic!("Trailer is not a dictionary");
         }
+    }
+
+    #[test]
+    fn object_without_endobj_is_read_in_linear_time() {
+        let mut body = b"1 0 obj\n".to_vec();
+        body.extend(std::iter::repeat_n(b'\n', 900_000));
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(load_object_at_offset(&mut Cursor::new(body), 0).is_err());
+        });
+        let finished = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("load_object_at_offset did not finish");
+        assert!(finished);
+    }
+
+    #[test]
+    fn unclosed_trailers_do_not_reparse_to_end_of_file() {
+        let mut pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n".to_vec();
+        for _ in 0..4_000 {
+            pdf.extend_from_slice(b"trailer<</K (");
+            pdf.extend(std::iter::repeat_n(b'a', 300));
+            pdf.push(b'\n');
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(reconstruct_xref(&mut Cursor::new(pdf)).is_ok());
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(20))
+            .expect("reconstruct_xref did not finish");
     }
 
     #[test]

@@ -5,7 +5,54 @@
 
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
-use crate::object::Object;
+use crate::object::{Object, ObjectRef};
+use std::collections::HashSet;
+
+/// Maximum outline nesting followed; deeper children are dropped.
+const OUTLINE_MAX_DEPTH: usize = 64;
+
+/// Maximum outline items visited in one walk, however the /First and /Next
+/// links are wired.
+const OUTLINE_MAX_ITEMS: usize = 100_000;
+
+/// Maximum name-tree nodes visited in one lookup or collection; a wide
+/// malformed tree cannot force unbounded work either.
+pub(crate) const NAME_TREE_MAX_NODES: usize = 500;
+
+/// Visit budget for a name-tree walk: each indirect node is entered at most
+/// once and the total node count is capped. ~keep
+#[derive(Default)]
+pub(crate) struct NameTreeBudget {
+    visited: HashSet<ObjectRef>,
+    nodes: usize,
+}
+
+impl NameTreeBudget {
+    pub(crate) fn admit(&mut self, node: &Object) -> bool {
+        if self.nodes >= NAME_TREE_MAX_NODES {
+            return false;
+        }
+        if let Object::Reference(r) = node
+            && !self.visited.insert(*r)
+        {
+            return false;
+        }
+        self.nodes += 1;
+        true
+    }
+}
+
+/// Visit budget for an outline walk: each item is entered at most once.
+#[derive(Default)]
+struct OutlineWalk {
+    visited: HashSet<ObjectRef>,
+}
+
+impl OutlineWalk {
+    fn admit(&mut self, item: ObjectRef) -> bool {
+        self.visited.len() < OUTLINE_MAX_ITEMS && self.visited.insert(item)
+    }
+}
 
 /// A single outline item (bookmark) in the document hierarchy.
 #[derive(Debug, Clone)]
@@ -78,10 +125,14 @@ impl PdfDocument {
         };
 
         let mut items = Vec::new();
+        let mut walk = OutlineWalk::default();
         let mut current_ref = Some(first_ref);
 
         while let Some(item_ref) = current_ref {
-            if let Ok(item) = self.parse_outline_item(item_ref) {
+            if !walk.admit(item_ref) {
+                break;
+            }
+            if let Ok(item) = self.parse_outline_item(item_ref, 0, &mut walk) {
                 items.push(item);
             }
 
@@ -99,7 +150,7 @@ impl PdfDocument {
     }
 
     /// Parse a single outline item and its children recursively.
-    fn parse_outline_item(&self, item_ref: crate::object::ObjectRef) -> Result<OutlineItem> {
+    fn parse_outline_item(&self, item_ref: ObjectRef, depth: usize, walk: &mut OutlineWalk) -> Result<OutlineItem> {
         let item_obj = self.load_object(item_ref)?;
 
         // Extract title. `/Title` is a PDF text string (ISO 32000-1
@@ -123,13 +174,17 @@ impl PdfDocument {
         let dest = self.parse_outline_destination(&item_obj)?;
 
         let mut children = Vec::new();
-        if let Some(dict) = item_obj.as_dict()
+        if depth < OUTLINE_MAX_DEPTH
+            && let Some(dict) = item_obj.as_dict()
             && let Some(Object::Reference(first_child_ref)) = dict.get("First")
         {
             let mut child_ref = Some(*first_child_ref);
 
             while let Some(c_ref) = child_ref {
-                if let Ok(child) = self.parse_outline_item(c_ref) {
+                if !walk.admit(c_ref) {
+                    break;
+                }
+                if let Ok(child) = self.parse_outline_item(c_ref, depth + 1, walk) {
                     children.push(child);
                 }
 
@@ -313,6 +368,7 @@ fn walk_name_tree(
     target: &[u8],
     resolve: &dyn Fn(crate::object::ObjectRef) -> Option<Object>,
     depth: u8,
+    budget: &mut NameTreeBudget,
 ) -> Option<Object> {
     if depth > NAME_TREE_MAX_DEPTH {
         return None;
@@ -349,7 +405,10 @@ fn walk_name_tree(
                 continue;
             };
             let in_range = kid_limits_admit(&kid_node, target, resolve);
-            if in_range && let Some(found) = walk_name_tree(&kid_node, target, resolve, depth + 1) {
+            if in_range
+                && budget.admit(kid)
+                && let Some(found) = walk_name_tree(&kid_node, target, resolve, depth + 1, budget)
+            {
                 return Some(found);
             }
         }
@@ -402,7 +461,7 @@ fn lookup_named_dest(
     }
     let names = catalog.get("Names").and_then(|n| deref_obj(n, resolve))?;
     let root = names.as_dict()?.get("Dests").and_then(|d| deref_obj(d, resolve))?;
-    walk_name_tree(&root, target, resolve, depth)
+    walk_name_tree(&root, target, resolve, depth, &mut NameTreeBudget::default())
 }
 
 #[cfg(test)]

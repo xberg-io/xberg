@@ -6,6 +6,18 @@
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::{Object, ObjectRef};
+use std::collections::HashSet;
+
+const MAX_FIELD_DEPTH: usize = 64;
+const MAX_FIELD_COUNT: usize = 100_000;
+const MAX_PARENT_DEPTH: usize = 64;
+
+/// Traversal state shared across one AcroForm field-tree walk. ~keep
+#[derive(Default)]
+struct FieldWalk {
+    visited: HashSet<ObjectRef>,
+    visited_fields: usize,
+}
 
 /// A form field extracted from a PDF AcroForm.
 #[derive(Debug, Clone)]
@@ -324,8 +336,11 @@ impl FormExtractor {
             .ok_or_else(|| Error::InvalidPdf("AcroForm /Fields is not an array".to_string()))?;
 
         let mut result = Vec::new();
+        let mut walk = FieldWalk::default();
         for field_ref in fields_array {
-            Self::extract_field_recursive(doc, field_ref, "", &mut result)?;
+            if let Err(error) = Self::extract_field_recursive(doc, field_ref, "", 0, &mut walk, &mut result) {
+                tracing::warn!("skipping unreadable form field: {error}");
+            }
         }
 
         Ok(result)
@@ -349,9 +364,20 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_ref: &Object,
         parent_name: &str,
+        depth: usize,
+        walk: &mut FieldWalk,
         result: &mut Vec<FormField>,
     ) -> Result<()> {
         let object_ref = field_ref.as_reference();
+        if depth > MAX_FIELD_DEPTH || walk.visited_fields >= MAX_FIELD_COUNT {
+            return Ok(());
+        }
+        if let Some(r) = object_ref
+            && !walk.visited.insert(r)
+        {
+            return Ok(());
+        }
+        walk.visited_fields += 1;
 
         let field = Self::resolve_object(doc, field_ref)?;
         let field_dict = match field.as_dict() {
@@ -360,11 +386,9 @@ impl FormExtractor {
         };
 
         let (partial_name, full_name) = Self::resolve_field_names(doc, field_dict, parent_name);
-        let has_kids = Self::recurse_into_kids(doc, field_dict, &full_name, result)?;
+        let has_kids = Self::recurse_into_kids(doc, field_dict, &full_name, depth, walk, result)?;
 
-        let field_type = field_dict
-            .get("FT")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let field_type = Self::inherited_attr(doc, field_dict, "FT")
             .and_then(|obj| obj.as_name().map(|s| s.to_string()))
             .map(|name| Self::parse_field_type(&name))
             .unwrap_or(FieldType::Unknown("".to_string()));
@@ -445,6 +469,8 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_dict: &std::collections::HashMap<String, Object>,
         full_name: &str,
+        depth: usize,
+        walk: &mut FieldWalk,
         result: &mut Vec<FormField>,
     ) -> Result<bool> {
         let Some(kids_ref) = field_dict.get("Kids") else {
@@ -455,9 +481,72 @@ impl FormExtractor {
             return Ok(false);
         };
         for kid_ref in kids_array {
-            Self::extract_field_recursive(doc, kid_ref, full_name, result)?;
+            if let Err(error) = Self::extract_field_recursive(doc, kid_ref, full_name, depth + 1, walk, result) {
+                tracing::warn!("skipping unreadable form field {full_name:?}: {error}");
+            }
         }
         Ok(true)
+    }
+
+    /// Looks up an inheritable field attribute (ISO 32000-1 §12.7.3.1) on the
+    /// field itself, then up its /Parent chain, bounded and cycle-safe.
+    fn inherited_attr(
+        doc: &PdfDocument,
+        field_dict: &std::collections::HashMap<String, Object>,
+        key: &str,
+    ) -> Option<Object> {
+        if let Some(value) = field_dict.get(key) {
+            return Self::resolve_object(doc, value).ok();
+        }
+        let mut seen = HashSet::new();
+        let mut parent = field_dict.get("Parent").cloned();
+        for _ in 0..MAX_PARENT_DEPTH {
+            let parent_obj = parent.take()?;
+            if let Some(r) = parent_obj.as_reference()
+                && !seen.insert(r)
+            {
+                return None;
+            }
+            let resolved = Self::resolve_object(doc, &parent_obj).ok()?;
+            let dict = resolved.as_dict()?;
+            if let Some(value) = dict.get(key) {
+                return Self::resolve_object(doc, value).ok();
+            }
+            parent = dict.get("Parent").cloned();
+        }
+        None
+    }
+
+    /// Maps a choice field's export value(s) to display text through /Opt
+    /// `[export display]` pairs; plain-string options and unmatched values pass through.
+    fn map_choice_value(
+        doc: &PdfDocument,
+        field_dict: &std::collections::HashMap<String, Object>,
+        value: FieldValue,
+    ) -> FieldValue {
+        let Some(Object::Array(opts)) = Self::inherited_attr(doc, field_dict, "Opt") else {
+            return value;
+        };
+        let display_for = |export: &str| -> Option<String> {
+            opts.iter().find_map(|opt| {
+                let resolved = Self::resolve_object(doc, opt).ok()?;
+                let pair = resolved.as_array()?;
+                let key = Self::resolve_object(doc, pair.first()?).ok()?;
+                let key = Self::decode_text_string(key.as_string()?)?;
+                if key != export {
+                    return None;
+                }
+                let shown = Self::resolve_object(doc, pair.get(1)?).ok()?;
+                Self::decode_text_string(shown.as_string()?)
+            })
+        };
+        match value {
+            FieldValue::Text(t) => FieldValue::Text(display_for(&t).unwrap_or(t)),
+            FieldValue::Array(items) => {
+                FieldValue::Array(items.into_iter().map(|t| display_for(&t).unwrap_or(t)).collect())
+            }
+            other => other,
+        }
     }
 
     /// Resolves the remaining per-field attributes (/V, /TU, /Rect, /Ff,
@@ -470,11 +559,14 @@ impl FormExtractor {
         field_dict: &std::collections::HashMap<String, Object>,
         field_type: &FieldType,
     ) -> FieldAttributes {
-        let value = field_dict
-            .get("V")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let value = Self::inherited_attr(doc, field_dict, "V")
             .map(|obj| Self::parse_field_value(&obj, field_type))
             .unwrap_or(FieldValue::None);
+        let value = if *field_type == FieldType::Choice {
+            Self::map_choice_value(doc, field_dict, value)
+        } else {
+            value
+        };
 
         let tooltip = field_dict
             .get("TU")
@@ -485,18 +577,14 @@ impl FormExtractor {
         let bounds = Self::parse_field_bounds(doc, field_dict);
         let flags = Self::field_dict_integer(doc, field_dict, "Ff");
 
-        let default_value = field_dict
-            .get("DV")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
-            .map(|obj| Self::parse_field_value(&obj, field_type));
+        let default_value =
+            Self::inherited_attr(doc, field_dict, "DV").map(|obj| Self::parse_field_value(&obj, field_type));
 
         let max_length = Self::field_dict_integer(doc, field_dict, "MaxLen");
         // Extract text alignment /Q (0=left, 1=center, 2=right) ~keep
         let alignment = Self::field_dict_integer(doc, field_dict, "Q");
 
-        let default_appearance = field_dict
-            .get("DA")
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
+        let default_appearance = Self::inherited_attr(doc, field_dict, "DA")
             .and_then(|obj| obj.as_string().map(|s| s.to_vec()))
             .and_then(|bytes| Self::decode_text_string(&bytes));
 
@@ -556,13 +644,10 @@ impl FormExtractor {
         field_dict: &std::collections::HashMap<String, Object>,
         key: &str,
     ) -> Option<u32> {
-        field_dict
-            .get(key)
-            .and_then(|obj| Self::resolve_object(doc, obj).ok())
-            .and_then(|obj| match obj {
-                Object::Integer(i) => Some(i as u32),
-                _ => None,
-            })
+        Self::inherited_attr(doc, field_dict, key).and_then(|obj| match obj {
+            Object::Integer(i) => Some(i as u32),
+            _ => None,
+        })
     }
 
     /// Parse field type from /FT value.
