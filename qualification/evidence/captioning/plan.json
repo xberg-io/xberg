@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "qualified": false,
+  "expected_generations": 120,
+  "repeats": 1,
+  "arms": ["fp32", "int8"],
+  "provenance": {
+    "corpus_receipt_sha256": "ff07b9971f8f8210e21c76cb5a7d209c97dfd93721fd8fd7ea5c0b4ed8f55cc4",
+    "split_audit_sha256": "c949afc18d929815379e2abef11fe9aa54724d8f46c425e74b152d19de4e3052"
+  },
+  "runtime": {
+    "runner_sha256": "0755ab073af1c255f48eb246a3999ff4861fdcbc5d56cb97a0307e3ec566d189",
+    "dependency_lock_sha256": "e53173ffc9fb1ba1d5e1479c9c80d4478f7d05c408500f1ae8d9a16ec2257616",
+    "ort_build_info": "ORT Build Info: git-branch=HEAD, git-commit-id=058787ceea, build type=Release",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4 Pro",
+    "threads": 0,
+    "deadline_ms": 600000
+  },
+  "images": [
+    {
+      "id": "coco-val2017-000000000139",
+      "image_file": "000000000139.jpg",
+      "image_sha256": "ffe0f0cec3b2e27aab1967229cdf0a0d7751dcdd5800322f0b8ac0dffb3b8a8d",
+      "image_bytes": 161811
+    },
+    {
+      "id": "coco-val2017-000000007888",
+      "image_file": "000000007888.jpg",
+      "image_sha256": "7c735e89b3699afc510053412ddea8e0370a1a5a2c9096713a5b255567747442",
+      "image_bytes": 132380
+    },
+    {
+      "id": "coco-val2017-000000025424",
+      "image_file": "000000025424.jpg",
+      "image_sha256": "89e8025ecb6f48125ac826dd5fe51409deae64e98133472adbe6ae62b6a61705",
+      "image_bytes": 106398
+    },
+    {
+      "id": "coco-val2017-000000056344",
+      "image_file": "000000056344.jpg",
+      "image_sha256": "2aedd846bfe767e86dc858282c286ff9bcd3f1303ef51dababc4bd459f5a5060",
+      "image_bytes": 84587
+    },
+    {
+      "id": "coco-val2017-000000078404",
+      "image_file": "000000078404.jpg",
+      "image_sha256": "325c239236841298fc6d1d96f0be32b13b0a93478e97735b1911e8502f04e01e",
+      "image_bytes": 95791
+    },
+    {
+      "id": "coco-val2017-000000087742",
+      "image_file": "000000087742.jpg",
+      "image_sha256": "2227dd6fdd0716149809fd17730e3a01f6c79e182bc6c0da6be900a17e6b25a8",
+      "image_bytes": 118691
+    },
+    {
+      "id": "coco-val2017-000000118594",
+      "image_file": "000000118594.jpg",
+      "image_sha256": "422552f71b460a7db60633b4037d9a3b97bf7a2c4eb4c91e4fb6b466b0619da0",
+      "image_bytes": 197930
+    },
+    {
+      "id": "coco-val2017-000000146831",
+      "image_file": "000000146831.jpg",
+      "image_sha256": "ab896be1be3a812e60c2303e5525d0fc506d7e1c541324fc9d68614a26cea337",
+      "image_bytes": 264571
+    },
+    {
+      "id": "coco-val2017-000000172649",
+      "image_file": "000000172649.jpg",
+      "image_sha256": "cab16032364caf6808cde47a8be432d3efb71c2c8c114285443fbccf108692e1",
+      "image_bytes": 76754
+    },
+    {
+      "id": "coco-val2017-000000177893",
+      "image_file": "000000177893.jpg",
+      "image_sha256": "68af357d19364a3f1f8e6a0479d72dc5f2fcf7d65ebf1d0724d39c55e39d8390",
+      "image_bytes": 144311
+    },
+    {
+      "id": "coco-val2017-000000199236",
+      "image_file": "000000199236.jpg",
+      "image_sha256": "517fea371789d6645aee7ac56167c3e351aa80b035d2b392439eb501e99c99ee",
+      "image_bytes": 223623
+    },
+    {
+      "id": "coco-val2017-000000212573",
+      "image_file": "000000212573.jpg",
+      "image_sha256": "8c0f1cae223eb12fa98f429f523b7623da66cc84d51c3330c0a4aea35bbf3986",
+      "image_bytes": 242491
+    },
+    {
+      "id": "coco-val2017-000000229111",
+      "image_file": "000000229111.jpg",
+      "image_sha256": "6cf7af80f210bcf25ff57bad62f814f4cd6d4e419a564fc1659ef2a479d5e7d3",
+      "image_bytes": 113899
+    },
+    {
+      "id": "coco-val2017-000000259597",
+      "image_file": "000000259597.jpg",
+      "image_sha256": "0979fa9c6ba626e03e7e73d40f26beeba561600a15afea899ebf5ea23c8e66ff",
+      "image_bytes": 123092
+    },
+    {
+      "id": "coco-val2017-000000267351",
+      "image_file": "000000267351.jpg",
+      "image_sha256": "54cdf7c83606df712ce6ca34c9bbdb9e4b1e6470541519c15e2eae6e34c83e69",
+      "image_bytes": 57785
+    },
+    {
+      "id": "coco-val2017-000000289343",
+      "image_file": "000000289343.jpg",
+      "image_sha256": "3e55a91ce9257d70771eac2380332a743cb17f2220aee0c070d2d46204931e56",
+      "image_bytes": 170295
+    },
+    {
+      "id": "coco-val2017-000000294695",
+      "image_file": "000000294695.jpg",
+      "image_sha256": "9f09c1871339afd079c2a35af4c51c18a2ae20252e2feef35e8bfb3d2b9ec2f9",
+      "image_bytes": 105543
+    },
+    {
+      "id": "coco-val2017-000000318080",
+      "image_file": "000000318080.jpg",
+      "image_sha256": "c7acb98203e36fe331a1ecd7a9fbd816edc6143725ac5fc81c118fcdea031328",
+      "image_bytes": 215632
+    },
+    {
+      "id": "coco-val2017-000000331317",
+      "image_file": "000000331317.jpg",
+      "image_sha256": "6b39e845481a797835f0ec99579651918b7fe0144df623f476caded9a4b38d81",
+      "image_bytes": 176783
+    },
+    {
+      "id": "coco-val2017-000000347265",
+      "image_file": "000000347265.jpg",
+      "image_sha256": "4c60eee093fa352796acb750d77f360b71b5e0bbc4879d929e9113bb04c6454f",
+      "image_bytes": 251754
+    },
+    {
+      "id": "coco-val2017-000000375430",
+      "image_file": "000000375430.jpg",
+      "image_sha256": "27892bc3b96cad9c534ba8cc72dc30f8bb17541b30722d4a60d9541ebfa2b735",
+      "image_bytes": 166801
+    },
+    {
+      "id": "coco-val2017-000000397681",
+      "image_file": "000000397681.jpg",
+      "image_sha256": "2d0a0055517147f3a0be7a13ab375f2ad3d41194f8a9d33fb510ca058c5e4662",
+      "image_bytes": 278522
+    },
+    {
+      "id": "coco-val2017-000000404839",
+      "image_file": "000000404839.jpg",
+      "image_sha256": "ae68fb337ff5b3e93643edb5f266156c87fa0032fcfa95134910d8f052bec646",
+      "image_bytes": 141077
+    },
+    {
+      "id": "coco-val2017-000000434548",
+      "image_file": "000000434548.jpg",
+      "image_sha256": "8b47087d39f6126a830c560e0e2d7d7b942bf9558704b8abd2b33a26d2d9dae8",
+      "image_bytes": 168692
+    },
+    {
+      "id": "coco-val2017-000000454978",
+      "image_file": "000000454978.jpg",
+      "image_sha256": "6b2614bab34a31ada0b112c2ed29af589929aa7cf02978ad1ab41c9b1b6c512b",
+      "image_bytes": 226933
+    },
+    {
+      "id": "coco-val2017-000000462643",
+      "image_file": "000000462643.jpg",
+      "image_sha256": "bd95ac3004b39f0402190ef64fb79130a46b7ad141e4f0afa35f6cb120cbb8c2",
+      "image_bytes": 79709
+    },
+    {
+      "id": "coco-val2017-000000488736",
+      "image_file": "000000488736.jpg",
+      "image_sha256": "b2eee8c0e4cc6cdec6f57577a3f165400a98e936280670c70152b48046dd2234",
+      "image_bytes": 309036
+    },
+    {
+      "id": "coco-val2017-000000491130",
+      "image_file": "000000491130.jpg",
+      "image_sha256": "8878fd00913cb87ca5b3e40e651c8e5a13eea4d9e7eae5be00cf2957f66f6e72",
+      "image_bytes": 107553
+    },
+    {
+      "id": "coco-val2017-000000521509",
+      "image_file": "000000521509.jpg",
+      "image_sha256": "32e087992c2613f404b90f768c5035999b53e19d26dec4e6018303b3dcb03672",
+      "image_bytes": 106887
+    },
+    {
+      "id": "coco-val2017-000000552775",
+      "image_file": "000000552775.jpg",
+      "image_sha256": "5f616a0e71f3bc8a7838ab6af74f0134d3761195e4f0cf57f430da9948826d04",
+      "image_bytes": 133107
+    }
+  ],
+  "candidates": [
+    {
+      "id": "smolvlm-256m-instruct",
+      "arms": { "fp32": { "precision": "fp32" }, "int8": { "precision": "quantized" } }
+    },
+    { "id": "smolvlm-500m-instruct", "arms": { "fp32": { "precision": "fp32" }, "int8": { "precision": "quantized" } } }
+  ]
+}

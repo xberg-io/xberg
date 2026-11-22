@@ -1,0 +1,13 @@
+Observed refusal, verbatim, from:
+
+  onnx-qualification run-captioning /tmp/plan-florence.json 1e1b39e41144253d811b0a65685c6b2dc547b242ecff165acef10081fb2f7683 /path/to/images /tmp/report-florence.json
+
+The probe plan was the real captioning plan with the candidate list replaced by
+florence-2-base at the fp32 arm. No image was read and no report was produced.
+
+ONNX qualification: Validation error: Florence-2 captioning is staged in the inventory but not
+enabled by this adapter: its merged decoder fails on cached decoder steps in the bundled ONNX
+Runtime. Only SmolVLM is wired; no other family is substituted.
+
+Source of the refusal: crates/xberg/src/local_captioning/types.rs, documented on
+LocalCaptioningFormat::Florence2.

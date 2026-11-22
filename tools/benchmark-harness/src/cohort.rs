@@ -210,6 +210,52 @@ mod tests {
     }
 
     #[test]
+    fn layout_heldout_cohort_loads_five_distinct_documents() {
+        let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest_path = crate_root.join("cohorts/layout-heldout-v1.json");
+        let manifest = CohortManifest::from_file(&manifest_path).unwrap();
+        let expected_fixtures = [
+            "pdf/2026-13845.json",
+            "pdf/docling_2305_03393v1.json",
+            "pdf/ft_ACN_2009_page_102_t0.json",
+            "rtl_arabic_native.json",
+            "ordinance_2197_scanned.json",
+        ]
+        .map(PathBuf::from);
+
+        assert_eq!(manifest.name, "layout-heldout-v1");
+        assert_eq!(manifest.batch_size, 1);
+        assert_eq!(manifest.fixtures, expected_fixtures);
+
+        let fixtures = manifest
+            .load_fixtures(&crate_root.join("fixtures"), &manifest_path)
+            .unwrap();
+        assert_eq!(fixtures.len(), expected_fixtures.len());
+
+        let mut basenames = HashSet::new();
+        for (fixture_path, fixture) in fixtures.fixtures() {
+            assert_eq!(fixture.file_type, "pdf");
+            let document_path = fixture.resolve_document_path(fixture_path.parent().unwrap());
+            assert!(document_path.is_file(), "missing document {}", document_path.display());
+            assert_eq!(
+                fixture.file_size,
+                std::fs::metadata(&document_path).unwrap().len(),
+                "document size mismatch for {}",
+                document_path.display()
+            );
+            assert!(
+                basenames.insert(
+                    document_path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap()
+                        .to_string()
+                )
+            );
+        }
+    }
+
+    #[test]
     fn image_cohorts_are_fully_eligible_for_sceptre() {
         use crate::adapter::OcrLanguagePolicy;
 

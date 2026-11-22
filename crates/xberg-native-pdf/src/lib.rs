@@ -191,7 +191,7 @@ pub use annotation_types::{
     CaretSymbol, FileAttachmentIcon, FreeTextIntent, HighlightMode, LineEndingStyle, QuadPoint, ReplyType, StampType,
     TextAlignment, TextAnnotationIcon, TextMarkupType, WidgetFieldType,
 };
-pub use annotations::{Annotation, LinkAction, LinkDestination};
+pub use annotations::{Annotation, LinkAction, LinkDestination, MeasureDictionary, PageViewport, PolygonAnnotation};
 pub use config::{DocumentType, ExtractionProfile};
 pub use document::{ExtractedImageRef, ImageFormat, PageRotation, PdfDocument, ReadingOrder};
 pub use error::{Error, Result};

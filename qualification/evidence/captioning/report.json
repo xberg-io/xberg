@@ -1,0 +1,4337 @@
+{
+  "schema": 1,
+  "qualified": false,
+  "plan_sha256": "599bc9c7581fb98ca1401f6b727707291b54c47a8e247c1dd13e3cc13074ca2a",
+  "runtime": {
+    "runner_sha256": "0755ab073af1c255f48eb246a3999ff4861fdcbc5d56cb97a0307e3ec566d189",
+    "dependency_lock_sha256": "e53173ffc9fb1ba1d5e1479c9c80d4478f7d05c408500f1ae8d9a16ec2257616",
+    "ort_build_info": "ORT Build Info: git-branch=HEAD, git-commit-id=058787ceea, build type=Release",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4 Pro",
+    "threads": 0,
+    "deadline_ms": 600000
+  },
+  "rows": [
+    {
+      "image": "coco-val2017-000000000139",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1215.543917,
+      "caption": "The image depicts a living room with a modern and minimalist design. The room is furnished with a large, rectangular wooden table and chairs, arranged in a somewhat formal and orderly manner. The table is set with a vase of flowers, which adds a touch of color and vibrancy to the room. The chairs are uphol",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000007888",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1801.703,
+      "caption": "The image depicts a clock tower, which is a prominent feature of a clock tower. The clock tower is a tall, multi-paned structure with a distinctive design. The clock face is visible, displaying the time as 1:55. The clock tower is constructed from a combination of metal and glass, with",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000025424",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1248.472292,
+      "caption": "The image depicts a person playing a tennis match. The person is wearing a white shirt and white pants, and they are in the middle of a serve. The tennis racket is held by the person, and the person is about to hit the ball with it. The ball is in the air, and the person is",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000056344",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1428.930791,
+      "caption": "The image depicts a two-screen display setup with a laptop and a tablet on a desk. The laptop is positioned on the left side of the screen, and the tablet is on the right side. Both devices are connected to a computer via a USB cable.\n\nThe laptop is displaying a document or a webpage,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000078404",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1344.259208,
+      "caption": "The image depicts a scene from a park or garden, likely taken during the daytime. The setting is outdoors, with a grassy area and some bushes in the foreground. There are three people in the image, all seated on a bench. The person on the left is wearing a white shirt and is looking towards the person on",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000087742",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1347.743375,
+      "caption": "The image depicts a glass vase placed on a round table. The vase is filled with a variety of colorful and intricate designs, including feathers and other decorative elements. The vase is placed on a round table, which is likely made of glass or ceramic, as it has a smooth surface. The table is set against a backdrop",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000118594",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1686.742666,
+      "caption": "The image depicts a large, muscular cow standing in a grassy field. The cow has a distinctive, long, spiraling horn that extends from its head down to its tail. The horns are white and appear to be quite large, suggesting that the cow is a large, adult animal. The cow's body is covered in",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000146831",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2370.711542,
+      "caption": "The image depicts a person performing a trick on a skateboard. The skateboarder is wearing a hoodie and a helmet, and they are performing a trick on a ramp. The ramp is made of a smooth, gray material, and it has a ramp surface that is slightly raised from the ground. The skateboard",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000172649",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1990.028291,
+      "caption": "The image depicts a dynamic scene involving a person performing a stunt on a ramp. The person is wearing a red shirt and dark pants, and they are in the process of performing a trick on a ramp. The ramp is painted in a bright red color, and it is part of a larger structure that includes a large,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000177893",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1670.383791,
+      "caption": "The image depicts a vintage red and white bus, which appears to be a long-haul passenger bus, likely used for transporting goods or passengers. The bus is parked on a city street, with a clear view of the road and the surrounding buildings. The bus is painted in a red and white color scheme, with the",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000199236",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1703.801583,
+      "caption": "The image depicts a scene from a circus or a similar circus event. The central focus is a man dressed in a medieval-style armor, likely from the 13th or 14th century, which includes a helmet, a breastplate, and a long chain. The man is riding a horse, which",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000212573",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2029.6951669999999,
+      "caption": "The image depicts a scene on a rainy day. The setting appears to be a street corner, with a few vehicles visible in the background. The street is lined with parked cars, indicating that it is likely a busy area. The street is wet, with the raindrops clinging to the pavement and the cars. The",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000229111",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1709.543167,
+      "caption": "The image depicts a young boy standing in front of a dining table, holding a white Wii remote. The boy is wearing a light orange t-shirt and has short blond hair. He is holding the remote with both hands, with his thumbs on the left side of the remote and his index finger on the right",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000259597",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1477.459542,
+      "caption": "The image depicts a scene from a street scene, likely in a city or town, where a group of people are gathered around a table. The people are dressed in casual attire, and they appear to be engaged in conversation or discussion. The setting appears to be a public place, possibly a street corner or a plaza",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000267351",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1386.34275,
+      "caption": "The image depicts a prominent landmark in a coastal area, specifically a lighthouse. The lighthouse is a tall, white structure with a distinctive yellow roof. The tower is topped with a red cross symbol, which is a common design element in many coastal towns and cities. The clock on the tower is set to 10:",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000289343",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2048.652791,
+      "caption": "The image depicts a scene from a street scene, likely in a rural or suburban area. The primary focus is on a person riding a bicycle, which is the central element of the image. The person is wearing a hat and a long-sleeved shirt, and they are riding a bicycle with a handlebar and",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000294695",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1618.550792,
+      "caption": "The image depicts a beach scene with a clear blue sky and a few scattered clouds. The foreground is dominated by a sandy beach with a few people walking along the shore. The people are dressed in swimwear and are carrying surfboards. The beach is lined with a few signs, one of which is marked with a red",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000318080",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1990.024791,
+      "caption": "The image depicts two large brown bears in a natural setting, likely a river or a lake. The bears are positioned in a way that suggests they are either in the midst of a fight or are engaged in a moment of play. The bears are positioned on either side of a log or a rock, which is partially submerged",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000331317",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3457.381958,
+      "caption": "The image depicts a clock set in a grand, ornate building. The clock is prominently displayed, with its hands pointing to the numbers 1 through 12. The clock is intricately designed, with ornate carvings and a detailed mechanism that appears to be part of a larger clock. The clock face is white with black",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000347265",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2529.3356249999997,
+      "caption": "The image depicts a person standing in a snowy forest. The person is wearing a purple jacket and black gloves, and they are holding ski poles. The person is standing in a line, with their feet shoulder-width apart, and their arms are bent at the elbows, holding ski poles. The snow is thick and covers",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000375430",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2274.176709,
+      "caption": "The image depicts a plate of pancakes, which are a popular breakfast food in many cultures. The pancakes are stacked on top of each other, with the topmost pancake being the largest and the bottom pancake being the smallest. The pancakes are golden-brown and have a slightly crispy texture, indicating they are freshly cooked",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000397681",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2414.296041,
+      "caption": "The image is a collage of 15 different food items, each presented in a separate image. The items are arranged in a grid format, with each image containing a different food item. Here is a detailed description of each food item:\n\n1. **Carrot**:\n   - **Description**: A small, round",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000404839",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1781.76325,
+      "caption": "The image depicts two individuals standing in front of a table with several electronic devices on it. The table is rectangular and appears to be made of glass or a similar transparent material. The table is set up in a casual, relaxed manner, with the individuals standing side by side.\n\nThe individuals are dressed in casual attire",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000434548",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1803.4077499999999,
+      "caption": "The image depicts a baseball player, who is positioned in the middle of the field, with his right arm raised, holding a baseball bat. The player is wearing a white uniform with a red and blue logo on the back, and he is wearing a helmet. The player is also wearing a glove on his left hand,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000454978",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1876.325709,
+      "caption": "The image depicts a winding road in a rural area. The road is narrow and appears to be made of gravel or dirt, with a few patches of grass and trees visible on either side. The road is flanked by a few small fences or barriers, which are made of metal or wood, and are likely used to",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000462643",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1758.599416,
+      "caption": "The image depicts a person's hand holding a small, partially opened flip phone. The phone is open, revealing its screen and a few buttons. The screen is turned off, and the phone is not turned on. The person's hand is holding the phone with their thumb on the bottom edge of the phone and their fingers",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000488736",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1792.806917,
+      "caption": "The image depicts a clock tower in a building, which is part of a larger structure. The clock tower is positioned on the side of a building, and it is illuminated by a bright light source. The clock tower is made of a dark material, possibly metal, and has a rectangular shape. The clock face is visible",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000491130",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2134.051833,
+      "caption": "The image depicts a person skiing down a snowy slope. The person is wearing a brown jacket, a pink scarf, and dark pants. They are holding a ski pole in their right hand, which is extended forward. The person is skiing down the slope, which is covered in snow. The snow is pristine, and",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000521509",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2413.64025,
+      "caption": "The image depicts a person sitting on a bed in what appears to be a bedroom. The person is wearing a white shirt and dark pants. They are leaning on a tripod stand, which is positioned on the bed. The tripod stand is made of metal and has a sturdy design, likely made of metal or plastic",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000552775",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1665.8558329999998,
+      "caption": "The image depicts a kitchen scene, focusing on a man standing in front of a stove. The man is wearing a dark shirt and has a serious expression on his face. He is holding a small, round object, possibly a spoon or a fork, in his left hand. The stove is a metallic, metallic-looking",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "e27ad810eabfa7c881b409e1ca357e7a951541019add228ff73c72718fcf6218"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "a68ea4058524059ed0e2873fdbc4f33b93e13ae3d3204938d32d0566d390ae00"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "5ae6a66fdf47680433aa6bcc512ae8f0b98c2db01bea055fc76ee37bb0389b78"
+          }
+        ],
+        "manifest_sha256": "475ce2603c158ea0b1c9d75d00565af45b1f473cdf38e098ece07f19705ac736",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000000139",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2262.5525,
+      "caption": "The image shows a living room with a modern design. The room has a large window with a white curtain, and the walls are painted in a light color, possibly yellow or light brown. There is a white sofa with a dark-colored throw blanket on it, and a dark-colored coffee table with a white",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000007888",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2055.625375,
+      "caption": "The image shows a black-and-white photograph of a clock tower, which is the central object in the image. The clock tower is positioned in the center of the image and is surrounded by a gray sky. The clock tower is made of a dark-colored material, possibly metal or concrete, and has a distinctive",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000025424",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2089.216125,
+      "caption": "The image depicts a person playing a tennis game on a green tennis court. The person is wearing a white shirt and white pants, and they are in the process of serving the ball. The tennis ball is in the air, and the person is about to hit it with their racket. The person is in a defensive",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000056344",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2134.254417,
+      "caption": "Two computer monitors are side by side on a desk. The monitor on the left displays a screen that is displaying a video of a person playing a video game. The monitor on the right displays a screen that is displaying a video of a person sitting at a table with a laptop open on the table.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000078404",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1564.907625,
+      "caption": "The image depicts a black and white photograph of three people sitting on a bench outdoors. The bench is made of light-colored wood and is positioned in a grassy area with bushes and tall hedges. The people are dressed in casual clothing, with the person on the left wearing a white shirt and the person on the right",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000087742",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1580.647,
+      "caption": "The image shows a window with a view outside. The window has a rectangular shape with a white frame. Through the window, we can see a building with a few windows and a tree with branches and leaves. The building has a light-colored facade. There is a reflection of the building and the tree on the window",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000118594",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1610.196084,
+      "caption": "In the image there are two large animals which are brown and white in color. They are standing in the grass and grazing. Behind them there is a fence with wire fencing.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000146831",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2412.347542,
+      "caption": "The image depicts a young person performing a trick on a skateboard ramp. The person is wearing a light-colored hoodie and dark pants, and they are holding the skateboard in their hands. The skateboard is positioned on the ramp, and the person is performing a trick on the ramp's edge. The ramp",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000172649",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1482.583042,
+      "caption": "In this image we can see a person skating on the road. In the background we can see a wall.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000177893",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2202.213416,
+      "caption": "The image shows a red and white bus with a long seating arrangement. The bus is parked on a street with palm trees in the background. The bus has a large windshield and a roof with a roof rack. The bus is painted in a bright red color, with white and black text on the side. The bus",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000199236",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4248.018334,
+      "caption": "In the center of the image there is a person riding a horse. In the background there are trees.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000212573",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4566.088667,
+      "caption": "The image depicts a busy urban street scene with a mix of people and vehicles. The street is lined with a variety of buildings, some of which are commercial and some of which are residential. The buildings are mostly made of concrete and brick, with some having large windows and balconies. The street is wet, with p",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000229111",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1822.499584,
+      "caption": "In the foreground of the image there is a boy holding a white wired game controller. In the background there is a wall and a window. On the right side of the image there is a window.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000259597",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2237.105333,
+      "caption": "The image shows a group of people gathered in what appears to be a public square. The people are dressed in casual clothing, and they are all standing close together, facing the camera. The people are standing on a sidewalk, and there are several benches and tables in the background. The ground is covered with a light-",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000267351",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1876.7762089999999,
+      "caption": "In this image we can see a tower clock on the ground. In the background we can see the sky.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000289343",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2129.7365,
+      "caption": "The image is taken in a rural or semi-rural setting, possibly in a rural or small-town area. The background features a building with a sign that reads \"No Smoking\" on it. There is a tree to the right of the image, and a small dog is sitting on the ground in front of",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000294695",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2441.256042,
+      "caption": "In this image we can see a few people standing on the beach, there is a kite flying in the sky, there are some objects on the ground, there is a board with some text on it, there is a flag on the beach, there is a fence, there are some objects on the ground, there is",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000318080",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2021.265084,
+      "caption": "The image depicts two large brown bears in a natural setting, likely a forest or jungle. The bears are positioned in a semi-submerged area, with the water visible in the background. The bears are facing each other, with their heads slightly turned towards each other. The bears appear to be engaged in a conversation,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000331317",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1281.445208,
+      "caption": "In this image there is a clock on the wall.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000347265",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1846.460833,
+      "caption": "The image shows a person standing in a snowy forest. The person is wearing a red jacket and a blue hat, and they are holding a pair of skis. The person is standing on a snow-covered path, and the background is filled with trees and snow. The trees are tall and have a variety of leaves",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000375430",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1516.774667,
+      "caption": "In the foreground of this image, there is a plate on which there are five pancakes. In the background, there is a vase with flowers.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000397681",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2186.7763330000002,
+      "caption": "A collage of 15 different images, each representing a different food item. The images are arranged in a grid format, with each image containing a different food item. Here is a detailed description of each image:\n\n1. **Top Left Image**:\n    - **Objects**:\n    - **Color**: Pink\n    -",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000404839",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1691.4985,
+      "caption": "The image depicts two people standing in front of a counter or table with various items on it. The counter is made of glass and has a rectangular shape, with a grid pattern on it. On the counter, there are several items, including a few boxes, a few boxes with a label, and a few other objects",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000434548",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2705.5586670000002,
+      "caption": "The image is a photograph of a baseball player standing on a baseball field with a pitcher in the background. The player is wearing a white uniform with black and red accents and is holding a baseball bat in his right hand. He is standing with his left foot on the mound and his right foot on the grass. The player",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000454978",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1943.8435410000002,
+      "caption": "The image shows a rural road in a state of natural beauty. The road is narrow and winding, with a few small stones and patches of grass visible on either side. The road is bordered by a low stone wall on the right side, and a wooden fence on the left side. The sky is overcast, with",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000462643",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1957.697791,
+      "caption": "A person is holding a small electronic device with a black screen and a small square with a black screen on it.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000488736",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3089.174666,
+      "caption": "The image shows a clock tower on the left side of the image, which is made of a brick wall with large windows. The clock tower is tall and has a modern design, with a green-colored pole and a green-colored base. The clock tower is currently turned off, with the hands on the clock showing",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000491130",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3201.2557089999996,
+      "caption": "The image shows a person snowboarding down a snowy mountain. The person is wearing a brown jacket, a pink hat, and a green and white snowboard. The snowboard is equipped with a handlebar grip and a snowboard guard. The person is in mid-air, with their body tilted upwards and their arms",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000521509",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2391.529583,
+      "caption": "The image depicts a person sitting on a bed, leaning against the side of the bed with a camera in his hand. The person is wearing a casual outfit, including a white shirt and a dark-colored pants. He is sitting on a wooden or metal bed frame, which is positioned on the bed. The bed frame",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000552775",
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2084.183666,
+      "caption": "The image depicts a man standing in front of an industrial-style stove. The stove is metallic and has a sleek, modern design, featuring a circular control panel with several buttons and knobs. The control panel is positioned on the left side of the stove, and it is open, revealing a glimpse of the interior.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-256m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "d534ab668d3563e6d1d809bbbf1ff18308ded48651178614dbcc4a1de13d16f7"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-256m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "4b919b829fe2bf225e42431230c56891116f0149e5170e36c99bcc0cfae0d2ef"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-256m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "306fad6cec3b5b7613600b74abf1e410fa50000fbc81292c0d083bd8d85b5fe2"
+          }
+        ],
+        "manifest_sha256": "6c6e800b787ab33c211880517b219973d16326ab8894f72e8b2a85bda73b6314",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000000139",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4536.6125,
+      "caption": "The image depicts a modern kitchen with a warm and inviting atmosphere. The kitchen is characterized by its sleek, contemporary design, with a focus on functionality and style. The walls are painted in a light yellow color, which provides a neutral backdrop that complements the warm tones of the kitchen.\n\nThe kitchen features a large,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000007888",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2689.680125,
+      "caption": "The image depicts a clock tower situated in an outdoor setting. The clock tower is rectangular and has a prominent, square-shaped face with two clock faces. The clock face is divided into two sections, each with a different time displayed. The upper clock face is set at 12:00, while the lower",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000025424",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2860.442958,
+      "caption": "The image depicts a man engaged in a game of tennis. The man is captured in mid-action, with his body slightly bent and his knees bent, indicating that he is in the process of hitting a tennis ball with his racquet. The tennis racquet is prominently visible, with its handle and strings clearly visible.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000056344",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2513.56225,
+      "caption": "The image shows a desk setup with two computer monitors, a keyboard, a mouse, and a touchpad. The desk is made of a light-colored material, possibly wood or laminate, and it appears to be well-maintained. The desk is positioned in front of a wall, which is painted in a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000078404",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2391.618625,
+      "caption": "The image depicts a scene of three people sitting on a bench in what appears to be a park or garden area. The bench is a simple, wooden structure with a rectangular shape and a slightly curved backrest. It is positioned on a grassy area, which is partially visible in the background. The bench is painted in a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000087742",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2238.522209,
+      "caption": "The image shows a clear glass vase placed on a round white table. The vase is filled with a variety of dried flowers, specifically peacock flowers. The flowers are arranged in a way that their stems are visible, and they are arranged in a way that the flowers are not overlapping. The flowers are dark blue, with",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000118594",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2698.346708,
+      "caption": "The image depicts a scene of a herd of large, horned animals, likely bison, grazing in a grassy field. The animals are positioned in a semi-circular formation, with the heads of the animals facing towards the left side of the image. The animals are covered in a light brown and white fur pattern,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000146831",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2375.7298339999998,
+      "caption": "The image depicts a skate park with a prominent, curved ramp. The skate park is enclosed by a metal fence, which is partially visible in the background. The fence is made of vertical bars and horizontal bars, and it appears to be sturdy and well-maintained.\n\nIn the foreground, there is a young",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000172649",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2943.728333,
+      "caption": "The image depicts a skateboarder performing a trick on a curved wall. The skateboarder is in mid-air, with the skateboarder's body slightly tilted to the left. The skateboarder is wearing a red shirt and beige shorts. The skateboard is in the air, with the skateboard",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000177893",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2882.753,
+      "caption": "The image depicts a scene from a city street, specifically an intersection. The main focus of the image is a red and white city bus, which is parked on the side of the road. The bus is a typical modern city bus, characterized by its large, comfortable seating arrangement, with multiple rows of seats that are arranged",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000199236",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2452.323042,
+      "caption": "The image depicts a scene from a horse racing event, specifically a horse race. The primary focus is on a horse, which is being ridden by a jockey. The horse is in motion, galloping across a grassy field, with its front legs extended forward and its hind legs bent behind. The jockey is",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000212573",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3725.592916,
+      "caption": "The image depicts a street scene with two individuals standing on a wet sidewalk. The background includes a traffic light, a car, and a few other vehicles, indicating that the scene is likely during a rainy day. The weather appears to be overcast, as evidenced by the wet pavement and the presence of a traffic light.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000229111",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3443.5874169999997,
+      "caption": "The image shows a young boy holding a Wii remote in his right hand. The Wii remote is a classic gaming device that is used to control a Wii console. The remote has various buttons and controls, including a directional pad, a start and select button, and a number pad. The boy is holding the",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000259597",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3491.998875,
+      "caption": "The image depicts a lively outdoor scene, likely during a festive event or celebration. The focal point of the image is a young boy, who is captured in a moment of joy and excitement. He is holding a cell phone in his right hand, which appears to be in use, as he is looking at the camera.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000267351",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4955.601291,
+      "caption": "The image depicts a clock tower, which is a prominent architectural feature of a building. The clock tower is white and has a distinctive design. It is topped with a red dome, which is a common feature in many religious and historical buildings. The clock itself is mounted on a rectangular base, with the hands of the clock",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000289343",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2467.883042,
+      "caption": "The image depicts a scene set in what appears to be a residential area, likely a suburban neighborhood. The primary focus is on a man and a woman, both dressed in period attire, which suggests that the image was taken in the late 19th or early 20th century. The man is wearing a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000294695",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2436.121959,
+      "caption": "The image depicts a beach scene with several key elements that provide context and details about the setting. The beach is characterized by a sandy surface that appears to be relatively flat, with gentle waves gently lapping at the shore. The sand is a light tan color, and there are no visible footprints or other human footprints on it",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000318080",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3739.718584,
+      "caption": "The image depicts two bears in a natural setting, likely in a zoo or wildlife reserve. The bears are positioned in a close-up, almost intimate, manner, suggesting a close and affectionate relationship. The bear on the left is larger and more dominant, with a thick, dark brown coat, while the bear on the",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000331317",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3900.1657920000002,
+      "caption": "The image depicts an ornate clock situated in what appears to be a grand hall or a large room. The clock is prominently featured in the center of the image and is surrounded by a series of metal bars that form a grid-like structure. The clock itself is made of a golden-brown metal, and it has a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000347265",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4181.048833,
+      "caption": "The image depicts a person standing on a snowy trail in a forest. The individual is dressed in a red jacket and a hat, suggesting that they might be a hiker or a skier. They are equipped with skis, which are essential for navigating through the snow. The person is holding a pair of skis",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000375430",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 6280.0560000000005,
+      "caption": "The image shows a plate of food that appears to be pancakes. The pancakes are stacked on top of each other, and they are golden brown and crispy on the edges. The pancakes are fluffy and have a light, fluffy texture. The plate is white and round, and it is placed on a table.\n\nIn",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000397681",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4962.6196660000005,
+      "caption": "The image is a collage of various images, each representing a different type of carrot. Here is a detailed description of each image:\n\n1. **Top Left Corner**:\n   - This image shows a close-up of a carrot, with its green leaves and white seeds.\n   - The carrot is placed against a white",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000404839",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 5276.543083,
+      "caption": "The image depicts two individuals engaged in a video game. The person on the left is wearing a light pink, short-sleeved shirt and black pants. They are holding a Wii remote in their right hand and appear to be in the process of playing a game. The person on the right is wearing a grey",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000434548",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3440.294458,
+      "caption": "The image depicts a baseball game in progress. The scene is set in a baseball stadium, with a large crowd visible in the background. The field is well-maintained, with green grass and dirt, and the stands are filled with spectators.\n\nIn the foreground, a baseball player is in the midst of a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000454978",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4339.740833000001,
+      "caption": "The image depicts a rural road with a motorcycle parked on the side. The road is unpaved and appears to be in good condition, with a few patches of dirt visible. The road is bordered by a line of trees, which are mostly deciduous, indicating that the season is likely late autumn or early winter. The trees",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000462643",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3637.165917,
+      "caption": "The image depicts a hand holding a small, compact electronic device. The device appears to be a type of smartwatch or fitness tracker, given its design and the presence of a small screen on the back. The device is held in the palm of the hand, with the fingers curled around it. The screen is rectangular",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000488736",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3914.160833,
+      "caption": "The image depicts a clock tower, which is a prominent feature of a building. The clock tower is rectangular and has a brick facade. The clock itself is mounted on the side of the tower and is mounted on a circular base. The clock face is round and has a metallic or painted appearance, with numbers and hands indicating",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000491130",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2772.907875,
+      "caption": "The image depicts a person engaged in snowboarding. The individual is captured mid-action, with their body slightly tilted backward, suggesting they are in the process of performing a trick or maneuver. They are wearing a brown jacket, a green and black camouflage jacket, and a pink beanie. The person is also wearing a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000521509",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3341.039375,
+      "caption": "The image depicts a bedroom with a central focus on a woman sitting on a bed. The woman is dressed in casual attire, with a light-colored shirt and dark pants. She is seated on a bed with a neatly made up bed, which is covered with a light-colored comforter. The bed is positioned",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000552775",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3949.336667,
+      "caption": "The image depicts a kitchen scene with a focus on a stove and a countertop. The stove is positioned centrally in the image, with its burners and cooking elements clearly visible. The stove has a sleek, modern design with a smooth surface and a few visible knobs and buttons. The burners are arranged in a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "fp32",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder.onnx",
+            "sha256": "7ecd87031065252c5e3419f9a75db938a92cd5d55d2c22024d8815efd980104f"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens.onnx",
+            "sha256": "6fe00a73de387cbe52cdb78f1b7c8bcda6bcb9974e40dc1b143315fc9f7e79af"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged.onnx",
+            "sha256": "1d4dc5a8464c92cf151be233e23da809992e111f5596ba245fe1eca28e838b7b"
+          }
+        ],
+        "manifest_sha256": "7630af64a5951dca124e69cc46d8cd04bfc4dd7e096ce90176f2d283bd441b86",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000000139",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 6381.132958,
+      "caption": "The image depicts a modern, well-lit living room with a warm, inviting atmosphere. The room is furnished with a variety of furniture, including a dining table and a couch. The dining table is positioned in the center of the room and is surrounded by a comfortable seating area. The chairs are upholstered in",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000007888",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4103.7119999999995,
+      "caption": "This is a black and white image. In the center of the image there is a clock. In the background there are plants.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000025424",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2255.211167,
+      "caption": "In the image we can see a man is holding a tennis racket and he is in the middle of the image.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000056344",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2720.827667,
+      "caption": "This image is taken in a room. In the foreground, there are two monitors and a keyboard on a table. In the background, there is a wall. On the left side of the image, there is a mobile phone and a mouse on the table.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000078404",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4317.421834,
+      "caption": "This is a black and white image. In the foreground, there are three women sitting on a bench. The woman on the left is holding a phone. In the background, there is a hedge and a pole.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000087742",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 5244.235041,
+      "caption": "In the foreground of the image, there is a vase filled with flowers. The flowers are in different colors, including white, black, and blue. The vase is placed on a white surface. In the background, there is a window with a building behind it. The building is made up of multiple stories and has a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000118594",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 5091.2045,
+      "caption": "The image depicts a scene of a herd of cattle grazing in a field. The background of the image is a wire fence, which serves as a boundary that separates the grazing area from the rest of the field. The cattle are grazing on a grassy field, and their heads are bent downward, indicating they are in the process",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000146831",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4085.8605,
+      "caption": "This image is taken outdoors. In the background, there are trees and buildings. In the middle of the image, there is a person skating on the skateboard. On the left side of the image, there is a person sitting on the ground. On the right side of the image, there is a person sitting on",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000172649",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 1086.47075,
+      "caption": "A man is skateboarding on a wall.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000177893",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2496.281792,
+      "caption": "The image depicts a street scene featuring a red and white city bus. The bus is moving along a city street, with a clear view of the road ahead. The bus is in the center of the image, slightly to the left, and it is moving towards the viewer. The bus has a standard design, with a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000199236",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3227.014542,
+      "caption": "In this image I can see a person sitting on a horse. In the background I can see the audience sitting on the chairs. In the background I can see the trees.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000212573",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2286.516125,
+      "caption": "In the image we can see there are two people standing and one person is holding an umbrella. In the background there are vehicles, poles, traffic lights and buildings.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000229111",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2547.292541,
+      "caption": "In the image we can see a boy holding a remote control. He is wearing a t-shirt. In the background we can see a wall and a window.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000259597",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2452.176417,
+      "caption": "In the image there is a boy holding a camera in his hand and in the background there are people and a building.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000267351",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3953.43475,
+      "caption": "In this image, we can see a clock tower. In the background, there is a sky.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000289343",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2826.0122920000003,
+      "caption": "In this image I can see a woman riding a bicycle on the road. In the background I can see a building, a tree and a dog.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000294695",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4787.419458,
+      "caption": "This image depicts a beach scene with several key elements:\n\n1. **Beach and Kites**: The foreground of the image features a sandy beach with several colorful kites. The kites are of different sizes and shapes, with one of them being particularly large and colorful, featuring a rainbow pattern. The kites",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000318080",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2575.426833,
+      "caption": "In this image I can see two bears, the one on the left is in the water and the one on the right is on the land.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000331317",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4180.277916999999,
+      "caption": "This image features a large clock with intricate designs. The clock is mounted on a wall that has a grid pattern, which is typical of a room with a high ceiling. The clock has a golden frame with ornate designs, and the numbers on the face are black. The time on the clock reads \"12:3",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000347265",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3844.232,
+      "caption": "The image depicts a person standing in a snowy forest. The individual is dressed in winter attire, including a red jacket, a hat, and ski boots. They are equipped with skis, which are likely used for skiing or snowboarding. The person is positioned in the center of the image, slightly to the left,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000375430",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 4971.990417,
+      "caption": "The image shows a plate of pancakes on a table. The pancakes are stacked on top of each other, indicating a variety of flavors or toppings. The pancakes are golden brown and have a slightly crispy texture, suggesting they have been cooked in a pan or on a griddle.\n\nThe plate is white and has",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000397681",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 8065.4725,
+      "caption": "This is a collage image of various vegetables. In the top left corner, there is a bowl of carrots. In the top center, there is a hand holding a carrot. In the top right corner, there is a carrot. In the center, there is a carrot. In the bottom left corner, there is a",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000404839",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2911.5647089999998,
+      "caption": "In this image I can see two persons standing and holding the video game controllers in their hands. In the background I can see the glass windows and the wall.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000434548",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3235.023166,
+      "caption": "In the image we can see a man holding a ball in his hand and he is standing on the ground. In the background we can see a banner and a hoarding.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000454978",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 8577.240208,
+      "caption": "This image depicts a rural road with a motorcycle parked on the side. The road is unpaved, with a dirt surface that appears to be slightly uneven. The road is bordered by a line of trees on both sides, indicating that this is a rural area. The trees are sparse, with only a few of them showing",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000462643",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 5332.42125,
+      "caption": "In this image I can see a person holding a camera. The person is wearing a white shirt. In the background I can see a person.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000488736",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3137.410042,
+      "caption": "In this image I can see the clock on the building.",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000491130",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2551.355166,
+      "caption": "The image depicts a person snowboarding down a snowy mountain. The snowboarder is captured mid-air, with their body slightly tilted to the right, indicating a dynamic and energetic pose. They are wearing a brown jacket, a green and black camouflage jacket, a brown beanie, and a pink-framed",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000521509",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 3334.726292,
+      "caption": "The image depicts a bedroom with a bed as the central feature. The bed is positioned against the wall, with a headboard that appears to be made of wood. The bed is covered with a white sheet, and there are two pillows on the bed, one of which is partially visible.\n\nIn the background,",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    },
+    {
+      "image": "coco-val2017-000000552775",
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "repeat": 1,
+      "inference": "completed",
+      "elapsed_ms": 2671.522458,
+      "caption": "The image depicts a man looking back over his shoulder at a countertop with various items on it. The man is positioned in the foreground, with his back to the camera. He has a short beard and a beard on his chin. His facial expression is neutral, with a slight smile on his face.\n\nThe",
+      "model": {
+        "selected_backend": "onnx_cpu",
+        "effective_backend": "onnx_cpu",
+        "format": "smol_vlm",
+        "precision": "quantized",
+        "repository": "xberg-io/captioning-models",
+        "revision": "7b8359d8ab0086922b91b7dfde6577c1a30f7442",
+        "graphs": [
+          {
+            "role": "vision_encoder",
+            "path": "smolvlm-500m-instruct/onnx/vision_encoder_int8.onnx",
+            "sha256": "50b814aa048a996bf5d5128a16c19046371a9a1aae24b930672f550af6c43646"
+          },
+          {
+            "role": "embed_tokens",
+            "path": "smolvlm-500m-instruct/onnx/embed_tokens_int8.onnx",
+            "sha256": "f5f14887bf9b756d9fff2e412d474f0b5403e91f33b23460c9411f0ca54d945b"
+          },
+          {
+            "role": "decoder",
+            "path": "smolvlm-500m-instruct/onnx/decoder_model_merged_int8.onnx",
+            "sha256": "36f53411b56c21868b0cf3d1fa0c1a7395ab88bcd1f7ae677bf91c54ab09cca0"
+          }
+        ],
+        "manifest_sha256": "a316aad0d5bbc8b2be6742abaa640d05c99daa8c32693f829a8f3382366e0bf4",
+        "experimental": true
+      }
+    }
+  ]
+}

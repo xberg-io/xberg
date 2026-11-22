@@ -21,6 +21,8 @@ mod decoding;
 #[cfg(feature = "classification-onnx")]
 mod execution;
 #[cfg(feature = "classification-onnx")]
+mod inspection;
+#[cfg(feature = "classification-onnx")]
 mod metadata;
 #[cfg(feature = "classification-onnx")]
 mod policy;
@@ -34,6 +36,10 @@ mod schema;
 mod tokenization;
 mod types;
 
+#[cfg(feature = "classification-onnx")]
+pub use inspection::{
+    LocalClassificationArtifact, LocalClassificationArtifactReport, LocalClassificationArtifactState,
+};
 #[cfg(feature = "classification-onnx")]
 pub use runtime::LocalTextClassifier;
 

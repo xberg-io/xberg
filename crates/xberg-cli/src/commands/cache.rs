@@ -10,13 +10,26 @@ use serde_json::json;
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 use std::path::Path;
 use std::path::PathBuf;
 use xberg::cache;
 
 use crate::{WireFormat, style};
+
+#[cfg(any(
+    feature = "embeddings",
+    feature = "layout-detection",
+    feature = "paddle-ocr",
+    feature = "tree-sitter",
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
+))]
+use super::warm_report::print_warm_summary;
 
 #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
 pub fn parse_nonempty_cache_dir(value: &str) -> std::result::Result<PathBuf, String> {
@@ -407,7 +420,9 @@ fn manifest_command_inner(format: WireFormat) -> Result<()> {
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 #[derive(Debug, Default)]
 pub struct WarmOptions {
@@ -431,12 +446,20 @@ pub struct WarmOptions {
     pub ner_model: Option<String>,
     #[cfg(feature = "ner-onnx")]
     pub all_ner_models: bool,
+    #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+    pub onnx: super::onnx_candidates::StageSelection,
 }
 
 /// Resolve the Hugging Face cache label shown in the warm summary: `Some` only when at
 /// least one requested model source actually reads the HF cache (paddle-ocr always does;
 /// embeddings/ner-onnx depend on what was requested).
-#[cfg(any(feature = "embeddings", feature = "ner-onnx", feature = "paddle-ocr"))]
+#[cfg(any(
+    feature = "embeddings",
+    feature = "ner-onnx",
+    feature = "paddle-ocr",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
+))]
 fn resolve_hf_cache_label(
     hf_cache_dir: &Option<PathBuf>,
     #[cfg_attr(not(any(feature = "embeddings", feature = "ner-onnx")), allow(unused_variables))] options: &WarmOptions,
@@ -458,6 +481,16 @@ fn resolve_hf_cache_label(
                 options.ner || options.ner_model.is_some() || options.all_ner_models
             }
             #[cfg(not(feature = "ner-onnx"))]
+            {
+                false
+            }
+        }
+        || {
+            #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
+            {
+                !options.onnx.is_empty()
+            }
+            #[cfg(not(any(feature = "classification-onnx", feature = "captioning-onnx")))]
             {
                 false
             }
@@ -688,73 +721,92 @@ fn warm_ner_models(
     Ok(())
 }
 
-/// Print the warm command's summary in the requested wire format.
+/// Warm every model family this binary was built with. Kept separate from [`warm_command`] so the
+/// command reads as setup, one call and a summary while each family keeps its own feature gate.
 #[cfg(any(
     feature = "embeddings",
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
-#[expect(
-    clippy::print_stdout,
-    reason = "cache warm download summary is the command's stdout result output"
-)]
-fn print_warm_summary(
-    format: WireFormat,
+fn warm_model_families(
+    options: &WarmOptions,
     cache_base: &Path,
-    hf_cache_label: &Option<String>,
-    downloaded: &[String],
-    already_cached: &[String],
+    #[cfg(any(
+        feature = "embeddings",
+        feature = "ner-onnx",
+        feature = "paddle-ocr",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
+    ))]
+    hf_cache_dir: &Option<PathBuf>,
+    downloaded: &mut Vec<String>,
+    #[cfg(any(
+        feature = "paddle-ocr",
+        feature = "layout-detection",
+        feature = "tree-sitter",
+        feature = "formula-recognition"
+    ))]
+    already_cached: &mut Vec<String>,
+    #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))] candidates: &mut Vec<
+        super::onnx_candidates::CandidateSummary,
+    >,
 ) -> Result<()> {
-    match format {
-        WireFormat::Text => {
-            if !downloaded.is_empty() {
-                println!("{}", style::label("Downloaded:"));
-                for d in downloaded {
-                    println!("  {}", style::success(d));
-                }
-            }
-            if !already_cached.is_empty() {
-                println!("{}", style::label("Already cached:"));
-                for c in already_cached {
-                    println!("  {}", style::dim(c));
-                }
-            }
-            println!(
-                "Xberg-managed cache: {}",
-                style::success(&cache_base.display().to_string())
-            );
-            if let Some(hf_cache) = hf_cache_label {
-                println!("Hugging Face cache: {}", style::success(hf_cache));
-            }
-        }
-        WireFormat::Json => {
-            let output = json!({
-                "cache_dir": cache_base.to_string_lossy(),
-                "xberg_cache_dir": cache_base.to_string_lossy(),
-                "hugging_face_cache_dir": hf_cache_label,
-                "downloaded": downloaded,
-                "already_cached": already_cached,
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).context("Failed to serialize warm results to JSON")?
-            );
-        }
-        WireFormat::Toon => {
-            let output = json!({
-                "cache_dir": cache_base.to_string_lossy(),
-                "xberg_cache_dir": cache_base.to_string_lossy(),
-                "hugging_face_cache_dir": hf_cache_label,
-                "downloaded": downloaded,
-                "already_cached": already_cached,
-            });
-            println!(
-                "{}",
-                serde_toon::to_string(&output).context("Failed to serialize warm results to TOON")?
-            );
-        }
+    #[cfg(feature = "paddle-ocr")]
+    warm_paddle_ocr_models(hf_cache_dir.clone(), downloaded)?;
+
+    #[cfg(feature = "formula-recognition")]
+    warm_formula_recognition(cache_base, downloaded, already_cached)?;
+
+    #[cfg(feature = "layout-detection")]
+    warm_layout_detection(
+        cache_base,
+        options.all_table_models,
+        options.layout_model.as_deref(),
+        downloaded,
+        already_cached,
+    )?;
+
+    #[cfg(feature = "paddle-ocr")]
+    warm_tessdata(cache_base, downloaded, already_cached)?;
+
+    #[cfg(feature = "embeddings")]
+    warm_embeddings(
+        options.all_embeddings,
+        options.embedding_model.clone(),
+        hf_cache_dir.clone(),
+        downloaded,
+    )?;
+
+    #[cfg(feature = "tree-sitter")]
+    warm_tree_sitter_grammars(
+        options.all_grammars,
+        options.grammar_groups.clone(),
+        options.grammars.clone(),
+        downloaded,
+        already_cached,
+    )?;
+
+    #[cfg(feature = "ner-onnx")]
+    warm_ner_models(
+        options.ner,
+        options.ner_model.clone(),
+        options.all_ner_models,
+        hf_cache_dir.clone(),
+        downloaded,
+    )?;
+
+    #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
+    if !options.onnx.is_empty() {
+        *candidates = super::onnx_candidates::stage_and_prepare(&options.onnx, hf_cache_dir.as_deref())?;
+        downloaded.extend(
+            candidates
+                .iter()
+                .map(|candidate| format!("{}/{} (staged and prepared)", candidate.feature, candidate.candidate)),
+        );
     }
 
     Ok(())
@@ -766,14 +818,34 @@ fn print_warm_summary(
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: WarmOptions) -> Result<()> {
-    #[cfg(any(feature = "embeddings", feature = "ner-onnx", feature = "paddle-ocr"))]
+    #[cfg(any(
+        feature = "embeddings",
+        feature = "ner-onnx",
+        feature = "paddle-ocr",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
+    ))]
     let hf_cache_dir = cache_dir.clone();
-    #[cfg(any(feature = "embeddings", feature = "ner-onnx", feature = "paddle-ocr"))]
+    #[cfg(any(
+        feature = "embeddings",
+        feature = "ner-onnx",
+        feature = "paddle-ocr",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
+    ))]
     let hf_cache_label = resolve_hf_cache_label(&hf_cache_dir, &options);
-    #[cfg(not(any(feature = "embeddings", feature = "ner-onnx", feature = "paddle-ocr")))]
+    #[cfg(not(any(
+        feature = "embeddings",
+        feature = "ner-onnx",
+        feature = "paddle-ocr",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
+    )))]
     let hf_cache_label: Option<String> = None;
     let cache_base = resolve_cache_base(cache_dir);
 
@@ -793,51 +865,41 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
     )))]
     let already_cached: Vec<String> = Vec::new();
 
-    #[cfg(feature = "paddle-ocr")]
-    warm_paddle_ocr_models(hf_cache_dir.clone(), &mut downloaded)?;
+    #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
+    let mut candidates: Vec<super::onnx_candidates::CandidateSummary> = Vec::new();
 
-    #[cfg(feature = "formula-recognition")]
-    warm_formula_recognition(&cache_base, &mut downloaded, &mut already_cached)?;
-
-    #[cfg(feature = "layout-detection")]
-    warm_layout_detection(
+    warm_model_families(
+        &options,
         &cache_base,
-        options.all_table_models,
-        options.layout_model.as_deref(),
+        #[cfg(any(
+            feature = "embeddings",
+            feature = "ner-onnx",
+            feature = "paddle-ocr",
+            feature = "classification-onnx",
+            feature = "captioning-onnx"
+        ))]
+        &hf_cache_dir,
         &mut downloaded,
+        #[cfg(any(
+            feature = "paddle-ocr",
+            feature = "layout-detection",
+            feature = "tree-sitter",
+            feature = "formula-recognition"
+        ))]
         &mut already_cached,
+        #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
+        &mut candidates,
     )?;
 
-    #[cfg(feature = "paddle-ocr")]
-    warm_tessdata(&cache_base, &mut downloaded, &mut already_cached)?;
-
-    #[cfg(feature = "embeddings")]
-    warm_embeddings(
-        options.all_embeddings,
-        options.embedding_model.clone(),
-        hf_cache_dir.clone(),
-        &mut downloaded,
-    )?;
-
-    #[cfg(feature = "tree-sitter")]
-    warm_tree_sitter_grammars(
-        options.all_grammars,
-        options.grammar_groups.clone(),
-        options.grammars.clone(),
-        &mut downloaded,
-        &mut already_cached,
-    )?;
-
-    #[cfg(feature = "ner-onnx")]
-    warm_ner_models(
-        options.ner,
-        options.ner_model.clone(),
-        options.all_ner_models,
-        hf_cache_dir.clone(),
-        &mut downloaded,
-    )?;
-
-    print_warm_summary(format, &cache_base, &hf_cache_label, &downloaded, &already_cached)
+    print_warm_summary(
+        format,
+        &cache_base,
+        &hf_cache_label,
+        &downloaded,
+        &already_cached,
+        #[cfg(any(feature = "classification-onnx", feature = "captioning-onnx"))]
+        &candidates,
+    )
 }
 
 /// Resolve the cache base directory.
@@ -850,7 +912,9 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 fn resolve_cache_base(cache_dir: Option<PathBuf>) -> PathBuf {
     cache_dir.unwrap_or_else(xberg::cache::resolve_cache_base_dir)

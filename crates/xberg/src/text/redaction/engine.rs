@@ -2124,6 +2124,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: Some(format!("Text layer with {email}.")),
                 geometry: None,
+                viewports: None,
             }]),
             ..Default::default()
         };
@@ -2184,6 +2185,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             }]),
             uris: Some(vec![ExtractedUri {
                 url: format!("mailto:{email}"),

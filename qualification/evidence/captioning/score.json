@@ -1,0 +1,125 @@
+{
+  "scores": [
+    {
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "fp32",
+      "generations": 30,
+      "images": 30,
+      "empty_captions": 0,
+      "number_recall": { "value": 0.05, "observations": 10, "reason": null },
+      "number_recall_ci": { "lower": 0.0, "upper": 0.15, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "term_recall": { "value": 0.22215608925728167, "observations": 30, "reason": null },
+      "term_recall_ci": {
+        "lower": 0.19207353677107805,
+        "upper": 0.25513344153739903,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "invented_number_image_rate": { "value": 0.13333333333333333, "observations": 30, "reason": null },
+      "invented_numbers": { "1": 3, "10": 1, "12": 1, "15": 1 }
+    },
+    {
+      "candidate": "smolvlm-256m-instruct",
+      "arm": "int8",
+      "generations": 30,
+      "images": 30,
+      "empty_captions": 0,
+      "number_recall": { "value": 0.0, "observations": 10, "reason": null },
+      "number_recall_ci": { "lower": 0.0, "upper": 0.0, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "term_recall": { "value": 0.21804092569332206, "observations": 30, "reason": null },
+      "term_recall_ci": {
+        "lower": 0.17996746694964263,
+        "upper": 0.25898877640724904,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "invented_number_image_rate": { "value": 0.03333333333333333, "observations": 30, "reason": null },
+      "invented_numbers": { "1": 1, "15": 1 }
+    },
+    {
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "fp32",
+      "generations": 30,
+      "images": 30,
+      "empty_captions": 0,
+      "number_recall": { "value": 0.0, "observations": 10, "reason": null },
+      "number_recall_ci": { "lower": 0.0, "upper": 0.0, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "term_recall": { "value": 0.2255318348056902, "observations": 30, "reason": null },
+      "term_recall_ci": {
+        "lower": 0.18130443128078516,
+        "upper": 0.27576607830415717,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "invented_number_image_rate": { "value": 0.06666666666666667, "observations": 30, "reason": null },
+      "invented_numbers": { "00": 1, "1": 1, "12": 1 }
+    },
+    {
+      "candidate": "smolvlm-500m-instruct",
+      "arm": "int8",
+      "generations": 30,
+      "images": 30,
+      "empty_captions": 0,
+      "number_recall": { "value": 0.0, "observations": 10, "reason": null },
+      "number_recall_ci": { "lower": 0.0, "upper": 0.0, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "term_recall": { "value": 0.19712930816502014, "observations": 30, "reason": null },
+      "term_recall_ci": {
+        "lower": 0.16331016380466343,
+        "upper": 0.23537582721425326,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "invented_number_image_rate": { "value": 0.06666666666666667, "observations": 30, "reason": null },
+      "invented_numbers": { "1": 1, "12": 1, "3": 1 }
+    }
+  ],
+  "contrasts": [
+    {
+      "candidate": "smolvlm-256m-instruct",
+      "first_arm": "fp32",
+      "second_arm": "int8",
+      "term_recall_delta": {
+        "lower": -0.0366658135026099,
+        "upper": 0.04528275356891312,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "number_recall_delta": { "lower": 0.0, "upper": 0.15, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "note": "Paired per-image difference; positive favours the first arm. With one scored repeat this measures arm parity, not run-to-run stability."
+    },
+    {
+      "candidate": "smolvlm-500m-instruct",
+      "first_arm": "fp32",
+      "second_arm": "int8",
+      "term_recall_delta": {
+        "lower": -0.012625918838195048,
+        "upper": 0.06693121388274391,
+        "level": 0.95,
+        "replicates": 2000,
+        "clusters": 30
+      },
+      "number_recall_delta": { "lower": 0.0, "upper": 0.0, "level": 0.95, "replicates": 2000, "clusters": 10 },
+      "note": "Paired per-image difference; positive favours the first arm. With one scored repeat this measures arm parity, not run-to-run stability."
+    }
+  ],
+  "assertions": [
+    { "name": "caption images in plan", "expected": 30, "observed": 30 },
+    { "name": "caption candidates", "expected": 2, "observed": 2 },
+    { "name": "caption arms", "expected": 2, "observed": 2 },
+    { "name": "caption repeats", "expected": 1, "observed": 1 },
+    { "name": "caption report rows", "expected": 120, "observed": 120 },
+    { "name": "smolvlm-256m-instruct / fp32 / repeat 1 generations", "expected": 30, "observed": 30 },
+    { "name": "smolvlm-256m-instruct / int8 / repeat 1 generations", "expected": 30, "observed": 30 },
+    { "name": "smolvlm-500m-instruct / fp32 / repeat 1 generations", "expected": 30, "observed": 30 },
+    { "name": "smolvlm-500m-instruct / int8 / repeat 1 generations", "expected": 30, "observed": 30 }
+  ],
+  "repeat_spread": {},
+  "corpus_digest": "1bf64e698dbc64ea7a2c3ecbe1ceb6596bd0e1edfa3525810e45065c2f721ba6",
+  "plan_sha256": "599bc9c7581fb98ca1401f6b727707291b54c47a8e247c1dd13e3cc13074ca2a",
+  "report_sha256": "02f0caee0683fc2a08edbef433b5235d33a3d4856016e4d453ce476f97929930"
+}

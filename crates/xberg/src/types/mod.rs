@@ -206,6 +206,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -235,6 +236,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -272,6 +274,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         let page2 = PageContent {
@@ -289,6 +292,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         assert!(Arc::ptr_eq(&page1.tables[0], &page2.tables[0]));
@@ -319,6 +323,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();

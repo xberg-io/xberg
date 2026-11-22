@@ -1363,7 +1363,10 @@ fn prescan_text_regions(data: &[u8]) -> Option<PrescanResult> {
     let mut needs_forward_ctm = false;
 
     for &tp in &text_positions {
-        let (region_start, hit_limit) = find_region_start(data, tp);
+        let (mut region_start, hit_limit) = find_region_start(data, tp);
+        if data[tp] == b'D' {
+            region_start = region_start.min(do_operand_start(data, tp));
+        }
 
         if hit_limit {
             needs_forward_ctm = true;
@@ -1443,7 +1446,11 @@ fn build_ctm_regions(data: &[u8], text_positions: &[usize]) -> Option<PrescanRes
 
     let mut ctm_regions: Vec<(usize, usize)> = Vec::new();
     for &tp in text_positions {
-        let region_start = find_preceding_marked_content(data, tp);
+        let region_start = if data[tp] == b'D' {
+            find_preceding_marked_content(data, tp).min(do_operand_start(data, tp))
+        } else {
+            find_preceding_marked_content(data, tp)
+        };
         let region_end = if data[tp] == b'B' {
             let et_end = find_matching_et(data, tp + 2).unwrap_or(len);
             find_following_emc(data, et_end)
@@ -1493,6 +1500,28 @@ fn build_ctm_regions(data: &[u8], text_positions: &[usize]) -> Option<PrescanRes
 /// 4KB scan window didn't reach the beginning of the data. When `hit_limit`
 /// is true, there may be additional enclosing `q`/`cm` operators beyond
 /// the window that affect the CTM.
+/// Start of the XObject name immediately preceding a `Do` at `pos`.
+///
+/// A prescan region that begins at the operator leaves the `/Name` behind, so
+/// the region parses as a bare `Do` with no operand, the Form XObject is never
+/// executed and its text is lost (xberg-io/xberg#3384). Returns `pos` when no
+/// name precedes the operator.
+fn do_operand_start(data: &[u8], pos: usize) -> usize {
+    let mut end = pos;
+    while end > 0 && data[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    let mut start = end;
+    while start > 0 && !is_boundary(data[start - 1]) {
+        start -= 1;
+    }
+    if start > 0 && data[start - 1] == b'/' {
+        start - 1
+    } else {
+        pos
+    }
+}
+
 fn find_region_start(data: &[u8], pos: usize) -> (usize, bool) {
     // Simple backward scan: find the nearest line that starts with 'q' or
     // the beginning of data. We limit backward scan to 4KB for performance. ~keep
@@ -2852,38 +2881,63 @@ fn build_marked_content_operator(name: &str, operands: &[Object]) -> Option<Oper
     })
 }
 
+/// Operand counts of the operators whose operands are read by index.
+///
+/// An operator listed here is defined by its **last** `n` operands, so a
+/// surplus operand left behind by an unknown operator ahead of it cannot shift
+/// what the operator reads (xberg-io/xberg#3383). Variable-operand operators
+/// (`sc`, `SC`, `scn`, `SCN`) are deliberately absent.
+fn fixed_arity(name: &str) -> Option<usize> {
+    Some(match name {
+        "cm" | "c" | "Tm" => 6,
+        "re" | "v" | "y" | "k" | "K" => 4,
+        "rg" | "RG" => 3,
+        "m" | "l" | "Td" | "TD" | "Tf" | "d" | "BDC" | "DP" => 2,
+        "w" | "J" | "j" | "M" | "i" | "Tc" | "Tw" | "Tz" | "TL" | "Ts" | "Tr" | "g" | "G" | "gs" | "ri" | "cs"
+        | "CS" | "sh" | "BMC" | "MP" => 1,
+        _ => return None,
+    })
+}
+
 fn build_operator(name: &str, operands: SmallVec<[Object; 6]>) -> Operator {
-    if let Some(op) = build_text_positioning_operator(name, &operands) {
+    // Trim to the operator's own operands before any builder reads them by
+    // index. A shorter operand list is left alone so a truncated operator
+    // keeps its existing defaults. ~keep
+    let seen = match fixed_arity(name) {
+        Some(arity) if operands.len() > arity => &operands[operands.len() - arity..],
+        _ => &operands[..],
+    };
+    if let Some(op) = build_text_positioning_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_text_showing_operator(name, &operands) {
+    if let Some(op) = build_text_showing_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_text_state_operator(name, &operands) {
+    if let Some(op) = build_text_state_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_state_stack_operator(name, &operands) {
+    if let Some(op) = build_state_stack_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_simple_color_operator(name, &operands) {
+    if let Some(op) = build_simple_color_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_indexed_color_operator(name, &operands) {
+    if let Some(op) = build_indexed_color_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_page_object_operator(name, &operands) {
+    if let Some(op) = build_page_object_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_path_operator(name, &operands) {
+    if let Some(op) = build_path_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_line_style_operator(name, &operands) {
+    if let Some(op) = build_line_style_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_ext_state_operator(name, &operands) {
+    if let Some(op) = build_ext_state_operator(name, seen) {
         return op;
     }
-    if let Some(op) = build_marked_content_operator(name, &operands) {
+    if let Some(op) = build_marked_content_operator(name, seen) {
         return op;
     }
 
@@ -3298,11 +3352,21 @@ enum ScanResult<'a> {
 /// Parse N float operands from a raw byte slice.
 /// Returns a fixed-size array. Returns None if not enough parseable numbers.
 #[inline]
+/// Reads a fixed-arity operator's operands from the trailing tokens.
+///
+/// A fixed-arity operator is defined by its **last** `N` operands, which is
+/// what other readers apply (poppler's `Gfx::execOp`). Content streams carry
+/// leaked operands ahead of an operator — pdfTeX emits `bcolor [0]` and
+/// `pagesize width 597.5pt height 845pt`, and the unknown operator is skipped
+/// while its operand stays on the stack. Reading from the front would then
+/// shift every element (`[0] 1 0 0 1 -72 -779 cm` -> a=1, b=1, ..., f=-72) or
+/// reject the operator outright, and a page translated by such a `cm` extracts
+/// empty (xberg-io/xberg#3383).
 fn parse_floats<const N: usize>(data: &[u8]) -> Option<[f32; N]> {
     let s = std::str::from_utf8(data).ok()?;
-    let mut iter = s.split_ascii_whitespace();
+    let mut iter = s.split_ascii_whitespace().rev().take(N);
     let mut result = [0.0f32; N];
-    for val in &mut result {
+    for val in result.iter_mut().rev() {
         *val = iter.next()?.parse::<f32>().ok()?;
     }
     Some(result)
@@ -3817,6 +3881,27 @@ fn parse_name_fast(data: &[u8], start: usize) -> (String, usize) {
     (name, i)
 }
 
+/// Right-aligns the operands a fixed-arity operator is defined by.
+///
+/// Every reader below indexes the operand array from zero, so a surplus operand
+/// collected ahead of an operator would shift its whole window. Only the
+/// trailing operands count (see [`fixed_arity`]); the surplus case is rare, so
+/// ordinary content pays one comparison and nothing else (xberg-io/xberg#3383).
+fn align_fast_operands(operands: &mut [Option<FastOperand>; 8], name: &str, count: usize) {
+    let Some(arity) = fixed_arity(name) else {
+        return;
+    };
+    if count <= arity || count > operands.len() {
+        return;
+    }
+    // `FastOperand` holds names and string bytes and is not `Clone`, so rotate
+    // the collected window in place and drop what falls past the operator. ~keep
+    operands[..count].rotate_right(arity);
+    for slot in &mut operands[arity..] {
+        *slot = None;
+    }
+}
+
 /// Builds `Td`/`TD`/`Tm`/`T*` operators for the fast text-operator parser.
 /// `None` if `op_bytes` isn't one of these. Pure code motion out of
 /// `parse_text_operator_fast`'s dispatch match. ~keep
@@ -4302,6 +4387,10 @@ fn parse_text_operator_fast(input: &[u8]) -> Option<(&[u8], Operator)> {
 
                 if op_bytes == b"true" || op_bytes == b"false" || op_bytes == b"null" {
                     continue;
+                }
+
+                if let Ok(name) = std::str::from_utf8(op_bytes) {
+                    align_fast_operands(&mut operands, name, op_count);
                 }
 
                 let operator = match op_bytes {

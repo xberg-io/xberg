@@ -253,6 +253,7 @@ impl ExcelExtractor {
                     ocr_confidence: None,
                     native_content: None,
                     geometry: None,
+                    viewports: None,
                 });
             } else {
                 let content = match name_opt.as_deref() {
@@ -275,6 +276,7 @@ impl ExcelExtractor {
                     ocr_confidence: None,
                     native_content: None,
                     geometry: None,
+                    viewports: None,
                 });
             }
         }
