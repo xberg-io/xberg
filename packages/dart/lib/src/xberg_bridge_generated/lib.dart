@@ -10,8 +10,8 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vector_line_cap_from_core`, `try_convert_vector_line_join_from_core`, `try_convert_vector_segment_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `ParsedDimension`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -108,6 +108,25 @@ Future<MapResult> mapUrl({
 /// formats with a registered extractor in this build.
 Future<List<SupportedFormat>> listSupportedFormats() =>
     RustLib.instance.api.crateListSupportedFormats();
+
+/// Append `annotation` to `page_index` (zero-based) and return the complete PDF.
+///
+/// **Errors:**
+///
+/// Returns an error when the input is not a readable PDF, the page does not
+/// exist, the document is encrypted (writing unencrypted bytes would not open in
+/// the source context), or the geometry is not representable: fewer than three
+/// vertices, a non-finite vertex or rect, or a colour component outside
+/// `0.0..=1.0`.
+Future<Uint8List> appendPolygonAnnotation({
+  required List<int> pdf,
+  required PlatformInt64 pageIndex,
+  required PolygonAnnotationInput annotation,
+}) => RustLib.instance.api.crateAppendPolygonAnnotation(
+  pdf: pdf,
+  pageIndex: pageIndex,
+  annotation: annotation,
+);
 
 /// List the names of all registered embedding backends.
 ///
@@ -528,6 +547,10 @@ Future<PageConfig> createPageConfigFromJson({required String json}) =>
 Future<PdfConfig> createPdfConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePdfConfigFromJson(json: json);
 
+Future<PlanRegionConfig> createPlanRegionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreatePlanRegionConfigFromJson(json: json);
+
 Future<HierarchyConfig> createHierarchyConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateHierarchyConfigFromJson(json: json);
 
@@ -591,6 +614,17 @@ Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
 Future<ServerConfig> createServerConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
 
+Future<SheetMetadata> createSheetMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateSheetMetadataFromJson(json: json);
+
+Future<ParsedScale> createParsedScaleFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateParsedScaleFromJson(json: json);
+
+Future<PolygonAnnotationInput> createPolygonAnnotationInputFromJson({
+  required String json,
+}) =>
+    RustLib.instance.api.crateCreatePolygonAnnotationInputFromJson(json: json);
+
 Future<StructuredDataResult> createStructuredDataResultFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
@@ -640,6 +674,15 @@ Future<Citation> createCitationFromJson({required String json}) =>
 
 Future<PdfAnnotation> createPdfAnnotationFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePdfAnnotationFromJson(json: json);
+
+Future<AnnotationPoint> createAnnotationPointFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateAnnotationPointFromJson(json: json);
+
+Future<MeasureData> createMeasureDataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateMeasureDataFromJson(json: json);
+
+Future<PageViewport> createPageViewportFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageViewportFromJson(json: json);
 
 Future<PageClassification> createPageClassificationFromJson({
   required String json,
@@ -817,6 +860,9 @@ Future<Formula> createFormulaFromJson({required String json}) =>
 
 Future<PageGeometry> createPageGeometryFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePageGeometryFromJson(json: json);
+
+Future<PlanRegion> createPlanRegionFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePlanRegionFromJson(json: json);
 
 Future<VectorPath> createVectorPathFromJson({required String json}) =>
     RustLib.instance.api.crateCreateVectorPathFromJson(json: json);
@@ -1959,6 +2005,24 @@ abstract class DocumentExtractorDartImpl implements RustOpaqueInterface {
   set field0(ArcDocumentExtractor field0);
 }
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DrawingSetText>>
+abstract class DrawingSetText implements RustOpaqueInterface {
+  static Future<double?> parseDimension({required String text}) =>
+      RustLib.instance.api.crateDrawingSetTextParseDimension(text: text);
+
+  static Future<String?> parseRevision({required String text}) =>
+      RustLib.instance.api.crateDrawingSetTextParseRevision(text: text);
+
+  static Future<ParsedScale?> parseScale({required String text}) =>
+      RustLib.instance.api.crateDrawingSetTextParseScale(text: text);
+
+  static Future<String?> parseSheetNumber({required String text}) =>
+      RustLib.instance.api.crateDrawingSetTextParseSheetNumber(text: text);
+
+  static Future<SheetMetadata> parseTitleBlock({required String text}) =>
+      RustLib.instance.api.crateDrawingSetTextParseTitleBlock(text: text);
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EmbeddingBackendDartImpl>>
 abstract class EmbeddingBackendDartImpl implements RustOpaqueInterface {
   ArcEmbeddingBackend get field0;
@@ -2166,6 +2230,29 @@ sealed class AnnotationKind with _$AnnotationKind {
     /// Optional value or parameter for the annotation.
     String? value,
   }) = AnnotationKind_Custom;
+}
+
+/// One point of an annotation's geometry, in PDF page points with y increasing
+/// upwards.
+class AnnotationPoint {
+  /// Horizontal coordinate in PDF points.
+  final double x;
+
+  /// Vertical coordinate in PDF points, increasing upwards.
+  final double y;
+
+  const AnnotationPoint({required this.x, required this.y});
+
+  @override
+  int get hashCode => x.hashCode ^ y.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AnnotationPoint &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y;
 }
 
 /// A single file extracted from an archive.
@@ -12913,6 +13000,82 @@ class MarkdownLink {
           url == other.url;
 }
 
+/// A PDF measurement dictionary (PDF `/Measure`, ISO 32000-1 §12.9).
+///
+/// Number format arrays are exposed as their flattened numeric entries because
+/// the PDF specification allows nested arrays and the meaning of the entries is
+/// producer-specific. [`scale_ratio`](Self::scale_ratio) keeps the producer's
+/// own scale text, which the drawing-set parser can turn into a number.
+class MeasureData {
+  /// Measure subtype: `RL` for a rectilinear drawing, `GEO` for geospatial
+  /// data.
+  final String? subtype;
+
+  /// The producer's scale-ratio text (PDF `/R`), for example
+  /// `"3/8 in = 1 ft"`.
+  final String? scaleRatio;
+
+  /// Flattened numeric entries of the `/X` number format array.
+  final Float64List? x;
+
+  /// Flattened numeric entries of the `/Y` number format array.
+  final Float64List? y;
+
+  /// Flattened numeric entries of the `/D` distance number format array.
+  final Float64List? distance;
+
+  /// Flattened numeric entries of the `/A` area number format array.
+  final Float64List? area;
+
+  /// Flattened numeric entries of the `/T` angle number format array.
+  final Float64List? angle;
+
+  /// Flattened numeric entries of the `/S` slope number format array.
+  final Float64List? slope;
+
+  /// Name of the coordinate origin (PDF `/O`).
+  final String? origin;
+
+  const MeasureData({
+    this.subtype,
+    this.scaleRatio,
+    this.x,
+    this.y,
+    this.distance,
+    this.area,
+    this.angle,
+    this.slope,
+    this.origin,
+  });
+
+  @override
+  int get hashCode =>
+      subtype.hashCode ^
+      scaleRatio.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      distance.hashCode ^
+      area.hashCode ^
+      angle.hashCode ^
+      slope.hashCode ^
+      origin.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MeasureData &&
+          runtimeType == other.runtimeType &&
+          subtype == other.subtype &&
+          scaleRatio == other.scaleRatio &&
+          x == other.x &&
+          y == other.y &&
+          distance == other.distance &&
+          area == other.area &&
+          angle == other.angle &&
+          slope == other.slope &&
+          origin == other.origin;
+}
+
 /// How partial results from multiple model calls (e.g. per page batch) are combined.
 ///
 /// Canonical home for the merge strategy referenced by presets and by the
@@ -15444,6 +15607,15 @@ class PageContent {
   /// XObject transforms are already applied. See [`PageGeometry`].
   final PageGeometry? geometry;
 
+  /// Page viewport dictionaries (PDF `/VP`), when the page defines any.
+  ///
+  /// A construction drawing uses one viewport per plan, detail or elevation;
+  /// each carries its bounds, name and measure dictionary (the view's scale).
+  /// Read for every PDF page regardless of `extract_vector_geometry`, because
+  /// the entries are a page-level annotation aid rather than path output.
+  /// `None` on every other format and on a page without `/VP`.
+  final List<PageViewport>? viewports;
+
   const PageContent({
     required this.pageNumber,
     required this.content,
@@ -15459,6 +15631,7 @@ class PageContent {
     this.ocrConfidence,
     this.nativeContent,
     this.geometry,
+    this.viewports,
   });
 
   @override
@@ -15476,7 +15649,8 @@ class PageContent {
       sheetName.hashCode ^
       ocrConfidence.hashCode ^
       nativeContent.hashCode ^
-      geometry.hashCode;
+      geometry.hashCode ^
+      viewports.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -15496,7 +15670,8 @@ class PageContent {
           sheetName == other.sheetName &&
           ocrConfidence == other.ocrConfidence &&
           nativeContent == other.nativeContent &&
-          geometry == other.geometry;
+          geometry == other.geometry &&
+          viewports == other.viewports;
 }
 
 /// Metadata for individual page/slide/sheet.
@@ -15536,17 +15711,26 @@ class PageGeometry {
   /// Clipping paths alone are not painted and are therefore not listed.
   final List<VectorPath> paths;
 
-  const PageGeometry({required this.paths});
+  /// Closed faces recovered from the page's line segments.
+  ///
+  /// Set only when `pdf_options.plan_regions` is enabled and the
+  /// `plan-regions` feature is compiled in. Each face carries its polygon, its
+  /// area in square page points, and the page text inside it. Ordering is
+  /// deterministic: largest area first, then by the face's upper-left corner.
+  final List<PlanRegion> regions;
+
+  const PageGeometry({required this.paths, required this.regions});
 
   @override
-  int get hashCode => paths.hashCode;
+  int get hashCode => paths.hashCode ^ regions.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is PageGeometry &&
           runtimeType == other.runtimeType &&
-          paths == other.paths;
+          paths == other.paths &&
+          regions == other.regions;
 }
 
 /// Page hierarchy structure containing heading levels and block information.
@@ -15913,6 +16097,65 @@ enum PageUnitType {
   sheet,
 }
 
+/// A page viewport (PDF `/VP`, ISO 32000-1 §12.5.6.19).
+///
+/// Construction drawings use one viewport per plan, detail or elevation, and
+/// the viewport's measure dictionary carries that view's scale.
+class PageViewport {
+  /// Viewport bounds in PDF page points with y increasing upwards.
+  final BoundingBox boundingBox;
+
+  /// Viewport name, read from `/Name`, then `/NM`, then `/T`.
+  final String? name;
+
+  /// Measurement dictionary for this viewport, when present.
+  final MeasureData? measure;
+
+  const PageViewport({required this.boundingBox, this.name, this.measure});
+
+  @override
+  int get hashCode => boundingBox.hashCode ^ name.hashCode ^ measure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageViewport &&
+          runtimeType == other.runtimeType &&
+          boundingBox == other.boundingBox &&
+          name == other.name &&
+          measure == other.measure;
+}
+
+/// A parsed scale note.
+class ParsedScale {
+  /// Paper length in inches when both sides of the note name a length.
+  /// `None` for a pure ratio such as `1:100`.
+  final double? drawingInches;
+
+  /// Real-world length in inches when both sides name a length. `None` for a
+  /// pure ratio.
+  final double? realInches;
+
+  /// Real-world units per paper unit: `3/8" = 1'-0"` is `32.0` (1:32) and
+  /// `1:100` is `100.0`.
+  final double ratio;
+
+  const ParsedScale({this.drawingInches, this.realInches, required this.ratio});
+
+  @override
+  int get hashCode =>
+      drawingInches.hashCode ^ realInches.hashCode ^ ratio.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ParsedScale &&
+          runtimeType == other.runtimeType &&
+          drawingInches == other.drawingInches &&
+          realInches == other.realInches &&
+          ratio == other.ratio;
+}
+
 /// One detected PII span in the input text.
 class PatternMatch {
   /// Inclusive byte-offset start of the match in the source text.
@@ -15989,6 +16232,27 @@ class PdfAnnotation {
   /// underlying text could be recovered.
   final String? markedText;
 
+  /// Vertices of a Line, Polygon or PolyLine annotation.
+  ///
+  /// A `Line` annotation carries its two `/L` endpoints; a `Polygon` or
+  /// `PolyLine` carries its `/Vertices`. Coordinates are in PDF page points
+  /// with y increasing upwards, the same frame as [`Self::bounding_box`].
+  /// `None` for every other subtype.
+  final List<AnnotationPoint>? vertices;
+
+  /// One point list per stroke of an Ink annotation (PDF `/InkList`), each in
+  /// PDF page points with y increasing upwards. `None` for every other
+  /// subtype.
+  final List<List<AnnotationPoint>>? inkList;
+
+  /// Measurement dictionary of a geometric annotation (PDF `/Measure`).
+  ///
+  /// Measured takeoff tools save their work as a polygon with a measure
+  /// dictionary; reading it lets a caller turn the polygon's page-space
+  /// coordinates into a real-world quantity. `None` when the annotation
+  /// carries no `/Measure`.
+  final MeasureData? measure;
+
   const PdfAnnotation({
     required this.annotationType,
     this.content,
@@ -16000,6 +16264,9 @@ class PdfAnnotation {
     this.subject,
     this.quadPoints,
     this.markedText,
+    this.vertices,
+    this.inkList,
+    this.measure,
   });
 
   @override
@@ -16013,7 +16280,10 @@ class PdfAnnotation {
       color.hashCode ^
       subject.hashCode ^
       quadPoints.hashCode ^
-      markedText.hashCode;
+      markedText.hashCode ^
+      vertices.hashCode ^
+      inkList.hashCode ^
+      measure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -16029,7 +16299,10 @@ class PdfAnnotation {
           color == other.color &&
           subject == other.subject &&
           quadPoints == other.quadPoints &&
-          markedText == other.markedText;
+          markedText == other.markedText &&
+          vertices == other.vertices &&
+          inkList == other.inkList &&
+          measure == other.measure;
 }
 
 /// Type of PDF annotation.
@@ -16223,6 +16496,21 @@ class PdfConfig {
   /// be parsed.
   final bool extractVectorGeometry;
 
+  /// Closed-region recovery over each page's vector paths.
+  ///
+  /// When enabled (default off), line segments are joined into a planar graph,
+  /// door-sized gaps are closed and every closed face is returned on
+  /// `pages[].geometry.regions` with its area in square page points and the
+  /// page text inside it. `snap_tolerance` and `gap_tolerance` control how
+  /// aggressively endpoints are merged and gaps are bridged.
+  ///
+  /// Requires the `plan-regions` Cargo feature; enabling it without that
+  /// feature is rejected during validation. Asking for regions also turns on
+  /// vector-geometry extraction internally, but the raw paths are only
+  /// reported when [`extract_vector_geometry`](Self::extract_vector_geometry)
+  /// is set.
+  final PlanRegionConfig? planRegions;
+
   const PdfConfig({
     required this.extractImages,
     required this.extractTables,
@@ -16238,6 +16526,7 @@ class PdfConfig {
     required this.readingOrder,
     required this.backend,
     required this.extractVectorGeometry,
+    this.planRegions,
   });
 
   @override
@@ -16255,7 +16544,8 @@ class PdfConfig {
       extractFormFields.hashCode ^
       readingOrder.hashCode ^
       backend.hashCode ^
-      extractVectorGeometry.hashCode;
+      extractVectorGeometry.hashCode ^
+      planRegions.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -16275,7 +16565,8 @@ class PdfConfig {
           extractFormFields == other.extractFormFields &&
           readingOrder == other.readingOrder &&
           backend == other.backend &&
-          extractVectorGeometry == other.extractVectorGeometry;
+          extractVectorGeometry == other.extractVectorGeometry &&
+          planRegions == other.planRegions;
 }
 
 /// A form field extracted from a PDF's AcroForm or XFA structure.
@@ -16559,6 +16850,142 @@ class PixelDimensions {
           runtimeType == other.runtimeType &&
           width == other.width &&
           height == other.height;
+}
+
+/// One closed face recovered from a page's line segments.
+///
+/// Coordinates are in PDF page points with y increasing upwards. The area is in
+/// square page points; convert it with the view's scale to get a real-world
+/// quantity.
+class PlanRegion {
+  /// Polygon vertices in drawing order, without a repeated closing point.
+  final List<VectorPoint> polygon;
+
+  /// Area of the face in square page points (always non-negative).
+  final double area;
+
+  /// Axis-aligned bounds of the face.
+  final BoundingBox boundingBox;
+
+  /// Page text whose span centre lies inside the face, in reading order and
+  /// joined by single spaces. Empty when no text is inside.
+  final String text;
+
+  const PlanRegion({
+    required this.polygon,
+    required this.area,
+    required this.boundingBox,
+    required this.text,
+  });
+
+  @override
+  int get hashCode =>
+      polygon.hashCode ^ area.hashCode ^ boundingBox.hashCode ^ text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlanRegion &&
+          runtimeType == other.runtimeType &&
+          polygon == other.polygon &&
+          area == other.area &&
+          boundingBox == other.boundingBox &&
+          text == other.text;
+}
+
+/// Settings for closed-region recovery on a PDF page's vector paths.
+class PlanRegionConfig {
+  /// Run the closed-region pass. Off by default per page/document.
+  final bool enabled;
+
+  /// Endpoints within this many page points of each other are treated as one
+  /// node. Default `0.5`, half a point.
+  final double snapTolerance;
+
+  /// Open wall ends up to this many page points apart are joined (door
+  /// openings). Default `24.0` (two feet at 12 points per foot); set `0.0` to
+  /// disable gap closing.
+  final double gapTolerance;
+
+  /// Maximum line segments considered on one page. A denser sheet is skipped
+  /// rather than allowed to dominate the extraction. Default `20_000`.
+  final PlatformInt64 maxSegments;
+
+  const PlanRegionConfig({
+    required this.enabled,
+    required this.snapTolerance,
+    required this.gapTolerance,
+    required this.maxSegments,
+  });
+
+  @override
+  int get hashCode =>
+      enabled.hashCode ^
+      snapTolerance.hashCode ^
+      gapTolerance.hashCode ^
+      maxSegments.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlanRegionConfig &&
+          runtimeType == other.runtimeType &&
+          enabled == other.enabled &&
+          snapTolerance == other.snapTolerance &&
+          gapTolerance == other.gapTolerance &&
+          maxSegments == other.maxSegments;
+}
+
+/// A Polygon annotation to append to an existing PDF.
+class PolygonAnnotationInput {
+  /// Vertices in PDF page points with y increasing upwards. At least three are
+  /// required.
+  final List<AnnotationPoint> vertices;
+
+  /// Explicit rectangle; `None` computes the tight bounds of the vertices.
+  final BoundingBox? rect;
+
+  /// Annotation text (PDF `/Contents`).
+  final String? contents;
+
+  /// Annotation subject (PDF `/Subj`).
+  final String? subject;
+
+  /// Measure dictionary copied onto the annotation (PDF `/Measure`).
+  final MeasureData? measure;
+
+  /// Colour components (PDF `/C`): gray, RGB or CMYK values in `0.0..=1.0`.
+  final Float64List? color;
+
+  const PolygonAnnotationInput({
+    required this.vertices,
+    this.rect,
+    this.contents,
+    this.subject,
+    this.measure,
+    this.color,
+  });
+
+  @override
+  int get hashCode =>
+      vertices.hashCode ^
+      rect.hashCode ^
+      contents.hashCode ^
+      subject.hashCode ^
+      measure.hashCode ^
+      color.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PolygonAnnotationInput &&
+          runtimeType == other.runtimeType &&
+          vertices == other.vertices &&
+          rect == other.rect &&
+          contents == other.contents &&
+          subject == other.subject &&
+          measure == other.measure &&
+          color == other.color;
 }
 
 /// Post-processor configuration.
@@ -18382,6 +18809,33 @@ class ServerConfig {
           maxRequestBodyBytes == other.maxRequestBodyBytes &&
           maxMultipartFieldBytes == other.maxMultipartFieldBytes &&
           jobTimeoutSecs == other.jobTimeoutSecs;
+}
+
+/// Metadata read from a drawing set's title block.
+class SheetMetadata {
+  /// Sheet number such as `A5.01`. `None` when the text carries no match.
+  final String? sheetNumber;
+
+  /// Sheet title, taken from a labelled line or a plain-language line next to
+  /// the sheet number. `None` when the text does not identify one.
+  final String? title;
+
+  /// Revision code such as `C` from `REV C` or `REVISION: C`.
+  final String? revision;
+
+  const SheetMetadata({this.sheetNumber, this.title, this.revision});
+
+  @override
+  int get hashCode => sheetNumber.hashCode ^ title.hashCode ^ revision.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SheetMetadata &&
+          runtimeType == other.runtimeType &&
+          sheetNumber == other.sheetNumber &&
+          title == other.title &&
+          revision == other.revision;
 }
 
 /// A URL entry from a sitemap.

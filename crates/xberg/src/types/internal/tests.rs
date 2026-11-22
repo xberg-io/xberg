@@ -478,6 +478,7 @@ fn a_plugin_result_marks_its_ocr_pages_from_the_extraction_method_or_a_page_conf
         sheet_name: None,
         native_content: None,
         geometry: None,
+        viewports: None,
     };
     let native = crate::types::ExtractedDocument {
         mime_type: "application/pdf".into(),

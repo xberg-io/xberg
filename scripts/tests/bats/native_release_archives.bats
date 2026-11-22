@@ -102,7 +102,9 @@ alef publish package --lang go --target $GO_TARGET --version 1.4.0 --output $XBE
 	xberg_assert_file "extracted/$GO_PLATFORM/lib/$GO_SHARED" 'generic shared'
 	xberg_assert_file "extracted/$GO_PLATFORM/lib/$GO_STATIC" 'generic static'
 	xberg_assert_file "extracted/$GO_PLATFORM/lib/native-static-libs.txt" '-lpthread'
-	[ "$(find extracted -type f | wc -l | tr -d '[:space:]')" -eq 3 ]
+	cmp "$REPOSITORY_ROOT/LICENSE" "extracted/$GO_PLATFORM/LICENSE"
+	cmp "$REPOSITORY_ROOT/THIRD_PARTY_LICENSES.md" "extracted/$GO_PLATFORM/THIRD_PARTY_LICENSES.md"
+	[ "$(find extracted -type f | wc -l | tr -d '[:space:]')" -eq 5 ]
 }
 
 @test "Go release packaging should ship link flags without terminal escapes and with libc++ for the zig-built Linux archive" {

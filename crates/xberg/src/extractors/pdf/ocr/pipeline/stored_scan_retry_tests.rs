@@ -138,3 +138,55 @@ fn stored_scan_cannot_authorize_an_incomplete_content_prefix() {
         "a complete image prefix cannot authorize trailing paint"
     );
 }
+
+/// A stored scan replaces the whole batch in the render phase, so the read and page phases index
+/// the same one-entry set. Substituting it in the read phase alone left the page phase indexing
+/// an empty render set, which panicked on the first page before any stored-scan guard could run.
+#[cfg(feature = "tokio-runtime")]
+#[test]
+fn stored_scan_page_route_reads_its_single_batch_page() {
+    const FULL: &[u8] = b"q 32 0 0 32 0 0 cm /Im0 Do Q\n";
+    let document = jpeg_page(FULL, false);
+    let scan = certified_scan(
+        &document,
+        0,
+        (64, 64),
+        &SecurityLimits::default(),
+        &ExtractionConfig::default(),
+    )
+    .unwrap()
+    .expect("the full-page JPEG is a stored scan");
+    let (_, height_pt) = super::super::page_dimensions_pt(&document, 0);
+    let config = ExtractionConfig {
+        ocr: Some(crate::core::config::OcrConfig::default()),
+        ..Default::default()
+    };
+
+    crate::extractors::pdf::ocr::run_on_ocr_test_stack(16 * 1024 * 1024, move || async move {
+        let (_, _, _, _, _, _, texts, ..) = Box::pin(super::super::extract_with_ocr_for_page(
+            None,
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+            0,
+            true,
+            Some(height_pt / scan.render.1 as f32),
+            Some(PageOcrHints {
+                source_dpi: Some(scan.dpi),
+                known_full_page_scan: true,
+                ..Default::default()
+            }),
+            0,
+            Some(DetachedOcrPage {
+                document: &document,
+                stored_scan: Some(&scan),
+                orientation_retry: None,
+            }),
+        ))
+        .await
+        .expect("the stored scan route reads its page");
+        assert_eq!(texts.len(), 1, "the stored scan is read as exactly one page");
+    });
+}

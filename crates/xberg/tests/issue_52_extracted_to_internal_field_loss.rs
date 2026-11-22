@@ -31,6 +31,9 @@ fn source_document() -> ExtractedDocument {
         subject: None,
         quad_points: None,
         marked_text: None,
+        vertices: None,
+        ink_list: None,
+        measure: None,
     }]);
     result.uris = Some(vec![ExtractedUri {
         url: "https://example.com/a".to_string(),
@@ -67,6 +70,7 @@ fn source_document() -> ExtractedDocument {
         ocr_confidence: None,
         native_content: None,
         geometry: None,
+        viewports: None,
         image_preprocessing: None,
     }]);
     result.ocr_elements = Some(vec![OcrElement {

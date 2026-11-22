@@ -1,0 +1,12 @@
+{
+	"schema_version": 1,
+	"name": "layout-heldout-v1",
+	"batch_size": 1,
+	"fixtures": [
+		"pdf/2026-13845.json",
+		"pdf/docling_2305_03393v1.json",
+		"pdf/ft_ACN_2009_page_102_t0.json",
+		"rtl_arabic_native.json",
+		"ordinance_2197_scanned.json"
+	]
+}

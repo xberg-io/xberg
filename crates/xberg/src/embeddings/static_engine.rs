@@ -61,7 +61,9 @@ impl StaticEmbeddingEngine {
         }
         let batch_size = if batch_size == 0 { 32 } else { batch_size };
         let owned: Vec<String> = texts.iter().map(|t| t.as_ref().to_string()).collect();
-        self.model.encode_with_args(&owned, max_length, batch_size)
+        // `None` keeps the model's own L2-normalization setting, which the previous
+        // three-argument form applied before model2vec-rs 0.5 made it explicit.
+        self.model.encode_with_args(&owned, max_length, batch_size, None)
     }
 }
 

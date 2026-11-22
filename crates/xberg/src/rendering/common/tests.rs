@@ -508,6 +508,9 @@ fn make_annotation(content: Option<&str>, marked_text: Option<&str>) -> crate::t
         subject: None,
         quad_points: None,
         marked_text: marked_text.map(str::to_string),
+        vertices: None,
+        ink_list: None,
+        measure: None,
     }
 }
 

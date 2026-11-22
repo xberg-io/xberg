@@ -39,7 +39,15 @@ before either becomes a default.
 | Cargo feature | Adapter | Selection |
 | ------------- | ------- | --------- |
 | `classification-onnx` (`classification-onnx-types` for the DTOs alone) | Zero-shot NLI classification (`xberg::local_classification`) | `LocalNliModel::staged(id, LocalClassificationPrecision::Quantized)`; the pinned fp32 NLI graph exceeds the adapter's size cap, while aarch64 selects `model_qint8_arm64.onnx` and x86_64 `model_quint8_avx2.onnx`. Caller labels are zero-shot only; a trained taxonomy is a separate, currently unstaged candidate. |
-| `captioning-onnx` (`captioning-onnx-types` for the DTOs alone) | SmolVLM and Florence-2 image captioning (`xberg::local_captioning`) | `LocalCaptioningModel::staged(id, LocalCaptioningPrecision)` then `LocalImageCaptioner::stage`/`prepare`. Both fp32 and int8 graph sets are pinned; nothing is downloaded by `prepare` or `caption`. SmolVLM uses one global 512x512 frame (no upstream tile splitting) and greedy decoding. Florence-2 files are pinned and its descriptor is validated, but the adapter refuses that family explicitly: its merged decoder fails on cached decoder steps in the bundled ONNX Runtime. |
+| `captioning-onnx` (`captioning-onnx-types` for the DTOs alone) | SmolVLM and Florence-2 image captioning (`xberg::local_captioning`) | `LocalCaptioningModel::staged(id, LocalCaptioningPrecision)` then `LocalImageCaptioner::stage`/`prepare`. Both fp32 and int8 graph sets are pinned; nothing is downloaded by `prepare` or `caption`. SmolVLM follows the pinned Idefics3 `do_image_splitting` path: resize to `size`, split into `max_image_size` tiles with `<row_N_col_M>` tags in row-major order, then the squashed global frame, with the tile count and image-token total bounded. Decoding is greedy. Florence-2 files are pinned and its descriptor is validated, but the adapter refuses it explicitly: its encoder-decoder, task-token and per-task post-processing pipeline is not implemented. Its pinned graphs (both quantizations) do load and run on the bundled ONNX Runtime 1.31.0; the earlier merged-decoder failure does not reproduce. |
+
+Both adapters expose their outline through the CLI when built with the matching feature:
+`xberg cache warm --captioning-model <id>` / `--classification-model <id>` stakes and
+prepares a candidate so its first request needs no network access, and `xberg doctor`
+lists every pinned artifact with its id, revision, size, SHA-256 and staged/missing state.
+`--*-precision` selects fp32 or the dynamically quantized graphs and `--*-backend`
+accepts only `onnx_cpu`. These CLI features are opt-in and are not in the default
+binary.
 
 The provider-backed `classify_text` and `caption_image` paths through liter-llm are
 unchanged and remain the default. A local adapter failure never falls back to a

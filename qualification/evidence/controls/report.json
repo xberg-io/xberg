@@ -1,0 +1,104 @@
+{
+  "controls": [
+    {
+      "id": "empty-corpus",
+      "description": "a corpus with no documents cannot authorize anything",
+      "expected_failure_contains": "must not be empty",
+      "observed": "corpus must not be empty",
+      "control_passed": true
+    },
+    {
+      "id": "no-held-out-documents",
+      "description": "a corpus without held-out work has nothing to qualify on",
+      "expected_failure_contains": "no held-out documents",
+      "observed": "corpus has no held-out documents",
+      "control_passed": true
+    },
+    {
+      "id": "corpus-digest-tamper",
+      "description": "editing a committed document without a new corpus digest is refused",
+      "expected_failure_contains": "digest mismatch",
+      "observed": "corpus digest mismatch",
+      "control_passed": true
+    },
+    {
+      "id": "family-leakage",
+      "description": "one source family may not span two splits",
+      "expected_failure_contains": "family spans two splits",
+      "observed": "corpus family spans two splits",
+      "control_passed": true
+    },
+    {
+      "id": "wrong-expected-count",
+      "description": "a preregistered total that disagrees with its factors is refused",
+      "expected_failure_contains": "does not equal its factors",
+      "observed": "expected count does not equal its factors",
+      "control_passed": true
+    },
+    {
+      "id": "skipped-inference",
+      "description": "a skipped row is never counted as completed work",
+      "expected_failure_contains": "inference must complete",
+      "observed": "inference must complete with positive finite measured duration",
+      "control_passed": true
+    },
+    {
+      "id": "missing-prediction",
+      "description": "a report missing one document x model x arm x repeat row is refused",
+      "expected_failure_contains": "row count",
+      "observed": "inference row count mismatch",
+      "control_passed": true
+    },
+    {
+      "id": "unexpected-document",
+      "description": "a prediction for a document the plan never froze is refused",
+      "expected_failure_contains": "unexpected document",
+      "observed": "unexpected document or repeat",
+      "control_passed": true
+    },
+    {
+      "id": "unknown-backend",
+      "description": "a completed CPU row cannot claim an unknown backend",
+      "expected_failure_contains": "unknown variant",
+      "observed": "unknown variant `provider`, expected `onnx_cpu`",
+      "control_passed": true
+    },
+    {
+      "id": "corrupt-artifact",
+      "description": "a report claiming a different graph digest than the frozen pin is refused",
+      "expected_failure_contains": "model identity",
+      "observed": "model identity mismatch",
+      "control_passed": true
+    },
+    {
+      "id": "missing-companion-artifact",
+      "description": "a frozen plan without tokenizer/configuration pins is refused",
+      "expected_failure_contains": "companion",
+      "observed": "missing or ambiguous companion artifact pin",
+      "control_passed": true
+    },
+    {
+      "id": "caption-empty-generation-set",
+      "description": "an empty caption set yields unmeasured metrics, never a zero that reads as a pass",
+      "expected_failure_contains": "no held-out generation",
+      "observed": "no held-out generation",
+      "control_passed": true
+    },
+    {
+      "id": "caption-skipped-inference",
+      "description": "the caption runner cannot report a skipped row as completed",
+      "expected_failure_contains": "must complete",
+      "observed": "caption inference must complete with a measured duration",
+      "control_passed": true
+    },
+    {
+      "id": "plan-corpus-disagreement",
+      "description": "scoring refuses a plan document the committed corpus does not contain",
+      "expected_failure_contains": "absent from the committed corpus",
+      "observed": "plan document doc-a is absent from the committed corpus",
+      "control_passed": true
+    }
+  ],
+  "passed": 14,
+  "failed": 0
+}

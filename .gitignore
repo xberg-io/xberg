@@ -339,6 +339,12 @@ packages/go/.lib/
 packages/csharp/src/Xberg/runtimes/
 packages/java/src/main/resources/natives/
 
+# The generated Kotlin `bundleNotices` Gradle task copies LICENSE and the notice bundle into
+# `src/main/resources/META-INF` at `preBuild`, so an Android build leaves them in the source
+# tree. They are build output: the task recreates them, and committing a 1.9 MB copy per
+# release would freeze it. ~keep
+packages/kotlin-android/src/main/resources/META-INF/
+
 .build/
 
 # basemind code-map index (local tooling)
