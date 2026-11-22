@@ -9,7 +9,7 @@ set -euo pipefail
 # the tree). Bump it only together with a regenerated binding set at the same version, and
 # verify by loading the library and resolving symbols -- never by the download alone, which
 # succeeds regardless. ~keep
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
 readonly PDFIUM_VERSION="${PDFIUM_VERSION:-$(tr -d '[:space:]' <"$SCRIPT_DIR/pdfium-version")}"
 readonly PREFIX="${PREFIX:-/usr/local}"

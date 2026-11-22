@@ -17,7 +17,7 @@ if [[ ! "$PDFIUM_VERSION" =~ ^[0-9]+$ ]]; then
   echo "Invalid PDFium Chromium revision: $PDFIUM_VERSION" >&2
   exit 1
 fi
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 VERIFY_ARCHIVE="$SCRIPT_DIR/ci/actions/setup-onnx-runtime/verify-archive.sh"
 CHECKSUMS="${PDFIUM_CHECKSUMS_FILE:-$SCRIPT_DIR/pdfium-runtime-checksums.sha256}"
 ASSET="pdfium-${PDFIUM_PLATFORM}.tgz"
