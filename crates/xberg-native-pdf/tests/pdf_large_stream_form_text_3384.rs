@@ -91,10 +91,7 @@ fn text_of(pdf: Vec<u8>) -> String {
 #[test]
 fn a_large_stream_prescan_keeps_text_painted_by_a_form_xobject() {
     let pdf = pdf_with_padded_form(285 * 1024);
-    assert!(
-        pdf.len() > 256 * 1024,
-        "the fixture must exceed the prescan threshold"
-    );
+    assert!(pdf.len() > 256 * 1024, "the fixture must exceed the prescan threshold");
 
     let text = text_of(pdf);
     assert!(
@@ -108,8 +105,5 @@ fn the_same_page_below_the_prescan_threshold_still_extracts_its_form_text() {
     // Control: the sequential parser reaches the form through `/X1 Do`.
     let text = text_of(pdf_with_padded_form(1024));
 
-    assert!(
-        text.contains(FORM_TEXT),
-        "the sequential path regressed, got {text:?}"
-    );
+    assert!(text.contains(FORM_TEXT), "the sequential path regressed, got {text:?}");
 }

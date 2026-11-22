@@ -68,12 +68,7 @@ fn a_surplus_name_operand_does_not_drop_a_rectangle() {
         .expect("the stream parses")
         .into_iter()
         .filter_map(|operator| match operator {
-            Operator::Rectangle {
-                x,
-                y,
-                width,
-                height,
-            } => Some([x, y, width, height]),
+            Operator::Rectangle { x, y, width, height } => Some([x, y, width, height]),
             _ => None,
         })
         .collect();

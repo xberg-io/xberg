@@ -1515,7 +1515,11 @@ fn do_operand_start(data: &[u8], pos: usize) -> usize {
     while start > 0 && !is_boundary(data[start - 1]) {
         start -= 1;
     }
-    if start > 0 && data[start - 1] == b'/' { start - 1 } else { pos }
+    if start > 0 && data[start - 1] == b'/' {
+        start - 1
+    } else {
+        pos
+    }
 }
 
 fn find_region_start(data: &[u8], pos: usize) -> (usize, bool) {
@@ -2889,8 +2893,8 @@ fn fixed_arity(name: &str) -> Option<usize> {
         "re" | "v" | "y" | "k" | "K" => 4,
         "rg" | "RG" => 3,
         "m" | "l" | "Td" | "TD" | "Tf" | "d" | "BDC" | "DP" => 2,
-        "w" | "J" | "j" | "M" | "i" | "Tc" | "Tw" | "Tz" | "TL" | "Ts" | "Tr" | "g" | "G" | "gs" | "ri"
-        | "cs" | "CS" | "sh" | "BMC" | "MP" => 1,
+        "w" | "J" | "j" | "M" | "i" | "Tc" | "Tw" | "Tz" | "TL" | "Ts" | "Tr" | "g" | "G" | "gs" | "ri" | "cs"
+        | "CS" | "sh" | "BMC" | "MP" => 1,
         _ => return None,
     })
 }
