@@ -26,7 +26,10 @@ impl PdfDocument {
     ///
     /// Returns [`Error::Unsupported`] for an encrypted document, and
     /// [`Error::InvalidPdf`] when the page, page dictionary, trailer or
-    /// `/Annots` array is unusable, or when fewer than three vertices are given.
+    /// `/Annots` array is unusable, the source has no readable `startxref`, or
+    /// the annotation geometry is not representable (fewer than three vertices,
+    /// a non-finite vertex or `/Rect`, or a colour component outside
+    /// `0.0..=1.0`).
     pub fn append_polygon_annotation(&self, page_index: usize, annotation: &PolygonAnnotation) -> Result<Vec<u8>> {
         use std::collections::HashMap;
 
@@ -38,12 +41,7 @@ impl PdfDocument {
                 "appending an annotation to an encrypted PDF is not supported".to_string(),
             ));
         }
-        if annotation.vertices.len() < 3 {
-            return Err(crate::error::Error::InvalidPdf(format!(
-                "a Polygon annotation needs at least three vertices, got {}",
-                annotation.vertices.len()
-            )));
-        }
+        validate_annotation(annotation)?;
 
         let page_ref = self.get_page_ref(page_index)?;
         let page_obj = self.load_object(page_ref)?;
@@ -130,12 +128,24 @@ impl PdfDocument {
         let mut updated_page = page_dict;
         updated_page.insert("Annots".to_string(), Object::Array(updated_annots));
 
-        let previous_xref = last_startxref_offset(&self.source_bytes).unwrap_or(0);
+        // The new xref must chain to the previous one. Without `/Prev` the
+        // rewritten page object would be the only reachable definition and every
+        // other object would read as free, so a source whose startxref cannot be
+        // located is rejected instead of written as an invalid file. ~keep
+        let previous_xref = last_startxref_offset(&self.source_bytes)
+            .filter(|offset| *offset > 0)
+            .ok_or_else(|| {
+                crate::error::Error::InvalidPdf(
+                    "the source PDF has no readable startxref offset to chain from".to_string(),
+                )
+            })?;
         let mut output = self.source_bytes.clone();
         if !output.ends_with(b"\n") {
             output.push(b'\n');
         }
-        let mut entries: Vec<(u32, u64)> = Vec::with_capacity(2);
+        // Each entry carries its real generation: a page whose object has a
+        // non-zero generation must read back as in use under that generation. ~keep
+        let mut entries: Vec<(u32, u16, u64)> = Vec::with_capacity(2);
         let annotation_offset = write_indirect_object(
             &mut output,
             annotation_id,
@@ -143,7 +153,7 @@ impl PdfDocument {
             &Object::Dictionary(annot_dict),
             &serialize_object,
         );
-        entries.push((annotation_id, annotation_offset));
+        entries.push((annotation_id, 0, annotation_offset));
         let page_offset = write_indirect_object(
             &mut output,
             page_ref.id,
@@ -151,10 +161,10 @@ impl PdfDocument {
             &Object::Dictionary(updated_page),
             &serialize_object,
         );
-        entries.push((page_ref.id, page_offset));
+        entries.push((page_ref.id, page_ref.generation, page_offset));
 
-        entries.sort_by_key(|(id, _)| *id);
-        entries.dedup_by_key(|(id, _)| *id);
+        entries.sort_by_key(|(id, _, _)| *id);
+        entries.dedup_by_key(|(id, _, _)| *id);
         write_xref_and_trailer(
             &mut output,
             &entries,
@@ -165,6 +175,49 @@ impl PdfDocument {
         );
         Ok(output)
     }
+}
+
+/// Reject a polygon whose geometry the PDF cannot represent.
+///
+/// A `NaN` or infinite coordinate would be serialised verbatim and make the
+/// annotation unreadable, and a colour component outside `0.0..=1.0` violates
+/// the device colour space, so both are refused at the boundary.
+fn validate_annotation(annotation: &PolygonAnnotation) -> Result<()> {
+    if annotation.vertices.len() < 3 {
+        return Err(crate::error::Error::InvalidPdf(format!(
+            "a Polygon annotation needs at least three vertices, got {}",
+            annotation.vertices.len()
+        )));
+    }
+    if let Some([x, y]) = annotation
+        .vertices
+        .iter()
+        .copied()
+        .find(|[x, y]| !x.is_finite() || !y.is_finite())
+    {
+        return Err(crate::error::Error::InvalidPdf(format!(
+            "Polygon annotation vertices must be finite, got ({x}, {y})"
+        )));
+    }
+    if let Some([x0, y0, x1, y1]) = annotation.rect
+        && ![x0, y0, x1, y1].iter().all(|value| value.is_finite())
+    {
+        return Err(crate::error::Error::InvalidPdf(
+            "the Polygon annotation Rect must be finite".to_string(),
+        ));
+    }
+    if let Some(component) = annotation
+        .color
+        .iter()
+        .flatten()
+        .copied()
+        .find(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+    {
+        return Err(crate::error::Error::InvalidPdf(format!(
+            "Polygon annotation colour components must lie in 0.0..=1.0, got {component}"
+        )));
+    }
+    Ok(())
 }
 
 /// Tight bounding box of a polygon, ordered `[x0, y0, x1, y1]`.
@@ -241,7 +294,7 @@ fn write_indirect_object(
 /// Append a classic xref table and trailer for the objects rewritten above.
 fn write_xref_and_trailer(
     output: &mut Vec<u8>,
-    entries: &[(u32, u64)],
+    entries: &[(u32, u16, u64)],
     size: u32,
     previous_xref: u64,
     trailer: &std::collections::HashMap<String, crate::object::Object>,
@@ -263,9 +316,8 @@ fn write_xref_and_trailer(
             end = entries[index].0;
         }
         output.extend_from_slice(format!("{} {}\n", start, end - start + 1).as_bytes());
-        for &(id, offset) in &entries[index - (end - start) as usize..=index] {
-            output.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-            let _ = id;
+        for &(_, generation, offset) in &entries[index - (end - start) as usize..=index] {
+            output.extend_from_slice(format!("{offset:010} {generation:05} n \n").as_bytes());
         }
         index += 1;
     }
@@ -277,9 +329,7 @@ fn write_xref_and_trailer(
         }
     }
     trailer_dict.insert("Size".to_string(), Object::Integer(i64::from(size)));
-    if previous_xref > 0 {
-        trailer_dict.insert("Prev".to_string(), Object::Integer(previous_xref as i64));
-    }
+    trailer_dict.insert("Prev".to_string(), Object::Integer(previous_xref as i64));
 
     output.extend_from_slice(b"trailer\n");
     serialize(output, &Object::Dictionary(trailer_dict));
@@ -296,4 +346,23 @@ fn last_startxref_offset(source: &[u8]) -> Option<u64> {
     let text = std::str::from_utf8(digits).ok()?;
     let number: String = text.trim_start().chars().take_while(char::is_ascii_digit).collect();
     number.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_source_without_startxref_has_no_trailer_offset() {
+        assert_eq!(
+            last_startxref_offset(b"%PDF-1.6\nxref\n0 1\ntrailer\n<< /Size 1 >>\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_last_startxref_offset_wins_in_an_incremental_file() {
+        let source = b"%PDF-1.6\nstartxref\n10\n%%EOF\n1 0 obj\n<< >>\nendobj\nstartxref\n42\n%%EOF\n";
+        assert_eq!(last_startxref_offset(source), Some(42));
+    }
 }

@@ -210,6 +210,116 @@ fn appending_rejects_a_polygon_with_too_few_vertices() {
     assert!(error.to_string().contains("three vertices"), "got: {error}");
 }
 
+/// [`skeleton_pdf`] with its page object at a non-zero generation.
+fn skeleton_pdf_with_page_generation(generation: u16) -> Vec<u8> {
+    let objects = [
+        (1u32, 0u16, "<< /Type /Catalog /Pages 2 0 R >>".to_string()),
+        (2, 0, format!("<< /Type /Pages /Kids [3 {generation} R] /Count 1 >>")),
+        (
+            3,
+            generation,
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> /Contents 4 0 R >>".to_string(),
+        ),
+        (4, 0, "<< /Length 0 >>\nstream\n\nendstream".to_string()),
+    ];
+    let mut pdf = b"%PDF-1.6\n".to_vec();
+    let mut written = Vec::new();
+    for (id, object_generation, body) in objects {
+        let offset = pdf.len();
+        pdf.extend_from_slice(format!("{id} {object_generation} obj\n{body}\nendobj\n").as_bytes());
+        written.push((id, object_generation, offset));
+    }
+    let xref_offset = pdf.len();
+    let size = written.iter().map(|(id, _, _)| *id).max().unwrap_or(0) + 1;
+    pdf.extend_from_slice(format!("xref\n0 {size}\n").as_bytes());
+    pdf.extend_from_slice(b"0000000000 65535 f \n");
+    for (_, object_generation, offset) in &written {
+        pdf.extend_from_slice(format!("{offset:010} {object_generation:05} n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes(),
+    );
+    pdf
+}
+
+#[test]
+fn appending_writes_the_pages_real_generation_into_the_xref() {
+    let original = skeleton_pdf_with_page_generation(2);
+    let original_len = original.len();
+    let document = PdfDocument::from_bytes(original).expect("the document opens");
+    let written = document
+        .append_polygon_annotation(
+            0,
+            &PolygonAnnotation::new(vec![[10.0, 10.0], [20.0, 10.0], [20.0, 20.0]]),
+        )
+        .expect("the annotation is appended");
+
+    let appended = &written[original_len..];
+    assert!(
+        appended.windows(b"3 2 obj".len()).any(|window| window == b"3 2 obj"),
+        "the rewritten page object keeps its generation"
+    );
+    assert!(
+        appended.windows(b"00002 n".len()).any(|window| window == b"00002 n"),
+        "the xref row must carry the page's real generation, not 00000"
+    );
+
+    let reopened = PdfDocument::from_bytes(written).expect("the written document opens");
+    assert_eq!(
+        reopened.get_annotations(0).expect("annotations are read").len(),
+        1,
+        "the /Annots update must still be reachable"
+    );
+}
+
+#[test]
+fn appending_fails_when_the_startxref_sits_outside_the_tail_scan() {
+    let mut bytes = skeleton_pdf("");
+    // Trailing padding longer than the writer's 1 MiB tail window. The document
+    // still opens (the xref reader grows its window), but the appended section
+    // would be written without a `/Prev` chain.
+    bytes.resize(bytes.len() + 1024 * 1024 + 64, 0);
+    let document = PdfDocument::from_bytes(bytes).expect("the padded document opens");
+    let error = document
+        .append_polygon_annotation(0, &PolygonAnnotation::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]))
+        .expect_err("a source without a reachable startxref must not be written");
+    assert!(error.to_string().contains("startxref"), "got: {error}");
+}
+
+#[test]
+fn appending_rejects_a_non_finite_vertex() {
+    let document = PdfDocument::from_bytes(skeleton_pdf("")).expect("the document opens");
+    let error = document
+        .append_polygon_annotation(
+            0,
+            &PolygonAnnotation::new(vec![[0.0, 0.0], [f64::NAN, 0.0], [1.0, 1.0]]),
+        )
+        .expect_err("a NaN vertex must be rejected");
+    assert!(error.to_string().contains("finite"), "got: {error}");
+}
+
+#[test]
+fn appending_rejects_a_non_finite_rect() {
+    let document = PdfDocument::from_bytes(skeleton_pdf("")).expect("the document opens");
+    let mut annotation = PolygonAnnotation::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]);
+    annotation.rect = Some([0.0, 0.0, f64::INFINITY, 1.0]);
+    let error = document
+        .append_polygon_annotation(0, &annotation)
+        .expect_err("an infinite /Rect must be rejected");
+    assert!(error.to_string().contains("Rect"), "got: {error}");
+}
+
+#[test]
+fn appending_rejects_a_colour_outside_the_unit_range() {
+    let document = PdfDocument::from_bytes(skeleton_pdf("")).expect("the document opens");
+    let mut annotation = PolygonAnnotation::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]);
+    annotation.color = Some(vec![0.0, 1.5, 0.0]);
+    let error = document
+        .append_polygon_annotation(0, &annotation)
+        .expect_err("a colour component above 1.0 must be rejected");
+    assert!(error.to_string().contains("0.0..=1.0"), "got: {error}");
+}
+
 #[test]
 fn measure_number_arrays_flatten_nested_entries() {
     let mut dict = std::collections::HashMap::new();
