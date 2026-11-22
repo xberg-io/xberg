@@ -886,12 +886,19 @@ impl<'doc> TextExtractor<'doc> {
                     } else {
                         crate::text::bidi::RunOrder::Ambiguous
                     };
+                    let stream_text = text.clone();
                     text = crate::text::bidi::apply_rtl_verdict(
                         &text,
                         verdict,
                         buffer.accumulated_width > 0.0,
                         matches!(buffer.render_mode, 3 | 7),
                     );
+                    // The widths are in stream order; once the text is reversed
+                    // they no longer describe its characters, and an empty
+                    // list is the shape every consumer already tolerates. ~keep
+                    if text != stream_text {
+                        buffer.char_widths.clear();
+                    }
                 }
             }
 

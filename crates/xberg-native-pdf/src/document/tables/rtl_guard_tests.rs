@@ -141,3 +141,56 @@ fn the_same_grid_below_the_rtl_threshold_is_still_a_table() {
     );
     assert_eq!(tables, 1);
 }
+
+/// Two column rectangles and one divider are three primitives but six rules,
+/// enough to bound a 2x2 grid, so the guard must not decline them.
+#[test]
+fn a_ruled_rtl_grid_drawn_with_three_primitives_is_still_a_table() {
+    let ops = "0.5 w\n20 140 90 60 re S\n110 140 90 60 re S\n20 170 m 200 170 l S\n\
+               BT /F1 12 Tf\n\
+               1 0 0 1 30 180 Tm [<0A0B0C>] TJ\n\
+               1 0 0 1 120 180 Tm [<010201>] TJ\n\
+               1 0 0 1 30 150 Tm [<0B0C0D>] TJ\n\
+               1 0 0 1 120 150 Tm [<030403>] TJ\nET";
+    let doc = PdfDocument::from_bytes(build_pdf(TOUNICODE, WIDTHS, LAST_CHAR, ops)).expect("open");
+    let spans = doc.extract_spans(0).expect("spans");
+    let rtl = spans.iter().filter(|s| crate::text::bidi::looks_rtl(&s.text)).count();
+    assert!(rtl * 100 / spans.len() > 30, "fixture is not predominantly RTL");
+    let tables = doc.extract_page_tables(0, &spans, &ConversionOptions::default(), true);
+    assert_eq!(tables.len(), 1, "a ruled RTL grid was declined");
+}
+
+/// A Hebrew run drawn in visual order is reversed to logical order, so the
+/// per-character widths read off the stream no longer describe the emitted
+/// characters unless they are dropped or reordered with them.
+#[test]
+fn char_widths_describe_the_emitted_text_after_an_rtl_reversal() {
+    // codes 0x0A, 0x0B, 0x0C -> U+05D1, U+05D9, U+05E6 at widths 500, 600, 700.
+    let widths = "600 600 600 600 600 600 600 600 600 600 500 600 700 600";
+    let draw = |show: &str| {
+        let ops = format!("BT /F1 12 Tf 1 0 0 1 20 100 Tm {show} ET");
+        let doc = PdfDocument::from_bytes(build_pdf(TOUNICODE, widths, LAST_CHAR, &ops)).expect("open");
+        doc.extract_spans(0).expect("spans")
+    };
+    for show in ["<0A0B0C> Tj", "[<0A0B0C>] TJ"] {
+        let spans = draw(show);
+        let span = spans
+            .iter()
+            .find(|s| s.text.chars().any(|c| c == '\u{5D1}'))
+            .expect("hebrew span");
+        assert_eq!(
+            span.text, "\u{5E6}\u{5D9}\u{5D1}",
+            "{show}: fixture must be reversed to logical order"
+        );
+        if span.char_widths.is_empty() {
+            continue;
+        }
+        assert_eq!(span.char_widths.len(), 3, "{show}");
+        let ratio = span.char_widths[0] / span.char_widths[2];
+        assert!(
+            (ratio - 700.0 / 500.0).abs() < 0.01,
+            "{show}: widths {:?} are not in the order of the text",
+            span.char_widths
+        );
+    }
+}
