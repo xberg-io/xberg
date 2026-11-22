@@ -497,6 +497,7 @@ fn resolve_generic_fill_color(
     resolved_space: Option<&Object>,
     doc: &PdfDocument,
     components: &[f32],
+    icc_cache: Option<&IccTransformCache>,
 ) -> FillColorSpaceResolution {
     let Some(rs) = resolved_space else {
         return FillColorSpaceResolution::Unhandled;
@@ -515,7 +516,7 @@ fn resolve_generic_fill_color(
         "Separation" | "DeviceN" => FillColorSpaceResolution::HandledNoChange,
         "Indexed" if !components.is_empty() => {
             let spaces = HashMap::new();
-            let ctx = ResolutionContext::new(doc, &spaces);
+            let ctx = ResolutionContext::new(doc, &spaces).with_icc_transform_cache(icc_cache);
             let logical = LogicalColor::Spaced {
                 space: rs,
                 components: smallvec::SmallVec::from_slice(components),
@@ -7450,6 +7451,22 @@ fn evaluate_type0_multi(
 /// back to the embedded `/Alternate` colour space recursively, per
 /// §8.6.5.5.
 fn project_bc_altspace_to_rgb(doc: &PdfDocument, alt_resolved: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+    project_bc_altspace_to_rgb_at(doc, alt_resolved, values, 0)
+}
+
+/// Deepest chain of ICCBased `/Alternate` spaces followed before giving up; a
+/// profile whose alternate leads back to itself would otherwise recurse forever.
+const MAX_ALTERNATE_DEPTH: u8 = 8;
+
+fn project_bc_altspace_to_rgb_at(
+    doc: &PdfDocument,
+    alt_resolved: &Object,
+    values: &[f32],
+    depth: u8,
+) -> Option<(f32, f32, f32)> {
+    if depth > MAX_ALTERNATE_DEPTH {
+        return None;
+    }
     if let Some(name) = alt_resolved.as_name() {
         return match name {
             "DeviceCMYK" | "CMYK" if values.len() >= 4 => Some(cmyk_to_rgb(values[0], values[1], values[2], values[3])),
@@ -7480,7 +7497,7 @@ fn project_bc_altspace_to_rgb(doc: &PdfDocument, alt_resolved: &Object, values: 
         "ICCBased" => {
             let stream_obj = arr.get(1)?;
             let stream_resolved = doc.resolve_object(stream_obj).ok()?;
-            project_iccbased_to_rgb(doc, &stream_resolved, values)
+            project_iccbased_to_rgb(doc, &stream_resolved, values, depth + 1)
         }
         _ => None,
     }
@@ -7623,7 +7640,12 @@ pub(crate) fn xyz_to_srgb(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
 /// recurse. Without a /Alternate, fall back to the device family
 /// inferred from the stream's /N (DeviceGray for N=1, DeviceRGB for
 /// N=3, DeviceCMYK for N=4) per §8.6.5.5.
-fn project_iccbased_to_rgb(doc: &PdfDocument, stream_resolved: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+fn project_iccbased_to_rgb(
+    doc: &PdfDocument,
+    stream_resolved: &Object,
+    values: &[f32],
+    depth: u8,
+) -> Option<(f32, f32, f32)> {
     let dict = stream_resolved.as_dict()?;
     let n = dict.get("N").and_then(|o| o.as_integer()).unwrap_or(3);
 
@@ -7669,7 +7691,7 @@ fn project_iccbased_to_rgb(doc: &PdfDocument, stream_resolved: &Object, values: 
     // No CMM (or CMM declined the profile) — recurse into /Alternate. ~keep
     if let Some(alt_obj) = dict.get("Alternate") {
         let alt_resolved = doc.resolve_object(alt_obj).ok()?;
-        return project_bc_altspace_to_rgb(doc, &alt_resolved, values);
+        return project_bc_altspace_to_rgb_at(doc, &alt_resolved, values, depth + 1);
     }
     // No /Alternate — synthesise the device family per /N (§8.6.5.5). ~keep
     match n {
@@ -10013,6 +10035,49 @@ mod tests {
             form_bbox_clip(&bbox(-2_000_000_000, 2_000_000_000), &pixmap, Transform::identity()).is_none(),
             "a box enclosing the raster restricts nothing"
         );
+    }
+
+    /// An ICCBased profile whose `/Alternate` leads back to itself, under a Pattern base, must
+    /// stop at the depth bound instead of overflowing the stack.
+    #[test]
+    fn pattern_base_icc_alternate_cycle_terminates() {
+        let doc = pdf_doc_with_extra_object(Some(
+            b"<< /N 3 /Alternate [/ICCBased 4 0 R] /Length 0 >>\nstream\n\nendstream",
+        ));
+        let space = Object::Array(vec![
+            Object::Name("ICCBased".to_string()),
+            Object::Reference(crate::object::ObjectRef::new(4, 0)),
+        ]);
+        assert_eq!(
+            components_to_rgb_in_space(&space, &[0.1, 0.2, 0.3], &doc),
+            Some((0.1, 0.2, 0.3))
+        );
+    }
+
+    /// `sc` over an Indexed space with an ICCBased CMYK base builds its transform through the
+    /// renderer's cache, not a fresh one per operator.
+    #[test]
+    fn indexed_fill_color_uses_the_renderer_icc_cache() {
+        let mut header_only = vec![0u8; 128];
+        header_only[8..12].copy_from_slice(&0x04000000u32.to_be_bytes());
+        header_only[12..16].copy_from_slice(b"prtr");
+        header_only[16..20].copy_from_slice(b"CMYK");
+        header_only[20..24].copy_from_slice(b"Lab ");
+        header_only[36..40].copy_from_slice(b"acsp");
+        let icc = Object::Stream {
+            dict: HashMap::from([("N".to_string(), Object::Integer(4))]),
+            data: header_only.into(),
+        };
+        let space = Object::Array(vec![
+            Object::Name("Indexed".to_string()),
+            Object::Array(vec![Object::Name("ICCBased".to_string()), icc]),
+            Object::Integer(0),
+            Object::String(vec![0, 0, 0, 0]),
+        ]);
+        let doc = minimal_pdf_doc();
+        let cache = IccTransformCache::new();
+        let _ = resolve_generic_fill_color(Some(&space), &doc, &[0.0], Some(&cache));
+        assert_eq!(cache.lookup_count(), 1);
     }
 }
 
