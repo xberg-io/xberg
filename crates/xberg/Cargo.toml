@@ -131,6 +131,13 @@ tokio-runtime = ["dep:tokio"]
 # need to change. `pdf-native` carries the native engine dependency set,
 # unchanged from before this split.
 pdf = ["pdf-native", "dep:tracing-subscriber"]
+# Closed-region recovery on a PDF page's vector paths: joins line segments into
+# a planar graph, closes door-sized gaps and returns each face with its area and
+# contained text. Opt-in because it only makes sense with a drawing sheet and
+# because `geo` is the one added dependency. It builds on the PDF extractor's
+# config and native types, so it forwards the umbrella `pdf` feature: a bare
+# `--features plan-regions` must compile on its own. ~keep
+plan-regions = ["pdf", "dep:geo"]
 pdf-native = [
     "dep:xberg-native-pdf",
     "dep:lopdf",
@@ -1383,6 +1390,7 @@ either = { version = "1", optional = true }
 encoding_rs = { version = "0.8.44" }
 fast_image_resize = { version = "6.2.0", optional = true }
 flate2 = { version = "1.1", optional = true }
+geo = { workspace = true, optional = true }
 hayro-jbig2 = { version = "0.4", default-features = false, features = ["std"], optional = true }
 hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std", "simd"], optional = true }
 hex = { workspace = true }

@@ -90,6 +90,9 @@ fn annotation(content: &str, author: Option<&str>) -> PdfAnnotation {
         subject: None,
         quad_points: None,
         marked_text: None,
+        vertices: None,
+        ink_list: None,
+        measure: None,
     }
 }
 

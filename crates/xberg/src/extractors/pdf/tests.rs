@@ -7345,6 +7345,7 @@ fn test_vlm_single_string_guard_clears_secondary_pages() {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         })
         .collect();
 
@@ -7379,6 +7380,7 @@ fn text_layer_page(page_number: u32, content: &str) -> crate::types::PageContent
         ocr_confidence: None,
         native_content: None,
         geometry: None,
+        viewports: None,
     }
 }
 
@@ -7709,6 +7711,7 @@ fn test_ocr_page_texts_update_is_blank_on_existing_pages() {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         })
         .collect();
 
@@ -7757,6 +7760,7 @@ fn test_ocr_scratch_pages_is_blank_set_from_content() {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             }
         })
         .collect();
@@ -9117,6 +9121,7 @@ fn should_attach_distinct_preprocessing_metadata_to_each_pdf_page() {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         },
         crate::types::PageContent {
             page_number: 2,
@@ -9133,6 +9138,7 @@ fn should_attach_distinct_preprocessing_metadata_to_each_pdf_page() {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         },
     ]);
     let by_page = ahash::AHashMap::from([(1, preprocessing(150, 150)), (2, preprocessing(300, 300))]);
@@ -9962,6 +9968,7 @@ mod unread_page_blank_flag_tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }
     }
 

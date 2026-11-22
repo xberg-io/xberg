@@ -34,6 +34,7 @@ pub(crate) fn attach_page_geometry(doc: &xberg_native_pdf::PdfDocument, pages: &
             Ok(paths) => {
                 page.geometry = Some(PageGeometry {
                     paths: paths.iter().map(VectorPath::from).collect(),
+                    regions: Vec::new(),
                 });
             }
             Err(error) => {

@@ -616,6 +616,7 @@ fn page_contents_from_texts(page_texts: &[String]) -> Vec<PageContent> {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
             }
         })
         .collect()
