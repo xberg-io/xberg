@@ -302,10 +302,10 @@ h2 {
   }
 
   .report-header {
-    page-break-after: avoid;
+    break-after: avoid;
   }
 
   section {
-    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
