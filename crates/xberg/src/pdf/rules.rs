@@ -132,7 +132,6 @@ mod tests {
             .with_stroke_width(0.0)
     }
 
-
     #[test]
     fn counts_a_stroked_segment_as_a_horizontal_rule() {
         assert_eq!(
