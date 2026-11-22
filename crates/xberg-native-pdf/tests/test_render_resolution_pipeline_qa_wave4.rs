@@ -707,27 +707,20 @@ fn qa_iccbased_n4_cmyk_endpoint_pipeline_corrects_inline_truncation() {
     );
 }
 
-/// Probe 11 — Shading with `/ColorSpace [/Indexed /DeviceRGB 255
-/// <lookup>]` and `/C0 [200]` (index into the lookup table). The
-/// pipeline does NOT do palette lookup — `resolve_indexed` returns
-/// `index/255` as a gray triple — so the resolved RGBA is
-/// `(0.784, 0.784, 0.784, alpha)`. The inline path's `parse_color_array`
-/// reads `[200]` as a 1-element grayscale → `(200, 200, 200)` as f32;
-/// `tiny_skia::Color::from_rgba` rejects those out-of-[0,1] values and
-/// the gradient stop falls back to `Color::BLACK`. Result: the
-/// pipeline paints a mid-grey gradient, the inline path paints black.
+/// Probe — an `/Indexed` shading endpoint resolves through the palette.
 ///
-/// Both behaviours (the pipeline clamp and the legacy black fallback)
-/// are "wrong" by spec — neither path does the palette lookup. The
-/// pipeline's clamp accidentally produces a more sensible visible
-/// result. This is a known capability gap for Indexed gradients
-/// pending a proper palette-lookup implementation.
+/// §8.6.6.3: an Indexed colour operand is an index into the lookup table,
+/// and the colour is that entry evaluated in the base space. With entry 200
+/// set to a distinct RGB triple, a uniform axial shading whose both endpoints
+/// are index 200 paints exactly that triple — not the index read as a grey
+/// level, and not black.
 #[test]
-fn qa_indexed_endpoint_pipeline_clamps_inline_falls_to_black() {
+fn qa_indexed_endpoint_resolves_through_the_palette() {
     let lookup_stream = {
-        // 256 * 3 = 768 bytes of palette data. Zero-fill is fine —
-        // we're proving the renderer doesn't read it. ~keep
-        let body = vec![0u8; 768];
+        // Entry 200 is (24, 100, 120): bytes under 0x80, since the fixture
+        // writer carries the stream as a `String`. ~keep
+        let mut body = vec![0u8; 768];
+        body[600..603].copy_from_slice(&[24, 100, 120]);
         let header = format!("6 0 obj\n<< /Length {} >>\nstream\n", body.len());
         let mut s = header.into_bytes();
         s.extend_from_slice(&body);
@@ -748,13 +741,13 @@ fn qa_indexed_endpoint_pipeline_clamps_inline_falls_to_black() {
     );
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
     let on = render_with_pipeline(&doc, true);
-
-    // Pipeline: resolve_indexed clamps to gray = 200/255 ≈ 0.784. ~keep
     let (r_on, g_on, b_on, a_on) = center_pixel(&on);
     assert!(
-        r_on > 180 && r_on < 220 && g_on == r_on && b_on == r_on && a_on == 255,
-        "pipeline Indexed-endpoint must clamp to gray = index/255 ≈ 200; \
-         got ({r_on}, {g_on}, {b_on}, {a_on})"
+        (r_on as i32 - 24).abs() <= 3
+            && (g_on as i32 - 100).abs() <= 3
+            && (b_on as i32 - 120).abs() <= 3
+            && a_on == 255,
+        "Indexed endpoint must be palette entry 200 = (24, 100, 120); got ({r_on}, {g_on}, {b_on}, {a_on})"
     );
 }
 

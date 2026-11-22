@@ -26,6 +26,8 @@ impl PageRenderer {
             force_cmyk_sidecar: false,
             k_zero_warning_emitted: false,
             type3_depth: 0,
+            form_depth: 0,
+            pattern_depth: 0,
             type3_fill_lock: None,
             knockout_shape: None,
             knockout_resources: knockout_resources::KnockoutResources::default(),

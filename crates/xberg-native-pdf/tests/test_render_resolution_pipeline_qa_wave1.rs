@@ -467,65 +467,41 @@ fn qa_combo_under_active_clip_paints_only_inside_band() {
     );
 }
 
-/// Probe 13 — Indexed colour space via `scn` (PDF "SetFillColorN").
+/// Probe 13 — Indexed colour space via `scn` (fill side).
 ///
-/// **BUG (MAJOR): Pipeline-on diverges from pipeline-off for `scn` against
-/// an Indexed colour space.**
-///
-/// The inline `SetFillColorN` handler at `page_renderer.rs:830` has NO
-/// `Indexed` branch (the older `SetFillColor` at line 581 does, but `scn`
-/// doesn't). For `scn` against Indexed, the inline path falls through to
-/// `gs.fill_color_rgb = (g, g, g)` with `g = components[0]` — the raw
-/// index value. For an index of 1 this gives `(1.0, 1.0, 1.0)` → white
-/// (the rasteriser interprets 1.0 as fully-on, and the bg is also white,
-/// so the centre pixel is white).
-///
-/// The pipeline's `resolve_indexed` (color.rs:237) divides by 255:
-/// `g = index / 255`. For index 1 that's `(0.004, 0.004, 0.004)` →
-/// near-black.
-///
-/// The two paths render dramatically different output. This test
-/// asserts byte equality — the wave-1 invariant — and is expected to
-/// FAIL until the fix wave brings the two paths into agreement. The
-/// agreed direction is up to the design pass; the divergence today is
-/// the bug.
+/// ISO 32000-1:2008 §8.6.6.3: an `/Indexed` operand is an index into the
+/// lookup table, and the colour is the table entry evaluated in the base
+/// space — never the index read as a grey level. With a two-entry palette of
+/// red and blue, `1 scn` fills blue.
 #[test]
-fn qa_indexed_scn_fill_index_as_gray_fallback() {
+fn qa_indexed_scn_fill_resolves_through_the_palette() {
     let resources = "/ColorSpace << /Pal [/Indexed /DeviceRGB 1 <FF0000 0000FF>] >>";
     let content = "/Pal cs\n1 scn\n20 20 60 60 re\nf\n";
     let bytes = build_pdf(content, resources);
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
     let on = render_with_pipeline(&doc, true);
-    // index/255 fallback → near-black at the centre. ~keep
     let (r_on, g_on, b_on, _) = center_pixel(&on);
     assert!(
-        r_on < 50 && g_on < 50 && b_on < 50,
-        "Indexed `scn`: index/255 fallback must produce near-black, got ({r_on}, {g_on}, {b_on})"
+        r_on < 50 && g_on < 50 && b_on > 200,
+        "Indexed `scn`: index 1 is the palette's blue entry, got ({r_on}, {g_on}, {b_on})"
     );
 }
 
-/// Probe 13b — Indexed colour space via `SCN` (stroke side).
-///
-/// **BUG (MAJOR): Symmetric to probe 13 on the stroke side.**
-///
-/// Same divergence pattern, stroke side. Inline `SetStrokeColorN` has no
-/// `Indexed` branch; pipeline's `resolve_indexed` divides by 255.
+/// Probe 13b — Indexed colour space via `SCN` (stroke side): the same
+/// lookup, on the stroke colour.
 #[test]
-fn qa_indexed_scn_stroke_index_as_gray_fallback() {
+fn qa_indexed_scn_stroke_resolves_through_the_palette() {
     let resources = "/ColorSpace << /Pal [/Indexed /DeviceRGB 1 <FF0000 0000FF>] >>";
     let content = "/Pal CS\n1 SCN\n10 w\n20 20 60 60 re\nS\n";
     let bytes = build_pdf(content, resources);
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
     let on = render_with_pipeline(&doc, true);
-    // Sample mid-top-edge pixel (50, 20) — should be near-black stroke.
-    // Use a generous absolute bound (< 150 per channel) because a single
-    // stroke-edge sample picks up platform-dependent AA blend toward the
-    // white background; "darker than mid-gray on all channels" still pins
-    // the index/255 fallback against the white-background no-op. ~keep
+    // A stroke-edge sample picks up antialiasing toward the white background,
+    // so the bound is generous on red and green and firm on blue.
     let (r, g, b, _) = pixel_at(&on, 50, 20);
     assert!(
-        r < 150 && g < 150 && b < 150,
-        "Indexed `SCN` stroke: index/255 fallback must paint dark top edge; got ({r},{g},{b})"
+        r < 150 && g < 150 && b > 150,
+        "Indexed `SCN` stroke: index 1 is the palette's blue entry; got ({r},{g},{b})"
     );
 }
 

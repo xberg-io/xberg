@@ -283,6 +283,8 @@ impl PageRenderer {
         if st.excluded_layer_depth == 0 {
             if let Some(path) = st.current_path.clone().finish() {
                 st.pending_clip = Some((path, tiny_skia::FillRule::Winding));
+            } else if let Some(empty) = degenerate_clip_path(&st.current_path) {
+                st.pending_clip = Some((empty, tiny_skia::FillRule::Winding));
             }
         }
     }
@@ -291,6 +293,8 @@ impl PageRenderer {
         if st.excluded_layer_depth == 0 {
             if let Some(path) = st.current_path.clone().finish() {
                 st.pending_clip = Some((path, tiny_skia::FillRule::EvenOdd));
+            } else if let Some(empty) = degenerate_clip_path(&st.current_path) {
+                st.pending_clip = Some((empty, tiny_skia::FillRule::EvenOdd));
             }
         }
     }
@@ -327,7 +331,7 @@ impl PageRenderer {
             page_num,
             resources,
         } = env;
-        Ok(gs_clone.fill_color_space == "Pattern"
+        Ok(self.is_pattern_space(&gs_clone.fill_color_space)
             && gs_clone.fill_pattern_name.is_some()
             && self.fill_with_tiling_pattern(
                 pixmap,
