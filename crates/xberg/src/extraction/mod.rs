@@ -24,6 +24,7 @@ pub(crate) mod grid_flatten;
 ))]
 pub(crate) mod image_decode;
 pub mod image_kind;
+pub mod plan_geometry;
 pub mod structured;
 pub mod transform;
 

@@ -25,11 +25,23 @@ pub mod extract;
 pub mod formats;
 #[cfg(feature = "ner-onnx")]
 pub mod ner;
+#[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+pub mod onnx_candidates;
 pub mod overrides;
 #[cfg(any(feature = "api", feature = "mcp"))]
 pub mod server;
 #[cfg(feature = "tree-sitter")]
 pub mod tree_sitter;
+#[cfg(any(
+    feature = "embeddings",
+    feature = "layout-detection",
+    feature = "paddle-ocr",
+    feature = "tree-sitter",
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
+))]
+mod warm_report;
 
 #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
 pub use cache::seed_classic_ocr_command;
@@ -38,7 +50,9 @@ pub use cache::seed_classic_ocr_command;
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 pub use cache::warm_command;
 pub use cache::{clear_command, manifest_command, stats_command};

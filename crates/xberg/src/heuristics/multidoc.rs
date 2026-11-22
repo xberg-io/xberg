@@ -641,6 +641,7 @@ mod tests {
                         ocr_confidence: None,
                         native_content: None,
                         geometry: None,
+                        viewports: None,
                     })
                     .collect(),
             ),
