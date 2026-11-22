@@ -3688,8 +3688,8 @@ fn assign_spans_to_intersection_grid(
             }
 
             // Concatenate columns left-to-right so spans on one visual line stay in reading
-            // order: `extract_cell_text` only re-sorts by Y, and each column's own span list
-            // is already confined to that column's X range. ~keep
+            // order: `extract_cell_text` re-sorts only by line (and by X within a left-to-right
+            // line), and each column's own span list is already confined to that column's X range. ~keep
             let group_span_indices: Vec<usize> = (first_col..=last_col)
                 .flat_map(|ci| grid_spans[ri][ci].iter().copied())
                 .collect();
@@ -5398,6 +5398,29 @@ fn grid_to_table(
     }
 }
 
+/// A run drawn at 180 degrees reads toward decreasing page x. A page `/Rotate` already folded
+/// into the span boxes means the box frame is the displayed one, where such a run reads upright. ~keep
+fn line_is_upside_down(line: &[(&TextSpan, String)]) -> bool {
+    line.iter()
+        .all(|(span, _)| span.page_rotation_applied == 0 && span.rotation_degrees.abs() > 135.0)
+}
+
+fn line_is_rtl_dominant(line: &[(&TextSpan, String)]) -> bool {
+    let (mut rtl, mut ltr) = (0usize, 0usize);
+    for c in line
+        .iter()
+        .flat_map(|(_, text)| text.chars())
+        .filter(|c| c.is_alphabetic())
+    {
+        if crate::text::is_rtl_text(c as u32) {
+            rtl += 1;
+        } else {
+            ltr += 1;
+        }
+    }
+    rtl > ltr
+}
+
 fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String {
     if cell_span_indices.is_empty() {
         return String::new();
@@ -5440,14 +5463,34 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
     }
     lines.push(current_line);
 
+    // Lines are grouped on the centre-y above; reading order within one is by x,
+    // because a centre moves with font size and a raised marker in a smaller
+    // font would otherwise sort ahead of the text it follows. A right-to-left
+    // line keeps the span order it arrived in, which is logical, not by x. ~keep
+    for line in &mut lines {
+        if line_is_rtl_dominant(line) {
+            continue;
+        }
+        if line_is_upside_down(line) {
+            line.sort_by(|a, b| crate::utils::safe_float_cmp(b.0.bbox.x, a.0.bbox.x));
+        } else {
+            line.sort_by(|a, b| crate::utils::safe_float_cmp(a.0.bbox.x, b.0.bbox.x));
+        }
+    }
+
     lines
         .iter()
         .map(|line| {
             let mut out = String::new();
+            let upside_down = !line_is_rtl_dominant(line) && line_is_upside_down(line);
             for (i, (span, text)) in line.iter().enumerate() {
                 if i > 0 {
                     let (prev_span, _) = line[i - 1];
-                    let separator = cell_span_separator(prev_span, span);
+                    let separator = if upside_down {
+                        cell_span_separator_for_gap(prev_span, span, prev_span.bbox.x - (span.bbox.x + span.bbox.width))
+                    } else {
+                        cell_span_separator(prev_span, span)
+                    };
                     out.push_str(separator);
                 }
                 out.push_str(text);
@@ -5485,8 +5528,11 @@ fn cell_span_separator(prev: &TextSpan, current: &TextSpan) -> &'static str {
         return "";
     }
 
-    let prev_end_x = prev.bbox.x + prev.bbox.width;
-    let gap = current.bbox.x - prev_end_x;
+    let gap = current.bbox.x - (prev.bbox.x + prev.bbox.width);
+    cell_span_separator_for_gap(prev, current, gap)
+}
+
+fn cell_span_separator_for_gap(prev: &TextSpan, current: &TextSpan, gap: f32) -> &'static str {
     let font_size = prev.font_size.max(current.font_size).max(1.0);
 
     let space_threshold = font_size * 0.15;
@@ -11708,6 +11754,46 @@ mod tests {
 
             assert_eq!(extract_cell_text(&[0, 1], &spans), format!("59{separator}804"));
         }
+    }
+
+    #[test]
+    fn cell_text_keeps_a_raised_marker_after_the_text_it_follows() {
+        let spans = vec![
+            ts("59.19*^", 143.0, 202.0, 30.0, 5.0),
+            ts("142.56 \u{b1}", 100.0, 200.0, 40.0, 8.0),
+        ];
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "142.56 \u{b1} 59.19*^");
+    }
+
+    #[test]
+    fn cell_text_orders_spans_by_x_within_the_line_it_groups_them_into() {
+        let spans = vec![ts("2", 106.0, 201.0, 6.0, 8.0), ts("1", 100.0, 199.0, 6.0, 12.0)];
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "12");
+    }
+
+    #[test]
+    fn cell_text_reads_an_upside_down_line_toward_decreasing_x() {
+        let mut spans = vec![
+            ts("Second", 40.0, 200.0, 30.0, 10.0),
+            ts("First", 100.0, 200.0, 30.0, 10.0),
+        ];
+        for span in &mut spans {
+            span.rotation_degrees = 180.0;
+        }
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "First Second");
+    }
+
+    #[test]
+    fn cell_text_keeps_logical_order_for_right_to_left_words_on_one_line() {
+        let spans = vec![
+            ts("\u{5E9}\u{5DC}\u{5D5}\u{5DD}", 100.0, 200.0, 30.0, 10.0),
+            ts("\u{5E2}\u{5D5}\u{5DC}\u{5DD}", 40.0, 200.0, 30.0, 10.0),
+        ];
+        let text = extract_cell_text(&[0, 1], &spans);
+        assert!(
+            text.find('\u{5E9}') < text.find('\u{5E2}'),
+            "right-to-left words were re-sorted by x: {text:?}"
+        );
     }
 
     #[test]

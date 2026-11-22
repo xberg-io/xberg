@@ -28,6 +28,7 @@ fn make_test_font(name: &str, subtype: &str) -> xberg_native_pdf::fonts::FontInf
         cid_default_width: 1000.0,
         has_explicit_dw: false,
         cff_gid_map: None,
+        cff_cid_to_gid: None,
         multi_char_map: HashMap::new(),
         byte_to_char_table: std::sync::OnceLock::new(),
         byte_to_width_table: std::sync::OnceLock::new(),

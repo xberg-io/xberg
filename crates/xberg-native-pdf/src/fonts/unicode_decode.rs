@@ -441,7 +441,7 @@ impl<'a> TextCharIter<'a> {
 }
 
 impl<'a> Iterator for TextCharIter<'a> {
-    type Item = (u16, usize);
+    type Item = (u32, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.bytes.len() {
@@ -450,16 +450,16 @@ impl<'a> Iterator for TextCharIter<'a> {
 
         let (char_code, bytes_consumed) = match &self.byte_mode {
             ByteMode::TwoByte if self.index + 1 < self.bytes.len() => (
-                ((self.bytes[self.index] as u16) << 8) | (self.bytes[self.index + 1] as u16),
+                ((self.bytes[self.index] as u32) << 8) | (self.bytes[self.index + 1] as u32),
                 2,
             ),
             ByteMode::ShiftJIS => {
                 let b = self.bytes[self.index];
                 let is_lead = (0x81..=0x9F).contains(&b) || (0xE0..=0xFC).contains(&b);
                 if is_lead && self.index + 1 < self.bytes.len() {
-                    (((b as u16) << 8) | (self.bytes[self.index + 1] as u16), 2)
+                    (((b as u32) << 8) | (self.bytes[self.index + 1] as u32), 2)
                 } else {
-                    (b as u16, 1)
+                    (b as u32, 1)
                 }
             }
             ByteMode::Codespace(cid_map) => {
@@ -468,9 +468,9 @@ impl<'a> Iterator for TextCharIter<'a> {
                 for &b in &self.bytes[self.index..(self.index + len).min(self.bytes.len())] {
                     code = (code << 8) | b as u32;
                 }
-                (u16::try_from(code).unwrap_or(0), len)
+                (code, len)
             }
-            _ => (self.bytes[self.index] as u16, 1),
+            _ => (self.bytes[self.index] as u32, 1),
         };
 
         self.index += bytes_consumed;
@@ -533,9 +533,7 @@ pub(crate) fn char_codes_with_len(bytes: &[u8], font: &FontInfo) -> Vec<(u32, us
     if font_has_utf8_cmap(font) {
         utf8_codes_with_len(bytes).collect()
     } else {
-        TextCharIter::new(bytes, Some(font))
-            .map(|(code, nbytes)| (code as u32, nbytes))
-            .collect()
+        TextCharIter::new(bytes, Some(font)).collect()
     }
 }
 
@@ -721,10 +719,10 @@ fn decode_generic_type0_bytes(
 ) -> String {
     let mut result = String::with_capacity(bytes.len());
     for (char_code, _) in TextCharIter::new(bytes, Some(font)) {
-        if !push_resolved(font, char_code as u32, policy, false, &mut result)
+        if !push_resolved(font, char_code, policy, false, &mut result)
             && let Some(tally) = drops.as_deref_mut()
         {
-            tally.record("no Unicode mapping", char_code as u32, 0);
+            tally.record("no Unicode mapping", char_code, 0);
         }
     }
     result
@@ -849,6 +847,7 @@ mod tests {
             cid_default_width: 1000.0,
             has_explicit_dw: false,
             cff_gid_map: None,
+            cff_cid_to_gid: None,
             multi_char_map: HashMap::new(),
             byte_to_char_table: std::sync::OnceLock::new(),
             type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),

@@ -62,7 +62,7 @@ impl<'doc> TextExtractor<'doc> {
                     // `code`: ISO 32000-1 §9.3.3 gates on the single-byte
                     // *character code* 32, not on whatever CID it resolves
                     // to. ~keep
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies ONLY to the
@@ -90,7 +90,7 @@ impl<'doc> TextExtractor<'doc> {
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
                     // GH #1631: translate the raw code to a CID before the
                     // /W2 lookup; the Tw check stays on the raw code. ~keep
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
@@ -252,7 +252,7 @@ impl<'doc> TextExtractor<'doc> {
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
                     // GH #1631: translate to a CID before the width lookup;
                     // Tw stays keyed on the raw code (§9.3.3). ~keep
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies only to the
@@ -263,7 +263,7 @@ impl<'doc> TextExtractor<'doc> {
                     }
                     w_sum += w;
                     // One width for each output letter, as in the string-array path. ~keep
-                    let letter_count = letter_count_of(font, code as u32);
+                    let letter_count = letter_count_of(font, code);
                     buffer.ligature_tail = letter_count > 1;
                     buffer.push_letter_widths(letter_count, w);
                 }
@@ -278,7 +278,7 @@ impl<'doc> TextExtractor<'doc> {
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
@@ -288,7 +288,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += word_space;
                     }
                     w_sum += w;
-                    buffer.push_letter_widths(letter_count_of(font, code as u32), w);
+                    buffer.push_letter_widths(letter_count_of(font, code), w);
                 }
                 w_sum
             }
@@ -488,13 +488,13 @@ impl<'doc> TextExtractor<'doc> {
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
                     // GH #1631: translate to a CID before the width lookup;
                     // Tw stays keyed on the raw code (§9.3.3). ~keep
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
                     if nbytes == 1 && code == 32 {
                         w += ws_hs;
                     }
-                    let letters = font.char_to_unicode(code as u32);
+                    let letters = font.char_to_unicode(code);
                     if letters.as_deref() == Some(" ") && buffer.absorb_roomless_space(w) {
                         buffer.append(&text[kept_from..offset])?;
                         kept_from = offset + nbytes;
@@ -520,7 +520,7 @@ impl<'doc> TextExtractor<'doc> {
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
                 for (code, nbytes) in TextCharIter::new(text, Some(font)) {
-                    let cid = font.code_to_cid(code as u32);
+                    let cid = font.code_to_cid(code);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
@@ -528,7 +528,7 @@ impl<'doc> TextExtractor<'doc> {
                         w += word_space;
                     }
                     w_sum += w;
-                    buffer.push_letter_widths(letter_count_of(font, code as u32), w);
+                    buffer.push_letter_widths(letter_count_of(font, code), w);
                 }
                 w_sum
             }
@@ -918,12 +918,19 @@ impl<'doc> TextExtractor<'doc> {
                     } else {
                         crate::text::bidi::RunOrder::Ambiguous
                     };
+                    let stream_text = text.clone();
                     text = crate::text::bidi::apply_rtl_verdict(
                         &text,
                         verdict,
                         buffer.accumulated_width > 0.0,
                         matches!(buffer.render_mode, 3 | 7),
                     );
+                    // The widths are in stream order; once the text is reversed
+                    // they no longer describe its characters, and an empty
+                    // list is the shape every consumer already tolerates. ~keep
+                    if text != stream_text {
+                        buffer.char_widths.clear();
+                    }
                 }
             }
 
@@ -1029,8 +1036,8 @@ impl<'doc> TextExtractor<'doc> {
             let text_matrix = state.text_matrix;
 
             let unicode_string = if let Some(font) = font {
-                font.char_to_unicode(char_code as u32)
-                    .unwrap_or_else(|| fallback_extraction_char_to_unicode(unmapped_type3, char_code as u32))
+                font.char_to_unicode(char_code)
+                    .unwrap_or_else(|| fallback_extraction_char_to_unicode(unmapped_type3, char_code))
             } else if char_code < 256 && (char_code as u8).is_ascii() {
                 (char_code as u8 as char).to_string()
             } else {
@@ -1052,7 +1059,7 @@ impl<'doc> TextExtractor<'doc> {
                 // `else` arm below), so `char_code` is a raw content-stream
                 // code that must be translated to a CID before the /W
                 // lookup. ~keep
-                font.get_glyph_width(font.code_to_cid_if_type0(char_code as u32))
+                font.get_glyph_width(font.code_to_cid_if_type0(char_code))
             } else {
                 500.0
             };
@@ -1081,7 +1088,7 @@ impl<'doc> TextExtractor<'doc> {
             } else {
                 // GH #1631: translate to a CID before the /W2 lookup. ~keep
                 let w1y = font
-                    .map(|f| f.get_vertical_metrics(f.code_to_cid_if_type0(char_code as u32)).w1y)
+                    .map(|f| f.get_vertical_metrics(f.code_to_cid_if_type0(char_code)).w1y)
                     .unwrap_or(crate::fonts::VerticalMetrics::SPEC_DEFAULT.w1y);
                 w1y * fs_factor + char_space + if ws_applies { word_space } else { 0.0 }
             };

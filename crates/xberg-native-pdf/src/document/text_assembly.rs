@@ -541,73 +541,6 @@ impl PdfDocument {
                         m
                     })
                     .collect();
-                // The detector runs on `extract_words` output, so a budget
-                // token can itself be a glued compound of several flow spans
-                // drawn with no gap ("12,3" + "45" -> "12,345"). A contained
-                // span may therefore consume a substring of one budget
-                // token; the unmatched remainder returns to the budget so
-                // the sibling fragments can follow. Absorption stays bounded
-                // by the material the cell was built from. The text-fallback
-                // path keeps whole-token matching: it has no containment
-                // evidence, so fragments would let distant same-substring
-                // text vanish. ~keep
-                fn take_one(
-                    work: &mut std::collections::HashMap<&str, usize>,
-                    tok: &str,
-                    allow_fragment: bool,
-                ) -> bool {
-                    if let Some(r) = work.get_mut(tok)
-                        && *r > 0
-                    {
-                        *r -= 1;
-                        return true;
-                    }
-                    if !allow_fragment {
-                        return false;
-                    }
-                    // Shortest host wins: splits are deterministic (HashMap
-                    // iteration order is not) and minimal. ~keep
-                    let Some(host) = work
-                        .iter()
-                        .filter(|(k, n)| **n > 0 && k.len() > tok.len() && k.contains(tok))
-                        .map(|(k, _)| *k)
-                        .min_by_key(|k| (k.len(), *k))
-                    else {
-                        return false;
-                    };
-                    *work.get_mut(host).unwrap() -= 1;
-                    let start = host.find(tok).unwrap();
-                    let before = &host[..start];
-                    let after = &host[start + tok.len()..];
-                    if !before.is_empty() {
-                        *work.entry(before).or_insert(0) += 1;
-                    }
-                    if !after.is_empty() {
-                        *work.entry(after).or_insert(0) += 1;
-                    }
-                    true
-                }
-                // Test plus decrement, in one place so the containment and
-                // text-fallback paths cannot drift apart — they must draw on
-                // the SAME accounting. All-or-nothing: a span either fits
-                // the cell's remaining budget whole or leaves it untouched. ~keep
-                fn try_consume(
-                    remaining: &mut std::collections::HashMap<&str, usize>,
-                    span_tokens: &[(&str, usize)],
-                    allow_fragment: bool,
-                ) -> bool {
-                    let mut work = remaining.clone();
-                    for (tok, n) in span_tokens {
-                        for _ in 0..*n {
-                            if !take_one(&mut work, tok, allow_fragment) {
-                                return false;
-                            }
-                        }
-                    }
-                    *remaining = work;
-                    true
-                }
-
                 let preserved_label_indices: std::collections::HashSet<usize> = Self::identify_multi_row_labels(&spans)
                     .into_iter()
                     .filter(|&idx| {
@@ -697,6 +630,37 @@ impl PdfDocument {
                                 if try_consume(&mut cell_remaining[ci], &span_tokens, true) {
                                     decided = true;
                                     break 'cells;
+                                }
+                            }
+                        }
+                        if !decided {
+                            let (sx0, sx1) = (s.bbox.x, s.bbox.x + s.bbox.width);
+                            let mut spanned: Vec<usize> = Vec::new();
+                            for bin in slo..=shi {
+                                for &ci in cell_y_index.get(&bin).into_iter().flatten() {
+                                    let (b, _) = &flushed_cells[ci];
+                                    if !spanned.contains(&ci)
+                                        && b.y - RETAIN_TOLERANCE <= s.bbox.y
+                                        && s.bbox.y + s.bbox.height <= b.y + b.height + RETAIN_TOLERANCE
+                                        && b.x < sx1
+                                        && b.x + b.width > sx0
+                                    {
+                                        spanned.push(ci);
+                                    }
+                                }
+                            }
+                            spanned.sort_by(|&a, &b| {
+                                crate::utils::safe_float_cmp(flushed_cells[a].0.x, flushed_cells[b].0.x)
+                            });
+                            if spanned.len() > 1 {
+                                let right = spanned
+                                    .iter()
+                                    .map(|&ci| flushed_cells[ci].0.x + flushed_cells[ci].0.width)
+                                    .fold(f32::MIN, f32::max);
+                                if flushed_cells[spanned[0]].0.x <= sx0 + RETAIN_TOLERANCE
+                                    && right >= sx1 - RETAIN_TOLERANCE
+                                {
+                                    decided = try_consume_across(&mut cell_remaining, &spanned, &span_tokens);
                                 }
                             }
                         }
@@ -1296,5 +1260,201 @@ impl PdfDocument {
         }
 
         Ok(result)
+    }
+}
+
+// The detector runs on `extract_words` output, so a budget
+// token can itself be a glued compound of several flow spans
+// drawn with no gap ("12,3" + "45" -> "12,345"). A contained
+// span may therefore consume a substring of one budget
+// token; the unmatched remainder returns to the budget so
+// the sibling fragments can follow. Absorption stays bounded
+// by the material the cell was built from. The text-fallback
+// path keeps whole-token matching: it has no containment
+// evidence, so fragments would let distant same-substring
+// text vanish. ~keep
+fn take_one(work: &mut std::collections::HashMap<&str, usize>, tok: &str, allow_fragment: bool) -> bool {
+    if let Some(r) = work.get_mut(tok)
+        && *r > 0
+    {
+        *r -= 1;
+        return true;
+    }
+    if !allow_fragment {
+        return false;
+    }
+    // Shortest host wins: splits are deterministic (HashMap
+    // iteration order is not) and minimal. ~keep
+    let Some(host) = work
+        .iter()
+        .filter(|(k, n)| **n > 0 && k.len() > tok.len() && k.contains(tok))
+        .map(|(k, _)| *k)
+        .min_by_key(|k| (k.len(), *k))
+    else {
+        return false;
+    };
+    *work.get_mut(host).unwrap() -= 1;
+    let start = host.find(tok).unwrap();
+    let before = &host[..start];
+    let after = &host[start + tok.len()..];
+    if !before.is_empty() {
+        *work.entry(before).or_insert(0) += 1;
+    }
+    if !after.is_empty() {
+        *work.entry(after).or_insert(0) += 1;
+    }
+    true
+}
+// The mirror of `take_one`'s containment case: one span token
+// may be the concatenation of several budget tokens. Word
+// clustering and the flow assembler split at different
+// distances, so a cell yielding {"abc", "def"} faces a flow
+// span "abcdef" that no single budget token contains. Consumes
+// the covering sequence only when the whole token is covered
+// exactly, so nothing is spent on a partial match. ~keep
+fn take_concatenation(work: &mut std::collections::HashMap<&str, usize>, tok: &str) -> bool {
+    // Longest available prefix first, ties by text: HashMap
+    // iteration order is not stable and this decides what the
+    // page emits. ~keep
+    //
+    // The search is exponential when several budget tokens tile the same text
+    // ({"a": 40, "aa": 40} against "aaaa...z"), so it is capped: past the cap
+    // the span is not a concatenation and stays in flow. ~keep
+    const COVER_STEP_LIMIT: usize = 10_000;
+    fn cover<'a>(work: &mut std::collections::HashMap<&'a str, usize>, rest: &str, steps: &mut usize) -> bool {
+        if rest.is_empty() {
+            return true;
+        }
+        if *steps == 0 {
+            return false;
+        }
+        *steps -= 1;
+        let mut candidates: Vec<&'a str> = work
+            .iter()
+            .filter(|(k, n)| **n > 0 && !k.is_empty() && rest.starts_with(**k))
+            .map(|(k, _)| *k)
+            .collect();
+        candidates.sort_by_key(|k| (std::cmp::Reverse(k.len()), *k));
+        for cand in candidates {
+            if let Some(slot) = work.get_mut(cand) {
+                *slot -= 1;
+            }
+            if cover(work, &rest[cand.len()..], steps) {
+                return true;
+            }
+            *work.entry(cand).or_insert(0) += 1;
+        }
+        false
+    }
+
+    cover(work, tok, &mut COVER_STEP_LIMIT.clone())
+}
+// Test plus decrement, in one place so the containment and
+// text-fallback paths cannot drift apart — they must draw on
+// the SAME accounting. All-or-nothing: a span either fits
+// the cell's remaining budget whole or leaves it untouched. ~keep
+fn try_consume(
+    remaining: &mut std::collections::HashMap<&str, usize>,
+    span_tokens: &[(&str, usize)],
+    allow_fragment: bool,
+) -> bool {
+    let mut work = remaining.clone();
+    for (tok, n) in span_tokens {
+        for _ in 0..*n {
+            if !take_one(&mut work, tok, allow_fragment) && !(allow_fragment && take_concatenation(&mut work, tok)) {
+                return false;
+            }
+        }
+    }
+    *remaining = work;
+    true
+}
+
+// A flow span can run across a column rule and so lie inside no
+// single cell (one text run drawn cell after cell on a row).
+// Such a span is absorbed from the pooled budgets of the cells
+// it covers, so the table's rendering stays the only copy.
+// Spending is leftmost-first and a fragment remainder returns
+// to the cell whose token it was split from, so the pool is conserved. ~keep
+fn try_consume_across<'a>(
+    remaining: &mut [std::collections::HashMap<&'a str, usize>],
+    cells: &[usize],
+    span_tokens: &[(&str, usize)],
+) -> bool {
+    let mut pooled: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
+    for &ci in cells {
+        for (tok, n) in &remaining[ci] {
+            *pooled.entry(*tok).or_insert(0) += n;
+        }
+    }
+    let before = pooled.clone();
+    if !try_consume(&mut pooled, span_tokens, true) {
+        return false;
+    }
+    let mut spent_from: Vec<(usize, &'a str)> = Vec::new();
+    for (tok, was) in &before {
+        let mut spend = was.saturating_sub(pooled.get(tok).copied().unwrap_or(0));
+        for &ci in cells {
+            if spend == 0 {
+                break;
+            }
+            if let Some(left) = remaining[ci].get_mut(tok) {
+                let taken = (*left).min(spend);
+                if taken > 0 {
+                    spent_from.push((ci, *tok));
+                }
+                *left -= taken;
+                spend -= taken;
+            }
+        }
+    }
+    for (tok, now) in &pooled {
+        let was = before.get(tok).copied().unwrap_or(0);
+        if *now > was {
+            let owner = spent_from
+                .iter()
+                .filter(|(_, host)| host.len() > tok.len() && host.contains(*tok))
+                .map(|(ci, _)| *ci)
+                .min()
+                .unwrap_or(cells[0]);
+            *remaining[owner].entry(*tok).or_insert(0) += *now - was;
+        }
+    }
+    true
+}
+
+#[cfg(test)]
+mod cell_budget_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn concatenation_joins_budget_tokens_that_tile_the_span() {
+        let mut work: HashMap<&str, usize> = HashMap::from([("abc", 1), ("def", 1)]);
+        assert!(take_concatenation(&mut work, "abcdef"));
+        assert_eq!(work.values().sum::<usize>(), 0);
+    }
+
+    #[test]
+    fn concatenation_search_is_bounded_on_a_token_that_cannot_be_covered() {
+        let tok = format!("{}z", "a".repeat(34));
+        let mut work: HashMap<&str, usize> = HashMap::from([("a", 40), ("aa", 40)]);
+        let started = std::time::Instant::now();
+        assert!(!take_concatenation(&mut work, &tok));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(1),
+            "uncoverable token took {:?}",
+            started.elapsed()
+        );
+        assert_eq!((work["a"], work["aa"]), (40, 40));
+    }
+
+    #[test]
+    fn fragment_remainder_returns_to_the_cell_it_was_split_from() {
+        let mut cells: Vec<HashMap<&str, usize>> = vec![HashMap::from([("x", 1)]), HashMap::from([("abc", 1)])];
+        assert!(try_consume_across(&mut cells, &[0, 1], &[("ab", 1)]));
+        assert_eq!(cells[1].get("c"), Some(&1), "remainder must return to the right cell");
+        assert_eq!(cells[0].get("c"), None);
+        assert_eq!(cells[0].get("x"), Some(&1));
     }
 }

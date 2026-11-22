@@ -209,6 +209,7 @@ pub(super) fn create_test_font() -> FontInfo {
         cid_default_width: 1000.0,
         has_explicit_dw: false,
         cff_gid_map: None,
+        cff_cid_to_gid: None,
         multi_char_map: HashMap::new(),
         byte_to_char_table: std::sync::OnceLock::new(),
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),

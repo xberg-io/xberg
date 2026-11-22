@@ -806,91 +806,97 @@ impl TextRasterizer {
         }
 
         let pdf_font_name = gs.font_name.as_deref().unwrap_or("Helvetica");
-        let font_data_and_index: Option<(Option<fontdb::ID>, Arc<Vec<u8>>, u32, bool)> =
-            if let Some(ref info) = font_info {
-                if let Some(ref embedded) = info.embedded_font_data {
-                    // Simple (non-Type0) TrueType subsets whose sole cmap subtable
-                    // is a byte-indexed table must be rendered by feeding the raw
-                    // PDF content bytes to the embedded cmap directly — the PDF
-                    // byte is the cmap input under the font's declared encoding
-                    // (ISO 32000-1 §9.6.6.4). Unicode shaping against these fonts
-                    // is unreliable: even if a space or punctuation happens to
-                    // share a codepoint with a cmap key, shaping for letters
-                    // resolves to .notdef and the system-font fallback picks up
-                    // unrelated glyphs. Bypass the Unicode shaping path entirely
-                    // for this subtype so the byte→GID route is taken for every
-                    // `Tj` / `TJ` call, not just the ones whose decoded Unicode
-                    // happens to miss the cmap.
-                    // Classify the embedded font's cmap tables. Computed
-                    // locally on every call — a cheap zero-copy `skrifa::FontRef`
-                    // probe; the process-wide memoisation was removed as
-                    // unsound under concurrency. ~keep
-                    let (is_byte_indexed, has_unicode_cmap) = classify_embedded_font(embedded);
-                    if info.subtype != "Type0" && is_byte_indexed {
-                        tracing::trace!("Using embedded PDF font with byte-indexed cmap (simple TrueType subset)");
-                        return self.render_cid_direct(target, text, info, embedded, 0, base_transform, gs);
-                    }
+        let font_data_and_index: Option<(Option<fontdb::ID>, Arc<Vec<u8>>, u32, bool)> = if let Some(ref info) =
+            font_info
+        {
+            if let Some(ref embedded) = info.embedded_font_data {
+                // Simple (non-Type0) TrueType subsets whose sole cmap subtable
+                // is a byte-indexed table must be rendered by feeding the raw
+                // PDF content bytes to the embedded cmap directly — the PDF
+                // byte is the cmap input under the font's declared encoding
+                // (ISO 32000-1 §9.6.6.4). Unicode shaping against these fonts
+                // is unreliable: even if a space or punctuation happens to
+                // share a codepoint with a cmap key, shaping for letters
+                // resolves to .notdef and the system-font fallback picks up
+                // unrelated glyphs. Bypass the Unicode shaping path entirely
+                // for this subtype so the byte→GID route is taken for every
+                // `Tj` / `TJ` call, not just the ones whose decoded Unicode
+                // happens to miss the cmap.
+                // Classify the embedded font's cmap tables. Computed
+                // locally on every call — a cheap zero-copy `skrifa::FontRef`
+                // probe; the process-wide memoisation was removed as
+                // unsound under concurrency. ~keep
+                let (is_byte_indexed, has_unicode_cmap) = classify_embedded_font(embedded);
+                if info.subtype != "Type0" && is_byte_indexed {
+                    tracing::trace!("Using embedded PDF font with byte-indexed cmap (simple TrueType subset)");
+                    return self.render_cid_direct(target, text, info, embedded, 0, base_transform, gs);
+                }
 
-                    let cid_truetype = info.subtype == "Type0"
-                        && info.cid_to_gid_map.is_some()
-                        && info.cid_font_type.as_deref() == Some("CIDFontType2");
-                    // Unicode cmap presence does not recover codes dropped by ToUnicode. For
-                    // identity-encoded TrueType runs, the original CIDs still own their outlines. ~keep
-                    // A code that decodes to several letters (a ligature, a letter with an accent) is the
-                    // same case: shaping reads PDF widths by letter index, so later glyphs take later
-                    // codes' widths. ~keep
-                    let lost_identity_run = cid_truetype
-                        && matches!(info.encoding, crate::fonts::Encoding::Identity)
-                        && info.embedded_cid_map.is_none()
-                        && (decode_drops.reason().is_some()
-                            || unicode_text.chars().count() != TextCharIter::new(text, Some(info)).count());
-                    if has_unicode_cmap && !lost_identity_run {
-                        tracing::trace!("Using embedded PDF font data");
-                        Some((None, Arc::clone(embedded), 0, false))
-                    } else if cid_truetype {
-                        tracing::trace!("Using embedded PDF font with CIDToGIDMap (CIDFontType2)");
-                        Some((None, Arc::clone(embedded), 0, true))
-                    } else if info.cff_gid_map.is_some()
-                        || (info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0"))
-                    {
-                        // CFF font — use direct GID rendering.
-                        //
-                        // For simple (non-Type0) CFF fonts the `cff_gid_map` is
-                        // built at load time by
-                        // [`crate::fonts::cff_encoding::parse_cff_gid_mapping_with_pdf_encoding`],
-                        // which uses the PDF font dictionary's `/Encoding`
-                        // (typically WinAnsi) as the byte → glyph-name source
-                        // and the CFF Charset as the glyph-name → GID resolver
-                        // (ISO 32000-1 §9.6.6). The subsetter's own CFF Encoding
-                        // table is *not* consulted directly — sparse subsetter
-                        // CFF Encoding tables would silently drop most content
-                        // bytes to `.notdef` otherwise.
-                        //
-                        // Type0 + CIDFontType0 (CFF / OpenType-CFF): Identity-H
-                        // emission means the content-stream's 2-byte codes ARE
-                        // the GIDs in the CFF charset; bypass harfrust Unicode
-                        // shaping (which round-trips CID→Unicode→GID through
-                        // the patched cmap and can drift on CFF charset
-                        // positions) and feed the raw codes to
-                        // render_cid_direct (G3-h). `OutlineFace` (skrifa) handles
-                        // CFF outlines for sfnt-wrapped OpenType-CFF (OTTO); raw
-                        // CFF streams were already wrapped by
-                        // `font_dict::wrap_cff_in_opentype` at load time. ~keep
-                        tracing::trace!("Using embedded CFF PDF font with direct GID mapping");
-                        Some((None, Arc::clone(embedded), 0, true))
-                    } else {
-                        tracing::trace!("Embedded PDF font lacks usable cmap, falling back to system font");
-                        self.load_font_data(&info.base_font)
-                            .map(|(id, d, i)| (Some(id), d, i, false))
-                    }
+                let cid_truetype = info.subtype == "Type0"
+                    && info.cid_to_gid_map.is_some()
+                    && info.cid_font_type.as_deref() == Some("CIDFontType2");
+                // Unicode cmap presence does not recover codes dropped by ToUnicode. For
+                // identity-encoded TrueType runs, the original CIDs still own their outlines. ~keep
+                // A code that decodes to several letters (a ligature, a letter with an accent) is the
+                // same case: shaping reads PDF widths by letter index, so later glyphs take later
+                // codes' widths. ~keep
+                let lost_identity_run = cid_truetype
+                    && matches!(info.encoding, crate::fonts::Encoding::Identity)
+                    && info.embedded_cid_map.is_none()
+                    && (decode_drops.reason().is_some()
+                        || unicode_text.chars().count() != TextCharIter::new(text, Some(info)).count());
+                // An OpenType CIDFontType0 must carry a cmap (ISO 32000-1 Table 126), but its CIDs
+                // resolve through the CFF (§9.7.4.2), not the Unicode cmap, but only where a code maps to a CID at
+                // all: a predefined CMap without a table leaves the raw code, which is no CID. ~keep
+                let cid_keyed_cff = info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0");
+                let cid_keyed_cff = cid_keyed_cff && info.resolves_codes_to_cids();
+                if has_unicode_cmap && !lost_identity_run && !cid_keyed_cff {
+                    tracing::trace!("Using embedded PDF font data");
+                    Some((None, Arc::clone(embedded), 0, false))
+                } else if cid_truetype {
+                    tracing::trace!("Using embedded PDF font with CIDToGIDMap (CIDFontType2)");
+                    Some((None, Arc::clone(embedded), 0, true))
+                } else if info.cff_gid_map.is_some()
+                    || (info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0"))
+                {
+                    // CFF font — use direct GID rendering.
+                    //
+                    // For simple (non-Type0) CFF fonts the `cff_gid_map` is
+                    // built at load time by
+                    // [`crate::fonts::cff_encoding::parse_cff_gid_mapping_with_pdf_encoding`],
+                    // which uses the PDF font dictionary's `/Encoding`
+                    // (typically WinAnsi) as the byte → glyph-name source
+                    // and the CFF Charset as the glyph-name → GID resolver
+                    // (ISO 32000-1 §9.6.6). The subsetter's own CFF Encoding
+                    // table is *not* consulted directly — sparse subsetter
+                    // CFF Encoding tables would silently drop most content
+                    // bytes to `.notdef` otherwise.
+                    //
+                    // Type0 + CIDFontType0 (CFF / OpenType-CFF): Identity-H
+                    // emission means the content-stream's 2-byte codes ARE
+                    // the GIDs in the CFF charset; bypass harfrust Unicode
+                    // shaping (which round-trips CID→Unicode→GID through
+                    // the patched cmap and can drift on CFF charset
+                    // positions) and feed the raw codes to
+                    // render_cid_direct (G3-h). `OutlineFace` (skrifa) handles
+                    // CFF outlines for sfnt-wrapped OpenType-CFF (OTTO); raw
+                    // CFF streams were already wrapped by
+                    // `font_dict::wrap_cff_in_opentype` at load time. ~keep
+                    tracing::trace!("Using embedded CFF PDF font with direct GID mapping");
+                    Some((None, Arc::clone(embedded), 0, true))
                 } else {
+                    tracing::trace!("Embedded PDF font lacks usable cmap, falling back to system font");
                     self.load_font_data(&info.base_font)
                         .map(|(id, d, i)| (Some(id), d, i, false))
                 }
             } else {
-                self.load_font_data(pdf_font_name)
+                self.load_font_data(&info.base_font)
                     .map(|(id, d, i)| (Some(id), d, i, false))
-            };
+            }
+        } else {
+            self.load_font_data(pdf_font_name)
+                .map(|(id, d, i)| (Some(id), d, i, false))
+        };
 
         let using_bundled_latin = font_data_and_index.is_none();
         let font_data_and_index = font_data_and_index.or_else(|| {
@@ -1727,7 +1733,7 @@ impl TextRasterizer {
         // visible without one line per glyph. ~keep
         let mut dropped = GlyphDropTally::default();
 
-        for (char_code, bytes_consumed) in TextCharIter::new(bytes, Some(font_info)) {
+        for (char_code, bytes_consumed) in char_codes_with_len(bytes, font_info) {
             // Map character code to GID based on font type:
             // - Type0 (CID-keyed) without CIDToGIDMap → CID is GID
             //   (Identity-H/Identity-V emission, the case our writer
@@ -1742,11 +1748,19 @@ impl TextRasterizer {
             //   under the font's declared encoding; ISO 32000-1
             //   §9.6.6.4).
             // - Default: identity mapping. ~keep
+            // The content code is a CID only under an identity CMap; a predefined
+            // one (UniCNS-UCS2-H, ...) maps code to CID first (§9.7.6). ~keep
+            let cid = font_info.code_to_cid_if_type0(char_code);
             let gid = if font_info.subtype == "Type0" {
                 match &font_info.cid_to_gid_map {
-                    Some(crate::fonts::CIDToGIDMap::Identity) => char_code,
-                    Some(crate::fonts::CIDToGIDMap::Explicit(map)) => *map.get(char_code as usize).unwrap_or(&0),
-                    None => char_code,
+                    Some(crate::fonts::CIDToGIDMap::Identity) => cid,
+                    Some(crate::fonts::CIDToGIDMap::Explicit(map)) => *map.get(cid as usize).unwrap_or(&0),
+                    // A CID-keyed CFF resolves CIDs through its charset (§9.7.4.2), so a CID the charset
+                    // lacks has no glyph; only a font without a charset map takes the CID as the GID. ~keep
+                    None => match &font_info.cff_cid_to_gid {
+                        Some(charset) => charset.get(&cid).copied().unwrap_or(0),
+                        None => cid,
+                    },
                 }
             } else if let Some(cff_map) = &font_info.cff_gid_map {
                 *cff_map.get(&(char_code as u8)).unwrap_or(&0)
@@ -1754,12 +1768,11 @@ impl TextRasterizer {
                 ttf_face.cmap_byte_to_gid(char_code as u8).unwrap_or(0)
             } else {
                 match &font_info.cid_to_gid_map {
-                    Some(crate::fonts::CIDToGIDMap::Identity) => char_code,
+                    Some(crate::fonts::CIDToGIDMap::Identity) => char_code as u16,
                     Some(crate::fonts::CIDToGIDMap::Explicit(map)) => *map.get(char_code as usize).unwrap_or(&0),
-                    None => char_code,
+                    None => char_code as u16,
                 }
             };
-            let cid = char_code;
 
             // Get width from PDF metrics (horizontal) and vertical advance
             // + origin offset (vertical mode). Both lookups read from
@@ -1783,11 +1796,11 @@ impl TextRasterizer {
             // Unicode entry (e.g. ligatures and accented chars in symbolic TrueType
             // fonts that use the Mac Roman cmap path) are not silently treated as
             // spaces and dropped from the rendered output. ~keep
-            let char_str = font_info.char_to_unicode(cid as u32).unwrap_or_default();
+            let char_str = font_info.char_to_unicode(char_code).unwrap_or_default();
             let char_at_pos = char_str.chars().next().unwrap_or('\0');
 
             if gid == 0 && !char_at_pos.is_whitespace() {
-                dropped.record("no glyph id", u32::from(char_code), u32::from(gid));
+                dropped.record("no glyph id", char_code, u32::from(gid));
             }
             // GH#1632: paint decided by whether there is an outline to draw,
             // NOT by what character the code is inferred to represent. For a
@@ -1807,7 +1820,7 @@ impl TextRasterizer {
                 // A genuine space legitimately has no outline; reporting it as
                 // dropped would bury the real misses in false positives. ~keep
                 if !outlined && !char_at_pos.is_whitespace() {
-                    dropped.record("no outline", u32::from(char_code), u32::from(gid));
+                    dropped.record("no outline", char_code, u32::from(gid));
                 }
                 if outlined {
                     if let Some(path) = pb.finish() {
@@ -1921,7 +1934,7 @@ impl TextRasterizer {
             // Adobe-collection identity CMap stream). Non-Identity predefined
             // CMaps (90ms-RKSJ-H, GBK-EUC-H, …) carry raw legacy multi-byte
             // codes and are never routed here. ~keep
-            let cid = char_code;
+            let cid = u16::try_from(char_code).unwrap_or(0);
 
             // PDF advance metrics (font's own /W array) — paint position is
             // independent of the substituted glyph's native advance. ~keep
@@ -2581,6 +2594,7 @@ mod tests {
             cid_default_width: 1000.0,
             has_explicit_dw: true,
             cff_gid_map: None,
+            cff_cid_to_gid: None,
             multi_char_map: HashMap::new(),
             byte_to_char_table: std::sync::OnceLock::new(),
             type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -2772,6 +2786,82 @@ mod tests {
             (advance - 18.0).abs() > 1.0,
             "advance must NOT match the pre-fix /DW-fallback ~18.0pt result, got {advance}"
         );
+    }
+
+    const DEJAVU_SANS: &[u8] = include_bytes!("../fonts/assets/DejaVuSans.ttf");
+
+    fn dejavu_gid(ch: u8) -> u16 {
+        OutlineFace::new(DEJAVU_SANS, 0)
+            .and_then(|face| face.cmap_byte_to_gid(ch))
+            .expect("DejaVu maps ASCII")
+    }
+
+    /// Bounding boxes, in glyph space, of every outline `render_cid_direct` paints for `bytes`.
+    fn painted_bounds(font: &FontInfo, bytes: &[u8]) -> Vec<(f32, f32, f32, f32)> {
+        let rasterizer = TextRasterizer::with_fontdb(Arc::new(fontdb::Database::new()));
+        let gs = GraphicsState {
+            font_size: 24.0,
+            ..Default::default()
+        };
+        let mut bounds = Vec::new();
+        let mut visit = |path: &tiny_skia::Path, _glyph: Transform, _user: Transform| {
+            let b = path.bounds();
+            bounds.push((b.left(), b.top(), b.right(), b.bottom()));
+        };
+        let mut target = GlyphTarget::Visit(&mut visit);
+        rasterizer
+            .render_cid_direct(&mut target, bytes, font, DEJAVU_SANS, 0, Transform::identity(), &gs)
+            .expect("render");
+        bounds
+    }
+
+    #[test]
+    fn render_cid_direct_resolves_a_predefined_cmap_code_to_its_cid_before_the_gid_lookup() {
+        let mut font = make_uni_cns_ucs2_test_font();
+        let cid = usize::from(font.code_to_cid(0x54));
+        assert_ne!(cid, 0x54, "fixture must have a code that differs from its CID");
+        let (gid_a, gid_w) = (dejavu_gid(b'A'), dejavu_gid(b'W'));
+        let mut map = vec![0u16; 0x100];
+        map[cid] = gid_a;
+        map[0x54] = gid_w;
+        font.cid_to_gid_map = Some(crate::fonts::CIDToGIDMap::Explicit(map));
+
+        let mut by_gid = make_uni_cns_ucs2_test_font();
+        by_gid.encoding = Encoding::Identity;
+        by_gid.cid_to_gid_map = Some(crate::fonts::CIDToGIDMap::Identity);
+        let expected = painted_bounds(&by_gid, &gid_a.to_be_bytes());
+        assert_eq!(expected.len(), 1);
+
+        assert_eq!(painted_bounds(&font, b"\x00T"), expected);
+    }
+
+    #[test]
+    fn render_cid_direct_paints_no_glyph_for_a_cid_missing_from_the_charset() {
+        let mut font = make_uni_cns_ucs2_test_font();
+        font.encoding = Encoding::Identity;
+        font.cid_to_gid_map = None;
+        let absent_cid = dejavu_gid(b'A');
+        font.cff_cid_to_gid = Some(HashMap::from([(100, dejavu_gid(b'B')), (200, dejavu_gid(b'W'))]));
+        assert!(!font.cff_cid_to_gid.as_ref().unwrap().contains_key(&absent_cid));
+
+        assert!(painted_bounds(&font, &absent_cid.to_be_bytes()).is_empty());
+
+        let present = painted_bounds(&font, &100u16.to_be_bytes());
+        assert_eq!(present.len(), 1, "a CID the charset names still paints");
+    }
+
+    #[test]
+    fn render_cid_direct_keeps_utf8_segmentation_for_a_utf8_named_cmap_without_a_codespace() {
+        let mut font = make_uni_cns_ucs2_test_font();
+        font.encoding = Encoding::Standard("Custom-UTF8-H".to_string());
+        font.embedded_cid_map = Some(Arc::new(
+            crate::fonts::cid_cmap::parse_cid_cmap(b"1 begincidchar\n<E4B8AD> 100\nendcidchar\n").unwrap(),
+        ));
+        let mut map = vec![0u16; 0x100];
+        map[100] = dejavu_gid(b'A');
+        font.cid_to_gid_map = Some(crate::fonts::CIDToGIDMap::Explicit(map));
+
+        assert_eq!(painted_bounds(&font, "\u{4E2D}".as_bytes()).len(), 1);
     }
 
     /// Identity-H/V non-regression: CID == code is the common case (it is

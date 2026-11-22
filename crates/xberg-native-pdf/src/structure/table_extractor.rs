@@ -365,24 +365,43 @@ fn collect_table_elements<'a>(elem: &'a StructElem, page_num: u32, tables: &mut 
 /// (≈ O(pages²) on a tagged document). For a given page the result matches
 /// `find_table_elements(tree, page)`: same DFS pre-order, and like
 /// `collect_table_elements` it does not recurse into a Table's children.
+///
+/// Each bucket holds its own copy, so a table on N pages is copied N times.
 pub fn find_table_elements_all_pages(
     struct_tree: &crate::structure::types::StructTreeRoot,
 ) -> std::collections::HashMap<u32, Vec<StructElem>> {
-    let mut by_page: std::collections::HashMap<u32, Vec<StructElem>> = std::collections::HashMap::new();
+    find_table_elements_all_pages_shared(struct_tree)
+        .into_iter()
+        .map(|(page, elems)| (page, elems.iter().map(|e| StructElem::clone(e)).collect()))
+        .collect()
+}
+
+/// Like [`find_table_elements_all_pages`], but each `Table` subtree is copied
+/// once and shared by every page bucket it appears in.
+pub(crate) fn find_table_elements_all_pages_shared(
+    struct_tree: &crate::structure::types::StructTreeRoot,
+) -> std::collections::HashMap<u32, Vec<std::sync::Arc<StructElem>>> {
+    let mut by_page = std::collections::HashMap::new();
     for elem in &struct_tree.root_elements {
         collect_table_elements_all_pages(elem, &mut by_page);
     }
     by_page
 }
 
-fn collect_table_elements_all_pages(elem: &StructElem, by_page: &mut std::collections::HashMap<u32, Vec<StructElem>>) {
+fn collect_table_elements_all_pages(
+    elem: &StructElem,
+    by_page: &mut std::collections::HashMap<u32, Vec<std::sync::Arc<StructElem>>>,
+) {
     if elem.struct_type == StructType::Table {
         // Pages this table (or any descendant) has content on — the exact set
         // for which `element_has_page_content(elem, page)` is true. ~keep
         let mut pages = std::collections::BTreeSet::new();
         collect_content_pages(elem, &mut pages);
-        for p in pages {
-            by_page.entry(p).or_default().push(elem.clone());
+        if !pages.is_empty() {
+            let shared = std::sync::Arc::new(elem.clone());
+            for p in pages {
+                by_page.entry(p).or_default().push(std::sync::Arc::clone(&shared));
+            }
         }
         return; // mirror collect_table_elements: don't recurse into table children ~keep
     }
@@ -450,6 +469,16 @@ fn element_has_page_content(elem: &StructElem, page_num: u32) -> bool {
 /// # Returns
 /// * `Table` containing all rows and cells
 pub fn extract_table_from_spans(table_elem: &StructElem, spans: &[crate::layout::TextSpan]) -> Result<Table, Error> {
+    extract_table_from_spans_on_page(table_elem, spans, None)
+}
+
+/// Extract a table from one page's spans, resolving marked-content references
+/// against that page. See [`extract_table_on_page`].
+pub fn extract_table_from_spans_on_page(
+    table_elem: &StructElem,
+    spans: &[crate::layout::TextSpan],
+    page: Option<u32>,
+) -> Result<Table, Error> {
     // Convert spans to TextBlocks for MCID matching, applying column-spanning
     // decimal split so that "12.11" (sailing score columns) becomes "12 11". ~keep
     let text_blocks: Vec<TextBlock> = spans
@@ -472,7 +501,7 @@ pub fn extract_table_from_spans(table_elem: &StructElem, spans: &[crate::layout:
             }
         })
         .collect();
-    extract_table(table_elem, &text_blocks)
+    extract_table_on_page(table_elem, &text_blocks, page)
 }
 
 /// Return the display text for a span when used as a table cell token.
@@ -535,6 +564,22 @@ pub(super) fn span_text_for_cell(span: &crate::layout::TextSpan) -> String {
 /// # Returns
 /// * `Table` containing all rows and cells
 pub fn extract_table(table_elem: &StructElem, text_blocks: &[TextBlock]) -> Result<Table, Error> {
+    extract_table_on_page(table_elem, text_blocks, None)
+}
+
+/// Extract a table, resolving marked-content references against one page.
+///
+/// `page` is the page whose spans `text_blocks` came from. A `Table` element
+/// covers the whole table however many pages it is laid out across
+/// (ISO 32000-1 §14.8.4.3.4), so without the qualifier every page emits every
+/// row of it, and because MCID numbering restarts in each content stream
+/// (§14.7.4.2) each of those rows fills itself from whatever this page happens
+/// to have numbered the same.
+pub fn extract_table_on_page(
+    table_elem: &StructElem,
+    text_blocks: &[TextBlock],
+    page: Option<u32>,
+) -> Result<Table, Error> {
     let mut table = Table::new();
 
     let has_thead = table_elem
@@ -550,17 +595,20 @@ pub fn extract_table(table_elem: &StructElem, text_blocks: &[TextBlock]) -> Resu
         match child {
             StructChild::StructElem(elem) => match elem.struct_type {
                 StructType::TR => {
-                    let row = extract_row(elem, text_blocks, false)?;
+                    if page.is_some_and(|p| !element_has_page_content(elem, p)) {
+                        continue;
+                    }
+                    let row = extract_row(elem, text_blocks, false, page)?;
                     table.add_row(row);
                 }
                 StructType::THead => {
-                    extract_row_group(elem, text_blocks, true, &mut table)?;
+                    extract_row_group(elem, text_blocks, true, &mut table, page)?;
                 }
                 StructType::TBody => {
-                    extract_row_group(elem, text_blocks, false, &mut table)?;
+                    extract_row_group(elem, text_blocks, false, &mut table, page)?;
                 }
                 StructType::TFoot => {
-                    extract_row_group(elem, text_blocks, false, &mut table)?;
+                    extract_row_group(elem, text_blocks, false, &mut table, page)?;
                 }
                 _ => {}
             },
@@ -578,11 +626,15 @@ fn extract_row_group(
     text_blocks: &[TextBlock],
     is_header: bool,
     table: &mut Table,
+    page_filter: Option<u32>,
 ) -> Result<(), Error> {
     for child in &group_elem.children {
         match child {
             StructChild::StructElem(elem) if elem.struct_type == StructType::TR => {
-                let row = extract_row(elem, text_blocks, is_header)?;
+                if page_filter.is_some_and(|p| !element_has_page_content(elem, p)) {
+                    continue;
+                }
+                let row = extract_row(elem, text_blocks, is_header, page_filter)?;
                 table.add_row(row);
             }
             _ => {}
@@ -592,18 +644,23 @@ fn extract_row_group(
 }
 
 /// Extract a single row (TR element).
-fn extract_row(tr_elem: &StructElem, text_blocks: &[TextBlock], force_header: bool) -> Result<TableRow, Error> {
+fn extract_row(
+    tr_elem: &StructElem,
+    text_blocks: &[TextBlock],
+    force_header: bool,
+    page_filter: Option<u32>,
+) -> Result<TableRow, Error> {
     let mut row = TableRow::new(force_header);
 
     for child in &tr_elem.children {
         match child {
             StructChild::StructElem(elem) => match elem.struct_type {
                 StructType::TH => {
-                    let cell = extract_cell(elem, text_blocks, true)?;
+                    let cell = extract_cell(elem, text_blocks, true, page_filter)?;
                     row.add_cell(cell);
                 }
                 StructType::TD => {
-                    let cell = extract_cell(elem, text_blocks, false)?;
+                    let cell = extract_cell(elem, text_blocks, false, page_filter)?;
                     row.add_cell(cell);
                 }
                 _ => {}
@@ -617,11 +674,15 @@ fn extract_row(tr_elem: &StructElem, text_blocks: &[TextBlock], force_header: bo
 }
 
 /// Extract a single cell (TH or TD element).
-fn extract_cell(cell_elem: &StructElem, text_blocks: &[TextBlock], is_header: bool) -> Result<TableCell, Error> {
-    let mut mcids = Vec::new();
-    collect_mcids(cell_elem, &mut mcids);
+fn extract_cell(
+    cell_elem: &StructElem,
+    text_blocks: &[TextBlock],
+    is_header: bool,
+    page_filter: Option<u32>,
+) -> Result<TableCell, Error> {
     let mut scoped_mcids = Vec::new();
-    collect_scoped_mcids(cell_elem, &mut scoped_mcids);
+    collect_scoped_mcids(cell_elem, page_filter, &mut scoped_mcids);
+    let mcids: Vec<u32> = scoped_mcids.iter().map(|(_, mcid)| *mcid).collect();
 
     // Find all text blocks that match these MCIDs, joining them with position-aware
     // spacing: insert a space only when there is a genuine horizontal gap between
@@ -874,12 +935,6 @@ fn cell_rotation_degrees(blocks: &[&TextBlock]) -> f32 {
 }
 
 /// Recursively collect all MCIDs from a structure element and its children.
-fn collect_mcids(elem: &StructElem, mcids: &mut Vec<u32>) {
-    let mut scoped = Vec::new();
-    collect_scoped_mcids(elem, &mut scoped);
-    mcids.extend(scoped.into_iter().map(|(_, mcid)| mcid));
-}
-
 /// Collect a cell's marked-content references with the content stream each one
 /// names.
 ///
@@ -887,14 +942,20 @@ fn collect_mcids(elem: &StructElem, mcids: &mut Vec<u32>) {
 /// so two Form XObjects on one page routinely both number a run 0. Carrying the
 /// scope lets a cell tell its own run from an identically numbered one drawn by
 /// a different stream.
-fn collect_scoped_mcids(elem: &StructElem, out: &mut Vec<(McidScope, u32)>) {
+///
+/// With a `page_filter`, references naming another page's stream are dropped:
+/// the blocks being matched are one page's, so such a reference can never be
+/// satisfied and must not match by number.
+fn collect_scoped_mcids(elem: &StructElem, page_filter: Option<u32>, out: &mut Vec<(McidScope, u32)>) {
     for child in &elem.children {
         match child {
-            StructChild::MarkedContentRef { mcid, scope, .. } => {
-                out.push((scope.clone(), *mcid));
+            StructChild::MarkedContentRef { mcid, scope, page } => {
+                if page_filter.is_none_or(|p| p == *page) {
+                    out.push((scope.clone(), *mcid));
+                }
             }
             StructChild::StructElem(child_elem) => {
-                collect_scoped_mcids(child_elem, out);
+                collect_scoped_mcids(child_elem, page_filter, out);
             }
             StructChild::ObjectRef(_, _) => {}
         }
@@ -1008,7 +1069,7 @@ mod tests {
 
         // The assertion is that this returns at all: with `partial_cmp(..)
         // .unwrap_or(Equal)` the NaN breaks transitivity and sort_by panics. ~keep
-        let cell = extract_cell(&cell, &blocks, false).expect("cell extraction");
+        let cell = extract_cell(&cell, &blocks, false, None).expect("cell extraction");
         assert!(
             cell.text.contains('a') && cell.text.contains('x'),
             "finite blocks must survive a non-finite sibling, got {:?}",

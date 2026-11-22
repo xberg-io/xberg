@@ -816,6 +816,108 @@ fn read_index_count_returns_header_count() {
     assert_eq!(read_index_count(&data, 0), Some(300));
 }
 
+/// A bare CFF whose Top DICT declares `/FontMatrix [1/2048 0 0 1/2048 0 0]`.
+///
+/// Built here rather than embedded as a fixture. Layout: header
+/// `01 00 04 01`, Name INDEX ("Test"), Top DICT INDEX carrying six real
+/// operands then operator `12 7`, then an integer and operator `17`
+/// (CharStrings), empty String and GlobalSubr INDEXes, and a CharStrings
+/// INDEX with two trivial glyphs.
+///
+/// `1E 0A 00 04 88 28 12 FF` is the real-number encoding of 0.00048828125
+/// — nibbles `. 0 0 0 4 8 8 2 8 1 2` terminated by `F`.
+const CFF_2048: &[u8] = &[
+    0x01, 0x00, 0x04, 0x01, 0x00, 0x01, 0x01, 0x01, 0x05, 0x54, 0x65, 0x73, 0x74, 0x00, 0x01, 0x01, 0x01, 0x21, 0x1E,
+    0x0A, 0x00, 0x04, 0x88, 0x28, 0x12, 0xFF, 0x1E, 0x0A, 0xFF, 0x1E, 0x0A, 0xFF, 0x1E, 0x0A, 0x00, 0x04, 0x88, 0x28,
+    0x12, 0xFF, 0x1E, 0x0A, 0xFF, 0x1E, 0x0A, 0xFF, 0x0C, 0x07, 0xC1, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01,
+    0x01, 0x06, 0x0B, 0x1C, 0x04, 0x00, 0x8B, 0x0E, 0x1C, 0x04, 0x00, 0x8B, 0x0E,
+];
+
+/// The same font with the `/FontMatrix` operator removed, so the CFF
+/// default of 1/1000 applies and nothing should be folded in.
+fn cff_without_font_matrix() -> Vec<u8> {
+    let mut v = CFF_2048.to_vec();
+    // Strip the six real operands and the `0C 07` operator from the Top
+    // DICT, leaving only the CharStrings offset — then fix the INDEX
+    // offset byte that follows the count/offSize header.
+    let start = 18; // first byte of the Top DICT data
+    let end = 48; // one past the `0C 07`
+    v.drain(start..end);
+    v[17] = 0x21 - (end - start) as u8;
+    v
+}
+
+/// A subsetter targeting a 2048-unit em declares it, and the glyph-space
+/// scale must come from the font rather than from the 1000-unit
+/// assumption in ISO 32000-1 §9.2.2 ("For **most** types of fonts").
+#[test]
+fn test_font_matrix_of_one_over_2048_is_read() {
+    let sx =
+        parse_cff_font_matrix_scale(CFF_2048).expect("the Top DICT declares a FontMatrix, so a scale must come back");
+    assert!(
+        (1.0 / sx - 2048.0).abs() < 1.0,
+        "expected a 2048-unit em, got 1/{sx} = {}",
+        1.0 / sx
+    );
+}
+
+/// No `/FontMatrix` means the CFF default, and the caller must keep its own
+/// 1000-unit assumption rather than being handed a value to fold in.
+#[test]
+fn test_absent_font_matrix_yields_nothing_to_fold_in() {
+    assert_eq!(
+        parse_cff_font_matrix_scale(&cff_without_font_matrix()),
+        None,
+        "a CFF with no FontMatrix must not override the default em size"
+    );
+}
+
+/// The real-number decoder handles the forms Adobe TN #5176 §4 defines:
+/// a decimal point, a leading minus, and an exponent.
+#[test]
+fn dict_reals_decode() {
+    assert_eq!(parse_dict_real(&[0x1E, 0x0A, 0x00, 0x1F], 0), Some((0.001, 4)));
+    let (v, _) = parse_dict_real(&[0x1E, 0xE2, 0xA5, 0xFF], 0).expect("negative real");
+    assert!((v + 2.5).abs() < 1e-9, "expected -2.5, got {v}");
+}
+
+/// A minimal **CID-keyed** CFF: the Top DICT carries ROS (operator `12 30`)
+/// and a format-0 charset mapping GID 1 to **CID 100**.
+///
+/// Built here rather than embedded as a fixture. Layout: header, Name INDEX
+/// ("CIDT"), Top DICT INDEX with ROS / CIDCount / charset / CharStrings,
+/// empty String and GlobalSubr INDEXes, the charset, then a CharStrings
+/// INDEX of two glyphs.
+const CFF_CID_KEYED: &[u8] = &[
+    0x01, 0x00, 0x04, 0x01, 0x00, 0x01, 0x01, 0x01, 0x05, 0x43, 0x49, 0x44, 0x54, 0x00, 0x01, 0x01, 0x01, 0x13, 0x1C,
+    0x01, 0x87, 0x1C, 0x01, 0x88, 0x8B, 0x0C, 0x1E, 0x1C, 0x03, 0xE8, 0x0C, 0x22, 0xB3, 0x0F, 0xB6, 0x11, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x02, 0x01, 0x01, 0x05, 0x09, 0x1C, 0x03, 0xE8, 0x0E, 0x1C, 0x03, 0xE8, 0x0E,
+];
+
+/// §9.7.4.2: when the Top DICT uses
+/// CIDFont operators the CID must be resolved through the charset, and the
+/// NOTE warns the CID and GID "may differ". Here CID 100 is
+/// glyph 1, so treating the CID as a GID would ask for glyph 100 of a
+/// two-glyph font and paint nothing.
+#[test]
+fn test_cid_keyed_charset_maps_cid_to_gid() {
+    let map = parse_cff_cid_to_gid(CFF_CID_KEYED).expect("the Top DICT carries ROS, so this font is CID-keyed");
+    assert_eq!(map.get(&100), Some(&1), "CID 100 is GID 1 in this charset; got {map:?}");
+}
+
+/// A CFF with no ROS is not CID-keyed, and the same clause
+/// then says "the CIDs shall be used directly as GID values" — so the
+/// caller must get nothing to override that with.
+#[test]
+fn test_font_without_ros_yields_no_mapping() {
+    // CFF_2048 is the FontMatrix fixture above: a plain, non-CID-keyed font.
+    assert_eq!(
+        parse_cff_cid_to_gid(CFF_2048),
+        None,
+        "a font whose Top DICT has no ROS operator must not produce a CID map"
+    );
+}
+
 #[test]
 fn charset_range_running_past_sid_65535_does_not_overflow() {
     let format1 = [1u8, 0xFF, 0xFF, 6];

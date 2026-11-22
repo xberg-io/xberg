@@ -840,10 +840,11 @@ pub struct PdfDocument {
     /// element must NOT override it.
     pub(crate) mc_actualtext_mcids: Mutex<HashMap<usize, HashSet<u32>>>,
     /// `Table` structure elements bucketed by page, built once via
-    /// `find_table_elements_all_pages` (one tree walk) so the converter table
-    /// path does an O(1) lookup instead of walking the tree per page.
+    /// `find_table_elements_all_pages_shared` (one tree walk) so the converter
+    /// table path does an O(1) lookup instead of walking the tree per page.
+    /// Each table is stored once and shared by every page it has content on.
     /// `None` = not yet built.
-    table_elements_cache: Mutex<Option<HashMap<u32, Vec<crate::structure::StructElem>>>>,
+    table_elements_cache: Mutex<Option<Arc<HashMap<u32, Vec<Arc<crate::structure::StructElem>>>>>>,
     /// Page object cache keyed by page index to avoid re-traversing the page tree.
     /// The page tree structure is static (§7.7.3.2), so pages can be safely cached.
     /// Mutex provides interior mutability for `&self` read-path methods.
