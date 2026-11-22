@@ -833,8 +833,10 @@ impl TextRasterizer {
                     && (decode_drops.reason().is_some()
                         || unicode_text.chars().count() != TextCharIter::new(text, Some(info)).count());
                 // An OpenType CIDFontType0 must carry a cmap (ISO 32000-1 Table 126), but its CIDs
-                // resolve through the CFF (§9.7.4.2), not the Unicode cmap. ~keep
+                // resolve through the CFF (§9.7.4.2), not the Unicode cmap, but only where a code maps to a CID at
+                // all: a predefined CMap without a table leaves the raw code, which is no CID. ~keep
                 let cid_keyed_cff = info.subtype == "Type0" && info.cid_font_type.as_deref() == Some("CIDFontType0");
+                let cid_keyed_cff = cid_keyed_cff && info.resolves_codes_to_cids();
                 if has_unicode_cmap && !lost_identity_run && !cid_keyed_cff {
                     tracing::trace!("Using embedded PDF font data");
                     Some((None, Arc::clone(embedded), 0, false))
@@ -1735,7 +1737,7 @@ impl TextRasterizer {
             // - Default: identity mapping. ~keep
             // The content code is a CID only under an identity CMap; a predefined
             // one (UniCNS-UCS2-H, ...) maps code to CID first (§9.7.6). ~keep
-            let cid = font_info.code_to_cid_if_type0(u32::from(char_code));
+            let cid = font_info.code_to_cid_if_type0(char_code);
             let gid = if font_info.subtype == "Type0" {
                 match &font_info.cid_to_gid_map {
                     Some(crate::fonts::CIDToGIDMap::Identity) => cid,
@@ -1753,9 +1755,9 @@ impl TextRasterizer {
                 ttf_face.cmap_byte_to_gid(char_code as u8).unwrap_or(0)
             } else {
                 match &font_info.cid_to_gid_map {
-                    Some(crate::fonts::CIDToGIDMap::Identity) => char_code,
+                    Some(crate::fonts::CIDToGIDMap::Identity) => char_code as u16,
                     Some(crate::fonts::CIDToGIDMap::Explicit(map)) => *map.get(char_code as usize).unwrap_or(&0),
-                    None => char_code,
+                    None => char_code as u16,
                 }
             };
 
@@ -1781,11 +1783,11 @@ impl TextRasterizer {
             // Unicode entry (e.g. ligatures and accented chars in symbolic TrueType
             // fonts that use the Mac Roman cmap path) are not silently treated as
             // spaces and dropped from the rendered output. ~keep
-            let char_str = font_info.char_to_unicode(u32::from(char_code)).unwrap_or_default();
+            let char_str = font_info.char_to_unicode(char_code).unwrap_or_default();
             let char_at_pos = char_str.chars().next().unwrap_or('\0');
 
             if gid == 0 && !char_at_pos.is_whitespace() {
-                dropped.record("no glyph id", u32::from(char_code), u32::from(gid));
+                dropped.record("no glyph id", char_code, u32::from(gid));
             }
             // GH#1632: paint decided by whether there is an outline to draw,
             // NOT by what character the code is inferred to represent. For a
@@ -1805,7 +1807,7 @@ impl TextRasterizer {
                 // A genuine space legitimately has no outline; reporting it as
                 // dropped would bury the real misses in false positives. ~keep
                 if !outlined && !char_at_pos.is_whitespace() {
-                    dropped.record("no outline", u32::from(char_code), u32::from(gid));
+                    dropped.record("no outline", char_code, u32::from(gid));
                 }
                 if outlined {
                     if let Some(path) = pb.finish() {
@@ -1917,7 +1919,7 @@ impl TextRasterizer {
             // Adobe-collection identity CMap stream). Non-Identity predefined
             // CMaps (90ms-RKSJ-H, GBK-EUC-H, …) carry raw legacy multi-byte
             // codes and are never routed here. ~keep
-            let cid = char_code;
+            let cid = u16::try_from(char_code).unwrap_or(0);
 
             // PDF advance metrics (font's own /W array) — paint position is
             // independent of the substituted glyph's native advance. ~keep

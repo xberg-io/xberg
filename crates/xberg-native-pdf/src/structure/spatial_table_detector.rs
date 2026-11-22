@@ -3661,8 +3661,8 @@ fn assign_spans_to_intersection_grid(
             }
 
             // Concatenate columns left-to-right so spans on one visual line stay in reading
-            // order: `extract_cell_text` only re-sorts by Y, and each column's own span list
-            // is already confined to that column's X range. ~keep
+            // order: `extract_cell_text` re-sorts only by line (and by X within a left-to-right
+            // line), and each column's own span list is already confined to that column's X range. ~keep
             let group_span_indices: Vec<usize> = (first_col..=last_col)
                 .flat_map(|ci| grid_spans[ri][ci].iter().copied())
                 .collect();
@@ -5371,6 +5371,22 @@ fn grid_to_table(
     }
 }
 
+fn line_is_rtl_dominant(line: &[(&TextSpan, String)]) -> bool {
+    let (mut rtl, mut ltr) = (0usize, 0usize);
+    for c in line
+        .iter()
+        .flat_map(|(_, text)| text.chars())
+        .filter(|c| c.is_alphabetic())
+    {
+        if crate::text::is_rtl_text(c as u32) {
+            rtl += 1;
+        } else {
+            ltr += 1;
+        }
+    }
+    rtl > ltr
+}
+
 fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String {
     if cell_span_indices.is_empty() {
         return String::new();
@@ -5415,9 +5431,12 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
 
     // Lines are grouped on the centre-y above; reading order within one is by x,
     // because a centre moves with font size and a raised marker in a smaller
-    // font would otherwise sort ahead of the text it follows. ~keep
+    // font would otherwise sort ahead of the text it follows. A right-to-left
+    // line keeps the span order it arrived in, which is logical, not by x. ~keep
     for line in &mut lines {
-        line.sort_by(|a, b| crate::utils::safe_float_cmp(a.0.bbox.x, b.0.bbox.x));
+        if !line_is_rtl_dominant(line) {
+            line.sort_by(|a, b| crate::utils::safe_float_cmp(a.0.bbox.x, b.0.bbox.x));
+        }
     }
 
     lines
@@ -11574,6 +11593,19 @@ mod tests {
     fn cell_text_orders_spans_by_x_within_the_line_it_groups_them_into() {
         let spans = vec![ts("2", 106.0, 201.0, 6.0, 8.0), ts("1", 100.0, 199.0, 6.0, 12.0)];
         assert_eq!(extract_cell_text(&[0, 1], &spans), "12");
+    }
+
+    #[test]
+    fn cell_text_keeps_logical_order_for_right_to_left_words_on_one_line() {
+        let spans = vec![
+            ts("\u{5E9}\u{5DC}\u{5D5}\u{5DD}", 100.0, 200.0, 30.0, 10.0),
+            ts("\u{5E2}\u{5D5}\u{5DC}\u{5DD}", 40.0, 200.0, 30.0, 10.0),
+        ];
+        let text = extract_cell_text(&[0, 1], &spans);
+        assert!(
+            text.find('\u{5E9}') < text.find('\u{5E2}'),
+            "right-to-left words were re-sorted by x: {text:?}"
+        );
     }
 
     #[test]
