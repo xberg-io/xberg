@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NPM_PKG="@xberg-io/xberg-cli"
-PYPI_PKG="xberg-cli"
+# ~keep Rewritten by scripts/sync_integration_versions.py on every release. The plugin only accepts a
+# ~keep binary at or above this version, and downloads exactly this release, so a plugin update
+# ~keep cannot keep running an older xberg that happens to be installed.
+PINNED_VERSION="1.5.0"
 
 log() { printf 'xberg-launch: %s\n' "$*" >&2; }
 die() {
@@ -12,8 +14,8 @@ die() {
 
 LAUNCHER="${XBERG_LAUNCHER:-auto}"
 case "$LAUNCHER" in
-auto | npx | uvx | brew | download) ;;
-*) die "invalid XBERG_LAUNCHER='$LAUNCHER' (expected auto|npx|uvx|brew|download)" ;;
+auto | brew | download) ;;
+*) die "invalid XBERG_LAUNCHER='$LAUNCHER' (expected auto|brew|download)" ;;
 esac
 
 want() { [ "$LAUNCHER" = "auto" ] || [ "$LAUNCHER" = "$1" ]; }
@@ -32,7 +34,21 @@ BIN="$BIN_DIR/$BINARY_NAME"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-runnable() { [ -x "$1" ] && "$1" --version >/dev/null 2>&1; }
+# True when $1 runs and reports a version at or above PINNED_VERSION. A prerelease of a version
+# sorts below that version (SemVer), so 1.5.0-rc.1 does not satisfy a 1.5.0 pin. ~keep
+runnable() {
+  local out found base
+  [ -x "$1" ] || return 1
+  out="$("$1" --version 2>/dev/null)" || return 1
+  found="$(printf '%s\n' "$out" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?' | head -n 1)"
+  [ -n "$found" ] || return 1
+  base="${found%%-*}"
+  if [ "$(printf '%s\n%s\n' "$PINNED_VERSION" "$base" | sort -V | head -n 1)" != "$PINNED_VERSION" ] ||
+    { [ "$base" = "$PINNED_VERSION" ] && [ "$found" != "$base" ]; }; then
+    log "ignoring $1: version $found is older than the pinned $PINNED_VERSION"
+    return 1
+  fi
+}
 
 if runnable "$BIN"; then
   log "using cached xberg at $BIN"
@@ -44,28 +60,6 @@ if have "$BINARY_NAME"; then
     log "using xberg on PATH ($PATH_BIN)"
     exec "$PATH_BIN" "$@"
   fi
-fi
-
-if want npx && have npx; then
-  log "resolving npx $NPM_PKG@latest ..."
-  scratch="$(mktemp -d)"
-  # Resolve in an empty project, then execute the selected binary in the caller's cwd. ~keep
-  if npm_bin="$(cd "$scratch" && npx -y --package "$NPM_PKG@latest" --call "command -v ${BINARY_NAME%.exe}" 2>/dev/null)" && runnable "$npm_bin"; then
-    rm -rf "$scratch"
-    log "launching npm package binary $npm_bin"
-    exec "$npm_bin" "$@"
-  fi
-  rm -rf "$scratch"
-  log "npx $NPM_PKG not available (no CLI bin yet); falling through"
-fi
-
-if want uvx && have uvx; then
-  log "probing uvx --from $PYPI_PKG $BINARY_NAME ..."
-  if uvx --from "$PYPI_PKG" "$BINARY_NAME" --version >/dev/null 2>&1; then
-    log "launching via uvx --from $PYPI_PKG $BINARY_NAME"
-    exec uvx --from "$PYPI_PKG" "$BINARY_NAME" "$@"
-  fi
-  log "uvx $PYPI_PKG not available (no CLI entry point yet); falling through"
 fi
 
 if want brew && have brew; then
@@ -116,7 +110,7 @@ try_download() {
   *) ext="tar.gz" ;;
   esac
 
-  base_url="https://github.com/xberg-io/xberg/releases/latest/download"
+  base_url="https://github.com/xberg-io/xberg/releases/download/v${PINNED_VERSION}"
   asset="xberg-cli-${triple}.${ext}"
   asset_url="${base_url}/${asset}"
 
@@ -133,7 +127,7 @@ try_download() {
   # shellcheck disable=SC2064  # expand $tmp now so the trap removes this exact dir
   trap "rm -rf '$tmp'" RETURN
 
-  log "downloading $asset from latest release ..."
+  log "downloading $asset from release v$PINNED_VERSION ..."
   if ! fetch "$asset_url" "$tmp/$asset"; then
     log "download failed or asset not found: $asset_url; falling through"
     return 1
@@ -185,5 +179,5 @@ fi
 die "could not locate or install xberg. Install it manually with one of:
   brew install xberg-io/tap/xberg
   cargo install xberg-cli
-  or download a prebuilt archive from https://github.com/xberg-io/xberg/releases/latest
+  or download a prebuilt archive from https://github.com/xberg-io/xberg/releases/tag/v${PINNED_VERSION}
 then ensure 'xberg' is on PATH and retry."

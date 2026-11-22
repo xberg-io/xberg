@@ -4,13 +4,8 @@ Comprehensive command-line interface for the Xberg document intelligence library
 
 ## Installation
 
-The pinned command below follows this source release (1.4.0); use it once that release is published.
-
 ```bash
 brew install xberg-io/tap/xberg
-# or run without a persistent install (self-installs the binary):
-npx @xberg-io/xberg-cli --help
-uvx --from xberg-cli==1.4.0 xberg --help
 ```
 
 Or download a pre-built binary from the [latest GitHub Release](https://github.com/xberg-io/xberg/releases/latest), or build from source:

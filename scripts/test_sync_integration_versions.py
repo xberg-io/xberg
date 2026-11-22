@@ -1,4 +1,4 @@
-from scripts.sync_integration_versions import helm_metadata_errors
+from scripts.sync_integration_versions import LAUNCHER_PIN_RE, helm_metadata_errors
 
 
 def chart_metadata(
@@ -77,3 +77,10 @@ def test_helm_metadata_rejects_leading_zero_prerelease_number() -> None:
     assert helm_metadata_errors(chart_metadata(version=version), version) == [
         f"release version is not valid SemVer: {version}",
     ]
+
+
+def test_launcher_pin_rewrites_only_the_pinned_version_line() -> None:
+    launcher = 'LAUNCHER="${XBERG_LAUNCHER:-auto}"\nPINNED_VERSION="1.4.2"\n'
+    assert LAUNCHER_PIN_RE.sub(r"\g<1>1.5.0\g<3>", launcher, count=1) == (
+        'LAUNCHER="${XBERG_LAUNCHER:-auto}"\nPINNED_VERSION="1.5.0"\n'
+    )

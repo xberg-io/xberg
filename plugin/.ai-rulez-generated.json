@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "source_hash": "blake3:c222fc982b9c5f3485c2b4b74087e923da7345e4b5eea4b8df8db4810fba1d76",
+  "source_hash": "blake3:349da3cd7af45e537dbb8e8aa6b033a84afccc9dd0f9ad1552d37ae18780228d",
   "outputs": {
     ".claude-plugin/plugin.json": {
       "content_hash": "blake3:096ecb97e4213043ea31a5634a43872069b848f58e759bfafd405541a62dcc03",
@@ -35,7 +35,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-batch-extraction/references/configuration.md": {
@@ -75,7 +75,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-chunking/references/configuration.md": {
@@ -115,7 +115,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-keywords/references/configuration.md": {
@@ -155,7 +155,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-tables/references/configuration.md": {
@@ -195,7 +195,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -235,7 +235,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg-picking-a-format/references/configuration.md": {
@@ -263,7 +263,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/index.md": {
@@ -275,7 +275,7 @@
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".cursor-plugin/skills/xberg/references/configuration.md": {
@@ -343,7 +343,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-batch-extraction/references/configuration.md": {
@@ -383,7 +383,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-chunking/references/configuration.md": {
@@ -423,7 +423,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-keywords/references/configuration.md": {
@@ -463,7 +463,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-tables/references/configuration.md": {
@@ -503,7 +503,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -543,7 +543,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg-picking-a-format/references/configuration.md": {
@@ -571,7 +571,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/index.md": {
@@ -583,7 +583,7 @@
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/configuration.md": {
@@ -643,7 +643,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-batch-extraction/references/configuration.md": {
@@ -683,7 +683,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-chunking/references/configuration.md": {
@@ -723,7 +723,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-keywords/references/configuration.md": {
@@ -763,7 +763,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-tables/references/configuration.md": {
@@ -803,7 +803,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -843,7 +843,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg-picking-a-format/references/configuration.md": {
@@ -871,7 +871,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/index.md": {
@@ -883,7 +883,7 @@
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".hermes/plugins/xberg/skills/xberg/references/configuration.md": {
@@ -931,7 +931,7 @@
       "mode": "0644"
     },
     ".opencode/plugins/xberg.js": {
-      "content_hash": "blake3:3fe1a33d721dfa8b49134cbe88659999cf9e481c558eb8e4b5ac81bc672c88db",
+      "content_hash": "blake3:46f8f791b8245653dbdbaf9e518595813fb8d6ca6e976cddbc0d1a7879447f3f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-batch-extraction/SKILL.md": {
@@ -947,7 +947,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-batch-extraction/references/configuration.md": {
@@ -987,7 +987,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-chunking/references/configuration.md": {
@@ -1027,7 +1027,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-keywords/references/configuration.md": {
@@ -1067,7 +1067,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-tables/references/configuration.md": {
@@ -1107,7 +1107,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -1147,7 +1147,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg-picking-a-format/references/configuration.md": {
@@ -1175,7 +1175,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     ".opencode/skills/xberg/index.md": {
@@ -1187,7 +1187,7 @@
       "mode": "0644"
     },
     ".opencode/skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".opencode/skills/xberg/references/configuration.md": {
@@ -1235,7 +1235,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-batch-extraction/references/configuration.md": {
@@ -1275,7 +1275,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-chunking/references/configuration.md": {
@@ -1315,7 +1315,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-keywords/references/configuration.md": {
@@ -1355,7 +1355,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-tables/references/configuration.md": {
@@ -1395,7 +1395,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -1435,7 +1435,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg-picking-a-format/references/configuration.md": {
@@ -1463,7 +1463,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     ".pi/skills/xberg/index.md": {
@@ -1475,7 +1475,7 @@
       "mode": "0644"
     },
     ".pi/skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     ".pi/skills/xberg/references/configuration.md": {
@@ -1547,7 +1547,7 @@
       "mode": "0644"
     },
     "scripts/mcp-launch.sh": {
-      "content_hash": "blake3:d21c265b90f396834114e62f2638b8962ae87a1a39a95dab00f2203a8d0f5492",
+      "content_hash": "blake3:1f1acc51cf10eaefcb525e403e0aae6b5cc5a99b0c393e9f91e2d5dcb2c91855",
       "mode": "0755"
     },
     "skills/xberg-batch-extraction/SKILL.md": {
@@ -1563,7 +1563,7 @@
       "mode": "0644"
     },
     "skills/xberg-batch-extraction/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-batch-extraction/references/configuration.md": {
@@ -1603,7 +1603,7 @@
       "mode": "0644"
     },
     "skills/xberg-chunking/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-chunking/references/configuration.md": {
@@ -1643,7 +1643,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-keywords/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-keywords/references/configuration.md": {
@@ -1683,7 +1683,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-tables/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-tables/references/configuration.md": {
@@ -1723,7 +1723,7 @@
       "mode": "0644"
     },
     "skills/xberg-extracting-with-ocr/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-extracting-with-ocr/references/configuration.md": {
@@ -1763,7 +1763,7 @@
       "mode": "0644"
     },
     "skills/xberg-picking-a-format/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg-picking-a-format/references/configuration.md": {
@@ -1791,7 +1791,7 @@
       "mode": "0644"
     },
     "skills/xberg/SKILL.md": {
-      "content_hash": "blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1",
+      "content_hash": "blake3:02be391d3f81bdb00fe965e07386ffcde4c8d16b563a7b14dd9094a1b9454e4d",
       "mode": "0644"
     },
     "skills/xberg/index.md": {
@@ -1803,7 +1803,7 @@
       "mode": "0644"
     },
     "skills/xberg/references/cli-reference.md": {
-      "content_hash": "blake3:70bcb43e649e885bb822d41efb7221b365fd6f1870d1e6a5bb4ab3ec10be6acc",
+      "content_hash": "blake3:8d6c6579952ddf042af5645a1d47916190c2ce51a87a7448963b19e43a4f7c4f",
       "mode": "0644"
     },
     "skills/xberg/references/configuration.md": {
