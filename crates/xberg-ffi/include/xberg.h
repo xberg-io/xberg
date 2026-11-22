@@ -7030,6 +7030,15 @@ int32_t xberg_conversion_options_has_max_depth(XBERGAlefHandle handle);
 char *xberg_conversion_options_exclude_selectors(XBERGAlefHandle handle);
 
 /**
+ * Get the `data_as_elements` field from a `ConversionOptions`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_conversion_options_data_as_elements(XBERGAlefHandle handle);
+
+/**
  * Get the `tier_strategy` field from a `ConversionOptions`.
  * A non-null returned handle is owned by the caller.
  * It must be freed with `xberg_tier_strategy_free`.

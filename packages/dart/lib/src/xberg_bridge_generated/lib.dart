@@ -4786,6 +4786,17 @@ class ConversionOptions {
   /// Example: `vec![".cookie-banner".into(), "#ad-container".into(), "[role='complementary']".into()]`
   final List<String> excludeSelectors;
 
+  /// Elements whose `data-as` attribute names the element they stand for.
+  ///
+  /// Mintlify writes a paragraph as `<span data-as="p">`. An element in this list that has a
+  /// `data-as` attribute is converted as the element the attribute names, so adjacent
+  /// `<span data-as="p">` elements become separate paragraphs. The attribute can name `p`,
+  /// `h1` to `h6`, `li`, `ul`, `ol`, `blockquote`, `pre` or `div`; any other value leaves the
+  /// element as it is. Tag names are matched without regard to case.
+  ///
+  /// `None` (the default) uses `["span", "div"]`. `Some` of an empty list turns the feature off.
+  final List<String>? dataAsElements;
+
   /// Which conversion tier to use.
   ///
   /// - [`TierStrategy::Auto`] (default) — automatically choose the best path.
@@ -4862,6 +4873,7 @@ class ConversionOptions {
     required this.inferDimensions,
     this.maxDepth,
     required this.excludeSelectors,
+    this.dataAsElements,
     required this.tierStrategy,
     this.baseUrl,
   });
@@ -4915,6 +4927,7 @@ class ConversionOptions {
       inferDimensions.hashCode ^
       maxDepth.hashCode ^
       excludeSelectors.hashCode ^
+      dataAsElements.hashCode ^
       tierStrategy.hashCode ^
       baseUrl.hashCode;
 
@@ -4970,6 +4983,7 @@ class ConversionOptions {
           inferDimensions == other.inferDimensions &&
           maxDepth == other.maxDepth &&
           excludeSelectors == other.excludeSelectors &&
+          dataAsElements == other.dataAsElements &&
           tierStrategy == other.tierStrategy &&
           baseUrl == other.baseUrl;
 }

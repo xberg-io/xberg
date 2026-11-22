@@ -20438,8 +20438,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConversionOptions dco_decode_conversion_options(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 49)
-      throw Exception('unexpected arr length: expect 49 but see ${arr.length}');
+    if (arr.length != 50)
+      throw Exception('unexpected arr length: expect 50 but see ${arr.length}');
     return ConversionOptions(
       headingStyle: dco_decode_heading_style(arr[0]),
       listIndentType: dco_decode_list_indent_type(arr[1]),
@@ -20488,8 +20488,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inferDimensions: dco_decode_bool(arr[44]),
       maxDepth: dco_decode_opt_box_autoadd_i_64(arr[45]),
       excludeSelectors: dco_decode_list_String(arr[46]),
-      tierStrategy: dco_decode_tier_strategy(arr[47]),
-      baseUrl: dco_decode_opt_String(arr[48]),
+      dataAsElements: dco_decode_opt_list_String(arr[47]),
+      tierStrategy: dco_decode_tier_strategy(arr[48]),
+      baseUrl: dco_decode_opt_String(arr[49]),
     );
   }
 
@@ -29923,6 +29924,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_inferDimensions = sse_decode_bool(deserializer);
     var var_maxDepth = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_excludeSelectors = sse_decode_list_String(deserializer);
+    var var_dataAsElements = sse_decode_opt_list_String(deserializer);
     var var_tierStrategy = sse_decode_tier_strategy(deserializer);
     var var_baseUrl = sse_decode_opt_String(deserializer);
     return ConversionOptions(
@@ -29973,6 +29975,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inferDimensions: var_inferDimensions,
       maxDepth: var_maxDepth,
       excludeSelectors: var_excludeSelectors,
+      dataAsElements: var_dataAsElements,
       tierStrategy: var_tierStrategy,
       baseUrl: var_baseUrl,
     );
@@ -42471,6 +42474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.inferDimensions, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxDepth, serializer);
     sse_encode_list_String(self.excludeSelectors, serializer);
+    sse_encode_opt_list_String(self.dataAsElements, serializer);
     sse_encode_tier_strategy(self.tierStrategy, serializer);
     sse_encode_opt_String(self.baseUrl, serializer);
   }
