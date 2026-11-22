@@ -157,6 +157,22 @@ const DEFAULT_OBJECT_STREAM_RECOVERY_MARKERS: usize = 4096;
 /// this pairwise heuristic.
 const FORWARD_GAP_K: f32 = 1.25;
 
+/// Position tolerance for treating recurring text as position-locked chrome
+/// rather than genuine content that happens to repeat.
+const ARTIFACT_POS_TOL_X: f32 = 40.0;
+const ARTIFACT_POS_TOL_Y: f32 = 24.0;
+
+/// One registered running-header/footer signature: the earliest page it was
+/// observed on (kept intact: often a cover-page title echoed by later pages)
+/// and every `(page, bbox)` it was recorded at. A digit-collapsed signature
+/// such as `#a` does not distinguish a running page number from unrelated
+/// per-page content (form line-item labels `1a`/`2a`) that normalizes the same
+/// way but sits somewhere else on every page, so matching also checks position.
+struct RunningArtifactSignature {
+    first_seen_page: usize,
+    occurrences: Vec<(usize, crate::geometry::Rect)>,
+}
+
 /// Maximum allowed inter-span X gap inside a candidate same-line reorder run.
 /// If the candidate's tentative X-order contains a larger gap, the run is
 /// probably a disjoint footer/header/field layout rather than a local
@@ -910,7 +926,8 @@ pub struct PdfDocument {
     /// first appearance is often the document's cover-page title that just
     /// happens to echo into the header band on every page (pdfa_010
     /// would otherwise drop "University of Oklahoma 2009").
-    running_artifact_signatures: Mutex<Option<std::sync::Arc<std::collections::HashMap<String, usize>>>>,
+    running_artifact_signatures:
+        Mutex<Option<std::sync::Arc<std::collections::HashMap<String, RunningArtifactSignature>>>>,
     /// Document-wide article threads (`/Threads`), parsed once. Reading-order
     /// resolution consults them per page, and parsing walks the whole page
     /// tree — so without this the cost per page scaled with the document.

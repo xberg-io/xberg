@@ -902,3 +902,109 @@ fn line_corridor_gutter_declines_on_a_grid_table() {
         "expected the 291.0..306.6 midpoint, got {gutter}"
     );
 }
+
+fn page_number_candidates(count: usize, y_of: impl Fn(usize) -> f32) -> Vec<TextSpan> {
+    (0..count)
+        .map(|i| {
+            let mut s = make_test_span(
+                &format!("{}", 1 + i % 9000),
+                5.0 + (i % 50) as f32 * 11.5,
+                y_of(i),
+                6.0,
+                4.0,
+            );
+            s.bbox.height = 4.0;
+            s
+        })
+        .collect()
+}
+
+/// The bare-page-number rule must tag exactly the spans that stand alone on
+/// their line, whatever the number of spans on the page.
+#[test]
+fn bare_page_number_marking_matches_a_brute_force_scan() {
+    let doc = PdfDocument::from_bytes(build_minimal_pdf(b"BT /F1 12 Tf 72 700 Td (x) Tj ET")).unwrap();
+    let y_of = |i: usize| 3.0 + ((i * 37) % 61) as f32 * 0.9;
+    let mut spans = page_number_candidates(400, y_of);
+    // A few spans far apart so some candidates stand alone on their line.
+    for (k, i) in [0usize, 7, 123, 399].iter().enumerate() {
+        spans[*i].bbox.y = 90.0 - k as f32 * 8.0 + 0.0003 * k as f32;
+    }
+    let baselines: Vec<f32> = spans.iter().map(|s| s.bbox.y).collect();
+    let expected: Vec<bool> = spans
+        .iter()
+        .map(|s| {
+            let tol = s.font_size.max(6.0);
+            baselines.iter().filter(|&&oy| (oy - s.bbox.y).abs() < tol).count() <= 1
+        })
+        .collect();
+    assert!(
+        expected.iter().any(|&e| e) && expected.iter().any(|&e| !e),
+        "fixture must exercise both outcomes"
+    );
+
+    doc.mark_running_artifact_spans(0, &mut spans).unwrap();
+
+    let tagged: Vec<bool> = spans.iter().map(|s| s.artifact_type.is_some()).collect();
+    assert_eq!(tagged, expected);
+}
+
+/// 100 000 page-number candidates in one band took quadratic time.
+#[test]
+fn bare_page_number_marking_scales_to_a_hostile_page() {
+    let doc = PdfDocument::from_bytes(build_minimal_pdf(b"BT /F1 12 Tf 72 700 Td (x) Tj ET")).unwrap();
+    let mut spans = page_number_candidates(100_000, |i| 3.0 + (i / 50) as f32 * 0.04);
+
+    let start = std::time::Instant::now();
+    doc.mark_running_artifact_spans(0, &mut spans).unwrap();
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < std::time::Duration::from_secs(10),
+        "marking {} spans took {elapsed:?}",
+        spans.len()
+    );
+}
+
+/// The sorted-endpoint straddle count must equal the per-x rescan it replaced,
+/// at every x the gutter scan could probe, over layouts with shared and abutting
+/// edges, zero-width and sub-4pt runs, and one or three columns.
+#[test]
+fn straddle_counter_matches_a_rescan_on_several_layouts() {
+    let layouts: Vec<Vec<(f32, f32)>> = vec![
+        (0..60)
+            .map(|i| (50.0 + (i % 2) as f32 * 260.0, 100.0 + (i % 5) as f32 * 3.0))
+            .collect(),
+        (0..60)
+            .map(|i| (40.0 + (i % 3) as f32 * 170.0, 120.0 + (i % 7) as f32 * 11.0))
+            .collect(),
+        (0..40)
+            .map(|i| (10.0 + i as f32 * 12.5, 4.0 * (i % 3) as f32))
+            .collect(),
+        (0..80)
+            .map(|i| (100.0 + (i * 7 % 13) as f32, 2.0 + (i % 4) as f32 * 0.5))
+            .collect(),
+        (0..50).map(|i| (30.0 + i as f32 * 10.0, 10.0)).collect(),
+        vec![(0.0, 0.0), (5.0, 4.0), (5.0, 4.0), (300.0, 250.0), (299.0, 2.0)],
+    ];
+    for (n, layout) in layouts.iter().enumerate() {
+        let spans: Vec<TextSpan> = layout
+            .iter()
+            .map(|&(x, w)| make_test_span("word", x, 700.0, w, 10.0))
+            .collect();
+        let idx: Vec<usize> = (0..spans.len()).collect();
+        let counter = PdfDocument::straddle_counter(&spans, &idx);
+        let mut probed = 0;
+        let mut x = -5.0f32;
+        while x < 620.0 {
+            let expected = idx
+                .iter()
+                .filter(|&&i| spans[i].bbox.x + 2.0 < x && spans[i].bbox.x + spans[i].bbox.width - 2.0 > x)
+                .count();
+            assert_eq!(counter(x), expected, "layout {n}, x = {x}");
+            probed += 1;
+            x += 0.5;
+        }
+        assert!(probed > 1000);
+    }
+}

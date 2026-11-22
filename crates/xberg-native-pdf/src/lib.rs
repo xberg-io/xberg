@@ -271,7 +271,7 @@ pub(crate) mod utils {
     /// comparing raw Y values with tolerance is non-transitive and would
     /// break `sort_by`.
     #[inline]
-    pub fn row_aware_span_cmp(a_y: f32, a_x: f32, b_y: f32, b_x: f32) -> Ordering {
+    pub fn row_band_then_x(a_y: f32, a_x: f32, b_y: f32, b_x: f32) -> Ordering {
         // Non-finite Y (NaN/±Inf) cannot be quantized into an i32 band —
         // `as i32` saturates, collapsing distinct non-finite values into
         // the same band and reordering them unpredictably against finite
@@ -282,10 +282,51 @@ pub(crate) mod utils {
         }
         let band_a = (a_y / ROW_BAND_TOLERANCE_PT).round() as i32;
         let band_b = (b_y / ROW_BAND_TOLERANCE_PT).round() as i32;
-        match band_b.cmp(&band_a) {
-            Ordering::Equal => safe_float_cmp(a_x, b_x),
-            other => other,
+        band_b.cmp(&band_a).then_with(|| safe_float_cmp(a_x, b_x))
+    }
+
+    /// Row band descending, then `x` ascending, then the baseline descending.
+    ///
+    /// Without the third key two spans sharing a band and an `x` compare
+    /// `Equal` and `sort_by` stability decides, which is the incoming order
+    /// rather than reading order. The baseline key is only meaningful for
+    /// baselines the page actually draws; a caller ordering on a synthetic key
+    /// must use [`row_band_then_x`] and break ties on the real geometry.
+    #[inline]
+    pub fn row_aware_span_cmp(a_y: f32, a_x: f32, b_y: f32, b_x: f32) -> Ordering {
+        row_band_then_x(a_y, a_x, b_y, b_x).then_with(|| safe_float_cmp(b_y, a_y))
+    }
+
+    /// Writing-axis quadrant, then row band, then `x`, with no baseline
+    /// tiebreak.
+    ///
+    /// Row banding compares baselines along page-y and orders within a band
+    /// along page-x, which only means something for runs sharing a writing
+    /// axis (ISO 32000-1:2008 §9.4.4). Pairs with a tiebreak on the baseline
+    /// the page draws when the row key is shared between spans.
+    #[inline]
+    #[allow(dead_code)]
+    pub fn row_band_then_x_axis(a_rot: f32, a_y: f32, a_x: f32, b_rot: f32, b_y: f32, b_x: f32) -> Ordering {
+        quadrant_key(a_rot)
+            .cmp(&quadrant_key(b_rot))
+            .then_with(|| row_band_then_x(a_y, a_x, b_y, b_x))
+    }
+
+    /// Writing-axis bucket for a run's rotation: 0/90/180/270, or a distinct
+    /// bucket for anything that is not within half a degree of a right angle.
+    #[inline]
+    #[allow(dead_code)]
+    fn quadrant_key(rot: f32) -> i32 {
+        if !rot.is_finite() {
+            return i32::MAX;
         }
+        let norm = rot.rem_euclid(360.0);
+        for (q, angle) in [(0, 0.0), (1, 90.0), (2, 180.0), (3, 270.0)] {
+            if (norm - angle).abs() <= 0.5 || (norm - (angle + 360.0)).abs() <= 0.5 {
+                return q;
+            }
+        }
+        4 + (norm as i32)
     }
 
     /// Dominant text-matrix rotation of a page's spans, if any.
@@ -346,7 +387,7 @@ pub(crate) mod utils {
         let band_a = (a_y / ROW_BAND_TOLERANCE_PT).round() as i32;
         let band_b = (b_y / ROW_BAND_TOLERANCE_PT).round() as i32;
         match band_b.cmp(&band_a) {
-            Ordering::Equal => safe_float_cmp(b_x, a_x),
+            Ordering::Equal => safe_float_cmp(b_x, a_x).then_with(|| safe_float_cmp(b_y, a_y)),
             other => other,
         }
     }
@@ -463,6 +504,7 @@ pub(crate) mod utils {
     /// ascending — `f32::total_cmp` equals `safe_float_cmp` for finite values,
     /// and both are stable on ties). Otherwise it falls back to the comparator
     /// so the NaN/±∞ policy is unchanged.
+    #[allow(dead_code)]
     pub fn sort_by_row_band<T>(items: &mut [T], get_y: impl Fn(&T) -> f32, get_x: impl Fn(&T) -> f32) {
         let all_finite = items.iter().all(|it| get_y(it).is_finite() && get_x(it).is_finite());
         if !all_finite {
@@ -473,7 +515,11 @@ pub(crate) mod utils {
             let band = (get_y(it) / ROW_BAND_TOLERANCE_PT).round() as i32;
             // Reverse band → larger Y (higher on page) first, matching the
             // comparator's `band_b.cmp(&band_a)`. ~keep
-            (std::cmp::Reverse(band), F32Ord(get_x(it)))
+            (
+                std::cmp::Reverse(band),
+                F32Ord(get_x(it)),
+                std::cmp::Reverse(F32Ord(get_y(it))),
+            )
         });
     }
 
@@ -527,9 +573,253 @@ pub(crate) mod utils {
         }
     }
 
+    /// Give every span the baseline of the row it is printed on, so a row-band
+    /// comparator sees one row per printed line.
+    ///
+    /// Quantizing each baseline onto a fixed grid decides row membership by
+    /// which side of an arbitrary boundary a baseline lands on, and that is
+    /// wrong wherever a row mixes font sizes. A timetable sets its times at
+    /// 5 pt and its band names at 8 pt on the same rows; the name's baseline
+    /// sits 3.3 pt below its own time's and only 2.0 pt above the next one's,
+    /// so the name bands with the row *below* the one it is printed on.
+    ///
+    /// Neither edge of the box settles it alone. Producers align mixed sizes
+    /// sometimes on the baseline and sometimes on the cap top — this very page
+    /// does both — so two runs are taken to be aligned when *either* their
+    /// baselines or their tops agree, whichever agrees better. ISO 32000-1:2008
+    /// §9.4.4 computes the glyph displacement along the writing axis and sets
+    /// the component for the other axis to 0: a horizontal run does not move
+    /// vertically as it is painted, so both edges are fixed by the font and
+    /// either may be the one the producer aligned on.
+    ///
+    /// The page's dominant text size defines the row grid. Rows are seeded
+    /// from spans at that size, in descending baseline order; every remaining
+    /// span then joins the row it aligns with *best*, rather than the first
+    /// row within tolerance — a name centred between two rows is close to
+    /// both, and only the better match is the row it is printed on. A span
+    /// that aligns with no row seeds one of its own.
+    ///
+    /// Rows are formed per writing-axis quadrant, so a rotated run never joins
+    /// a horizontal row.
+    pub fn snap_baselines_to_rows(all_spans: &[crate::layout::TextSpan], indices: &[usize]) -> Vec<f32> {
+        // Baseline and top of a span. A degenerate box falls back to the font
+        // size so it still gets a row rather than becoming one.
+        let edges = |i: usize| -> (f32, f32) {
+            let b = &all_spans[i].bbox;
+            let h = if b.height.is_finite() && b.height > 0.0 {
+                b.height
+            } else {
+                all_spans[i].font_size.max(1.0)
+            };
+            (b.y, b.y + h)
+        };
+        let quadrant = |i: usize| -> i32 {
+            let r = all_spans[i].rotation_degrees;
+            if !r.is_finite() {
+                return 0;
+            }
+            (r / 90.0).round().rem_euclid(4.0) as i32
+        };
+        // How far apart two runs are, taking the better-agreeing edge — but
+        // only between runs of comparable height.
+        //
+        // Reading the better-agreeing edge is what lets a superscript, a drop
+        // capital or a run whose box carries a descender join the line it
+        // belongs to: at similar heights, agreement on either edge implies
+        // agreement on the other. That implication fails once one run is much
+        // taller than the other. A 19 pt centred title spanning three lines of
+        // an 8 pt stamp beside it had a top edge 0.4 pt from the stamp's first
+        // line and a baseline 11 pt away, so the better-agreeing edge put the
+        // title *inside* the stamp's opening phrase and pushed the phrase's
+        // second half onto the following line: `Prescribed by Treasury` /
+        // title / `Department Treasury Dept. Cir. 1076`.
+        //
+        // Sharing a row means sharing a baseline. Above twice the height the
+        // top edge stops being evidence of that and only the baseline counts.
+        const COMPARABLE_HEIGHT_RATIO: f32 = 2.0;
+        let distance = |a: usize, b: usize| -> f32 {
+            let (a_base, a_top) = edges(a);
+            let (b_base, b_top) = edges(b);
+            let by_baseline = (a_base - b_base).abs();
+            let (short, tall) = {
+                let (ha, hb) = (a_top - a_base, b_top - b_base);
+                (ha.min(hb), ha.max(hb))
+            };
+            if short > 0.0 && tall > short * COMPARABLE_HEIGHT_RATIO {
+                return by_baseline;
+            }
+            by_baseline.min((a_top - b_top).abs())
+        };
+
+        let mut snapped: Vec<f32> = indices.iter().map(|&i| all_spans[i].bbox.y).collect();
+        if indices.is_empty() {
+            return snapped;
+        }
+
+        // The dominant text size, to 0.5 pt. Seeding rows from one size keeps
+        // the grid regular; mixing every size in would let a run centred
+        // between two rows define a row of its own between them.
+        let mut tally: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
+        for &i in indices {
+            let fs = all_spans[i].font_size;
+            if fs.is_finite() && fs > 0.0 {
+                *tally.entry((fs * 2.0).round() as i32).or_insert(0) += 1;
+            }
+        }
+        let modal = tally
+            .into_iter()
+            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
+            .map(|(k, _)| k);
+
+        // Positions within `indices`, topmost baseline first, so a row is
+        // always seeded by its upper edge.
+        let mut order: Vec<usize> = (0..indices.len()).collect();
+        order.sort_by(|&a, &b| safe_float_cmp(all_spans[indices[b]].bbox.y, all_spans[indices[a]].bbox.y));
+
+        // Two runs cannot share a line and also share the space on it.
+        //
+        // Row membership is decided from vertical evidence alone, which is
+        // right for runs printed side by side and wrong for runs printed on
+        // top of each other. A page footer stamped over an earlier footer sits
+        // within a fraction of a point of it — 0.145 pt between the cap tops of
+        // a 7 pt and a 9 pt run — so every vertical test accepts the pair, the
+        // row is then ordered by left edge, and the two footers come back
+        // shuffled into one another: `The Molecular Probes The Molecular
+        // Probes(R) Handbook: (TM) Handbook: A Guide to ...`.
+        //
+        // Horizontal extent settles it, and nothing else does. ISO 32000-1:2008
+        // §9.4.4 advances the text position along the writing axis by each
+        // glyph's displacement, so a run occupies one unbroken interval on that
+        // axis; two runs whose intervals overlap substantially cannot both be
+        // reading matter on one line, and one is drawn over the other.
+        //
+        // Substantially, because extractor boxes overreach to the right on
+        // trailing whitespace and stretched advances, and adjacent runs on a
+        // real line touch or overlap slightly through kerning. The bar is a
+        // quarter of the shorter run and at least two points; the stamped
+        // footers above overlap by 69.7 pt, which is 95% of the shorter one.
+        const MIN_OVERLAP_PT: f32 = 2.0;
+        const OVERLAP_FRACTION: f32 = 0.25;
+        let x_extent = |i: usize| -> (f32, f32) {
+            let b = &all_spans[i].bbox;
+            let w = if b.width.is_finite() && b.width > 0.0 {
+                b.width
+            } else {
+                0.0
+            };
+            (b.x, b.x + w)
+        };
+        let occupies_the_same_space = |i: usize, j: usize| -> bool {
+            // A blank run competes for no reading space. Producers emit
+            // space-only runs freely, and one drawn a fraction of a point under
+            // a heading at the same left edge belongs to that heading's row —
+            // separating it there would undo the rule that keeps a two-line
+            // section title whole.
+            if all_spans[i].text.trim().is_empty() || all_spans[j].text.trim().is_empty() {
+                return false;
+            }
+            let ((li, ri), (lj, rj)) = (x_extent(i), x_extent(j));
+            if !(li.is_finite() && ri.is_finite() && lj.is_finite() && rj.is_finite()) {
+                return false;
+            }
+            let overlap = ri.min(rj) - li.max(lj);
+            if overlap <= 0.0 {
+                return false;
+            }
+            let shorter = (ri - li).min(rj - lj).max(0.0);
+            overlap > MIN_OVERLAP_PT.max(shorter * OVERLAP_FRACTION)
+        };
+
+        // A row is remembered by the span that seeded it, and by everything
+        // assigned to it — a candidate has to clear the space of every member,
+        // not just the seed's, because the run it collides with may have joined
+        // the row later.
+        let mut rows: Vec<usize> = Vec::new();
+        let mut members: Vec<Vec<usize>> = Vec::new();
+        let mut row_of: Vec<Option<usize>> = vec![None; indices.len()];
+        // Seeded rows indexed by their seed's baseline, ascending, so the
+        // nearest-row search reads a window instead of every row on the page.
+        //
+        // `distance` is the smaller of the baseline gap and the top-edge gap,
+        // and a top-edge gap differs from the baseline gap by at most the two
+        // runs' heights, so `d <= ROW_BAND_TOLERANCE_PT` implies
+        // `|baseline_i - baseline_seed| <= ROW_BAND_TOLERANCE_PT + h_i + h_max`.
+        // Every row that could win is inside that window; the ones outside it
+        // could only lose, and a loss and an absence take the same branch.
+        let mut rows_by_baseline: Vec<(f32, usize)> = Vec::new();
+        let h_max = indices
+            .iter()
+            .map(|&i| {
+                let (b, t) = edges(i);
+                (t - b).abs()
+            })
+            .filter(|h| h.is_finite())
+            .fold(0.0f32, f32::max);
+        let is_modal =
+            |i: usize| -> bool { modal.is_some_and(|m| ((all_spans[i].font_size * 2.0).round() as i32) == m) };
+
+        // Two passes over the same order: the dominant size lays down the
+        // grid, then everything else attaches to it.
+        for modal_pass in [true, false] {
+            for &pos in &order {
+                let i = indices[pos];
+                if row_of[pos].is_some() || is_modal(i) != modal_pass {
+                    continue;
+                }
+                if !all_spans[i].bbox.y.is_finite() {
+                    continue;
+                }
+                let q = quadrant(i);
+                let (base_i, top_i) = edges(i);
+                let window = ROW_BAND_TOLERANCE_PT + (top_i - base_i).abs() + h_max;
+                let (lo_b, hi_b) = (base_i - window, base_i + window);
+                let from = rows_by_baseline.partition_point(|&(b, _)| b < lo_b);
+                let to = rows_by_baseline.partition_point(|&(b, _)| b <= hi_b);
+                let mut candidates: Vec<usize> = rows_by_baseline[from..to].iter().map(|&(_, r)| r).collect();
+                // Row order, so a tie still resolves to the row seeded first.
+                candidates.sort_unstable();
+                let best = candidates
+                    .into_iter()
+                    .filter(|&r| quadrant(rows[r]) == q)
+                    .map(|r| (distance(i, rows[r]), r, rows[r]))
+                    .min_by(|a, b| safe_float_cmp(a.0, b.0));
+                // The space test is applied to the row that wins on distance,
+                // not to every row that might have. Scanning each candidate's
+                // members for every span is quadratic in the spans on a page
+                // and doubled the time to convert a 725-page book; a run is
+                // only ever placed on its nearest row, so that is the only one
+                // whose space it can be competing for. A run vetoed there opens
+                // a row of its own, which is what it needs.
+                match best {
+                    Some((d, r, seed))
+                        if d <= ROW_BAND_TOLERANCE_PT && !members[r].iter().any(|&m| occupies_the_same_space(i, m)) =>
+                    {
+                        row_of[pos] = Some(seed);
+                        members[r].push(i);
+                    }
+                    _ => {
+                        let at = rows_by_baseline.partition_point(|&(b, _)| b <= base_i);
+                        rows_by_baseline.insert(at, (base_i, rows.len()));
+                        rows.push(i);
+                        members.push(vec![i]);
+                        row_of[pos] = Some(i);
+                    }
+                }
+            }
+        }
+
+        for (pos, seed) in row_of.iter().enumerate() {
+            if let Some(seed) = seed {
+                snapped[pos] = all_spans[*seed].bbox.y;
+            }
+        }
+        snapped
+    }
+
     /// Total-order wrapper over `f32` for use as a sort key. For finite values
     /// `total_cmp` is identical to `safe_float_cmp` / `partial_cmp`.
     #[derive(Clone, Copy, PartialEq)]
+    #[allow(dead_code)]
     struct F32Ord(f32);
     impl Eq for F32Ord {}
     impl PartialOrd for F32Ord {
@@ -546,6 +836,69 @@ pub(crate) mod utils {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        /// Build a span at an explicit baseline/height for the row-snapping
+        /// tests below.
+        fn row_span(y: f32, height: f32, text: &str) -> crate::layout::TextSpan {
+            row_span_at(0.0, y, height, text)
+        }
+
+        /// As [`row_span`], at an explicit left edge — for cases where the
+        /// horizontal extents matter and must not overlap.
+        fn row_span_at(x: f32, y: f32, height: f32, text: &str) -> crate::layout::TextSpan {
+            crate::layout::TextSpan {
+                text: text.to_string(),
+                bbox: crate::geometry::Rect::new(x, y, 10.0, height),
+                font_size: height,
+                ..Default::default()
+            }
+        }
+
+        /// A government form's masthead, at the geometry the file draws. A
+        /// 19 pt centred title spans all three lines of an 8 pt stamp beside
+        /// it, so its top edge lands 0.4 pt from the stamp's first line while
+        /// its baseline sits 11.5 pt away.
+        ///
+        /// Taking the better-agreeing edge put the title on the stamp's
+        /// opening row, which sorted it between `Prescribed by Treasury` and
+        /// `Department` — splitting one phrase and gluing its second half to
+        /// the line below.
+        #[test]
+        fn test_tall_centred_run_does_not_join_a_short_row_beside_it() {
+            let spans = vec![
+                row_span(723.0, 8.2, "Prescribed by Treasury"),
+                row_span(716.0, 8.3, "Department"),
+                row_span(709.1, 8.2, "Treasury Dept. Cir. 1076"),
+                row_span(711.5, 19.3, "DIRECT DEPOSIT SIGN-UP FORM"),
+            ];
+            let idx: Vec<usize> = (0..spans.len()).collect();
+            let rows = snap_baselines_to_rows(&spans, &idx);
+            assert_ne!(
+                rows[3], rows[0],
+                "a run 2.4x the height of the line beside it does not share its row"
+            );
+        }
+
+        /// The counter-case that keeps the narrowing honest. Two runs of
+        /// comparable height whose tops agree exactly and whose baselines do
+        /// not — a superscript, a drop capital, a box carrying a descender —
+        /// must still snap together. This is the case the better-agreeing-edge
+        /// rule exists for, and it passes with or without the height guard.
+        #[test]
+        fn comparable_runs_still_snap_on_their_better_edge() {
+            // Side by side, as a superscript actually sits: sharing a line
+            // means sharing neither ink nor the space it occupies.
+            let spans = vec![
+                row_span_at(0.0, 700.0, 10.0, "body"),
+                row_span_at(12.0, 703.0, 7.0, "sup"),
+            ];
+            let idx: Vec<usize> = (0..spans.len()).collect();
+            let rows = snap_baselines_to_rows(&spans, &idx);
+            assert_eq!(
+                rows[0], rows[1],
+                "runs of similar height still join on whichever edge agrees"
+            );
+        }
 
         /// The cached-key sort must produce the identical permutation to
         /// `sort_by(row_aware_span_cmp)` on finite inputs.
@@ -805,6 +1158,109 @@ pub(crate) mod utils {
         fn test_row_aware_span_cmp_is_total_order() {
             let mut v: Vec<(f32, f32)> = (0..200).map(|i| ((i as f32) * 0.73, ((i * 17) % 500) as f32)).collect();
             v.sort_by(|a, b| row_aware_span_cmp(a.0, a.1, b.0, b.1));
+        }
+
+        /// Two spans in one band at the same x still order by baseline.
+        #[test]
+        fn test_sub_band_baseline_difference_still_decides() {
+            assert_eq!(
+                row_aware_span_cmp(98.36, 232.08, 98.21, 232.08),
+                Ordering::Less,
+                "one band, one x: the baseline must decide, or sort stability does"
+            );
+            assert_eq!(row_aware_span_cmp(98.21, 232.08, 98.36, 232.08), Ordering::Greater);
+        }
+
+        /// The banding still does its job: within a band, x decides whatever
+        /// the baselines are doing. This is the case banding exists for and the
+        /// tiebreak must not disturb it.
+        #[test]
+        fn x_still_decides_within_a_band() {
+            assert_eq!(row_aware_span_cmp(98.36, 100.0, 98.21, 200.0), Ordering::Less);
+            assert_eq!(row_aware_span_cmp(98.21, 100.0, 98.36, 200.0), Ordering::Less);
+        }
+
+        /// `row_band_then_x` deliberately stops before the baseline, so a
+        /// caller sorting on a synthetic key can apply its own tiebreak on the
+        /// real geometry. The two comparators must differ in exactly this way,
+        /// or the split has no effect and the hazard comes back.
+        #[test]
+        fn test_band_and_x_comparator_leaves_a_same_x_tie_open() {
+            assert_eq!(row_band_then_x(98.21, 232.08, 98.36, 232.08), Ordering::Equal);
+            assert_eq!(row_aware_span_cmp(98.21, 232.08, 98.36, 232.08), Ordering::Greater);
+            // Wherever x differs the two agree, so swapping one for the other
+            // moves nothing except the tie.
+            assert_eq!(
+                row_band_then_x(98.36, 100.0, 98.21, 200.0),
+                row_aware_span_cmp(98.36, 100.0, 98.21, 200.0)
+            );
+        }
+
+        /// Two spans in one row share a row key — that is what the key is
+        /// for — so any tiebreak read back from it compares them equal and
+        /// hands their order to the sequence they arrived in. A space-only run
+        /// drawn a fifth of a point under a heading, at the same left edge and
+        /// emitted first, then sorted ahead of the heading's own text and broke
+        /// a two-line section title into body text plus its last word.
+        ///
+        /// The row key settles the band and `x`; the baseline the page draws
+        /// settles what is left.
+        #[test]
+        fn test_shared_row_key_leaves_the_baseline_to_decide() {
+            use crate::layout::TextSpan;
+            let span = |y: f32, text: &str| TextSpan {
+                text: text.to_string(),
+                bbox: crate::geometry::Rect::new(36.0, y, 100.0, 12.0),
+                font_size: 12.0,
+                ..Default::default()
+            };
+            // Emitted in the order a producer drew them: the space first.
+            let spans = vec![span(745.73, " "), span(745.93, "Section Title")];
+            let idx: Vec<usize> = (0..spans.len()).collect();
+            let key = snap_baselines_to_rows(&spans, &idx);
+            assert_eq!(
+                key[0], key[1],
+                "the two runs are one row, so the hazard this guards is real"
+            );
+
+            // Ordering on the key alone cannot separate them.
+            assert_eq!(
+                row_band_then_x_axis(0.0, key[0], 36.0, 0.0, key[1], 36.0),
+                Ordering::Equal
+            );
+            // Adding the drawn baseline does, and puts the heading first.
+            let ordered = row_band_then_x_axis(0.0, key[0], 36.0, 0.0, key[1], 36.0)
+                .then_with(|| safe_float_cmp(spans[1].bbox.y, spans[0].bbox.y));
+            assert_eq!(
+                ordered,
+                Ordering::Greater,
+                "the run drawn higher on the page must be read first"
+            );
+        }
+
+        /// A different band still wins over x.
+        #[test]
+        fn test_different_band_still_wins_over_x() {
+            assert_eq!(row_aware_span_cmp(120.0, 400.0, 98.0, 50.0), Ordering::Less);
+        }
+
+        /// Identical geometry is genuinely equal — the comparator must not
+        /// invent an order where there is no evidence for one.
+        #[test]
+        fn identical_geometry_is_equal() {
+            assert_eq!(row_aware_span_cmp(98.36, 232.08, 98.36, 232.08), Ordering::Equal);
+        }
+
+        /// And the cached-key sort must agree with the comparator, or the two
+        /// orderings diverge wherever both are used on the same data.
+        #[test]
+        fn test_cached_key_sort_agrees_with_the_comparator() {
+            let data = [(98.21_f32, 232.08_f32), (98.36, 232.08), (98.30, 100.0)];
+            let mut by_key = data.to_vec();
+            sort_by_row_band(&mut by_key, |it| it.0, |it| it.1);
+            let mut by_cmp = data.to_vec();
+            by_cmp.sort_by(|a, b| row_aware_span_cmp(a.0, a.1, b.0, b.1));
+            assert_eq!(by_key, by_cmp);
         }
 
         /// #656/#657: the RTL variant keeps rows top-to-bottom but orders

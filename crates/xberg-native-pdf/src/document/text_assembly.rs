@@ -7,6 +7,74 @@
 use super::*;
 use crate::text::cjk_ranges::is_vertical_text_cjk;
 
+/// The rotated reading frame a page's spans were mapped into.
+///
+/// A landscape table typeset on a portrait page carries a dominant text-matrix
+/// rotation, and the row-major assembler only reads it once the spans are
+/// rotated upright. Every other page-space value compared against those spans (a
+/// widget `/Rect`, a table's boxes) must be mapped with the same frame, so the
+/// frame is a value a consumer can apply rather than a convention of whichever
+/// variable holds the mapped spans.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ReadingFrame {
+    /// Quadrant rotation applied: 90, 180 or 270.
+    rot: u16,
+    /// The media box the map was built against.
+    llx: f32,
+    lly: f32,
+    w: f32,
+    h: f32,
+}
+
+impl ReadingFrame {
+    fn map_point(&self, x: f32, y: f32) -> (f32, f32) {
+        let (rx, ry) = (x - self.llx, y - self.lly);
+        let (mx, my) = match self.rot {
+            90 => (ry, self.w - rx),
+            180 => (self.w - rx, self.h - ry),
+            270 => (self.h - ry, rx),
+            _ => (rx, ry),
+        };
+        (self.llx + mx, self.lly + my)
+    }
+
+    /// A quadrant rotation takes an axis-aligned rectangle to an axis-aligned
+    /// rectangle, so mapping two opposite corners and normalising is exact.
+    fn map_rect(&self, r: &crate::geometry::Rect) -> crate::geometry::Rect {
+        let (x0, y0) = self.map_point(r.x, r.y);
+        let (x1, y1) = self.map_point(r.x + r.width, r.y + r.height);
+        crate::geometry::Rect::new(x0.min(x1), y0.min(y1), (x1 - x0).abs(), (y1 - y0).abs())
+    }
+
+    /// The runs a cell draws travel with it: ownership is decided by measuring a
+    /// page span against the spans a cell renders, so both sides must share a frame.
+    fn map_table(&self, table: &mut crate::structure::table_extractor::Table) {
+        if let Some(ref b) = table.bbox {
+            table.bbox = Some(self.map_rect(b));
+        }
+        for row in &mut table.rows {
+            for cell in &mut row.cells {
+                if let Some(ref b) = cell.bbox {
+                    cell.bbox = Some(self.map_rect(b));
+                }
+                for span in &mut cell.spans {
+                    self.map_span_origin(span);
+                }
+            }
+        }
+    }
+
+    /// Rotated spans store text-local extents (origin, advance-along-the-run as
+    /// `width`, font size as `height`) that already describe the run in its own
+    /// upright frame, so only the origin moves.
+    fn map_span_origin(&self, span: &mut crate::layout::TextSpan) {
+        let (x, y) = self.map_point(span.bbox.x, span.bbox.y);
+        span.bbox.x = x;
+        span.bbox.y = y;
+        span.rotation_degrees = 0.0;
+    }
+}
+
 impl PdfDocument {
     /// Circular references and recursion limit errors are handled gracefully
     /// with warning messages in the output.
@@ -70,26 +138,52 @@ impl PdfDocument {
         Ok(Self::apply_mixed_rtl_line_pass(text))
     }
 
-    /// [`Self::map_dominant_rotation_into_reading_frame`] with the
-    /// mapped/unchanged distinction collapsed, for the call sites that only
-    /// want "spans as a reader sees them".
+    /// The page's spans in the frame the text reads in, together with the frame
+    /// itself when one was applied.
     ///
-    /// Every library text surface goes through this — via
-    /// [`Self::assemble_text_from_spans`] or the converter pipelines. Applying
-    /// the frame at one call site made the same page read correctly through
-    /// `extract_text` and incorrectly through `to_markdown` / `to_html` /
-    /// `to_plain_text`. Callers must apply `ConversionOptions` region filters
-    /// BEFORE this: region rects are page-space coordinates, and the map
-    /// rewrites the geometry they select against.
+    /// Every library text surface goes through this. Callers must apply
+    /// `ConversionOptions` region filters BEFORE it (region rects are page-space
+    /// coordinates, and the map rewrites the geometry they select against), and
+    /// must map any other page-space geometry they compare these spans against,
+    /// widget rectangles and detected tables included, with the returned frame.
     fn spans_in_reading_frame(
         &self,
         page_index: usize,
         spans: Vec<crate::layout::TextSpan>,
-    ) -> Vec<crate::layout::TextSpan> {
+    ) -> (Vec<crate::layout::TextSpan>, Option<ReadingFrame>) {
         match self.map_dominant_rotation_into_reading_frame(page_index, spans) {
-            Ok(mapped) => mapped,
-            Err(original) => original,
+            Ok((mapped, frame)) => (mapped, Some(frame)),
+            Err(original) => (original, None),
         }
+    }
+
+    /// Detected tables in the same frame as the caller's page spans.
+    /// `extract_page_tables` works from page-space words and paths, so without
+    /// this every ownership test between a table and the spans it renders
+    /// compares two frames and the cells are emitted twice.
+    fn tables_in_frame(
+        mut tables: Vec<crate::structure::table_extractor::Table>,
+        frame: Option<ReadingFrame>,
+    ) -> Vec<crate::structure::table_extractor::Table> {
+        if let Some(f) = frame {
+            for t in &mut tables {
+                f.map_table(t);
+            }
+        }
+        tables
+    }
+
+    /// Widget spans in the same frame as the caller's page spans. A widget's
+    /// `/Rect` is page space (ISO 32000-1:2008 §12.5.2); appending it unmapped
+    /// to mapped page spans puts two frames in one vector.
+    fn widget_spans_in_frame(&self, page_index: usize, frame: Option<ReadingFrame>) -> Vec<TextSpan> {
+        let mut spans = self.extract_widget_spans(page_index);
+        if let Some(f) = frame {
+            for s in &mut spans {
+                f.map_span_origin(s);
+            }
+        }
+        spans
     }
 
     /// Map a dominant-rotation page's spans into their rotated reading
@@ -113,7 +207,7 @@ impl PdfDocument {
         &self,
         page_index: usize,
         spans: Vec<crate::layout::TextSpan>,
-    ) -> std::result::Result<Vec<crate::layout::TextSpan>, Vec<crate::layout::TextSpan>> {
+    ) -> std::result::Result<(Vec<crate::layout::TextSpan>, ReadingFrame), Vec<crate::layout::TextSpan>> {
         if self.get_page_rotation(page_index).unwrap_or(0) != 0 {
             return Err(spans);
         }
@@ -134,26 +228,18 @@ impl PdfDocument {
         };
         tracing::debug!(target: LOG_TARGET, "page {page_index}: dominant text rotation {deg}° — assembling text in rotated frame");
         let (llx, lly, urx, ury) = self.get_page_media_box(page_index).unwrap_or((0.0, 0.0, 612.0, 792.0));
-        let (w, h) = (urx - llx, ury - lly);
+        let frame = ReadingFrame {
+            rot,
+            llx,
+            lly,
+            w: urx - llx,
+            h: ury - lly,
+        };
         let mut spans = spans;
-        // Rotated spans store TEXT-LOCAL extents (origin + advance-along-
-        // the-run as `width` + font size as `height`): rotate the ORIGIN
-        // as a point and keep the extents, which already describe the run
-        // in its own upright frame (same convention as
-        // `order_rotated_blocks`). ~keep
         for s in &mut spans {
-            let (rx, ry) = (s.bbox.x - llx, s.bbox.y - lly);
-            let (mx, my) = match rot {
-                90 => (ry, w - rx),
-                180 => (w - rx, h - ry),
-                270 => (h - ry, rx),
-                _ => (rx, ry),
-            };
-            s.bbox.x = llx + mx;
-            s.bbox.y = lly + my;
-            s.rotation_degrees = 0.0;
+            frame.map_span_origin(s);
         }
-        Ok(spans)
+        Ok((spans, frame))
     }
 
     /// Assemble page text from the page's native spans **plus** caller-supplied
@@ -325,7 +411,7 @@ impl PdfDocument {
         // pages in their rotated reading frame instead — after the region
         // filters, whose rects select in page space, and before table
         // detection, which consumes the geometry this maps. ~keep
-        let base_spans = self.spans_in_reading_frame(page_index, base_spans);
+        let (base_spans, reading_frame) = self.spans_in_reading_frame(page_index, base_spans);
         // Struct-tree-scope `/ActualText` is applied per branch below
         // — the structure-order assembler handles it natively via the
         // per-page action map, and the geometric branch applies the
@@ -341,13 +427,16 @@ impl PdfDocument {
         // AND /MarkInfo /Suspects is not true. Suspect documents fall through to
         // the geometric `else` arm below, the spec-correct behaviour. ~keep
         let cached_tree = self.struct_tree_trustworthy();
-        let widget_spans = self.extract_widget_spans(page_index);
+        let widget_spans = self.widget_spans_in_frame(page_index, reading_frame);
 
         let tables = if options.extract_tables {
             // text_fallback=false: extract_text preserves the prior behaviour
             // where line-less pages return no tables. Only the structured-output
             // converters (to_markdown, to_html) opt in to text-only spatial fallback. ~keep
-            self.extract_page_tables(page_index, &base_spans, options, false)
+            Self::tables_in_frame(
+                self.extract_page_tables(page_index, &base_spans, options, false),
+                reading_frame,
+            )
         } else {
             Vec::new()
         };
@@ -912,9 +1001,25 @@ impl PdfDocument {
                 // plain-text path. Tightly gated (≥30 spans, narrow sidebar with
                 // ≥2 furniture labels), so it is a no-op (None) on ordinary pages. ~keep
                 spans = ordered;
-            } else if let Some(gutter_x) =
-                Self::prose_two_column_gutter(&spans).or_else(|| Self::classifier_column_gutter(&spans))
-            {
+            } else if let Some(gutter_x) = Self::prose_two_column_gutter(&spans).or_else(|| {
+                // The fallback detector is not consulted when the page's only
+                // multi-column signal is a table. A data grid's own inter-column
+                // gap is a real empty vertical corridor that neither half of a
+                // numeric grid classifies Table/Form, so the classifier admits
+                // it and every grid row is cut at that x, its right-hand cells
+                // surfacing a whole column-run below their label. A grid row is
+                // one reading unit (ISO 32000-1:2008 §14.8.4.3.4: TR holds its
+                // TD cells). `multicol_signal_is_tabular` cannot see a right
+                // column sharing bands with the left one, so a body with exactly
+                // two column starts outside the tables still opens the gate.
+                // `prose_two_column_gutter` is content-balance gated and keeps
+                // deciding genuine two-column bodies on its own. ~keep
+                (tables.is_empty()
+                    || !Self::multicol_signal_is_tabular(&spans, &tables)
+                    || Self::two_column_starts_outside_tables(&spans, &tables))
+                .then(|| Self::classifier_column_gutter(&spans))
+                .flatten()
+            }) {
                 // Genuine two-column prose (content-balance gated — forms /
                 // TOC / tables / figures are rejected), OR a ragged
                 // reference list / dense results body that the clean corridor
@@ -939,7 +1044,9 @@ impl PdfDocument {
                 // (bibliography interleave) or shattering wrapped hyphenated
                 // lines in dense two-column bodies. ~keep
             } else if !Self::is_multi_column_page(&spans)
-                || (!tables.is_empty() && Self::multicol_signal_is_tabular(&spans, &tables))
+                || (!tables.is_empty()
+                    && Self::multicol_signal_is_tabular(&spans, &tables)
+                    && !Self::two_column_starts_outside_tables(&spans, &tables))
             {
                 // Either a genuine single-column page, OR a single-column page
                 // whose only multi-column geometric signal comes from a TABLE
@@ -965,7 +1072,12 @@ impl PdfDocument {
                     a.sequence.cmp(&b.sequence)
                 });
 
-                Self::reorder_rowspan_labels(&mut spans);
+                // Only where the page has a table: the promotion reasons in table
+                // terms and finds the same shape on prose, promoting display
+                // equation glyphs ahead of the line they belong to. ~keep
+                if !tables.is_empty() {
+                    Self::reorder_rowspan_labels(&mut spans);
+                }
 
                 // Restore intra-line reading order after the row-aware band sort.
                 // Off-baseline glyphs (e.g. superscripts/subscripts) can land in
@@ -1066,6 +1178,11 @@ impl PdfDocument {
                     }
                 }
 
+                if prev_span.is_some_and(|prev| Self::apply_soft_hyphen_seam(&mut text, prev, span)) {
+                    prev_span = Some(span);
+                    continue;
+                }
+
                 if let Some(prev) = prev_span {
                     let prev_end_x = prev.bbox.x + prev.bbox.width;
                     let span_end_x = span.bbox.x + span.bbox.width;
@@ -1092,7 +1209,31 @@ impl PdfDocument {
                     // y-line break OR (when the two halves share a baseline band) as a
                     // large backward X jump, so it is gated at each break site below. ~keep
                     let hangul_midword_wrap = Self::hangul_midword_line_wrap(&text, prev, span);
-                    if y_diff > Self::same_line_threshold(prev, span) {
+                    // A blank run is on no axis: its `rotation_degrees` records
+                    // the matrix in force, not evidence about the page, and a
+                    // rotated watermark scatters blanks across the rows it
+                    // crosses. Only two inked runs on different writing axes
+                    // are not one line (ISO 32000-1:2008 §9.4.4); the gap
+                    // arithmetic below reads an axis-aligned `bbox.width` and
+                    // cannot see it. ~keep
+                    let both_carry_ink = !prev.text.trim().is_empty() && !span.text.trim().is_empty();
+                    if both_carry_ink && (prev.rotation_degrees - span.rotation_degrees).abs() > 0.5 {
+                        // `dehyphenate_line_breaks` rejoins `<lowercase>-` across
+                        // a single line break; a run on another axis is never the
+                        // continuation of a hyphenated word, so end the paragraph
+                        // rather than the line. ~keep
+                        let ends_on_a_wrap_hyphen = {
+                            let t = text.trim_end_matches([' ', '\t']);
+                            let mut back = t.chars().rev();
+                            back.next() == Some('-') && back.next().is_some_and(|c| c.is_ascii_lowercase())
+                        };
+                        if !text.ends_with('\n') {
+                            text.push('\n');
+                        }
+                        if ends_on_a_wrap_hyphen && !text.ends_with("\n\n") {
+                            text.push('\n');
+                        }
+                    } else if y_diff > Self::same_line_threshold(prev, span) {
                         let font_size = prev.font_size.max(span.font_size).max(10.0);
                         let line_height = font_size * 1.2;
                         let num_breaks = (y_diff / line_height).round() as usize;
@@ -1231,6 +1372,32 @@ impl PdfDocument {
                             if !hangul_midword_wrap && !text.ends_with('\n') {
                                 text.push('\n');
                             }
+                        } else if gap < -fs * 3.0
+                            && delta_x.abs() <= fs * 0.5
+                            && !hangul_midword_wrap
+                            && !prev.rtl_draw_logical
+                            && !span.rtl_draw_logical
+                            && !text.ends_with(' ')
+                            && !text.ends_with('\n')
+                        {
+                            // Two runs over the same extent from the same
+                            // origin: a second line drawn in the same place
+                            // (overlaid labels, a stamped duplicate), neither
+                            // kerning nor a wrap. Superscripts advance forward,
+                            // kerning overlaps stay above -fs, and a fraction
+                            // denominator sits ~2 em back. ~keep
+                            text.push('\n');
+                        }
+                    } else if y_diff >= prev.font_size.max(span.font_size).max(1.0)
+                        && gap < FORWARD_GAP_K * prev.font_size.max(span.font_size).max(1.0)
+                    {
+                        // Stacked lines one em or more apart: `same_line_threshold`
+                        // admits 1.2x the smaller font, and stacked labels that
+                        // start at or right of the line above have a ~0 gap that
+                        // no arm above separates ("Latency" over "Efficiency").
+                        // One em bounds it: a superscript shift is smaller. ~keep
+                        if !text.ends_with('\n') {
+                            text.push('\n');
                         }
                     } else if y_diff > 2.0 && gap > FORWARD_GAP_K * prev.font_size.max(span.font_size).max(1.0) {
                         // Forward-gap guard: pairs newly admitted to same-line

@@ -2095,21 +2095,45 @@ impl PdfDocument {
                 }
             }
         }
-        lines.extend(rotated_lines.into_iter().map(|(rot, off, mut line)| {
+        lines.extend(rotated_lines.into_iter().flat_map(|(rot, off, mut line)| {
             // A merged quarter-turn line collects its runs in arrival order,
             // which is content-stream order: a subscript drawn after the
             // line's tail lands at the end of the string. Order members
             // along the writing axis instead — ascending y for +90,
             // descending for -90 — the order the text assembler reads them
             // in. Stable, so runs sharing a coordinate keep drawing order. ~keep
-            if !off.is_nan() {
-                if rot > 0.0 {
-                    line.sort_by(|a, b| a.bbox.y.total_cmp(&b.bbox.y));
-                } else {
-                    line.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
-                }
+            if off.is_nan() {
+                return vec![line];
             }
-            line
+            if rot > 0.0 {
+                line.sort_by(|a, b| a.bbox.y.total_cmp(&b.bbox.y));
+            } else {
+                line.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
+            }
+            // Runs merge by their offset ACROSS the writing axis and say nothing
+            // about their separation ALONG it, so two rotated columns fused into
+            // single lines however wide the gutter. The horizontal path splits at
+            // `max(3 x font size, 30 pt)`; a rotated line gets the same rule
+            // measured along its own writing axis (ISO 32000-1:2008 §9.4.4). A
+            // word's `width` is its advance along that axis and `bbox.y` its
+            // origin. ~keep
+            let along = |w: &crate::layout::Word| if rot > 0.0 { w.bbox.y } else { -w.bbox.y };
+            let mut split: Vec<Vec<crate::layout::Word>> = Vec::new();
+            let mut current: Vec<crate::layout::Word> = Vec::new();
+            for word in line {
+                if let Some(prev) = current.last() {
+                    let gap = along(&word) - (along(prev) + prev.bbox.width);
+                    let font_size_ref = word.avg_font_size.max(prev.avg_font_size);
+                    if gap >= (font_size_ref * 3.0).max(30.0) {
+                        split.push(std::mem::take(&mut current));
+                    }
+                }
+                current.push(word);
+            }
+            if !current.is_empty() {
+                split.push(current);
+            }
+            split
         }));
         // Reading order: sort lines by the span sequence of their first word
         // (stable so intra-line order is preserved). ~keep

@@ -419,12 +419,12 @@ impl PdfDocument {
                         error_code = "reading_order_error",
                         "XY-cut reading order failed; falling back to row-aware sort"
                     );
-                    spans.sort_by(|a, b| crate::utils::row_aware_span_cmp(a.bbox.y, a.bbox.x, b.bbox.y, b.bbox.x));
+                    Self::sort_spans_by_snapped_rows(&mut spans);
                     Self::reorder_rowspan_labels(&mut spans);
                 }
             }
         } else {
-            spans.sort_by(|a, b| crate::utils::row_aware_span_cmp(a.bbox.y, a.bbox.x, b.bbox.y, b.bbox.x));
+            Self::sort_spans_by_snapped_rows(&mut spans);
             Self::reorder_rowspan_labels(&mut spans);
         }
 
