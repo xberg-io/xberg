@@ -8,23 +8,30 @@
 //! [`crate::candidate_models`] inventory:
 //!
 //! * SmolVLM (`Idefics3`): a SigLIP vision encoder, an embedding graph and a merged decoder with
-//!   a key/value cache. The image becomes one 512x512 global frame whose features replace the
-//!   repeated image token in the pinned chat prompt.
-//! * Florence-2 descriptors and graph pins are validated, but the adapter refuses the family:
-//!   its merged decoder fails on cached decoder steps in the ONNX Runtime this crate bundles, so
-//!   [`LocalImageCaptioner::new`] returns an explicit error instead of substituting SmolVLM.
+//!   a key/value cache. Preprocessing follows the pinned processor's `do_image_splitting` path:
+//!   the image is resized to the processor's `size`, split into `max_image_size` tiles with
+//!   `<row_N_col_M>` tags in row-major order, and a squashed global frame is appended last. The
+//!   tile count and total image-token expansion are bounded before inference.
+//! * Florence-2 descriptors and graph pins are validated, but the adapter refuses the family
+//!   explicitly instead of substituting SmolVLM. The earlier refusal cited a merged-decoder
+//!   failure in the bundled ONNX Runtime; that does not reproduce on the pinned ONNX Runtime
+//!   1.31.0 (`ort` 2.0.0-rc.15 `download-binaries`). Both pinned quantizations load, and the
+//!   merged decoder executes its uncached and cached branches with a 581-token encoder context
+//!   (`florence_merged_decoder_diagnostic`, `florence_pipeline_diagnostic`). The actual blocker is
+//!   pipeline scope, not the graphs: the artifact reader never resolves the declared
+//!   `text_encoder_file`, generation has no encoder-decoder or task-token path, and Florence-2
+//!   needs per-task post-processing and beam search (`generation_config`: three beams, a
+//!   no-repeat trigram) that this adapter does not implement.
 //!
 //! # What is not qualified
 //!
 //! These adapters exist to make the candidates measurable, not to claim a result. Qualification
 //! (xberg-io/xberg#2334) is outstanding, and these limitations are part of why:
 //!
-//! * SmolVLM uses a single global frame. The upstream processor's tile splitting
-//!   (`do_image_splitting`, `<row_N_col_M>` tags) is not implemented, so large images lose the
-//!   per-tile detail the export was trained with and the aspect ratio is not preserved.
-//! * Florence-2 is not enabled (see above).
 //! * Decoding is greedy with no repetition control or beam search, and this adapter reports no
 //!   quality, latency, memory or calibration numbers.
+//! * Florence-2 is not enabled (see above); its exclusion is an unimplemented pipeline, not a
+//!   demonstrated runtime defect.
 //!
 //! Preparation reads only the local Hugging Face cache; it never reaches the network. Staging a
 //! missing artifact is a separate, explicit step ([`LocalImageCaptioner::stage`]). A missing,
@@ -40,6 +47,8 @@ mod control;
 #[cfg(feature = "captioning-onnx")]
 mod generation;
 #[cfg(feature = "captioning-onnx")]
+mod inspection;
+#[cfg(feature = "captioning-onnx")]
 mod policy;
 #[cfg(feature = "captioning-onnx")]
 mod preprocess;
@@ -47,6 +56,8 @@ mod preprocess;
 mod runtime;
 mod types;
 
+#[cfg(feature = "captioning-onnx")]
+pub use inspection::{LocalCaptioningArtifact, LocalCaptioningArtifactReport, LocalCaptioningArtifactState};
 #[cfg(feature = "captioning-onnx")]
 pub use runtime::LocalImageCaptioner;
 
@@ -59,5 +70,7 @@ pub use types::{
 #[cfg(feature = "captioning-onnx")]
 pub(crate) use policy::descriptor_from_selection;
 
+#[cfg(all(test, feature = "captioning-onnx"))]
+mod diagnostics_tests;
 #[cfg(all(test, feature = "captioning-onnx"))]
 mod tests;

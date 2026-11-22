@@ -64,10 +64,10 @@ fn graph_relative_files(model: &LocalNliModel) -> crate::Result<Vec<(String, Str
 }
 
 #[derive(Debug)]
-struct Pin {
-    path: String,
-    sha256: String,
-    size_bytes: u64,
+pub(super) struct Pin {
+    pub(super) path: String,
+    pub(super) sha256: String,
+    pub(super) size_bytes: u64,
 }
 
 #[derive(Debug)]
@@ -111,6 +111,29 @@ impl ArtifactInventory {
             companions,
         })
     }
+}
+
+/// Every pinned artifact path with its size and SHA-256, from the descriptor's two manifests.
+/// The two manifests must list exactly the same artifacts.
+pub(super) fn pinned_files(model: &LocalNliModel) -> crate::Result<Vec<Pin>> {
+    let pins = crate::model_download::parse_sha256_manifest(&model.sha256_manifest).map_err(invalid)?;
+    let mut sizes = parse_size_manifest(&model.size_manifest)?;
+    let mut files = Vec::with_capacity(pins.len());
+    for (path, sha256) in pins {
+        let size_bytes = sizes
+            .remove(&path)
+            .ok_or_else(|| invalid(format!("Local NLI artifact lacks a size pin: {path}")))?;
+        files.push(Pin {
+            path,
+            sha256,
+            size_bytes,
+        });
+    }
+    if !sizes.is_empty() {
+        return Err(invalid("Local NLI size manifest lists unexpected artifacts"));
+    }
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(files)
 }
 
 type PinMap = std::collections::BTreeMap<String, String>;
