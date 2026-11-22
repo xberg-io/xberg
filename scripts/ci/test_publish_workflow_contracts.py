@@ -276,7 +276,7 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     workflow = WORKFLOW.read_text().split("\njobs:\n", 1)[1]
     jobs = re.findall(r"(?m)^  ([a-zA-Z0-9_-]+):$", workflow)
     core_jobs = [job for job in jobs if job not in ("dispatch-plugin-npm", "dispatch-plugin-hermes")]
-    assert len(core_jobs) == 86
+    assert len(core_jobs) == 87
     for job in core_jobs:
         expression = job_if_expression(job_block(workflow, job))
         assert expression.startswith("!inputs.plugins-only && ("), job
@@ -2243,6 +2243,28 @@ def test_ruby_source_gem_name_is_derived_from_the_gemspec() -> None:
             )
             assert result.returncode == 0, result.stderr
             assert result.stdout == "xberg-1.5.0.pre.rc.1.gem", result.stdout
+
+
+def test_mcp_registry_publish_follows_the_npm_proxy_and_never_runs_on_dry_runs() -> None:
+    block = job_block(WORKFLOW.read_text(), "publish-mcp-registry")
+    header = block.split("    steps:", 1)[0]
+    needs = re.search(r"(?m)^    needs: \[(.+)\]$", header)
+    assert needs is not None and "cli-proxy" in needs.group(1)
+    condition = job_if_expression(block)
+    assert "needs.prepare.outputs.dry_run != 'true'" in condition
+    assert "!cancelled()" in condition
+    assert "needs.cli-proxy.result == 'success'" in condition
+    # A re-run finds the npm proxy already published, so cli-proxy is skipped; that must
+    # still publish the registry entry. ~keep
+    assert "needs.cli-proxy.result == 'skipped' && needs.check-cli.outputs.npm_exists == 'true'" in condition
+    assert "id-token: write" in header
+    assert "./mcp-publisher login github-oidc" in block
+    assert "./mcp-publisher validate server.json" in block
+    assert "releases/latest" not in block
+    # The registry skips versions it already holds; every publishing step must honor that. ~keep
+    for step in ("Install cosign", "Validate server.json", "Authenticate to the MCP Registry"):
+        assert re.search(rf"name: {step}\n\s+if: \$\{{\{{ steps.registry.outputs.exists != 'true' \}}\}}", block), step
+    assert "mcp-publisher publish server.json" in block
 
 
 if __name__ == "__main__":
