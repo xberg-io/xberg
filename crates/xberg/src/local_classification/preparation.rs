@@ -205,3 +205,34 @@ fn build_memory_session(
         source: Some(Box::new(error)),
     })
 }
+
+/// Resolves every pinned artifact through the shared download/cache path, verifying the pinned
+/// SHA-256 and size. A cache hit performs no network request; a miss downloads only when Hugging
+/// Face offline mode is off. The preparation step that follows is cache-only.
+pub(super) fn stage(config: &LocalClassificationConfig, control: &WorkerControl) -> crate::Result<()> {
+    let model = &config.model;
+    let cache_directory = config.cache_directory.as_deref().map(std::path::Path::new);
+    for pin in super::artifacts::pinned_files(model)? {
+        control.check()?;
+        let path = crate::model_download::hf_resolve_file_with_progress(
+            &model.repository,
+            &pin.path,
+            Some(&model.revision),
+            cache_directory,
+            Some(&pin.sha256),
+            crate::core::config::DownloadProgress::SILENT,
+        )
+        .map_err(invalid)?;
+        let metadata =
+            std::fs::metadata(&path).map_err(|error| invalid(format!("Local NLI artifact {}: {error}", pin.path)))?;
+        if metadata.len() != pin.size_bytes {
+            return Err(invalid(format!(
+                "Local NLI staged size mismatch for {}: expected {} bytes, got {}",
+                pin.path,
+                pin.size_bytes,
+                metadata.len()
+            )));
+        }
+    }
+    Ok(())
+}

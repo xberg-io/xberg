@@ -8,6 +8,28 @@ use xberg::{DoctorCheck, DoctorReport, ProbeStatus, doctor};
 use super::config::load_config;
 use crate::{WireFormat, style};
 
+/// Experimental local ONNX candidate selection for `xberg doctor`.
+///
+/// Every field is feature-gated so a build without the experimental adapters exposes no flags and
+/// appends no candidate checks. Nothing here downloads; reports only resolve the local cache.
+#[derive(Debug, Default)]
+pub struct OnnxCandidateOptions {
+    #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+    pub cache_dir: Option<PathBuf>,
+    #[cfg(feature = "captioning-onnx")]
+    pub captioning_model: Option<String>,
+    #[cfg(feature = "captioning-onnx")]
+    pub captioning_precision: Option<String>,
+    #[cfg(feature = "captioning-onnx")]
+    pub captioning_backend: Option<String>,
+    #[cfg(feature = "classification-onnx")]
+    pub classification_model: Option<String>,
+    #[cfg(feature = "classification-onnx")]
+    pub classification_precision: Option<String>,
+    #[cfg(feature = "classification-onnx")]
+    pub classification_backend: Option<String>,
+}
+
 /// Fold the outcome of an already-run cache cleanup pass into `report` as a regular
 /// check, so the text/JSON/TOON renderers only ever need one output shape. `cleaned` is
 /// `None` when cleanup was not requested at all (nothing to report); `Some(None)` when it
@@ -102,6 +124,11 @@ pub fn doctor_command(
     no_config_discovery: bool,
     format: WireFormat,
     clean: bool,
+    #[cfg_attr(
+        not(any(feature = "captioning-onnx", feature = "classification-onnx")),
+        allow(unused_variables)
+    )]
+    candidates: &OnnxCandidateOptions,
 ) -> Result<()> {
     let config = load_config(config_path, !no_config_discovery)?;
 
@@ -110,11 +137,71 @@ pub fn doctor_command(
     let cleaned = clean.then(xberg::doctor::clean_obsolete);
     let mut report = doctor(&config);
     append_cache_clean_check(&mut report, cleaned);
+    #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+    append_candidate_checks(&mut report, candidates)?;
 
     print_report(&report, format)?;
 
     if !report.is_ok() {
         std::process::exit(1);
     }
+    Ok(())
+}
+
+/// Append the experimental candidate artifact catalog to the report.
+///
+/// Without an explicit `--captioning-model`/`--classification-model` every staged candidate is
+/// listed, so the offline doctor output always names each pinned artifact. Naming one model
+/// narrows the catalog to it. Nothing here downloads.
+#[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+fn append_candidate_checks(report: &mut DoctorReport, options: &OnnxCandidateOptions) -> Result<()> {
+    use super::onnx_candidates;
+
+    let cache = options.cache_dir.as_deref();
+    #[allow(unused_mut)]
+    let mut any_selected = false;
+    #[cfg(feature = "captioning-onnx")]
+    {
+        any_selected |= options.captioning_model.is_some();
+    }
+    #[cfg(feature = "classification-onnx")]
+    {
+        any_selected |= options.classification_model.is_some();
+    }
+    let mut summaries = Vec::new();
+
+    #[cfg(feature = "captioning-onnx")]
+    {
+        use xberg::local_captioning::LocalCaptioningModel;
+        onnx_candidates::parse_backend(options.captioning_backend.as_deref(), "captioning")?;
+        let precision = onnx_candidates::parse_captioning_precision(options.captioning_precision.as_deref())?;
+        match options.captioning_model.as_deref() {
+            Some(id) => summaries.push(onnx_candidates::captioning_report(id, precision, cache)?),
+            None if !any_selected => {
+                for id in LocalCaptioningModel::staged_candidates() {
+                    summaries.push(onnx_candidates::captioning_report(id, precision, cache)?);
+                }
+            }
+            None => {}
+        }
+    }
+
+    #[cfg(feature = "classification-onnx")]
+    {
+        use xberg::local_classification::LocalNliModel;
+        onnx_candidates::parse_backend(options.classification_backend.as_deref(), "classification")?;
+        let precision = onnx_candidates::parse_classification_precision(options.classification_precision.as_deref())?;
+        match options.classification_model.as_deref() {
+            Some(id) => summaries.push(onnx_candidates::classification_report(id, precision, cache)?),
+            None if !any_selected => {
+                for id in LocalNliModel::staged_candidates() {
+                    summaries.push(onnx_candidates::classification_report(id, precision, cache)?);
+                }
+            }
+            None => {}
+        }
+    }
+
+    onnx_candidates::append_doctor_checks(report, &summaries, any_selected);
     Ok(())
 }
