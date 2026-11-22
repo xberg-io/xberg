@@ -445,6 +445,10 @@ impl BoundedObjectCache {
 
     fn insert_pinned(&mut self, key: ObjectRef, value: Object) {
         self.pinned.insert(key);
+        // Pinned keys stay out of the eviction queue so scans never rotate them. ~keep
+        if let Some(position) = self.insertion_order.iter().position(|candidate| *candidate == key) {
+            self.insertion_order.remove(position);
+        }
         self.insert(key, value);
     }
 
@@ -483,10 +487,6 @@ impl BoundedObjectCache {
             match self.insertion_order.pop_front() {
                 Some(old_key) => {
                     examined += 1;
-                    if self.pinned.contains(&old_key) {
-                        self.insertion_order.push_back(old_key);
-                        continue;
-                    }
                     if old_key == key {
                         if skipped_self {
                             self.insertion_order.push_front(old_key);
@@ -504,7 +504,7 @@ impl BoundedObjectCache {
             }
         }
 
-        if self.map.insert(key, Arc::new(value)).is_none() {
+        if self.map.insert(key, Arc::new(value)).is_none() && !self.pinned.contains(&key) {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;
@@ -521,7 +521,7 @@ impl BoundedObjectCache {
     fn clear(&mut self) {
         let pinned = std::mem::take(&mut self.pinned);
         self.map.retain(|k, _| pinned.contains(k));
-        self.insertion_order.retain(|k| pinned.contains(k));
+        self.insertion_order.clear();
         self.current_bytes = self.map.values().map(|v| Self::estimate_size(v)).sum();
         self.pinned = pinned;
     }

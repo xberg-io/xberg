@@ -718,3 +718,37 @@ fn test_all_pinned_cache_does_not_spin() {
     }
     assert_eq!(cache.len(), 8);
 }
+
+#[test]
+fn pinned_entries_stay_out_of_the_eviction_queue() {
+    let mut cache = BoundedObjectCache::new(512);
+    for i in 0..100u32 {
+        cache.insert_pinned(ObjectRef::new(i, 0), Object::String(vec![b'y'; 256]));
+    }
+    assert_eq!(cache.len(), 100);
+    assert!(
+        cache.insertion_order.is_empty(),
+        "pinned keys must not be queued for the eviction scan"
+    );
+
+    cache.insert(ObjectRef::new(500, 0), Object::Integer(1));
+    cache.insert(ObjectRef::new(501, 0), Object::Integer(2));
+    assert_eq!(
+        cache.insertion_order.len(),
+        1,
+        "the over-budget cache evicts ordinary entries only"
+    );
+    assert!((0..100u32).all(|i| cache.get(&ObjectRef::new(i, 0)).is_some()));
+    assert!(cache.get(&ObjectRef::new(501, 0)).is_some());
+}
+
+#[test]
+fn pinning_an_already_cached_entry_dequeues_it() {
+    let mut cache = BoundedObjectCache::new(4096);
+    let key = ObjectRef::new(7, 0);
+    cache.insert(key, Object::Integer(1));
+    cache.insert_pinned(key, Object::Integer(2));
+    assert!(cache.insertion_order.is_empty());
+    cache.clear();
+    assert!(cache.get(&key).is_some());
+}
