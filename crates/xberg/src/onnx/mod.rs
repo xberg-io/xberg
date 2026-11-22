@@ -557,6 +557,7 @@ fn configure_tokenizer(
 
 /// Pick the model output to read: the only output if there is one, else the first name in
 /// `precedence` that the model exposes, else the first output.
+#[cfg(any(test, feature = "embeddings", feature = "sparse-embeddings"))]
 pub(crate) fn select_output_name<'a>(names: &[&'a str], precedence: &[&str]) -> Option<&'a str> {
     if let [only] = names {
         return Some(only);

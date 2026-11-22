@@ -205,7 +205,12 @@ fn reuses_the_size_of_a_probed_chunk() {
     }
 
     let calls = ProbeCalls(Cell::new(0));
-    let splitter = TextSplitter::new(ChunkConfig::new(2).with_sizer(&calls).with_trim(false));
+    let splitter = TextSplitter::new(ChunkConfig {
+        capacity: 2.into(),
+        overlap: 0,
+        sizer: &calls,
+        trim: false,
+    });
     let chunks = splitter.chunks("a\nb\nc").collect::<Vec<_>>();
 
     assert_eq!(chunks, ["a\n", "b\n", "c"]);
