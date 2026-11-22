@@ -23,7 +23,7 @@ impl PageOcrContext<'_> {
             mut detached_page,
             mut xobject_document,
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-            mut stored_scan,
+                stored_scan: _,
             has_stored_scan: _,
             mut has_layout_detections,
             mut resolved_ocr_config,

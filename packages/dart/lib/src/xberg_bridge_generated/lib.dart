@@ -614,6 +614,17 @@ Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
 Future<ServerConfig> createServerConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
 
+Future<SheetMetadata> createSheetMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateSheetMetadataFromJson(json: json);
+
+Future<ParsedScale> createParsedScaleFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateParsedScaleFromJson(json: json);
+
+Future<PolygonAnnotationInput> createPolygonAnnotationInputFromJson({
+  required String json,
+}) =>
+    RustLib.instance.api.crateCreatePolygonAnnotationInputFromJson(json: json);
+
 Future<StructuredDataResult> createStructuredDataResultFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
