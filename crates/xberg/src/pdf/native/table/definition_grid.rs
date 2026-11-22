@@ -110,7 +110,7 @@ pub(super) fn has_definition_shape(grid: &[Vec<String>]) -> bool {
         return false;
     }
 
-    let data_rows = if has_header_row(first) { &grid[1..] } else { &grid[..] };
+    let data_rows = if has_header_row(first) { &grid[1..] } else { grid };
     if data_rows.len() < MIN_DATA_ROWS {
         return false;
     }
@@ -483,13 +483,15 @@ fn group_words(region: &[HocrWord], tracks: &[Track], start: usize, end: usize) 
 /// Best cover of the track list by valid grids: most rows first, then the most
 /// tracks claimed, then the fewest grids.
 fn partition(tracks: &[Track], region: &[HocrWord], frame: GridFrame<'_>) -> Option<Vec<(usize, usize)>> {
+    type Best = (usize, Vec<(usize, usize)>);
+
     fn best_from(
         index: usize,
         tracks: &[Track],
         region: &[HocrWord],
         frame: GridFrame<'_>,
-        memo: &mut Vec<Option<Option<(usize, Vec<(usize, usize)>)>>>,
-    ) -> Option<(usize, Vec<(usize, usize)>)> {
+        memo: &mut [Option<Option<Best>>],
+    ) -> Option<Best> {
         if index == tracks.len() {
             return Some((0, Vec::new()));
         }

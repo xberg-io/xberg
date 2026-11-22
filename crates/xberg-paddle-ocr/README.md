@@ -51,13 +51,16 @@ PaddleOCR models are automatically downloaded and cached on first use. Supported
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Xberg's own modifications and additions are licensed under the MIT License - see the
+[LICENSE](LICENSE) file. Files derived from
+[paddle-ocr-rs](https://github.com/mg-chao/paddle-ocr-rs) remain subject to the
+Apache License 2.0 of that project; see `ATTRIBUTIONS.md` at the repository root.
 
 ## Acknowledgements
 
 This project is based on the original
 [paddle-ocr-rs](https://github.com/mg-chao/paddle-ocr-rs) by
-[mg-chao](https://github.com/mg-chao), originally licensed under Apache-2.0.
+[mg-chao](https://github.com/mg-chao) (version 0.6.1), licensed under Apache-2.0.
 We are grateful for the foundational work that made this integration possible.
 
 The original paddle-ocr-rs provides Rust bindings for PaddlePaddle's OCR models

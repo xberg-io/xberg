@@ -224,7 +224,10 @@ fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[
                         nom::Err::Failure(nom::error::Error::new(object_input, nom::error::ErrorKind::Verify))
                     })?
                 } else {
-                    ObjectRef::new(i as u32, generation as u16)
+                    match checked_reference(i, generation) {
+                        Some(reference) => reference,
+                        None => return Ok((input3, Object::Null)),
+                    }
                 };
                 return Ok((input3, Object::Reference(reference)));
             }
@@ -446,10 +449,14 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     )))
 }
 
+/// How far past `stream` the fallback looks for `endstream`. Without a bound, each object with a
+/// missing or wrong /Length scans to end of file, which is quadratic across many such objects.
+const MAX_ENDSTREAM_SCAN: usize = 16 * 1024 * 1024;
+
 /// Find the position of 'endstream' keyword in input.
 fn find_endstream(input: &[u8]) -> Option<usize> {
-    let keyword = b"endstream";
-    input.windows(keyword.len()).position(|window| window == keyword)
+    let window = &input[..input.len().min(MAX_ENDSTREAM_SCAN)];
+    memchr::memmem::find(window, b"endstream")
 }
 
 /// Parse a PDF array: `[ obj1 obj2 ... objN ]`

@@ -16,3 +16,4 @@ mod ligature_decode;
 mod ligature_glyph;
 mod pen_continuation;
 mod primary_lead_classification;
+mod run_continuation_bounds;

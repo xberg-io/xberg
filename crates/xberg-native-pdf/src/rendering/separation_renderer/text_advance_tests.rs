@@ -53,3 +53,9 @@ fn clip_only_text_paints_nothing_on_the_plate_and_advances_by_the_rasterizer_mea
     let plate = plate_of("1 0 0 0 k BT /F1 20 Tf 50 Tz 10 10 Td 7 Tr (H) Tj 0 Tr (H) Tj ET", "");
     assert_eq!(plate, reference());
 }
+
+#[test]
+fn tj_advances_the_text_matrix_once_per_element() {
+    let plate = plate_of("1 0 0 0 k BT /F1 20 Tf 50 Tz 10 10 Td 3 Tr [(H)] TJ 0 Tr (H) Tj ET", "");
+    assert_eq!(plate, reference());
+}

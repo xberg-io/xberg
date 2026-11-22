@@ -20,7 +20,7 @@ use nom::{
     IResult, Parser,
     branch::alt,
     bytes::complete::{take_till, take_while},
-    character::complete::{char, digit1, one_of},
+    character::complete::{char, digit1},
     combinator::{map, opt, value},
     sequence::{delimited, preceded},
 };
@@ -144,14 +144,27 @@ pub(crate) fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///
 /// Note: PDF allows leading +/- signs and numbers starting with decimal point.
 fn parse_number(input: &[u8]) -> IResult<&[u8], Token<'_>> {
-    let (input, sign) = opt(one_of("+-")).parse(input)?;
+    // Repeated signs collapse to one (`--5` is -5, as pdf.js and Adobe Reader read it). ~keep
+    let sign_len = input.iter().take_while(|b| matches!(**b, b'+' | b'-')).count();
+    let negative = input[..sign_len].contains(&b'-');
+    let input = &input[sign_len..];
 
-    let (input, int_part) = opt(digit1).parse(input)?;
+    let (mut input, int_part) = opt(digit1).parse(input)?;
+    // A minus inside a digit run is ignored (`4-5` reads as 45, as pdf.js does). ~keep
+    let mut int_part: Option<std::borrow::Cow<[u8]>> = int_part.map(std::borrow::Cow::Borrowed);
+    while let Some(digits) = int_part.as_mut()
+        && input.first() == Some(&b'-')
+        && input.get(1).is_some_and(u8::is_ascii_digit)
+    {
+        let (rest, more) = digit1.parse(&input[1..])?;
+        digits.to_mut().extend_from_slice(more);
+        input = rest;
+    }
 
     let (input, frac_part) = opt(preceded(char('.'), opt(digit1))).parse(input)?;
 
     if int_part.is_none() && frac_part.is_none() {
-        if sign.is_some() {
+        if sign_len > 0 {
             // Bare sign (e.g., `-` or `+`) without digits — treat as integer 0.
             // This occurs in malformed TJ arrays like `(v)-(e)` where `-` is a bare offset. ~keep
             return Ok((input, Token::Integer(0)));
@@ -164,10 +177,10 @@ fn parse_number(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 
     if frac_part.is_some() {
         let mut num_str = String::new();
-        if sign == Some('-') {
+        if negative {
             num_str.push('-');
         }
-        if let Some(int) = int_part {
+        if let Some(int) = &int_part {
             num_str.push_str(
                 std::str::from_utf8(int)
                     .map_err(|_| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?,
@@ -200,17 +213,15 @@ fn parse_number(input: &[u8]) -> IResult<&[u8], Token<'_>> {
         }
         Ok((input, Token::Real(num)))
     } else {
-        let int_bytes =
-            int_part.ok_or_else(|| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?;
+        let int_bytes = int_part
+            .as_deref()
+            .ok_or_else(|| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?;
         let int_str = std::str::from_utf8(int_bytes)
             .map_err(|_| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?;
-        let mut num: i64 = int_str
-            .parse()
-            .map_err(|_| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?;
-        if sign == Some('-') {
-            num = -num;
-        }
-        Ok((input, Token::Integer(num)))
+        // A literal beyond i64 clamps rather than failing the token, so one absurd operand
+        // cannot abort the stream. ~keep
+        let magnitude: i64 = int_str.parse().unwrap_or(i64::MAX);
+        Ok((input, Token::Integer(if negative { -magnitude } else { magnitude })))
     }
 }
 
@@ -560,6 +571,32 @@ mod tests {
         assert!(
             ratio < MAX_RATIO,
             "doubling the stream multiplied the tokenizing time by {ratio:.2} ({single:.3}s -> {double:.3}s): the cost is not linear"
+        );
+    }
+
+    #[test]
+    fn repeated_minus_signs_read_as_one_negative() {
+        assert_eq!(token(b"--5 0 Td"), Ok((&b" 0 Td"[..], Token::Integer(-5))));
+        assert_eq!(token(b"--1.5"), Ok((&b""[..], Token::Real(-1.5))));
+        assert_eq!(token(b"+-7"), Ok((&b""[..], Token::Integer(-7))));
+    }
+
+    #[test]
+    fn minus_inside_digits_is_ignored_and_second_dot_ends_the_number() {
+        assert_eq!(token(b"4-5"), Ok((&b""[..], Token::Integer(45))));
+        assert_eq!(token(b"1.2.3"), Ok((&b".3"[..], Token::Real(1.2))));
+        assert_eq!(token(b"4 -5"), Ok((&b" -5"[..], Token::Integer(4))));
+    }
+
+    #[test]
+    fn oversized_integer_literal_clamps_instead_of_failing() {
+        assert_eq!(
+            token(b"99999999999999999999999"),
+            Ok((&b""[..], Token::Integer(i64::MAX)))
+        );
+        assert_eq!(
+            token(b"-99999999999999999999999"),
+            Ok((&b""[..], Token::Integer(-i64::MAX)))
         );
     }
 

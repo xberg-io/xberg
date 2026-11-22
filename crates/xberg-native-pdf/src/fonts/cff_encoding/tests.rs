@@ -917,3 +917,16 @@ fn test_font_without_ros_yields_no_mapping() {
         "a font whose Top DICT has no ROS operator must not produce a CID map"
     );
 }
+
+#[test]
+fn charset_range_running_past_sid_65535_does_not_overflow() {
+    let format1 = [1u8, 0xFF, 0xFF, 6];
+    let sids = parse_charset(&format1, 0, 8).unwrap();
+    assert_eq!(sids.len(), 8);
+    assert!(sids[1..].iter().all(|sid| *sid == u16::MAX));
+
+    let format2 = [2u8, 0xFF, 0xFE, 0x00, 6];
+    let sids = parse_charset(&format2, 0, 8).unwrap();
+    assert_eq!(sids[1], 0xFFFE);
+    assert_eq!(sids[7], u16::MAX);
+}

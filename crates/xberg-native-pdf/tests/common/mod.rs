@@ -56,6 +56,47 @@ pub fn build_minimal_pdf_raw(content: &[u8], page_extra: &[u8]) -> Vec<u8> {
     finalize_pdf(pdf, &offsets)
 }
 
+/// Builds a PDF from `(object number, body)` pairs, with a classic xref table
+/// and `/Root 1 0 R`. Object numbers not listed become free entries, so
+/// shuffled or sparse numbering is expressible.
+pub fn build_pdf_from_objects(objects: &[(u32, String)]) -> Vec<u8> {
+    let max_id = objects.iter().map(|(id, _)| *id).max().unwrap_or(1);
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = vec![0usize; max_id as usize + 1];
+    for (id, body) in objects {
+        offsets[*id as usize] = out.len();
+        out.extend_from_slice(format!("{id} 0 obj\n{body}\nendobj\n").as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", max_id + 1).as_bytes());
+    for offset in &offsets[1..] {
+        if *offset == 0 {
+            out.extend_from_slice(b"0000000000 65535 f \n");
+        } else {
+            out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            max_id + 1
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+/// Runs `work` on a thread with a deliberately small stack, so unbounded
+/// recursion aborts the test binary (run it alone) instead of passing unnoticed.
+pub fn on_small_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(work)
+        .unwrap()
+        .join()
+        .expect("worker thread panicked")
+}
+
 /// Append the cross-reference table, trailer and `startxref` for a body whose
 /// object offsets are `offsets` (index 0 is the free head and is ignored).
 pub fn finalize_pdf(mut pdf: Vec<u8>, offsets: &[usize]) -> Vec<u8> {

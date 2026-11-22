@@ -763,6 +763,38 @@ impl<'doc> TextExtractor<'doc> {
         perp.abs() <= tolerance && along >= 0.0
     }
 
+    /// The run's displacement along its writing axis when `(e, f)` continues the run that started at
+    /// `start`, or `None` when it ends the run. On top of [`Self::advances_along_writing_axis`], a
+    /// jump past the run's end (`accumulated`, in the units of `e` and `f`) by more than a column gap
+    /// ends it: `max(3 x font size, 30 pt)` is the threshold the line grouping already uses to
+    /// separate columns, so a producer that positions every cell with an absolute `Tm` does not glue
+    /// columns into one span. Vertical writing mode keeps the raw same-line, forward test. ~keep
+    pub(super) fn run_continuation_along(
+        start: Matrix,
+        wmode: u8,
+        e: f32,
+        f: f32,
+        font_size: f32,
+        accumulated: f32,
+    ) -> Option<f32> {
+        if wmode != 0 {
+            let on_line = (f - start.f).abs() <= ((font_size * start.d).abs() * 0.5).max(0.5);
+            return (on_line && e >= start.e).then_some(e - start.e);
+        }
+        if !Self::advances_along_writing_axis(start, wmode, e, f, font_size) {
+            return None;
+        }
+        let axis = (start.a * start.a + start.b * start.b).sqrt();
+        let (ux, uy) = if axis > 0.0 {
+            (start.a / axis, start.b / axis)
+        } else {
+            (1.0, 0.0)
+        };
+        let along = ux * (e - start.e) + uy * (f - start.f);
+        let limit = (font_size * axis * 3.0).abs().max(30.0);
+        (along - accumulated <= limit).then_some(along)
+    }
+
     /// How far the pen at `e` lies from `start`'s origin along an upright run, in text space.
     ///
     /// `e` is a user-space coordinate, while a run's `accumulated_width` is in text space and the

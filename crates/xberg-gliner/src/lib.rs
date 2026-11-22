@@ -1,8 +1,12 @@
-//! Span-mode GLiNER ONNX inference.
+//! GLiNER inference: span-mode ONNX Runtime backend plus an optional Candle
+//! GLiNER2 backend (`candle` feature).
 //!
 //! This crate vendors the span-mode preprocessing and decoding path from the
-//! `gline-rs` project and replaces its pipeline wrapper with direct `ort`
-//! session management.
+//! `gline-rs` project (Apache-2.0, <https://github.com/fbilhaut/gline-rs>) and
+//! replaces its pipeline wrapper with direct `ort` session management. The
+//! `candle` module is ported from `anno` (MIT OR Apache-2.0,
+//! <https://github.com/arclabs561/anno>). See `NOTICE` and the repository-root
+//! `ATTRIBUTIONS.md` for licenses and modifications.
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 #![cfg_attr(test, allow(clippy::print_stdout, clippy::print_stderr))]

@@ -164,13 +164,15 @@ impl PdfDocument {
             .as_ref()
             .and_then(|n| n.as_dict())
             .and_then(|d| d.get("EmbeddedFiles"))
-            .and_then(|e| self.resolve_object(e).ok())
         else {
             return Ok(Vec::new());
         };
 
         let mut filespecs: Vec<Object> = Vec::new();
-        self.collect_embedded_filespecs(&ef_root, &mut filespecs, 0);
+        let mut budget = crate::outline::NameTreeBudget::default();
+        if budget.admit(ef_root) {
+            self.collect_embedded_filespecs(ef_root, &mut filespecs, 0, &mut budget);
+        }
 
         let mut out = Vec::new();
         for fs in &filespecs {
@@ -207,7 +209,13 @@ impl PdfDocument {
 
     /// Recursively collect `/Filespec` objects from an `/EmbeddedFiles`
     /// name-tree node: leaf `/Names [key filespec …]` pairs plus `/Kids`.
-    fn collect_embedded_filespecs(&self, node: &Object, out: &mut Vec<Object>, depth: u8) {
+    fn collect_embedded_filespecs(
+        &self,
+        node: &Object,
+        out: &mut Vec<Object>,
+        depth: u8,
+        budget: &mut crate::outline::NameTreeBudget,
+    ) {
         if depth > 32 {
             return;
         }
@@ -233,7 +241,9 @@ impl PdfDocument {
             && let Some(arr) = kids.as_array()
         {
             for kid in arr {
-                self.collect_embedded_filespecs(kid, out, depth + 1);
+                if budget.admit(kid) {
+                    self.collect_embedded_filespecs(kid, out, depth + 1, budget);
+                }
             }
         }
     }

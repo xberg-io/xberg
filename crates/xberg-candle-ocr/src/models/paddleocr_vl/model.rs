@@ -1,6 +1,7 @@
 //! PaddleOCR-VL model implementation: SigLIP vision encoder + ERNIE text decoder with M-RoPE.
 //!
 //! Adapted from aha's paddleocr_vl module.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 //! Handles the complete forward pass for vision-language document understanding.
 
 use candle_core::{D, IndexOp, Shape, Tensor};

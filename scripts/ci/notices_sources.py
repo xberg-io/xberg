@@ -60,7 +60,7 @@ LIBWPD_VENDOR_DIR = Path("crates/xberg-libwpd/vendor")
 TESSERACT_BUILD = Path("crates/xberg-tesseract/build.rs")
 OCR_BUILD = Path("scripts/ci/install-system-deps/build-ocr-linux.sh")
 PDFIUM_CHECKSUMS = Path("scripts/pdfium-runtime-checksums.sha256")
-PDFIUM_ACTION = Path(".github/actions/download-pdfium/action.yml")
+PDFIUM_PIN = Path("scripts/pdfium-version")
 ONNX_CHECKSUMS = Path("scripts/ci/actions/setup-onnx-runtime/checksums.sha256")
 
 
@@ -409,15 +409,13 @@ def _libwpd_pins(root: Path, inputs: BuildInputs) -> None:
 
 
 def _pdfium_pin(root: Path, inputs: BuildInputs) -> None:
-    action = (root / PDFIUM_ACTION).read_text(encoding="utf-8")
-    default = re.search(r'(?ms)pdfium-version:.*?\n\s+default: "(\d+)"', action)
-    if default is None:
-        raise ValueError(f"{PDFIUM_ACTION} has no pdfium-version default")
-    revision = default.group(1)
+    revision = (root / PDFIUM_PIN).read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"\d+", revision):
+        raise ValueError(f"{PDFIUM_PIN} must hold one numeric Chromium build, found {revision!r}")
     for dockerfile in sorted((root / "docker").glob("Dockerfile*")):
         arg = _docker_arg(dockerfile, "PDFIUM_VERSION")
         if arg is not None and arg != revision:
-            raise ValueError(f"{dockerfile}: PDFIUM_VERSION={arg} but {PDFIUM_ACTION} pins {revision}")
+            raise ValueError(f"{dockerfile}: PDFIUM_VERSION={arg} but {PDFIUM_PIN} pins {revision}")
     digests = {}
     for line in (root / PDFIUM_CHECKSUMS).read_text(encoding="utf-8").splitlines():
         match = HEX_DIGEST.match(line.strip())

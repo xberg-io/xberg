@@ -53,6 +53,19 @@ When you change the classic OCR model catalog or the cache code behind `xberg ca
 `mise run test:classic-ocr-cache`. It builds the CLI, downloads every pinned PaddleOCR and Sceptre artifact, and
 verifies inference with the network off. CI does not run it, because it needs the network and the full model set.
 
+### Pdfium
+
+The optional pdfium PDF backend needs a real `libpdfium`. The pinned build is `scripts/pdfium-version`, with SHA-256 digests in
+`scripts/pdfium-runtime-checksums.sha256`; a mismatch or a failed download is an error, never a skip.
+
+| Command                          | What it does                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `mise run pdfium:provision`      | Download and verify the pinned build into `~/.cache/xberg/pdfium/<build>/<platform>/`, print its directory |
+| `mise run pdfium:test`           | Provision, then run the fork and engine tests with `XBERG_REQUIRE_PDFIUM=1`                    |
+| `eval "$(mise run -q pdfium:env)"` | Export `PDFIUM_DYNAMIC_LIB_PATH` for your own `cargo` runs                                   |
+| `mise run pdfium:latest`         | Compare the newest upstream build with the pin (edits nothing)                                 |
+| `mise run pdfium:bump <build>`   | Dry-run a pin update from the release digests; `--apply` writes it (needs matching bindings)   |
+
 For the complete development workflow, build profiles, coding standards, and PR guidelines, see the full [Contributing Guide](https://docs.xberg.io/contributing/).
 
 ## Commit guidelines
