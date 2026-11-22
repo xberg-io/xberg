@@ -258,6 +258,9 @@ impl<'doc> TextExtractor<'doc> {
                 && prev_tail_char.is_some_and(|c| c.is_alphabetic())
                 && curr_head_char.is_some_and(|c| c.is_alphabetic());
 
+            let has_small_caps_size_step =
+                (current.font_size - span.font_size).abs() > 0.1 * current.font_size.max(span.font_size);
+
             // Merge threshold: Use configured values
             // Negative gaps: use severe_overlap_threshold_pt (default -0.5pt)
             // Positive gaps: use a threshold that allows for justified text but
@@ -350,9 +353,12 @@ impl<'doc> TextExtractor<'doc> {
                 );
                 current.text.push('.');
                 current.text.push_str(&span.text);
-            } else if cross_font_word_glue {
-                // Mid-word font/weight change: concatenate without any space
-                // or space-heuristic — these are same-word character runs. ~keep
+            } else if cross_font_word_glue || (small_caps_glue && has_small_caps_size_step) {
+                // Mid-word font/weight change (including a small-capitals
+                // initial): concatenate without any space or space-heuristic —
+                // these are same-word character runs. A size step under 10% is
+                // a line-height wobble, not small capitals, and keeps the
+                // space heuristic. ~keep
                 current.text.push_str(&span.text);
             } else if should_merge {
                 // Check if next span is entirely whitespace-only OR marked as offset_semantic space

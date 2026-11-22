@@ -83,6 +83,7 @@ fn sig() -> PageSignals {
         fragmented_word_ratio: 0.0,
         consecutive_repeat_ratio: 0.0,
         vector_path_density: 0.0,
+        vector_path_count: 0,
         has_reliable_structure: false,
         producer_prior: ProducerPrior::Unknown,
         page_is_empty: false,
@@ -230,4 +231,42 @@ fn auto_extractor_construction_is_cheap_and_infallible() {
     assert_eq!(AutoExtractor::text_only().options().mode, ExtractMode::TextOnly);
     let ae = AutoExtractor::with(AutoExtractOptions::high_fidelity());
     assert!(ae.options().min_text_confidence.is_some());
+}
+
+mod vector_artwork_is_not_a_scan_tests {
+    use super::*;
+
+    #[test]
+    fn test_handful_of_paths_is_artwork_not_outlined_text() {
+        let mut s = sig();
+        s.vector_path_density = 1.0;
+        s.vector_path_count = 4;
+        let (kind, _, _) = classify_from_signals(&s, &AutoExtractOptions::default());
+        assert_ne!(kind, PageKind::Scanned);
+    }
+
+    #[test]
+    fn outlined_text_is_still_an_ocr_candidate() {
+        let mut s = sig();
+        s.vector_path_density = 1.0;
+        s.vector_path_count = 2400;
+        let (kind, _, reason) = classify_from_signals(&s, &AutoExtractOptions::default());
+        assert_eq!(kind, PageKind::Scanned);
+        assert_eq!(reason, ReasonCode::NoTextLayerPresent);
+    }
+
+    #[test]
+    fn no_text_and_no_raster_is_not_a_scan() {
+        let (kind, _, _) = classify_from_signals(&sig(), &AutoExtractOptions::default());
+        assert_eq!(kind, PageKind::Empty);
+    }
+
+    #[test]
+    fn test_unmeasurable_image_is_still_a_scan() {
+        let mut s = sig();
+        s.codec = ImageCodecClass::Dct;
+        s.image_area_ratio = 0.0;
+        let (kind, _, _) = classify_from_signals(&s, &AutoExtractOptions::default());
+        assert_eq!(kind, PageKind::Scanned);
+    }
 }
