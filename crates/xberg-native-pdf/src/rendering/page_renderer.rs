@@ -7256,7 +7256,7 @@ fn project_cal_rgb_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32
 /// §8.6.5.4 Lab → XYZ → sRGB via the standard CIELab inverse. The
 /// dictionary's /WhitePoint sets the reference white; the function
 /// `f^-1(t) = t^3 if t > 6/29, else 3·(6/29)^2·(t - 4/29)`.
-fn project_lab_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+pub(crate) fn project_lab_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
     let dict = dict_obj.as_dict()?;
     if values.len() < 3 {
         return None;
@@ -7660,13 +7660,25 @@ fn components_to_rgb_in_space(space: &Object, components: &[f32], doc: &PdfDocum
         },
         Object::Array(a) => {
             let tag = a.first().and_then(|o| o.as_name())?;
+            // The operand count gates the conversion; the calibration or
+            // profile then decides the colour, with the device-style reading
+            // as the fallback when that cannot be applied.
+            let converted = |n: usize, resolved: &Object| -> Option<(f32, f32, f32)> {
+                if components.len() != n {
+                    return None;
+                }
+                project_bc_altspace_to_rgb(doc, resolved, components).or_else(|| n_to_rgb(n))
+            };
             match tag {
-                "CalGray" => n_to_rgb(1),
-                "CalRGB" | "Lab" => n_to_rgb(3),
+                "CalGray" | "CalRGB" | "Lab" => {
+                    let dict = doc.resolve_object(a.get(1)?).ok()?;
+                    let resolved = Object::Array(vec![a[0].clone(), dict]);
+                    converted(if tag == "CalGray" { 1 } else { 3 }, &resolved)
+                }
                 "ICCBased" => {
                     let stream = doc.resolve_object(a.get(1)?).ok()?;
                     let n = stream.as_dict().and_then(|d| d.get("N")).and_then(|o| o.as_integer())? as usize;
-                    n_to_rgb(n)
+                    converted(n, space)
                 }
                 _ => None,
             }

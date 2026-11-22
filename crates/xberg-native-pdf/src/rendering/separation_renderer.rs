@@ -1601,13 +1601,7 @@ fn execute_separation_operators(
         if excluded_layer_depth > 0
             && matches!(
                 op,
-                Operator::Do { .. }
-                    | Operator::Tj { .. }
-                    | Operator::TJ { .. }
-                    | Operator::Quote { .. }
-                    | Operator::DoubleQuote { .. }
-                    | Operator::PaintShading { .. }
-                    | Operator::InlineImage { .. }
+                Operator::Do { .. } | Operator::PaintShading { .. } | Operator::InlineImage { .. }
             )
         {
             continue;
@@ -2179,6 +2173,7 @@ fn execute_separation_operators(
                         ctx,
                         clip_stack.last().and_then(|c| c.as_ref()),
                         target_inks,
+                        excluded_layer_depth > 0,
                     )?;
                     gs_stack.current_mut().advance_text_matrix(advance);
                 }
@@ -2196,6 +2191,7 @@ fn execute_separation_operators(
                         ctx,
                         clip_stack.last().and_then(|c| c.as_ref()),
                         target_inks,
+                        excluded_layer_depth > 0,
                     )?;
                     gs_stack.current_mut().advance_text_matrix(advance);
                 }
@@ -2219,6 +2215,7 @@ fn execute_separation_operators(
                         ctx,
                         clip_stack.last().and_then(|c| c.as_ref()),
                         target_inks,
+                        excluded_layer_depth > 0,
                     )?;
                     gs_stack.current_mut().advance_text_matrix(advance);
                 }
@@ -2248,6 +2245,7 @@ fn execute_separation_operators(
                         ctx,
                         clip_stack.last().and_then(|c| c.as_ref()),
                         target_inks,
+                        excluded_layer_depth > 0,
                     )?;
                     gs_stack.current_mut().advance_text_matrix(advance);
                 }
@@ -2377,14 +2375,16 @@ fn render_text_to_plate(
     ctx: &mut SeparationContext<'_>,
     clip: Option<&Mask>,
     target_inks: &[&str],
+    hidden: bool,
 ) -> Result<f32> {
     let gs = gs_stack.current();
     let empty = SeparationColorState::new();
     let cs = color_state_stack.last().unwrap_or(&empty);
 
     // Render mode 3 = invisible text; mode 7 = clip-only, no paint (§9.3.6,
-    // WS1.5). Both advance the text matrix but skip painting. ~keep
-    if gs.render_mode == 3 || gs.render_mode == 7 {
+    // WS1.5); text in a hidden optional-content scope is likewise not drawn
+    // (§8.11.3). All advance the text matrix but skip painting. ~keep
+    if hidden || gs.render_mode == 3 || gs.render_mode == 7 {
         return measure_text_advance(text, gs, ctx.fonts);
     }
 
@@ -2449,6 +2449,7 @@ fn render_tj_to_plate(
     ctx: &mut SeparationContext<'_>,
     clip: Option<&Mask>,
     target_inks: &[&str],
+    hidden: bool,
 ) -> Result<f32> {
     let mut total_advance = 0.0;
     for element in array {
@@ -2465,6 +2466,7 @@ fn render_tj_to_plate(
                     ctx,
                     clip,
                     target_inks,
+                    hidden,
                 )?;
                 gs_stack.current_mut().advance_text_matrix(advance);
                 total_advance += advance;

@@ -142,6 +142,23 @@ impl ColorResolver {
         ctx: &ResolutionContext,
         alpha: f32,
     ) -> Result<ResolvedColor> {
+        self.resolve_spaced_at(space, components, ctx, alpha, 0)
+    }
+
+    /// `depth` counts the colour spaces entered through an Indexed base or a
+    /// Separation/DeviceN alternate. A cyclic chain of them would otherwise
+    /// never terminate.
+    fn resolve_spaced_at(
+        &self,
+        space: &Object,
+        components: &[f32],
+        ctx: &ResolutionContext,
+        alpha: f32,
+        depth: usize,
+    ) -> Result<ResolvedColor> {
+        if depth >= MAX_SPACE_DEPTH {
+            return Ok(first_as_gray(components, alpha));
+        }
         // A `Name` here means a device family — the operator dispatcher
         // already folded those into LogicalColor::Device for the canonical
         // `g`/`rg`/`k`/`K` operators, but `SCN` against a Device* alias
@@ -167,8 +184,8 @@ impl ColorResolver {
             "CalRGB" => Ok(resolve_calrgb(arr, components, ctx, alpha)),
             "DeviceCMYK" | "CMYK" => Ok(four_as_cmyk_native(components, alpha)),
             "ICCBased" => self.resolve_iccbased(arr, components, ctx, alpha),
-            "Separation" | "DeviceN" => self.resolve_separation_or_devicen(arr, components, ctx, alpha),
-            "Indexed" => self.resolve_indexed(arr, components, ctx, alpha),
+            "Separation" | "DeviceN" => self.resolve_separation_or_devicen(arr, components, ctx, alpha, depth),
+            "Indexed" => self.resolve_indexed(arr, components, ctx, alpha, depth),
             _ => Ok(first_as_gray(components, alpha)),
         }
     }
@@ -393,6 +410,7 @@ impl ColorResolver {
         components: &[f32],
         ctx: &ResolutionContext,
         alpha: f32,
+        depth: usize,
     ) -> Result<ResolvedColor> {
         if components.is_empty() {
             return Ok(ResolvedColor::Rgba {
@@ -517,7 +535,7 @@ impl ColorResolver {
                 // Separation with an ICC alternate route through the ICC
                 // branch correctly. ~keep
                 if let Object::Array(_) = alt_cs_resolved {
-                    self.resolve_spaced(&alt_cs_resolved, &altspace_values, ctx, alpha)
+                    self.resolve_spaced_at(&alt_cs_resolved, &altspace_values, ctx, alpha, depth + 1)
                 } else {
                     Ok(first_as_gray(&altspace_values, alpha))
                 }
@@ -531,6 +549,7 @@ impl ColorResolver {
         components: &[f32],
         ctx: &ResolutionContext,
         alpha: f32,
+        depth: usize,
     ) -> Result<ResolvedColor> {
         if components.is_empty() {
             return Ok(ResolvedColor::Rgba {
@@ -571,14 +590,53 @@ impl ColorResolver {
         if n == 0 {
             return Ok(first_as_gray(components, alpha));
         }
-        let off = idx * n;
-        if off + n > palette.len() {
+        let Some(off) = idx.checked_mul(n) else {
+            return Ok(first_as_gray(components, alpha));
+        };
+        let Some(end) = off.checked_add(n) else {
+            return Ok(first_as_gray(components, alpha));
+        };
+        if end > palette.len() {
             return Ok(first_as_gray(components, alpha));
         }
 
-        let base_components: Vec<f32> = palette[off..off + n].iter().map(|b| f32::from(*b) / 255.0).collect();
-        self.resolve_spaced(&base, &base_components, ctx, alpha)
+        if let Some((r, g, b)) = lab_palette_entry_to_rgb(&base, &palette[off..end], ctx) {
+            return Ok(ResolvedColor::Rgba {
+                r: r.clamp(0.0, 1.0),
+                g: g.clamp(0.0, 1.0),
+                b: b.clamp(0.0, 1.0),
+                a: alpha,
+            });
+        }
+
+        let base_components: Vec<f32> = palette[off..end].iter().map(|b| f32::from(*b) / 255.0).collect();
+        self.resolve_spaced_at(&base, &base_components, ctx, alpha, depth + 1)
     }
+}
+
+/// An `/Indexed` palette entry over a `[/Lab dict]` base, as RGB. The bytes
+/// span L* over 0..=100 and a*, b* over the dictionary's `/Range`
+/// (ISO 32000-1 8.6.6.3, 8.6.5.4); `None` when `base` is not a Lab array.
+fn lab_palette_entry_to_rgb(base: &Object, entry: &[u8], ctx: &ResolutionContext) -> Option<(f32, f32, f32)> {
+    let arr = base.as_array()?;
+    if arr.first().and_then(|o| o.as_name()) != Some("Lab") || entry.len() != 3 {
+        return None;
+    }
+    let dict_obj = ctx.doc.resolve_object(arr.get(1)?).ok()?;
+    let range = dict_obj
+        .as_dict()
+        .and_then(|d| d.get("Range"))
+        .and_then(|o| o.as_array())
+        .map(|a| a.iter().map(|o| object_to_f64(o) as f32).collect::<Vec<f32>>())
+        .filter(|r| r.len() == 4)
+        .unwrap_or_else(|| vec![-100.0, 100.0, -100.0, 100.0]);
+    let frac = |b: u8| f32::from(b) / 255.0;
+    let lab = [
+        frac(entry[0]) * 100.0,
+        range[0] + frac(entry[1]) * (range[1] - range[0]),
+        range[2] + frac(entry[2]) * (range[3] - range[2]),
+    ];
+    crate::rendering::page_renderer::project_lab_to_rgb(&dict_obj, &lab)
 }
 
 /// ISO 32000-1 8.6.5.3 CalRGB: apply `/Gamma`, then `/Matrix`, then project
@@ -629,6 +687,10 @@ fn resolve_calrgb(arr: &[Object], components: &[f32], ctx: &ResolutionContext, a
         a: alpha,
     }
 }
+
+/// Deepest chain of Indexed bases and Separation/DeviceN alternates followed
+/// before a colour falls back to its first component.
+const MAX_SPACE_DEPTH: usize = 8;
 
 /// Component count of an `/Indexed` base space. Returns 0 for an unrecognised
 /// family so the caller falls back instead of striding the palette wrongly.
@@ -1193,6 +1255,25 @@ mod tests {
         assert!((gg - g).abs() < 1e-3, "g: got {gg}, want {g}");
         assert!((bb - b).abs() < 1e-3, "b: got {bb}, want {b}");
         assert!((aa - a).abs() < 1e-3, "a: got {aa}, want {a}");
+    }
+
+    #[test]
+    fn indexed_offset_overflow_falls_back_instead_of_panicking() {
+        let doc = fixture_doc();
+        let spaces = HashMap::new();
+        let resolver = ColorResolver::new();
+        let space = Object::Array(vec![
+            Object::Name("Indexed".to_string()),
+            Object::Name("DeviceRGB".to_string()),
+            Object::Integer(i64::MAX),
+            Object::String(vec![255, 0, 0]),
+        ]);
+        let lc = LogicalColor::Spaced {
+            space: &space,
+            components: smallvec::smallvec![1.0e19],
+        };
+        let c = resolver.resolve(&lc, &ctx(&doc, &spaces), 1.0).unwrap();
+        assert_rgba(c, 1.0, 1.0, 1.0, 1.0);
     }
 
     #[test]
