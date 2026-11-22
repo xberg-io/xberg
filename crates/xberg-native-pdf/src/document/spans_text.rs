@@ -6,6 +6,19 @@
 
 use super::*;
 
+/// What the geometry at a soft-hyphen seam says about the wrap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SoftHyphenSeam {
+    /// The baseline dropped by about one line and the continuation returned to
+    /// the left of where the previous run ended.
+    Close,
+    /// Neither a wrap nor contiguous glyphs: the marker survives and the seam
+    /// is made non-empty.
+    Keep,
+    /// Contiguous glyphs on one line, a word the file split into two runs.
+    Contiguous,
+}
+
 impl PdfDocument {
     /// Normalize Kangxi Radical characters to CJK Unified Ideographs.
     ///
@@ -608,7 +621,15 @@ impl PdfDocument {
     /// # Returns
     /// `true` if a space should be inserted between the spans
     pub(super) fn should_insert_space(prev: &TextSpan, current: &TextSpan) -> bool {
-        let font_size = prev.font_size.max(current.font_size).max(1.0);
+        // The smaller run sets the threshold: too large fuses two words the page
+        // draws apart (`And` 13 pt beside `welcomes` 9 pt gave `Andwelcomes`),
+        // too small only separates what is already separate. A missing size
+        // falls back to the larger. ~keep
+        let font_size = if prev.font_size > 0.0 && current.font_size > 0.0 {
+            prev.font_size.min(current.font_size).max(1.0)
+        } else {
+            prev.font_size.max(current.font_size).max(1.0)
+        };
 
         // Same-line gate. Uses the shared threshold so the assembly
         // loop's same-line decision and the space-insertion decision
@@ -1182,31 +1203,89 @@ impl PdfDocument {
         }
         if Self::is_column_spanning_decimal(span) {
             let dot = span.text.find('.').unwrap();
-            Self::push_str_without_soft_hyphens(out, &span.text[..dot]);
+            out.push_str(&span.text[..dot]);
             out.push(' ');
-            Self::push_str_without_soft_hyphens(out, &span.text[dot + 1..]);
+            out.push_str(&span.text[dot + 1..]);
         } else if let Some(split) = Self::char_widths_boundary_split(span) {
-            Self::push_str_without_soft_hyphens(out, &span.text[..split]);
+            out.push_str(&span.text[..split]);
             out.push(' ');
-            Self::push_str_without_soft_hyphens(out, &span.text[split..]);
+            out.push_str(&span.text[split..]);
         } else {
-            Self::push_str_without_soft_hyphens(out, &span.text);
+            out.push_str(&span.text);
         }
     }
 
-    /// Append `s` to `out`, dropping U+00AD (SOFT HYPHEN). Per ISO 32000-1
-    /// §14.8.2.2.3 a soft hyphen only marks a discretionary line-break point —
-    /// it is never meaningful rendered content, so it must not survive into
-    /// flat-text output regardless of whether it sits at a line boundary (the
-    /// PDF's own line wrap is not preserved here) or mid-word within a span
-    /// whose glyphs were positioned individually.
-    #[inline]
-    fn push_str_without_soft_hyphens(out: &mut String, s: &str) {
-        if s.contains('\u{00AD}') {
-            out.extend(s.chars().filter(|&c| c != '\u{00AD}'));
-        } else {
-            out.push_str(s);
+    /// Act on a soft-hyphen seam between `prev` and `span`, and report whether
+    /// `span` has been consumed.
+    ///
+    /// U+00AD marks a break offered *inside* a word (ISO 32000-1:2008
+    /// §14.8.2.2.3), but WinAnsi code 255 "shall be typographically the same as
+    /// hyphen" (Annex D note 5), so a marker inside one span is a painted
+    /// character and is kept. Only a seam between two spans can be a wrap, and
+    /// the only evidence is geometry that is gone once the text is assembled.
+    /// On a wrap the marker is dropped and `span` written here; otherwise
+    /// `text` is left for the caller's own cascade to append `span`.
+    pub(super) fn apply_soft_hyphen_seam(text: &mut String, prev: &TextSpan, span: &TextSpan) -> bool {
+        let marker_seam = text
+            .strip_suffix('\u{00AD}')
+            .is_some_and(|t| t.ends_with(char::is_alphabetic))
+            && span.text.starts_with(char::is_alphabetic);
+        if !marker_seam || (prev.rotation_degrees - span.rotation_degrees).abs() > 0.5 {
+            return false;
         }
+        let em = prev.font_size.max(span.font_size).max(6.0);
+        let drop = prev.bbox.y - span.bbox.y;
+        let seam_gap = span.bbox.x - (prev.bbox.x + prev.bbox.width);
+        match Self::soft_hyphen_seam(em, drop, seam_gap) {
+            SoftHyphenSeam::Close => {
+                text.pop();
+                Self::push_span_text(text, span);
+                true
+            }
+            SoftHyphenSeam::Keep => {
+                // An empty seam reads downstream as proof the runs are
+                // contiguous; on a re-ordered scan the next run can start 40 pt
+                // left of where this one ended, so make the seam non-empty. ~keep
+                text.push(' ');
+                false
+            }
+            SoftHyphenSeam::Contiguous => {
+                // A marker with a real advance was painted, so joining across it
+                // would delete a character the page draws (`Campus<shy>Main`).
+                // One without an advance was never drawn: a true break
+                // opportunity, closed by the existing rule. ~keep
+                if Self::soft_hyphen_was_painted(prev) {
+                    let cut = text.len() - '\u{00AD}'.len_utf8();
+                    text.truncate(cut);
+                    Self::push_span_text(text, span);
+                    text.insert(cut, '\u{00AD}');
+                    return true;
+                }
+                false
+            }
+        }
+    }
+
+    /// `char_widths` holds per-character advances and is only trustworthy when
+    /// it matches the text length, the same condition `to_chars` applies.
+    fn soft_hyphen_was_painted(prev: &TextSpan) -> bool {
+        prev.char_widths.len() == prev.text.chars().count() && prev.char_widths.last().is_some_and(|w| *w > 0.0)
+    }
+
+    /// Classify a soft-hyphen seam from the geometry either side of it: `em` is
+    /// the larger font size, `drop` the baseline fall from the previous run, and
+    /// `seam_gap` the distance from where the previous run ended to where this
+    /// one starts (negative when it begins to the left). Real wraps sit at
+    /// 1.08-1.40 em of drop; the false joins on re-ordered scans at -0.29 to
+    /// +0.59 em, which is band jitter rather than a line advance.
+    pub(super) fn soft_hyphen_seam(em: f32, drop: f32, seam_gap: f32) -> SoftHyphenSeam {
+        if drop >= em * 0.6 && drop <= em * 1.6 && seam_gap < -em {
+            return SoftHyphenSeam::Close;
+        }
+        if drop.abs() <= em * 0.35 && seam_gap > -em * 0.35 && seam_gap < em * 0.6 {
+            return SoftHyphenSeam::Contiguous;
+        }
+        SoftHyphenSeam::Keep
     }
 
     /// Append a span's text to the structure-tree assembly, reversing a

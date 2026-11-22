@@ -311,23 +311,121 @@ fn test_push_span_text_leaves_normal_decimal() {
 }
 
 #[test]
-fn test_push_span_text_strips_soft_hyphen_mid_word() {
-    // ISO 32000-1 §14.8.2.2.3: U+00AD marks a discretionary line-break
-    // point only — it must never survive into extract_text/to_markdown/
-    // to_html output, even mid-word with no adjacent line break (the
-    // span was drawn as a single reflowed run, not split across lines). ~keep
+fn test_soft_hyphen_inside_one_span_survives() {
+    // A span is one run on one line, so a marker inside it sits at no line
+    // break and was painted: Annex D note 5 makes WinAnsi 255 typographically
+    // the same as hyphen. Only a seam between spans can be a wrap, judged by
+    // `apply_soft_hyphen_seam` from the geometry. ~keep
     let span = make_decimal_span("recon\u{00AD}struction", vec![], 80.0, 12.0);
     let mut out = String::new();
     PdfDocument::push_span_text(&mut out, &span);
-    assert_eq!(out, "reconstruction");
+    assert_eq!(out, "recon\u{00AD}struction");
 }
 
 #[test]
-fn test_push_span_text_strips_multiple_soft_hyphens() {
+fn several_soft_hyphens_inside_one_span_all_survive() {
     let span = make_decimal_span("un\u{00AD}be\u{00AD}liev\u{00AD}able", vec![], 100.0, 12.0);
     let mut out = String::new();
     PdfDocument::push_span_text(&mut out, &span);
-    assert_eq!(out, "unbelievable");
+    assert_eq!(out, "un\u{00AD}be\u{00AD}liev\u{00AD}able");
+}
+
+mod soft_hyphen_seam {
+    use super::super::super::PdfDocument;
+    use super::super::super::spans_text::SoftHyphenSeam;
+    use crate::layout::TextSpan;
+
+    fn seam_span(text: &str, x: f32, y: f32, width: f32, font_size: f32) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            bbox: crate::geometry::Rect::new(x, y, width, font_size),
+            font_name: "F1".to_string(),
+            font_size,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_backward_seam_keeps_the_marker_and_separates_the_runs() {
+        let prev = seam_span("con\u{00AD}", 315.45, 639.61, 19.28, 9.9);
+        let span = seam_span("and ", 294.82, 639.20, 17.70, 9.9);
+        let mut text = String::from("ducted the\ncon\u{00AD}");
+
+        let consumed = PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span);
+
+        assert!(!consumed, "the span must be left to the caller's cascade");
+        assert!(
+            text.ends_with("con\u{00AD} "),
+            "the marker was dropped or the seam left empty: {text:?}"
+        );
+    }
+
+    #[test]
+    fn test_line_wrap_closes_and_consumes_the_span() {
+        let prev = seam_span("admini\u{00AD}", 430.0, 700.0, 30.0, 10.0);
+        let span = seam_span("stration", 72.0, 686.0, 38.0, 10.0);
+        let mut text = String::from("the admini\u{00AD}");
+
+        let consumed = PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span);
+
+        assert!(consumed, "a wrap writes the span itself");
+        assert_eq!(text, "the administration");
+    }
+
+    #[test]
+    fn test_wrap_geometry_across_rotations_is_not_a_seam() {
+        let prev = seam_span("admini\u{00AD}", 430.0, 700.0, 30.0, 10.0);
+        let mut span = seam_span("stration", 72.0, 686.0, 38.0, 10.0);
+        span.rotation_degrees = 90.0;
+        let mut text = String::from("the admini\u{00AD}");
+
+        assert!(!PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span));
+        assert_eq!(text, "the admini\u{00AD}", "a run on another axis must not be joined");
+    }
+
+    #[test]
+    fn contiguous_unpainted_runs_are_left_to_the_existing_rule() {
+        let prev = seam_span("recon\u{00AD}", 72.0, 700.0, 28.0, 10.0);
+        let span = seam_span("struction", 100.0, 700.0, 42.0, 10.0);
+        let mut text = String::from("recon\u{00AD}");
+
+        assert!(!PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span));
+        assert_eq!(
+            text, "recon\u{00AD}",
+            "an empty seam between contiguous glyphs stays empty"
+        );
+    }
+
+    #[test]
+    fn contiguous_painted_marker_is_kept_between_the_runs() {
+        let mut prev = seam_span("Campus\u{00AD}", 72.0, 700.0, 40.0, 10.0);
+        prev.char_widths = vec![5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 4.0];
+        let span = seam_span("Main", 112.0, 700.0, 20.0, 10.0);
+        let mut text = String::from("Campus\u{00AD}");
+
+        assert!(PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span));
+        assert_eq!(text, "Campus\u{00AD}Main");
+    }
+
+    #[test]
+    fn test_marker_before_a_non_letter_is_not_a_seam() {
+        let prev = seam_span("re\u{00AD}", 315.0, 640.0, 12.0, 9.9);
+        let span = seam_span("42", 281.0, 639.4, 11.0, 9.9);
+        let mut text = String::from("re\u{00AD}");
+
+        assert!(!PdfDocument::apply_soft_hyphen_seam(&mut text, &prev, &span));
+        assert_eq!(text, "re\u{00AD}");
+    }
+
+    #[test]
+    fn test_classifier_separates_wraps_from_band_jitter() {
+        let em = 10.0;
+        assert_eq!(PdfDocument::soft_hyphen_seam(em, 14.0, -30.0), SoftHyphenSeam::Close);
+        assert_eq!(PdfDocument::soft_hyphen_seam(em, 0.41, -39.9), SoftHyphenSeam::Keep);
+        assert_eq!(PdfDocument::soft_hyphen_seam(em, -2.9, -25.0), SoftHyphenSeam::Keep);
+        assert_eq!(PdfDocument::soft_hyphen_seam(em, 5.9, -30.0), SoftHyphenSeam::Keep);
+        assert_eq!(PdfDocument::soft_hyphen_seam(em, 0.0, 0.0), SoftHyphenSeam::Contiguous);
+    }
 }
 
 #[test]
@@ -888,4 +986,26 @@ fn test_should_insert_space_relaxes_every_ligature_code_point_on_the_previous_si
             code as u32
         );
     }
+}
+
+/// Two OCR words of unrelated estimated sizes (`And` at 13.12 pt, `welcomes` at
+/// 8.97 pt) with a gap that is a word space at the smaller size. The larger
+/// size raised the threshold above the real gap and fused them.
+#[test]
+fn should_insert_space_scales_by_the_smaller_font() {
+    let prev = make_test_span("And", 100.0, 500.0, 20.0, 13.12);
+    let current = make_test_span("welcomes", 121.6, 500.0, 40.0, 8.97);
+
+    assert!(PdfDocument::should_insert_space(&prev, &current));
+}
+
+#[test]
+fn should_insert_space_falls_back_to_the_larger_font_when_a_size_is_missing() {
+    let prev = make_test_span("And", 100.0, 500.0, 20.0, 0.0);
+    let current = make_test_span("welcomes", 100.0 + 20.0 + 1.6, 500.0, 40.0, 8.97);
+
+    assert_eq!(
+        PdfDocument::should_insert_space(&prev, &current),
+        PdfDocument::should_insert_space(&make_test_span("And", 100.0, 500.0, 20.0, 8.97), &current)
+    );
 }

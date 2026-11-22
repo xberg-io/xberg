@@ -158,6 +158,21 @@ impl PdfDocument {
         out
     }
 
+    /// Sort spans top-to-bottom then left-to-right, keying each span to the row
+    /// it is printed on rather than to its own baseline, which on a row mixing
+    /// font sizes lands on either side of the 3 pt band grid.
+    pub(crate) fn sort_spans_by_snapped_rows(spans: &mut [crate::layout::TextSpan]) {
+        let all: Vec<usize> = (0..spans.len()).collect();
+        let row_baseline = crate::utils::snap_baselines_to_rows(spans, &all);
+        let mut order: Vec<usize> = all;
+        order.sort_by(|&a, &b| {
+            crate::utils::row_band_then_x(row_baseline[a], spans[a].bbox.x, row_baseline[b], spans[b].bbox.x)
+                .then_with(|| crate::utils::safe_float_cmp(spans[b].bbox.y, spans[a].bbox.y))
+        });
+        let reordered: Vec<crate::layout::TextSpan> = order.into_iter().map(|i| spans[i].clone()).collect();
+        spans.clone_from_slice(&reordered);
+    }
+
     pub(crate) fn reorder_rowspan_labels(spans: &mut Vec<crate::layout::TextSpan>) {
         use std::collections::HashMap;
 
@@ -322,6 +337,18 @@ impl PdfDocument {
         if labels.is_empty() {
             return;
         }
+
+        // A stub label is a word (ISO 32000-1:2008 §14.8.4.3.4: a row's stub
+        // cell carries its name). On prose the sparse-versus-dense clustering
+        // finds the same shape in single glyphs of a display equation, and
+        // hoisting them reorders the paragraph around them.
+        let multi_char = labels
+            .iter()
+            .filter(|&&i| spans[i].text.trim().chars().count() > 1)
+            .count();
+        if multi_char * 2 <= labels.len() {
+            return;
+        }
         labels.sort_by(|&a, &b| crate::utils::safe_float_cmp(spans[b].bbox.y, spans[a].bbox.y));
 
         // Labels that sit at near-identical Y values almost always
@@ -381,11 +408,16 @@ impl PdfDocument {
             return;
         }
 
-        let mut order: Vec<usize> = (0..spans.len()).collect();
+        let all: Vec<usize> = (0..spans.len()).collect();
+        let row_baseline = crate::utils::snap_baselines_to_rows(spans, &all);
+        let mut order: Vec<usize> = all;
         order.sort_by(|&a, &b| {
-            let ya = promoted.get(&a).copied().unwrap_or(spans[a].bbox.y);
-            let yb = promoted.get(&b).copied().unwrap_or(spans[b].bbox.y);
-            crate::utils::row_aware_span_cmp(ya, spans[a].bbox.x, yb, spans[b].bbox.x)
+            let ya = promoted.get(&a).copied().unwrap_or(row_baseline[a]);
+            let yb = promoted.get(&b).copied().unwrap_or(row_baseline[b]);
+            // A promoted key is `anchor + 1.0`, bookkeeping rather than a
+            // position: the tiebreak must read the baseline the page draws.
+            crate::utils::row_band_then_x(ya, spans[a].bbox.x, yb, spans[b].bbox.x)
+                .then_with(|| crate::utils::safe_float_cmp(spans[b].bbox.y, spans[a].bbox.y))
         });
         let reordered: Vec<crate::layout::TextSpan> = order.into_iter().map(|i| spans[i].clone()).collect();
         *spans = reordered;

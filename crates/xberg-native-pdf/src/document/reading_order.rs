@@ -1046,7 +1046,7 @@ impl PdfDocument {
                 "Found {} text spans without MCID (including form field widgets) - appending sorted by position",
                 spans_without_mcid.len()
             );
-            crate::utils::sort_by_row_band(&mut spans_without_mcid, |s| s.bbox.y, |s| s.bbox.x);
+            Self::sort_spans_by_snapped_rows(&mut spans_without_mcid);
             for span in &spans_without_mcid {
                 if let Some(prev) = prev_span.as_deref() {
                     let y_diff = (prev.bbox.y - span.bbox.y).abs();

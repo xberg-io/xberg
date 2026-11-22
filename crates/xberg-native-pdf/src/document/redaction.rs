@@ -104,14 +104,22 @@ impl PdfDocument {
     /// Collect every span's text that falls in `area`'s zone (top/bottom 15%
     /// of the page), keyed by its trimmed text, with the `(page, bbox)` of
     /// each occurrence. Split out of [`Self::remove_repeated_text`] to keep
-    /// it short. ~keep
+    /// it short. A zone span already tagged `Pagination(Other)` (by the
+    /// cross-page running-artifact pass, which verified its position
+    /// consistency) is erased here and counted, since a span whose digits vary
+    /// per page (`1 com`, `2 com`) never repeats verbatim. ~keep
     fn collect_zone_text_occurrences(
         &self,
         area: PageArea,
         page_count: usize,
-    ) -> Result<std::collections::HashMap<String, Vec<(usize, crate::geometry::Rect)>>> {
+    ) -> Result<(
+        std::collections::HashMap<String, Vec<(usize, crate::geometry::Rect)>>,
+        usize,
+    )> {
+        use crate::extractors::text::{ArtifactType, PaginationSubtype};
         use std::collections::HashMap;
 
+        let mut tagged_removed = 0;
         let mut occurrences: HashMap<String, Vec<(usize, crate::geometry::Rect)>> = HashMap::new();
         for page_idx in 0..page_count {
             let height = self.get_page_media_box(page_idx)?.3;
@@ -127,15 +135,24 @@ impl PdfDocument {
                     PageArea::Footer => (span.bbox.y + span.bbox.height) < zone,
                 };
 
-                if is_in_zone {
-                    let text = span.text.trim().to_string();
-                    if text.len() > 3 && !text.chars().all(|c| c.is_numeric()) {
-                        occurrences.entry(text).or_default().push((page_idx, span.bbox));
-                    }
+                if !is_in_zone {
+                    continue;
+                }
+                if matches!(
+                    span.artifact_type,
+                    Some(ArtifactType::Pagination(PaginationSubtype::Other))
+                ) {
+                    self.erase_region(page_idx, span.bbox)?;
+                    tagged_removed += 1;
+                    continue;
+                }
+                let text = span.text.trim().to_string();
+                if text.len() > 3 && !text.chars().all(|c| c.is_numeric()) {
+                    occurrences.entry(text).or_default().push((page_idx, span.bbox));
                 }
             }
         }
-        Ok(occurrences)
+        Ok((occurrences, tagged_removed))
     }
 
     /// Erase every occurrence group that repeats on at least `min_occurrences`
@@ -225,9 +242,9 @@ impl PdfDocument {
         // (a) erase only the header/footer occurrence and never an identically
         // worded span elsewhere on the page, and (b) require the occurrences to
         // share a position before treating the string as chrome. ~keep
-        let occurrences = self.collect_zone_text_occurrences(area, page_count)?;
+        let (occurrences, tagged_removed) = self.collect_zone_text_occurrences(area, page_count)?;
 
-        self.erase_position_locked_occurrences(occurrences, min_occurrences)
+        Ok(tagged_removed + self.erase_position_locked_occurrences(occurrences, min_occurrences)?)
     }
 
     /// Erase existing header content.

@@ -2373,11 +2373,11 @@ fn decode_indexed_pixels(
     out: &mut Vec<u8>,
 ) {
     // The palette defines the valid index range: its last complete entry is `hival`.
-    let last_entry = if n == 0 {
-        0
-    } else {
-        (params.palette.len() / n).saturating_sub(1)
-    };
+    let last_entry = params
+        .palette
+        .len()
+        .checked_div(n)
+        .map_or(0, |entries| entries.saturating_sub(1));
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(params.raw.len());
@@ -2485,11 +2485,10 @@ pub(crate) fn expand_indexed_to_base_samples(
     validate_indexed_input_len(raw, bytes_per_row, h)?;
 
     let mut out = Vec::with_capacity(output_bytes);
-    let last_entry = if n == 0 {
-        0
-    } else {
-        (palette.len() / n).saturating_sub(1)
-    };
+    let last_entry = palette
+        .len()
+        .checked_div(n)
+        .map_or(0, |entries| entries.saturating_sub(1));
     for y in 0..h {
         let row_start = y * bytes_per_row;
         let row_end = (row_start + bytes_per_row).min(raw.len());

@@ -1,3 +1,33 @@
+/// A sparse column of single glyphs is a fragmented line (a display equation's
+/// pieces), not a stub column of labels, and must not be hoisted. The fixture is
+/// the promoted case with its labels cut to one character each.
+#[test]
+fn single_glyph_columns_are_not_promoted_as_rowspan_labels() {
+    use crate::layout::TextSpan;
+
+    fn mk(text: &str, x: f32, y: f32, w: f32) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            bbox: crate::geometry::Rect::new(x, y, w, 10.0),
+            font_size: 12.0,
+            font_name: "Arial".into(),
+            ..Default::default()
+        }
+    }
+
+    let mut spans = vec![mk("x", 50.0, 75.0, 8.0), mk("y", 50.0, 45.0, 8.0)];
+    for i in 0..12 {
+        let y = 100.0 - (i as f32) * 10.0;
+        spans.push(mk(&format!("d{:02}", i), 200.0, y, 20.0));
+    }
+    let before: Vec<String> = spans.iter().map(|s| s.text.clone()).collect();
+
+    super::super::PdfDocument::reorder_rowspan_labels(&mut spans);
+
+    let after: Vec<String> = spans.iter().map(|s| s.text.clone()).collect();
+    assert_eq!(after, before, "single glyphs must not be hoisted as rowspan labels");
+}
+
 /// Multi-row-spanning label cell (test item name vertically centered
 /// across N data rows) must be placed at the top of its row block in
 /// reading-order output, not interleaved mid-group by Y.
