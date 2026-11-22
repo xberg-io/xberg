@@ -771,7 +771,16 @@ values = [
 [[entries]]
 relative_path = "poly.toml"
 key_path = "per_file_ignores.crates/xberg-ffi/include/xberg.h"
-values = ["comment", "doc-comment", "file-too-long"]
+values = [
+  "comment",
+  "doc-comment",
+  "file-too-long",
+  "function-too-long",
+  "too-many-parameters",
+  "cyclomatic-complexity",
+  "nesting-too-deep",
+  "type-too-long",
+]
 
 [[entries]]
 relative_path = "poly.toml"

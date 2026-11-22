@@ -545,6 +545,33 @@ controler = "controler"
 conversie = "conversie"
 cursos = "cursos"
 daa = "daa"
+# Deliberate test-fixture strings, OCR-corpus text, foreign-language words and upstream names. ~keep
+actaul = "actaul"
+slq = "slq"
+informe = "informe"
+anual = "anual"
+automatico = "automatico"
+recomend = "recomend"
+inspeccion = "inspeccion"
+oficial = "oficial"
+certicate = "certicate"
+Ane = "Ane"
+Sade = "Sade"
+sur = "sur"
+Sur = "Sur"
+struc = "struc"
+ofr = "ofr"
+trals = "trals"
+ure = "ure"
+defned = "defned"
+fxed = "fxed"
+classifed = "classifed"
+qualifed = "qualifed"
+Titel = "Titel"
+theis = "theis"
+ful = "ful"
+allo = "allo"
+secur = "secur"
 delocate = "delocate"
 diffcult = "diffcult"
 docling = "docling"
@@ -646,6 +673,8 @@ wel = "wel"
 yor = "yor"
 
 [workspace.poly.typos.extend-identifiers]
+# Generated Java marshalling locals are `c` + parameter name. ~keep
+cannotation = "cannotation"
 PyMuPDF = "PyMuPDF"
 MarkItDown = "MarkItDown"
 SurrealDB = "SurrealDB"
@@ -1227,7 +1256,16 @@ traineddata = "traineddata"
   "too-many-parameters",
   "type-too-long",
 ]
-"crates/xberg-ffi/include/xberg.h" = ["comment", "doc-comment", "file-too-long"]
+"crates/xberg-ffi/include/xberg.h" = [
+  "comment",
+  "doc-comment",
+  "file-too-long",
+  "function-too-long",
+  "too-many-parameters",
+  "cyclomatic-complexity",
+  "nesting-too-deep",
+  "type-too-long",
+]
 "crates/xberg-py/src/lib.rs" = [
   "comment",
   "doc-comment",
