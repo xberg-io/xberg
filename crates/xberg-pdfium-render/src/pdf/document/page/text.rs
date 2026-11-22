@@ -627,6 +627,41 @@ mod tests {
         Ok(())
     }
 
+    // Glyph A maps through ToUnicode to U+20000, a surrogate pair in UTF-16. The cross-reference table is
+    // omitted; pdfium rebuilds it by scanning the objects.
+    const SUPPLEMENTARY_PLANE_PDF: &[u8] = b"%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R
+  /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 33 >> stream
+BT /F1 24 Tf 50 700 Td (AB) Tj ET
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 6 0 R >> endobj
+6 0 obj << /Length 160 >> stream
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap
+1 begincodespacerange <00> <FF> endcodespacerange
+2 beginbfchar
+<41> <D840DC00>
+<42> <0042>
+endbfchar
+endcmap end end
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF
+";
+
+    #[test]
+    fn whole_page_keeps_supplementary_plane_characters() -> Result<(), PdfiumError> {
+        let pdfium = test_bind_to_pdfium();
+        let document = pdfium.load_pdf_from_byte_slice(SUPPLEMENTARY_PLANE_PDF, None)?;
+        let page = document.pages().get(0)?;
+
+        assert_eq!(page.text()?.whole_page().trim(), "\u{20000}B");
+
+        Ok(())
+    }
+
     fn test_one_overlapping_text_object_results(
         object: &PdfPageObject,
         page_text: &PdfPageText,

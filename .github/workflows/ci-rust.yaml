@@ -41,7 +41,8 @@ on:
       - "crates/xberg-pdfium-render/**"
       - "crates/xberg/src/extractors/pdf/pdfium_engine.rs"
       - "crates/xberg/src/extractors/pdf/pdfium_engine/**"
-      - "test_documents/vendored/pdfium-render/**"
+      # A fixture pin bump changes the gitlink itself, not a path beneath it. ~keep
+      - "test_documents"
       - ".github/actions/download-pdfium/**"
       - ".github/workflows/ci-rust.yaml"
   workflow_dispatch:
