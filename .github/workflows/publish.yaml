@@ -6773,6 +6773,96 @@ jobs:
           provenance: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
+  publish-mcp-registry:
+    name: Publish MCP Registry entry
+    needs: [prepare, check-cli, cli-proxy]
+    # The registry validates the entry against the published npm package (existence and the
+    # `mcpName` ownership proof), so it runs after the npm proxy is on the registry: either
+    # cli-proxy just published it, or check-cli found that version already there. Dry runs
+    # synthesize a tag but publish nothing, so they must not reach the registry. ~keep
+    if: >-
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.cli-proxy.result == 'success' || (needs.cli-proxy.result == 'skipped' && needs.check-cli.outputs.npm_exists == 'true'))) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # ~keep Pinned: a floating latest would land an upstream release in a publish job
+      # unreviewed. Bump deliberately; the cosign step below verifies the download.
+      MCP_PUBLISHER_VERSION: v1.8.13
+    steps:
+      - name: Require the npm proxy this entry points at
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: MCP Registry (xberg)
+          needs: ${{ toJSON(needs) }}
+          succeeded: ${{ needs.check-cli.outputs.npm_exists != 'true' && 'cli-proxy' || '' }}
+          succeeded-or-skipped: ${{ needs.check-cli.outputs.npm_exists == 'true' && 'cli-proxy' || '' }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Check server.json matches the release
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          jq -e --arg v "$VERSION" '.version == $v and ([.packages[].version] | all(. == $v))' server.json >/dev/null \
+            || { echo "::error::server.json version does not match release $VERSION; run mise run version:sync"; exit 1; }
+
+      # Registry versions are immutable, so a re-run (or force_republish) must skip rather
+      # than fail on a version it already holds. 404 is the only "absent" answer; anything
+      # else unexpected fails the job instead of being read as absent. ~keep
+      - name: Check the registry for this version
+        id: registry
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          name="$(jq -r '.name | @uri' server.json)"
+          version="$(jq -rn --arg v "$VERSION" '$v | @uri')"
+          status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/${name}/versions/${version}")"
+          case "$status" in
+            200) echo "exists=true" >> "$GITHUB_OUTPUT"; echo "::notice::MCP Registry already holds $VERSION" ;;
+            404) echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unexpected HTTP $status from the MCP Registry"; exit 1 ;;
+          esac
+
+      - name: Install cosign
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        uses: sigstore/cosign-installer@v4.1.2 # ~keep no v4 major tag exists
+
+      - name: Download and verify mcp-publisher
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        run: |
+          set -euo pipefail
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          archive="mcp-publisher_${os}_${arch}.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+
+      - name: Validate server.json
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        run: ./mcp-publisher validate server.json
+
+      - name: Authenticate to the MCP Registry
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to the MCP Registry
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        run: ./mcp-publisher publish server.json
+
   # --- First-party integrations (lockstep with core; see integrations/README.md) ---
   # These are additive best-effort stages: they publish the integrations that ship
   # with this core version, but are intentionally NOT part of release-finalize /

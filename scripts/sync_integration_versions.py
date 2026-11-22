@@ -9,6 +9,8 @@ to every integration manifest:
 * the package's own ``version`` field, and
 * its ``xberg`` dependency pin (floor).
 
+The MCP Registry entry ``server.json`` is synced too (its version and its npm package version).
+
 Python manifests use the PEP 440 form (``1.0.0-rc.32`` -> ``1.0.0rc32``); the
 Maven pom and the npm ``package.json`` manifests use the native form
 (``1.0.0-rc.32``, which is also valid semver). npm packages pin ``@xberg-io/xberg``
@@ -31,6 +33,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -64,6 +67,12 @@ SEMVER_PATTERN = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 
+# MCP Registry entry. Its version and the npm package version it points at are the core version;
+# the registry proves ownership of the npm package by `mcpName` in the proxy's package.json
+# matching `name`. ~keep
+MCP_SERVER_JSON = "server.json"
+MCP_PROXY_PACKAGE_JSON = "cli-proxy/npm/package.json"
+
 # npm integration packages (package.json): version + exact `@xberg-io/xberg` pin,
 # both in the native/semver form. The committed `package-lock.json` is intentionally NOT
 # synced here: the core pin resolves to an rc that is published to npm only during the same
@@ -87,6 +96,7 @@ VERSION_TARGETS = [
     "integrations/java/spring-ai/pom.xml",
     HELM_CHART,
     HELM_CHART_README,
+    MCP_SERVER_JSON,
     *NPM_MANIFESTS,
 ]
 
@@ -167,6 +177,22 @@ def helm_metadata_errors(chart: str, expected_version: str) -> list[str]:
     return errors
 
 
+def mcp_metadata_errors(server_json: str, proxy_package_json: str) -> list[str]:
+    """Check the registry entry names the proxy package and that package proves ownership."""
+    server = json.loads(server_json)
+    proxy = json.loads(proxy_package_json)
+    errors = []
+    npm_packages = [p for p in server.get("packages", []) if p.get("registryType") == "npm"]
+    if [p.get("identifier") for p in npm_packages] != [proxy.get("name")]:
+        errors.append(f"{MCP_SERVER_JSON} must list exactly the npm package {proxy.get('name')}")
+    for package in npm_packages:
+        if package.get("version") != server.get("version"):
+            errors.append(f"{MCP_SERVER_JSON} package version {package.get('version')} != {server.get('version')}")
+    if proxy.get("mcpName") != server.get("name"):
+        errors.append(f"{MCP_PROXY_PACKAGE_JSON} mcpName is {proxy.get('mcpName')}, expected {server.get('name')}")
+    return errors
+
+
 def transform(rel: str, sync_version: bool, sync_dep: bool, maven: str, pep440: str) -> tuple[str, str]:
     path = ROOT / rel
     original = path.read_text(encoding="utf-8")
@@ -189,6 +215,10 @@ def transform(rel: str, sync_version: bool, sync_dep: bool, maven: str, pep440: 
     if rel == HELM_CHART_README:
         if sync_version:
             updated = re.sub(r"--version \S+", f"--version {maven}", updated)
+        return original, updated
+    if rel == MCP_SERVER_JSON:
+        if sync_version:
+            updated = re.sub(r'(?m)^(\s*"version":\s*)"[^"]*"', rf'\g<1>"{maven}"', updated)
         return original, updated
     if rel.endswith(".xml"):
         if sync_version:
@@ -257,6 +287,10 @@ def main() -> int:
 
     if check:
         helm_errors = helm_metadata_errors((ROOT / HELM_CHART).read_text(encoding="utf-8"), maven)
+        helm_errors += mcp_metadata_errors(
+            (ROOT / MCP_SERVER_JSON).read_text(encoding="utf-8"),
+            (ROOT / MCP_PROXY_PACKAGE_JSON).read_text(encoding="utf-8"),
+        )
         if drift or helm_errors:
             print(f"integration versions out of sync with core {maven}:")
             for rel in drift:
