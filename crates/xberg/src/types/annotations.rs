@@ -180,6 +180,9 @@ pub struct MeasureData {
     pub origin: Option<String>,
 }
 
+// The native types exist only with the PDF backend, and this module compiles in
+// every build, so the conversions follow the `pdf` gate of `xberg-native-pdf`. ~keep
+#[cfg(feature = "pdf")]
 impl From<&xberg_native_pdf::MeasureDictionary> for MeasureData {
     fn from(measure: &xberg_native_pdf::MeasureDictionary) -> Self {
         Self {
@@ -213,6 +216,7 @@ pub struct PageViewport {
     pub measure: Option<MeasureData>,
 }
 
+#[cfg(feature = "pdf")]
 impl From<&xberg_native_pdf::PageViewport> for PageViewport {
     fn from(viewport: &xberg_native_pdf::PageViewport) -> Self {
         Self {

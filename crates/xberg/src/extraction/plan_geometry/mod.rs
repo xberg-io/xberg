@@ -9,9 +9,10 @@
 //! - `regions` (opt-in, `plan-regions` feature) closes line segments into faces
 //!   with areas.
 //!
-//! Nothing here changes an extraction result unless the caller asks for it:
-//! viewports are additive and only appear when the PDF defines `/VP`, and the
-//! closed-region pass is off by default.
+//! The viewport read runs for every PDF page and adds only the optional
+//! `viewports` field; a page without `/VP` is unchanged. Everything else is
+//! opt-in: writing needs an explicit call and the closed-region pass is off by
+//! default.
 
 pub mod drawing_set;
 

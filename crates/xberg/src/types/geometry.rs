@@ -37,7 +37,7 @@ pub struct PageGeometry {
     /// area in square page points, and the page text inside it. Ordering is
     /// deterministic: largest area first, then by the face's upper-left corner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[cfg_attr(feature = "api", schema(required = false))]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.5.0"))]
     pub regions: Vec<PlanRegion>,
 }
 

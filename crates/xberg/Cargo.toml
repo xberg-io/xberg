@@ -134,8 +134,10 @@ pdf = ["pdf-native", "dep:tracing-subscriber"]
 # Closed-region recovery on a PDF page's vector paths: joins line segments into
 # a planar graph, closes door-sized gaps and returns each face with its area and
 # contained text. Opt-in because it only makes sense with a drawing sheet and
-# because `geo` is the one added dependency. ~keep
-plan-regions = ["pdf-native", "dep:geo"]
+# because `geo` is the one added dependency. It builds on the PDF extractor's
+# config and native types, so it forwards the umbrella `pdf` feature: a bare
+# `--features plan-regions` must compile on its own. ~keep
+plan-regions = ["pdf", "dep:geo"]
 pdf-native = [
     "dep:xberg-native-pdf",
     "dep:lopdf",
