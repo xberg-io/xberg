@@ -6,6 +6,9 @@ use super::super::*;
 use super::*;
 use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
+// rayon's work-stealing pool needs OS threads; wasm32 has none, so the parallel encode
+// path below falls back to sequential `.iter()` there. Gate the import to match. ~keep
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use rayon::prelude::*;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -324,6 +327,15 @@ impl<'a> PageOcrContext<'a> {
             #[cfg(not(feature = "pdf"))]
             let encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> = Vec::new();
             (None::<Cow<'_, [image::DynamicImage]>>, encoded)
+        };
+
+        // A stored scan is this batch's whole read, so substitute it here: the read and page
+        // phases both index this one-entry set, never the render the substitution replaced. ~keep
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let encoded = if let Some(scan) = stored_scan {
+            vec![(0, Arc::clone(&scan.data), scan.render.0, scan.render.1)]
+        } else {
+            encoded
         };
 
         Ok((

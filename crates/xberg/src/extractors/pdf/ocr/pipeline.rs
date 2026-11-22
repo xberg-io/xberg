@@ -1190,7 +1190,11 @@ fn mixed_layer_lines_to_put_first(
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 #[cfg(all(feature = "layout-detection", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 type MixedPageDetection = crate::layout::DetectionResult;
+// Defined only where its `not(layout-detection)` users compile: the alias itself otherwise
+// outlived the `ocr`-gated users and warned as dead code on a `pdf`-only build. ~keep
 #[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
     not(feature = "layout-detection"),
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
