@@ -39,6 +39,7 @@ impl PostProcessor for DeadlineProcessor {
         let started = Instant::now();
         // The outer Tokio timeout cannot poll while this processor is in flight. ~keep
         while !token.time_limit_reached() && started.elapsed() < FAILSAFE {
+            // ast-grep-ignore: blocking-call-in-async-fn
             std::thread::sleep(POLL_INTERVAL);
         }
         assert!(token.time_limit_reached(), "entry point never armed the deadline");

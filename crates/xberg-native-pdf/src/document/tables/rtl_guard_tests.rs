@@ -165,7 +165,6 @@ fn a_ruled_rtl_grid_drawn_with_three_primitives_is_still_a_table() {
 /// characters unless they are dropped or reordered with them.
 #[test]
 fn char_widths_describe_the_emitted_text_after_an_rtl_reversal() {
-    // codes 0x0A, 0x0B, 0x0C -> U+05D1, U+05D9, U+05E6 at widths 500, 600, 700.
     let widths = "600 600 600 600 600 600 600 600 600 600 500 600 700 600";
     let draw = |show: &str| {
         let ops = format!("BT /F1 12 Tf 1 0 0 1 20 100 Tm {show} ET");
