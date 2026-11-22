@@ -78,20 +78,21 @@ impl PdfPageIndexCache {
     /// previously-cached maximum index was removed.
     #[inline]
     fn recompute_maximum_index(&mut self, document: FPDF_DOCUMENT) {
-        if self.indices_by_page.is_empty() {
-            self.documents_by_maximum_index.remove(&document);
-            return;
-        }
-
         let maximum = self
             .indices_by_page
             .keys()
             .filter(|(doc, _)| *doc == document)
             .map(|(_, index)| *index)
-            .max()
-            .unwrap_or(0);
+            .max();
 
-        self.documents_by_maximum_index.insert(document, maximum);
+        match maximum {
+            Some(maximum) => {
+                self.documents_by_maximum_index.insert(document, maximum);
+            }
+            None => {
+                self.documents_by_maximum_index.remove(&document);
+            }
+        }
     }
 
     /// Removes and re-caches the page at `old_index` in `document` under `new_index`, preserving
@@ -560,5 +561,35 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn removing_a_documents_last_page_clears_its_maximum_index() {
+        use crate::pdf::document::page::PdfPageContentRegenerationStrategy;
+        use crate::pdf::document::page::index_cache::PdfPageCachedProperties;
+
+        let document_a = 0xD000_0000usize as FPDF_DOCUMENT;
+        let document_b = 0xE000_0000usize as FPDF_DOCUMENT;
+        let a_page = 0xD000_0001usize as FPDF_PAGE;
+        let b_page = 0xE000_0001usize as FPDF_PAGE;
+
+        // A private cache instance keeps this test independent of the shared global cache.
+        let mut cache = PdfPageIndexCache::new();
+
+        for (document, page) in [(document_a, a_page), (document_b, b_page)] {
+            cache.set(
+                document,
+                page,
+                PdfPageCachedProperties {
+                    index: 0,
+                    content_regeneration_strategy: PdfPageContentRegenerationStrategy::AutomaticOnEveryChange,
+                },
+            );
+        }
+
+        cache.remove(document_a, a_page);
+
+        assert_eq!(cache.documents_by_maximum_index.get(&document_a), None);
+        assert_eq!(cache.documents_by_maximum_index.get(&document_b).copied(), Some(0));
     }
 }

@@ -342,6 +342,8 @@ impl<'a> Drop for PdfDocument<'a> {
 
         PdfPageIndexCache::clear_document(self.handle);
 
+        self.fonts.release_for(self.handle);
+
         self.bindings.FPDF_CloseDocument(self.handle);
     }
 }

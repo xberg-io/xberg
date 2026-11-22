@@ -446,7 +446,7 @@ High-level idiomatic Rust wrapper around Pdfium, forked and vendored for xberg:
 - **License**: MIT OR Apache-2.0 upstream (`license` in `Cargo.toml`); the fork takes the MIT option and is redistributed under MIT.
 - **Author**: Alastair Carey (<alastair@alastaircarey.com>), per upstream `Cargo.toml` `authors`.
 - **Copyright**: no copyright line exists upstream. The repository's only license file is `LICENSE.md` (checked at HEAD `79164d0d2837a2d6edef8f5a3487cc1f8017b9cd` and in the 0.8.37 crates.io package; the repository has never had a `LICENSE-MIT` file), a pointer reading "Licensed under either of Apache License, Version 2.0 (LICENSE-APACHE ...) or MIT License (LICENSE-MIT ...) at your option"; the `LICENSE-APACHE` and `LICENSE-MIT` files it names are absent from the HEAD tree. There is therefore no upstream copyright notice or license text to reproduce. An earlier "Copyright (c) 2022-2026" line here had no source in upstream and was removed
-- **Forked Version**: 0.8.x-era, with bindings generated against pdfium 7678 (`src/bindings/version.rs`,
+- **Forked Version**: upstream 0.9.0 development line at or after commit 0dbad90 (2025-12-13), with bindings generated against pdfium 7678 (`src/bindings/version.rs`,
   `src/bindgen/pdfium_7678.rs`). The runtime binary staged by `scripts/download_pdfium_runtime.sh`, the
   two system installers and the Docker images is the same 7678, because the bindings are the ABI
   contract and only one binding set exists in the tree

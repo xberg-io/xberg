@@ -982,16 +982,6 @@ impl<'a> From<PdfPageUnsupportedObject<'a>> for PdfPageObject<'a> {
     }
 }
 
-impl<'a> Drop for PdfPageObject<'a> {
-    /// Closes this [PdfPageObject], releasing held memory.
-    #[inline]
-    fn drop(&mut self) {
-        if !self.ownership().is_owned() {
-            self.bindings().FPDFPageObj_Destroy(self.object_handle());
-        }
-    }
-}
-
 #[cfg(test)]
 #[path = "object_tests.rs"]
 mod tests;
