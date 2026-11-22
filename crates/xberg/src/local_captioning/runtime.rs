@@ -70,7 +70,7 @@ fn validate_cpu_execution(
     Ok(())
 }
 
-fn build_session(bytes: &[u8], label: &str) -> crate::Result<Session> {
+pub(super) fn build_session(bytes: &[u8], label: &str) -> crate::Result<Session> {
     let session_options = crate::ort_options::ort_session_options();
     let acceleration = crate::core::config::acceleration::AccelerationConfig {
         provider: crate::core::config::acceleration::ExecutionProviderType::Cpu,
@@ -200,7 +200,7 @@ pub(super) fn model_info(model: &super::LocalCaptioningModel) -> crate::Result<L
     })
 }
 
-fn precision_of_model(model: &super::LocalCaptioningModel) -> LocalCaptioningPrecision {
+pub(super) fn precision_of_model(model: &super::LocalCaptioningModel) -> LocalCaptioningPrecision {
     if model.decoder_file.ends_with("_int8.onnx") {
         LocalCaptioningPrecision::Quantized
     } else {
@@ -302,6 +302,19 @@ impl LocalImageCaptioner {
                 semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             }),
         })
+    }
+
+    /// Offline artifact inventory and cache state for this captioner's descriptor.
+    ///
+    /// Resolves every pinned path from the local Hugging Face cache and never downloads. A
+    /// missing artifact reports [`super::LocalCaptioningArtifactState::Missing`]; a present file
+    /// whose size differs from the pin reports a size mismatch. Preparation re-verifies the
+    /// SHA-256 of every artifact before a session loads.
+    pub fn artifacts(&self) -> crate::Result<super::LocalCaptioningArtifactReport> {
+        super::LocalCaptioningArtifactReport::for_model(
+            &self.state.config.model,
+            self.state.config.cache_directory.as_deref(),
+        )
     }
 
     /// Resolves and verifies every pinned artifact through the shared download/cache path.

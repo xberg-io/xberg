@@ -110,6 +110,7 @@ fn annotation_only_options(pdf: &PdfConfig) -> bool {
             reading_order: false,
             backend: PdfBackend::Native,
             extract_vector_geometry: false,
+            plan_regions: None,
         }
     )
 }

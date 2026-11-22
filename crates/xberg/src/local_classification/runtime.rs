@@ -42,6 +42,41 @@ impl LocalTextClassifier {
         })
     }
 
+    /// Offline artifact inventory and cache state for this classifier's descriptor.
+    ///
+    /// Resolves every pinned path from the local Hugging Face cache and never downloads. A
+    /// missing artifact reports [`super::LocalClassificationArtifactState::Missing`]; a present
+    /// file whose size differs from the pin reports a size mismatch. Preparation re-verifies the
+    /// SHA-256 of every artifact before a session loads.
+    pub fn artifacts(&self) -> crate::Result<super::LocalClassificationArtifactReport> {
+        super::LocalClassificationArtifactReport::for_model(
+            &self.state.config.model,
+            self.state.config.cache_directory.as_deref(),
+        )
+    }
+
+    /// Resolves and verifies every pinned artifact through the shared download/cache path.
+    ///
+    /// A cache hit performs no network request. A miss downloads only when Hugging Face offline
+    /// mode is off. This is the only method that can reach the network; neither [`Self::prepare`]
+    /// nor [`Self::classify`] fetches a missing asset.
+    pub async fn stage(&self, options: &LocalClassificationOptions) -> crate::Result<()> {
+        let started = Instant::now();
+        check_control(options, started)?;
+        let state = Arc::clone(&self.state);
+        let worker_options = options.clone();
+        run_controlled(Arc::clone(&state.semaphore), options.clone(), started, move |request| {
+            let control = WorkerControl {
+                state: request,
+                options: worker_options,
+                started,
+            };
+            control.check()?;
+            super::preparation::stage(&state.config, &control)
+        })
+        .await
+    }
+
     /// Prepare the experimental CPU session from a pre-staged, checksum-pinned immutable cache.
     ///
     /// Neither preparation nor classification fetches missing assets from the network.

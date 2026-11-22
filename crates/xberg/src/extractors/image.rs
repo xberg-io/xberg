@@ -685,6 +685,7 @@ fn finish_cached_layout_document(
         ocr_confidence: None,
         native_content: None,
         geometry: None,
+        viewports: None,
         image_preprocessing: whole_image_doc.metadata.image_preprocessing.clone(),
     }]);
     ImageExtractor::mark_ocr_extraction(&mut assembled);
@@ -3708,6 +3709,7 @@ impl ImageExtractor {
                         ocr_confidence: whole_image_ocr_confidence,
                         native_content: None,
                         geometry: None,
+                        viewports: None,
                     }]);
                 }
             }
@@ -3751,6 +3753,7 @@ impl ImageExtractor {
                     ocr_confidence: None,
                     native_content: None,
                     geometry: None,
+                    viewports: None,
                 }]);
             }
             Ok(doc)
@@ -3886,6 +3889,7 @@ impl ImageExtractor {
                 ocr_confidence: pipeline_ocr_confidence.remove(&1),
                 native_content: None,
                 geometry: None,
+                viewports: None,
             }]);
         }
 
@@ -6961,6 +6965,7 @@ mod tests {
             ocr_confidence: None,
             native_content: None,
             geometry: None,
+            viewports: None,
         }]);
         doc.metadata.additional.insert(
             std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),

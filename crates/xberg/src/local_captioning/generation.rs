@@ -338,17 +338,15 @@ pub(super) fn generate(
         )));
     }
     match prepared.format {
-        LocalCaptioningFormat::SmolVlm => {
-            generate_smolvlm(prepared, &features, batch.num_images, prompt, max_new_tokens, control)
-        }
+        LocalCaptioningFormat::SmolVlm => generate_smolvlm(prepared, &features, batch, prompt, max_new_tokens, control),
         LocalCaptioningFormat::Florence2 => Err(invalid(
             "Florence-2 captioning is not enabled by this adapter; only SmolVLM is wired",
         )),
     }
 }
 
-fn smolvlm_prompt(prepared: &PreparedCaptioner, num_images: usize, prompt: Option<&str>) -> crate::Result<Vec<i64>> {
-    let text = smolvlm_prompt_text(num_images, prompt, prepared.preprocess.image_seq_len)?;
+fn smolvlm_prompt(prepared: &PreparedCaptioner, batch: &ImageBatch, prompt: Option<&str>) -> crate::Result<Vec<i64>> {
+    let text = smolvlm_prompt_text(batch.rows, batch.cols, prompt, prepared.preprocess.image_seq_len)?;
     let ids: Vec<i64> = prepared
         .tokenizer
         .encode(text.as_str(), false)
@@ -360,38 +358,60 @@ fn smolvlm_prompt(prepared: &PreparedCaptioner, num_images: usize, prompt: Optio
     Ok(ids)
 }
 
-/// The pinned Idefics3 chat expansion for one global frame. The image block is opened by
-/// `<fake_token_around_image><global-img>`, holds `image_seq_len * num_images` repeated image
-/// tokens, and is closed by `<fake_token_around_image>` before the question. This adapter
-/// deliberately uses one global frame instead of the export's tile splitting, so no
-/// `<row_N_col_M>` tags are inserted; that choice is a documented qualification gap.
+/// The pinned Idefics3 chat expansion. A split image expands to one `<fake_token_around_image>`
+/// and `<row_N_col_M>` tag per tile, `image_seq_len` image tokens, a newline after each row, then
+/// an empty line and the global frame; a single frame uses the global block alone. Both forms
+/// close the image block before the question, which is where the processor substitutes the block
+/// into the chat template's `<image>`.
 pub(super) fn smolvlm_prompt_text(
-    num_images: usize,
+    rows: usize,
+    cols: usize,
     prompt: Option<&str>,
     image_seq_len: u32,
 ) -> crate::Result<String> {
-    if num_images != 1 {
-        return Err(invalid(
-            "Local captioning SmolVLM prompt supports one global image frame",
-        ));
-    }
+    const FAKE: &str = "<fake_token_around_image>";
+    const IMAGE: &str = "<image>";
+    const GLOBAL: &str = "<global-img>";
     let question = prompt.unwrap_or("Can you describe this image?");
-    let image_tokens = image_seq_len as usize * num_images;
+    let images = || IMAGE.repeat(image_seq_len as usize);
+    let block = if rows == 0 && cols == 0 {
+        format!("{FAKE}{GLOBAL}{}{FAKE}", images())
+    } else {
+        if rows == 0 || cols == 0 || rows * cols > super::preprocess::MAX_TILES as usize {
+            return Err(invalid(format!(
+                "Local captioning SmolVLM prompt has an invalid {rows}x{cols} tile grid"
+            )));
+        }
+        let mut block = String::new();
+        for row in 1..=rows {
+            for col in 1..=cols {
+                block.push_str(FAKE);
+                block.push_str(&format!("<row_{row}_col_{col}>"));
+                block.push_str(&images());
+            }
+            block.push('\n');
+        }
+        block.push('\n');
+        block.push_str(FAKE);
+        block.push_str(GLOBAL);
+        block.push_str(&images());
+        block.push_str(FAKE);
+        block
+    };
     Ok(format!(
-        "<|im_start|>User:<fake_token_around_image><global-img>{images}<fake_token_around_image>{question}<end_of_utterance>\nAssistant:",
-        images = "<image>".repeat(image_tokens)
+        "<|im_start|>User:{block}{question}<end_of_utterance>\nAssistant:"
     ))
 }
 
 fn generate_smolvlm(
     prepared: &mut PreparedCaptioner,
     features: &[f32],
-    num_images: usize,
+    batch: &ImageBatch,
     prompt: Option<&str>,
     max_new_tokens: u32,
     control: &WorkerControl,
 ) -> crate::Result<String> {
-    let ids = smolvlm_prompt(prepared, num_images, prompt)?;
+    let ids = smolvlm_prompt(prepared, batch, prompt)?;
     let mut embeds = run_embed(prepared, &ids, control)?;
     merge_image_features(prepared.image_token_id, prepared.hidden, &ids, features, &mut embeds)?;
     let sequence = ids.len();

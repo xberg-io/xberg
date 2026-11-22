@@ -657,11 +657,21 @@ pub(crate) fn extract_all_from_native_document(
     let force_hierarchy_page_tracking =
         hierarchy_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
     // Vector geometry is returned on `PageContent`, so the same rule applies: asking for it
-    // is the opt-in for the per-page tracking it needs.
-    let geometry_enabled = config
+    // is the opt-in for the per-page tracking it needs. Closed regions are computed from
+    // those same paths, so asking for them also turns the geometry pass on internally.
+    let extract_vector_geometry = config
         .pdf_options
         .as_ref()
         .is_some_and(|options| options.extract_vector_geometry);
+    #[cfg(feature = "plan-regions")]
+    let plan_region_settings = config
+        .pdf_options
+        .as_ref()
+        .and_then(|options| options.plan_regions.as_ref())
+        .filter(|regions| regions.enabled);
+    #[cfg(not(feature = "plan-regions"))]
+    let plan_region_settings: Option<&crate::core::config::PlanRegionConfig> = None;
+    let geometry_enabled = extract_vector_geometry || plan_region_settings.is_some();
     let force_geometry_page_tracking =
         geometry_enabled && !config.pages.as_ref().is_some_and(|pages| pages.extract_pages);
     let mut tracked_config;
@@ -740,11 +750,7 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let _ = layout_hints;
 
-    let ocr_inline_images = config
-        .pdf_options
-        .as_ref()
-        .map(|options| options.ocr_inline_images)
-        .unwrap_or(false);
+    let ocr_inline_images = super::inline_image_ocr_enabled(config);
     let needs_structured = needs_structured_extraction(
         hierarchy_enabled,
         config.include_document_structure,
@@ -1258,6 +1264,10 @@ pub(crate) fn extract_all_from_native_document(
         None
     });
 
+    if !cut_short && let Some(pages) = page_contents.as_mut() {
+        crate::extraction::plan_geometry::viewports::attach_page_viewports(&doc.doc, pages);
+    }
+
     if cut_short && geometry_enabled {
         skipped_stages.push("vector geometry");
     }
@@ -1266,6 +1276,15 @@ pub(crate) fn extract_all_from_native_document(
         && let Some(pages) = page_contents.as_mut()
     {
         crate::pdf::native::geometry::attach_page_geometry(&doc.doc, pages);
+        #[cfg(feature = "plan-regions")]
+        if let Some(settings) = plan_region_settings {
+            crate::extraction::plan_geometry::regions::attach_plan_regions(
+                &doc.doc,
+                pages,
+                settings,
+                extract_vector_geometry,
+            );
+        }
     }
 
     if !skipped_stages.is_empty() {
@@ -1869,6 +1888,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
                 image_preprocessing: None,
             },
             PageContent {
@@ -1885,6 +1905,7 @@ mod tests {
                 ocr_confidence: None,
                 native_content: None,
                 geometry: None,
+                viewports: None,
                 image_preprocessing: None,
             },
         ]);

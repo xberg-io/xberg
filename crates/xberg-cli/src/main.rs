@@ -73,7 +73,9 @@ use clap::{CommandFactory, Parser, Subcommand};
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 use commands::cache::WarmOptions;
 #[cfg(feature = "embeddings")]
@@ -88,7 +90,9 @@ use commands::serve_command;
     feature = "layout-detection",
     feature = "paddle-ocr",
     feature = "tree-sitter",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "classification-onnx",
+    feature = "captioning-onnx"
 ))]
 use commands::warm_command;
 use commands::{
@@ -336,6 +340,41 @@ enum Commands {
         /// Delete stray files reported in xberg-owned cache directories after probing
         #[arg(long)]
         clean: bool,
+
+        /// Hugging Face cache root to inspect for staged experimental candidates
+        #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+        #[arg(long, value_name = "DIR")]
+        cache_dir: Option<PathBuf>,
+
+        /// Inspect this experimental captioning candidate instead of every candidate
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "ID")]
+        captioning_model: Option<String>,
+
+        /// Captioning graph quantization: quantized (default) or fp32
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "PRECISION")]
+        captioning_precision: Option<String>,
+
+        /// Captioning backend; only onnx_cpu is implemented
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "BACKEND")]
+        captioning_backend: Option<String>,
+
+        /// Inspect this experimental classification candidate instead of every candidate
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "ID")]
+        classification_model: Option<String>,
+
+        /// Classification graph quantization; only quantized is usable on this host
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "PRECISION")]
+        classification_precision: Option<String>,
+
+        /// Classification backend; only onnx_cpu is implemented
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "BACKEND")]
+        classification_backend: Option<String>,
     },
 
     /// Start the API server
@@ -566,7 +605,9 @@ enum CacheCommands {
         feature = "layout-detection",
         feature = "paddle-ocr",
         feature = "tree-sitter",
-        feature = "ner-onnx"
+        feature = "ner-onnx",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
     ))]
     Warm {
         /// Xberg cache directory; for HF models, an explicit HF cache root
@@ -635,6 +676,36 @@ enum CacheCommands {
         #[cfg(feature = "ner-onnx")]
         #[arg(long)]
         all_ner_models: bool,
+
+        /// Stage an experimental local captioning candidate so its first request needs no network
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "ID")]
+        captioning_model: Option<String>,
+
+        /// Captioning graph quantization: quantized (default) or fp32
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "PRECISION")]
+        captioning_precision: Option<String>,
+
+        /// Captioning backend; only onnx_cpu is implemented
+        #[cfg(feature = "captioning-onnx")]
+        #[arg(long, value_name = "BACKEND")]
+        captioning_backend: Option<String>,
+
+        /// Stage an experimental local classification candidate so its first request needs no network
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "ID")]
+        classification_model: Option<String>,
+
+        /// Classification graph quantization; only quantized is usable on this host
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "PRECISION")]
+        classification_precision: Option<String>,
+
+        /// Classification backend; only onnx_cpu is implemented
+        #[cfg(feature = "classification-onnx")]
+        #[arg(long, value_name = "BACKEND")]
+        classification_backend: Option<String>,
     },
 }
 
@@ -1051,7 +1122,9 @@ fn main() -> Result<()> {
                 feature = "layout-detection",
                 feature = "paddle-ocr",
                 feature = "tree-sitter",
-                feature = "ner-onnx"
+                feature = "ner-onnx",
+                feature = "classification-onnx",
+                feature = "captioning-onnx"
             ))]
             CacheCommands::Warm {
                 cache_dir,
@@ -1076,6 +1149,18 @@ fn main() -> Result<()> {
                 ner_model,
                 #[cfg(feature = "ner-onnx")]
                 all_ner_models,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_model,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_precision,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_backend,
+                #[cfg(feature = "classification-onnx")]
+                classification_model,
+                #[cfg(feature = "classification-onnx")]
+                classification_precision,
+                #[cfg(feature = "classification-onnx")]
+                classification_backend,
             } => {
                 let options = WarmOptions {
                     #[cfg(feature = "embeddings")]
@@ -1098,6 +1183,21 @@ fn main() -> Result<()> {
                     ner_model,
                     #[cfg(feature = "ner-onnx")]
                     all_ner_models,
+                    #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+                    onnx: commands::onnx_candidates::StageSelection {
+                        #[cfg(feature = "captioning-onnx")]
+                        captioning_model,
+                        #[cfg(feature = "captioning-onnx")]
+                        captioning_precision,
+                        #[cfg(feature = "captioning-onnx")]
+                        captioning_backend,
+                        #[cfg(feature = "classification-onnx")]
+                        classification_model,
+                        #[cfg(feature = "classification-onnx")]
+                        classification_precision,
+                        #[cfg(feature = "classification-onnx")]
+                        classification_backend,
+                    },
                 };
                 warm_command(cache_dir.clone(), format, options)?;
             }
@@ -1135,8 +1235,38 @@ fn main() -> Result<()> {
             no_config_discovery,
             format,
             clean,
+            #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+            cache_dir,
+            #[cfg(feature = "captioning-onnx")]
+            captioning_model,
+            #[cfg(feature = "captioning-onnx")]
+            captioning_precision,
+            #[cfg(feature = "captioning-onnx")]
+            captioning_backend,
+            #[cfg(feature = "classification-onnx")]
+            classification_model,
+            #[cfg(feature = "classification-onnx")]
+            classification_precision,
+            #[cfg(feature = "classification-onnx")]
+            classification_backend,
         } => {
-            doctor_command(config, no_config_discovery, format, clean)?;
+            let candidates = commands::doctor::OnnxCandidateOptions {
+                #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
+                cache_dir,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_model,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_precision,
+                #[cfg(feature = "captioning-onnx")]
+                captioning_backend,
+                #[cfg(feature = "classification-onnx")]
+                classification_model,
+                #[cfg(feature = "classification-onnx")]
+                classification_precision,
+                #[cfg(feature = "classification-onnx")]
+                classification_backend,
+            };
+            doctor_command(config, no_config_discovery, format, clean, &candidates)?;
         }
 
         #[cfg(feature = "api")]
@@ -1412,7 +1542,9 @@ mod feature_profile_tests {
         feature = "layout-detection",
         feature = "paddle-ocr",
         feature = "tree-sitter",
-        feature = "ner-onnx"
+        feature = "ner-onnx",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
     )))]
     #[test]
     fn lean_profile_omits_warm_command() {
@@ -1426,7 +1558,9 @@ mod feature_profile_tests {
         feature = "layout-detection",
         feature = "paddle-ocr",
         feature = "tree-sitter",
-        feature = "ner-onnx"
+        feature = "ner-onnx",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
     ))]
     #[test]
     fn warm_capable_profile_exposes_warm_command() {

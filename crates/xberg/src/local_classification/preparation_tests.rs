@@ -362,3 +362,118 @@ async fn preparation_rejects_a_corrupt_tokenizer_snapshot_before_parsing() {
         "{error}"
     );
 }
+
+#[test]
+fn the_offline_artifact_report_distinguishes_staged_missing_and_mismatched_files() {
+    use super::{LocalClassificationArtifactReport, LocalClassificationArtifactState};
+
+    let fixture = fixture();
+    let cache = fixture.directory.path().to_str().unwrap();
+    let report = LocalClassificationArtifactReport::for_model(&fixture.config.model, Some(cache)).unwrap();
+    assert!(report.complete());
+    assert_eq!(report.staged(), fixture.config.model.sha256_manifest.lines().count());
+    assert_eq!(report.repository, fixture.config.model.repository);
+    // A caller-pinned toy graph whose path carries no int8 marker is reported as fp32.
+    assert_eq!(report.precision, super::LocalClassificationPrecision::Fp32);
+    assert_eq!(report.model_file, "model.onnx");
+    let model = report
+        .artifacts
+        .iter()
+        .find(|artifact| artifact.path == "model.onnx")
+        .unwrap();
+    assert_eq!(model.state, LocalClassificationArtifactState::Staged);
+    assert_eq!(
+        model.sha256,
+        hex::encode(Sha256::digest(
+            std::fs::read(fixture.snapshot().join("model.onnx")).unwrap()
+        ))
+    );
+
+    std::fs::write(fixture.snapshot().join("model.onnx"), b"tampered").unwrap();
+    std::fs::remove_file(fixture.snapshot().join("tokenizer.json")).unwrap();
+    let report = LocalClassificationArtifactReport::for_model(&fixture.config.model, Some(cache)).unwrap();
+    assert!(!report.complete());
+    assert_eq!(
+        report.staged(),
+        fixture.config.model.sha256_manifest.lines().count() - 2
+    );
+    assert!(report.artifacts.iter().any(|artifact| {
+        artifact.path == "model.onnx" && artifact.state == LocalClassificationArtifactState::SizeMismatch
+    }));
+    assert!(report.artifacts.iter().any(|artifact| {
+        artifact.path == "tokenizer.json" && artifact.state == LocalClassificationArtifactState::Missing
+    }));
+}
+
+#[test]
+fn a_candidate_report_from_an_empty_cache_is_offline_and_fully_missing() {
+    use super::LocalClassificationArtifactReport;
+
+    let directory = tempfile::tempdir().unwrap();
+    let report = LocalClassificationArtifactReport::for_candidate(
+        "nli-minilm2-l6-h768",
+        super::LocalClassificationPrecision::Quantized,
+        Some(directory.path().to_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(report.candidate.as_deref(), Some("nli-minilm2-l6-h768"));
+    assert_eq!(report.repository, "xberg-io/classification-models");
+    assert_eq!(report.revision, crate::candidate_models::CLASSIFICATION_MODELS_REVISION);
+    assert!(report.empty());
+    assert_eq!(report.staged(), 0);
+    assert!(report.total_bytes > 0);
+    assert!(report.model_file.contains("onnx"));
+    assert!(report.artifacts.iter().all(|artifact| artifact.sha256.len() == 64));
+}
+
+#[tokio::test]
+async fn an_offline_stage_and_prepare_do_not_fetch_and_a_missing_artifact_fails_explicitly() {
+    let fixture = fixture();
+    let classifier = LocalTextClassifier::new(fixture.config.clone()).unwrap();
+    // The fabricated cache is complete, so a stage resolves every pin without a transfer.
+    classifier.stage(&Default::default()).await.unwrap();
+    classifier.prepare(&Default::default()).await.unwrap();
+
+    std::fs::remove_file(fixture.snapshot().join("model.onnx")).unwrap();
+    let captioner = LocalTextClassifier::new(fixture.config.clone()).unwrap();
+    let error = captioner.prepare(&Default::default()).await.unwrap_err().to_string();
+    assert!(error.contains("missing from the pre-staged cache"), "{error}");
+}
+
+#[tokio::test]
+async fn alternating_model_identities_never_reuse_another_models_session() {
+    let mut first = fixture();
+    let mut second_fixture = fixture();
+    second_fixture.config.model.revision = "b".repeat(40);
+    // Re-stage the same bytes under the second revision so both caches are complete.
+    let second_snapshot = second_fixture
+        .directory
+        .path()
+        .join("models--owner--nli-model/snapshots")
+        .join(&second_fixture.config.model.revision);
+    std::fs::create_dir_all(&second_snapshot).unwrap();
+    for entry in std::fs::read_dir(first.snapshot()).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), second_snapshot.join(entry.file_name())).unwrap();
+    }
+    let first_cache = first.directory.path().to_str().unwrap().to_owned();
+    let second_cache = second_fixture.directory.path().to_str().unwrap().to_owned();
+    first.config.cache_directory = Some(first_cache);
+    second_fixture.config.cache_directory = Some(second_cache);
+
+    let a = LocalTextClassifier::new(first.config.clone()).unwrap();
+    let b = LocalTextClassifier::new(second_fixture.config.clone()).unwrap();
+    let first_info = a.prepare(&Default::default()).await.unwrap();
+    let second_info = b.prepare(&Default::default()).await.unwrap();
+    assert_ne!(
+        super::policy::model_identity(&first.config),
+        super::policy::model_identity(&second_fixture.config),
+        "the model identity binds the pinned revision"
+    );
+    assert_eq!(first_info.revision, first.config.model.revision);
+    assert_eq!(second_info.revision, second_fixture.config.model.revision);
+    let first_result = a.classify("alpha", &labels(), &Default::default()).await.unwrap();
+    assert_eq!(first_result.model.revision, first.config.model.revision);
+    let second_result = b.classify("alpha", &labels(), &Default::default()).await.unwrap();
+    assert_eq!(second_result.model.revision, second_fixture.config.model.revision);
+}
