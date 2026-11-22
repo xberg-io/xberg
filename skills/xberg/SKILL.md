@@ -1,6 +1,6 @@
 ---
 description: Extract text, tables, metadata, and images from 107 document formats (PDF, Office, images, HTML, email, archives, academic) using Xberg. Use when writing code that calls Xberg APIs in Python, Node.js/TypeScript, Rust, or CLI. Covers installation, extraction (sync/async), configuration (OCR, chunking, output format), batch processing, error handling, and plugins.
-license: Elastic-2.0
+license: MIT
 metadata:
     author: xberg-io
     version: "0.1.0"
@@ -10,8 +10,8 @@ name: xberg
 
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:bdb659ec3959943d7e4b8da0cc3b8fbe51dc3bfec07e27dbbd8f84e190a63e1a
-Source-Hash: blake3:3fe619691b35fa619d59e836771b41c0ca93890a7de029cca8c9b15b5849ebcc
+Content-Hash: blake3:044becc6dc1b9b46f01817bf44333e7b0401d79aeadf6b78089ba1f836bf04f1
+Source-Hash: blake3:c222fc982b9c5f3485c2b4b74087e923da7345e4b5eea4b8df8db4810fba1d76
 Schema-Version: v1
 -->
 
