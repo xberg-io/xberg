@@ -62,7 +62,14 @@ impl<'doc> TextExtractor<'doc> {
         // rationale (unchanged, just split out for file size). ~keep
         let ligature_glyph = buffer.is_lone_ligature();
         let text = std::mem::take(&mut buffer.unicode);
+        let stream_text = (!text.is_ascii()).then(|| text.clone());
         let text = Self::correct_tj_buffer_rtl_order(text, &buffer);
+        // The widths are in stream order; once the text is reversed they no
+        // longer describe its characters, and an empty list is the shape every
+        // consumer already tolerates. ~keep
+        if stream_text.is_some_and(|before| before != text) {
+            buffer.char_widths.clear();
+        }
 
         let span = TextSpan {
             provenance: None,

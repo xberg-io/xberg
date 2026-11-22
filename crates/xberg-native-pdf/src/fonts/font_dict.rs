@@ -3417,6 +3417,15 @@ impl FontInfo {
         } else {
             222.0
         };
+        // Code 39 is `quotesingle` and 96 `grave` in WinAnsi, not the
+        // `quoteright`/`quoteleft` the StandardEncoding tables give them. ~keep
+        let ascii_quotesingle = match (is_times, is_bold, is_italic) {
+            (true, false, false) => 180.0,
+            (true, false, true) => 214.0,
+            (true, true, _) => 278.0,
+            (false, true, _) => 238.0,
+            (false, false, _) => 191.0,
+        };
         let Encoding::Standard(name) = &self.encoding else {
             return None;
         };
@@ -3427,6 +3436,8 @@ impl FontInfo {
             ("WinAnsiEncoding", 149) => 350.0,
             ("WinAnsiEncoding", 145 | 146) => quotesingle,
             ("WinAnsiEncoding", 147 | 148) => quotedbl,
+            ("WinAnsiEncoding", 39) => ascii_quotesingle,
+            ("WinAnsiEncoding", 96) => 333.0,
             ("StandardEncoding", 177) => endash,
             ("StandardEncoding", 208) => emdash,
             ("StandardEncoding", 188) => ellipsis,
@@ -11329,6 +11340,24 @@ mod tests {
         assert_eq!(table[87], 944.0, "'W'");
 
         assert_eq!(table[0], 1000.0, "NUL -> default_width fallback");
+    }
+
+    #[test]
+    fn winansi_apostrophe_and_grave_use_their_own_standard_14_widths() {
+        let width = |base: &str, enc: &str, code: u16| {
+            make_font(|f| {
+                f.base_font = base.to_string();
+                f.encoding = Encoding::Standard(enc.to_string());
+            })
+            .get_glyph_width(code)
+        };
+        assert_eq!(width("Helvetica", "WinAnsiEncoding", 39), 191.0);
+        assert_eq!(width("Helvetica", "WinAnsiEncoding", 96), 333.0);
+        assert_eq!(width("Helvetica-Bold", "WinAnsiEncoding", 39), 238.0);
+        assert_eq!(width("Helvetica-Bold", "WinAnsiEncoding", 96), 333.0);
+        assert_eq!(width("Times-Roman", "WinAnsiEncoding", 39), 180.0);
+        assert_eq!(width("Helvetica", "StandardEncoding", 39), 222.0);
+        assert_eq!(width("Helvetica", "StandardEncoding", 96), 222.0);
     }
 
     /// Build a minimal ToUnicode CMap stream that maps codes 0x0041–0x005A

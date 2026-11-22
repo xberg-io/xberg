@@ -743,19 +743,33 @@ impl PdfDocument {
         let input_spans = if !word_spans.is_empty() { &word_spans } else { spans };
 
         // Bounding one cell takes two rules on each axis, so fewer than four
-        // primitives cannot describe a grid. The RTL guard further down only
-        // gates the retry, after this call has already produced a table from
-        // aligned diacritics. ~keep
-        const MIN_PRIMITIVES_FOR_A_GRID: usize = 4;
-        if config.text_fallback && paths.len() < MIN_PRIMITIVES_FOR_A_GRID {
+        // rules cannot describe a grid; a rectangle supplies four on its own.
+        // The RTL guard further down only gates the retry, after this call has
+        // already produced a table from aligned diacritics. ~keep
+        const MIN_RULES_FOR_A_GRID: usize = 4;
+        let rule_count: usize = paths
+            .iter()
+            .map(|p| {
+                p.operations
+                    .iter()
+                    .map(|op| match op {
+                        crate::elements::PathOperation::Rectangle(..) => 4,
+                        crate::elements::PathOperation::LineTo(..) => 1,
+                        _ => 0,
+                    })
+                    .sum::<usize>()
+                    .max(1)
+            })
+            .sum();
+        if config.text_fallback && rule_count < MIN_RULES_FOR_A_GRID {
             let rtl_fraction = spans.iter().filter(|s| crate::text::bidi::looks_rtl(&s.text)).count() as f32
                 / spans.len().max(1) as f32;
             if rtl_fraction > 0.30 {
                 tracing::debug!(target: LOG_TARGET,
-                    "Declining spatial table detection on page {} — {:.0}% RTL spans and only {} table primitives",
+                    "Declining spatial table detection on page {} — {:.0}% RTL spans and only {} table rules",
                     page_index,
                     rtl_fraction * 100.0,
-                    paths.len()
+                    rule_count
                 );
                 return Vec::new();
             }
