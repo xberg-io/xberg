@@ -395,6 +395,12 @@ class BuildInputTest(unittest.TestCase):
         notices_sources.assert_offers(ROOT, self.inputs, offers)
         assert any("elixir-macos-arm64" in offer.channels for offer in offers)
 
+    def test_pdfium_pin_comes_from_the_pin_file(self) -> None:
+        revision = (ROOT / "scripts/pdfium-version").read_text().strip()
+        pin = self.inputs.pins["pdfium"][0]
+        assert pin.version == revision
+        assert self.inputs.pdfium_revision == revision
+
     def test_fonts_are_identified_by_the_bytes_that_ship(self) -> None:
         assert {font.family for font in self.inputs.fonts} == {"DejaVu Sans", "Droid Sans Fallback", "Noto Emoji"}
 
