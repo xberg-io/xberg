@@ -563,5 +563,20 @@ mod group4_entry_point_tests {
         assert_eq!(rows_valid, 1, "one all-white row decodes under Group 4");
         let legacy = decompress_ccitt_group4(&g4, 8, 1).expect("legacy entry point");
         assert_eq!(legacy, vec![0x00], "legacy entry point must decode as Group 4");
+
+        // An all-white row is also what a failed decode falls back to, so a row with ink is what
+        // tells decoding from blank substitution. Horizontal mode: white run 2, black run 6, EOFB.
+        let g4_ink = [0x2E, 0x40, 0x04, 0x00, 0x80];
+        let (reported, rows_valid) = decompress_ccitt_reporting(&g4_ink, &params).expect("group 4 decode");
+        assert_eq!(
+            (reported.as_slice(), rows_valid),
+            (&[0x3F][..], 1),
+            "test premise: the row carries ink"
+        );
+        let legacy = decompress_ccitt_group4(&g4_ink, 8, 1).expect("legacy entry point");
+        assert_eq!(
+            legacy, reported,
+            "legacy entry point must decode a row with ink as Group 4"
+        );
     }
 }

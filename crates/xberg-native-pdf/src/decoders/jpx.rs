@@ -285,6 +285,12 @@ pub fn decode_jpx_at(bytes: &[u8], declared_components: Option<u8>, target: Opti
     decode_subsampled(comps, width, height, colour_components)
 }
 
+/// The size the codestream itself declares, which a reduced decode of it does not report. ~keep
+pub fn codestream_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let image = hayro_jpeg2000::Image::new(bytes, &hayro_jpeg2000::DecodeSettings::default()).ok()?;
+    Some((image.width(), image.height()))
+}
+
 /// Decode the palette indices of a JPEG 2000 image whose dictionary names an `/Indexed` colour
 /// space, one byte per pixel, for the caller to look up in the dictionary's own palette. The
 /// result is a one-component [`JpxImage`] at the codestream's own size, which the caller uses in
@@ -302,19 +308,14 @@ pub fn decode_jpx_at(bytes: &[u8], declared_components: Option<u8>, target: Opti
 /// and clears its alpha flag, even when a second component is the image's opacity. So the channel
 /// count, not the component count, says whether the image is an index plane; any component after
 /// the first is opacity and is dropped, as [`decode_jpx`] drops it for every other image. ~keep
-#[cfg(test)]
+///
+/// It always decodes at full resolution: a lower resolution level averages neighbouring samples,
+/// and an average of two palette indices is another entry's index, not a blend of their colours. ~keep
 pub fn decode_jpx_indices(bytes: &[u8], highest_index: u8) -> Result<JpxImage> {
-    decode_jpx_indices_at(bytes, highest_index, None)
-}
-
-/// [`decode_jpx_indices`], with the resolution hint of [`decode_jpx_at`]. A codestream carrying a
-/// palette box, which is the usual shape here, decodes at full resolution regardless. ~keep
-pub fn decode_jpx_indices_at(bytes: &[u8], highest_index: u8, target: Option<(u32, u32)>) -> Result<JpxImage> {
     use hayro_jpeg2000::{DecodeSettings, DecoderContext, Image};
 
     let settings = DecodeSettings {
         resolve_palette_indices: false,
-        target_resolution: target,
         ..DecodeSettings::default()
     };
     let image = Image::new(bytes, &settings)

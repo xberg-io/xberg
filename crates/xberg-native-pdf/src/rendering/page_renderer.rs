@@ -2277,10 +2277,12 @@ impl PageRenderer {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
-        // A colour-key /Mask and an in-data soft mask index the full-size samples, so only an
-        // image free of both may be decoded at its painted footprint. ~keep
+        // A /Mask, an /SMask and an in-data soft mask are all sampled against the image's own
+        // samples (the referenced ones by nearest neighbour), so only an image free of every one of
+        // them may be decoded at its painted footprint. ~keep
         let reduced_target = {
-            let full_size_samples_needed = matches!(mask_obj, Some(Object::Array(_)))
+            let full_size_samples_needed = mask_obj.is_some()
+                || smask_obj.is_some()
                 || xobject
                     .as_dict()
                     .and_then(|dict| dict.get("SMaskInData"))

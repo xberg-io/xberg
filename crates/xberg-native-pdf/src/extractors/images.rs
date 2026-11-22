@@ -3325,7 +3325,7 @@ fn decode_jpx_image(
     // ISO 32000-1 §7.4.9 puts the `/Indexed` palette in charge, so any `pclr` palette in the
     // codestream is not applied; the caller looks the indices up. (GH#1885) ~keep
     if let Some(highest_index) = indexed.map(IndexedResolution::highest_index) {
-        let indices = crate::decoders::jpx::decode_jpx_indices_at(&codestream, highest_index, target)?;
+        let indices = crate::decoders::jpx::decode_jpx_indices(&codestream, highest_index)?;
         warn_on_jpx_size_mismatch(doc, declared_size, (indices.width, indices.height));
         return Ok(JpxDecoded {
             data: ImageData::Raw {
@@ -3373,7 +3373,13 @@ fn decode_jpx_image(
     // trusts `width * height * components` either read a scrambled prefix at the wrong stride or
     // rejected the buffer outright as the wrong length, and neither recorded why (GH#1900).
     // Returning the codestream's own size keeps the two in agreement for every consumer. ~keep
-    warn_on_jpx_size_mismatch(doc, declared_size, (img.width, img.height));
+    // A reduced decode reports the reduced samples' size, which is not what the codestream declares.
+    let codestream_size = if target.is_some() {
+        crate::decoders::jpx::codestream_size(&codestream).unwrap_or((img.width, img.height))
+    } else {
+        (img.width, img.height)
+    };
+    warn_on_jpx_size_mismatch(doc, declared_size, codestream_size);
 
     let format = match img.num_components {
         1 => PixelFormat::Grayscale,
@@ -5713,6 +5719,44 @@ mod palette_expansion_tests {
             (PixelFormat::RGB, &[255, 0, 0, 0, 0, 255][..])
         );
         assert_eq!(image.bits_per_component(), 8);
+    }
+
+    fn grey_jpx_xobject(
+        codestream: &'static [u8],
+        width: i64,
+        height: i64,
+        color_space: crate::object::Object,
+    ) -> crate::object::Object {
+        use crate::object::Object;
+        let mut dict = std::collections::HashMap::new();
+        dict.insert("Subtype".to_string(), Object::Name("Image".to_string()));
+        dict.insert("Width".to_string(), Object::Integer(width));
+        dict.insert("Height".to_string(), Object::Integer(height));
+        dict.insert("ColorSpace".to_string(), color_space);
+        dict.insert("Filter".to_string(), Object::Name("JPXDecode".to_string()));
+        Object::Stream {
+            dict,
+            data: bytes::Bytes::from_static(codestream),
+        }
+    }
+
+    /// Palette indices are not a quantity a lower resolution level may average, so an `/Indexed`
+    /// JPEG 2000 image decodes at the codestream's own size whatever the painted footprint.
+    #[test]
+    fn an_indexed_jpx_image_ignores_a_reduced_target() {
+        use crate::object::Object;
+        const SAMPLE_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/sample_gray.jp2");
+        let palette = (0..=255u8).flat_map(|i| [i, i, i]).collect();
+        let indexed = Object::Array(vec![
+            Object::Name("Indexed".to_string()),
+            Object::Name("DeviceRGB".to_string()),
+            Object::Integer(255),
+            Object::String(palette),
+        ]);
+        let xobject = grey_jpx_xobject(SAMPLE_JP2, 816, 1056, indexed);
+        let image = extract_image_from_xobject_at(None, &xobject, None, None, Some((200, 260)))
+            .expect("an /Indexed JPEG 2000 image");
+        assert_eq!((image.width(), image.height()), (816, 1056));
     }
 
     /// A JPEG 2000 image with no palette reports the 8 bits per component its decoded samples have,
