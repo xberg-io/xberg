@@ -1,6 +1,7 @@
 //! Configuration structures for PaddleOCR-VL model and preprocessing.
 //!
 //! Adapted from aha's paddleocr_vl module.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 
 use candle_nn::Activation;
 use serde::{Deserialize, Serialize};

@@ -2,6 +2,7 @@
 //!
 //! Handles image loading, resizing, and normalization with JSON-driven configuration.
 //! Adapted from aha's paddleocr_vl module.
+//! Modified by Xberg; changes are listed in repo-root ATTRIBUTIONS.md § jhqxxx/aha (Modifications).
 
 use candle_core::{DType, Device, Shape, Tensor};
 use image::DynamicImage;

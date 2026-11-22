@@ -562,3 +562,54 @@ fn test_parse_field_value_real_returns_none() {
     let value = FormExtractor::parse_field_value(&obj, &FieldType::Text);
     assert!(matches!(value, FieldValue::None));
 }
+
+#[test]
+fn inherited_lookups_do_not_deep_copy_the_parent() {
+    const KIDS: u32 = 50;
+    let kid_refs: String = (5..5 + KIDS).map(|id| format!("{id} 0 R ")).collect();
+    let mut objects: Vec<(u32, String)> = vec![
+        (
+            1,
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>".to_string(),
+        ),
+        (2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string()),
+        (3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string()),
+        (
+            4,
+            format!("<< /T (P) /FT /Tx /V (v) /DV (d) /DA (/Helv 0 Tf) /Kids [{kid_refs}] >>"),
+        ),
+    ];
+    objects.extend((5..5 + KIDS).map(|id| (id, "<< /Parent 4 0 R /Rect [0 0 1 1] >>".to_string())));
+    let max_id = 4 + KIDS;
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = vec![0usize; max_id as usize + 1];
+    for (id, body) in &objects {
+        offsets[*id as usize] = pdf.len();
+        pdf.extend_from_slice(format!("{id} 0 obj\n{body}\nendobj\n").as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", max_id + 1).as_bytes());
+    for offset in &offsets[1..] {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            max_id + 1
+        )
+        .as_bytes(),
+    );
+
+    let doc = PdfDocument::from_bytes(pdf).expect("parse");
+    let before = doc.cached_object_clone_count();
+    let fields = FormExtractor::extract_fields(&doc).expect("fields");
+    let clones = doc.cached_object_clone_count() - before;
+    assert_eq!(
+        fields.iter().filter(|f| f.default_appearance.is_some()).count(),
+        KIDS as usize + 1
+    );
+    assert!(
+        clones <= 3 * KIDS as usize,
+        "inherited lookups cloned cached objects {clones} times for {KIDS} kids"
+    );
+}

@@ -380,6 +380,32 @@ fn find_actual_xref_offset<R: Read + Seek>(reader: &mut R, offset: u64) -> Resul
     Ok(offset)
 }
 
+/// Most xref sections followed through /Prev before giving up on the chain
+/// and letting the caller reconstruct the table from the file body.
+const MAX_XREF_CHAIN: usize = 1000;
+
+/// Reads a /Prev or /XRefStm trailer value as a byte offset. Producers write
+/// these as Real numbers or indirect references to an integer object; both are
+/// accepted, and a negative or non-finite value is rejected rather than wrapped.
+fn xref_pointer<R: Read + Seek>(reader: &mut R, table: &CrossRefTable, value: &Object) -> Option<u64> {
+    match value {
+        Object::Integer(i) => u64::try_from(*i).ok(),
+        Object::Real(r) if r.is_finite() && *r >= 0.0 => Some(*r as u64),
+        Object::Reference(r) => {
+            let entry = table.get(r.id)?;
+            if entry.entry_type != XRefEntryType::Uncompressed {
+                return None;
+            }
+            match crate::xref_reconstruction::load_object_at_offset(reader, entry.offset).ok()? {
+                Object::Integer(i) => u64::try_from(i).ok(),
+                Object::Real(r) if r.is_finite() && r >= 0.0 => Some(r as u64),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Parse xref table iteratively, following /Prev pointers for incremental updates.
 ///
 /// Uses a `HashSet` of visited offsets to detect circular /Prev chains instead of
@@ -394,6 +420,14 @@ fn parse_xref_iterative<R: Read + Seek>(reader: &mut R, start_offset: u64) -> Re
         if !visited.insert(offset) {
             tracing::warn!(offset, "circular /Prev chain detected, stopping xref traversal");
             break;
+        }
+
+        if visited.len() > MAX_XREF_CHAIN {
+            tracing::warn!(
+                limit = MAX_XREF_CHAIN,
+                "xref /Prev chain too long, abandoning traversal"
+            );
+            return Err(Error::InvalidXref);
         }
 
         let actual_offset = find_actual_xref_offset(reader, offset)?;
@@ -448,8 +482,7 @@ fn parse_xref_iterative<R: Read + Seek>(reader: &mut R, start_offset: u64) -> Re
         let prev_offset = xref
             .trailer()
             .and_then(|t| t.get("Prev"))
-            .and_then(|o| o.as_integer())
-            .map(|v| v as u64);
+            .and_then(|o| xref_pointer(reader, &xref, o));
         // Hybrid-reference files (§7.5.8.4): a classic trailer may carry
         // /XRefStm pointing to an xref stream that indexes the compressed
         // (object-stream) objects invisible to the classic table. Without this
@@ -458,8 +491,7 @@ fn parse_xref_iterative<R: Read + Seek>(reader: &mut R, start_offset: u64) -> Re
         let xrefstm_offset = xref
             .trailer()
             .and_then(|t| t.get("XRefStm"))
-            .and_then(|o| o.as_integer())
-            .map(|v| v as u64);
+            .and_then(|o| xref_pointer(reader, &xref, o));
 
         // Merge: most recent xref entries take priority over older ones ~keep
         match &mut result_xref {
@@ -604,6 +636,13 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 break;
             }
 
+            // An object number past u32::MAX has no slot; saturating would overwrite the entry at u32::MAX. ~keep
+            let Some(obj_num) = start_obj.checked_add(i) else {
+                malformed_entry_count += 1;
+                i += 1;
+                continue;
+            };
+
             // Parse entry: "nnnnnnnnnn ggggg f/n"
             // Be flexible with whitespace and format ~keep
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
@@ -614,7 +653,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 // Still increment counter to maintain object numbering
                 // Add a placeholder free entry to maintain object number sequence ~keep
                 let entry = XRefEntry::free(0, 65535);
-                xref.add_entry(start_obj + i, entry);
+                xref.add_entry(obj_num, entry);
                 i += 1;
                 continue;
             }
@@ -629,7 +668,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 Err(_) => {
                     malformed_entry_count += 1;
                     let entry = XRefEntry::free(0, 65535);
-                    xref.add_entry(start_obj + i, entry);
+                    xref.add_entry(obj_num, entry);
                     i += 1;
                     continue;
                 }
@@ -640,7 +679,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 Err(_) => {
                     malformed_entry_count += 1;
                     let entry = XRefEntry::free(0, 65535);
-                    xref.add_entry(start_obj + i, entry);
+                    xref.add_entry(obj_num, entry);
                     i += 1;
                     continue;
                 }
@@ -662,7 +701,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
             };
 
             let entry = XRefEntry::new(offset, generation, in_use);
-            xref.add_entry(start_obj + i, entry);
+            xref.add_entry(obj_num, entry);
             i += 1;
         }
     }
@@ -741,7 +780,10 @@ fn parse_xref_stream<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Cros
 
     let needs_more = if let Some(length_val) = find_stream_length(&content) {
         let stream_kw_pos = content.windows(6).position(|w| w == b"stream").unwrap_or(0);
-        let needed = stream_kw_pos + 20 + length_val + 30;
+        let needed = stream_kw_pos
+            .saturating_add(20)
+            .saturating_add(length_val)
+            .saturating_add(30);
         if needed > bytes_read { Some(needed) } else { None }
     } else if content.windows(6).any(|w| w == b"endobj") {
         None
@@ -939,7 +981,9 @@ fn parse_xref_stream<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Cros
                 }
             };
 
-            xref.add_entry(start_obj + i, entry);
+            if let Some(obj_num) = start_obj.checked_add(i) {
+                xref.add_entry(obj_num, entry);
+            }
         }
     }
 
@@ -1275,6 +1319,106 @@ mod tests {
             .get(2)
             .expect("object 2 must resolve via the merged /XRefStm supplement");
         assert_eq!(obj2.offset, 0x270F, "object 2 offset comes from the xref stream");
+    }
+
+    /// Appends a one-object classic xref section for `obj_id` and returns its offset.
+    fn push_classic_section(pdf: &mut Vec<u8>, obj_id: u32, obj_off: usize, trailer_extra: &str) -> usize {
+        let section = pdf.len();
+        pdf.extend_from_slice(format!("xref\n{obj_id} 1\n{obj_off:010} 00000 n \n").as_bytes());
+        pdf.extend_from_slice(format!("trailer\n<< /Size 20 /Root 1 0 R {trailer_extra} >>\n").as_bytes());
+        section
+    }
+
+    #[test]
+    fn test_real_valued_prev_is_followed() {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let off1 = pdf.len();
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog >>\nendobj\n");
+        let older = push_classic_section(&mut pdf, 1, off1, "");
+        let off2 = pdf.len();
+        pdf.extend_from_slice(b"2 0 obj\n<< >>\nendobj\n");
+        let newer = push_classic_section(&mut pdf, 2, off2, &format!("/Prev {older}.0"));
+        let table = parse_xref_iterative(&mut Cursor::new(pdf), newer as u64).unwrap();
+        assert!(table.get(2).is_some());
+        assert!(
+            table.get(1).is_some(),
+            "object 1 lives only in the section named by a Real /Prev"
+        );
+    }
+
+    #[test]
+    fn test_indirect_prev_is_followed() {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let off1 = pdf.len();
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog >>\nendobj\n");
+        let older = push_classic_section(&mut pdf, 1, off1, "");
+        let off7 = pdf.len();
+        pdf.extend_from_slice(format!("7 0 obj\n{older}\nendobj\n").as_bytes());
+        let newer = push_classic_section(&mut pdf, 7, off7, "/Prev 7 0 R");
+        let table = parse_xref_iterative(&mut Cursor::new(pdf), newer as u64).unwrap();
+        assert!(
+            table.get(1).is_some(),
+            "object 1 lives only in the section named by an indirect /Prev"
+        );
+    }
+
+    #[test]
+    fn test_negative_prev_is_not_wrapped_into_an_offset() {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let off1 = pdf.len();
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog >>\nendobj\n");
+        let only = push_classic_section(&mut pdf, 1, off1, "/Prev -5");
+        let table = parse_xref_iterative(&mut Cursor::new(pdf), only as u64).unwrap();
+        assert_eq!(table.len(), 1);
+    }
+
+    #[test]
+    fn test_overlong_prev_chain_is_abandoned() {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let off1 = pdf.len();
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog >>\nendobj\n");
+        let mut section = push_classic_section(&mut pdf, 1, off1, "");
+        for _ in 0..MAX_XREF_CHAIN + 50 {
+            section = push_classic_section(&mut pdf, 1, off1, &format!("/Prev {section}"));
+        }
+        assert!(parse_xref_iterative(&mut Cursor::new(pdf), section as u64).is_err());
+    }
+
+    #[test]
+    fn test_classic_subsection_at_u32_max_does_not_overflow() {
+        let data = b"xref\n4294967295 3\n\
+            0000000018 00000 n \n\
+            0000000154 00000 n \n\
+            0000000200 00000 n \n\
+            trailer\n<< /Size 1 >>\n";
+        let table = parse_xref(&mut Cursor::new(&data[..]), 0).unwrap();
+        assert_eq!(table.get(u32::MAX).expect("boundary entry").offset, 18);
+    }
+
+    #[test]
+    fn test_xref_stream_index_at_u32_max_does_not_overflow() {
+        let mut pdf = b"%PDF-1.5\n".to_vec();
+        let off = pdf.len();
+        pdf.extend_from_slice(
+            b"6 0 obj\n<< /Type /XRef /Size 3 /W [1 2 1] /Index [4294967295 2] /Root 1 0 R /Length 8 >>\nstream\n",
+        );
+        pdf.extend_from_slice(&[1, 0, 9, 0, 1, 0, 10, 0]);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        let table = parse_xref_stream(&mut Cursor::new(pdf), off as u64).unwrap();
+        assert_eq!(table.get(u32::MAX).expect("boundary entry").offset, 9);
+    }
+
+    #[test]
+    fn test_xref_stream_with_maximal_length_does_not_overflow() {
+        let mut pdf = b"%PDF-1.5\n".to_vec();
+        let off = pdf.len();
+        pdf.extend_from_slice(
+            b"6 0 obj\n<< /Type /XRef /Size 3 /W [1 2 1] /Index [0 1] /Root 1 0 R \
+              /Length 18446744073709551615 >>\nstream\n",
+        );
+        pdf.extend_from_slice(&[1, 0, 9, 0]);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        let _ = parse_xref_stream(&mut Cursor::new(pdf), off as u64);
     }
 
     #[test]

@@ -20,6 +20,16 @@
 //! is also deliberately rotation-blind by design (see its doc comment) even
 //! when it does run. GH#1358 is only fully closed for pages where layout
 //! detection actually produces hints.
+//!
+//! # Provenance
+//!
+//! The predecessor-graph reading-order reconstruction (`reading_order_cmp` and
+//! the `_predict_page` port with its helpers) is a Rust port of the Docling
+//! reading-order predictor and of docling-core's `BoundingBox` predicates
+//! (MIT license, <https://github.com/DS4SD/docling-core> and
+//! <https://github.com/DS4SD/docling-ibm-models>), modified to operate on PDF
+//! points with a bottom-left origin. See the repository-root `ATTRIBUTIONS.md`
+//! section "Docling reading order" for the license and copyright notice.
 
 use super::rotation::{ATOMIC_FRAGMENT_GAP_RATIO, upright_reading_origin};
 pub(crate) use super::rotation::{TextSpan, assemble_reading_order_text};

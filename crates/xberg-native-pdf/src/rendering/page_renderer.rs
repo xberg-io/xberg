@@ -337,6 +337,8 @@ pub struct PageRenderer {
     /// and decremented on exit; glyphs at or beyond [`MAX_TYPE3_DEPTH`] are
     /// skipped (their advance width is still applied by the caller).
     type3_depth: u32,
+    form_depth: u32,
+    pattern_depth: u32,
     /// Active Type 3 `d1` fill-colour lock. When `Some`, a `d1` glyph
     /// description is being executed: the glyph is a stencil painted with
     /// this fill colour and every colour-setting operator inside it is
@@ -365,6 +367,15 @@ pub(crate) const MAX_SMASK_DEPTH: u32 = 32;
 /// without bound. The cap sits well above any realistic nesting; glyphs at
 /// or beyond it are skipped while their advance width is still applied.
 pub(crate) const MAX_TYPE3_DEPTH: u32 = 8;
+
+/// Maximum Form XObject nesting depth. A form's own `/Resources /XObject` may
+/// name the form itself, directly or through a cycle, which would otherwise
+/// overflow the stack.
+pub(crate) const MAX_FORM_DEPTH: u32 = 16;
+
+/// Maximum tiling-pattern nesting depth: a `/PatternType 1` content stream may
+/// set the very pattern it is painting.
+pub(crate) const MAX_PATTERN_DEPTH: u32 = 8;
 
 /// Outcome of resolving a generic (non-device-family) colour space for the
 /// plain fill-colour operator (`Operator::SetFillColor`, i.e. `sc`).
@@ -473,6 +484,7 @@ fn resolve_generic_fill_color(
     resolved_space: Option<&Object>,
     doc: &PdfDocument,
     components: &[f32],
+    icc_cache: Option<&IccTransformCache>,
 ) -> FillColorSpaceResolution {
     let Some(rs) = resolved_space else {
         return FillColorSpaceResolution::Unhandled;
@@ -490,8 +502,20 @@ fn resolve_generic_fill_color(
         },
         "Separation" | "DeviceN" => FillColorSpaceResolution::HandledNoChange,
         "Indexed" if !components.is_empty() => {
-            let g = components[0] / 255.0;
-            FillColorSpaceResolution::Rgb(g, g, g)
+            let spaces = HashMap::new();
+            let ctx = ResolutionContext::new(doc, &spaces).with_icc_transform_cache(icc_cache);
+            let logical = LogicalColor::Spaced {
+                space: rs,
+                components: smallvec::SmallVec::from_slice(components),
+            };
+            match crate::rendering::resolution::color::ColorResolver::new().resolve(&logical, &ctx, 1.0) {
+                Ok(ResolvedColor::Rgba { r, g, b, .. }) => FillColorSpaceResolution::Rgb(r, g, b),
+                Ok(ResolvedColor::Cmyk { c, m, y, k, .. }) => {
+                    let (r, g, b) = cmyk_to_rgb(c, m, y, k);
+                    FillColorSpaceResolution::Rgb(r, g, b)
+                }
+                _ => FillColorSpaceResolution::Unhandled,
+            }
         }
         _ => FillColorSpaceResolution::Unhandled,
     }
@@ -969,7 +993,32 @@ impl PageRenderer {
                 ScnColorSpaceResolution::HandledNoChange
             }
             "Indexed" => ScnColorSpaceResolution::HandledNoChange,
+            // Uncoloured tiling pattern (PaintType 2): the operands before the
+            // pattern name are components of the underlying space, arr[1]
+            // (ISO 32000-1 8.7.3.3). ~keep
+            "Pattern" if arr.len() > 1 => {
+                let base = doc.resolve_object(&arr[1]).unwrap_or_else(|_| arr[1].clone());
+                match components_to_rgb_in_space(&base, components, doc) {
+                    Some((r, g, b)) => ScnColorSpaceResolution::Rgb(r, g, b),
+                    None => ScnColorSpaceResolution::Unhandled,
+                }
+            }
             _ => ScnColorSpaceResolution::Unhandled,
+        }
+    }
+
+    /// Whether the named fill colour space is a Pattern space (ISO 32000-1
+    /// 8.7.3). `gs.fill_color_space` holds the resource name the stream used,
+    /// so `/R8 cs` reaching `/Pattern` or `[/Pattern /DeviceRGB]` through a
+    /// resource is not literally "Pattern".
+    pub(super) fn is_pattern_space(&self, name: &str) -> bool {
+        if name == "Pattern" {
+            return true;
+        }
+        match self.color_spaces.get(name) {
+            Some(Object::Name(n)) => n == "Pattern",
+            Some(Object::Array(a)) => a.first().and_then(|o| o.as_name()) == Some("Pattern"),
+            _ => false,
         }
     }
 
@@ -2271,13 +2320,37 @@ impl PageRenderer {
         mask_obj: Option<Object>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        use crate::extractors::images::{ImageData, extract_image_from_xobject};
+        use crate::extractors::images::{ImageData, extract_image_from_xobject, extract_image_from_xobject_at};
 
         if self.skip_image(obj_ref) {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
-        let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
+        // A /Mask, an /SMask and an in-data soft mask are all sampled against the image's own
+        // samples (the referenced ones by nearest neighbour), so only an image free of every one of
+        // them may be decoded at its painted footprint. ~keep
+        let reduced_target = {
+            let full_size_samples_needed = mask_obj.is_some()
+                || smask_obj.is_some()
+                || xobject
+                    .as_dict()
+                    .and_then(|dict| dict.get("SMaskInData"))
+                    .and_then(Object::as_integer)
+                    .is_some_and(|value| value != 0);
+            let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
+            (!full_size_samples_needed
+                && painted.0.is_finite()
+                && painted.1.is_finite()
+                && painted.0 >= 1.0
+                && painted.1 >= 1.0)
+                .then(|| (painted.0.ceil() as u32, painted.1.ceil() as u32))
+        };
+        let pdf_image = match reduced_target {
+            Some(target) => {
+                extract_image_from_xobject_at(Some(doc), xobject, obj_ref, Some(&color_space_map), Some(target))?
+            }
+            None => extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?,
+        };
         let mut reduction = 1;
         let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
@@ -2334,7 +2407,10 @@ impl PageRenderer {
                                 let mh = mask_gray.height();
                                 let iw = rgba_image.width();
                                 let ih = rgba_image.height();
-                                if mw == 0 || mh == 0 {
+                                // Extracted ImageMask luma is black for the painting sample,
+                                // including after an inverted /Decode is folded in. Alpha has
+                                // the opposite polarity: black ink must be fully opaque. ~keep
+                                if !fold_mask_into_alpha(&mut rgba_image, &mask_gray, is_image_mask) {
                                     // No mask sample to test: leave the base
                                     // image fully opaque rather than guessing. ~keep
                                     tracing::warn!(
@@ -2342,19 +2418,6 @@ impl PageRenderer {
                                          no sample to test"
                                     );
                                 } else {
-                                    for y in 0..ih {
-                                        let my = ((y as u64 * mh as u64 / ih as u64) as u32).min(mh - 1);
-                                        for x in 0..iw {
-                                            let mx = ((x as u64 * mw as u64 / iw as u64) as u32).min(mw - 1);
-                                            let sample = mask_gray.get_pixel(mx, my)[0];
-                                            // Extracted ImageMask luma is black for the painting sample,
-                                            // including after an inverted /Decode is folded in. Alpha has
-                                            // the opposite polarity: black ink must be fully opaque. ~keep
-                                            let mask_val = if is_image_mask { 255 - sample } else { sample };
-                                            let pixel = rgba_image.get_pixel_mut(x, y);
-                                            pixel[3] = ((pixel[3] as u32 * mask_val as u32) / 255) as u8;
-                                        }
-                                    }
                                     tracing::trace!("Applied image Mask ({}x{}) to image ({}x{})", mw, mh, iw, ih);
                                 }
                             }
@@ -2415,12 +2478,17 @@ impl PageRenderer {
                                                             mh,
                                                         );
                                                     match ccitt_result {
-                                                        Ok(decompressed) => {
+                                                        Ok(mut decompressed) => {
                                                             tracing::trace!(
                                                                 "CCITT Group4 decompressed mask: {} → {} bytes",
                                                                 raw_mask_data.len(),
                                                                 decompressed.len()
                                                             );
+                                                            // The decoder emits 1 for ink; the stencil rule
+                                                            // below reads PDF sample values, where 0 marks. ~keep
+                                                            for b in &mut decompressed {
+                                                                *b = !*b;
+                                                            }
                                                             decompressed
                                                         }
                                                         Err(error) => {
@@ -2555,22 +2623,12 @@ impl PageRenderer {
                     if let Ok(smask_dyn) = smask_image.to_dynamic_image() {
                         let smask_gray = smask_dyn.to_luma8();
 
-                        // Apply SMask to alpha channel
-                        // Rescale smask if dimensions don't match (simplification) ~keep
-                        let sw = smask_gray.width();
-                        let sh = smask_gray.height();
-                        let iw = rgba_image.width();
-                        let ih = rgba_image.height();
-
-                        for y in 0..ih {
-                            for x in 0..iw {
-                                let sx = (x * sw / iw).min(sw - 1);
-                                let sy = (y * sh / ih).min(sh - 1);
-                                let alpha = smask_gray.get_pixel(sx, sy)[0];
-
-                                let pixel = rgba_image.get_pixel_mut(x, y);
-                                pixel[3] = ((pixel[3] as u32 * alpha as u32) / 255) as u8;
-                            }
+                        if !fold_mask_into_alpha(&mut rgba_image, &smask_gray, false) {
+                            tracing::warn!(
+                                "Ignoring image SMask: it is {}x{} and carries no sample to test",
+                                smask_gray.width(),
+                                smask_gray.height()
+                            );
                         }
                     }
                 }
@@ -2957,7 +3015,8 @@ impl PageRenderer {
                 height,
             )?;
         } else if let Some(params) = Self::image_mask_ccitt_params(dict, width, height, doc)? {
-            raw = crate::extractors::ccitt_bilevel::decompress_ccitt(&raw, &params)?;
+            let (decoded, rows_valid) = crate::extractors::ccitt_bilevel::decompress_ccitt_reporting(&raw, &params)?;
+            raw = decoded;
 
             // The shared CCITT image decoder normalises packed rows to
             // 0=white, 1=black. An ImageMask needs the actual PDF sample
@@ -2968,6 +3027,17 @@ impl PageRenderer {
             // values consumed by the independent `/Decode` mapping below. ~keep
             for byte in &mut raw {
                 *byte = !*byte;
+            }
+
+            // Rows past `rows_valid` are padding or a blank substitute, not
+            // content; fill them with the sample that paints nothing under this
+            // mask's own /Decode so an unreadable stencil does not cover its
+            // whole footprint under [1 0]. ~keep
+            let row_bytes = (width as usize).div_ceil(8);
+            if rows_valid < height as usize && row_bytes > 0 {
+                let blank = if invert { 0x00 } else { 0xFF };
+                let from = rows_valid.saturating_mul(row_bytes).min(raw.len());
+                raw[from..].fill(blank);
             }
         }
 
@@ -3060,6 +3130,37 @@ impl PageRenderer {
 
     #[allow(clippy::too_many_arguments)]
     fn render_form_xobject_with_invocation(
+        &mut self,
+        pixmap: &mut Pixmap,
+        dict: &HashMap<String, Object>,
+        data: &[u8],
+        parent_transform: Transform,
+        doc: &PdfDocument,
+        page_num: usize,
+        parent_resources: &Object,
+        invocation: Option<FormInvocation<'_>>,
+    ) -> Result<()> {
+        if self.form_depth >= MAX_FORM_DEPTH {
+            tracing::warn!("Form XObject nesting reached MAX_FORM_DEPTH={MAX_FORM_DEPTH}; skipping this form");
+            return Ok(());
+        }
+        self.form_depth += 1;
+        let result = self.render_form_xobject_nested(
+            pixmap,
+            dict,
+            data,
+            parent_transform,
+            doc,
+            page_num,
+            parent_resources,
+            invocation,
+        );
+        self.form_depth -= 1;
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_form_xobject_nested(
         &mut self,
         pixmap: &mut Pixmap,
         dict: &HashMap<String, Object>,
@@ -3310,6 +3411,41 @@ impl PageRenderer {
     /// Never panics and never loops unboundedly.
     #[allow(clippy::too_many_arguments)]
     fn fill_with_tiling_pattern(
+        &mut self,
+        pixmap: &mut Pixmap,
+        path: &tiny_skia::Path,
+        base_transform: Transform,
+        path_transform: Transform,
+        fill_rule: tiny_skia::FillRule,
+        clip: Option<&tiny_skia::Mask>,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+        page_num: usize,
+        resources: &Object,
+    ) -> Result<bool> {
+        if self.pattern_depth >= MAX_PATTERN_DEPTH {
+            tracing::warn!("Tiling pattern nesting reached MAX_PATTERN_DEPTH={MAX_PATTERN_DEPTH}; using a solid fill");
+            return Ok(false);
+        }
+        self.pattern_depth += 1;
+        let result = self.fill_with_tiling_pattern_nested(
+            pixmap,
+            path,
+            base_transform,
+            path_transform,
+            fill_rule,
+            clip,
+            gs,
+            doc,
+            page_num,
+            resources,
+        );
+        self.pattern_depth -= 1;
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fill_with_tiling_pattern_nested(
         &mut self,
         pixmap: &mut Pixmap,
         path: &tiny_skia::Path,
@@ -5762,6 +5898,20 @@ impl PageRenderer {
         self.cmyk_sidecar = saved_sidecar;
         mask_result?;
 
+        // A Luminosity group that paints nothing (and has no /BC) derives a
+        // mask of 0 everywhere, which would erase the masked content. Every
+        // reference engine discards such a mask instead, departing from a
+        // literal reading of ISO 32000-1 11.6.5.2; an explicit /BC is a
+        // deliberate backdrop and still applies. The pixmap is all zero until
+        // the group paints, so "unchanged" means "still all zero". ~keep
+        if smask.subtype == crate::content::graphics_state::SoftMaskSubtype::Luminosity
+            && smask.backdrop.is_none()
+            && mask_pixmap.data().iter().all(|&byte| byte == 0)
+        {
+            tracing::debug!("luminosity soft-mask group painted nothing; discarding the mask");
+            return Ok(true);
+        }
+
         // Resolve /TR transfer function once. The audit fixture uses
         // a Type-2 power function (`N=2` squares the input); the
         // helper below covers Type 2 and falls through to identity
@@ -7032,6 +7182,22 @@ fn evaluate_type0_multi(
 /// back to the embedded `/Alternate` colour space recursively, per
 /// §8.6.5.5.
 fn project_bc_altspace_to_rgb(doc: &PdfDocument, alt_resolved: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+    project_bc_altspace_to_rgb_at(doc, alt_resolved, values, 0)
+}
+
+/// Deepest chain of ICCBased `/Alternate` spaces followed before giving up; a
+/// profile whose alternate leads back to itself would otherwise recurse forever.
+const MAX_ALTERNATE_DEPTH: u8 = 8;
+
+fn project_bc_altspace_to_rgb_at(
+    doc: &PdfDocument,
+    alt_resolved: &Object,
+    values: &[f32],
+    depth: u8,
+) -> Option<(f32, f32, f32)> {
+    if depth > MAX_ALTERNATE_DEPTH {
+        return None;
+    }
     if let Some(name) = alt_resolved.as_name() {
         return match name {
             "DeviceCMYK" | "CMYK" if values.len() >= 4 => Some(cmyk_to_rgb(values[0], values[1], values[2], values[3])),
@@ -7062,7 +7228,7 @@ fn project_bc_altspace_to_rgb(doc: &PdfDocument, alt_resolved: &Object, values: 
         "ICCBased" => {
             let stream_obj = arr.get(1)?;
             let stream_resolved = doc.resolve_object(stream_obj).ok()?;
-            project_iccbased_to_rgb(doc, &stream_resolved, values)
+            project_iccbased_to_rgb(doc, &stream_resolved, values, depth + 1)
         }
         _ => None,
     }
@@ -7148,7 +7314,7 @@ fn project_cal_rgb_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32
 /// §8.6.5.4 Lab → XYZ → sRGB via the standard CIELab inverse. The
 /// dictionary's /WhitePoint sets the reference white; the function
 /// `f^-1(t) = t^3 if t > 6/29, else 3·(6/29)^2·(t - 4/29)`.
-fn project_lab_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+pub(crate) fn project_lab_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
     let dict = dict_obj.as_dict()?;
     if values.len() < 3 {
         return None;
@@ -7182,7 +7348,7 @@ fn project_lab_to_rgb(dict_obj: &Object, values: &[f32]) -> Option<(f32, f32, f3
 /// Linear XYZ → sRGB via the standard ITU-R BT.709 / sRGB primaries
 /// matrix and the §IEC 61966-2-1 piecewise transfer function. Inputs
 /// are CIE XYZ tristimulus values normalised so Y_white = 1.
-fn xyz_to_srgb(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
+pub(crate) fn xyz_to_srgb(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
     // sRGB primaries matrix (D65 reference). The PDF Cal* /Lab specs
     // express XYZ tristimulus values; sRGB is the canonical output. ~keep
     let r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
@@ -7205,7 +7371,12 @@ fn xyz_to_srgb(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
 /// recurse. Without a /Alternate, fall back to the device family
 /// inferred from the stream's /N (DeviceGray for N=1, DeviceRGB for
 /// N=3, DeviceCMYK for N=4) per §8.6.5.5.
-fn project_iccbased_to_rgb(doc: &PdfDocument, stream_resolved: &Object, values: &[f32]) -> Option<(f32, f32, f32)> {
+fn project_iccbased_to_rgb(
+    doc: &PdfDocument,
+    stream_resolved: &Object,
+    values: &[f32],
+    depth: u8,
+) -> Option<(f32, f32, f32)> {
     let dict = stream_resolved.as_dict()?;
     let n = dict.get("N").and_then(|o| o.as_integer()).unwrap_or(3);
 
@@ -7251,7 +7422,7 @@ fn project_iccbased_to_rgb(doc: &PdfDocument, stream_resolved: &Object, values: 
     // No CMM (or CMM declined the profile) — recurse into /Alternate. ~keep
     if let Some(alt_obj) = dict.get("Alternate") {
         let alt_resolved = doc.resolve_object(alt_obj).ok()?;
-        return project_bc_altspace_to_rgb(doc, &alt_resolved, values);
+        return project_bc_altspace_to_rgb_at(doc, &alt_resolved, values, depth + 1);
     }
     // No /Alternate — synthesise the device family per /N (§8.6.5.5). ~keep
     match n {
@@ -7449,6 +7620,51 @@ fn image_unit_square_transform(parent: Transform, src_w: u32, src_h: u32) -> Tra
         .pre_scale(1.0 / src_w as f32, -1.0 / src_h as f32)
 }
 
+/// The clip a current path made of a single `m` describes. ISO 32000-1 8.5.3.3.1: a
+/// single-point open subpath produces no output, so intersecting the clip with it
+/// leaves nothing. `PathBuilder::finish` rejects a lone move-to, which would read as
+/// "no clip" and leave the previous, larger clip in force. Only that case is
+/// converted: `finish` also fails on a non-finite bound, where an arithmetic limit
+/// rather than the file failed and the clip must not paint less than asked. ~keep
+fn degenerate_clip_path(builder: &PathBuilder) -> Option<tiny_skia::Path> {
+    if builder.len() != 1 {
+        return None;
+    }
+    let p = builder.last_point()?;
+    let mut pb = PathBuilder::new();
+    pb.move_to(p.x, p.y);
+    pb.line_to(p.x, p.y);
+    pb.finish()
+}
+
+/// Fold a /Mask or /SMask sample plane into the alpha channel, stretching the mask
+/// over the image. A zero-dimension mask carries no sample to test (the image-to-user
+/// matrix of ISO 32000-1 8.9.5.1 is undefined at 0), so it is refused and the base image
+/// is left untouched; indexing it would underflow `mw - 1`. `stencil` flips the polarity
+/// for an ImageMask. Returns whether the mask was applied. ~keep
+#[must_use]
+fn fold_mask_into_alpha(rgba_image: &mut image::RgbaImage, mask_gray: &image::GrayImage, stencil: bool) -> bool {
+    let (mw, mh) = (mask_gray.width(), mask_gray.height());
+    let (iw, ih) = (rgba_image.width(), rgba_image.height());
+    if mw == 0 || mh == 0 {
+        return false;
+    }
+    if iw == 0 || ih == 0 {
+        return true;
+    }
+    for y in 0..ih {
+        let my = ((y as u64 * mh as u64 / ih as u64) as u32).min(mh - 1);
+        for x in 0..iw {
+            let mx = ((x as u64 * mw as u64 / iw as u64) as u32).min(mw - 1);
+            let sample = mask_gray.get_pixel(mx, my)[0];
+            let alpha = if stencil { 255 - sample } else { sample };
+            let pixel = rgba_image.get_pixel_mut(x, y);
+            pixel[3] = ((pixel[3] as u32 * alpha as u32) / 255) as u8;
+        }
+    }
+    true
+}
+
 /// Build the `PixmapPaint` used to blit an already-flipped image into
 /// the page pixmap.
 ///
@@ -7486,6 +7702,54 @@ fn pixmap_paint_for_image_blit(image_transform: Transform, opacity: f32, blend_m
 /// `crate::color::rgb_to_cmyk`, which keeps the overprint round-trip consistent
 /// within the process gamut. A real ICC/OutputIntent CMM still takes precedence
 /// when a profile is available.
+/// Colour of `components` interpreted in `space` (the base of a `[/Pattern base]`
+/// array). `None` when the space is unrecognised or the operand count does not
+/// match it, so the caller keeps its fallback instead of painting a guess.
+fn components_to_rgb_in_space(space: &Object, components: &[f32], doc: &PdfDocument) -> Option<(f32, f32, f32)> {
+    let n_to_rgb = |n: usize| -> Option<(f32, f32, f32)> {
+        match (n, components.len()) {
+            (1, 1) => Some((components[0], components[0], components[0])),
+            (3, 3) => Some((components[0], components[1], components[2])),
+            (4, 4) => Some(cmyk_to_rgb(components[0], components[1], components[2], components[3])),
+            _ => None,
+        }
+    };
+    match space {
+        Object::Name(n) => match n.as_str() {
+            "DeviceGray" | "G" | "CalGray" => n_to_rgb(1),
+            "DeviceRGB" | "RGB" | "CalRGB" | "Lab" => n_to_rgb(3),
+            "DeviceCMYK" | "CMYK" => n_to_rgb(4),
+            _ => None,
+        },
+        Object::Array(a) => {
+            let tag = a.first().and_then(|o| o.as_name())?;
+            // The operand count gates the conversion; the calibration or
+            // profile then decides the colour, with the device-style reading
+            // as the fallback when that cannot be applied.
+            let converted = |n: usize, resolved: &Object| -> Option<(f32, f32, f32)> {
+                if components.len() != n {
+                    return None;
+                }
+                project_bc_altspace_to_rgb(doc, resolved, components).or_else(|| n_to_rgb(n))
+            };
+            match tag {
+                "CalGray" | "CalRGB" | "Lab" => {
+                    let dict = doc.resolve_object(a.get(1)?).ok()?;
+                    let resolved = Object::Array(vec![a[0].clone(), dict]);
+                    converted(if tag == "CalGray" { 1 } else { 3 }, &resolved)
+                }
+                "ICCBased" => {
+                    let stream = doc.resolve_object(a.get(1)?).ok()?;
+                    let n = stream.as_dict().and_then(|d| d.get("N")).and_then(|o| o.as_integer())? as usize;
+                    converted(n, space)
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 fn cmyk_to_rgb(c: f32, m: f32, y: f32, k: f32) -> (f32, f32, f32) {
     crate::color::cmyk_to_rgb(c, m, y, k)
 }
@@ -7891,6 +8155,21 @@ fn apply_pending_clip(
         // Drop the clip rather than materialize an empty mask — an empty
         // mask would erase every subsequent draw on the page. ~keep
         if !device_bounds_rasterizable(&path, transform) {
+            // A clip wholly off the pixmap excludes the whole page, so it
+            // clips everything away; one that merely exceeds the precision
+            // limit but reaches the page restricts nothing visible. ~keep
+            if crate::rendering::device_bounds_miss_pixmap(&path, transform, pixmap.width(), pixmap.height()) {
+                tracing::debug!(
+                    "clip lies wholly off-pixmap and cannot be rasterized: {:?}",
+                    path.bounds()
+                );
+                if let Some(empty) = tiny_skia::Mask::new(pixmap.width(), pixmap.height()) {
+                    if let Some(slot) = clip_stack.last_mut() {
+                        *slot = Some(empty);
+                    }
+                }
+                return;
+            }
             tracing::debug!("skipping clip beyond f32 device precision: {:?}", path.bounds());
             return;
         }
@@ -9349,6 +9628,49 @@ mod tests {
             assert_eq!(found, (24..38).collect::<Vec<_>>(), "{show}");
             assert_eq!(rows, (56..70).collect::<Vec<_>>(), "{show}");
         }
+    }
+
+    /// An ICCBased profile whose `/Alternate` leads back to itself, under a Pattern base, must
+    /// stop at the depth bound instead of overflowing the stack.
+    #[test]
+    fn pattern_base_icc_alternate_cycle_terminates() {
+        let doc = pdf_doc_with_extra_object(Some(
+            b"<< /N 3 /Alternate [/ICCBased 4 0 R] /Length 0 >>\nstream\n\nendstream",
+        ));
+        let space = Object::Array(vec![
+            Object::Name("ICCBased".to_string()),
+            Object::Reference(crate::object::ObjectRef::new(4, 0)),
+        ]);
+        assert_eq!(
+            components_to_rgb_in_space(&space, &[0.1, 0.2, 0.3], &doc),
+            Some((0.1, 0.2, 0.3))
+        );
+    }
+
+    /// `sc` over an Indexed space with an ICCBased CMYK base builds its transform through the
+    /// renderer's cache, not a fresh one per operator.
+    #[test]
+    fn indexed_fill_color_uses_the_renderer_icc_cache() {
+        let mut header_only = vec![0u8; 128];
+        header_only[8..12].copy_from_slice(&0x04000000u32.to_be_bytes());
+        header_only[12..16].copy_from_slice(b"prtr");
+        header_only[16..20].copy_from_slice(b"CMYK");
+        header_only[20..24].copy_from_slice(b"Lab ");
+        header_only[36..40].copy_from_slice(b"acsp");
+        let icc = Object::Stream {
+            dict: HashMap::from([("N".to_string(), Object::Integer(4))]),
+            data: header_only.into(),
+        };
+        let space = Object::Array(vec![
+            Object::Name("Indexed".to_string()),
+            Object::Array(vec![Object::Name("ICCBased".to_string()), icc]),
+            Object::Integer(0),
+            Object::String(vec![0, 0, 0, 0]),
+        ]);
+        let doc = minimal_pdf_doc();
+        let cache = IccTransformCache::new();
+        let _ = resolve_generic_fill_color(Some(&space), &doc, &[0.0], Some(&cache));
+        assert_eq!(cache.lookup_count(), 1);
     }
 }
 

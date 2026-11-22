@@ -31,7 +31,10 @@ pub use gap_statistics::{
 };
 pub use geometric_spacing::{SpaceInsertion, SpacingConfig, should_insert_space};
 pub use hierarchical::HierarchicalExtractor;
-pub use images::{ColorSpace, ImageData, PdfImage, PixelFormat, expand_inline_image_dict, extract_image_from_xobject};
+pub use images::{
+    ColorSpace, ImageData, PdfImage, PixelFormat, expand_inline_image_dict, extract_image_from_xobject,
+    extract_image_from_xobject_at,
+};
 pub use page_labels::{PageLabelExtractor, PageLabelRange, PageLabelStyle};
 pub use paths::{FillRule, PathExtractor};
 pub use pattern_detector::{PatternDetector, PatternPreservationConfig};
