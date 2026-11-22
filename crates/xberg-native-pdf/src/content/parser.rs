@@ -1653,9 +1653,18 @@ fn find_preceding_marked_content(data: &[u8], pos: usize) -> usize {
     pos
 }
 
+/// Offset just past the `EI` closing the inline-image payload that starts at
+/// `payload`, or `end` when the payload is not closed within `data[..end]`.
+fn inline_image_end(data: &[u8], payload: usize, end: usize) -> usize {
+    match find_ei_operator(&data[payload..end]) {
+        Ok((_, ei_pos)) => payload + ei_pos + 3,
+        Err(_) => end,
+    }
+}
+
 /// Whether `data[start..end]` contains a `Q` operator with no matching `q`
-/// before it. Strings, names and comments are skipped, so a `Q` inside a
-/// string operand or a `/Q` name is not counted.
+/// before it. Strings, names, comments and inline-image payloads are skipped,
+/// so a `Q` inside a string operand or a `/Q` name is not counted.
 fn has_unbalanced_restore(data: &[u8], start: usize, end: usize) -> bool {
     let end = end.min(data.len());
     let mut depth: i32 = 0;
@@ -1682,13 +1691,19 @@ fn has_unbalanced_restore(data: &[u8], start: usize, end: usize) -> bool {
             }
             b'/' => {
                 i += 1;
-                while i < end && !is_boundary(data[i]) {
+                while i < end && !is_whitespace_or_delimiter(data[i]) {
                     i += 1;
                 }
             }
+            b'I' if data.get(i + 1) == Some(&b'D')
+                && (i == 0 || is_whitespace_or_delimiter(data[i - 1]))
+                && data.get(i + 2).is_some_and(|&b| is_whitespace(b)) =>
+            {
+                i = inline_image_end(data, i + 2, end);
+            }
             b'q' | b'Q' => {
-                let before_ok = i == 0 || is_boundary(data[i - 1]);
-                let after_ok = i + 1 >= data.len() || is_boundary(data[i + 1]);
+                let before_ok = i == 0 || is_whitespace_or_delimiter(data[i - 1]);
+                let after_ok = i + 1 >= data.len() || is_whitespace_or_delimiter(data[i + 1]);
                 if before_ok && after_ok {
                     if data[i] == b'q' {
                         depth += 1;

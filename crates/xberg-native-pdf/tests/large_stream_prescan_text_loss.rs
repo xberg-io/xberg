@@ -381,3 +381,45 @@ fn text_after_an_unbalanced_restore_survives_a_large_stream() {
         "linework padding alone changed the extracted text"
     );
 }
+
+/// An inherited `q` plus a scale, linework, then a marked-content block that
+/// holds two text objects around a `Q` the block did not open. The restore
+/// returns the scale to 1, so the second text at x=2000 is only on the page
+/// after it. `restore` is the spelling of that `Q` operator.
+fn inherited_restore_sheet(pad: usize, restore: &str) -> Vec<u8> {
+    let mut c = String::from("q 2 0 0 2 0 0 cm ");
+    c.push_str(&linework(pad));
+    c.push_str("/Span BMC BT /F1 12 Tf 1 0 0 1 10 10 Tm (FIRST) Tj ET ");
+    c.push_str(restore);
+    c.push_str("BT /F1 12 Tf 1 0 0 1 2000 10 Tm (SECOND) Tj ET EMC");
+    one_page_pdf(&c, &[])
+}
+
+fn assert_inherited_restore_survives(restore: &str) {
+    let small = text_of(inherited_restore_sheet(1_000, restore));
+    let big = text_of(inherited_restore_sheet(300_000, restore));
+    assert!(
+        small.contains("FIRST") && small.contains("SECOND"),
+        "control failed: the sub-threshold page lost text (got {small:?})"
+    );
+    assert_eq!(
+        words(&small),
+        words(&big),
+        "a restore of an inherited save changed the text above the pre-scan threshold"
+    );
+}
+
+#[test]
+fn nul_after_a_restore_is_a_token_boundary_for_the_balance_guard() {
+    assert_inherited_restore_survives("Q\0 ");
+}
+
+#[test]
+fn inline_image_payload_is_not_counted_as_a_graphics_state_save() {
+    assert_inherited_restore_survives("BI /W 1 /H 1 /BPC 8 /CS /DeviceGray ID q EI Q ");
+}
+
+#[test]
+fn spaced_restore_of_an_inherited_save_is_unchanged_by_the_guard() {
+    assert_inherited_restore_survives("Q ");
+}
