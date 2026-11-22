@@ -775,40 +775,15 @@ fn inks_from_space(
 /// transform that maps PDF user space into the pixmap).
 fn compute_page_extent(doc: &PdfDocument, page_num: usize, dpi: u32) -> Result<(u32, u32, Transform)> {
     let page_info = doc.get_page_info(page_num)?;
-    let media_box = page_info.media_box;
-
-    // `%` is a remainder and preserves sign, so a legal negative /Rotate (e.g. -90,
-    // equivalent to 270 per ISO 32000-1 s7.7.3.3 Table 30) matched neither 90 nor
-    // 270 below and the page rendered unrotated. rem_euclid normalizes to 0..359,
-    // matching get_page_rotation's own `((raw % 360) + 360) % 360` convention. ~keep
-    let rotation = page_info.rotation.rem_euclid(360);
-    let (page_w, page_h) = if rotation == 90 || rotation == 270 {
-        (media_box.height, media_box.width)
-    } else {
-        (media_box.width, media_box.height)
-    };
+    // The separation entry points take no options, so plates always use the media box, which is the
+    // composite renderer's default page rectangle.
+    let page_box = super::page_render_box(&page_info.media_box, None);
+    let rotation = page_info.rotation;
+    let (page_w, page_h) = super::rotated_page_extent(&page_box, rotation);
     let scale = dpi as f32 / 72.0;
     let width = (page_w * scale).ceil() as u32;
     let height = (page_h * scale).ceil() as u32;
-
-    let base_transform = match rotation {
-        90 => Transform::from_translate(-media_box.x, -media_box.y)
-            .post_concat(Transform::from_row(0.0, scale, scale, 0.0, 0.0, 0.0)),
-        180 => Transform::from_translate(-media_box.x, -media_box.y)
-            .post_scale(-scale, scale)
-            .post_translate(media_box.width * scale, 0.0),
-        270 => Transform::from_translate(-media_box.x, -media_box.y).post_concat(Transform::from_row(
-            0.0,
-            -scale,
-            -scale,
-            0.0,
-            media_box.height * scale,
-            media_box.width * scale,
-        )),
-        _ => Transform::from_translate(-media_box.x, -media_box.y)
-            .post_scale(scale, -scale)
-            .post_translate(0.0, page_h * scale),
-    };
+    let base_transform = super::page_base_transform(&page_box, rotation, scale);
 
     Ok((width, height, base_transform))
 }
@@ -2583,9 +2558,18 @@ fn apply_separation_clip(
         let gs = gs_stack.current();
         let transform = combine_transforms(base_transform, &gs.ctm);
 
-        // See `apply_pending_clip` in page_renderer: a clip path beyond f32
-        // device precision is dropped, not materialized as an empty mask. ~keep
+        // See `apply_pending_clip` in page_renderer: a clip path beyond f32 device precision is
+        // dropped, unless its bounds miss the plate entirely. That clip excludes everything
+        // (§8.5.4), so dropping it would count ink the page does not show; it becomes an empty
+        // mask instead. ~keep
         if !device_bounds_rasterizable(&path, transform) {
+            if super::device_bounds_miss_pixmap(&path, transform, pixmap_width, pixmap_height) {
+                tracing::debug!("clip lies wholly off-plate and cannot be rasterized; clipping everything away");
+                if let (Some(empty), Some(slot)) = (Mask::new(pixmap_width, pixmap_height), clip_stack.last_mut()) {
+                    *slot = Some(empty);
+                }
+                return;
+            }
             tracing::debug!("skipping clip beyond f32 device precision: {:?}", path.bounds());
             return;
         }

@@ -183,19 +183,45 @@ impl PageRenderer {
                 .as_mut()
                 .and_then(|probe| probe.capture(pixmap, literal, base_transform))
         });
-        let advance = self.render_text_with_modulators(
-            pixmap,
-            run,
-            GroupTextPaint {
-                gs,
-                doc,
-                resources,
-                clip,
-                transform,
-            },
-            page_num,
-            base_transform,
-        )?;
+        let text_paint = GroupTextPaint {
+            gs,
+            doc,
+            resources,
+            clip,
+            transform,
+        };
+        // A shading pattern paints the glyphs through their own coverage; the advance still comes
+        // from the rasteriser so the text matrix keeps moving.
+        let through_pattern = if self.text_takes_a_fill_pattern(gs) {
+            let coverage_gs = Self::coverage_only_gs(gs);
+            let mut scratch = Pixmap::new(pixmap.width(), pixmap.height());
+            let advance = match scratch.as_mut() {
+                Some(scratch) => Some(self.draw_text(
+                    scratch,
+                    run,
+                    GroupTextPaint {
+                        gs: &coverage_gs,
+                        ..text_paint
+                    },
+                    None,
+                )?),
+                None => None,
+            };
+            match (scratch, advance) {
+                (Some(scratch), Some(advance)) => {
+                    let mask = tiny_skia::Mask::from_pixmap(scratch.as_ref(), tiny_skia::MaskType::Alpha);
+                    self.paint_pattern_through_mask_from_resources(pixmap, &mask, base_transform, gs, doc, resources)?
+                        .then_some(advance)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let advance = match through_pattern {
+            Some(advance) => advance,
+            None => self.render_text_with_modulators(pixmap, run, text_paint, page_num, base_transform)?,
+        };
         if let Some((probe, samples)) = self.text_contrast_probe.as_mut().zip(contrast_samples) {
             probe.observe(pixmap, samples);
         }

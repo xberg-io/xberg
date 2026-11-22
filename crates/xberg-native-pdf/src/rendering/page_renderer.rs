@@ -176,6 +176,9 @@ pub struct RenderOptions {
     /// When `Some`, bypasses integer-DPI quantization so fit dimensions are
     /// exact. Not part of the public API; set via `render_page_fit` only.
     pub(crate) scale_override: Option<f32>,
+    /// Render the page's `/CropBox` (clipped to the `/MediaBox`) instead of the whole `/MediaBox`
+    /// (default: false).
+    pub honor_crop_box: bool,
 }
 
 impl Default for RenderOptions {
@@ -188,6 +191,7 @@ impl Default for RenderOptions {
             jpeg_quality: 85,
             excluded_layers: HashSet::new(),
             scale_override: None,
+            honor_crop_box: false,
         }
     }
 }
@@ -338,6 +342,8 @@ pub struct PageRenderer {
     /// skipped (their advance width is still applied by the caller).
     type3_depth: u32,
     form_depth: u32,
+    /// State a form XObject's operator run starts from; consumed by the next run.
+    pub(super) form_entry: Option<FormEntry>,
     pattern_depth: u32,
     /// Active Type 3 `d1` fill-colour lock. When `Some`, a `d1` glyph
     /// description is being executed: the glyph is a stencil painted with
@@ -399,6 +405,13 @@ enum ScnColorSpaceResolution {
     RgbCmyk((f32, f32, f32), (f32, f32, f32, f32)),
     HandledNoChange,
     Unhandled,
+}
+
+/// Graphics state and clip a form XObject's operator run starts from.
+#[derive(Clone)]
+pub(super) struct FormEntry {
+    pub(super) gs: Option<GraphicsState>,
+    pub(super) clip: Option<tiny_skia::Mask>,
 }
 
 /// Read-only paint context threaded through the post-paint colour-lane
@@ -654,19 +667,18 @@ impl PageRenderer {
         };
 
         let page_info = doc.get_page_info(page_num)?;
-        let media_box = page_info.media_box;
+        let media_box = super::page_render_box(
+            &page_info.media_box,
+            page_info.crop_box.as_ref().filter(|_| self.options.honor_crop_box),
+        );
 
         // Calculate output dimensions, accounting for page rotation
         // `%` is a remainder and preserves sign, so a legal negative /Rotate (e.g. -90,
         // equivalent to 270 per ISO 32000-1 s7.7.3.3 Table 30) matched neither 90 nor
         // 270 below and the page rendered unrotated. rem_euclid normalizes to 0..359,
         // matching get_page_rotation's own `((raw % 360) + 360) % 360` convention. ~keep
-        let rotation = page_info.rotation.rem_euclid(360);
-        let (page_w, page_h) = if rotation == 90 || rotation == 270 {
-            (media_box.height, media_box.width)
-        } else {
-            (media_box.width, media_box.height)
-        };
+        let rotation = page_info.rotation;
+        let (page_w, page_h) = super::rotated_page_extent(&media_box, rotation);
         let scale_override = self.options.scale_override;
         let scale_at_dpi = |dpi| scale_override.unwrap_or(dpi as f32 / 72.0);
         let dimensions_at_dpi = |dpi| raster_dimensions(page_w, page_h, scale_at_dpi(dpi), scale_override.is_some());
@@ -702,38 +714,7 @@ impl PageRenderer {
         // Per PDF spec §8.3.2.3, /Rotate specifies clockwise rotation.
         // The approach: first map PDF coords to an unrotated pixel space,
         // then rotate the entire result. ~keep
-        let transform = match rotation {
-            90 => {
-                // 90° CW rotation: portrait PDF → landscape display
-                // PDF y-up (x,y) → screen y-down: screen_x = y*s, screen_y = x*s ~keep
-                Transform::from_translate(-media_box.x, -media_box.y)
-                    .post_concat(Transform::from_row(0.0, scale, scale, 0.0, 0.0, 0.0))
-            }
-            180 => Transform::from_translate(-media_box.x, -media_box.y)
-                .post_scale(-scale, scale)
-                .post_translate(media_box.width * scale, 0.0),
-            270 => {
-                // 270° CW: PDF (x,y) → screen_x = (H - y)*s, screen_y = (W - x)*s.
-                //
-                // The `y` row used to be `screen_y = x*s`, which put the page's
-                // TOP-LEFT corner at the top-left of the raster; under a 270° turn
-                // it belongs at the BOTTOM-left. That is not merely a wrong angle -
-                // it is a MIRROR: the old matrix has a POSITIVE determinant, while
-                // 0°/90°/180° all have a negative one (they carry the PDF y-up →
-                // raster y-down flip). Text came out reversed. ~keep
-                Transform::from_translate(-media_box.x, -media_box.y).post_concat(Transform::from_row(
-                    0.0,
-                    -scale,
-                    -scale,
-                    0.0,
-                    media_box.height * scale,
-                    media_box.width * scale,
-                ))
-            }
-            _ => Transform::from_translate(-media_box.x, -media_box.y)
-                .post_scale(scale, -scale)
-                .post_translate(0.0, page_h * scale),
-        };
+        let transform = super::page_base_transform(&media_box, rotation, scale);
 
         let (resources, admitted_spots) = match admitted_png {
             Some((resources, spots)) => (resources, Some(spots)),
@@ -1127,7 +1108,19 @@ impl PageRenderer {
         static EMPTY: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
         let empty_ref: &HashSet<String> = EMPTY.get_or_init(HashSet::new);
         let excluded_layers: &HashSet<String> = snapshot.as_deref().unwrap_or(empty_ref);
-        let gs_stack = self.seed_operator_graphics_state();
+        let entry = self.form_entry.take();
+        let mut gs_stack = self.seed_operator_graphics_state();
+        // §8.10.1: a form starts from the graphics state in force at `Do`. The CTM is already
+        // carried by `base_transform`, and a soft mask applies to the form's result, not to
+        // each paint inside it, so those are not inherited as data.
+        if let Some(parent) = entry.as_ref().and_then(|e| e.gs.as_ref()) {
+            let mut seed = parent.clone();
+            seed.ctm = Matrix::identity();
+            seed.text_matrix = Matrix::identity();
+            seed.text_line_matrix = Matrix::identity();
+            seed.smask = None;
+            *gs_stack.current_mut() = seed;
+        }
 
         // Per-`execute_operators` resolved ExtGState resource dictionary. PDF
         // content streams often invoke `gs<N>` thousands of times per page
@@ -1153,6 +1146,10 @@ impl PageRenderer {
             resources,
         };
         let mut st = OpLoopState::new(gs_stack, excluded_layers, ext_g_states);
+        // Depth 0 carries the caller's clip; `Q` never pops below it.
+        if let Some(clip) = entry.and_then(|e| e.clip) {
+            st.clip_stack[0] = Some(clip);
+        }
         for op in operators {
             if self.image_selection.is_some_and(|(_, include)| include) {
                 if knockout::is_path_paint(op) {
@@ -1674,18 +1671,76 @@ impl PageRenderer {
             None
         };
 
-        let shading = match shading_obj.as_ref().and_then(|o| o.as_dict()) {
-            Some(d) => d.clone(),
-            None => {
-                tracing::warn!(
-                    target: crate::LOG_TARGET_ROOT,
-                    operation = "render_shading",
-                    error_code = "missing_resource",
-                    "skipping missing shading resource"
-                );
-                return Ok(());
-            }
+        let Some(shading_obj) = shading_obj.filter(|o| o.as_dict().is_some()) else {
+            tracing::warn!(
+                target: crate::LOG_TARGET_ROOT,
+                operation = "render_shading",
+                error_code = "missing_resource",
+                "skipping missing shading resource"
+            );
+            return Ok(());
         };
+
+        self.render_shading_object(pixmap, &shading_obj, transform, gs, doc, clip_mask)
+    }
+
+    /// Intersects the clip with a shading's own `/BBox` (Table 78), a temporary clip applied in
+    /// addition to the current one. `None` keeps the caller's clip: no usable box, or a mask that
+    /// cannot be allocated, must never paint less than the file asked for. The exception is a box
+    /// that cannot be rasterised and lies wholly off the page, which excludes everything (§8.5.4)
+    /// and yields an empty mask; a merely enormous box that still reaches the page restricts nothing.
+    fn shading_bbox_mask(
+        shading: &HashMap<String, Object>,
+        pixmap: &Pixmap,
+        transform: Transform,
+        clip_mask: Option<&tiny_skia::Mask>,
+    ) -> Option<tiny_skia::Mask> {
+        let array = shading.get("BBox")?.as_array()?;
+        if array.len() < 4 {
+            return None;
+        }
+        let number = |i: usize| array.get(i).and_then(obj_to_f32);
+        let (x0, y0, x1, y1) = (number(0)?, number(1)?, number(2)?, number(3)?);
+        let rect = tiny_skia::Rect::from_ltrb(x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1))?;
+
+        let mut builder = PathBuilder::new();
+        builder.push_rect(rect);
+        let path = builder.finish()?;
+        if !device_bounds_rasterizable(&path, transform) {
+            if super::device_bounds_miss_pixmap(&path, transform, pixmap.width(), pixmap.height()) {
+                return tiny_skia::Mask::new(pixmap.width(), pixmap.height());
+            }
+            return None;
+        }
+
+        let mut mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height())?;
+        guarded_mask_fill_path(&mut mask, &path, tiny_skia::FillRule::Winding, true, transform);
+        if let Some(clip) = clip_mask {
+            for (value, bound) in mask.data_mut().iter_mut().zip(clip.data().iter()) {
+                *value = (*value).min(*bound);
+            }
+        }
+        Some(mask)
+    }
+
+    /// Paints an already-resolved shading object. A shading pattern's shading is inline in the
+    /// pattern dictionary rather than named in the `Shading` resource, so it enters here directly.
+    fn render_shading_object(
+        &self,
+        pixmap: &mut Pixmap,
+        shading_obj: &Object,
+        transform: Transform,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+        clip_mask: Option<&tiny_skia::Mask>,
+    ) -> Result<()> {
+        let Some(shading) = shading_obj.as_dict().cloned() else {
+            return Ok(());
+        };
+        let shading_obj = Some(shading_obj);
+
+        let bbox_clip = Self::shading_bbox_mask(&shading, pixmap, transform, clip_mask);
+        let clip_mask = bbox_clip.as_ref().or(clip_mask);
 
         let shading_type = shading.get("ShadingType").and_then(|o| o.as_integer()).unwrap_or(0);
 
@@ -1725,9 +1780,8 @@ impl PageRenderer {
                 // colour-space resolution path via this closure so DeviceN /
                 // Separation / ICCBased colour spaces resolve identically to
                 // the axial/radial endpoints. ~keep
-                let shading_obj = match shading_obj.as_ref() {
-                    Some(o) => o,
-                    None => return Ok(()),
+                let Some(shading_obj) = shading_obj else {
+                    return Ok(());
                 };
                 let resolved_cs = shading.get("ColorSpace").and_then(|o| doc.resolve_object(o).ok());
                 let resolve_color = |comps: &[f32]| -> Option<(f32, f32, f32, f32)> {
@@ -1758,25 +1812,19 @@ impl PageRenderer {
         }
     }
 
-    /// Resolve a Type 2 / Type 3 shading dictionary's `/C0` and `/C1`
-    /// endpoint colours through the resolution pipeline. The shading
-    /// dict's `/ColorSpace` selects the colour space; `/Function` (a
-    /// Type 2 exponential or a Type 3 stitching wrapper) carries the
-    /// endpoint component arrays. Returns `None` when either endpoint
-    /// can't be resolved (missing `/Function`, unsupported sub-function
+    /// Resolve a Type 2 / Type 3 shading dictionary's colour ramp through
+    /// the resolution pipeline, sampled across `/Domain`. The shading
+    /// dict's `/ColorSpace` selects the colour space and `/Function`
+    /// (type 0, 2 or 3) supplies the components. Returns `None` when a
+    /// sample can't be resolved (missing `/Function`, unsupported function
     /// type, non-RGBA resolver output, etc.) — the caller falls back to
-    /// the existing inline behaviour in that case.
-    ///
-    /// Splits the "what colour" decision (pipeline-resolved) from the
-    /// "how to interpolate" decision (still owned by the gradient
-    /// backend). The interpolation math is untouched — only the two
-    /// fixed endpoint colours are routed through the pipeline.
+    /// a black-to-white ramp in that case.
     fn pipeline_resolve_shading_endpoints(
         &self,
         shading: &std::collections::HashMap<String, Object>,
         gs: &GraphicsState,
         doc: &PdfDocument,
-    ) -> Option<((f32, f32, f32, f32), (f32, f32, f32, f32))> {
+    ) -> Option<Vec<(f32, (f32, f32, f32, f32))>> {
         // The shading dict's `/ColorSpace` can be a Name (DeviceRGB,
         // CS1, ...) or an inline Array ([/Separation ... funcRef]).
         // Resolve indirect references so the helper sees the final
@@ -1807,89 +1855,30 @@ impl PageRenderer {
             })
             .unwrap_or((0.0, 1.0));
 
-        // Extract endpoint component arrays from `/Function`. Handles
-        // Type 2 (exponential) — where the endpoints are evaluated by
-        // applying the shading's `/Domain` to the function's
-        // exponential interpolation — and Type 3 (stitching) — where
-        // the first sub-function's `/C0` and the last sub-function's
-        // `/C1` are taken at face value. Type 3 with non-trivial
-        // `/Encode` is not honoured; see the body comment below. ~keep
+        // §8.7.4.5.3 defines the colour at parametric distance t by the shading's function, not by
+        // two endpoint colours: /C0 and /C1 are absent from a stitching function over sampled
+        // sub-functions, and a sampled ramp need not be monotonic (white to near-black and back to
+        // white has white at both ends). Sampling at 1/32 steps keeps the ramp's shape at far less
+        // cost than per-pixel evaluation, and evaluating honours the stitching /Encode.
         let func_obj = shading.get("Function")?;
         let resolved_func = doc.resolve_object(func_obj).ok()?;
-        let func_dict = resolved_func.as_dict()?;
-        let func_type = func_dict.get("FunctionType").and_then(|o| o.as_integer())?;
-        let to_components = |arr: &[Object]| -> Vec<f32> {
-            arr.iter()
-                .map(|o| match o {
-                    Object::Real(v) => *v as f32,
-                    Object::Integer(v) => *v as f32,
-                    _ => 0.0,
-                })
-                .collect()
-        };
-        let (c0_comps, c1_comps) = match func_type {
-            2 => {
-                // Type 2: exponential interpolation
-                // f(x) = C0 + x^N * (C1 - C0).
-                // The shading's geometric `t=0` evaluates `f(Domain[0])`
-                // and `t=1` evaluates `f(Domain[1])`, so when /Domain
-                // is non-default the endpoint colours are NOT raw /C0
-                // and /C1. ~keep
-                let c0 = to_components(func_dict.get("C0").and_then(|o| o.as_array())?);
-                let c1 = to_components(func_dict.get("C1").and_then(|o| o.as_array())?);
-                let n = func_dict
-                    .get("N")
-                    .and_then(|o| match o {
-                        Object::Real(v) => Some(*v as f32),
-                        Object::Integer(v) => Some(*v as f32),
-                        _ => None,
-                    })
-                    .unwrap_or(1.0);
-                let eval = |x: f32| -> Vec<f32> {
-                    let p = x.abs().powf(n) * x.signum();
-                    c0.iter().zip(c1.iter()).map(|(a, b)| *a + p * (*b - *a)).collect()
-                };
-                (eval(domain0), eval(domain1))
-            }
-            3 => {
-                // Type 3: stitching. The shading's `/Domain` maps to a
-                // sub-function via stitching `/Bounds` and `/Encode`
-                // arrays. The current path takes the first
-                // sub-function's `/C0` and the last sub-function's
-                // `/C1` at face value — correct for the default
-                // `Domain [0 1]` with natural `Encode`, but ignores
-                // `Encode`-driven sub-domain remapping. Documented gap. ~keep
-                let funcs = func_dict.get("Functions").and_then(|o| o.as_array())?;
-                let first = funcs.first()?;
-                let last = funcs.last().unwrap_or(first);
-                let first_resolved = doc.resolve_object(first).ok()?;
-                let last_resolved = doc.resolve_object(last).ok()?;
-                let first_dict = first_resolved.as_dict()?;
-                let last_dict = last_resolved.as_dict()?;
-                let c0 = first_dict.get("C0").and_then(|o| o.as_array())?;
-                let c1 = last_dict.get("C1").and_then(|o| o.as_array())?;
-                (to_components(c0), to_components(c1))
-            }
-            // Function types 0 (sampled) and 4 (PostScript Type 4
-            // calculator) used as the shading's own /Function are
-            // out-of-scope for endpoint pre-resolution — they produce
-            // colours at intermediate domain points, not at two fixed
-            // /C0 / /C1 arrays. Caller falls back to inline. ~keep
-            _ => return None,
-        };
-
-        // Fold in `gs.fill_alpha` here — it's the alpha the inline
-        // code path multiplies into each gradient stop's RGBA when
-        // building the tiny-skia LinearGradient / RadialGradient. ~keep
-        let c0 = self.pipeline_resolve_components(doc, &self.color_spaces, &resolved_cs, &c0_comps, gs.fill_alpha)?;
-        let c1 = self.pipeline_resolve_components(doc, &self.color_spaces, &resolved_cs, &c1_comps, gs.fill_alpha)?;
-        Some((c0, c1))
+        const STOPS: usize = 33;
+        let mut stops: Vec<(f32, (f32, f32, f32, f32))> = Vec::with_capacity(STOPS);
+        for i in 0..STOPS {
+            let t = i as f32 / (STOPS - 1) as f32;
+            let x = domain0 + (domain1 - domain0) * t;
+            let comps = evaluate_pdf_function_at(doc, &resolved_func, x, 0)?;
+            let rgba =
+                self.pipeline_resolve_components(doc, &self.color_spaces, &resolved_cs, &comps, gs.fill_alpha)?;
+            stops.push((t, rgba));
+        }
+        Some(stops)
     }
 
     /// Render axial (linear) gradient shading (Type 2).
     ///
-    /// `resolved_endpoints`, when `Some`, supplies pre-resolved RGBA
-    /// values for the two gradient stops with `gs.fill_alpha` already
+    /// `resolved_endpoints`, when `Some`, supplies the pre-resolved RGBA
+    /// ramp (parametric position, colour) with `gs.fill_alpha` already
     /// folded in — the resolution-pipeline route produced by
     /// [`Self::pipeline_resolve_shading_endpoints`]. When `None`, the
     /// function falls back to a black-to-white default
@@ -1902,7 +1891,7 @@ impl PageRenderer {
         transform: Transform,
         gs: &GraphicsState,
         clip_mask: Option<&tiny_skia::Mask>,
-        resolved_endpoints: Option<((f32, f32, f32, f32), (f32, f32, f32, f32))>,
+        resolved_endpoints: Option<Vec<(f32, (f32, f32, f32, f32))>>,
     ) -> Result<()> {
         let coords = shading.get("Coords").and_then(|o| o.as_array());
         let coords = match coords {
@@ -1934,10 +1923,7 @@ impl PageRenderer {
         // black-to-white default that matches the legacy renderer's
         // safety net — render with sensible defaults rather than
         // panicking or rendering nothing. ~keep
-        let (stop0, stop1) = match resolved_endpoints {
-            Some(((r0, g0, b0, a0), (r1, g1, b1, a1))) => ((r0, g0, b0, a0), (r1, g1, b1, a1)),
-            None => ((0.0, 0.0, 0.0, gs.fill_alpha), (1.0, 1.0, 1.0, gs.fill_alpha)),
-        };
+        let ramp = shading_gradient_stops(resolved_endpoints, gs.fill_alpha);
 
         let mut p0 = tiny_skia::Point { x: x0, y: y0 };
         let mut p1 = tiny_skia::Point { x: x1, y: y1 };
@@ -1964,16 +1950,7 @@ impl PageRenderer {
         let gradient = tiny_skia::LinearGradient::new(
             tiny_skia::Point { x: p0.x, y: p0.y },
             tiny_skia::Point { x: p1.x, y: p1.y },
-            vec![
-                tiny_skia::GradientStop::new(
-                    0.0,
-                    tiny_skia::Color::from_rgba(stop0.0, stop0.1, stop0.2, stop0.3).unwrap_or(tiny_skia::Color::BLACK),
-                ),
-                tiny_skia::GradientStop::new(
-                    1.0,
-                    tiny_skia::Color::from_rgba(stop1.0, stop1.1, stop1.2, stop1.3).unwrap_or(tiny_skia::Color::BLACK),
-                ),
-            ],
+            ramp,
             spread,
             Transform::identity(),
         );
@@ -2006,8 +1983,8 @@ impl PageRenderer {
 
     /// Render radial gradient shading (Type 3).
     ///
-    /// `resolved_endpoints`, when `Some`, supplies pre-resolved RGBA
-    /// values for the two gradient stops with `gs.fill_alpha` already
+    /// `resolved_endpoints`, when `Some`, supplies the pre-resolved RGBA
+    /// ramp (parametric position, colour) with `gs.fill_alpha` already
     /// folded in — the resolution-pipeline route produced by
     /// [`Self::pipeline_resolve_shading_endpoints`]. When `None`, the
     /// function falls back to a black-to-white default (the safety net
@@ -2020,7 +1997,7 @@ impl PageRenderer {
         transform: Transform,
         gs: &GraphicsState,
         clip_mask: Option<&tiny_skia::Mask>,
-        resolved_endpoints: Option<((f32, f32, f32, f32), (f32, f32, f32, f32))>,
+        resolved_endpoints: Option<Vec<(f32, (f32, f32, f32, f32))>>,
     ) -> Result<()> {
         let coords = shading.get("Coords").and_then(|o| o.as_array());
         let coords = match coords {
@@ -2045,10 +2022,7 @@ impl PageRenderer {
             (false, false)
         };
 
-        let (stop0, stop1) = match resolved_endpoints {
-            Some(((r0c, g0, b0, a0), (r1c, g1, b1, a1))) => ((r0c, g0, b0, a0), (r1c, g1, b1, a1)),
-            None => ((0.0, 0.0, 0.0, gs.fill_alpha), (1.0, 1.0, 1.0, gs.fill_alpha)),
-        };
+        let ramp = shading_gradient_stops(resolved_endpoints, gs.fill_alpha);
 
         // Per ISO 32000-1 §8.7.4.5.4, the radial gradient interpolates
         // between two circles `(x0, y0, r0)` (the inner / start circle,
@@ -2097,16 +2071,7 @@ impl PageRenderer {
                 y: center1.y,
             },
             radius1, // end_radius (outer circle, in device space) ~keep
-            vec![
-                tiny_skia::GradientStop::new(
-                    0.0,
-                    tiny_skia::Color::from_rgba(stop0.0, stop0.1, stop0.2, stop0.3).unwrap_or(tiny_skia::Color::BLACK),
-                ),
-                tiny_skia::GradientStop::new(
-                    1.0,
-                    tiny_skia::Color::from_rgba(stop1.0, stop1.1, stop1.2, stop1.3).unwrap_or(tiny_skia::Color::BLACK),
-                ),
-            ],
+            ramp,
             tiny_skia::SpreadMode::Pad,
             Transform::identity(),
         );
@@ -2222,7 +2187,14 @@ impl PageRenderer {
                                                 self.pipeline_resolve_paint_gs(doc, gs, PipelinePaintKind::ImageMask);
                                             let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(gs);
                                             if let Err(error) = self.render_image_mask(
-                                                pixmap, &xobj, xobj_ref, transform, doc, clip_mask, render_gs,
+                                                pixmap,
+                                                &xobj,
+                                                xobj_ref,
+                                                transform,
+                                                doc,
+                                                clip_mask,
+                                                render_gs,
+                                                (mask_transform, resources),
                                             ) {
                                                 tracing::warn!(
                                                     error_code = error.telemetry_code(),
@@ -2272,6 +2244,7 @@ impl PageRenderer {
                                                 mask_transform,
                                                 mask_resources: resources,
                                             }),
+                                            true,
                                         ) {
                                             tracing::warn!(
                                                 error_code = error.telemetry_code(),
@@ -2908,6 +2881,7 @@ impl PageRenderer {
     /// and inverted `/Decode` polarities, and bilinear/bicubic resampling
     /// chosen by the image-space-to-user-space scale (matches
     /// `render_image`).
+    #[allow(clippy::too_many_arguments)]
     fn render_image_mask(
         &mut self,
         pixmap: &mut Pixmap,
@@ -2917,6 +2891,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
         gs: &GraphicsState,
+        pattern_frame: (Transform, &Object),
     ) -> Result<()> {
         if self.skip_image(obj_ref) {
             return Ok(());
@@ -3022,6 +2997,16 @@ impl PageRenderer {
             )));
         }
 
+        // §8.7.4.1: a shading pattern may paint "with an image mask", so the stencil becomes the
+        // coverage the gradient is painted through rather than a flat-colour image.
+        let (pattern_base, pattern_resources) = pattern_frame;
+        let shading_pattern = self.fill_shading_pattern(gs, pattern_resources, doc)?;
+        let (pr, pg, pb, pa) = if shading_pattern.is_some() {
+            (255, 255, 255, 255)
+        } else {
+            (pr, pg, pb, pa)
+        };
+
         let mut rgba = Vec::new();
         rgba.try_reserve_exact(rgba_len)
             .map_err(|_| Error::Image(format!("Unable to allocate {rgba_len} ImageMask bytes")))?;
@@ -3054,10 +3039,46 @@ impl PageRenderer {
             tiny_skia::IntSize::from_wh(width, height)
                 .ok_or_else(|| Error::Image("ImageMask invalid dimensions".to_string()))?,
         ) {
+            if let Some(pattern) = shading_pattern {
+                let Some(mut coverage) = Pixmap::new(pixmap.width(), pixmap.height()) else {
+                    return Ok(());
+                };
+                coverage.draw_pixmap(0, 0, stencil_pixmap.as_ref(), &paint, image_transform, clip_mask);
+                let mask = tiny_skia::Mask::from_pixmap(coverage.as_ref(), tiny_skia::MaskType::Alpha);
+                self.paint_shading_pattern_through_mask(pixmap, &pattern, pattern_base, &mask, gs, doc)?;
+                return Ok(());
+            }
             pixmap.draw_pixmap(0, 0, stencil_pixmap.as_ref(), &paint, image_transform, clip_mask);
         }
 
         Ok(())
+    }
+
+    /// The current fill pattern when it is a shading (`PatternType 2`) pattern in `resources`.
+    fn fill_shading_pattern(
+        &self,
+        gs: &GraphicsState,
+        resources: &Object,
+        doc: &PdfDocument,
+    ) -> Result<Option<Object>> {
+        if !self.is_pattern_space(&gs.fill_color_space) {
+            return Ok(None);
+        }
+        let Some(name) = gs.fill_pattern_name.as_deref() else {
+            return Ok(None);
+        };
+        let Some(group) = resources.as_dict().and_then(|dict| dict.get("Pattern")) else {
+            return Ok(None);
+        };
+        let group = doc.resolve_object(group)?;
+        let Some(entry) = group.as_dict().and_then(|map| map.get(name)) else {
+            return Ok(None);
+        };
+        let pattern = doc.resolve_object(entry)?;
+        let is_shading = pattern
+            .as_dict()
+            .is_some_and(|dict| dict.get("PatternType").and_then(|o| o.as_integer()) == Some(2));
+        Ok(is_shading.then_some(pattern))
     }
 
     /// Render a Form XObject by parsing its content stream recursively.
@@ -3083,6 +3104,33 @@ impl PageRenderer {
             page_num,
             parent_resources,
             None,
+            true,
+        )
+    }
+
+    /// Draws an annotation appearance stream. Its `/BBox` is not applied as a clip: §12.5.5 scales
+    /// the box to fill `/Rect`, so a border stroked on the box boundary is half outside it by
+    /// construction, and widget appearances routinely draw exactly that.
+    fn render_form_xobject_unclipped(
+        &mut self,
+        pixmap: &mut Pixmap,
+        dict: &std::collections::HashMap<String, Object>,
+        data: &[u8],
+        parent_transform: Transform,
+        doc: &PdfDocument,
+        page_num: usize,
+        parent_resources: &Object,
+    ) -> Result<()> {
+        self.render_form_xobject_with_invocation(
+            pixmap,
+            dict,
+            data,
+            parent_transform,
+            doc,
+            page_num,
+            parent_resources,
+            None,
+            false,
         )
     }
 
@@ -3097,6 +3145,7 @@ impl PageRenderer {
         page_num: usize,
         parent_resources: &Object,
         invocation: Option<FormInvocation<'_>>,
+        clip_to_bbox: bool,
     ) -> Result<()> {
         if self.form_depth >= MAX_FORM_DEPTH {
             tracing::warn!("Form XObject nesting reached MAX_FORM_DEPTH={MAX_FORM_DEPTH}; skipping this form");
@@ -3112,6 +3161,7 @@ impl PageRenderer {
             page_num,
             parent_resources,
             invocation,
+            clip_to_bbox,
         );
         self.form_depth -= 1;
         result
@@ -3128,6 +3178,7 @@ impl PageRenderer {
         page_num: usize,
         parent_resources: &Object,
         invocation: Option<FormInvocation<'_>>,
+        clip_to_bbox: bool,
     ) -> Result<()> {
         let _nested_form = if self.knockout_resources.active() {
             Some(self.knockout_resources.reserve(Some(0))?)
@@ -3241,7 +3292,26 @@ impl PageRenderer {
             if parent_shape.is_some() {
                 self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
             }
+            let bbox_clip = intersect_clips(
+                clip_to_bbox
+                    .then(|| form_bbox_clip(dict, &group_pixmap, combined_transform))
+                    .flatten(),
+                invocation.and_then(|context| context.clip),
+            );
+            // A group's alpha constant and blend mode apply once, when it is composited
+            // (Table 58); inheriting them would apply them a second time inside.
+            let group_entry = FormEntry {
+                gs: invocation.map(|context| {
+                    let mut seed = context.gs.clone();
+                    seed.fill_alpha = 1.0;
+                    seed.stroke_alpha = 1.0;
+                    seed.blend_mode = "Normal".to_string();
+                    seed
+                }),
+                clip: bbox_clip,
+            };
             let mut work_fallback = None;
+            self.form_entry = Some(group_entry.clone());
             let result = if is_knockout {
                 // §11.4.6.2: snapshot the initial backdrop, then composite
                 // each element separately against it. The accumulator
@@ -3291,6 +3361,7 @@ impl PageRenderer {
                         page_num,
                         resources: &form_resources,
                         knockout: is_knockout && work_fallback.is_none(),
+                        entry: &group_entry,
                     },
                 );
                 if let Err(error) = recovered {
@@ -3340,10 +3411,97 @@ impl PageRenderer {
                 parent.include_shape(group);
             }
         } else {
+            self.form_entry = Some(FormEntry {
+                gs: invocation.map(|context| context.gs.clone()),
+                clip: intersect_clips(
+                    clip_to_bbox
+                        .then(|| form_bbox_clip(dict, pixmap, combined_transform))
+                        .flatten(),
+                    invocation.and_then(|context| context.clip),
+                ),
+            });
             self.execute_operators(pixmap, combined_transform, &operators, doc, page_num, &form_resources)?;
         }
 
         Ok(())
+    }
+
+    /// Paints a `PatternType 2` (shading) pattern through a coverage mask. §8.7.4.1 lets a shading
+    /// pattern paint with `f`, `S`, `Tj` and image masks; each reduces to coverage plus this. The
+    /// shading's coordinates are in pattern space (Table 77), so the pattern matrix rides on
+    /// `base_transform` rather than on the CTM in force at the paint. Returns `false` when
+    /// `pattern_obj` is not a type 2 pattern, leaving the caller to paint its own way.
+    fn paint_shading_pattern_through_mask(
+        &self,
+        pixmap: &mut Pixmap,
+        pattern_obj: &Object,
+        base_transform: Transform,
+        mask: &tiny_skia::Mask,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+    ) -> Result<bool> {
+        let Some(pattern) = pattern_obj.as_dict() else {
+            return Ok(false);
+        };
+        if pattern.get("PatternType").and_then(|o| o.as_integer()).unwrap_or(1) != 2 {
+            return Ok(false);
+        }
+        let Some(shading_entry) = pattern.get("Shading") else {
+            return Ok(false);
+        };
+        let shading_obj = doc.resolve_object(shading_entry)?;
+        let matrix: Vec<f32> = pattern
+            .get("Matrix")
+            .and_then(|o| o.as_array())
+            .map(|array| array.iter().filter_map(obj_to_f32).collect())
+            .filter(|values: &Vec<f32>| values.len() == 6)
+            .unwrap_or_else(|| vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+        let pattern_matrix = Transform::from_row(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+        self.render_shading_object(
+            pixmap,
+            &shading_obj,
+            base_transform.pre_concat(pattern_matrix),
+            gs,
+            doc,
+            Some(mask),
+        )?;
+        Ok(true)
+    }
+
+    /// Whether a text show paints through a fill pattern rather than a solid colour. Render modes 3
+    /// and 7 paint nothing (§9.3.6), and the coverage render forces mode 0, so they are excluded:
+    /// otherwise every invisible OCR layer under a pattern fill would paint a visible gradient.
+    pub(super) fn text_takes_a_fill_pattern(&self, gs: &GraphicsState) -> bool {
+        gs.fill_pattern_name.is_some()
+            && self.is_pattern_space(&gs.fill_color_space)
+            && matches!(gs.render_mode, 0 | 2 | 4 | 6)
+    }
+
+    /// Resolves the current fill pattern from `resources` and paints it through `mask` when it is a
+    /// shading pattern. The pattern lives in the resources the paint was given, which inside a form
+    /// XObject is the form's own dictionary. Returns `false` when there is no shading pattern to
+    /// paint; a tiling pattern is a repeated content stream, which a mask cannot serve.
+    pub(super) fn paint_pattern_through_mask_from_resources(
+        &self,
+        pixmap: &mut Pixmap,
+        mask: &tiny_skia::Mask,
+        base_transform: Transform,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+        resources: &Object,
+    ) -> Result<bool> {
+        let Some(name) = gs.fill_pattern_name.as_deref() else {
+            return Ok(false);
+        };
+        let Some(group) = resources.as_dict().and_then(|dict| dict.get("Pattern")) else {
+            return Ok(false);
+        };
+        let group = doc.resolve_object(group)?;
+        let Some(entry) = group.as_dict().and_then(|map| map.get(name)) else {
+            return Ok(false);
+        };
+        let pattern_obj = doc.resolve_object(entry)?;
+        self.paint_shading_pattern_through_mask(pixmap, &pattern_obj, base_transform, mask, gs, doc)
     }
 
     /// Rasterise a `/PatternType 1` tiling pattern into the current fill
@@ -3445,9 +3603,24 @@ impl PageRenderer {
             return Ok(false);
         };
 
-        // Only tiling patterns (PatternType 1) are handled here; shading
-        // patterns (PatternType 2) are left to the caller's solid fallback. ~keep
-        if pdict.get("PatternType").and_then(|o| o.as_integer()).unwrap_or(1) != 1 {
+        let pattern_type = pdict.get("PatternType").and_then(|o| o.as_integer()).unwrap_or(1);
+        // §8.7.4.1: a shading pattern paints its gradient through the shape being filled, whose
+        // geometry is independent of the gradient's. Painting a flat colour instead would be a
+        // wrong result: a coloured pattern is selected by `scn` with no operands, so the flat
+        // fallback would use a stale fill colour.
+        if pattern_type == 2 {
+            let Some(mut mask) = tiny_skia::Mask::new(pixmap.width(), pixmap.height()) else {
+                return Ok(false);
+            };
+            guarded_mask_fill_path(&mut mask, path, fill_rule, true, path_transform);
+            if let Some(clip) = clip {
+                for (value, bound) in mask.data_mut().iter_mut().zip(clip.data().iter()) {
+                    *value = (*value).min(*bound);
+                }
+            }
+            return self.paint_shading_pattern_through_mask(pixmap, &pattern_obj, base_transform, &mask, gs, doc);
+        }
+        if pattern_type != 1 {
             return Ok(false);
         }
         let paint_type = pdict.get("PaintType").and_then(|o| o.as_integer()).unwrap_or(1);
@@ -4313,6 +4486,7 @@ impl PageRenderer {
                                             doc,
                                             clip_mask,
                                             &cov_gs,
+                                            (Transform::identity(), &Object::Dictionary(HashMap::new())),
                                         );
                                     } else {
                                         // Keep image opacity in the mirror replay, independent of knockout geometry. ~keep
@@ -5997,6 +6171,12 @@ impl PageRenderer {
                     }
                 }
             }
+            // §12.5.3 Table 165: Hidden and NoView annotations are not displayed.
+            if annot.flags.contains(crate::annotation_types::AnnotationFlags::HIDDEN)
+                || annot.flags.contains(crate::annotation_types::AnnotationFlags::NO_VIEW)
+            {
+                continue;
+            }
             if let Some(ap_obj) = annot.raw_dict.as_ref().and_then(|d| d.get("AP")) {
                 let ap_stream_obj = doc.resolve_object(ap_obj)?;
 
@@ -6006,6 +6186,20 @@ impl PageRenderer {
                 if let Object::Dictionary(ap_dict) = ap_stream_obj {
                     if let Some(n_entry) = ap_dict.get("N") {
                         let n_stream_obj = doc.resolve_object(n_entry)?;
+                        // §12.5.5: /N is a stream or a subdictionary of appearance states, in
+                        // which case /AS names the one to draw (checkboxes and radio buttons).
+                        // Without a state, or with one naming no member, nothing is drawn.
+                        let (n_entry, n_stream_obj) = match &n_stream_obj {
+                            Object::Dictionary(states) => {
+                                let Some(selected) = annot.appearance_state.as_deref().and_then(|s| states.get(s))
+                                else {
+                                    continue;
+                                };
+                                (selected.clone(), doc.resolve_object(selected)?)
+                            }
+                            _ => (n_entry.clone(), n_stream_obj),
+                        };
+                        let n_entry = &n_entry;
                         if let Object::Stream { ref dict, .. } = n_stream_obj {
                             let ap_data = if let Some(r) = n_entry.as_reference() {
                                 doc.decode_stream_with_encryption(&n_stream_obj, r)?
@@ -6014,9 +6208,10 @@ impl PageRenderer {
                             };
 
                             if let Some(rect) = annot.rect {
-                                let x = rect[0] as f32;
-                                let y = rect[1] as f32;
-                                let annot_transform = base_transform.pre_translate(x, y);
+                                let annot_transform = match appearance_fit_matrix(dict, &rect) {
+                                    Some(fit) => base_transform.pre_concat(fit),
+                                    None => base_transform.pre_translate(rect[0] as f32, rect[1] as f32),
+                                };
 
                                 let old_fonts = self.fonts.clone();
                                 let old_cs = self.color_spaces.clone();
@@ -6026,7 +6221,7 @@ impl PageRenderer {
                                     }
                                 }
 
-                                self.render_form_xobject(
+                                self.render_form_xobject_unclipped(
                                     pixmap,
                                     &dict,
                                     &ap_data,
@@ -6964,6 +7159,87 @@ fn evaluate_type3_multi(
 /// sample stream satisfy them at any dimension count, and at `N >= 64` the
 /// `1usize << N` corner count overflows outright.
 const MAX_SAMPLED_FUNCTION_DIMS: usize = 8;
+
+/// Evaluates a PDF function at one point of its domain (§7.10): types 0, 2 and 3. Type 4 returns
+/// `None`, leaving the caller's fallback. `depth` bounds stitching recursion.
+fn evaluate_pdf_function_at(doc: &PdfDocument, func: &Object, t: f32, depth: u8) -> Option<Vec<f32>> {
+    const MAX_FUNCTION_DEPTH: u8 = 8;
+    if depth > MAX_FUNCTION_DEPTH {
+        return None;
+    }
+    let dict = func.as_dict()?;
+    let function_type = dict.get("FunctionType").and_then(|o| o.as_integer())?;
+    let numbers = |key: &str| -> Option<Vec<f32>> {
+        dict.get(key)
+            .and_then(|o| o.as_array())
+            .map(|array| array.iter().map(|o| obj_to_f32(o).unwrap_or(0.0)).collect())
+    };
+    let domain = numbers("Domain").unwrap_or_else(|| vec![0.0, 1.0]);
+    let d0 = domain.first().copied().unwrap_or(0.0);
+    let d1 = domain.get(1).copied().unwrap_or(1.0);
+    let t = t.clamp(d0.min(d1), d0.max(d1));
+
+    match function_type {
+        0 => evaluate_type0_multi(func, dict, &[t]),
+        // Table 40: y_j = C0_j + x^N (C1_j - C0_j) with x the input itself, not its position
+        // within /Domain.
+        2 => {
+            let c0 = numbers("C0").unwrap_or_else(|| vec![0.0]);
+            let c1 = numbers("C1").unwrap_or_else(|| vec![1.0]);
+            let exponent = dict.get("N").and_then(obj_to_f32).unwrap_or(1.0);
+            let k = t.powf(exponent);
+            Some(c0.iter().zip(c1.iter()).map(|(a, b)| a + k * (b - a)).collect())
+        }
+        // §7.10.4: /Bounds partitions /Domain; the sub-domain holding t is remapped onto the
+        // matching /Encode pair before its sub-function is evaluated.
+        3 => {
+            let functions = dict.get("Functions").and_then(|o| o.as_array())?;
+            if functions.is_empty() {
+                return None;
+            }
+            let bounds = numbers("Bounds").unwrap_or_default();
+            let encode = numbers("Encode").unwrap_or_default();
+            let k = bounds
+                .iter()
+                .position(|b| t < *b)
+                .unwrap_or(functions.len() - 1)
+                .min(functions.len() - 1);
+            let lo = if k == 0 { d0 } else { bounds[k - 1] };
+            let hi = if k >= bounds.len() { d1 } else { bounds[k] };
+            let e0 = encode.get(2 * k).copied().unwrap_or(0.0);
+            let e1 = encode.get(2 * k + 1).copied().unwrap_or(1.0);
+            let span = hi - lo;
+            let u = if span.abs() < f32::EPSILON {
+                e0
+            } else {
+                e0 + (t - lo) * (e1 - e0) / span
+            };
+            let sub = doc.resolve_object(functions.get(k)?).ok()?;
+            evaluate_pdf_function_at(doc, &sub, u, depth + 1)
+        }
+        _ => None,
+    }
+}
+
+/// Gradient stops for a shading's sampled colour ramp. `None` (a missing or unsupported
+/// `/Function`) falls back to black-to-white so an unreadable shading still paints.
+fn shading_gradient_stops(
+    resolved: Option<Vec<(f32, (f32, f32, f32, f32))>>,
+    fill_alpha: f32,
+) -> Vec<tiny_skia::GradientStop> {
+    let ramp = match resolved {
+        Some(ramp) if ramp.len() >= 2 => ramp,
+        _ => vec![(0.0, (0.0, 0.0, 0.0, fill_alpha)), (1.0, (1.0, 1.0, 1.0, fill_alpha))],
+    };
+    ramp.into_iter()
+        .map(|(t, (r, g, b, a))| {
+            tiny_skia::GradientStop::new(
+                t,
+                tiny_skia::Color::from_rgba(r, g, b, a).unwrap_or(tiny_skia::Color::BLACK),
+            )
+        })
+        .collect()
+}
 
 /// Evaluate a Type 0 (sampled) function with n-dimensional input `bc`
 /// per §7.10.2.
@@ -8061,6 +8337,124 @@ fn compose_overprint_channel(
     };
     let alpha = alpha.clamp(0.0, 1.0);
     alpha * b + (1.0 - alpha) * c_b
+}
+
+/// The matrix fitting an annotation appearance to its `/Rect` (§12.5.5): the form's `/BBox`,
+/// mapped through `/Matrix` and enclosed by the smallest upright rectangle, is scaled onto `/Rect`.
+/// `None` when the form has no usable `/BBox` or its transformed box is degenerate on an axis; the
+/// caller then keeps a plain translation to the rectangle's lower-left corner.
+fn appearance_fit_matrix(dict: &HashMap<String, Object>, rect: &[f64; 4]) -> Option<Transform> {
+    let Some(Object::Array(bbox)) = dict.get("BBox") else {
+        return None;
+    };
+    let number = |array: &[Object], i: usize| array.get(i).and_then(obj_to_f32);
+    let (bx0, by0, bx1, by1) = (number(bbox, 0)?, number(bbox, 1)?, number(bbox, 2)?, number(bbox, 3)?);
+    let (bx0, bx1) = (bx0.min(bx1), bx0.max(bx1));
+    let (by0, by1) = (by0.min(by1), by0.max(by1));
+
+    let matrix = match dict.get("Matrix") {
+        Some(Object::Array(m)) if m.len() >= 6 => Transform::from_row(
+            number(m, 0).unwrap_or(1.0),
+            number(m, 1).unwrap_or(0.0),
+            number(m, 2).unwrap_or(0.0),
+            number(m, 3).unwrap_or(1.0),
+            number(m, 4).unwrap_or(0.0),
+            number(m, 5).unwrap_or(0.0),
+        ),
+        _ => Transform::identity(),
+    };
+
+    let mut corners = [
+        tiny_skia::Point::from_xy(bx0, by0),
+        tiny_skia::Point::from_xy(bx1, by0),
+        tiny_skia::Point::from_xy(bx1, by1),
+        tiny_skia::Point::from_xy(bx0, by1),
+    ];
+    matrix.map_points(&mut corners);
+    let tx0 = corners.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
+    let tx1 = corners.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
+    let ty0 = corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let ty1 = corners.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+    if !(tx0.is_finite() && tx1.is_finite() && ty0.is_finite() && ty1.is_finite()) {
+        return None;
+    }
+    let (width, height) = (tx1 - tx0, ty1 - ty0);
+    if width <= f32::EPSILON || height <= f32::EPSILON {
+        return None;
+    }
+
+    let (rx0, rx1) = (rect[0].min(rect[2]) as f32, rect[0].max(rect[2]) as f32);
+    let (ry0, ry1) = (rect[1].min(rect[3]) as f32, rect[1].max(rect[3]) as f32);
+    let (sx, sy) = ((rx1 - rx0) / width, (ry1 - ry0) / height);
+    if !sx.is_finite() || !sy.is_finite() {
+        return None;
+    }
+    Some(Transform::from_row(sx, 0.0, 0.0, sy, rx0 - sx * tx0, ry0 - sy * ty0))
+}
+
+/// A form's own `/BBox` clip combined with the clip in force at its `Do` (§8.10.2 step c, §8.5.4).
+fn intersect_clips(own: Option<tiny_skia::Mask>, caller: Option<&tiny_skia::Mask>) -> Option<tiny_skia::Mask> {
+    match (own, caller) {
+        (Some(mut mask), Some(caller)) => {
+            for (value, bound) in mask.data_mut().iter_mut().zip(caller.data().iter()) {
+                *value = (*value).min(*bound);
+            }
+            Some(mask)
+        }
+        (Some(mask), None) => Some(mask),
+        (None, Some(caller)) => Some(caller.clone()),
+        (None, None) => None,
+    }
+}
+
+/// Rasterises a form's `/BBox` (in its own space, under `transform`) as a clip mask.
+///
+/// Returns `None` when there is nothing usable to clip to: no box, a zero-extent box (honouring it
+/// would erase the form) or a box that cannot be rasterised.
+fn form_bbox_clip(dict: &HashMap<String, Object>, pixmap: &Pixmap, transform: Transform) -> Option<tiny_skia::Mask> {
+    let Some(Object::Array(arr)) = dict.get("BBox") else {
+        return None;
+    };
+    if arr.len() < 4 {
+        return None;
+    }
+    let number = |i: usize| -> Option<f32> {
+        match arr.get(i) {
+            Some(Object::Real(v)) => Some(*v as f32),
+            Some(Object::Integer(v)) => Some(*v as f32),
+            _ => None,
+        }
+    };
+    let (x0, y0, x1, y1) = (number(0)?, number(1)?, number(2)?, number(3)?);
+    if (x1 - x0).abs() <= f32::EPSILON || (y1 - y0).abs() <= f32::EPSILON {
+        return None;
+    }
+    let rect = tiny_skia::Rect::from_ltrb(x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1))?;
+
+    // Grown by half a device pixel: producers size /BBox to exactly the geometry inside it, whose
+    // edge pixels are already partially covered, and clipping them again by partial coverage would
+    // lighten a one-pixel ring that other renderers leave alone.
+    let scale_x = transform.sx.hypot(transform.ky).abs();
+    let scale_y = transform.kx.hypot(transform.sy).abs();
+    let inflate_x = if scale_x > f32::EPSILON { 0.5 / scale_x } else { 0.0 };
+    let inflate_y = if scale_y > f32::EPSILON { 0.5 / scale_y } else { 0.0 };
+    let rect = tiny_skia::Rect::from_ltrb(
+        rect.left() - inflate_x,
+        rect.top() - inflate_y,
+        rect.right() + inflate_x,
+        rect.bottom() + inflate_y,
+    )
+    .unwrap_or(rect);
+
+    let mut builder = PathBuilder::new();
+    builder.push_rect(rect);
+    let path = builder.finish()?;
+    if !device_bounds_rasterizable(&path, transform) {
+        return None;
+    }
+    let mut mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height())?;
+    mask.fill_path(&path, tiny_skia::FillRule::Winding, true, transform);
+    Some(mask)
 }
 
 fn apply_pending_clip(

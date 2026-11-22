@@ -124,6 +124,65 @@ pub(crate) fn pdf_blend_mode_to_skia(mode: &str) -> tiny_skia::BlendMode {
 /// device units, which an earlier 1e8 bound discarded.
 const MAX_DEVICE_COORD: f64 = 5.0e8;
 
+/// The rectangle a page is rendered to: its `/CropBox` clipped to the `/MediaBox`, or the media box
+/// when there is no crop box. ISO 32000-1:2008 Table 30 clips page contents to the crop box and
+/// §14.11.2 takes it as its intersection with the media box. A crop box that misses the media box
+/// describes nothing to show and falls back to the media box.
+pub(crate) fn page_render_box(
+    media_box: &crate::geometry::Rect,
+    crop_box: Option<&crate::geometry::Rect>,
+) -> crate::geometry::Rect {
+    let span = |origin: f32, extent: f32| (origin.min(origin + extent), origin.max(origin + extent));
+    let (m_x0, m_x1) = span(media_box.x, media_box.width);
+    let (m_y0, m_y1) = span(media_box.y, media_box.height);
+    let normalized_media = crate::geometry::Rect::from_points(m_x0, m_y0, m_x1, m_y1);
+    let Some(crop) = crop_box else {
+        return normalized_media;
+    };
+    let (c_x0, c_x1) = span(crop.x, crop.width);
+    let (c_y0, c_y1) = span(crop.y, crop.height);
+    let (x0, y0, x1, y1) = (c_x0.max(m_x0), c_y0.max(m_y0), c_x1.min(m_x1), c_y1.min(m_y1));
+    if x1 <= x0 || y1 <= y0 {
+        return normalized_media;
+    }
+    crate::geometry::Rect::from_points(x0, y0, x1, y1)
+}
+
+/// The page extent in points after the `/Rotate` turn, as `(width, height)`.
+pub(crate) fn rotated_page_extent(page_box: &crate::geometry::Rect, rotation: i32) -> (f32, f32) {
+    if matches!(rotation.rem_euclid(360), 90 | 270) {
+        (page_box.height, page_box.width)
+    } else {
+        (page_box.width, page_box.height)
+    }
+}
+
+/// The base transform from PDF user space to device pixels, including the `/Rotate` turn and the
+/// y-up to y-down flip. Every case has a negative determinant (the flip contributes one reflection
+/// and a quarter turn none), so a positive one is a mirror image. Shared by the composite and the
+/// separation renderers so the two cannot disagree about which way a page faces. `rotation` may be
+/// negative; it is normalised here.
+pub(crate) fn page_base_transform(page_box: &crate::geometry::Rect, rotation: i32, scale: f32) -> tiny_skia::Transform {
+    use tiny_skia::Transform;
+    let origin = Transform::from_translate(-page_box.x, -page_box.y);
+    let (_, page_h) = rotated_page_extent(page_box, rotation);
+    match rotation.rem_euclid(360) {
+        90 => origin.post_concat(Transform::from_row(0.0, scale, scale, 0.0, 0.0, 0.0)),
+        180 => origin
+            .post_scale(-scale, scale)
+            .post_translate(page_box.width * scale, 0.0),
+        270 => origin.post_concat(Transform::from_row(
+            0.0,
+            -scale,
+            -scale,
+            0.0,
+            page_box.height * scale,
+            page_box.width * scale,
+        )),
+        _ => origin.post_scale(scale, -scale).post_translate(0.0, page_h * scale),
+    }
+}
+
 /// How far a stroke's outline may reach from its centerline, in device
 /// units, before the width is narrowed. Measured separately from
 /// [`MAX_DEVICE_COORD`] because it is a separate failure: a 10x10 rect
@@ -688,8 +747,12 @@ pub fn render_page_region(
         return Err(crate::Error::InvalidPdf(format!("invalid crop rect: {crop_rect_pt:?}")));
     }
 
-    let media = doc.get_page_media_box(page_num)?;
-    let page_h_pt = media.3 - media.1;
+    let page_info = doc.get_page_info(page_num)?;
+    let page_box = page_render_box(
+        &page_info.media_box,
+        page_info.crop_box.as_ref().filter(|_| options.honor_crop_box),
+    );
+    let page_h_pt = page_box.height;
 
     // Points → pixels at the render DPI. ~keep
     let scale = options.dpi as f32 / 72.0;
@@ -753,12 +816,12 @@ pub fn render_page_fit(
     // equivalent to 270 per ISO 32000-1 s7.7.3.3 Table 30) matched neither 90 nor
     // 270 below and the page rendered unrotated. rem_euclid normalizes to 0..359,
     // matching get_page_rotation's own `((raw % 360) + 360) % 360` convention. ~keep
-    let rotation = page_info.rotation.rem_euclid(360);
-    let (page_w_pt, page_h_pt) = if rotation == 90 || rotation == 270 {
-        (page_info.media_box.height.max(1.0), page_info.media_box.width.max(1.0))
-    } else {
-        (page_info.media_box.width.max(1.0), page_info.media_box.height.max(1.0))
-    };
+    let page_box = page_render_box(
+        &page_info.media_box,
+        page_info.crop_box.as_ref().filter(|_| options.honor_crop_box),
+    );
+    let (page_w_pt, page_h_pt) = rotated_page_extent(&page_box, page_info.rotation);
+    let (page_w_pt, page_h_pt) = (page_w_pt.max(1.0), page_h_pt.max(1.0));
 
     // Compute scale as a float ratio to avoid integer-DPI quantization. ~keep
     let scale = (fit_w_px as f32 / page_w_pt).min(fit_h_px as f32 / page_h_pt);
