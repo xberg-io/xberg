@@ -17,6 +17,8 @@ const MAX_PARENT_DEPTH: usize = 64;
 struct FieldWalk {
     visited: HashSet<ObjectRef>,
     visited_fields: usize,
+    /// Keep choice values as export values (what FDF/XFDF `/V` must carry) instead of display text.
+    export_values: bool,
 }
 
 /// A form field extracted from a PDF AcroForm.
@@ -298,14 +300,14 @@ impl FormExtractor {
     /// ```
     #[tracing::instrument(name = "pdf.extract_fields", skip_all)]
     pub fn extract_fields(doc: &PdfDocument) -> Result<Vec<FormField>> {
-        let result = Self::extract_fields_impl(doc);
+        let result = Self::extract_fields_impl(doc, false);
         if let Err(error) = &result {
             crate::error::trace_failure("extract_form_fields", error);
         }
         result
     }
 
-    fn extract_fields_impl(doc: &PdfDocument) -> Result<Vec<FormField>> {
+    fn extract_fields_impl(doc: &PdfDocument, export_values: bool) -> Result<Vec<FormField>> {
         let catalog = doc.catalog()?;
         let catalog_dict = catalog
             .as_dict()
@@ -336,7 +338,10 @@ impl FormExtractor {
             .ok_or_else(|| Error::InvalidPdf("AcroForm /Fields is not an array".to_string()))?;
 
         let mut result = Vec::new();
-        let mut walk = FieldWalk::default();
+        let mut walk = FieldWalk {
+            export_values,
+            ..FieldWalk::default()
+        };
         for field_ref in fields_array {
             if let Err(error) = Self::extract_field_recursive(doc, field_ref, "", 0, &mut walk, &mut result) {
                 tracing::warn!("skipping unreadable form field: {error}");
@@ -407,7 +412,7 @@ impl FormExtractor {
             return Ok(());
         }
 
-        let attrs = Self::extract_field_attributes(doc, field_dict, &field_type);
+        let attrs = Self::extract_field_attributes(doc, field_dict, &field_type, !walk.export_values);
 
         let form_field = FormField {
             name: partial_name,
@@ -502,12 +507,15 @@ impl FormExtractor {
         let mut parent = field_dict.get("Parent").cloned();
         for _ in 0..MAX_PARENT_DEPTH {
             let parent_obj = parent.take()?;
-            if let Some(r) = parent_obj.as_reference()
-                && !seen.insert(r)
-            {
-                return None;
-            }
-            let resolved = Self::resolve_object(doc, &parent_obj).ok()?;
+            let resolved = match parent_obj.as_reference() {
+                Some(r) => {
+                    if !seen.insert(r) {
+                        return None;
+                    }
+                    doc.load_object_shared(r).ok()?
+                }
+                None => std::sync::Arc::new(parent_obj),
+            };
             let dict = resolved.as_dict()?;
             if let Some(value) = dict.get(key) {
                 return Self::resolve_object(doc, value).ok();
@@ -527,19 +535,25 @@ impl FormExtractor {
         let Some(Object::Array(opts)) = Self::inherited_attr(doc, field_dict, "Opt") else {
             return value;
         };
-        let display_for = |export: &str| -> Option<String> {
-            opts.iter().find_map(|opt| {
-                let resolved = Self::resolve_object(doc, opt).ok()?;
-                let pair = resolved.as_array()?;
-                let key = Self::resolve_object(doc, pair.first()?).ok()?;
-                let key = Self::decode_text_string(key.as_string()?)?;
-                if key != export {
-                    return None;
-                }
-                let shown = Self::resolve_object(doc, pair.get(1)?).ok()?;
-                Self::decode_text_string(shown.as_string()?)
-            })
-        };
+        let mut displays: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for opt in &opts {
+            let pair = Self::resolve_object(doc, opt)
+                .ok()
+                .and_then(|resolved| resolved.as_array().cloned());
+            let Some(pair) = pair else { continue };
+            let key = pair
+                .first()
+                .and_then(|k| Self::resolve_object(doc, k).ok())
+                .and_then(|k| k.as_string().and_then(Self::decode_text_string));
+            let shown = pair
+                .get(1)
+                .and_then(|v| Self::resolve_object(doc, v).ok())
+                .and_then(|v| v.as_string().and_then(Self::decode_text_string));
+            if let (Some(key), Some(shown)) = (key, shown) {
+                displays.entry(key).or_insert(shown);
+            }
+        }
+        let display_for = |export: &str| -> Option<String> { displays.get(export).cloned() };
         match value {
             FieldValue::Text(t) => FieldValue::Text(display_for(&t).unwrap_or(t)),
             FieldValue::Array(items) => {
@@ -558,11 +572,12 @@ impl FormExtractor {
         doc: &PdfDocument,
         field_dict: &std::collections::HashMap<String, Object>,
         field_type: &FieldType,
+        map_choices: bool,
     ) -> FieldAttributes {
         let value = Self::inherited_attr(doc, field_dict, "V")
             .map(|obj| Self::parse_field_value(&obj, field_type))
             .unwrap_or(FieldValue::None);
-        let value = if *field_type == FieldType::Choice {
+        let value = if map_choices && *field_type == FieldType::Choice {
             Self::map_choice_value(doc, field_dict, value)
         } else {
             value
@@ -830,7 +845,7 @@ impl FormExtractor {
     /// FormExtractor::export_fdf(&mut doc, "form_data.fdf")?;
     /// ```
     pub fn export_fdf(doc: &PdfDocument, output_path: impl AsRef<std::path::Path>) -> Result<()> {
-        let fields = Self::extract_fields(doc)?;
+        let fields = Self::extract_fields_impl(doc, true)?;
         let writer = crate::fdf::FdfWriter::from_fields(fields);
         writer.write_to_file(output_path)
     }
@@ -854,7 +869,7 @@ impl FormExtractor {
     /// FormExtractor::export_xfdf(&mut doc, "form_data.xfdf")?;
     /// ```
     pub fn export_xfdf(doc: &PdfDocument, output_path: impl AsRef<std::path::Path>) -> Result<()> {
-        let fields = Self::extract_fields(doc)?;
+        let fields = Self::extract_fields_impl(doc, true)?;
         let writer = crate::fdf::XfdfWriter::from_fields(fields);
         writer.write_to_file(output_path)
     }

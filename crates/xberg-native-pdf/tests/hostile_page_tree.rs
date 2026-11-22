@@ -59,3 +59,29 @@ fn annotation_with_contents_is_not_a_page() {
     assert!(doc.get_page(0).is_ok());
     assert!(doc.get_page(1).is_err(), "annotation dict must not be served as page 1");
 }
+
+#[test]
+fn popup_annotation_with_parent_is_not_a_page() {
+    let pdf = common::build_pdf_from_objects(&[
+        (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+        (2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into()),
+        (
+            3,
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>".into(),
+        ),
+        (
+            4,
+            "<< /Subtype /Text /Contents (note) /Rect [0 0 1 1] /Popup 5 0 R >>".into(),
+        ),
+        (
+            5,
+            "<< /Subtype /Popup /Parent 4 0 R /Contents (note) /Rect [0 0 1 1] >>".into(),
+        ),
+    ]);
+    let doc = PdfDocument::from_bytes(pdf).expect("parse");
+    assert!(doc.get_page(0).is_ok());
+    assert!(
+        doc.get_page(1).is_err(),
+        "popup annotation must not be served as page 1"
+    );
+}

@@ -111,3 +111,22 @@ fn page_tree_without_type_entries_still_maps_pg() {
     found.sort();
     assert_eq!(found, vec![(3, 1), (5, 1)]);
 }
+
+#[test]
+fn nested_page_tree_with_count_equal_to_kids_maps_pg_to_leaf_pages() {
+    let pdf = common::build_pdf_from_objects(&[
+        (1, "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R >>".into()),
+        (2, "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>".into()),
+        (3, "<< /Type /Pages /Parent 2 0 R /Kids [9 0 R] /Count 1 >>".into()),
+        (4, "<< /Type /Pages /Parent 2 0 R /Kids [10 0 R] /Count 1 >>".into()),
+        (6, "<< /Type /StructTreeRoot /K 7 0 R >>".into()),
+        (7, "<< /Type /StructElem /S /Sect /Pg 10 0 R /K [8 0 R] >>".into()),
+        (8, "<< /Type /StructElem /S /P /K [<< /Type /MCR /MCID 3 >>] >>".into()),
+        (9, "<< /Type /Page /Parent 3 0 R /MediaBox [0 0 200 200] >>".into()),
+        (10, "<< /Type /Page /Parent 4 0 R /MediaBox [0 0 200 200] >>".into()),
+    ]);
+    let tree = parse(pdf).expect("tagged");
+    let mut found = Vec::new();
+    mcr_pages(&tree.root_elements[0], &mut found);
+    assert_eq!(found, vec![(3, 1)]);
+}

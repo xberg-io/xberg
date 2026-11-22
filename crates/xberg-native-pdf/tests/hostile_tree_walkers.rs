@@ -86,3 +86,22 @@ fn embedded_files_tree_with_repeated_kid_is_walked_once() {
     });
     assert!(files.is_empty());
 }
+
+#[test]
+fn embedded_files_root_listing_itself_as_kid_returns_each_attachment_once() {
+    let bytes = pdf(
+        "/Names << /EmbeddedFiles 7 0 R >>",
+        &[
+            (7, "<< /Names [(a) 8 0 R] /Kids [7 0 R] >>"),
+            (8, "<< /F (a.txt) /EF << /F 9 0 R >> >>"),
+            (9, "<< /Length 5 >>\nstream\nhello\nendstream"),
+        ],
+    );
+    let files = within(5, move || {
+        PdfDocument::from_bytes(bytes)
+            .unwrap()
+            .extract_embedded_files()
+            .unwrap()
+    });
+    assert_eq!(files, vec![("a.txt".to_string(), b"hello".to_vec())]);
+}

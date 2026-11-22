@@ -763,6 +763,7 @@ impl PdfDocument {
                 let type_is_null = dict.get("Type").is_some_and(|t| matches!(t, Object::Null));
                 if (has_no_type || type_is_null)
                     && dict.contains_key("Parent")
+                    && !dict.contains_key("Subtype")
                     && (dict.contains_key("MediaBox")
                         || dict.contains_key("Contents")
                         || (dict.contains_key("Resources") && dict.contains_key("Parent")))

@@ -110,3 +110,61 @@ fn inheritable_attributes_resolve_through_parent_and_opt_maps_value() {
     assert_eq!(kid.default_appearance.as_deref(), Some("/Helv 0 Tf"));
     assert_eq!(kid.value, FieldValue::Text("Green".to_string()));
 }
+
+fn choice_form() -> Vec<u8> {
+    build_pdf(
+        "4 0 R",
+        &[(
+            4,
+            "<< /T (Color) /FT /Ch /V (g) /Opt [[(r) (Red)] [(g) (Green)] [(g) (Second)]] >>".to_string(),
+        )],
+    )
+}
+
+#[test]
+fn fdf_and_xfdf_export_choice_export_values_not_display_text() {
+    let pdf = choice_form();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let doc = PdfDocument::from_bytes(pdf).expect("parse");
+    assert_eq!(
+        FormExtractor::extract_fields(&doc).expect("fields")[0].value,
+        FieldValue::Text("Green".to_string())
+    );
+    let fdf = dir.path().join("out.fdf");
+    let xfdf = dir.path().join("out.xfdf");
+    FormExtractor::export_fdf(&doc, &fdf).expect("fdf");
+    FormExtractor::export_xfdf(&doc, &xfdf).expect("xfdf");
+    let fdf = String::from_utf8_lossy(&std::fs::read(fdf).unwrap()).into_owned();
+    let xfdf = std::fs::read_to_string(xfdf).unwrap();
+    assert!(fdf.contains("(g)") && !fdf.contains("Green"), "fdf: {fdf}");
+    assert!(xfdf.contains(">g<") && !xfdf.contains("Green"), "xfdf: {xfdf}");
+}
+
+#[test]
+fn many_selected_values_map_through_a_large_option_list() {
+    const OPTIONS: usize = 20_000;
+    let opts: String = (0..OPTIONS).map(|i| format!("[(e{i}) (d{i})]")).collect();
+    let selected: String = (0..OPTIONS).map(|i| format!("(e{i})")).collect();
+    let pdf = build_pdf(
+        "4 0 R",
+        &[(
+            4,
+            format!("<< /T (Many) /FT /Ch /Ff 2097152 /V [{selected}] /Opt [{opts}] >>"),
+        )],
+    );
+    let fields = common::on_small_stack(move || {
+        let doc = PdfDocument::from_bytes(pdf).expect("parse");
+        let started = std::time::Instant::now();
+        let fields = FormExtractor::extract_fields(&doc).expect("fields");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "option mapping is quadratic"
+        );
+        fields
+    });
+    let FieldValue::Array(values) = &fields[0].value else {
+        panic!("expected array value, got {:?}", fields[0].value);
+    };
+    assert_eq!(values.len(), OPTIONS);
+    assert_eq!(values[7], "d7");
+}

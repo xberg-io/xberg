@@ -28,6 +28,11 @@ pub(crate) struct NameTreeBudget {
 }
 
 impl NameTreeBudget {
+    /// Whether `admit` would accept `node`, without recording it.
+    pub(crate) fn can_admit(&self, node: &Object) -> bool {
+        self.nodes < NAME_TREE_MAX_NODES && !matches!(node, Object::Reference(r) if self.visited.contains(r))
+    }
+
     pub(crate) fn admit(&mut self, node: &Object) -> bool {
         if self.nodes >= NAME_TREE_MAX_NODES {
             return false;
@@ -401,6 +406,9 @@ fn walk_name_tree(
         .filter(|k| k.as_array().is_some())
     {
         for kid in kids.as_array().expect("checked array above") {
+            if !budget.can_admit(kid) {
+                continue;
+            }
             let Some(kid_node) = deref_obj(kid, resolve) else {
                 continue;
             };
@@ -511,6 +519,28 @@ mod tests {
 
         assert_eq!(parent.children.len(), 1);
         assert_eq!(parent.children[0].title, "Section 1.1");
+    }
+
+    #[test]
+    fn name_tree_repeated_kid_is_not_resolved_again() {
+        let node = crate::object::ObjectRef::new(7, 0);
+        let mut dict = HashMap::new();
+        dict.insert("Kids".to_string(), Object::Array(vec![Object::Reference(node); 1_000]));
+        let root = Object::Dictionary(dict);
+        let resolved = std::cell::Cell::new(0usize);
+        let resolve = |r: crate::object::ObjectRef| {
+            resolved.set(resolved.get() + 1);
+            (r == node).then(|| root.clone())
+        };
+        let found = walk_name_tree(
+            &Object::Reference(node),
+            b"x",
+            &resolve,
+            0,
+            &mut NameTreeBudget::default(),
+        );
+        assert!(found.is_none());
+        assert!(resolved.get() <= 4, "resolved {} times", resolved.get());
     }
 
     /// Catalog `/Dests` dict, value is the destination array directly.

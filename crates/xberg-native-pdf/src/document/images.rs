@@ -164,18 +164,15 @@ impl PdfDocument {
             .as_ref()
             .and_then(|n| n.as_dict())
             .and_then(|d| d.get("EmbeddedFiles"))
-            .and_then(|e| self.resolve_object(e).ok())
         else {
             return Ok(Vec::new());
         };
 
         let mut filespecs: Vec<Object> = Vec::new();
-        self.collect_embedded_filespecs(
-            &ef_root,
-            &mut filespecs,
-            0,
-            &mut crate::outline::NameTreeBudget::default(),
-        );
+        let mut budget = crate::outline::NameTreeBudget::default();
+        if budget.admit(ef_root) {
+            self.collect_embedded_filespecs(ef_root, &mut filespecs, 0, &mut budget);
+        }
 
         let mut out = Vec::new();
         for fs in &filespecs {

@@ -636,6 +636,13 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 break;
             }
 
+            // An object number past u32::MAX has no slot; saturating would overwrite the entry at u32::MAX. ~keep
+            let Some(obj_num) = start_obj.checked_add(i) else {
+                malformed_entry_count += 1;
+                i += 1;
+                continue;
+            };
+
             // Parse entry: "nnnnnnnnnn ggggg f/n"
             // Be flexible with whitespace and format ~keep
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
@@ -646,7 +653,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 // Still increment counter to maintain object numbering
                 // Add a placeholder free entry to maintain object number sequence ~keep
                 let entry = XRefEntry::free(0, 65535);
-                xref.add_entry(start_obj.saturating_add(i), entry);
+                xref.add_entry(obj_num, entry);
                 i += 1;
                 continue;
             }
@@ -661,7 +668,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 Err(_) => {
                     malformed_entry_count += 1;
                     let entry = XRefEntry::free(0, 65535);
-                    xref.add_entry(start_obj.saturating_add(i), entry);
+                    xref.add_entry(obj_num, entry);
                     i += 1;
                     continue;
                 }
@@ -672,7 +679,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
                 Err(_) => {
                     malformed_entry_count += 1;
                     let entry = XRefEntry::free(0, 65535);
-                    xref.add_entry(start_obj.saturating_add(i), entry);
+                    xref.add_entry(obj_num, entry);
                     i += 1;
                     continue;
                 }
@@ -694,7 +701,7 @@ fn parse_traditional_xref<R: Read + Seek>(reader: &mut R, offset: u64) -> Result
             };
 
             let entry = XRefEntry::new(offset, generation, in_use);
-            xref.add_entry(start_obj.saturating_add(i), entry);
+            xref.add_entry(obj_num, entry);
             i += 1;
         }
     }
@@ -974,7 +981,9 @@ fn parse_xref_stream<R: Read + Seek>(reader: &mut R, offset: u64) -> Result<Cros
                 }
             };
 
-            xref.add_entry(start_obj.saturating_add(i), entry);
+            if let Some(obj_num) = start_obj.checked_add(i) {
+                xref.add_entry(obj_num, entry);
+            }
         }
     }
 
@@ -1383,7 +1392,7 @@ mod tests {
             0000000200 00000 n \n\
             trailer\n<< /Size 1 >>\n";
         let table = parse_xref(&mut Cursor::new(&data[..]), 0).unwrap();
-        assert!(table.get(u32::MAX).is_some());
+        assert_eq!(table.get(u32::MAX).expect("boundary entry").offset, 18);
     }
 
     #[test]
@@ -1393,10 +1402,10 @@ mod tests {
         pdf.extend_from_slice(
             b"6 0 obj\n<< /Type /XRef /Size 3 /W [1 2 1] /Index [4294967295 2] /Root 1 0 R /Length 8 >>\nstream\n",
         );
-        pdf.extend_from_slice(&[1, 0, 9, 0, 1, 0, 9, 0]);
+        pdf.extend_from_slice(&[1, 0, 9, 0, 1, 0, 10, 0]);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
         let table = parse_xref_stream(&mut Cursor::new(pdf), off as u64).unwrap();
-        assert!(table.get(u32::MAX).is_some());
+        assert_eq!(table.get(u32::MAX).expect("boundary entry").offset, 9);
     }
 
     #[test]
