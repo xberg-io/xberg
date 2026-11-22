@@ -107,6 +107,9 @@ KNOWN_BROKEN = {
         "xberg_ocr_backend_supports_language_for": _INT32_AS_LONG,
         "xberg_registry_is_empty": _INT32_AS_LONG,
         "xberg_verify_excerpt": _INT32_AS_LONG,
+        # The polygon writer returns int32_t; XbergRs.java:47 narrows it with `(int)(long)`
+        # exactly as the entries above do. ~keep
+        "xberg_append_polygon_annotation": _INT32_AS_LONG,
         **dict.fromkeys(_PLUGIN_REGISTRY_INT32, _INT32_AS_LONG),
     },
 }
