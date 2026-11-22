@@ -81,7 +81,7 @@ xml = ["xberg/xml"]
 [dependencies]
 async-trait = "0.1"
 crawlberg = { default-features = false, version = "1.13.1" }
-html-to-markdown-rs = { default-features = false, version = "3.22.2" }
+html-to-markdown-rs = { default-features = false, version = "3.23.0" }
 pyo3 = { version = "0.30" }
 pyo3-async-runtimes = { version = "0.30", features = ["tokio-runtime"] }
 serde = { version = "1", features = ["derive"] }

@@ -57,6 +57,7 @@ fn should_preserve_exhaustive_html_options_and_upstream_type_identity() {
         exclude_selectors: defaults.exclude_selectors,
         tier_strategy: defaults.tier_strategy,
         base_url: defaults.base_url,
+        data_as_elements: defaults.data_as_elements,
         visitor: defaults.visitor,
     };
     let module: xberg::extraction::html::ConversionOptions = options;

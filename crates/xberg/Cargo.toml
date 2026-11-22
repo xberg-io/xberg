@@ -1418,7 +1418,7 @@ jotdown = "0.10"
 # The reduced-decode memory bound follows the decoder's internals, and
 # `tests/bounded_jpeg_peak.rs` measures it. Re-run that test after a bump. ~keep
 jpeg-decoder = { version = "0.3.2", default-features = false, features = ["rayon"], optional = true }
-jsonschema = { version = "0.62", optional = true, default-features = false }
+jsonschema = { version = "0.63", optional = true, default-features = false }
 libc = { workspace = true }
 # lofty: pure-Rust audio tag reader (ID3v1/v2, MP4 atoms, Vorbis comments, FLAC, etc.)
 # MIT license. Used for metadata extraction independent of the inference backend.
@@ -1819,7 +1819,7 @@ image = { workspace = true, default-features = false, features = ["png"] }
 # Test-only: encodes progressive and chroma-subsampled JPEG fixtures. ~keep
 jpeg-encoder = "0.7.1"
 # Test retrieval features prove runtime compilation stays offline under Cargo feature unification. ~keep
-jsonschema = { version = "0.62", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }
+jsonschema = { version = "0.63", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }
 qrcode = { version = "0.15", default-features = false, features = ["image"] }
 # Test-only: builds an in-memory model2vec fixture (safetensors bytes) for the
 # static_engine unit tests, without a network fetch.

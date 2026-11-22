@@ -79,7 +79,7 @@ fs2 = "0.4.3"
 futures = "0.3"
 geo = { version = "0.33", default-features = false }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.22.2", default-features = false }
+html-to-markdown-rs = { version = "3.23.0", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.15"
 
