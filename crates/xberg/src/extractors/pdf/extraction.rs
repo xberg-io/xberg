@@ -740,11 +740,7 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let _ = layout_hints;
 
-    let ocr_inline_images = config
-        .pdf_options
-        .as_ref()
-        .map(|options| options.ocr_inline_images)
-        .unwrap_or(false);
+    let ocr_inline_images = super::inline_image_ocr_enabled(config);
     let needs_structured = needs_structured_extraction(
         hierarchy_enabled,
         config.include_document_structure,
