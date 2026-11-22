@@ -549,4 +549,11 @@ impl<'a> PdfFonts<'a> {
     pub fn get(&self, token: PdfFontToken) -> Option<&PdfFont<'_>> {
         self.fonts.get(&token)
     }
+
+    /// Drops every font in this registry. Must run before `FPDF_CloseDocument()`, because
+    /// `FPDFFont_Close()` on a font of an already-closed document reads freed memory.
+    #[inline]
+    pub(crate) fn clear(&mut self) {
+        self.fonts.clear();
+    }
 }

@@ -374,7 +374,7 @@ High-level idiomatic Rust wrapper around Pdfium, forked and vendored for xberg:
 - **License**: MIT OR Apache-2.0 upstream; the fork takes the MIT option and is redistributed
   under MIT, retaining the upstream copyright notice below.
 - **Author**: Alastair Carey (<alastair@alastaircarey.com>), Copyright (c) 2022-2026
-- **Forked Version**: 0.8.x-era, with bindings generated against pdfium 7678 (`src/bindings/version.rs`,
+- **Forked Version**: upstream 0.9.0 development line at or after commit 0dbad90 (2025-12-13), with bindings generated against pdfium 7678 (`src/bindings/version.rs`,
   `src/bindgen/pdfium_7678.rs`). The runtime binary staged by `scripts/download_pdfium_runtime.sh`, the
   two system installers and the Docker images is the same 7678, because the bindings are the ABI
   contract and only one binding set exists in the tree
