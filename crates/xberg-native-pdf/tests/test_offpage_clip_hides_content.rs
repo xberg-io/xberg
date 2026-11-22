@@ -89,6 +89,18 @@ fn test_offpage_unrasterisable_clip_paints_nothing() {
     );
 }
 
+/// An unrasterisable clip that only touches the page edge has no area inside
+/// the page, so it excludes everything just as a fully off-page one does.
+#[test]
+fn test_edge_touching_unrasterisable_clip_paints_nothing() {
+    let f = dark_fraction(clipped_fill_pdf("200 0 2000000000 200"));
+    assert!(
+        f < 0.01,
+        "a clip touching only the page edge still painted {:.0}% of it",
+        f * 100.0
+    );
+}
+
 /// The other direction: an enormous clip that still contains the page
 /// restricts nothing visible, so the fill must survive. An empty mask here
 /// would erase the page — the failure the previous behaviour was guarding.
