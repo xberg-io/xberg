@@ -85,6 +85,7 @@ RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>
 # this workflow — vendor-native-closure.sh already understands `.whl`
 # artifacts and matches the `_xberg*.so` extension-module naming.
 COPY scripts/ci/vendor-native-closure.sh /usr/local/bin/vendor-native-closure.sh
+COPY scripts/ci/rewrite_wheel_record.py /usr/local/bin/rewrite_wheel_record.py
 
 # Diagnostics for task #490: the vendor loop below fails with an unattributed
 # exit 127 partway through, after ~28 prior successful iterations in the same
