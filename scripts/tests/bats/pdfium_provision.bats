@@ -71,9 +71,15 @@ truncated_archive() {
 		'done'
 	unset PDFIUM_CHECKSUMS_FILE PDFIUM_VERSION
 	run bash "$PDFIUM_SH" bump 1 --allow-binding-mismatch
-	[ "$status" -eq 0 ] || { echo "$output"; return 1; }
+	[ "$status" -eq 0 ] || {
+		echo "$output"
+		return 1
+	}
 	[[ "$output" == *"Dry run"* ]]
-	[ -z "$(ls -A "$TMPDIR")" ] || { ls -A "$TMPDIR"; return 1; }
+	[ -z "$(ls -A "$TMPDIR")" ] || {
+		ls -A "$TMPDIR"
+		return 1
+	}
 }
 
 @test "pdfium:provision should repeat the selected platform and version in its env hint" {
