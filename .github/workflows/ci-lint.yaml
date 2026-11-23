@@ -704,6 +704,9 @@ jobs:
       # This job's own purpose is `poly fmt --check` and `poly lint .`, which the failing
       # step masked. ~keep
       check-fixture-snippets: false
+      # poly kills a whole-project check after 1800s by default, and a cold cargo-clippy
+      # build of this workspace exceeds that on a runner without a warm sccache. ~keep
+      poly-workspace-timeout-secs: "7200"
       setup-rust: true
       # poly's cargo-clippy hook builds the whole workspace, and
       # tools/benchmark-harness depends on xberg with `full`, which pulls
