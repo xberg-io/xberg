@@ -34,17 +34,6 @@ on:
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
-  # Only the pdfium jobs run on a PR; every other job here is gated to refs/heads/main. ~keep
-  pull_request:
-    branches: [main]
-    paths:
-      - "crates/xberg-pdfium-render/**"
-      - "crates/xberg/src/extractors/pdf/pdfium_engine.rs"
-      - "crates/xberg/src/extractors/pdf/pdfium_engine/**"
-      # A fixture pin bump changes the gitlink itself, not a path beneath it. ~keep
-      - "test_documents"
-      - ".github/actions/download-pdfium/**"
-      - ".github/workflows/ci-rust.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -943,7 +932,7 @@ jobs:
   pdfium-engine:
     name: Rust pdfium engine (real library)
     if: >-
-      ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -1018,7 +1007,7 @@ jobs:
   pdfium-gating:
     name: Rust pdfium gating (no library)
     if: >-
-      ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
+      ${{ github.ref == 'refs/heads/main' && (github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

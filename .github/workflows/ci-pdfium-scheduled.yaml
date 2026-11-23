@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-pdfium-scheduled
-  cancel-in-progress: false
+  group: ci-pdfium-scheduled-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   XBERG_REQUIRE_PDFIUM: "1"
@@ -93,7 +93,7 @@ jobs:
   newest:
     name: Newest build ${{ needs.latest.outputs.latest }} (${{ matrix.os }})
     needs: latest
-    if: ${{ needs.latest.outputs.newer == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.latest.outputs.newer == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     strategy:
@@ -139,7 +139,7 @@ jobs:
   report:
     name: Report drift
     needs: [latest, newest]
-    if: ${{ always() && needs.latest.outputs.newer == 'true' && needs.newest.result != 'skipped' }}
+    if: ${{ github.ref == 'refs/heads/main' && always() && needs.latest.outputs.newer == 'true' && needs.newest.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
