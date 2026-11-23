@@ -1283,7 +1283,10 @@ def test_windows_cli_archive_ships_dynamic_libheif_with_notices() -> None:
     assert "${XBERG_LIBHEIF_DLL_DIR:?}" in run, "the archive must stage the codec DLLs from vcpkg"
     assert 'if [[ "$SUFFIX" != "-no-gpl-lgpl" ]]' in run, "the no-GPL archive must stay codec-free"
     assert "stage_windows_heif_dlls.py" in run, "stage only the codec roots and their imports, not *.dll"
-    assert 'cp "$HEIF_BIN"/*.dll' not in run, "a blind glob copy would ship unneeded DLLs such as zlib1.dll"
+    assert 'cp "$HEIF_BIN"/*.dll' not in run, "a blind glob copy would ship unneeded DLLs"
+    assert '/z.dll"' in run and 'cp "$ZLIB_DLL" "$STAGE/z.dll"' in run, (
+        "xberg.exe imports the vcpkg zlib through libz-sys, so z.dll must ship in every archive variant"
+    )
     for notice in ("LGPL-3.0.txt", "GPL-3.0.txt", "libheif-COPYING", "libde265-COPYING", "aom-COPYING"):
         assert notice in run, f"the archive must stage {notice}"
     assert "GPL-SOURCE-OFFER-windows-heif.txt" in run, "the archive must stage the written source offer"

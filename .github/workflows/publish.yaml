@@ -2204,7 +2204,7 @@ jobs:
             cp "$BINARY_PATH" "$STAGE/xberg.exe"
             # libheif and libde265 are LGPL-3.0 and are linked as shared libraries, never
             # into xberg.exe (#3339). Stage only the codec roots and the DLLs they actually
-            # import; a blind *.dll copy would also ship unrelated DLLs such as zlib1.dll.
+            # import; a blind *.dll copy would also ship unrelated DLLs. z.dll is staged separately below.
             # Then the §4(b) texts and the §3/§6 corresponding-source offer.
             # The no-GPL archive compiles `heic` out and stays codec-free. ~keep
             CLOSURE_TOOLS="$GITHUB_WORKSPACE/.release-tools/scripts/ci"
@@ -2220,6 +2220,12 @@ jobs:
               cp "$HEIF_SHARE/libde265/copyright" "$STAGE/libde265-COPYING"
               cp "$HEIF_SHARE/aom/copyright" "$STAGE/aom-COPYING"
             fi
+            # libz-sys resolves the vcpkg zlib installed for the dynamic triplet, so xberg.exe
+            # itself imports z.dll in both archive variants; the closure gate rejects the ZIP
+            # without it. zlib is permissively licensed and covered by THIRD_PARTY_LICENSES.md. ~keep
+            ZLIB_DLL="$(cygpath -u "${XBERG_LIBHEIF_DLL_DIR:?}")/z.dll"
+            test -f "$ZLIB_DLL"
+            cp "$ZLIB_DLL" "$STAGE/z.dll"
             ORT_RUNTIME_DLL="$(cygpath -u "${ORT_DYLIB_PATH:?}")"
             test -f "$ORT_RUNTIME_DLL"
             pwsh -NoProfile -File "$CLOSURE_TOOLS/vendor-windows-native-closure.ps1" -Artifact "$STAGE" -DllSourceDir "$(cygpath -w "$(dirname "$ORT_RUNTIME_DLL")")" -NativeGlob "xberg.exe"

@@ -150,9 +150,9 @@ if (-not $libheifCacheHit) {
   # links replaceable DLLs and ships their texts instead of embedding the code in
   # xberg.exe (#3339). zlib is installed in the same triplet only so libz-sys's vcpkg
   # probe succeeds under VCPKGRS_TRIPLET=x64-windows and it does not fall back to a
-  # vendored zlib beside the static zlib xberg-libwpd links. Nothing copies
-  # zlib1.dll into the release ZIP; the archive closure gate rejects a ZIP whose
-  # executable imports it without it. ~keep
+  # vendored zlib beside the static zlib xberg-libwpd links. xberg.exe therefore
+  # imports the vcpkg zlib DLL (z.dll), which the CLI packaging step stages explicitly;
+  # the archive closure gate rejects a ZIP whose executable imports it without it. ~keep
   if (-not (Retry-Command { & $vcpkgExe install "libheif[core,aom,libde265]:x64-windows" "zlib:x64-windows" --recurse } -MaxAttempts 2)) {
     throw "Failed to install libheif via the verified vcpkg baseline"
   }
