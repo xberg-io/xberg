@@ -303,6 +303,7 @@ main() {
     artifact="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
     unzip -qo "$artifact" -d "$WORKDIR"
     vendor_tree "$WORKDIR"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/rewrite_wheel_record.py" "$WORKDIR"
     rm -f "$artifact"
     (cd "$WORKDIR" && zip -qr "$artifact" .)
     ;;

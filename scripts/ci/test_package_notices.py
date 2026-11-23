@@ -19,6 +19,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("package-notices.py").resolve()
 ROOT = SCRIPT.parents[2]
+REWRITE_SCRIPT = Path(__file__).with_name("rewrite_wheel_record.py").resolve()
 NOTICES = ("LICENSE", "THIRD_PARTY_LICENSES.md")
 
 
@@ -33,6 +34,10 @@ def run_script(*arguments: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
+
+
+def run_script_at(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, str(script), *arguments], text=True, capture_output=True, check=False)
 
 
 def record_rows(archive_path: Path) -> list[list[str]]:
@@ -242,6 +247,26 @@ class PackageNoticesTests(unittest.TestCase):
         result = run_script("check", "--format", "wheel", "--expected-count", "1", str(wheel))
         assert result.returncode == 1
         assert "RECORD hash mismatch" in result.stderr
+
+    def test_should_accept_a_wheel_whose_record_was_rebuilt_after_vendoring(self) -> None:
+        wheel = build_wheel(self.root)
+        tree = self.root / "unpacked"
+        with zipfile.ZipFile(wheel) as archive:
+            for name in archive.namelist():
+                target = tree / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(name))
+        (tree / "demo" / "libvendored.so.1").write_bytes(b"vendored")
+        (tree / "demo" / "__init__.py").write_bytes(b"patched")
+        wheel.unlink()
+        rebuilt = run_script_at(REWRITE_SCRIPT, str(tree))
+        assert rebuilt.returncode == 0, rebuilt.stderr
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for path in sorted(p for p in tree.rglob("*") if p.is_file()):
+                archive.write(path, path.relative_to(tree).as_posix())
+        result = run_script("inject", "--format", "wheel", "--expected-count", "1", str(wheel))
+        assert result.returncode == 0, result.stderr
+        assert "demo/libvendored.so.1" in {row[0] for row in record_rows(wheel)}
 
     def test_should_reject_a_wheel_that_omits_a_record_row(self) -> None:
         wheel = build_wheel(self.root)
