@@ -14,7 +14,7 @@ task_sets = [
 ]
 
 [overrides."github:xberg-io/alef"]
-version = "0.132.0"
+version = "0.132.4"
 reason = "alef.toml alef_version pins the 0.132.x line; 1.5.0 needs bundled_notices (AAR) and additional_licenses (POM); move both together"
 
 [task_overrides]
