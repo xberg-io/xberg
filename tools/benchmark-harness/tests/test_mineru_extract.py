@@ -28,7 +28,7 @@ class MineruBatchConformanceTest(unittest.TestCase):
         package = types.ModuleType("mineru")
         package.MinerUParser = object
         with (
-            mock.patch.object(wrapper.importlib_metadata, "version", return_value="4.1.3"),
+            mock.patch.object(wrapper.importlib_metadata, "version", return_value="4.2.3"),
             mock.patch.dict("sys.modules", {"mineru": package}),
         ):
             assert wrapper._load_mineru_api() is object

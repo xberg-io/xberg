@@ -1590,7 +1590,7 @@ jobs:
 
       - name: Install liteparse CLI (lit)
         run: |
-          cargo install liteparse --version 2.9.0 --locked
+          cargo install liteparse --version 2.21.0 --locked
           lit --version
 
       - name: Run benchmark
