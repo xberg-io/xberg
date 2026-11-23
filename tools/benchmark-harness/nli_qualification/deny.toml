@@ -7,6 +7,8 @@ yanked = "warn"
 unused-ignored-advisory = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "Existing project exception narrowed to this leaf: tokenizers 0.23.2 uses unmaintained paste 1.0.15 with no patched release; no vulnerability is ignored (#2334)." },
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained only, no safe upgrade; chrono arrives through hf-hub's xet-client and xet-runtime with no maintained drop-in replacement yet." },
+  { id = "RUSTSEC-2026-0542", reason = "unmaintained only, wraps chrono; arrives through xet-data." },
 ]
 
 [licenses]
