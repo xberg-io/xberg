@@ -4,7 +4,7 @@ set -euo pipefail
 # ~keep Rewritten by scripts/sync_integration_versions.py on every release. The plugin only accepts a
 # ~keep binary at or above this version, and downloads exactly this release, so a plugin update
 # ~keep cannot keep running an older xberg that happens to be installed.
-PINNED_VERSION="1.5.0"
+PINNED_VERSION="1.5.1"
 
 log() { printf 'xberg-launch: %s\n' "$*" >&2; }
 die() {

@@ -465,9 +465,9 @@ dependencies = [
 
 [[package]]
 name = "comrak"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac117e26984ed52df05f295e84217255ca14b1bed983cbe276abb292edce1189"
+checksum = "a253d04a12dff46b9ff641890e76bad5f6475afa891faac93d736a04fed5804e"
 dependencies = [
  "caseless",
  "entities",
@@ -4491,7 +4491,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xberg"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -4544,7 +4544,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
