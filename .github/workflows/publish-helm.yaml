@@ -145,7 +145,7 @@ jobs:
         if: steps.meta.outputs.dry_run != 'true'
         # cosign-installer has no v4 major tag. v4 defaults to cosign 3, whose bundle-format signatures the Artifact Hub
         # "Signed" label has not been verified against, so stay on cosign 2 (legacy .sig format). ~keep
-        uses: sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@v4.1.3
         with:
           cosign-release: v2.6.5
 
