@@ -429,7 +429,7 @@ fn a_processor_config_whose_grid_exceeds_the_tile_budget_is_rejected() {
     .unwrap_err()
     .to_string();
     assert!(error.contains("tiles"), "{error}");
-    assert!(MAX_TILES >= 16);
+    const { assert!(MAX_TILES >= 16) };
 
     // A tile grid that fits but whose prompt expansion would exceed the token ceiling.
     let error = PreprocessConfig::from_json(

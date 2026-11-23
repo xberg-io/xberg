@@ -293,7 +293,7 @@ pub mod captioning;
 /// Pinned inventory of experimental candidate models staged on owned Hugging Face repositories.
 /// Compiled whenever the inventory checks can run: tests always exercise it, and production builds
 /// only where the shared model downloader exists.
-#[cfg(any(test, model_download))]
+#[cfg(all(not(target_arch = "wasm32"), any(test, model_download)))]
 // Part of the inventory's read API is consumed by tests and by staged-model consumers that are
 // feature-gated separately; keep its completeness checked without dead-code noise. ~keep
 #[cfg_attr(not(test), allow(dead_code))]

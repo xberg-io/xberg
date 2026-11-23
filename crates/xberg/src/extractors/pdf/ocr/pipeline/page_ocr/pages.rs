@@ -1,6 +1,7 @@
 // Each phase binds the whole context by value and writes only the fields its own feature leg
-// touches; which of those bindings need `mut` therefore differs per build. ~keep
-#![allow(unused_mut)]
+// touches; which of those bindings need `mut`, and which imports and bindings are read at all,
+// therefore differs per build. ~keep
+#![allow(unused_mut, unused_imports, unused_variables)]
 
 use super::super::*;
 use super::*;

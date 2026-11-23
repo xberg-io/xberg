@@ -230,14 +230,14 @@ fn rescale_to_max_len(height: u32, width: u32, max_len: u32) -> (u32, u32) {
     let (height, width) = if width >= height {
         let width = max_len;
         let mut height = (f64::from(width) / aspect_ratio) as u32;
-        if height % 2 != 0 {
+        if !height.is_multiple_of(2) {
             height += 1;
         }
         (height, width)
     } else {
         let height = max_len;
         let mut width = (f64::from(height) * aspect_ratio) as u32;
-        if width % 2 != 0 {
+        if !width.is_multiple_of(2) {
             width += 1;
         }
         (height, width)

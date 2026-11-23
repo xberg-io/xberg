@@ -287,6 +287,7 @@ pub(super) async fn prepare<'a>(
     #[cfg(not(feature = "pdf"))]
     let lazy_pdf_page_count = 0;
 
+    #[allow(unused_imports)]
     use std::sync::Arc;
 
     let configured_batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());

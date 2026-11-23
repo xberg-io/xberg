@@ -10,6 +10,8 @@ use std::sync::Arc;
 use ort::session::SessionInputValue;
 use ort::value::Tensor;
 
+type PastEntry = (String, (Vec<i64>, Vec<f32>));
+
 use super::artifacts::read_artifacts;
 use super::control::{RequestState, WorkerControl};
 use super::preprocess::{PreprocessConfig, preprocess};
@@ -39,7 +41,7 @@ fn decoder_inputs(
     position: Vec<i64>,
     context_tokens: usize,
     use_cache: bool,
-    past: &[(String, (Vec<i64>, Vec<f32>))],
+    past: &[PastEntry],
 ) -> Vec<(String, SessionInputValue<'static>)> {
     names
         .iter()
@@ -103,7 +105,7 @@ fn run_decoder_branches(precision: LocalCaptioningPrecision) {
         false,
         &[],
     );
-    let present: Vec<(String, (Vec<i64>, Vec<f32>))> = {
+    let present: Vec<PastEntry> = {
         let options = ort::session::RunOptions::new().unwrap();
         let outputs = match decoder.run_with_options(values, &options) {
             Ok(outputs) => outputs,
