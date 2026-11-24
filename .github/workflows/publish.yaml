@@ -7041,8 +7041,15 @@ jobs:
         # committed lockfile can never pre-match it (the stale rc.32 lockfile broke rc.36's npm
         # publish). install reconciles the core entry against the just-published version while
         # preserving the third-party pins already recorded in package-lock.json. ~keep
+        # n8n-nodes-xberg only compiles TypeScript, but its dev dependency isolated-vm (pulled in
+        # through n8n-workflow) builds a V8 addon that does not compile against Node 26. Skip
+        # install scripts for that package; no other build step needs them. ~keep
         run: |
-          npm install --no-audit --no-fund
+          if [[ "${{ matrix.package }}" == "n8n-nodes-xberg" ]]; then
+            npm install --no-audit --no-fund --ignore-scripts
+          else
+            npm install --no-audit --no-fund
+          fi
           npm run build
       - uses: xberg-io/actions/publish-npm@v1
         with:
