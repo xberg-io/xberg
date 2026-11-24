@@ -79,6 +79,15 @@ platforms). The Rust crate texts are collected from the same graphs `cargo deny`
   which apply patches to all three libraries, and those patches are listed in the Corresponding
   Source table below. Every shipped library remains replaceable, satisfying LGPL §6.
   Upstream source: <https://github.com/strukturag/libheif>.
+- **LGPL-3.0 compliance method (Windows CLI ZIP):** the codecs are linked as shared libraries,
+  the §4(d)(1) route, rather than statically. An interface-compatible rebuild of `heif.dll` (or
+  `libde265.dll`) dropped in beside `xberg.exe` is loaded instead, which satisfies §4(d)(1)(b),
+  and the ZIP ships `GPL-SOURCE-OFFER.txt` for the Corresponding Source (LGPL-3.0 §3, GPL-3.0 §6).
+  This file ships in the ZIP as the §4(a) notice; the texts required by §4(b) ship as
+  `LGPL-3.0.txt`, `GPL-3.0.txt` and the per-port `*-COPYING` files.
+- **Modification notice (LGPL-3.0 §2):** the Windows codecs are not compiled verbatim from the
+  upstream tarballs. The vcpkg ports apply the patches named in the Corresponding Source table
+  below before building, and Xberg makes no further changes to them.
 
 ## libheif codec libraries
 
@@ -173,9 +182,9 @@ upstream tarballs untouched.
 
 | Artifact | Copyleft components | Build and patches | Upstream source |
 | --- | --- | --- | --- |
-| macOS and Linux CLI archives, Docker images and manylinux wheels | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh, docker/Dockerfile.*` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
-| macOS arm64 Elixir NIF archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.3, x265 4.3 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz> (sha256 12c01dc731ed7b5a999e28120b45bf58a002ba3435a4ba2cfbc1e084a27c9c04); x265: <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz> (sha256 83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121) |
-| macOS arm64 PHP extension archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs, statically linked by `scripts/ci/build-macos-heif-deps.sh` at release 1.5.0 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
+| macOS and Linux CLI archives, Docker images and manylinux wheels | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh, docker/Dockerfile.*` at release 1.5.1 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
+| macOS arm64 Elixir NIF archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.3, x265 4.3 | unmodified upstream release tarballs via `scripts/ci/build-macos-heif-deps.sh` at release 1.5.1 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz> (sha256 12c01dc731ed7b5a999e28120b45bf58a002ba3435a4ba2cfbc1e084a27c9c04); x265: <https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz> (sha256 83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121) |
+| macOS arm64 PHP extension archive | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | unmodified upstream release tarballs, statically linked by `scripts/ci/build-macos-heif-deps.sh` at release 1.5.1 | libheif: <https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz> (sha256 f7483e818503ea6224c8863e4a56ac02c7089021a98472c811c12aa19faf2475); libde265: <https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz> (sha256 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905); libaom: <https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz> (sha256 67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc) |
 | xberg-cli-x86_64-pc-windows-msvc.zip | libheif 1.23.7, libde265 1.1.3, libaom 3.15.2 | vcpkg port set at baseline `5363acb796e576328288fae60c25304e227e9839`: libheif patched (`cxx-linkage-pkgconfig.diff`, `find-modules.diff`, `gdk-pixbuf.patch`, `symbol-exports.diff`, `vvc-pkgconfig.patch`); libde265 patched (`fix-linkage.patch`); libaom patched (`aom-rename-static.diff`) | libheif: <https://github.com/strukturag/libheif> (e3b59c0ab6da9a86273d3f6de693d5d1fc955c84d97ca5514c58c62b6ff8ece44e81e215a126d6dbb4248b1e344f60251443c520058033fd71a7282263492180); libde265: <https://github.com/strukturag/libde265> (58eabdac466c0b59e0bc82e4d2b6d4fc9cbf6ee0af9562e36d63c0601c92c2fe21bd3dfca2a119934ee4a9dcc73e7207f6ea25dba78382752e901374896c4471); libaom: <https://aomedia.googlesource.com/aom> (commit af3dc9aadc793c1b00edc003e3fc19a44fdeb574) |
 
 ### Written offers of Corresponding Source
@@ -3369,7 +3378,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: `droid-sans-fallback`, candle-nn 0.11.1, candle-transformers 0.11.1, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, gloo-timers 0.4.1, hf-hub 1.0.0, hf-xet 1.8.1, jni 0.22.4, lofty 0.25.5, mail-parser 1.0.1, mathemascii 0.4.0, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, opentelemetry 0.33.1, opentelemetry-semantic-conventions 0.33.1, opentelemetry_sdk 0.33.1, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tract-extra 0.23.10, typst-syntax 0.15.1, typst-timing 0.15.1, typst-utils 0.15.1, wasite 1.0.2, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, xet-client 1.8.1, xet-core-structures 1.8.1, xet-data 1.8.1, xet-runtime 1.8.1, zune-inflate 0.2.54
+Applies to: `droid-sans-fallback`, candle-nn 0.11.1, candle-transformers 0.11.1, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, gloo-timers 0.4.1, hf-hub 1.0.0, hf-xet 1.8.1, jni 0.22.4, lofty 0.25.5, mail-parser 1.0.2, mathemascii 0.4.0, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, opentelemetry 0.33.1, opentelemetry-semantic-conventions 0.33.1, opentelemetry_sdk 0.33.1, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tract-extra 0.23.10, typst-syntax 0.15.1, typst-timing 0.15.1, typst-utils 0.15.1, wasite 1.0.2, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, xet-client 1.8.1, xet-core-structures 1.8.1, xet-data 1.8.1, xet-runtime 1.8.1, zune-inflate 0.2.54
 
 ### T-077d138387dd
 
@@ -3489,7 +3498,7 @@ Applies to: fallible-iterator 0.3.0
 
 ### T-090a294a492a
 
-Source: `LICENSE-MIT`. Applies to 2 entries.
+Source: `LICENSE-MIT`. Applies to 1 entry.
 
 ```text
 Copyright (c) 2019 Embark Studios
@@ -3519,7 +3528,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: cfg-expr 0.17.2, cfg-expr 0.20.11
+Applies to: cfg-expr 0.17.2
 
 ### T-0982c3339015
 
@@ -7346,7 +7355,7 @@ Applies to: fearless_simd 1.2.0, kurbo 0.13.1, polycool 0.4.0
 
 ### T-23f18e03dc49
 
-Source: `LICENSE-MIT`. Applies to 73 entries.
+Source: `LICENSE-MIT`. Applies to 74 entries.
 
 ```text
 Permission is hereby granted, free of charge, to any
@@ -7374,7 +7383,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: adler2 2.0.1, allocator-api2 0.2.21, anyhow 1.0.104, atomic-waker 1.1.2, biblatex 0.12.0, biblib 0.10.0, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.15.4, daachorse 3.0.3, dary_heap 0.3.9, derive_utils 0.16.0, dyn-clone 1.0.20, dyn-hash 1.0.0, erased-serde 0.4.11, fast-float2 0.2.4, fastrand 2.5.0, finl_unicode 1.5.1, hermit-abi 0.5.3, inventory 0.3.25, itoa 1.0.19, lazy_static 1.5.1, libyaml-rs 0.3.0, linux-raw-sys 0.12.1, mel_spec 0.5.0, minimal-lexical 0.2.1, monostate 0.1.18, once_cell 1.21.4, oneshot 0.1.13, pathdiff 0.2.3, pin-project 1.2.0, pin-project-lite 0.2.18, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, rustix 1.1.6, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, simd_cesu8 1.2.0, smol_str 0.3.7, swift-bridge 0.1.59, syn 1.0.109, syn 2.0.119, syn 3.0.10, system-deps 9.0.1, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, tract-core 0.23.10, tract-data 0.23.10, tract-hir 0.23.10, tract-linalg 0.23.10, tract-nnef 0.23.10, tract-onnx 0.23.10, tract-onnx-opl 0.23.10, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-streams 0.5.0, wit-bindgen 0.57.1, yaml_serde 0.10.7, zmij 1.0.23
+Applies to: adler2 2.0.1, allocator-api2 0.2.21, anyhow 1.0.104, anyhow 1.0.105, atomic-waker 1.1.2, biblatex 0.12.0, biblib 0.10.0, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.15.4, daachorse 3.0.3, dary_heap 0.3.9, derive_utils 0.16.0, dyn-clone 1.0.20, dyn-hash 1.0.0, erased-serde 0.4.11, fast-float2 0.2.4, fastrand 2.5.0, finl_unicode 1.5.1, hermit-abi 0.5.3, inventory 0.3.25, itoa 1.0.19, lazy_static 1.5.1, libyaml-rs 0.3.0, linux-raw-sys 0.12.1, mel_spec 0.5.0, minimal-lexical 0.2.1, monostate 0.1.18, once_cell 1.21.4, oneshot 0.1.13, pathdiff 0.2.3, pin-project 1.2.0, pin-project-lite 0.2.18, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, rustix 1.1.6, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, simd_cesu8 1.2.0, smol_str 0.3.7, swift-bridge 0.1.59, syn 1.0.109, syn 2.0.119, syn 3.0.10, system-deps 9.0.1, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, tract-core 0.23.10, tract-data 0.23.10, tract-hir 0.23.10, tract-linalg 0.23.10, tract-nnef 0.23.10, tract-onnx 0.23.10, tract-onnx-opl 0.23.10, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-streams 0.5.0, wit-bindgen 0.57.1, yaml_serde 0.10.7, zmij 1.0.23
 
 ### T-248378d0a338
 
@@ -7983,7 +7992,7 @@ Applies to: aes 0.9.4
 
 ### T-268872b9816f
 
-Source: `LICENSE-Apache-2.0_WITH_LLVM-exception`. Applies to 9 entries.
+Source: `LICENSE-Apache-2.0_WITH_LLVM-exception`. Applies to 8 entries.
 
 ```text
 
@@ -8207,7 +8216,7 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-Applies to: linux-raw-sys 0.12.1, rustix 1.1.6, target-lexicon 0.12.16, target-lexicon 0.13.5, target-lexicon 0.13.6, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
+Applies to: linux-raw-sys 0.12.1, rustix 1.1.6, target-lexicon 0.12.16, target-lexicon 0.13.6, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
 
 ### T-270b0d81891a
 
@@ -8449,7 +8458,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: comrak 1.1.0
+Applies to: comrak 1.2.0
 
 ### T-275370a97013
 
@@ -15169,7 +15178,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: zip 9.8.1
+Applies to: zip 9.8.2
 
 ### T-592dc80f1a86
 
@@ -16074,7 +16083,7 @@ Applies to: atomic-waker 1.1.2
 
 ### T-62c7a1e35f56
 
-Source: `LICENSE-APACHE`. Applies to 48 entries.
+Source: `LICENSE-APACHE`. Applies to 49 entries.
 
 ```text
                               Apache License
@@ -16255,7 +16264,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ```
 
-Applies to: allocator-api2 0.2.21, anyhow 1.0.104, bon 3.10.3, constant_time_eq 0.4.2, constant_time_eq 0.6.1, daachorse 3.0.3, dary_heap 0.3.9, dyn-clone 1.0.20, dyn-hash 1.0.0, ecow 0.2.6, erased-serde 0.4.11, finl_unicode 1.5.1, heapify 0.2.0, inventory 0.3.25, itoa 1.0.19, libc 0.2.191, litrs 1.0.1, monostate 0.1.18, oneshot 0.1.13, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, reqwest-middleware 0.5.2, ryu 1.0.23, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, serde_urlencoded 0.7.1, subsetter 0.2.6, syn 2.0.119, syn 3.0.10, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, unicode-math-class 0.1.0, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, wasm-streams 0.5.0, whoami 2.1.3, yaml_serde 0.10.7
+Applies to: allocator-api2 0.2.21, anyhow 1.0.104, anyhow 1.0.105, bon 3.10.3, constant_time_eq 0.4.2, constant_time_eq 0.6.1, daachorse 3.0.3, dary_heap 0.3.9, dyn-clone 1.0.20, dyn-hash 1.0.0, ecow 0.2.6, erased-serde 0.4.11, finl_unicode 1.5.1, heapify 0.2.0, inventory 0.3.25, itoa 1.0.19, libc 0.2.191, litrs 1.0.1, monostate 0.1.18, oneshot 0.1.13, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, reqwest-middleware 0.5.2, ryu 1.0.23, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, serde_urlencoded 0.7.1, subsetter 0.2.6, syn 2.0.119, syn 3.0.10, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, unicode-math-class 0.1.0, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, wasm-streams 0.5.0, whoami 2.1.3, yaml_serde 0.10.7
 
 ### T-62f78cf02422
 
@@ -20585,7 +20594,7 @@ Applies to: astral-html 0.0.4
 
 ### T-8173d5c29b4f
 
-Source: `LICENSE-APACHE`. Applies to 9 entries.
+Source: `LICENSE-APACHE`. Applies to 8 entries.
 
 ```text
                               Apache License
@@ -20791,7 +20800,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: bit-set 0.11.1, bit-set 0.8.0, bit-vec 0.10.2, bit-vec 0.8.0, cfg-expr 0.17.2, cfg-expr 0.20.11, downcast-rs 2.0.2, minimal-lexical 0.2.1, qoi 0.4.1
+Applies to: bit-set 0.11.1, bit-set 0.8.0, bit-vec 0.10.2, bit-vec 0.8.0, cfg-expr 0.17.2, downcast-rs 2.0.2, minimal-lexical 0.2.1, qoi 0.4.1
 
 ### T-81c54baa1c7b
 
@@ -27334,7 +27343,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.1, crawlberg-robots 1.13.1, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.0, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.0, jsonschema-value 0.63.0, liter-llm 2.7.3, lofty 0.25.5, mail-parser 1.0.1, napi 3.16.2, napi-build 2.6.0, napi-derive-backend 7.0.1, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.1, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.10, tree-sitter-language-pack 1.25.2, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
+Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.2, crawlberg-robots 1.13.2, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.1, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.0, jsonschema-value 0.63.0, liter-llm 2.7.4, lofty 0.25.5, mail-parser 1.0.2, napi 3.16.2, napi-build 2.6.0, napi-derive-backend 7.0.1, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.1, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.10, tree-sitter-language-pack 1.27.1, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
 
 ### T-b1181a40b2a7
 
@@ -31253,7 +31262,7 @@ Applies to: atomic 0.5.3, lock_api 0.4.14, lock_api 0.5.0, parking_lot 0.12.5, p
 
 ### T-c9bff7573892
 
-Source: `LICENSE-BOOST`. Applies to 2 entries.
+Source: `LICENSE-BOOST`. Applies to 3 entries.
 
 ```text
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -31281,7 +31290,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: ryu 1.0.23, whoami 2.1.3
+Applies to: ryu 1.0.23, whoami 2.1.3, xxhash-rust 0.8.21
 
 ### T-ca2abdf69588
 
@@ -34615,7 +34624,7 @@ For these and/or other purposes and motivations, and without any expectation of 
      d. Affirmer understands and acknowledges that Creative Commons is not a party to this document and has no duty or obligation with respect to this CC0 or use of the Work.
 ```
 
-Applies to: notify 8.2.2
+Applies to: notify 9.0.0
 
 ### T-e0b96c91bddf
 

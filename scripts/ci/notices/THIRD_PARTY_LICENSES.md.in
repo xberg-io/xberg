@@ -41,6 +41,15 @@ platforms). The Rust crate texts are collected from the same graphs `cargo deny`
   which apply patches to all three libraries, and those patches are listed in the Corresponding
   Source table below. Every shipped library remains replaceable, satisfying LGPL §6.
   Upstream source: <https://github.com/strukturag/libheif>.
+- **LGPL-3.0 compliance method (Windows CLI ZIP):** the codecs are linked as shared libraries,
+  the §4(d)(1) route, rather than statically. An interface-compatible rebuild of `heif.dll` (or
+  `libde265.dll`) dropped in beside `xberg.exe` is loaded instead, which satisfies §4(d)(1)(b),
+  and the ZIP ships `GPL-SOURCE-OFFER.txt` for the Corresponding Source (LGPL-3.0 §3, GPL-3.0 §6).
+  This file ships in the ZIP as the §4(a) notice; the texts required by §4(b) ship as
+  `LGPL-3.0.txt`, `GPL-3.0.txt` and the per-port `*-COPYING` files.
+- **Modification notice (LGPL-3.0 §2):** the Windows codecs are not compiled verbatim from the
+  upstream tarballs. The vcpkg ports apply the patches named in the Corresponding Source table
+  below before building, and Xberg makes no further changes to them.
 
 ## libheif codec libraries
 
