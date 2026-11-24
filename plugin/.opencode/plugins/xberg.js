@@ -1,6 +1,6 @@
 // AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 // Content-Hash: blake3:46f8f791b8245653dbdbaf9e518595813fb8d6ca6e976cddbc0d1a7879447f3f
-// Source-Hash: blake3:ec9d4d8ce2f39047223f7a99bbabbbbc2a02c344273e8703a80abfd0d85c9f03
+// Source-Hash: blake3:c737030b81aa77941284ed51d1f79c62507ea7731681c990b45239ed04ee8c83
 // Schema-Version: v1
 
 import { spawn } from "node:child_process";

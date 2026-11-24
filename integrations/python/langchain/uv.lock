@@ -511,7 +511,7 @@ wheels = [
 
 [[package]]
 name = "langchain-xberg"
-version = "1.5.1"
+version = "1.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "langchain-core" },
@@ -1380,7 +1380,7 @@ wheels = [
 
 [[package]]
 name = "xberg"
-version = "1.5.1"
+version = "1.5.2"
 source = { editable = "../../../packages/python" }
 
 [package.metadata]

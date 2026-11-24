@@ -3,7 +3,7 @@
   "name": "io.github.xberg-io/xberg",
   "title": "Xberg",
   "description": "Extract text, tables, metadata, and images from documents via local CLI.",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "websiteUrl": "https://xberg.io",
   "repository": {
     "url": "https://github.com/xberg-io/xberg",
@@ -14,7 +14,7 @@
     {
       "registryType": "npm",
       "identifier": "@xberg-io/xberg-cli",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [1.5.2] - 2026-11-24
+
+### Fixed
+
+- The 1.5.0 and 1.5.1 releases did not publish: the Linux arm64 and musl Python wheels and the Windows CLI archives failed packaging checks. 1.5.2 ships the 1.5.0 changes with those artifacts fixed. The Windows CLI archives now include `z.dll` and the LGPL compliance and modification notices in `THIRD_PARTY_LICENSES.md`.
+
 ## [1.5.1] - 2026-11-24
 
 ### Fixed
