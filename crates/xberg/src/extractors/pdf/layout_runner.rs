@@ -3015,7 +3015,7 @@ mod tests {
 
         assert_eq!(
             capacity_of(&letter_pages(None)),
-            2,
+            crate::layout::engine::LAYOUT_INFERENCE_MAX_BATCH,
             "uncropped pages keep the engine's capacity"
         );
         assert_eq!(capacity_of(&letter_pages(Some((104, 104, 1_067, 1_333)))), 1);

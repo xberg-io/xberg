@@ -553,6 +553,15 @@ pub(crate) fn validate_layout_inference_peak(
     )
 }
 
+/// Most pages one layout inference call receives, whatever the memory budget would admit.
+///
+/// RT-DETR costs about 21 G instructions per image at batch 2 against about 5.1 G at batch 1
+/// (M4 Pro, 6-page PDF: 132 G instructions at batch 2, 37 G at batch 1, identical output and
+/// peak footprint). ORT appears to keep its fast convolution path only for a single image. The
+/// memory budget can still lower the capacity, never raise it past this.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+pub(crate) const LAYOUT_INFERENCE_MAX_BATCH: usize = 1;
+
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(crate) fn layout_inference_batch_capacity(
     width: u32,
@@ -570,7 +579,7 @@ pub(crate) fn layout_inference_batch_capacity(
     if capacity == 0 {
         validate_layout_inference_peak(width, height, current_live_bytes, 1, security_limits)?;
     }
-    Ok(capacity.min(candidate_count).max(1))
+    Ok(capacity.min(candidate_count).min(LAYOUT_INFERENCE_MAX_BATCH).max(1))
 }
 
 /// Sum the decoded size of every raster in `images`, reporting an overflow as a dimension
@@ -617,9 +626,25 @@ mod layout_peak_tests {
             layout_inference_batch_capacity(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, PAGE_COUNT, &limits)
                 .expect("default limits must support at least one inference page");
 
-        assert_eq!(capacity, 2);
+        assert_eq!(capacity, LAYOUT_INFERENCE_MAX_BATCH);
         validate_layout_inference_peak(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, capacity, &limits)
             .expect("the selected subbatch must fit default limits");
+    }
+
+    #[test]
+    fn huge_budget_never_raises_capacity_past_the_batch_cap() {
+        let limits = crate::extractors::security::SecurityLimits {
+            max_content_size: usize::MAX,
+            ..Default::default()
+        };
+
+        let capacity = layout_inference_batch_capacity(1_275, 1_650, 0, 64, &limits).expect("capacity");
+
+        assert_eq!(capacity, LAYOUT_INFERENCE_MAX_BATCH);
+        assert_eq!(
+            layout_inference_batch_capacity(1_275, 1_650, 0, 0, &limits).expect("empty"),
+            0
+        );
     }
 
     /// Ties the workspace estimate to the things it estimates, so the three
