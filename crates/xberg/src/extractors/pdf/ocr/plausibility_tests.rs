@@ -350,8 +350,8 @@ fn cp1251_cyrillic_read_as_latin1_is_implausible_gh1767() {
 fn the_gh1767_carrier_defeats_the_confidence_signal_on_both_clauses() {
     let prose = select_prose_text(CP1251_CYRILLIC_AS_LATIN1);
     let chunks = prose_chunks(&prose);
-    let chunk_refs: Vec<&str> = chunks.iter().map(String::as_str).collect();
-    let reliability = crate::language_detection::chunk_reliability(&chunk_refs);
+    let reliability =
+        crate::language_detection::chunk_reliability(&chunks, usize::MAX).expect("an unbounded read never stops early");
 
     assert!(
         reliability.reliable_ratio() >= t().min_reliable_language_chunk_ratio,
@@ -394,5 +394,184 @@ fn diacritic_dense_real_prose_stays_far_below_the_mojibake_threshold() {
         latin1_supplement_alpha_ratio(CP1251_CYRILLIC_AS_LATIN1),
         1.0,
         "every letter of the carrier sits inside the block"
+    );
+}
+
+/// The chunking before it sliced in place: the prose cut into owned strings of
+/// [`crate::language_detection::CHUNK_SIZE`] characters through a `Vec<char>`, a short tail
+/// dropped. The reference [`prose_chunks`] must reproduce.
+fn legacy_prose_chunks(prose_text: &str) -> Vec<String> {
+    let chars: Vec<char> = prose_text.chars().collect();
+    let mut chunks: Vec<String> = chars
+        .chunks(crate::language_detection::CHUNK_SIZE)
+        .map(|chunk| chunk.iter().collect())
+        .collect();
+    if chunks.last().is_some_and(|tail| tail.chars().count() < 100) {
+        chunks.pop();
+    }
+    chunks
+}
+
+/// The verdict before detection could stop early: every chunk read, both clauses evaluated.
+fn legacy_verdict(text: &str, thresholds: &OcrQualityThresholds) -> PlausibilityVerdict {
+    let prose_text = select_prose_text(text);
+    let chunks = legacy_prose_chunks(&prose_text);
+    if chunks.len() < PLAUSIBILITY_MIN_PROSE_CHUNKS {
+        return PlausibilityVerdict::NotEvaluated;
+    }
+    let chunk_refs: Vec<&str> = chunks.iter().map(String::as_str).collect();
+    let reliability = crate::language_detection::chunk_reliability(&chunk_refs, usize::MAX)
+        .expect("an unbounded read never stops early");
+    let low_confidence = reliability.reliable_ratio() < thresholds.min_reliable_language_chunk_ratio
+        && reliability.mean_confidence() < PLAUSIBILITY_MAX_MEAN_CONFIDENCE;
+    let mojibake = latin1_supplement_alpha_ratio(&prose_text) >= MOJIBAKE_LATIN1_SUPPLEMENT_ALPHA_RATIO;
+    if low_confidence || mojibake {
+        PlausibilityVerdict::Implausible
+    } else {
+        PlausibilityVerdict::Plausible
+    }
+}
+
+#[test]
+fn prose_chunks_slices_exactly_the_legacy_owned_chunks() {
+    let alphabets = ["a", "\u{E9}", "\u{4E2D}", "\u{1F600}", "ab\u{E9}\u{4E2D} "];
+    for alphabet in alphabets {
+        for repeat in 0..=700 {
+            let text = alphabet.repeat(repeat);
+            let sliced = prose_chunks(&text);
+            assert_eq!(
+                sliced,
+                legacy_prose_chunks(&text),
+                "chunking diverged for {repeat} repeats of {alphabet:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn reliable_chunks_clearing_ratio_is_the_least_count_that_fails_the_ratio_clause() {
+    assert_eq!(reliable_chunks_clearing_ratio(10, 0.1), 1);
+    assert_eq!(reliable_chunks_clearing_ratio(20, 0.1), 2);
+    assert_eq!(reliable_chunks_clearing_ratio(22, 0.1), 3);
+    assert_eq!(reliable_chunks_clearing_ratio(3, 0.0), 0);
+    assert_eq!(reliable_chunks_clearing_ratio(5, 1.0), 5);
+    assert_eq!(reliable_chunks_clearing_ratio(5, 1.5), 6);
+    for chunks in 1..=64usize {
+        for min_ratio in [0.0, 0.05, 0.1, 0.25, 1.0 / 3.0, 0.5, 0.9, 1.0] {
+            let least = reliable_chunks_clearing_ratio(chunks, min_ratio);
+            for reliable in 0..=chunks {
+                let clause_fails = (reliable as f64 / chunks as f64) >= min_ratio;
+                assert_eq!(
+                    clause_fails,
+                    reliable >= least,
+                    "{reliable}/{chunks} against {min_ratio}: least count {least}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn chunk_reliability_stops_at_the_requested_reliable_count() {
+    let english = select_prose_text(&ENGLISH_PROSE.repeat(3));
+    let chunks = prose_chunks(&english);
+    assert!(chunks.len() >= 3, "fixture must hold several chunks");
+    assert!(
+        crate::language_detection::chunk_reliability(&chunks, 1).is_none(),
+        "English prose holds a reliable chunk, so a read asked to stop at one must stop"
+    );
+    assert!(crate::language_detection::chunk_reliability(&chunks, 0).is_none());
+
+    let shifted = select_prose_text(&rot(ENGLISH_PROSE, 3).repeat(3));
+    let shifted_chunks = prose_chunks(&shifted);
+    let full = crate::language_detection::chunk_reliability(&shifted_chunks, usize::MAX)
+        .expect("an unbounded read never stops early");
+    assert_eq!(full.chunks, shifted_chunks.len());
+    let reached = full.reliable_chunks + 1;
+    let unstopped = crate::language_detection::chunk_reliability(&shifted_chunks, reached)
+        .expect("a count above every reliable chunk on the page is never reached");
+    assert_eq!(unstopped.reliable_chunks, full.reliable_chunks);
+    assert_eq!(unstopped.confidence_sum.to_bits(), full.confidence_sum.to_bits());
+}
+
+/// Pages spanning every verdict: real prose in three scripts, every ROT shift of English, a
+/// mojibake page, prose-free pages, a short tail at each length near the chunk floor, and
+/// English and ROT-3 text mixed in every proportion up to 2:6, so the reliable ratio takes many
+/// values between 0 and 1.
+fn equivalence_pages() -> Vec<String> {
+    let mut pages = vec![
+        ENGLISH_PROSE.to_string(),
+        GERMAN_PROSE.to_string(),
+        CHINESE_PROSE_SEGMENT.repeat(5),
+        CP1251_CYRILLIC_AS_LATIN1.to_string(),
+        SHORT_PAGE.to_string(),
+        NUMERIC_TABLE_PAGE.repeat(3),
+        FORMULA_HEAVY_PAGE.repeat(3),
+        table_rows_page(),
+        "Мы хотим видеть дальше чем окна дома напротив и слышать музыку ветра ".repeat(12),
+    ];
+    pages.extend((1..26).map(|shift| rot(ENGLISH_PROSE, shift)));
+    pages.extend([3, 13].map(|shift| rot(GERMAN_PROSE, shift)));
+    let long = ENGLISH_PROSE.repeat(2);
+    pages.extend((590..=900).step_by(7).map(|length| long[..length].to_string()));
+    let shifted = rot(ENGLISH_PROSE, 3);
+    for english in 0..=2 {
+        for rotated in 0..=6 {
+            pages.push(format!(
+                "{}\n{}",
+                ENGLISH_PROSE.repeat(english),
+                shifted.repeat(rotated)
+            ));
+            let lines: Vec<&str> = std::iter::repeat_n(ENGLISH_PROSE, english)
+                .chain(std::iter::repeat_n(shifted.as_str(), rotated))
+                .collect();
+            pages.push(lines.join("\n"));
+        }
+    }
+    pages
+}
+
+/// The early stop must never change a verdict. Thresholds include, per page, the page's own
+/// full-read reliable ratio and its neighbours on either side, the borderline values where
+/// stopping one chunk too soon or too late would flip the verdict.
+#[test]
+fn early_stopping_verdict_equals_the_full_read_verdict() {
+    let mut verdicts = std::collections::HashMap::new();
+    let mut boundary_cases = 0usize;
+    for page in equivalence_pages() {
+        let prose = select_prose_text(&page);
+        let chunks = prose_chunks(&prose);
+        let mut thresholds_to_try = vec![0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 1.0 / 3.0, 0.5, 0.75, 0.9, 1.0];
+        if chunks.len() >= PLAUSIBILITY_MIN_PROSE_CHUNKS {
+            let full = crate::language_detection::chunk_reliability(&chunks, usize::MAX)
+                .expect("an unbounded read never stops early");
+            let own = full.reliable_ratio();
+            thresholds_to_try.extend([own, own - 1e-12, own + 1e-12]);
+            boundary_cases += 1;
+        }
+        for min_ratio in thresholds_to_try {
+            let thresholds = OcrQualityThresholds {
+                min_reliable_language_chunk_ratio: min_ratio,
+                ..t()
+            };
+            let expected = legacy_verdict(&page, &thresholds);
+            assert_eq!(
+                evaluate_text_plausibility(&page, &thresholds),
+                expected,
+                "verdict changed at min_reliable_language_chunk_ratio {min_ratio} for page {:?}",
+                page.chars().take(80).collect::<String>()
+            );
+            *verdicts.entry(format!("{expected:?}")).or_insert(0usize) += 1;
+        }
+    }
+    for verdict in ["Plausible", "Implausible", "NotEvaluated"] {
+        assert!(
+            verdicts.get(verdict).copied().unwrap_or(0) > 0,
+            "the equivalence pages must reach every verdict, missing {verdict}: {verdicts:?}"
+        );
+    }
+    assert!(
+        boundary_cases >= 40,
+        "too few judged pages to probe the boundary: {boundary_cases}"
     );
 }

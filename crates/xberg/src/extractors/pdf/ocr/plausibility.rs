@@ -53,7 +53,7 @@ const PLAUSIBILITY_MIN_TAIL_CHUNK_CHARS: usize = 100;
 /// less prose than this — a numeric table, a sparse form, a formula-only page — abstain
 /// (`PlausibilityVerdict::NotEvaluated`) rather than risk a confident wrong answer from too
 /// little evidence. ~keep
-const PLAUSIBILITY_MIN_PROSE_CHUNKS: usize = 3;
+pub(super) const PLAUSIBILITY_MIN_PROSE_CHUNKS: usize = 3;
 /// The second guard on [`PlausibilityVerdict::Implausible`]: even when a page's reliable-chunk
 /// ratio is below threshold, it is only flagged when the mean chunk confidence is ALSO below
 /// this ceiling. Protects genuinely legible text in a close language pair (e.g. Danish vs.
@@ -165,27 +165,46 @@ pub(super) fn select_prose_text(text: &str) -> String {
 
 /// Split prose text into [`crate::language_detection::CHUNK_SIZE`]-character chunks, dropping
 /// a short trailing chunk (see [`PLAUSIBILITY_MIN_TAIL_CHUNK_CHARS`]).
-pub(super) fn prose_chunks(prose_text: &str) -> Vec<String> {
-    let chars: Vec<char> = prose_text.chars().collect();
-    let mut chunks: Vec<String> = chars
-        .chunks(crate::language_detection::CHUNK_SIZE)
-        .map(|chunk| chunk.iter().collect())
-        .collect();
-
-    if chunks
-        .last()
-        .is_some_and(|tail| tail.chars().count() < PLAUSIBILITY_MIN_TAIL_CHUNK_CHARS)
-    {
-        chunks.pop();
+pub(super) fn prose_chunks(prose_text: &str) -> Vec<&str> {
+    let mut chunks = Vec::with_capacity(prose_text.len() / crate::language_detection::CHUNK_SIZE + 1);
+    let mut start = 0usize;
+    let mut chars_in_chunk = 0usize;
+    for (index, _) in prose_text.char_indices() {
+        if chars_in_chunk == crate::language_detection::CHUNK_SIZE {
+            chunks.push(&prose_text[start..index]);
+            start = index;
+            chars_in_chunk = 0;
+        }
+        chars_in_chunk += 1;
     }
-
+    if chars_in_chunk >= PLAUSIBILITY_MIN_TAIL_CHUNK_CHARS {
+        chunks.push(&prose_text[start..]);
+    }
     chunks
+}
+
+/// The fewest reliable chunks, out of `chunks`, at which `reliable / chunks < min_ratio` no
+/// longer holds; `chunks + 1` when no count reaches that.
+///
+/// The expression is [`crate::language_detection::ChunkReliability::reliable_ratio`]'s, and it
+/// is monotone in the count, so a page whose reliable count reaches this value has a reliability
+/// clause that is false whatever the chunks not yet read hold. ~keep
+pub(super) fn reliable_chunks_clearing_ratio(chunks: usize, min_ratio: f64) -> usize {
+    (0..=chunks)
+        .find(|&reliable| (reliable as f64 / chunks as f64).partial_cmp(&min_ratio) != Some(std::cmp::Ordering::Less))
+        .unwrap_or(chunks + 1)
 }
 
 /// Judge a span of text's language/dictionary plausibility.
 ///
 /// Does not consult the character-shape gate ([`super::scoring::evaluate_native_text_for_ocr`])
 /// itself — callers that need to skip already-routed pages do so before calling this.
+///
+/// The verdict is `low_confidence || mojibake`. Mojibake needs no language detection and is
+/// read first. The low-confidence clause needs the reliable ratio below threshold, so
+/// detection stops at the reliable count that rules it out
+/// ([`reliable_chunks_clearing_ratio`]); only a page that never reaches it pays for every
+/// chunk, and its ratio and mean confidence are then computed over all of them as before.
 pub(super) fn evaluate_text_plausibility(text: &str, thresholds: &OcrQualityThresholds) -> PlausibilityVerdict {
     let prose_text = select_prose_text(text);
     let chunks = prose_chunks(&prose_text);
@@ -194,14 +213,18 @@ pub(super) fn evaluate_text_plausibility(text: &str, thresholds: &OcrQualityThre
         return PlausibilityVerdict::NotEvaluated;
     }
 
-    let chunk_refs: Vec<&str> = chunks.iter().map(String::as_str).collect();
-    let reliability = crate::language_detection::chunk_reliability(&chunk_refs);
+    if latin1_supplement_alpha_ratio(&prose_text) >= MOJIBAKE_LATIN1_SUPPLEMENT_ALPHA_RATIO {
+        return PlausibilityVerdict::Implausible;
+    }
 
-    let low_confidence_implausible = reliability.reliable_ratio() < thresholds.min_reliable_language_chunk_ratio
-        && reliability.mean_confidence() < PLAUSIBILITY_MAX_MEAN_CONFIDENCE;
-    let mojibake_implausible = latin1_supplement_alpha_ratio(&prose_text) >= MOJIBAKE_LATIN1_SUPPLEMENT_ALPHA_RATIO;
+    let stop_at_reliable = reliable_chunks_clearing_ratio(chunks.len(), thresholds.min_reliable_language_chunk_ratio);
+    let Some(reliability) = crate::language_detection::chunk_reliability(&chunks, stop_at_reliable) else {
+        return PlausibilityVerdict::Plausible;
+    };
 
-    if low_confidence_implausible || mojibake_implausible {
+    if reliability.reliable_ratio() < thresholds.min_reliable_language_chunk_ratio
+        && reliability.mean_confidence() < PLAUSIBILITY_MAX_MEAN_CONFIDENCE
+    {
         PlausibilityVerdict::Implausible
     } else {
         PlausibilityVerdict::Plausible
