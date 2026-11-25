@@ -53,7 +53,10 @@ fn is_word_char(c: char) -> bool {
     if c.is_ascii() {
         return c.is_ascii_alphanumeric() || c == '_';
     }
-    if c.is_alphabetic() {
+    // Latin-1 Supplement and Latin Extended-A/B letters are \w in every Unicode version. Other
+    // alphabetic code points go to the regex: std and regex-syntax can carry different Unicode
+    // tables (U+0558 is alphabetic in std but not \w in regex-syntax).
+    if matches!(c as u32, 0xC0..=0x24F) && !matches!(c, '\u{D7}' | '\u{F7}') {
         return true;
     }
     if c.is_whitespace()
