@@ -113,6 +113,82 @@ fn a_canonical_plain_text_change_keeps_formatted_identifiers_byte_exact() {
     assert!(result.processing_warnings.is_empty());
 }
 
+fn nfc_page(content: &str, native_content: Option<&str>) -> crate::types::PageContent {
+    crate::types::PageContent {
+        page_number: 1,
+        content: content.to_owned(),
+        tables: Vec::new(),
+        image_indices: Vec::new(),
+        image_preprocessing: None,
+        hierarchy: None,
+        is_blank: None,
+        layout_regions: None,
+        speaker_notes: None,
+        section_name: None,
+        sheet_name: None,
+        ocr_confidence: None,
+        native_content: native_content.map(str::to_owned),
+        geometry: None,
+        viewports: None,
+    }
+}
+
+#[test]
+fn normalize_nfc_keeps_already_nfc_text_in_its_original_buffers() {
+    let text = "Café, naïve, Straße 東京";
+    let mut result = ExtractedDocument {
+        content: text.to_owned(),
+        pages: Some(vec![nfc_page(text, Some(text))]),
+        ..Default::default()
+    };
+    let content_buffer = result.content.as_ptr();
+    let pages = result.pages.as_ref().unwrap();
+    let page_buffer = pages[0].content.as_ptr();
+    let native_buffer = pages[0].native_content.as_ref().unwrap().as_ptr();
+
+    normalize_nfc(&mut result);
+
+    assert_eq!(result.content, text);
+    assert_eq!(result.content.as_ptr(), content_buffer);
+    let page = &result.pages.as_ref().unwrap()[0];
+    assert_eq!(page.content, text);
+    assert_eq!(page.content.as_ptr(), page_buffer);
+    assert_eq!(page.native_content.as_deref(), Some(text));
+    assert_eq!(page.native_content.as_ref().unwrap().as_ptr(), native_buffer);
+}
+
+#[test]
+fn normalize_nfc_still_composes_decomposed_content_and_pages() {
+    let mut result = ExtractedDocument {
+        content: "Cafe\u{301} na\u{131}ve".to_owned(),
+        pages: Some(vec![nfc_page("Cafe\u{301}", Some("e\u{301}t\u{e9}"))]),
+        ..Default::default()
+    };
+
+    normalize_nfc(&mut result);
+
+    assert_eq!(result.content, "Caf\u{e9} na\u{131}ve");
+    let page = &result.pages.as_ref().unwrap()[0];
+    assert_eq!(page.content, "Caf\u{e9}");
+    assert_eq!(page.native_content.as_deref(), Some("\u{e9}t\u{e9}"));
+}
+
+#[test]
+fn normalize_nfc_skips_an_nfc_page_beside_a_decomposed_one() {
+    let mut result = ExtractedDocument {
+        content: "Caf\u{e9}".to_owned(),
+        pages: Some(vec![nfc_page("Caf\u{e9}", None), nfc_page("Cafe\u{301}", None)]),
+        ..Default::default()
+    };
+    let nfc_page_buffer = result.pages.as_ref().unwrap()[0].content.as_ptr();
+
+    normalize_nfc(&mut result);
+
+    let pages = result.pages.as_ref().unwrap();
+    assert_eq!(pages[0].content.as_ptr(), nfc_page_buffer);
+    assert_eq!(pages[1].content, "Caf\u{e9}");
+}
+
 #[test]
 fn compatibility_characters_are_not_treated_as_canonical_equivalents() {
     let rendered = "x<sup>2</sup>\n";

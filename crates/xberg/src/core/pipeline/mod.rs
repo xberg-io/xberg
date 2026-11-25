@@ -1786,18 +1786,26 @@ fn normalize_nfc(result: &mut ExtractedDocument) {
     #[cfg(feature = "quality")]
     {
         use unicode_normalization::UnicodeNormalization;
-        let unnormalized = std::mem::take(&mut result.content);
-        result.content = unnormalized.nfc().collect();
-        if result.content != unnormalized {
-            remap_entity_spans_after_nfc(result, &unnormalized);
-            if result.formatted_content.is_none() {
-                remap_page_boundaries_after_nfc(result, &unnormalized);
+        // Text that is already NFC is left in place: collecting it again would hold a
+        // second copy of the whole content at peak memory and change nothing. ~keep
+        if !unicode_normalization::is_nfc(&result.content) {
+            let unnormalized = std::mem::take(&mut result.content);
+            result.content = unnormalized.nfc().collect();
+            if result.content != unnormalized {
+                remap_entity_spans_after_nfc(result, &unnormalized);
+                if result.formatted_content.is_none() {
+                    remap_page_boundaries_after_nfc(result, &unnormalized);
+                }
             }
         }
         if let Some(pages) = result.pages.as_mut() {
             for page in pages.iter_mut() {
-                page.content = page.content.nfc().collect();
-                if let Some(native_content) = page.native_content.as_mut() {
+                if !unicode_normalization::is_nfc(&page.content) {
+                    page.content = page.content.nfc().collect();
+                }
+                if let Some(native_content) = page.native_content.as_mut()
+                    && !unicode_normalization::is_nfc(native_content)
+                {
                     *native_content = native_content.nfc().collect();
                 }
             }
