@@ -139,13 +139,10 @@ fn push_sceptre_args(args: &mut Vec<String>, engine_options: &str) {
 
 /// Whether the pipeline runs layout detection, so a failed layout pass must fail the row rather
 /// than be scored as "layout made no difference".
-pub(crate) fn pipeline_runs_layout(pipeline: XbergPipeline) -> bool {
+pub fn pipeline_runs_layout(pipeline: XbergPipeline) -> bool {
     matches!(
         pipeline,
-        XbergPipeline::Layout
-            | XbergPipeline::LayoutV3
-            | XbergPipeline::LayoutPaddle
-            | XbergPipeline::SceptreOrtLayout
+        XbergPipeline::Layout | XbergPipeline::LayoutV3 | XbergPipeline::LayoutPaddle | XbergPipeline::SceptreOrtLayout
     )
 }
 
@@ -281,7 +278,6 @@ pub fn create_xberg_adapter(
     let framework_name = xberg_framework_name(pipeline, output_format, batch, pdf_backend);
     assemble_adapter(
         framework_name,
-        cli_path,
         build_identity,
         args,
         output_format,
@@ -317,10 +313,11 @@ pub fn create_xberg_auto_ocr_adapter(
     args.push(XbergPdfBackend::Native.as_str().to_string());
 
     let framework_name = auto_ocr_framework_name(backend, output_format, batch);
-    assemble_adapter(framework_name, cli_path, build_identity, args, output_format, batch, false)
+    assemble_adapter(framework_name, build_identity, args, output_format, batch, false)
 }
 
-fn auto_ocr_framework_name(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> String {
+/// Framework name of an auto-OCR variant, e.g. `xberg-markdown-auto-ocr-paddle-batch`.
+pub fn auto_ocr_framework_name(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> String {
     let format_slug = match output_format {
         OutputFormat::Markdown => "markdown",
         OutputFormat::Plaintext => "plaintext",
@@ -353,13 +350,13 @@ fn auto_ocr_args(backend: AutoOcrBackend, output_format: OutputFormat, batch: bo
 
 fn assemble_adapter(
     framework_name: String,
-    cli_path: PathBuf,
     build_identity: ExecutableBuildIdentity,
     args: Vec<String>,
     output_format: OutputFormat,
     batch: bool,
     reject_layout_failures: bool,
 ) -> Result<SubprocessAdapter> {
+    let cli_path = build_identity.path.clone();
     // Derive the benchmarkable format list from xberg's own MIME registry so it never drifts from
     // what xberg can actually extract (a stale hardcoded list silently filtered out fixtures for
     // formats like fb2/eml/msg/rst/org/latex/typst/docbook/tsv, which xberg fully supports).
@@ -989,7 +986,10 @@ mod tests {
             assert!(!pipeline_runs_layout(pipeline), "{pipeline} does not run layout");
             let mut args = Vec::new();
             push_pipeline_args(&mut args, pipeline);
-            assert!(!args.iter().any(|arg| arg == "--layout"), "{pipeline} must not pass --layout");
+            assert!(
+                !args.iter().any(|arg| arg == "--layout"),
+                "{pipeline} must not pass --layout"
+            );
         }
     }
 
@@ -1021,6 +1021,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn forced_ocr_variants_still_force_ocr() {
+        let forces_ocr = |pipeline| {
+            let mut args = Vec::new();
+            push_pipeline_args(&mut args, pipeline);
+            args.windows(2).any(|pair| pair == ["--force-ocr", "true"])
+        };
+        for pipeline in [
+            XbergPipeline::BaselinePaddle,
+            XbergPipeline::LayoutPaddle,
+            XbergPipeline::SceptreOrt,
+            XbergPipeline::SceptreOrtLayout,
+        ] {
+            assert!(forces_ocr(pipeline), "{pipeline} must keep forcing OCR");
+        }
+        assert!(
+            merged_benchmark_config(true).force_ocr,
+            "the tesseract baseline forces OCR"
+        );
     }
 
     #[test]

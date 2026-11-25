@@ -1,6 +1,9 @@
 //! `run`: executes benchmarks across one or more registered framework adapters.
 
 use crate::cli::CliMode;
+use benchmark_harness::adapters::xberg::{
+    AutoOcrBackend, auto_ocr_framework_name, create_xberg_auto_ocr_adapter, pipeline_runs_layout,
+};
 use benchmark_harness::adapters::{create_xberg_adapter, create_xberg_steady_adapter};
 use benchmark_harness::provenance::{CoverageGateProvenance, FrameworkCoverageProvenance};
 use benchmark_harness::types::ErrorKind;
@@ -319,7 +322,7 @@ pub(crate) fn selected_frameworks_use_tesseract(frameworks: &[String]) -> bool {
             framework.starts_with("xberg-")
                 && !framework.contains("paddle")
                 && !framework.contains("sceptre")
-                && (framework.contains("-baseline") || framework.contains("-layout"))
+                && (framework.contains("-baseline") || framework.contains("-layout") || framework.contains("-auto-ocr"))
         })
 }
 
@@ -524,6 +527,46 @@ fn register_steady_xberg_adapter(
     }
 }
 
+/// Plain output discards the layout-detected headings, lists and tables, so a plaintext layout
+/// run only pays the layout cost (the CLI warns about this in `overrides/layout.rs`).
+pub(crate) fn plaintext_layout_is_a_no_op(format: OutputFormat, pipeline: XbergPipeline) -> bool {
+    format == OutputFormat::Plaintext && pipeline_runs_layout(pipeline)
+}
+
+/// Registers the auto-OCR variants, which configure an OCR engine without forcing OCR.
+fn register_auto_ocr_adapters(registry: &mut AdapterRegistry, context: &XbergRegistration<'_>) -> usize {
+    if !context.ocr {
+        return 0;
+    }
+    let mut registered = 0;
+    for backend in AutoOcrBackend::ALL {
+        let framework_name = auto_ocr_framework_name(backend, context.format, context.batch_mode);
+        if !(context.should_init)(&framework_name) {
+            continue;
+        }
+        match create_xberg_auto_ocr_adapter(backend, context.format, context.batch_mode, context.ocr)
+            .map(|adapter| adapter.with_batch_workers(context.config.max_concurrent))
+            .map(|adapter| match context.config.xberg_max_threads {
+                Some(max_threads) => adapter.with_xberg_max_threads(max_threads),
+                None => adapter,
+            }) {
+            Ok(adapter) => match registry.register(Arc::new(adapter)) {
+                Ok(()) => {
+                    tracing::info!(framework = %framework_name, "adapter registered");
+                    registered += 1;
+                }
+                Err(error) => {
+                    tracing::warn!(framework = %framework_name, %error, "adapter registration failed");
+                }
+            },
+            Err(error) => {
+                tracing::warn!(framework = %framework_name, %error, "adapter initialization failed");
+            }
+        }
+    }
+    registered
+}
+
 /// Registers every eligible `xberg-*` adapter permutation (pipeline x pdf backend) for `run`.
 fn register_xberg_pipelines(
     registry: &mut AdapterRegistry,
@@ -538,7 +581,9 @@ fn register_xberg_pipelines(
     let native_only_backend = [XbergPdfBackend::Native];
     let mut xberg_count = 0;
     for pipeline in &XBERG_RUN_PIPELINES {
-        if !should_register_xberg_pipeline(*pipeline, has_explicit_frameworks) {
+        if !should_register_xberg_pipeline(*pipeline, has_explicit_frameworks)
+            || plaintext_layout_is_a_no_op(context.format, *pipeline)
+        {
             continue;
         }
         if !context.ocr
@@ -567,7 +612,7 @@ fn register_xberg_pipelines(
             }
         }
     }
-    xberg_count
+    xberg_count + register_auto_ocr_adapters(registry, context)
 }
 
 /// Registers the open-source competitor adapters selected by `should_init`. Batch mode only

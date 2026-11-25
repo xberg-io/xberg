@@ -105,7 +105,10 @@ fn every_layout_variant_rejects_the_pdf_and_image_layout_failure_warnings() {
             let error = adapter_for(pipeline)
                 .parse_output(payload)
                 .expect_err(&format!("{pipeline} must not score a failed layout pass"));
-            assert!(error.to_string().contains("layout detection failed"), "{pipeline}: {error}");
+            assert!(
+                error.to_string().contains("layout detection failed"),
+                "{pipeline}: {error}"
+            );
         }
     }
 }

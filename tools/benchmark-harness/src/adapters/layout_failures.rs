@@ -37,7 +37,9 @@ pub(crate) fn layout_failure_in_item(item: &serde_json::Value) -> Option<String>
             warning_text(warning, "message").unwrap_or_default(),
         )
     })?;
-    Some(message(warning_text(warning, "message").unwrap_or("unknown layout error")))
+    Some(message(
+        warning_text(warning, "message").unwrap_or("unknown layout error"),
+    ))
 }
 
 fn warning_text<'a>(warning: &'a serde_json::Value, key: &str) -> Option<&'a str> {
@@ -103,7 +105,12 @@ mod tests {
         let mut document = ExtractedDocument::default();
         document.processing_warnings.push(warning("layout-ocr", reason));
         assert!(layout_failure_in_document(&document).is_some());
-        assert!(layout_failure_in_item(&item(serde_json::json!([{ "source": "layout-ocr", "message": reason }]))).is_some());
+        assert!(
+            layout_failure_in_item(&item(
+                serde_json::json!([{ "source": "layout-ocr", "message": reason }])
+            ))
+            .is_some()
+        );
     }
 
     #[test]
