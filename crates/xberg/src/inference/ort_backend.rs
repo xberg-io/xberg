@@ -3,7 +3,8 @@
 //!
 //! [`OrtBackend`] folds the session-build recipe shared across xberg's ORT
 //! consumers into one place: `GraphOptimizationLevel::All`, an intra-op thread
-//! budget from the concurrency config, a single inter-op thread, and the
+//! budget from the concurrency config, a single inter-op thread, initializers
+//! allocated outside the arena, and the
 //! execution provider selected by [`crate::ort_discovery::apply_execution_providers`],
 //! with a CPU-only retry when the platform EP fails to build — but only for an
 //! auto-detected provider; an explicitly-requested provider that fails to build
@@ -52,6 +53,8 @@ impl OrtBackend {
                 .with_intra_threads(thread_budget)
                 .map_err(|e| ort::Error::new(e.message()))?
                 .with_inter_threads(1)
+                .map_err(|e| ort::Error::new(e.message()))?
+                .with_device_allocated_initializers()
                 .map_err(|e| ort::Error::new(e.message()))?;
             #[cfg(all(test, feature = "layout-detection"))]
             if let Some(path) = super::recording::profile_prefix() {

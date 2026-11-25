@@ -28,6 +28,8 @@ pub(crate) fn build_session(
         .with_intra_threads(thread_budget)
         .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?
         .with_inter_threads(1)
+        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?
+        .with_device_allocated_initializers()
         .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?;
 
     let builder = crate::ort_discovery::apply_execution_providers(builder, accel)
