@@ -422,7 +422,14 @@ pub(super) fn reorder_page_reading_order(
 /// Reorder one page's spans into reading order for the element-based
 /// extraction path (GH#1397).
 ///
-/// Applies the guarded sparse-column repair unconditionally, then attempts
+/// A page of three or more prose columns whose content stream already reads
+/// them column by column keeps that stream order
+/// (`xberg_native_pdf::pipeline::reading_order::order_by_stream_columns`):
+/// the gutter repairs below model one gutter, and XY-Cut finds no page-wide
+/// horizontal valley once a heading spans only some of the columns, so such a
+/// page used to fall back to row order and interleave its columns.
+///
+/// Otherwise applies the guarded sparse-column repair unconditionally, then attempts
 /// the dense two-column band-split repair
 /// (`super::text::reorder_dense_two_column_page`). That repair carries its
 /// own conservative gates (minimum content width, per-line gutter agreement,
@@ -446,6 +453,9 @@ fn reorder_single_page_reading_order(
     page_height: f32,
     page_index: usize,
 ) {
+    if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
+        return;
+    }
     super::text::reorder_sparse_two_column_page(spans, page_width);
     if super::text::reorder_dense_two_column_page(spans, page_width) {
         return;
@@ -2081,6 +2091,49 @@ mod tests {
             original.iter().map(String::as_str).collect::<Vec<_>>(),
             "a single-column page must not be reordered by either the dense repair or XY-Cut"
         );
+    }
+
+    /// A three-column page whose stream is written in reading order (2026-14578), with a
+    /// heading spanning columns two and three. The 13pt gutters sit under XY-Cut's 15pt
+    /// `min_valley_width`, and the dense repair splits at one gutter only, so without the
+    /// stream pass the second and third columns interleave.
+    #[test]
+    fn element_path_reads_a_three_column_stream_column_by_column() {
+        const LEFTS: [f32; 3] = [60.0, 233.0, 406.0];
+        const WIDTH: f32 = 160.0;
+        const LEADING: f32 = 14.0;
+        const TOP_Y: f32 = 720.0;
+        let line = |label: &str, column: usize, row: usize| {
+            let text = format!("{label} column line {row} reads on");
+            text_span(&text, LEFTS[column], TOP_Y - row as f32 * LEADING, WIDTH)
+        };
+        let mut reading_order: Vec<TextSpan> = (0..10).map(|row| line("First", 0, row)).collect();
+        reading_order.push(text_span(
+            "Heading Spanning The Second And Third Columns",
+            LEFTS[1],
+            TOP_Y,
+            LEFTS[2] + WIDTH - LEFTS[1],
+        ));
+        reading_order.extend((2..10).map(|row| line("Second", 1, row)));
+        reading_order.extend((2..10).map(|row| line("Third", 2, row)));
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let mut spans: Vec<TextSpan> = reading_order
+            .into_iter()
+            .enumerate()
+            .map(|(sequence, span)| TextSpan { sequence, ..span })
+            .collect();
+        spans.sort_by(|left, right| {
+            right
+                .bbox
+                .y
+                .total_cmp(&left.bbox.y)
+                .then(left.bbox.x.total_cmp(&right.bbox.x))
+        });
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        assert_eq!(texts, expected.iter().map(String::as_str).collect::<Vec<_>>());
     }
 
     #[test]
