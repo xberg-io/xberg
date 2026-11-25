@@ -9,6 +9,7 @@ mod support;
 mod derived_metrics;
 mod extraction_duration;
 mod keys_and_shape;
+mod paired_deltas;
 mod percentiles_and_batching;
 mod quality_and_failures;
 mod ranking_pareto;
