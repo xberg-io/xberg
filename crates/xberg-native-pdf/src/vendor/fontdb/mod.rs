@@ -30,12 +30,16 @@
 //!   (`make_shared_face_data`/`make_face_data_unshared`) are dropped: the
 //!   memmap path is the only unsafe code upstream fontdb has, and nothing
 //!   here calls it (`SharedFile` is only ever constructed behind that path).
+//!   Without the map, the system-font scan reads only each file's table
+//!   directories and the four tables the face parse needs (`scan`), rather
+//!   than the whole file, which is what the map achieves upstream.
 //! - Windows system-font discovery is ported (plain `std::fs` directory
 //!   walking, no registry access — upstream fontdb doesn't touch the
 //!   registry either).
 
 mod matching;
 mod parse;
+mod scan;
 mod system_fonts;
 
 use std::path::PathBuf;

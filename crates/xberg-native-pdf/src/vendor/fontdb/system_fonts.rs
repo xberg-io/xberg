@@ -1,10 +1,10 @@
 // Derived from fontdb 0.24.0 (https://github.com/RazrFalcon/fontdb),
 // Copyright (c) 2020 Yevhenii Reizner, MIT licensed. Modified: `log::warn!`
-// call sites were converted to `tracing::warn!`; otherwise this is a
-// near-verbatim port — plain `std::fs` directory walking with symlink-loop
-// protection, and (on Linux/BSD) fontconfig-driven generic-family and
-// directory discovery, none of which touches the ttf_parser/skrifa parser
-// that was replaced elsewhere in this module. ~keep
+// call sites were converted to `tracing::warn!`, and `load_font_file` reads
+// faces through `scan::read_face_infos` instead of loading the whole file;
+// otherwise this is a near-verbatim port — plain `std::fs` directory walking
+// with symlink-loop protection, and (on Linux/BSD) fontconfig-driven
+// generic-family and directory discovery. ~keep
 
 //! System font directory discovery: per-OS directory lists, the recursive
 //! directory walk, and (on Linux/BSD) fontconfig integration.
@@ -12,7 +12,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use super::{Database, Source, parse};
+use super::{Database, Source, scan};
 
 impl Database {
     /// Loads font files from `dir` into the `Database`, recursively.
@@ -50,13 +50,15 @@ impl Database {
         }
     }
 
-    /// Reads `path` and loads every face it contains, warning (and
-    /// continuing) per malformed face rather than failing the directory
-    /// scan over one bad file.
+    /// Loads every face in `path`, warning (and continuing) per malformed
+    /// face rather than failing the directory scan over one bad file.
+    ///
+    /// Reads only the table directories and the tables the face parse needs
+    /// (`scan::read_face_infos`), not the whole file. ~keep
     #[cfg_attr(any(target_arch = "wasm32", target_os = "android"), allow(dead_code))]
     fn load_font_file(&mut self, path: &Path) {
-        let data = match std::fs::read(path) {
-            Ok(data) => data,
+        let faces = match scan::read_face_infos(path) {
+            Ok(faces) => faces,
             Err(error) => {
                 tracing::warn!(
                     target: "xberg_native_pdf::vendor::fontdb",
@@ -68,13 +70,7 @@ impl Database {
             }
         };
 
-        let source = Source::File(path.to_path_buf());
-        for (index, font_result) in skrifa::raw::FontRef::fonts(&data).enumerate() {
-            let index = index as u32;
-            let parsed = match font_result {
-                Ok(font) => parse::parse_face_info(&font, source.clone(), index),
-                Err(_) => Err(parse::LoadError::Malformed),
-            };
+        for (index, parsed) in faces.into_iter().enumerate() {
             match parsed {
                 Ok(info) => {
                     tracing::trace!(
