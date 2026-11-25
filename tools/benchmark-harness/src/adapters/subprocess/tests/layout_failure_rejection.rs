@@ -6,8 +6,10 @@
 
 use crate::adapters::layout_failures::layout_failure_in_item;
 use crate::adapters::subprocess::SubprocessAdapter;
-use crate::adapters::xberg::pipeline_runs_layout;
-use crate::types::XbergPipeline;
+use crate::adapters::xberg::adapter_with_identity;
+use crate::types::{OutputFormat, XbergPdfBackend, XbergPipeline};
+
+use super::support::test_build_identity;
 
 const LAYOUT_FAILURE: &str = "layout detection failed (model not found); document extracted without layout hints";
 
@@ -27,31 +29,22 @@ const LAYOUT_PIPELINES: [XbergPipeline; 4] = [
 
 const NON_LAYOUT_PIPELINES: [XbergPipeline; 2] = [XbergPipeline::Baseline, XbergPipeline::BaselinePaddle];
 
-fn plain_adapter(pipeline: XbergPipeline) -> SubprocessAdapter {
-    let directory = tempfile::tempdir().unwrap();
-    let binary = directory.keep().join("framework");
-    std::fs::write(&binary, b"test executable").unwrap();
-    SubprocessAdapter::new(
-        &format!("xberg-markdown-{pipeline}"),
-        binary,
-        vec!["extract".to_string()],
-        Vec::new(),
-        vec!["pdf".to_string()],
-    )
-}
-
-/// Applies the same rejection policy `create_xberg_adapter` applies to a pipeline.
+/// Builds the real adapter `create_xberg_adapter` builds for the pipeline, so the rejection
+/// policy under test is the one production wires, not a copy of it.
 fn adapter_for(pipeline: XbergPipeline) -> SubprocessAdapter {
-    let adapter = plain_adapter(pipeline);
-    if pipeline_runs_layout(pipeline) {
-        adapter.with_layout_failure_rejection()
-    } else {
-        adapter
-    }
+    adapter_with_identity(
+        pipeline,
+        OutputFormat::Markdown,
+        false,
+        true,
+        XbergPdfBackend::Native,
+        test_build_identity(),
+    )
+    .unwrap()
 }
 
 fn rejecting_adapter() -> SubprocessAdapter {
-    plain_adapter(XbergPipeline::LayoutV3).with_layout_failure_rejection()
+    adapter_for(XbergPipeline::LayoutV3)
 }
 
 #[test]
