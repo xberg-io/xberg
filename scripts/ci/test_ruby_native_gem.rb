@@ -54,6 +54,32 @@ Dir.mktmpdir("xberg-gem-test") do |directory|
       raise "source policy mismatch" unless File.exist?(source) == (keep == "true")
       raise "source changed" if keep == "true" && File.binread(source) != original
     end
+
+    File.binwrite(source, original)
+    abi = RbConfig::CONFIG.fetch("ruby_version")
+    fat_extension = "lib/xberg_rb/#{abi}/xberg_rb.#{RbConfig::CONFIG.fetch("DLEXT")}"
+    _, stderr, status = Open3.capture3(RbConfig.ruby, script, platform, version, "true", "fat")
+    raise stderr unless status.success?
+    fat = Gem::Package.new(native)
+    unless fat.contents.include?(fat_extension) && fat.spec.required_ruby_version.to_s == ">= 0"
+      raise "wrong fat package"
+    end
+
+    _, stderr, status = Open3.capture3(RbConfig.ruby, script, platform, version, "true", "extension")
+    raise stderr unless status.success?
+    staged = "pkg/ext/#{fat_extension}"
+    raise "extension not staged" unless File.file?(staged)
+
+    other = File.join("dist", "rubyext-label-ruby9.9", File.dirname(fat_extension).sub(%r{/[^/]+\z}, "/9.9.0"))
+    FileUtils.mkdir_p(other)
+    FileUtils.cp(staged, File.join(other, File.basename(staged)))
+    FileUtils.mkdir_p("dist/rubygems-label")
+    FileUtils.cp(native, "dist/rubygems-label/")
+    merge = File.expand_path("merge-ruby-native-gems.rb", __dir__)
+    _, stderr, status = Open3.capture3(RbConfig.ruby, merge, "dist", "#{abi},9.9.0", "label:#{platform}")
+    raise stderr unless status.success?
+    _, stderr, status = Open3.capture3(RbConfig.ruby, merge, "dist", "#{abi},8.8.0", "label:#{platform}")
+    raise "missing ABI passed" if status.success? || !stderr.include?("8.8.0")
   end
 end
 

@@ -157,6 +157,45 @@ checksum = "sha256:1dc0715916251a13c4f6a550a3da1f2c726bff869371fd573a65234c008f4
 url = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.9-1/rubyinstaller-4.0.9-1-x64.7z"
 
 [[tools.ruby]]
+version = "3.4.13"
+backend = "core:ruby"
+specifiers = ["3.4.13"]
+
+[tools.ruby.options]
+compile = "false"
+precompiled_url = "jdx/ruby"
+ruby_build_repo = "https://github.com/rbenv/ruby-build.git"
+ruby_install = "false"
+
+[tools.ruby."platforms.linux-arm64"]
+checksum = "sha256:2ab80102f52c138a3816bb73d8492cb931cc3b4287a9552e3581913dcc872886"
+url = "https://github.com/jdx/ruby/releases/download/3.4.13-1/ruby-3.4.13.arm64_linux.tar.gz"
+provenance = "github-attestations"
+
+[tools.ruby."platforms.linux-x64"]
+checksum = "sha256:bbe91d035fa17a37cbd481e2fe8c5b9842133bdbdcbe38bde534e7368bf72cb3"
+url = "https://github.com/jdx/ruby/releases/download/3.4.13-1/ruby-3.4.13.x86_64_linux.tar.gz"
+provenance = "github-attestations"
+
+[tools.ruby."platforms.macos-arm64"]
+checksum = "sha256:ad38145d8e2f5e45405adbcfe1fb1b20ce17619ab4ffb0b117df04d974c7dbb2"
+url = "https://github.com/jdx/ruby/releases/download/3.4.13-1/ruby-3.4.13.macos.tar.gz"
+provenance = "github-attestations"
+
+[tools.ruby."platforms.macos-x64"]
+checksum = "sha256:d0d3bf3dd8c224a3c3b7ecd816a0f1b2cbcf4f87b5afcbdbe91d3fef177f351a"
+url = "https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.13.tar.gz"
+
+[[tools.ruby]]
+version = "3.4.13"
+backend = "core:ruby"
+specifiers = ["3.4.13"]
+
+[tools.ruby."platforms.windows-x64"]
+checksum = "sha256:228d698c2311dee6207017634faac64a07b7208cdc7a6a50972c4b19d9153a42"
+url = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.4.13-1/rubyinstaller-3.4.13-1-x64.7z"
+
+[[tools.ruby]]
 version = "3.3.13"
 backend = "core:ruby"
 specifiers = ["3.3.13"]

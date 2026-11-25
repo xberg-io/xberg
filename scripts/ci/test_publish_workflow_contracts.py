@@ -2248,6 +2248,33 @@ def test_ruby_source_gem_name_is_derived_from_the_gemspec() -> None:
             assert result.stdout == "xberg-1.5.0.pre.rc.1.gem", result.stdout
 
 
+def test_ruby_gems_ship_every_supported_ruby_abi_in_one_gem_per_platform() -> None:
+    text = WORKFLOW.read_text()
+    build = job_block(text, "ruby-gem")
+    legs = re.findall(
+        r"(?m)^          - \{ os: [^}]*label: ([a-z0-9_-]+)[^}]*ruby: \"([0-9.]+)\", layout: (\w+) \}$", build
+    )
+    for label in ("linux-x86_64", "linux-aarch64", "macos-arm64"):
+        assert sorted((ruby, layout) for name, ruby, layout in legs if name == label) == [
+            ("3.3", "fat"),
+            ("3.4", "extension"),
+            ("4.0", "extension"),
+        ], label
+    assert "ruby=${{ matrix.ruby }}" in build
+    assert "name: rubyext-${{ matrix.label }}-ruby${{ matrix.ruby }}" in build
+    assert '"$GEM_LAYOUT"' in build
+
+    publish = job_block(text, "publish-rubygems")
+    assert "pattern: rubyext-*" in publish
+    merge = publish.index("name: Merge the per-Ruby extensions into the platform gems")
+    inventory = publish.index("name: Assert the expected gem inventory")
+    verify = publish.index("name: Verify Ruby gem package contents")
+    assert inventory < merge < verify
+    assert "merge-ruby-native-gems.rb dist 3.3.0,3.4.0,4.0.0" in publish
+    for pair in ("linux-x86_64:x86_64-linux", "linux-aarch64:aarch64-linux", "macos-arm64:arm64-darwin"):
+        assert pair in publish, pair
+
+
 def test_mcp_registry_publish_follows_the_npm_proxy_and_never_runs_on_dry_runs() -> None:
     block = job_block(WORKFLOW.read_text(), "publish-mcp-registry")
     header = block.split("    steps:", 1)[0]
