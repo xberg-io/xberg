@@ -126,7 +126,7 @@ enum HeuristicTableRejection {
     PostProcessing,
     TooFewRows,
     CodeListing,
-    NotWellFormed,
+    NotWellFormed { columns: usize },
     EmptyMarkdown,
     AxisTickGrid,
 }
@@ -2012,7 +2012,14 @@ fn reconstruct_region_tables(
         horizontal_rules,
         column_rules,
     ) else {
-        return Vec::new();
+        return reconstruct_rejected_side_by_side(
+            region,
+            page_height,
+            page_number,
+            allow_single_column,
+            horizontal_rules,
+        )
+        .unwrap_or_default();
     };
     if parent.cells.first().map_or(0, Vec::len) < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
         return vec![parent];
@@ -2061,22 +2068,200 @@ fn reconstruct_side_by_side_child(
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<Table> {
-    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
-    heights.sort_unstable();
-    let child_gap = heights
-        .get(heights.len() / 2)
-        .copied()?
-        .max(1)
-        .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER);
     reconstruct_region_table_with_column_gap(
         region,
         page_height,
         page_number,
         allow_single_column,
-        child_gap,
+        side_by_side_child_gap(region)?,
         horizontal_rules,
     )
     .ok()
+}
+
+fn side_by_side_child_gap(region: &[crate::pdf::table_reconstruct::HocrWord]) -> Option<u32> {
+    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
+    heights.sort_unstable();
+    Some(
+        heights
+            .get(heights.len() / 2)
+            .copied()?
+            .max(1)
+            .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER),
+    )
+}
+
+/// Side-by-side split of a parent the whole-region gate rejected.
+///
+/// A two-column schedule whose records wrap over several lines fails that gate as one
+/// grid: each record's amount and value fill only its last line, so most cells of the
+/// fused grid are empty. Each side is admitted only on its own, through the full gate,
+/// after its wrapped records are collapsed into one row each, and both sides must carry
+/// the recurring numeric tracks [`side_tables_have_independent_shape`] requires, which
+/// two columns of prose do not. At least one side must have needed the collapse: wrapped
+/// records are the evidence that the rejection came from the fused grid, not the content,
+/// so two sides that pass unaided leave the rejected parent as it was. ~keep
+fn reconstruct_rejected_side_by_side(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> Option<Vec<Table>> {
+    let (left_region, right_region) = split_side_by_side_region(region)?;
+    let Err(HeuristicTableRejection::NotWellFormed { columns }) =
+        reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
+    else {
+        return None;
+    };
+    if columns < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
+        return None;
+    }
+    let child = |side: &[crate::pdf::table_reconstruct::HocrWord]| {
+        reconstruct_wrapped_side_by_side_child(side, page_height, page_number, allow_single_column, horizontal_rules)
+    };
+    let (left, left_collapsed) = child(&left_region)?;
+    let (right, right_collapsed) = child(&right_region)?;
+    if !(left_collapsed || right_collapsed) || !side_tables_have_independent_shape(&left, &right) {
+        return None;
+    }
+    tracing::trace!(
+        page = page_number,
+        parent_columns = columns,
+        left_columns = left.cells.first().map_or(0, Vec::len),
+        right_columns = right.cells.first().map_or(0, Vec::len),
+        "split side-by-side heuristic tables from a rejected parent"
+    );
+    Some(vec![left, right])
+}
+
+fn reconstruct_wrapped_side_by_side_child(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> Option<(Table, bool)> {
+    if let Some(table) =
+        reconstruct_side_by_side_child(region, page_height, page_number, allow_single_column, horizontal_rules)
+    {
+        return Some((table, false));
+    }
+    let col_gap = side_by_side_child_gap(region)?;
+    let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
+    let row_lefts = grid_row_left_edges(region, grid.len());
+    let indent_tolerance = median_word_height(region) / 2;
+    let collapsed = collapse_wrapped_financial_records(&grid, row_lefts.as_deref(), indent_tolerance)?;
+    admit_region_grid(
+        region,
+        collapsed,
+        column_positions,
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    )
+    .ok()
+    .map(|table| (table, true))
+}
+
+/// Leftmost word edge of each grid row, or `None` when the region's rows do not map one to
+/// one onto the grid's (a merged header fragment or a dropped row), so no row is misread.
+fn grid_row_left_edges(region: &[crate::pdf::table_reconstruct::HocrWord], grid_rows: usize) -> Option<Vec<u32>> {
+    let positions = crate::table_core::detect_rows(region, REGION_ROW_THRESHOLD_RATIO);
+    let mut lefts: Vec<Option<u32>> = vec![None; positions.len()];
+    for word in region {
+        let Some(index) = crate::table_core::find_row_index(&positions, word) else {
+            continue;
+        };
+        let left = &mut lefts[index];
+        *left = Some(left.map_or(word.left, |current| current.min(word.left)));
+    }
+    let lefts: Vec<u32> = lefts.into_iter().flatten().collect();
+    (lefts.len() == grid_rows).then_some(lefts)
+}
+
+/// Fewest wrapped records a side must collapse before its lines read as a wrapped schedule.
+const WRAPPED_RECORD_MIN_COLLAPSED: usize = 3;
+
+/// Collapse each wrapped record of a financial schedule into one row.
+///
+/// A record's description wraps over descriptor-only lines and ends on the line that holds
+/// its numeric amount or value; those lines become one row whose descriptor joins them.
+/// A line back at the outdented left edge starts a new entry, so a section heading or
+/// issuer line above it stays a row of its own and is not counted as a wrapped record. A run longer than
+/// [`WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS`] is prose, not a record, and fails the
+/// collapse, as does a grid with fewer than [`WRAPPED_RECORD_MIN_COLLAPSED`] records.
+fn collapse_wrapped_financial_records(
+    grid: &[Vec<String>],
+    row_lefts: Option<&[u32]>,
+    indent_tolerance: u32,
+) -> Option<Vec<Vec<String>>> {
+    let width = grid.first()?.len();
+    if width < CANONICAL_FINANCIAL_COLUMNS || grid.iter().any(|row| row.len() != width) {
+        return None;
+    }
+    let outdent = row_lefts.and_then(|lefts| lefts.iter().min().copied());
+    let is_outdented = |index: usize| match (row_lefts, outdent) {
+        (Some(lefts), Some(outdent)) => lefts
+            .get(index)
+            .is_some_and(|&left| left <= outdent.saturating_add(indent_tolerance)),
+        _ => false,
+    };
+
+    let mut rows = Vec::with_capacity(grid.len());
+    let mut pending: Vec<&str> = Vec::new();
+    let mut collapsed = 0usize;
+    for (index, row) in grid.iter().enumerate() {
+        let descriptor = row[0].trim();
+        let values = &row[1..];
+        if values.iter().any(|value| is_numeric_word(value.trim())) {
+            if !descriptor.is_empty() && is_outdented(index) {
+                flush_pending_descriptor(&mut pending, &mut rows, width);
+            }
+            if !pending.is_empty() {
+                collapsed += 1;
+            }
+            if !descriptor.is_empty() {
+                pending.push(descriptor);
+            }
+            let mut record = Vec::with_capacity(width);
+            record.push(pending.join(" "));
+            record.extend(values.iter().cloned());
+            pending.clear();
+            rows.push(record);
+        } else if !descriptor.is_empty() && values.iter().all(|value| value.trim().is_empty()) {
+            if is_outdented(index) {
+                flush_pending_descriptor(&mut pending, &mut rows, width);
+            }
+            pending.push(descriptor);
+            if pending.len() > WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS {
+                return None;
+            }
+        } else {
+            flush_pending_descriptor(&mut pending, &mut rows, width);
+            rows.push(row.clone());
+        }
+    }
+    flush_pending_descriptor(&mut pending, &mut rows, width);
+    if collapsed < WRAPPED_RECORD_MIN_COLLAPSED {
+        return None;
+    }
+    if width == CANONICAL_FINANCIAL_COLUMNS {
+        preserve_repeated_issuer_rows(&mut rows);
+    }
+    Some(rows)
+}
+
+fn flush_pending_descriptor(pending: &mut Vec<&str>, rows: &mut Vec<Vec<String>>, width: usize) {
+    if pending.is_empty() {
+        return;
+    }
+    let mut row = vec![String::new(); width];
+    row[0] = pending.join(" ");
+    pending.clear();
+    rows.push(row);
 }
 
 fn normalize_side_by_side_financial_tables(mut left: Table, mut right: Table) -> (Table, Table) {
@@ -3053,22 +3238,57 @@ fn reconstruct_region_table_with_column_gap(
     col_gap: u32,
     horizontal_rules: usize,
 ) -> std::result::Result<Table, HeuristicTableRejection> {
-    use crate::pdf::table_reconstruct::{
-        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
-        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
-    };
+    let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
+    admit_region_grid(
+        region,
+        grid,
+        column_positions,
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    )
+}
 
+/// Row grouping tolerance, as a multiple of median word height, for heuristic region grids.
+const REGION_ROW_THRESHOLD_RATIO: f64 = 0.5;
+
+fn reconstruct_region_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    col_gap: u32,
+) -> (Vec<Vec<String>>, Vec<u32>) {
     // Take the column positions from the same call that built the grid. `reconstruct_table`
     // now detects columns from post-merge cell tokens, not from `region` directly, so a
     // separate `detect_columns(region, col_gap)` no longer agrees with the grid's column
     // count — and `repair_split_numeric_track` fails safe on a count mismatch, which would
     // have silently switched the repair off rather than reporting anything (#688).
-    let (mut grid, mut column_positions) = crate::table_core::reconstruct_table_with_columns(region, col_gap, 0.5);
+    let (mut grid, mut column_positions) =
+        crate::table_core::reconstruct_table_with_columns(region, col_gap, REGION_ROW_THRESHOLD_RATIO);
     // Takes `column_positions` by &mut so a successful repair drops the merged boundary from
     // BOTH: the repair collapses two grid columns into one, and a stale extra position would
     // leave `grid` one column narrower than `column_positions` for every consumer below —
     // including `is_well_formed_borderless_table`, which is handed both.
     repair_split_numeric_track(&mut grid, region, &mut column_positions);
+    (grid, column_positions)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn admit_region_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    grid: Vec<Vec<String>>,
+    mut column_positions: Vec<u32>,
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    col_gap: u32,
+    horizontal_rules: usize,
+) -> std::result::Result<Table, HeuristicTableRejection> {
+    use crate::pdf::table_reconstruct::{
+        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
+        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
+    };
+
     if grid.is_empty() || grid[0].is_empty() {
         return Err(HeuristicTableRejection::EmptyGrid);
     }
@@ -3123,7 +3343,9 @@ fn reconstruct_region_table_with_column_gap(
         is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules)
     };
     if !well_formed {
-        return Err(HeuristicTableRejection::NotWellFormed);
+        return Err(HeuristicTableRejection::NotWellFormed {
+            columns: cleaned.first().map_or(0, Vec::len),
+        });
     }
 
     let bounding_box = region_bounding_box(region, page_height);
@@ -4417,6 +4639,182 @@ mod tests {
         );
         assert_eq!(tables[0].cells[0].len(), 3);
         assert_eq!(tables[1].cells[0].len(), 4);
+    }
+
+    /// One side of a two-column schedule whose records wrap over three lines: an outdented
+    /// issuer line, an indented continuation, and an indented last line that alone carries the
+    /// amount and value. `values: false` puts words in those tracks instead of numbers.
+    fn extend_wrapped_schedule_words(
+        words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>,
+        origin: u32,
+        values: bool,
+    ) {
+        let [descriptor, currency, par, value] = [origin, origin + 80, origin + 150, origin + 220];
+        words.push(make_word("Security", descriptor, 100, 40));
+        words.push(make_word("Par", par, 100, 20));
+        words.push(make_word("Value", value, 100, 30));
+        for record in 0..6u32 {
+            let top = 124 + record * 36;
+            words.push(make_word(&wrapped_schedule_issuer(record), descriptor, top, 60));
+            words.push(make_word("Class A1R, (3-mo. SOFR", descriptor + 10, top + 12, 50));
+            words.push(make_word(
+                &format!("+ 1.{record}5%), 5.87%"),
+                descriptor + 10,
+                top + 24,
+                50,
+            ));
+            if record < 2 {
+                words.push(make_word("USD", currency, top + 24, 20));
+            }
+            let (amount, worth) = if values {
+                (format!("{},{record}00", record + 1), wrapped_schedule_value(record))
+            } else {
+                ("pending".to_string(), "reviewed".to_string())
+            };
+            words.push(make_word(&amount, par, top + 24, 30));
+            words.push(make_word(&worth, value, top + 24, 40));
+        }
+    }
+
+    fn wrapped_schedule_issuer(record: u32) -> String {
+        format!("Issuer {record} Ltd., Series 2024-{record}A,")
+    }
+
+    fn wrapped_schedule_value(record: u32) -> String {
+        format!("{},{record}02,049", record + 1)
+    }
+
+    fn wrapped_schedule_words(values: bool) -> Vec<crate::pdf::table_reconstruct::HocrWord> {
+        let mut words = Vec::new();
+        extend_wrapped_schedule_words(&mut words, 20, values);
+        extend_wrapped_schedule_words(&mut words, 320, values);
+        words
+    }
+
+    fn assert_rejected_wide_parent(words: &[crate::pdf::table_reconstruct::HocrWord]) {
+        let parent = reconstruct_region_table_with_reason(words, 792.0, 1, false, 0);
+        assert!(
+            matches!(
+                parent,
+                Err(HeuristicTableRejection::NotWellFormed { columns }) if columns >= SIDE_BY_SIDE_MIN_PARENT_COLUMNS
+            ),
+            "fixture must exercise the rejected-parent path, got {parent:?}"
+        );
+    }
+
+    #[test]
+    fn splits_wrapped_side_by_side_schedule_rejected_as_one_grid() {
+        let words = wrapped_schedule_words(true);
+        assert_rejected_wide_parent(&words);
+        let (left, _) = split_side_by_side_region(&words).expect("central seam should be credible");
+        assert!(
+            reconstruct_side_by_side_child(&left, 792.0, 1, false, 0).is_none(),
+            "uncollapsed wrapped lines must still fail the gate, or this test proves nothing new"
+        );
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert_eq!(tables.len(), 2, "each side of the schedule should be its own table");
+        for table in &tables {
+            let width = table.cells[0].len();
+            assert!(table.cells.iter().all(|row| row.len() == width));
+            for record in 0..6 {
+                let descriptor = format!(
+                    "{} Class A1R, (3-mo. SOFR + 1.{record}5%), 5.87%",
+                    wrapped_schedule_issuer(record)
+                );
+                let value = wrapped_schedule_value(record);
+                assert!(
+                    table
+                        .cells
+                        .iter()
+                        .any(|row| row[0] == descriptor && row.iter().any(|cell| *cell == value)),
+                    "record {record} must be one row holding its whole description and value: {:?}",
+                    table.cells
+                );
+            }
+            assert!(
+                !table.cells.iter().any(|row| row[0] == "Class A1R, (3-mo. SOFR"),
+                "no continuation line may remain a row of its own"
+            );
+        }
+    }
+
+    #[test]
+    fn rejected_side_by_side_text_columns_without_value_tracks_yield_no_table() {
+        let words = wrapped_schedule_words(false);
+        assert_rejected_wide_parent(&words);
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert!(
+            tables.is_empty(),
+            "text columns with no numeric value track must stay prose, got {tables:?}"
+        );
+    }
+
+    fn grid_rows(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn collapses_wrapped_financial_records_into_single_rows() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Cayman Islands (continued)", "", ""],
+            &["RR 28 Ltd., Series 2024-28RA, Class", "", ""],
+            &["A1R, (3-mo. CME Term SOFR", "", ""],
+            &["04/15/37 . . .", "USD 5,718", "$ 5,742,049"],
+            &["TICP CLO VI Ltd.", "", ""],
+            &["Series 2016-6A, Class AR2, (3-mo.", "", ""],
+            &["CME Term SOFR", "", ""],
+            &["5.70%, 01/15/34 . . .", "500", "500,889"],
+            &["Series 2016-6A, Class BR2, (3-mo.", "", ""],
+            &["6.08%, 01/15/34 . . .", "500", "500,639"],
+            &["", "", "68,077,028"],
+        ]);
+        let lefts = [18, 18, 18, 27, 27, 18, 27, 36, 36, 27, 36, 253];
+
+        let collapsed = collapse_wrapped_financial_records(&grid, Some(&lefts[..]), 5).expect("three wrapped records");
+
+        assert_eq!(
+            collapsed,
+            grid_rows(&[
+                &["Security", "Par", "Value"],
+                &["Cayman Islands (continued)", "", ""],
+                &[
+                    "RR 28 Ltd., Series 2024-28RA, Class A1R, (3-mo. CME Term SOFR 04/15/37 . . .",
+                    "USD 5,718",
+                    "$ 5,742,049"
+                ],
+                &["TICP CLO VI Ltd.", "", ""],
+                &[
+                    "Series 2016-6A, Class AR2, (3-mo. CME Term SOFR 5.70%, 01/15/34 . . .",
+                    "500",
+                    "500,889"
+                ],
+                &[
+                    "Series 2016-6A, Class BR2, (3-mo. 6.08%, 01/15/34 . . .",
+                    "500",
+                    "500,639"
+                ],
+                &["", "", "68,077,028"],
+            ])
+        );
+    }
+
+    #[test]
+    fn wrapped_record_collapse_rejects_runs_longer_than_a_record() {
+        let mut rows: Vec<&[&str]> = vec![&["Security", "Par", "Value"][..]];
+        rows.extend(std::iter::repeat_n(
+            &["prose line", "", ""][..],
+            WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS + 1,
+        ));
+        rows.push(&["end of paragraph", "500", "500,889"]);
+
+        assert_eq!(collapse_wrapped_financial_records(&grid_rows(&rows), None, 5), None);
     }
 
     fn wrapped_financial_side(prefix: &str) -> Table {
@@ -6255,7 +6653,7 @@ mod tests {
         let result = reconstruct_region_table_with_column_gap(&region, 792.0, 1, false, 30, 0);
 
         assert!(
-            matches!(result, Err(HeuristicTableRejection::NotWellFormed)),
+            matches!(result, Err(HeuristicTableRejection::NotWellFormed { .. })),
             "expected the straddled 'Name'/'Value' boundary alone to reject this as prose, got {result:?}"
         );
     }
