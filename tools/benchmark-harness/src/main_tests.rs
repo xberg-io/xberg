@@ -6,9 +6,9 @@ use crate::commands::cohort_contract::cohort_contract_summary;
 use crate::commands::parse_pipeline_names;
 use crate::commands::pipeline_benchmark::parse_sort_metric;
 use crate::commands::run::{
-    XBERG_RUN_PIPELINES, compute_framework_coverage, normalize_run_frameworks, parse_model_provenance,
-    parse_pdf_backends, selected_frameworks_use_tesseract, should_register_xberg_pipeline,
-    validate_framework_result_cardinality, write_run_artifacts_and_check_gate,
+    compute_framework_coverage, normalize_run_frameworks, parse_model_provenance, parse_pdf_backends,
+    selected_frameworks_use_tesseract, should_register_xberg_pipeline, validate_framework_result_cardinality,
+    write_run_artifacts_and_check_gate, XBERG_RUN_PIPELINES,
 };
 use benchmark_harness::provenance::{
     CorpusProvenance, FrameworkProvenance, RepositoryProvenance, RunProvenance, TimingProvenance,
@@ -261,19 +261,17 @@ fn pipeline_benchmark_accepts_exact_cohort_and_rejects_ambiguous_filters() {
     ));
 
     for conflicting_filter in ["--doc", "--group"] {
-        assert!(
-            Cli::try_parse_from([
-                "benchmark-harness",
-                "pipeline-benchmark",
-                "--fixtures",
-                "fixtures",
-                "--cohort",
-                "cohort.json",
-                conflicting_filter,
-                "sample",
-            ])
-            .is_err()
-        );
+        assert!(Cli::try_parse_from([
+            "benchmark-harness",
+            "pipeline-benchmark",
+            "--fixtures",
+            "fixtures",
+            "--cohort",
+            "cohort.json",
+            conflicting_filter,
+            "sample",
+        ])
+        .is_err());
     }
 }
 
@@ -292,12 +290,12 @@ fn cohort_contract_summary_includes_exact_matrix_cells() {
     let summary = cohort_contract_summary(benchmark_harness::bench_matrix::Cohort::Native);
     let matrix = summary["matrix"].as_array().expect("matrix array");
 
-    // 8 xberg (baseline/layout x md/plain x single/batch) + 4 xberg pdfium + 4 docling
-    // + 4 liteparse + markitdown + unstructured + tika + pymupdf4llm + 1 optional mineru.
-    // The pdfium cells were added to `native_matrix` without updating these totals, and the
-    // benchmark CI job filters to `cohort::tests::`, so nothing ran this. ~keep
-    assert_eq!(matrix.len(), 25);
-    assert_eq!(summary["expected_matrix_keys"], 24);
+    // 6 xberg (baseline md/plain + layout md, single/batch; plain layout is not benchmarked)
+    // + 4 xberg pdfium + 4 docling + 4 liteparse + markitdown + unstructured + tika
+    // + pymupdf4llm + 1 optional mineru. The benchmark CI job filters to `cohort::tests::`,
+    // so this test does not run there. ~keep
+    assert_eq!(matrix.len(), 23);
+    assert_eq!(summary["expected_matrix_keys"], 22);
     assert_eq!(summary["optional_matrix_keys"], 1);
     assert_eq!(
         matrix[0]["artifact"],

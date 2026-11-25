@@ -379,7 +379,7 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
         batch_size,
         system_load,
         throughput_excluded_sample_count: performance_metrics.throughput_excluded_sample_count,
-        memory_methods: count_memory_methods(performance_samples),
+        memory_methods: count_memory_methods(&performance_samples),
     }
 }
 

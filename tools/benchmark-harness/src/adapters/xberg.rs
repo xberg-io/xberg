@@ -21,6 +21,7 @@ use std::{
 use which::which;
 
 mod auto_ocr;
+#[cfg(test)]
 pub(crate) use auto_ocr::auto_ocr_adapter_with_identity;
 pub use auto_ocr::{AutoOcrBackend, auto_ocr_framework_name, create_xberg_auto_ocr_adapter, is_auto_ocr_framework};
 
