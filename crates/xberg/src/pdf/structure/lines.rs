@@ -24,6 +24,12 @@ const SEGMENT_GAP_SPACE_RATIO: f32 = 0.15;
 /// above the observed defect and 2x below the suite's word-boundary bound at every font size.
 const TOUCHING_SPAN_GAP_EM_RATIO: f32 = 0.025;
 
+/// Maximum overlap, as a fraction of the larger font size, that still counts as touching at a
+/// punctuation boundary. Italic and italic-monospace glyphs overhang the following run; the
+/// reported `E(CA)T` overlaps 0.055 em, while a reordered fragment backtracks by more than a
+/// whole em (`segments_need_space`'s severe-backtrack guard).
+const TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO: f32 = 0.1;
+
 /// Maximum baseline difference, in points, for the "touching spans" guard in
 /// [`segments_are_touching`]. Tighter than `segments_need_space`'s `eff_height`-scaled
 /// same-line check (which must tolerate wrapped-line reflow noise), because this guard only
@@ -81,7 +87,34 @@ pub(crate) fn segments_are_touching(
     if !prev_last_char.is_alphanumeric() || !next_first_char.is_alphanumeric() {
         return false;
     }
+    same_line_gap_in_em(prev_seg, next_seg).is_some_and(|gap| gap.abs() < TOUCHING_SPAN_GAP_EM_RATIO)
+}
 
+/// Touching geometry across a boundary with punctuation on one side: `CA` set in a monospace
+/// font between `E(` and `)T`, or before `-satellite`. A style change alone must not open a
+/// space the page does not draw. An italic run's glyphs overhang the next run (`A` into `)`
+/// by 0.055 em in the reported page), so overlap up to
+/// [`TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO`] still touches. Kept out of
+/// [`segments_are_touching`] because table word merging calls that guard before column
+/// assignment, where joining `59` + `.804` merges real columns (GH#2122).
+fn punctuation_boundary_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    let (Some(prev_last_char), Some(next_first_char)) = (prev_word.chars().last(), next_word.chars().next()) else {
+        return false;
+    };
+    let is_punctuation = |character: char| !character.is_alphanumeric() && !character.is_whitespace();
+    (is_punctuation(prev_last_char) || is_punctuation(next_first_char))
+        && same_line_gap_in_em(prev_seg, next_seg)
+            .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
+}
+
+/// Signed advance-axis gap between two runs, in ems of the larger font, when they share a
+/// rotation, baseline and font size and no explicit space separates them.
+fn same_line_gap_in_em(prev_seg: &SegmentData, next_seg: &SegmentData) -> Option<f32> {
     // ~keep An explicitly drawn space at the boundary outranks any geometry. The producer
     // emitted a space glyph, and its advance is already inside `prev_seg`'s extent, so the
     // measured gap to the next segment collapses to ~0 and reads as "touching" — exactly the
@@ -93,26 +126,26 @@ pub(crate) fn segments_are_touching(
     if prev_seg.text.chars().last().is_some_and(char::is_whitespace)
         || next_seg.text.chars().next().is_some_and(char::is_whitespace)
     {
-        return false;
+        return None;
     }
 
     if !prev_seg.has_same_rotation(next_seg) {
-        return false;
+        return None;
     }
 
     let baseline_gap = (prev_seg.upright_baseline() - next_seg.upright_baseline()).abs();
     if baseline_gap > TOUCHING_SPAN_BASELINE_TOLERANCE {
-        return false;
+        return None;
     }
 
     let max_font_size = prev_seg.font_size.max(next_seg.font_size).max(1.0);
     if (prev_seg.font_size - next_seg.font_size).abs() > max_font_size * TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO {
-        return false;
+        return None;
     }
 
     let (_, prev_end) = prev_seg.upright_advance_extent();
     let (next_start, _) = next_seg.upright_advance_extent();
-    (next_start - prev_end).abs() < max_font_size * TOUCHING_SPAN_GAP_EM_RATIO
+    Some((next_start - prev_end) / max_font_size)
 }
 
 /// Returns true if the character is a CJK ideograph, Hiragana, Katakana, or Hangul.
@@ -178,7 +211,9 @@ pub(super) fn segments_need_space(
         return false;
     }
 
-    if segments_are_touching(prev_seg, prev_word, next_seg, next_word) {
+    if segments_are_touching(prev_seg, prev_word, next_seg, next_word)
+        || punctuation_boundary_touches(prev_seg, prev_word, next_seg, next_word)
+    {
         return false;
     }
 
@@ -391,6 +426,50 @@ mod tests {
         next.is_bold = true;
 
         assert!(!segments_need_space(&prev, "pri", &next, "js"));
+    }
+
+    /// `E(CA)T` and `CA-satellite` with `CA` in CMTT10 between CMR10 runs: the monospace switch
+    /// sits on a punctuation boundary that touches, so no space may open there.
+    #[test]
+    fn should_join_touching_punctuation_across_a_monospace_switch() {
+        let mut code = segment(" CA", 489.3, 13.3, 9.96264, 700.0);
+        code.is_monospace = true;
+        let compound = segment("-satellite", 502.7, 39.0, 9.96264, 700.0);
+        assert!(!segments_need_space(&code, "CA", &compound, "-satellite"));
+
+        // Measured on the page: `(` overhangs `C` by 0.11 pt and `A` overhangs `)` by 0.55 pt.
+        let open = segment("E(", 333.72, 10.19, 9.96264, 238.32);
+        let mut inner = segment("CA", 343.8, 10.51, 9.96264, 238.32);
+        inner.is_monospace = true;
+        let close = segment(")T", 353.76, 9.19, 9.96264, 238.32);
+        assert!(!segments_need_space(&open, "E(", &inner, "CA"));
+        assert!(!segments_need_space(&inner, "CA", &close, ")T"));
+    }
+
+    #[test]
+    fn should_keep_the_style_change_space_at_a_punctuation_boundary_that_does_not_touch() {
+        let mut code = segment("CA", 100.0, 10.0, 10.0, 700.0);
+        code.is_monospace = true;
+        let gapped = segment("-satellite", 110.5, 39.0, 10.0, 700.0);
+        let spaced = segment(" -satellite", 110.0, 41.0, 10.0, 700.0);
+        let raised = segment("-satellite", 110.0, 39.0, 10.0, 703.0);
+        let smaller = segment("-satellite", 110.0, 39.0, 7.0, 700.0);
+        let overlapping = segment("-satellite", 108.5, 39.0, 10.0, 700.0);
+
+        assert!(segments_need_space(&code, "CA", &overlapping, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &gapped, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &spaced, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &raised, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &smaller, "-satellite"));
+        assert!(
+            !segments_are_touching(
+                &segment("59", 100.0, 10.0, 10.0, 700.0),
+                "59",
+                &segment(".804", 110.0, 20.0, 10.0, 700.0),
+                ".804"
+            ),
+            "table word merging keeps requiring a word character on both sides (GH#2122)"
+        );
     }
 
     #[test]
