@@ -1,9 +1,11 @@
-"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed | --twice] [--lettered]
+"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed | --twice] [--lettered] [--progressive]
 
 Writes an image-only PDF of a site plan: mostly one or two character labels and a notes block,
 stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan.
 With --twice, the document has two scan pages, each with its own copy of the image. With --lettered,
-each lot label is a two letter code, so a read of the sheet is mostly short words.
+each lot label is a two letter code, so a read of the sheet is mostly short words. With --progressive,
+the JPEG is progressive: the same quantized coefficients in several scans, so it decodes to the same
+pixels, but a renderer cannot decode it at a reduced size or row by row in place.
 """
 
 import hashlib
@@ -30,7 +32,7 @@ STREETS = ["OAK ST", "ELM DR", "PINE CT", "CEDAR LN", "MAPLE AVE", "BIRCH WAY", 
 NATIVE_TEXT = b"BT /F1 12 Tf 16 TL 72 720 Td " + b"(The native page remains unchanged.) ' " * 10 + b"ET"
 
 
-def render(w_in: float, h_in: float, dpi: int, lettered: bool = False) -> bytes:
+def render(w_in: float, h_in: float, dpi: int, lettered: bool = False, progressive: bool = False) -> bytes:
     if hashlib.sha256(FONT.read_bytes()).hexdigest() != FONT_SHA256:
         raise SystemExit(f"{FONT} does not match the pinned font")
     width, height = int(w_in * dpi), int(h_in * dpi)
@@ -68,7 +70,7 @@ def render(w_in: float, h_in: float, dpi: int, lettered: bool = False) -> bytes:
     img = Image.blend(img, grain, 0.025)
     rgb = Image.merge("RGB", (img.point(lambda v: v * 0.96 + 6),) * 3)
     buf = io.BytesIO()
-    rgb.save(buf, "JPEG", quality=80, dpi=(dpi, dpi))
+    rgb.save(buf, "JPEG", quality=80, dpi=(dpi, dpi), progressive=progressive)
     return buf.getvalue()
 
 
@@ -125,14 +127,14 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool, twice: b
 
 
 def main() -> None:
-    flags = ("--mixed", "--twice", "--lettered")
+    flags = ("--mixed", "--twice", "--lettered", "--progressive")
     args = [arg for arg in sys.argv[1:] if arg not in flags]
     if len(args) != 4:
         raise SystemExit(__doc__)
     out, w_in, h_in, dpi = args[0], float(args[1]), float(args[2]), int(args[3])
     if "--mixed" in sys.argv and "--twice" in sys.argv:
         raise SystemExit(__doc__)
-    jpeg = render(w_in, h_in, dpi, "--lettered" in sys.argv)
+    jpeg = render(w_in, h_in, dpi, "--lettered" in sys.argv, "--progressive" in sys.argv)
     Path(out).write_bytes(build(jpeg, w_in, h_in, dpi, "--mixed" in sys.argv, "--twice" in sys.argv))
 
 

@@ -3,3 +3,7 @@ label-scan-mixed.pdf binary
 label-scan-downscaled.pdf binary
 label-scan-low-dpi.pdf binary
 label-scan-two-pages.pdf binary
+label-scan-progressive.pdf binary
+label-scan-mixed-progressive.pdf binary
+label-scan-two-pages-progressive.pdf binary
+label-scan-downscaled-progressive.pdf binary
