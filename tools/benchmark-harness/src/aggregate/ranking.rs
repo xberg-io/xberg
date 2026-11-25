@@ -274,7 +274,10 @@ pub fn apply_pinned_cohort_comparison(aggregate: &mut super::types::NewConsolida
     }
     if cohort_names.len() != 1 || scoped_records.iter().any(Option::is_none) {
         return Err(crate::Error::Benchmark(format!(
-            "cannot apply one benchmark contract to mixed or incomplete cohorts: {}",
+            "cannot apply one benchmark contract to mixed or incomplete cohorts: {}. Each cohort has its own \
+             contract (required cells, rankings), so consolidate each cohort's run directories separately \
+             (one `consolidate` invocation per cohort, with its own --output) and do not mix in runs that \
+             lack cohort provenance",
             cohort_names.into_iter().collect::<Vec<_>>().join(", ")
         )));
     }
