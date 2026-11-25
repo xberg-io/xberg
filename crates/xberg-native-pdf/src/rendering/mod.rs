@@ -455,6 +455,43 @@ pub fn render_png_page_with_dpi_budget(
         .map(|(image, dpi, _)| (image, dpi))
 }
 
+/// A page raster as straight-alpha RGB8, row-major from the top-left, alpha dropped.
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rgb8Raster {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// `width * height * 3` bytes.
+    pub data: Vec<u8>,
+}
+
+/// Internal Core bridge: [`render_png_page_with_dpi_budget`] without the PNG encode. The page is
+/// admitted under the same budget, so it renders at the same DPI, and the pixels equal the RGB
+/// channels of that PNG decoded to RGB8.
+#[doc(hidden)]
+pub fn render_rgb8_page_with_dpi_budget(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(Rgb8Raster, u32)> {
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi,
+    };
+    let (image, dpi, _) = render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi).as_raw(), Some(budget))
+        .map_err(|(error, _)| error)?;
+    let raster = Rgb8Raster {
+        width: image.width,
+        height: image.height,
+        data: page_renderer::straight_rgb8(&image.data),
+    };
+    Ok((raster, dpi))
+}
+
 /// Internal Core bridge returning whether a Type0 glyph lost ink during this render.
 #[doc(hidden)]
 pub fn render_png_page_with_ink_evidence(
@@ -703,6 +740,8 @@ pub fn exact_text_show_has_contrast(
     Ok(renderer.text_contrast_probe.is_some_and(|probe| probe.visible()))
 }
 
+#[cfg(test)]
+mod rgb8_raster_tests;
 #[cfg(test)]
 mod text_ink_tests;
 

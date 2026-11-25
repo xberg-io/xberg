@@ -691,7 +691,7 @@ fn render_layout_page(
     // OCR and layout-only renders retain their distinct DPI policies.
     let (rendered, raster_dpi) = if normalize_for_ocr {
         crate::pdf::render::render_pdf_ocr_page_with_dpi(doc, page_index, budget.images_config, budget.security_limits)
-            .map(|(image, dpi)| (image, Some(dpi)))
+            .map(|(image, dpi)| (crate::pdf::render::LayoutRaster::Png(image), Some(dpi)))
     } else {
         crate::pdf::render::render_pdf_layout_page(
             doc,
@@ -711,6 +711,10 @@ fn render_layout_page(
         );
         format!("page {} failed to render: {error}", page_index + 1)
     })?;
+    let rendered = match rendered {
+        crate::pdf::render::LayoutRaster::Rgb(image) => return Ok((image, raster_dpi)),
+        crate::pdf::render::LayoutRaster::Png(rendered) => rendered,
+    };
 
     let rendered_data = if normalize_for_ocr {
         crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(

@@ -265,6 +265,30 @@ pub(super) fn png_working_bytes_fit(
     width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)
 }
 
+/// Convert one premultiplied RGBA pixel to straight alpha in place, rounding to nearest.
+fn demultiply(pixel: &mut [u8; 4]) {
+    let a = pixel[3];
+    if a != 0 && a != 255 {
+        let a32 = a as u32;
+        for channel in &mut pixel[..3] {
+            *channel = ((*channel as u32 * 255 + a32 / 2) / a32).min(255) as u8;
+        }
+    }
+}
+
+/// The straight-alpha RGB channels of premultiplied RGBA pixels, alpha dropped: exactly what
+/// decoding [`encode_png`]'s output and converting it to RGB8 yields, without the round trip.
+pub(in crate::rendering) fn straight_rgb8(premultiplied_rgba: &[u8]) -> Vec<u8> {
+    let pixels = premultiplied_rgba.as_chunks::<4>().0;
+    let mut rgb = Vec::with_capacity(pixels.len() * 3);
+    for pixel in pixels {
+        let mut pixel = *pixel;
+        demultiply(&mut pixel);
+        rgb.extend_from_slice(&pixel[..3]);
+    }
+    rgb
+}
+
 /// Encode a tiny_skia `Pixmap` to PNG.
 ///
 /// Uses fdeflate (ultra-fast) compression via the `image` crate instead of
@@ -278,13 +302,7 @@ pub(super) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
     let src = pixmap.data();
     let mut data = src.to_vec();
     for chunk in data.as_chunks_mut::<4>().0 {
-        let a = chunk[3];
-        if a != 0 && a != 255 {
-            let a32 = a as u32;
-            chunk[0] = ((chunk[0] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[1] = ((chunk[1] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[2] = ((chunk[2] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-        }
+        demultiply(chunk);
     }
 
     use image::ImageEncoder;
@@ -294,4 +312,27 @@ pub(super) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
         .write_image(&data, w, h, image::ExtendedColorType::Rgba8)
         .map_err(|e| Error::InvalidPdf(format!("PNG encoding failed: {}", e)))?;
     Ok(output)
+}
+
+#[cfg(test)]
+mod straight_rgb8_tests {
+    use super::*;
+
+    /// Every premultiplied (value, alpha) pair a canvas can hold, against the PNG round trip.
+    #[test]
+    fn straight_rgb8_matches_the_decoded_png_for_every_alpha() {
+        let width = 256;
+        let height = 256;
+        let mut pixmap = Pixmap::new(width, height).unwrap();
+        for (index, pixel) in pixmap.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let alpha = (index / 256) as u8;
+            let value = ((index % 256) as u8).min(alpha);
+            *pixel = [value, value / 2, alpha.saturating_sub(value), alpha];
+        }
+
+        let png = encode_png(&pixmap).unwrap();
+        let decoded = image::load_from_memory(&png).unwrap().into_rgb8();
+
+        assert_eq!(straight_rgb8(pixmap.data()), decoded.into_raw());
+    }
 }

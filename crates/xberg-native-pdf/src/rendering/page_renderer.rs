@@ -79,6 +79,7 @@ mod raster_budget;
 pub(super) use raster_budget::PngRenderBudget;
 #[cfg(test)]
 use raster_budget::png_working_bytes_fit;
+pub(super) use raster_budget::straight_rgb8;
 #[cfg(test)]
 pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
 use raster_budget::{declares_spot_soft_mask, encode_png, fit_png_dpi, raster_dimensions, resize_rgba};

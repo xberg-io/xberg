@@ -997,13 +997,20 @@ pub(crate) fn render_page_with_safeguards(
     render_page_with_options(doc, page_index, &options, max_png_working_bytes)
 }
 
+/// A layout raster: RGB8 from the budgeted render, or PNG from the fixed-DPI fallback.
+#[cfg(feature = "layout-detection")]
+pub(crate) enum LayoutRaster {
+    Png(xberg_native_pdf::rendering::RenderedImage),
+    Rgb(image::RgbImage),
+}
+
 #[cfg(feature = "layout-detection")]
 pub(crate) fn render_pdf_layout_page(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     max_working_bytes: usize,
-) -> std::result::Result<xberg_native_pdf::rendering::RenderedImage, xberg_native_pdf::Error> {
+) -> std::result::Result<LayoutRaster, xberg_native_pdf::Error> {
     const POINT_DPI: u32 = 72;
     let media = doc.get_page_media_box(page_index).ok();
     let dimensions = media
@@ -1015,14 +1022,16 @@ pub(crate) fn render_pdf_layout_page(
     // The layout point frame also depends on a valid MediaBox. Keep the fixed-DPI
     // behavior when layout would project into fallback dimensions. ~keep
     if !layout_media_matches_renderer(doc, page_index, media) {
-        return render_page_with_options(doc, page_index, &options, Some(max_working_bytes));
+        return render_page_with_options(doc, page_index, &options, Some(max_working_bytes)).map(LayoutRaster::Png);
     }
     let minimum_dpi = images_config
         .map_or(POINT_DPI, |images| (images.min_dpi.max(1) as u32).max(POINT_DPI))
         .min(options.dpi);
-    let (image, dpi) = render_page_capturing_glyph_drops(page_index, || {
+    // RGB8 straight from the canvas: the PNG this used to encode was decoded right back to RGB8,
+    // and the bridge reproduces those exact pixels under the same render budget. ~keep
+    let (raster, dpi) = render_page_capturing_glyph_drops(page_index, || {
         guard_render_panic(page_index, || {
-            xberg_native_pdf::rendering::render_png_page_with_dpi_budget(
+            xberg_native_pdf::rendering::render_rgb8_page_with_dpi_budget(
                 doc,
                 page_index,
                 options.dpi,
@@ -1039,7 +1048,15 @@ pub(crate) fn render_pdf_layout_page(
             "layout raster DPI reduced to fit the render budget"
         );
     }
-    Ok(image)
+    let (width, height) = (raster.width, raster.height);
+    image::RgbImage::from_raw(width, height, raster.data)
+        .map(LayoutRaster::Rgb)
+        .ok_or_else(|| {
+            xberg_native_pdf::Error::InvalidPdf(format!(
+                "page {} layout raster does not hold {width}x{height} RGB pixels",
+                page_index + 1
+            ))
+        })
 }
 
 #[cfg(feature = "layout-detection")]
