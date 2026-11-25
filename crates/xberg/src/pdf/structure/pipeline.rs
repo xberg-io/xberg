@@ -3339,9 +3339,9 @@ const BODY_SIZE_TOLERANCE_PT: f32 = 0.5;
 ///
 /// A single-level number ("1. Introduction") is also an ordered-list marker, so it
 /// needs the full bold font gate: a bold, body-sized "1. First step" stays a list item.
-/// Multi-level, roman or all-caps numbering ("3.1. Overview") is never a list marker,
-/// so a size just above body suffices -- CVPR-style 11pt subsection titles over a 10pt
-/// body clear neither the bold gate nor the body-size bold pass. ~keep
+/// Multi-level numbering ("3.1. Overview") is never a list marker, so a size just
+/// above body suffices -- CVPR-style 11pt subsection titles over a 10pt body clear
+/// neither the bold gate nor the body-size bold pass. ~keep
 fn is_bold_numbered_section_heading(
     text: &str,
     word_count: usize,
@@ -3349,12 +3349,13 @@ fn is_bold_numbered_section_heading(
     body_font_size: f32,
     clears_bold_font_gate: bool,
 ) -> bool {
+    let multi_level = is_numbered_section_heading(text) && super::classify::infer_section_level(text) >= 3;
     body_font_size > 0.0
         && font_size > body_font_size + BODY_SIZE_TOLERANCE_PT
         && super::classify::starts_with_section_number(text)
-        && (clears_bold_font_gate || is_numbered_section_heading(text))
-        && text.chars().any(char::is_alphabetic)
-        && !text.ends_with(':')
+        && (clears_bold_font_gate || multi_level)
+        && text.chars().find(|c| c.is_alphabetic()).is_some_and(char::is_uppercase)
+        && !text.ends_with(['.', ',', ';', ':'])
         && !super::classify::reads_as_body_content(text, word_count)
         && !super::layout_classify::is_separator_text(text)
         && !super::regions::looks_like_figure_label(text)

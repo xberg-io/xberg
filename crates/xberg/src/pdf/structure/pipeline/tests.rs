@@ -8176,9 +8176,39 @@ fn bold_single_level_number_below_the_bold_font_gate_stays_a_list_item() {
 }
 
 #[test]
-fn bold_multi_level_section_number_at_body_size_is_left_to_the_document_pass() {
+fn bold_multi_level_section_number_at_body_size_is_not_promoted_per_paragraph() {
     let para = finalize_bold_numbered_heading("3.1.", "Overview", 10.0);
     assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn bold_three_level_section_number_is_a_fourth_level_heading() {
+    let para = finalize_bold_numbered_heading("3.1.2", "Details", 11.0);
+    assert_eq!(para.heading_level, Some(4));
+}
+
+#[test]
+fn bold_numbered_step_ending_in_a_period_stays_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Preheat the oven.", 12.0);
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
+}
+
+#[test]
+fn bold_single_level_roman_number_just_above_body_size_is_not_a_heading() {
+    let para = finalize_bold_numbered_heading("II.", "METHODS", 10.8);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn non_bold_numbered_line_above_body_size_stays_a_list_item() {
+    let heading_map = vec![(10.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let marker = seg_at("1.", 72.0, 700.0, 12.0, false);
+    let body = seg_at("Introduction", 90.0, 700.0, 12.0, false);
+    let para = finalize_paragraph(&[&marker, &body], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
 }
 
 /// Paragraph carrying real geometry, for the page-number validation tests.
