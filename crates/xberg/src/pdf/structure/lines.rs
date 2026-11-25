@@ -107,6 +107,16 @@ fn punctuation_boundary_touches(
         return false;
     };
     let is_punctuation = |character: char| !character.is_alphanumeric() && !character.is_whitespace();
+    // ~keep An emphasis delimiter between punctuation and a letter is not flanking under
+    // CommonMark (`x*(a)*`, `**Note.**Text`) and renders as literal asterisks, so a bold or
+    // italic change keeps its space in exactly those shapes.
+    let closes_after_prev = (prev_seg.is_bold && !next_seg.is_bold) || (prev_seg.is_italic && !next_seg.is_italic);
+    let opens_before_next = (next_seg.is_bold && !prev_seg.is_bold) || (next_seg.is_italic && !prev_seg.is_italic);
+    let breaks_flanking = (closes_after_prev && is_punctuation(prev_last_char) && next_first_char.is_alphanumeric())
+        || (opens_before_next && prev_last_char.is_alphanumeric() && is_punctuation(next_first_char));
+    if breaks_flanking {
+        return false;
+    }
     (is_punctuation(prev_last_char) || is_punctuation(next_first_char))
         && same_line_gap_in_em(prev_seg, next_seg)
             .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
@@ -444,6 +454,27 @@ mod tests {
         let close = segment(")T", 353.76, 9.19, 9.96264, 238.32);
         assert!(!segments_need_space(&open, "E(", &inner, "CA"));
         assert!(!segments_need_space(&inner, "CA", &close, ")T"));
+    }
+
+    #[test]
+    fn should_keep_the_space_where_joining_would_leave_emphasis_non_flanking() {
+        let roman = segment("x", 100.0, 5.0, 10.0, 700.0);
+        let mut italic_open = segment("(a)", 105.0, 12.0, 10.0, 700.0);
+        italic_open.is_italic = true;
+        assert!(segments_need_space(&roman, "x", &italic_open, "(a)"));
+
+        let mut bold_note = segment("Note.", 100.0, 25.0, 10.0, 700.0);
+        bold_note.is_bold = true;
+        let body = segment("Text", 125.0, 20.0, 10.0, 700.0);
+        assert!(segments_need_space(&bold_note, "Note.", &body, "Text"));
+
+        let mut italic_word = segment("word", 100.0, 20.0, 10.0, 700.0);
+        italic_word.is_italic = true;
+        let comma = segment(",", 120.0, 3.0, 10.0, 700.0);
+        assert!(
+            !segments_need_space(&italic_word, "word", &comma, ","),
+            "`*word*,` is flanking and joins"
+        );
     }
 
     #[test]
