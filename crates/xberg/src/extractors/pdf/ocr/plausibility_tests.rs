@@ -152,7 +152,8 @@ fn short_trailing_chunk_is_dropped_not_padded() {
     // was never counted as a 4th chunk in the first place.
     let mut text = ENGLISH_PROSE.repeat(2);
     text.truncate(640);
-    let chunks = prose_chunks(&select_prose_text(&text));
+    let prose = select_prose_text(&text);
+    let chunks = prose_chunks(&prose);
     assert_eq!(
         chunks.len(),
         3,
