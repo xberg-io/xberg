@@ -1,6 +1,7 @@
 use super::super::extract_api::page_span_interpretations;
 use super::super::*;
 use super::common::*;
+use super::pdf_fixtures::build_catalog_test_pdf;
 
 const FULL_PAGE: &str = "[0 0 600 800]";
 const ROTATED_PAGE: &str = "[0 0 600 800] /Rotate 90";
@@ -365,4 +366,62 @@ fn pages_past_the_budget_are_interpreted_each_read_and_stay_equal() {
     let reference = format!("{:?}", fresh.extract_spans_raw(2).unwrap());
     assert_eq!(first, reference);
     assert_eq!(second, reference);
+}
+
+/// A page drawn with a Type 3 font (a structured warning at font load) and with
+/// a font name its resources lack (a missing-font recovery per decode).
+fn warning_pdf() -> Vec<u8> {
+    let content = "BT /F3 12 Tf 72 700 Td (A) Tj ET\nBT /F9 12 Tf 72 680 Td (Hello) Tj ET\n";
+    let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (
+                3,
+                &b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+                   /Resources << /Font << /F3 5 0 R >> >> >>"[..],
+            ),
+            (4, stream.as_bytes()),
+            (
+                5,
+                &b"<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] \
+                   /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << >> \
+                   /Encoding << /Type /Encoding /Differences [65 /A] >> \
+                   /FirstChar 65 /LastChar 65 /Widths [500] /Resources << >> >>"[..],
+            ),
+        ],
+    )
+}
+
+#[test]
+fn a_cache_hit_replays_the_warnings_its_interpretation_pushed() {
+    let doc = PdfDocument::from_bytes(warning_pdf()).expect("open document");
+    doc.begin_page_passes();
+    drop(doc.take_structured_warnings());
+    drop(doc.extract_spans_raw(0).unwrap());
+    let first = doc.take_structured_warnings();
+    assert!(
+        first
+            .iter()
+            .any(|warning| warning.category == crate::extractors::warnings::WarningCategory::Type3Font),
+        "{first:?}"
+    );
+    let before = page_span_interpretations();
+    drop(doc.extract_spans_raw(0).unwrap());
+    assert_eq!(page_span_interpretations(), before, "the second read is a hit");
+    assert_eq!(format!("{:?}", doc.take_structured_warnings()), format!("{first:?}"));
+}
+
+#[test]
+fn a_cache_hit_charges_the_recoveries_of_its_interpretation_again() {
+    let doc = PdfDocument::from_bytes(warning_pdf()).expect("open document");
+    doc.begin_page_passes();
+    let start = doc.recovery_counts().snapshot();
+    drop(doc.extract_spans_raw(0).unwrap());
+    let first = doc.recovery_counts().snapshot().since(&start);
+    assert!(first.missing_font_decodes > 0, "{first:?}");
+    let middle = doc.recovery_counts().snapshot();
+    drop(doc.extract_spans_raw(0).unwrap());
+    assert_eq!(doc.recovery_counts().snapshot().since(&middle), first);
 }

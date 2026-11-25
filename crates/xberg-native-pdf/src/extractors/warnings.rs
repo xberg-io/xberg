@@ -140,6 +140,35 @@ impl WarningSink {
 // event still fires and the warning remains unattributed. ~keep
 thread_local! {
     static ACTIVE_SINK: RefCell<Option<WarningSink>> = const { RefCell::new(None) };
+    /// Open [`capture_pushes`] frames, innermost last: the sink each watches and
+    /// what was pushed into it on this thread meanwhile.
+    static CAPTURES: RefCell<Vec<(usize, Vec<Warning>)>> = const { RefCell::new(Vec::new()) };
+}
+
+struct CaptureFrame;
+
+impl Drop for CaptureFrame {
+    fn drop(&mut self) {
+        CAPTURES.with(|captures| captures.borrow_mut().pop());
+    }
+}
+
+/// Run `operation` and also return every warning it pushed into `sink` on this
+/// thread, before the sink's repeat collapsing, so a cached result can push the
+/// same warnings again.
+pub(crate) fn capture_pushes<T>(sink: &WarningSink, operation: impl FnOnce() -> T) -> (T, Vec<Warning>) {
+    CAPTURES.with(|captures| captures.borrow_mut().push((sink.identity(), Vec::new())));
+    let frame = CaptureFrame;
+    let value = operation();
+    let captured = CAPTURES.with(|captures| {
+        captures
+            .borrow_mut()
+            .last_mut()
+            .map(|(_, warnings)| std::mem::take(warnings))
+            .unwrap_or_default()
+    });
+    drop(frame);
+    (value, captured)
 }
 
 #[must_use = "the warning scope ends when the guard is dropped"]
@@ -205,8 +234,24 @@ impl WarningSink {
         }
     }
 
+    fn identity(&self) -> usize {
+        Arc::as_ptr(&self.warnings) as usize
+    }
+
+    fn note_captured(&self, warning: &Warning) {
+        let identity = self.identity();
+        CAPTURES.with(|captures| {
+            for (sink, captured) in captures.borrow_mut().iter_mut() {
+                if *sink == identity {
+                    captured.push(warning.clone());
+                }
+            }
+        });
+    }
+
     /// Record a warning without emitting a tracing event.
     pub fn push(&self, warning: Warning) {
+        self.note_captured(&warning);
         if let Ok(mut v) = self.warnings.lock() {
             self.insert(&mut v, warning);
         }
@@ -242,6 +287,7 @@ impl WarningSink {
     pub fn extend(&self, warnings: impl IntoIterator<Item = Warning>) {
         if let Ok(mut v) = self.warnings.lock() {
             for warning in warnings {
+                self.note_captured(&warning);
                 self.insert(&mut v, warning);
             }
         }

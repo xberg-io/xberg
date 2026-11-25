@@ -46,6 +46,10 @@ pub(super) struct InterpretedPage {
     /// CMSY glyph witnesses, present only when they were requested and the
     /// extractor ran. Capturing them does not change the spans.
     cmsy: Option<Vec<crate::layout::TextSpan>>,
+    /// Structured warnings the interpretation pushed into the document's sink.
+    warnings: Vec<crate::extractors::warnings::Warning>,
+    /// Recoveries the interpretation charged to the document.
+    recovered: crate::extractors::recovery_tally::RecoverySnapshot,
 }
 
 impl InterpretedPage {
@@ -54,6 +58,8 @@ impl InterpretedPage {
             spans: Vec::new(),
             mc_actualtext: None,
             cmsy: None,
+            warnings: Vec::new(),
+            recovered: Default::default(),
         }
     }
 
@@ -75,6 +81,12 @@ impl InterpretedPage {
                 .mc_actualtext
                 .as_ref()
                 .map_or(0, |set| set.capacity() * size_of::<u32>())
+            + self.warnings.capacity() * size_of::<crate::extractors::warnings::Warning>()
+            + self
+                .warnings
+                .iter()
+                .map(|warning| warning.message.capacity())
+                .sum::<usize>()
     }
 }
 
@@ -278,7 +290,9 @@ impl PdfDocument {
     ///
     /// A hit reproduces the interpretation's document effects: it rewrites the
     /// page's `mc_actualtext_mcids` entry, which a differently-filtered call may
-    /// have replaced since, and fills `cmsy` the same way.
+    /// have replaced since, fills `cmsy` the same way, pushes the structured
+    /// warnings the interpretation pushed (the sink collapses repeats as it did
+    /// for them) and charges its recoveries again.
     fn cached_page_spans(
         &self,
         page_index: usize,
@@ -306,21 +320,29 @@ impl PdfDocument {
             .as_ref()
             .and_then(|cache| cache.get(&key).cloned());
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
+            self.warning_sink.extend(page.warnings.iter().cloned());
+            self.recovery_counts().add(&page.recovered);
             self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
                 output.clone_from(witnesses);
             }
             return Ok((page.spans.clone(), page.mc_actualtext.clone()));
         }
-        let page = self.interpret_page_spans(
-            page_index,
-            crate::extractors::TextExtractionConfig::default(),
-            HashSet::new(),
-            HashSet::new(),
-            script_geometry,
-            false,
-            capture_cmsy,
-        )?;
+        let recovered_before = self.recovery_counts().snapshot();
+        let (page, warnings) = crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
+            self.interpret_page_spans(
+                page_index,
+                crate::extractors::TextExtractionConfig::default(),
+                HashSet::new(),
+                HashSet::new(),
+                script_geometry,
+                false,
+                capture_cmsy,
+            )
+        });
+        let mut page = page?;
+        page.warnings = warnings;
+        page.recovered = self.recovery_counts().snapshot().since(&recovered_before);
         self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
         if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
             output.clone_from(witnesses);
@@ -350,6 +372,8 @@ impl PdfDocument {
             spans: page.spans.clone(),
             mc_actualtext: page.mc_actualtext.clone(),
             cmsy: page.cmsy.clone(),
+            warnings: page.warnings.clone(),
+            recovered: page.recovered,
         };
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
             cache.insert(key, std::sync::Arc::new(copy), bytes);
@@ -537,6 +561,8 @@ impl PdfDocument {
             spans,
             mc_actualtext: Some(extractor.take_mc_actualtext_mcids()),
             cmsy,
+            warnings: Vec::new(),
+            recovered: Default::default(),
         })
     }
 

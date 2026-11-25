@@ -71,9 +71,40 @@ impl RecoverySnapshot {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
+
+    /// What was recovered between `earlier` and this snapshot.
+    pub(crate) fn since(&self, earlier: &Self) -> Self {
+        Self {
+            missing_font_decodes: self.missing_font_decodes.saturating_sub(earlier.missing_font_decodes),
+            missing_font_bytes: self.missing_font_bytes.saturating_sub(earlier.missing_font_bytes),
+            xref_misses: self.xref_misses.saturating_sub(earlier.xref_misses),
+            file_scan_recoveries: self.file_scan_recoveries.saturating_sub(earlier.file_scan_recoveries),
+            objects_treated_as_null: self
+                .objects_treated_as_null
+                .saturating_sub(earlier.objects_treated_as_null),
+            unsupported_cff_versions: self
+                .unsupported_cff_versions
+                .saturating_sub(earlier.unsupported_cff_versions),
+        }
+    }
 }
 
 impl RecoveryCounts {
+    /// Charge `delta` again, as a repeat of the work that recovered it.
+    pub(crate) fn add(&self, delta: &RecoverySnapshot) {
+        self.missing_font_decodes
+            .fetch_add(delta.missing_font_decodes, Ordering::Relaxed);
+        self.missing_font_bytes
+            .fetch_add(delta.missing_font_bytes, Ordering::Relaxed);
+        self.xref_misses.fetch_add(delta.xref_misses, Ordering::Relaxed);
+        self.file_scan_recoveries
+            .fetch_add(delta.file_scan_recoveries, Ordering::Relaxed);
+        self.objects_treated_as_null
+            .fetch_add(delta.objects_treated_as_null, Ordering::Relaxed);
+        self.unsupported_cff_versions
+            .fetch_add(delta.unsupported_cff_versions, Ordering::Relaxed);
+    }
+
     pub(crate) fn snapshot(&self) -> RecoverySnapshot {
         RecoverySnapshot {
             missing_font_decodes: self.missing_font_decodes.load(Ordering::Relaxed),
