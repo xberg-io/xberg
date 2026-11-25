@@ -40,7 +40,7 @@ fn make_benchmark_result(
             p50_memory_bytes: 90_000_000,
             p95_memory_bytes: 95_000_000,
             p99_memory_bytes: 99_000_000,
-            ..Default::default(),
+            ..Default::default()
         },
         quality,
         iterations: vec![],

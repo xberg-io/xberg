@@ -395,7 +395,7 @@ fn test_ocr_unknown_is_not_mislabeled() {
             p50_memory_bytes: 8_000_000,
             p95_memory_bytes: 9_500_000,
             p99_memory_bytes: 9_900_000,
-            ..Default::default(),
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],
@@ -444,7 +444,7 @@ fn test_failed_results_excluded_from_percentiles() {
                 p50_memory_bytes: 8_000_000,
                 p95_memory_bytes: 9_500_000,
                 p99_memory_bytes: 9_900_000,
-                ..Default::default(),
+                ..Default::default()
             },
             quality: None,
             iterations: vec![],
@@ -478,7 +478,7 @@ fn test_failed_results_excluded_from_percentiles() {
                 p50_memory_bytes: 0,
                 p95_memory_bytes: 0,
                 p99_memory_bytes: 0,
-                ..Default::default(),
+                ..Default::default()
             },
             quality: None,
             iterations: vec![],

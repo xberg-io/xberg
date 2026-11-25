@@ -33,7 +33,7 @@ pub(super) fn create_test_result(
             p50_memory_bytes: memory_bytes,
             p95_memory_bytes: memory_bytes,
             p99_memory_bytes: memory_bytes,
-            ..Default::default(),
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],

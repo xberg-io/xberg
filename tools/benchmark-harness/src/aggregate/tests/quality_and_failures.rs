@@ -117,7 +117,7 @@ fn test_calculate_percentiles_extraction_duration_no_extraction_some_failed() {
             p50_memory_bytes: 0,
             p95_memory_bytes: 0,
             p99_memory_bytes: 0,
-            ..Default::default(),
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],
