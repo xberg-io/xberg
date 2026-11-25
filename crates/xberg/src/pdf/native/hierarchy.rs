@@ -1270,12 +1270,18 @@ fn extract_segments_with_structure_tree(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
+    skip_page: &impl Fn(usize) -> bool,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
     extract_pages_with_structure_tree(
         doc,
         artifacts,
         script_geometry,
-        extract_segments_from_page_inner,
+        |doc, page_idx, mcid_roles, artifacts, script_geometry| {
+            if skip_page(page_idx) {
+                return Ok(Vec::new());
+            }
+            extract_segments_from_page_inner(doc, page_idx, mcid_roles, artifacts, script_geometry)
+        },
         |segments| {
             segments
                 .iter()
@@ -1406,24 +1412,28 @@ pub(crate) fn extract_all_segments(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Preserve)
+    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Preserve, &|_: usize| false)
 }
 
 // Heuristic tables have plain cell strings, not annotation carriers. Preserve
 // their existing script flattening until table annotations are implemented. ~keep
+/// Pages for which `skip_page` (0-based) holds get an empty segment list without
+/// being read, so the result still has one slot per page.
 pub(crate) fn extract_all_segments_for_tables(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
+    skip_page: impl Fn(usize) -> bool,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Flatten)
+    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Flatten, &skip_page)
 }
 
 fn extract_all_segments_inner(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
+    skip_page: &impl Fn(usize) -> bool,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    let (tree_segments, used_tree) = extract_segments_with_structure_tree(doc, artifacts, script_geometry)?;
+    let (tree_segments, used_tree) = extract_segments_with_structure_tree(doc, artifacts, script_geometry, skip_page)?;
     if used_tree && !tree_segments.is_empty() {
         return Ok((tree_segments, true));
     }
@@ -1435,6 +1445,10 @@ fn extract_all_segments_inner(
     let mut all_pages: Vec<Vec<SegmentData>> = Vec::with_capacity(page_count);
 
     for page_idx in 0..page_count {
+        if skip_page(page_idx) {
+            all_pages.push(Vec::new());
+            continue;
+        }
         let segments = extract_segments_from_page_inner(doc, page_idx, &HashMap::new(), artifacts, script_geometry)?;
         all_pages.push(segments);
     }

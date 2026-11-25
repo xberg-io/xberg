@@ -886,7 +886,8 @@ pub(crate) struct HeuristicTableExtraction {
 /// detector can lock onto.
 ///
 /// Returns the detected tables together with ownership of the exact hierarchy
-/// segments used for reconstruction.
+/// segments used for reconstruction. Pages in `skip_pages` are never read, so
+/// their segment lists are empty.
 pub(crate) fn extract_tables_heuristic(
     doc: &mut NativeDocument,
     allow_single_column: bool,
@@ -895,7 +896,10 @@ pub(crate) fn extract_tables_heuristic(
     page_paths: &mut TablePagePaths,
 ) -> Result<HeuristicTableExtraction> {
     let (per_page_segments, used_structure_tree) =
-        crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
+        crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts, |page_idx| {
+            skip_pages.contains(&((page_idx + 1) as u32))
+        })
+        .map_err(|e| {
             PdfError::TextExtractionFailed(format!(
                 "xberg_native_pdf hierarchy extraction failed for heuristic tables: {e}"
             ))
@@ -5569,6 +5573,90 @@ mod tests {
         }
     }
 
+    /// Two pages sharing one content stream of an unruled label/value grid.
+    fn build_two_page_grid_pdf() -> Vec<u8> {
+        let mut content = String::from("BT /Helvetica 10 Tf\n");
+        for (row, label) in ["Revenue", "Costs", "Margin", "Taxes", "Net", "Cash"]
+            .into_iter()
+            .enumerate()
+        {
+            let baseline = 700 - row * 16;
+            content.push_str(&format!("1 0 0 1 60 {baseline} Tm ({label}) Tj\n"));
+            for (column, x) in [220, 300, 380, 460].into_iter().enumerate() {
+                let value = 1_000 + row * 137 + column * 59;
+                content.push_str(&format!("1 0 0 1 {x} {baseline} Tm ({value}) Tj\n"));
+            }
+        }
+        content.push_str("ET\n");
+        let single = String::from_utf8(build_table_test_pdf(&content)).expect("ASCII fixture");
+        let pages = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+        let page = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] \
+                    /Contents 4 0 R /Resources << /Font << /Helvetica 5 0 R >> >> >>\nendobj\n";
+        assert!(
+            single.contains(pages) && single.contains(page),
+            "single-page fixture layout changed"
+        );
+        let body = single
+            .replace(pages, "<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>")
+            .split("xref\n")
+            .next()
+            .expect("fixture body")
+            .to_string();
+        let mut pdf = body.clone();
+        let second_page = pdf.len();
+        pdf.push_str(&page.replacen("3 0 obj", "6 0 obj", 1));
+        let mut offsets = Vec::new();
+        for id in 1..=5 {
+            offsets.push(pdf.find(&format!("\n{id} 0 obj\n")).expect("object offset") + 1);
+        }
+        offsets.push(second_page);
+        let xref = pdf.len();
+        pdf.push_str("xref\n0 7\n0000000000 65535 f \n");
+        for offset in offsets {
+            pdf.push_str(&format!("{offset:010} 00000 n \n"));
+        }
+        pdf.push_str(&format!(
+            "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+        ));
+        pdf.into_bytes()
+    }
+
+    /// A skipped page is never read for segments, and every other page's
+    /// segments and heuristic tables are what a run without skips produces.
+    #[test]
+    fn skipped_heuristic_pages_are_not_read_and_others_are_unchanged() {
+        let bytes = build_two_page_grid_pdf();
+        let mut doc = NativeDocument::open_bytes(&bytes).expect("open two-page fixture");
+        assert_eq!(doc.doc.page_count().expect("page count"), 2);
+        let run = |doc: &mut NativeDocument, skip: &HashSet<u32>| {
+            extract_tables_heuristic(doc, false, skip, Default::default(), &mut TablePagePaths::default())
+                .expect("heuristic extraction")
+        };
+        let full = run(&mut doc, &HashSet::new());
+        let skipped = run(&mut doc, &HashSet::from([1]));
+
+        let [full_first, full_second] = full.hierarchy_segments.pages.as_slice() else {
+            panic!("one segment slot per page");
+        };
+        let [skipped_first, skipped_second] = skipped.hierarchy_segments.pages.as_slice() else {
+            panic!("one segment slot per page, skipped pages included");
+        };
+        assert!(
+            !full_first.is_empty() && !full_second.is_empty(),
+            "both pages carry text"
+        );
+        assert!(skipped_first.is_empty(), "a skipped page must not be read");
+        assert_eq!(format!("{skipped_second:?}"), format!("{full_second:?}"));
+
+        let second_page_tables = |tables: &[Table]| {
+            serde_json::to_value(tables.iter().filter(|table| table.page_number == 2).collect::<Vec<_>>())
+                .expect("serialize tables")
+        };
+        assert!(skipped.tables.iter().all(|table| table.page_number == 2));
+        assert_eq!(second_page_tables(&skipped.tables), second_page_tables(&full.tables));
+        assert_eq!(skipped.grids.len(), skipped.tables.len());
+    }
+
     /// Vertical-gap clustering: words all within one band become one region.
     #[test]
     fn test_cluster_words_single_region_not_split() {
@@ -7080,6 +7168,7 @@ mod tests {
         let (segments, _) = crate::pdf::native::hierarchy::extract_all_segments_for_tables(
             &mut doc,
             crate::pdf::native::hierarchy::ArtifactRetention::default(),
+            |_| false,
         )
         .unwrap();
         let page_height = segments[0]
