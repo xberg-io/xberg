@@ -808,18 +808,18 @@ fn inference_crop_bytes(pages: &[RenderedLayoutPage], positions: &[usize]) -> Re
     })
 }
 
-/// The engine's batch capacity, lowered until a batch that size fits with every page charged the
-/// chunk's largest inference crop. Only one batch's crops are live at a time, so charging the
-/// whole chunk's crops at once refuses chunks that split into valid batches.
+/// The engine's memory-derived batch capacity, lowered until a batch that size fits with every
+/// page charged the chunk's largest inference crop. Only one batch's crops are live at a time, so
+/// charging the whole chunk's crops at once refuses chunks that split into valid batches.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-fn inference_batch_capacity(
+fn inference_memory_capacity(
     pages: &[RenderedLayoutPage],
     rendered_positions: &[usize],
     current_live_bytes: u64,
     (width, height): (u32, u32),
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> Result<usize> {
-    let capacity = crate::layout::engine::layout_inference_batch_capacity(
+    let capacity = crate::layout::engine::layout_inference_memory_capacity(
         width,
         height,
         current_live_bytes,
@@ -844,6 +844,27 @@ fn inference_batch_capacity(
     };
     // One when nothing fits, so the per-batch check reports the page that does not.
     Ok((1..=capacity).rev().find(|&batch_len| fits(batch_len)).unwrap_or(1))
+}
+
+/// [`inference_memory_capacity`] lowered to the engine's throughput cap for its model and
+/// execution provider.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn inference_batch_capacity(
+    pages: &[RenderedLayoutPage],
+    rendered_positions: &[usize],
+    current_live_bytes: u64,
+    dimensions: (u32, u32),
+    max_batch: usize,
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> Result<usize> {
+    let memory = inference_memory_capacity(
+        pages,
+        rendered_positions,
+        current_live_bytes,
+        dimensions,
+        security_limits,
+    )?;
+    Ok(memory.min(max_batch).max(1))
 }
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -983,6 +1004,7 @@ fn detect_layout_chunk(
         &rendered_positions,
         current_live_bytes,
         (width, height),
+        engine.inference_batch_cap(),
         security_limits,
     )?;
     for position_chunk in rendered_positions.chunks(capacity) {
@@ -3003,7 +3025,7 @@ mod tests {
                 1_650,
             )
             .expect("eight page rasters");
-            let capacity = super::inference_batch_capacity(pages, &positions, live, (1_275, 1_650), &limits)
+            let capacity = super::inference_memory_capacity(pages, &positions, live, (1_275, 1_650), &limits)
                 .expect("default limits must support at least one inference page");
             for batch in positions.chunks(capacity) {
                 let crops = super::inference_crop_bytes(pages, batch).expect("crop bytes");
@@ -3015,10 +3037,48 @@ mod tests {
 
         assert_eq!(
             capacity_of(&letter_pages(None)),
-            crate::layout::engine::LAYOUT_INFERENCE_MAX_BATCH,
+            2,
             "uncropped pages keep the engine's capacity"
         );
         assert_eq!(capacity_of(&letter_pages(Some((104, 104, 1_067, 1_333)))), 1);
+    }
+
+    #[test]
+    fn batch_cap_lowers_memory_capacity_and_never_raises_it() {
+        let limits = crate::extractors::security::SecurityLimits::default();
+        let pages: Vec<RenderedLayoutPage> = (0..8)
+            .map(|page_index| RenderedLayoutPage {
+                page_height_pts: 792.0,
+                image: Some(image::RgbImage::new(1_275, 1_650)),
+                ..rendered_page(page_index, 1, 612.0)
+            })
+            .collect();
+        let positions: Vec<usize> = (0..8).collect();
+        let live =
+            crate::layout::engine::live_raster_bytes(pages.iter().filter_map(|page| page.image.as_ref()), 1_275, 1_650)
+                .expect("eight page rasters");
+        let capacity = |max_batch| {
+            super::inference_batch_capacity(&pages, &positions, live, (1_275, 1_650), max_batch, &limits)
+                .expect("capacity")
+        };
+
+        assert_eq!(capacity(crate::layout::engine::LAYOUT_INFERENCE_MAX_BATCH), 1);
+        assert_eq!(capacity(usize::MAX), 2, "an uncapped model keeps the memory capacity");
+
+        let huge = crate::extractors::security::SecurityLimits {
+            max_content_size: usize::MAX,
+            ..Default::default()
+        };
+        let huge_capacity = super::inference_batch_capacity(
+            &pages,
+            &positions,
+            live,
+            (1_275, 1_650),
+            crate::layout::engine::LAYOUT_INFERENCE_MAX_BATCH,
+            &huge,
+        )
+        .expect("capacity");
+        assert_eq!(huge_capacity, crate::layout::engine::LAYOUT_INFERENCE_MAX_BATCH);
     }
 
     /// The 300 dpi scans that lost layout render at 2586x3346 (25,958,268 B). Three of them and a
