@@ -299,3 +299,263 @@ fn dense_decimal_baseline_leaves_unsearched_words_without_offsets() {
     assert!(spans[63].char_x_offsets.is_empty(), "unsearched word retains offsets");
     assert_eq!(spans.iter().filter(|span| !span.char_x_offsets.is_empty()).count(), 32);
 }
+
+/// `stamp_char_x_offsets`'s span loop before its baseline rows were shared across spans.
+fn stamp_char_x_offsets_oracle(
+    accurate: &[crate::layout::TextChar],
+    spans: &mut [crate::layout::TextSpan],
+    exact_decimals: bool,
+) {
+    let is_decimal_word = |span: &crate::layout::TextSpan| {
+        span.text.contains('.') && span.text.chars().any(|glyph| glyph.is_ascii_digit())
+    };
+    let mut by_y: Vec<u32> = (0..accurate.len() as u32).collect();
+    by_y.sort_by(|&a, &b| crate::utils::safe_float_cmp(accurate[a as usize].origin_y, accurate[b as usize].origin_y));
+    let ys: Vec<f32> = by_y.iter().map(|&i| accurate[i as usize].origin_y).collect();
+    let mut decimal_candidates_left = accurate.len().saturating_mul(32);
+    for span in spans.iter_mut() {
+        if span.rotation_degrees != 0.0 || (exact_decimals && !is_decimal_word(span)) {
+            continue;
+        }
+        span.char_x_offsets.clear();
+        if exact_decimals && decimal_candidates_left == 0 {
+            continue;
+        }
+        let glyphs: Vec<char> = span.text.chars().collect();
+        let n = glyphs.len();
+        if n == 0 {
+            continue;
+        }
+        let baseline_tol = 0.6 * span.font_size.max(1.0);
+        let bracket = baseline_tol + baseline_tol.abs() * 1e-6 + f32::EPSILON;
+        let lo = ys.partition_point(|&y| y < span.bbox.y - bracket);
+        let hi = ys.partition_point(|&y| y <= span.bbox.y + bracket);
+        if exact_decimals {
+            let Some(remaining) = decimal_candidates_left.checked_sub(hi - lo) else {
+                decimal_candidates_left = 0;
+                continue;
+            };
+            decimal_candidates_left = remaining;
+        }
+        let horizontal = span.bbox.left()..span.bbox.right();
+        let mut idx: Vec<u32> = by_y[lo..hi]
+            .iter()
+            .copied()
+            .filter(|&i| {
+                let glyph = &accurate[i as usize];
+                (glyph.origin_y - span.bbox.y).abs() <= baseline_tol
+                    && (!exact_decimals || horizontal.contains(&glyph.origin_x))
+            })
+            .collect();
+        if idx.is_empty() {
+            continue;
+        }
+        idx.sort_by(|&a, &b| {
+            crate::utils::safe_float_cmp(accurate[a as usize].origin_x, accurate[b as usize].origin_x).then(a.cmp(&b))
+        });
+        let line: Vec<&crate::layout::TextChar> = idx.iter().map(|&i| &accurate[i as usize]).collect();
+        if exact_decimals {
+            let mut source = line.iter();
+            let baseline = line[0].origin_y;
+            let positions = glyphs
+                .iter()
+                .map(|glyph| {
+                    source
+                        .next()
+                        .filter(|item| {
+                            item.char == *glyph
+                                && item.rotation_degrees == 0.0
+                                && (item.origin_y - baseline).abs() <= 0.05
+                        })
+                        .map(|item| item.origin_x)
+                })
+                .collect::<Option<Vec<_>>>();
+            if let Some(positions) = positions
+                && source.next().is_none()
+                && positions.windows(2).all(|pair| pair[0] < pair[1])
+            {
+                span.char_x_offsets = positions;
+            }
+            continue;
+        }
+        let start = line.iter().position(|c| c.origin_x >= span.bbox.x - 0.5).unwrap_or(0);
+        let mut assigned: Vec<Option<f32>> = vec![None; n];
+        let mut li = start;
+        for (k, &g) in glyphs.iter().enumerate() {
+            let mut j = li;
+            let mut steps = 0;
+            while j < line.len() && steps < 6 {
+                if line[j].char == g {
+                    assigned[k] = Some(line[j].origin_x);
+                    li = j + 1;
+                    break;
+                }
+                j += 1;
+                steps += 1;
+            }
+        }
+        let anchors = assigned.iter().filter(|a| a.is_some()).count();
+        if anchors * 5 < n * 3 {
+            continue;
+        }
+        let cw = &span.char_widths;
+        let width_at = |i: usize| -> f32 {
+            if cw.len() == n {
+                cw[i]
+            } else {
+                span.bbox.width / n as f32
+            }
+        };
+        let mut offs = vec![0.0f32; n];
+        let mut last: Option<(usize, f32)> = None;
+        for k in 0..n {
+            if let Some(x) = assigned[k] {
+                offs[k] = x;
+                last = Some((k, x));
+            } else if let Some((lk, lx)) = last {
+                let acc: f32 = (lk..k).map(width_at).sum();
+                offs[k] = lx + acc;
+            }
+        }
+        if assigned[0].is_none()
+            && let Some(fk) = assigned.iter().position(|a| a.is_some())
+        {
+            let fx = assigned[fk].unwrap();
+            for k in 0..fk {
+                let acc: f32 = (k..fk).map(width_at).sum();
+                offs[k] = fx - acc;
+            }
+        }
+        span.char_x_offsets = offs;
+    }
+}
+
+/// A deterministic xorshift stream, so a failing seed reproduces.
+struct Xorshift(u64);
+
+impl Xorshift {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    fn below(&mut self, bound: usize) -> usize {
+        (self.next() % bound as u64) as usize
+    }
+
+    fn pick<T: Copy>(&mut self, items: &[T]) -> T {
+        items[self.below(items.len())]
+    }
+}
+
+fn random_stamp_page(rng: &mut Xorshift) -> (Vec<crate::layout::TextChar>, Vec<crate::layout::TextSpan>) {
+    const GLYPHS: &[char] = &['1', '2', '.', '3', 'a', 'b', ' '];
+    const BASELINES: &[f32] = &[100.0, 100.4, 103.0, 110.0, 110.05, 125.0];
+    let mut chars = Vec::new();
+    for _ in 0..rng.below(90) + 1 {
+        let x = match rng.below(20) {
+            0 => f32::NAN,
+            1 => -0.0,
+            _ => (rng.below(120) as f32) * 0.5,
+        };
+        chars.push(crate::layout::TextChar {
+            char: rng.pick(GLYPHS),
+            bbox: crate::geometry::Rect::new(x, 0.0, 1.0, 4.0),
+            font_name: "F1".to_string(),
+            font_size: 4.0,
+            font_weight: crate::layout::FontWeight::Normal,
+            color: crate::layout::Color::black(),
+            mcid: None,
+            is_italic: false,
+            is_monospace: false,
+            origin_x: x,
+            origin_y: rng.pick(BASELINES) + rng.pick(&[0.0f32, 0.02, -0.3, 2.4, 2.41]),
+            rotation_degrees: rng.pick(&[0.0, 0.0, 0.0, 90.0]),
+            advance_width: 1.0,
+            rendered_advance: 1.0,
+            ascent: 3.8,
+            descent: -1.4,
+            matrix: None,
+        });
+    }
+    let mut spans = Vec::new();
+    for _ in 0..rng.below(80) + 1 {
+        if rng.below(2) == 0 {
+            let y = rng.pick(BASELINES);
+            let mut row: Vec<&crate::layout::TextChar> = chars
+                .iter()
+                .filter(|glyph| glyph.origin_y == y && !glyph.origin_x.is_nan())
+                .collect();
+            row.sort_by(|a, b| a.origin_x.total_cmp(&b.origin_x));
+            if !row.is_empty() {
+                let start = rng.below(row.len());
+                let end = (start + 1 + rng.below(6)).min(row.len());
+                let left = row[start].origin_x;
+                let width = row[end - 1].origin_x + 0.25 - left;
+                spans.push(crate::layout::TextSpan {
+                    text: row[start..end].iter().map(|glyph| glyph.char).collect(),
+                    bbox: crate::geometry::Rect::new(left, y, width, 4.0),
+                    font_size: 4.0,
+                    ..Default::default()
+                });
+                continue;
+            }
+        }
+        let length = rng.below(7);
+        let text: String = (0..length).map(|_| rng.pick(GLYPHS)).collect();
+        let char_widths = if rng.below(2) == 0 {
+            (0..length).map(|_| rng.below(4) as f32 * 0.5).collect()
+        } else {
+            vec![1.0; rng.below(3)]
+        };
+        spans.push(crate::layout::TextSpan {
+            text,
+            bbox: crate::geometry::Rect::new(
+                rng.pick(&[f32::NAN, 0.0, 3.5, 10.0, 25.0, 40.0]),
+                rng.pick(BASELINES) + rng.pick(&[0.0f32, 0.0, 0.3, f32::NAN]),
+                rng.pick(&[0.0, 2.5, 8.0, 30.0]),
+                4.0,
+            ),
+            font_size: rng.pick(&[0.5, 4.0, 4.0, 8.0, f32::NAN]),
+            rotation_degrees: rng.pick(&[0.0, 0.0, 0.0, 0.0, 90.0]),
+            char_widths,
+            char_x_offsets: vec![-1.0; rng.below(3)],
+            ..Default::default()
+        });
+    }
+    (chars, spans)
+}
+
+fn offset_bits(spans: &[crate::layout::TextSpan]) -> Vec<Vec<u32>> {
+    spans
+        .iter()
+        .map(|span| span.char_x_offsets.iter().map(|x| x.to_bits()).collect())
+        .collect()
+}
+
+#[test]
+fn stamp_with_shared_baseline_rows_matches_per_span_selection() {
+    let mut rng = Xorshift(0x9e37_79b9_7f4a_7c15);
+    let mut stamped = [0usize; 2];
+    for case in 0..3000 {
+        let (chars, spans) = random_stamp_page(&mut rng);
+        for (mode, exact_decimals) in [false, true].into_iter().enumerate() {
+            let mut expected = spans.clone();
+            stamp_char_x_offsets_oracle(&chars, &mut expected, exact_decimals);
+            let mut actual = spans.clone();
+            PdfDocument::stamp_char_x_offsets_from_chars(&chars, &mut actual, exact_decimals);
+            assert_eq!(
+                offset_bits(&actual),
+                offset_bits(&expected),
+                "case {case}, exact_decimals {exact_decimals}"
+            );
+            stamped[mode] += expected.iter().filter(|span| !span.char_x_offsets.is_empty()).count();
+        }
+    }
+    assert!(
+        stamped.iter().all(|&count| count > 100),
+        "the oracle stamped too few spans: {stamped:?}"
+    );
+}

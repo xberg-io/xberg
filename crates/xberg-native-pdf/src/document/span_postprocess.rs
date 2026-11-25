@@ -604,10 +604,7 @@ impl PdfDocument {
     /// (see `postprocess_spans`) and their glyphs run along a rotated axis, so a
     /// horizontal-x stamp would misalign — those individual spans are skipped.
     fn stamp_char_x_offsets(&self, page_index: usize, spans: &mut [crate::layout::TextSpan], exact_decimals: bool) {
-        let is_decimal_word = |span: &crate::layout::TextSpan| {
-            span.text.contains('.') && span.text.chars().any(|glyph| glyph.is_ascii_digit())
-        };
-        if exact_decimals && !spans.iter().any(is_decimal_word) {
+        if exact_decimals && !spans.iter().any(Self::is_decimal_word) {
             return;
         }
         // Horizontal-x offsets only make sense in an unrotated frame; the 180°
@@ -620,7 +617,21 @@ impl PdfDocument {
             Ok(chars) if !chars.is_empty() => chars,
             _ => return,
         };
+        Self::stamp_char_x_offsets_from_chars(&accurate, spans, exact_decimals);
+    }
 
+    fn is_decimal_word(span: &crate::layout::TextSpan) -> bool {
+        span.text.contains('.') && span.text.chars().any(|glyph| glyph.is_ascii_digit())
+    }
+
+    /// The span loop of [`Self::stamp_char_x_offsets`] over a page's non-empty
+    /// accurate chars.
+    pub(super) fn stamp_char_x_offsets_from_chars(
+        accurate: &[crate::layout::TextChar],
+        spans: &mut [crate::layout::TextSpan],
+        exact_decimals: bool,
+    ) {
+        let is_decimal_word = Self::is_decimal_word;
         // Baseline index: char positions ordered by `origin_y`, so each span's
         // baseline slice is a binary-searched range rather than a linear scan
         // over every glyph on the page (that scan made this pass
@@ -634,6 +645,11 @@ impl PdfDocument {
         // revisit the same full glyph neighborhood for every decimal word. ~keep
         const DECIMAL_CANDIDATES_PER_PAGE_GLYPH: usize = 32;
         let mut decimal_candidates_left = accurate.len().saturating_mul(DECIMAL_CANDIDATES_PER_PAGE_GLYPH);
+        // The baseline selection depends only on the span's `bbox.y` and
+        // tolerance, which every span of a row shares, so each row's chars are
+        // selected and x-sorted once instead of once per span (quadratic on
+        // dense table rows). Keyed on the exact bits, so a hit is the same set. ~keep
+        let mut rows: HashMap<(u32, u32), Vec<u32>> = HashMap::new();
 
         for span in spans.iter_mut() {
             // Rotated-content spans are in the displayed frame (mapped on 90/270)
@@ -673,26 +689,36 @@ impl PdfDocument {
                 };
                 decimal_candidates_left = remaining;
             }
-            let horizontal = span.bbox.left()..span.bbox.right();
-            let mut idx: Vec<u32> = by_y[lo..hi]
-                .iter()
-                .copied()
-                .filter(|&i| {
-                    let glyph = &accurate[i as usize];
-                    (glyph.origin_y - span.bbox.y).abs() <= baseline_tol
-                        && (!exact_decimals || horizontal.contains(&glyph.origin_x))
-                })
-                .collect();
-            if idx.is_empty() {
+            let span_y = span.bbox.y;
+            let row: &[u32] = rows
+                .entry((span_y.to_bits(), baseline_tol.to_bits()))
+                .or_insert_with(|| {
+                    let mut idx: Vec<u32> = by_y[lo..hi]
+                        .iter()
+                        .copied()
+                        .filter(|&i| (accurate[i as usize].origin_y - span_y).abs() <= baseline_tol)
+                        .collect();
+                    idx.sort_by(|&a, &b| {
+                        crate::utils::safe_float_cmp(accurate[a as usize].origin_x, accurate[b as usize].origin_x)
+                            .then(a.cmp(&b))
+                    });
+                    idx
+                });
+            if row.is_empty() {
                 continue;
             }
-            idx.sort_by(|&a, &b| {
-                crate::utils::safe_float_cmp(accurate[a as usize].origin_x, accurate[b as usize].origin_x)
-                    .then(a.cmp(&b))
-            });
-            let line: Vec<&crate::layout::TextChar> = idx.iter().map(|&i| &accurate[i as usize]).collect();
 
             if exact_decimals {
+                // Filtering keeps the (origin_x, index) order of the shared row. ~keep
+                let horizontal = span.bbox.left()..span.bbox.right();
+                let line: Vec<&crate::layout::TextChar> = row
+                    .iter()
+                    .map(|&i| &accurate[i as usize])
+                    .filter(|glyph| horizontal.contains(&glyph.origin_x))
+                    .collect();
+                if line.is_empty() {
+                    continue;
+                }
                 // Skipping an in-span glyph can assign an overprinted point to the word. ~keep
                 let mut source = line.iter();
                 let baseline = line[0].origin_y;
@@ -727,15 +753,25 @@ impl PdfDocument {
             // unmatched glyph (an inserted word-boundary space, a ligature split,
             // a combining mark) no longer discards the whole span — such glyphs
             // are interpolated below so `char_x_offsets` still fills every index. ~keep
-            let start = line.iter().position(|c| c.origin_x >= span.bbox.x - 0.5).unwrap_or(0);
+            let line = |j: usize| &accurate[row[j] as usize];
+            // `row` ascends by `safe_float_cmp` (NaN last), so `origin_x < left`
+            // holds on a prefix; the first glyph past it is the first at or right
+            // of `left` unless it is NaN, when none is and the scan starts at 0. ~keep
+            let left = span.bbox.x - 0.5;
+            let first_right = row.partition_point(|&i| accurate[i as usize].origin_x < left);
+            let start = if first_right < row.len() && line(first_right).origin_x >= left {
+                first_right
+            } else {
+                0
+            };
             let mut assigned: Vec<Option<f32>> = vec![None; n];
             let mut li = start;
             for (k, &g) in glyphs.iter().enumerate() {
                 let mut j = li;
                 let mut steps = 0;
-                while j < line.len() && steps < 6 {
-                    if line[j].char == g {
-                        assigned[k] = Some(line[j].origin_x);
+                while j < row.len() && steps < 6 {
+                    if line(j).char == g {
+                        assigned[k] = Some(line(j).origin_x);
                         li = j + 1;
                         break;
                     }
