@@ -3083,6 +3083,7 @@ pub(super) fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_in
 struct NativeSpanPage {
     spans: Vec<TextSpan>,
     page_width: f32,
+    structure_ordered: bool,
 }
 
 /// Keep the existing optional-content filtering and coordinate conventions while reading
@@ -3110,9 +3111,58 @@ fn page_text_with_options_excluding_layers(
     } else {
         right
     };
-    let mut page = NativeSpanPage { spans, page_width };
+    let mut page = NativeSpanPage {
+        spans,
+        page_width,
+        structure_ordered: false,
+    };
     prefer_tagged_rtl_structure_order(doc, page_index, &mut page);
     Ok(page)
+}
+
+/// The page's spans in the order the structured (markdown) path reads them: top to bottom,
+/// then `hierarchy::reorder_page_reading_order` and the key/value row pass, exactly as
+/// `hierarchy::extract_final_spans_from_page_with_primes` applies them.
+///
+/// `ReadingOrder::ColumnAware` XY-cuts every page, which reads a table column by column and
+/// interleaves the columns of a page whose gutter the cut misses; the structured path cuts
+/// only pages `select_reading_order` judges balanced prose columns. Plain and Markdown output
+/// must share one reading order. A failed read returns `None` and keeps the caller's order. ~keep
+fn structured_path_page_spans(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    excluded_layers: &std::collections::HashSet<String>,
+    margins: PageMarginFractions,
+) -> Option<Vec<TextSpan>> {
+    let read = || -> std::result::Result<Vec<TextSpan>, String> {
+        let mut spans = if excluded_layers.is_empty() {
+            doc.extract_spans_with_reading_order(page_index, ReadingOrder::TopToBottom)
+        } else {
+            doc.extract_spans_filtered_with_reading_order(
+                page_index,
+                ReadingOrder::TopToBottom,
+                excluded_layers.clone(),
+                Default::default(),
+            )
+        }
+        .map_err(|error| error.to_string())?;
+        let (left, lower, right, upper) = doc.get_page_media_box(page_index).map_err(|error| error.to_string())?;
+        let (page_bottom, page_top) = (lower.min(upper), lower.max(upper));
+        retain_spans_inside_page_margins(&mut spans, page_bottom, page_top, margins);
+        super::hierarchy::reorder_page_reading_order(&mut spans, right - left, page_top - page_bottom, page_index);
+        xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
+        Ok(spans)
+    };
+    match super::guard_native_panic(read, |panic| format!("panicked: {panic}")) {
+        Ok(spans) => Some(spans),
+        Err(error) => {
+            tracing::debug!(
+                page = page_index,
+                "structured-path span order unavailable; keeping column-aware order: {error}"
+            );
+            None
+        }
+    }
 }
 
 fn prefer_tagged_rtl_structure_order(
@@ -3135,6 +3185,7 @@ fn prefer_tagged_rtl_structure_order(
         span.order_info.source == xberg_native_pdf::pipeline::ordered_span::ReadingOrderSource::StructureTree
     }) {
         page.spans = ordered.into_iter().map(|span| span.span).collect();
+        page.structure_ordered = true;
     }
 }
 
@@ -3264,6 +3315,7 @@ fn extract_page_text_column_aware(
     retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, options.margins);
 
     let complete_page = excluded_layers.is_empty() && widgets.is_empty() && span_count == page_text_data.spans.len();
+    let mut producer_order_applied = false;
     let financial_rows = if complete_page
         && let Some((order, arity)) = producer_financial_row_order(&page_text_data.spans, page_index)
         && untagged_upright_page(doc, page_index)
@@ -3287,6 +3339,7 @@ fn extract_page_text_column_aware(
             && untagged_upright_page(doc, page_index)
         {
             apply_span_order(&mut page_text_data.spans, &order);
+            producer_order_applied = true;
         }
         None
     };
@@ -3305,6 +3358,12 @@ fn extract_page_text_column_aware(
             "glyph fragmentation detected — rebuilding text from span positions (#962)"
         );
         rebuild_text_from_fragmented_spans(&page_text_data.spans)
+    } else if financial_rows.is_none()
+        && !producer_order_applied
+        && !page_text_data.structure_ordered
+        && let Some(spans) = structured_path_page_spans(doc, page_index, excluded_layers, options.margins)
+    {
+        assemble_page_text(&spans)
     } else {
         assemble_page_text(&page_text_data.spans)
     };
