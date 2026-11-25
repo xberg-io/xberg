@@ -5384,7 +5384,8 @@ impl FontInfo {
     /// Priority order per PDF Spec ISO 32000-1:2008:
     /// 1. FontWeight field from FontDescriptor (Table 122) - MOST RELIABLE
     /// 2. ForceBold flag (bit 19) from Flags field (Table 123)
-    /// 3. Font name heuristics (fallback for legacy PDFs)
+    /// 3. Font name heuristics (fallback for legacy PDFs): weight words, then TeX
+    ///    fontname shape codes, then a regular style suffix
     /// 4. StemV analysis (stem thickness correlates with weight)
     ///
     /// # Returns
@@ -5516,15 +5517,22 @@ impl FontInfo {
 
     /// Whether a style suffix of the name says regular weight: `Arial-ItalicMT`,
     /// `SourceSansPro-Regular`, `Times-Roman`, `NimbusRomNo9L-Regu`. Weight words
-    /// (`BoldItalic`) are matched before this runs.
+    /// (`BoldItalic`) are matched before this runs; an abbreviated weight token
+    /// (`Bookman-Demi-Italic`) leaves the decision to StemV.
     fn names_regular_style(name_lower: &str) -> bool {
         const REGULAR_STYLES: [&str; 10] = [
             "regular", "regu", "roman", "book", "normal", "plain", "italic", "it", "oblique", "obli",
         ];
-        name_lower.split(['-', ',']).skip(1).any(|style| {
-            let style = style.strip_suffix("mt").unwrap_or(style);
-            REGULAR_STYLES.contains(&style)
-        })
+        const WEIGHT_ABBREVIATIONS: [&str; 8] = ["demi", "semi", "bd", "blk", "hv", "medi", "extra", "ultra"];
+        let styles: Vec<&str> = name_lower
+            .split(['-', ','])
+            .skip(1)
+            .map(|style| style.strip_suffix("mt").unwrap_or(style))
+            .collect();
+        !styles
+            .iter()
+            .any(|style| WEIGHT_ABBREVIATIONS.iter().any(|weight| style.starts_with(weight)))
+            && styles.iter().any(|style| REGULAR_STYLES.contains(style))
     }
 
     /// Check if this font is bold (convenience method).
@@ -8763,6 +8771,26 @@ mod tests {
         assert_eq!(weight_of("Arial,Italic", 140.0), FontWeight::Normal);
         assert_eq!(weight_of("Arial-BoldItalicMT", 60.0), FontWeight::Bold);
         assert_eq!(weight_of("NimbusRomNo9L-Medi", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Times-Roman", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("Helvetica-Oblique", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("SourceSansPro-It", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("lmroman10-regular", 140.0), FontWeight::Normal);
+    }
+
+    #[test]
+    fn abbreviated_weight_beside_a_regular_style_leaves_weight_to_stem_v() {
+        assert_eq!(weight_of("Bookman-Demi-Italic", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Bd-It", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Blk-Roman", 140.0), FontWeight::Bold);
+    }
+
+    #[test]
+    fn tex_font_name_weight_reads_ec_and_sans_shape_codes() {
+        assert_eq!(weight_of("ECRM1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("TCRM1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("SFSS1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("ECBX1200", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFSX1000", 60.0), FontWeight::Bold);
     }
 
     /// Test CIDToGIDMap Identity mapping
