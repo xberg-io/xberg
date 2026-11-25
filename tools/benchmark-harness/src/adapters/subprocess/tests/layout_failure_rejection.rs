@@ -114,6 +114,26 @@ fn every_layout_variant_rejects_the_pdf_and_image_layout_failure_warnings() {
 }
 
 #[test]
+fn a_cpu_recovery_that_also_lost_pages_is_rejected_by_the_subprocess_adapter() {
+    let combined = "automatic layout inference failed (CoreML ExecuteKernel failed); recovered on CPU; \
+                    layout: 1 page(s) could not be prepared for layout analysis and were treated as empty: \
+                    page 2 failed to render: boom";
+    let recovered_only = "automatic layout inference failed (CoreML ExecuteKernel failed); recovered on CPU";
+    let rejected = item(serde_json::json!([{ "source": "layout", "message": combined }])).to_string();
+    let accepted = item(serde_json::json!([{ "source": "layout", "message": recovered_only }])).to_string();
+    for pipeline in LAYOUT_PIPELINES {
+        let error = adapter_for(pipeline)
+            .parse_output(&rejected)
+            .expect_err(&format!("{pipeline} must reject lost pages"));
+        assert!(
+            error.to_string().contains("could not be prepared"),
+            "{pipeline}: {error}"
+        );
+        assert!(adapter_for(pipeline).parse_output(&accepted).is_ok(), "{pipeline}");
+    }
+}
+
+#[test]
 fn baseline_variants_ignore_the_same_layout_warnings() {
     let pdf = item(serde_json::json!([{ "source": "layout", "message": LAYOUT_FAILURE }])).to_string();
     let image = item(serde_json::json!([{ "source": "layout-ocr", "message": IMAGE_LAYOUT_FAILURE }])).to_string();

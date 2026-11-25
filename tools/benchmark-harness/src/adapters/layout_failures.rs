@@ -9,12 +9,19 @@ use xberg::types::ExtractedDocument;
 /// and `layout-ocr` from the image extractor's layout-region OCR.
 const LAYOUT_WARNING_SOURCES: [&str; 2] = ["layout", "layout-ocr"];
 
-/// Emitted when the CPU provider recovered the layout pass; the layout was applied, so the row
-/// is still valid.
+/// Emitted when the CPU provider recovered the layout pass; the layout was applied, so on its own
+/// this clause leaves the row valid.
 const RECOVERED_ON_CPU_MARKER: &str = "recovered on CPU";
 
+/// Texts of clauses that report lost layout: a failed detector pass, and pages that could not be
+/// prepared for it. xberg joins these onto the CPU-recovery clause in a single `layout` warning
+/// (`combine_layout_warnings`), so a recovery marker must not exempt the whole message.
+const LAYOUT_LOSS_MARKERS: [&str; 2] = ["layout detection failed", "could not be prepared for layout analysis"];
+
 fn is_layout_failure(source: &str, message: &str) -> bool {
-    LAYOUT_WARNING_SOURCES.contains(&source) && !message.contains(RECOVERED_ON_CPU_MARKER)
+    LAYOUT_WARNING_SOURCES.contains(&source)
+        && (LAYOUT_LOSS_MARKERS.iter().any(|marker| message.contains(marker))
+            || !message.contains(RECOVERED_ON_CPU_MARKER))
 }
 
 /// The layout failure a document reports, if its extraction continued without layout hints.
@@ -111,6 +118,29 @@ mod tests {
             ))
             .is_some()
         );
+    }
+
+    /// Negative control: the exact text xberg emits when a CPU recovery and unrenderable pages
+    /// coincide; the recovered clause must not hide the lost pages. ~keep
+    #[test]
+    fn a_cpu_recovery_combined_with_a_page_loss_is_still_a_failure() {
+        let combined = "automatic layout inference failed (CoreML ExecuteKernel failed); recovered on CPU; \
+                        layout: 1 page(s) could not be prepared for layout analysis and were treated as empty: \
+                        page 2 failed to render: boom";
+        let mut document = ExtractedDocument::default();
+        document.processing_warnings.push(warning("layout", combined));
+        let from_document = layout_failure_in_document(&document).expect("page loss must be detected");
+        assert!(from_document.contains("could not be prepared"), "{from_document}");
+        assert!(
+            layout_failure_in_item(&item(serde_json::json!([{ "source": "layout", "message": combined }]))).is_some()
+        );
+    }
+
+    #[test]
+    fn a_cpu_recovery_combined_with_a_detector_failure_is_still_a_failure() {
+        let combined = "automatic layout inference failed (provider error); recovered on CPU; \
+                        layout detection failed (model not found); document extracted without layout hints";
+        assert!(is_layout_failure("layout", combined));
     }
 
     #[test]
