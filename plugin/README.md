@@ -57,7 +57,9 @@ Pi content alongside the OpenCode adapter. No separate Pi release job is needed.
 
 ### Binary requirement
 
-Install the `xberg` CLI:
+The plugin's MCP launcher needs no manual install. It uses, in order: a cached binary in the plugin directory, an `xberg` on `PATH` at or above the pinned version, `npx --yes @xberg-io/xberg-cli@<pinned version>` (requires `node` and `npx`), then the GitHub release archive for the pinned version. Homebrew is used only when `XBERG_LAUNCHER=brew` is set; `XBERG_LAUNCHER` also accepts `npx` and `download` to force one tier.
+
+To install the `xberg` CLI yourself:
 
 ```bash
 brew install xberg-io/tap/xberg

@@ -6,7 +6,7 @@ name: xberg-extracting-keywords
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 Content-Hash: blake3:491d3cbcd4f6128d43e32b39c13d03a023b397f97c71da48ed5a02d6be00ae28
-Source-Hash: blake3:f468574fd379ff893b67333b30748f6893922d5d9d08c5eded8a0a3f01a0bce4
+Source-Hash: blake3:745a1d19b9f0e0eaf10c740318c422e6f4a5e294bb526f1e7151c30217236822
 Schema-Version: v1
 -->
 

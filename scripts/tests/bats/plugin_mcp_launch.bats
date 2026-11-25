@@ -2,8 +2,9 @@
 #
 # Contract tests for plugin/scripts/mcp-launch.sh.
 #
-# This launcher pins the release it ships with (PINNED_VERSION) and has no npx or uvx tier, so the
-# suite is no longer byte-identical with the sibling repositories' copies.
+# This launcher pins the release it ships with (PINNED_VERSION) and runs the exact pinned npm
+# package through npx before any download, so the suite is no longer byte-identical with the
+# sibling repositories' copies.
 #
 # The suite tests strictly through the process boundary: it runs the script and asserts the
 # exit status, which launcher was exec'd, and that argv arrives intact. Internal names never
@@ -43,7 +44,7 @@ setup_file() {
 	# machine has no brew" and the probe would find the developer's real copy. The product binary
 	# is excluded for the same reason -- a developer with it installed would otherwise take the
 	# PATH branch in every test. ~keep
-	xberg_shadow_system_path_without brew curl wget "$BINARY_NAME"
+	xberg_shadow_system_path_without brew curl wget node npx "$BINARY_NAME"
 
 	export REPO_ROOT SCRIPT BINARY_NAME PINNED_VERSION LAUNCHER_VAR
 }
@@ -117,12 +118,12 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 
 	xberg_assert_status 1
 	xberg_assert_output_contains "invalid ${LAUNCHER_VAR}='wget-please'"
-	xberg_assert_output_contains "auto|brew|download"
+	xberg_assert_output_contains "auto|npx|brew|download"
 }
 
 @test "mcp-launch should_accept_every_documented_launcher_value" {
 	local mode
-	for mode in auto brew download; do
+	for mode in auto npx brew download; do
 		LAUNCH_MODE="$mode"
 		launch
 		# Each of these still fails -- nothing is installed -- but it must fail at the end, not
@@ -140,7 +141,7 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 
 	xberg_assert_status 1
 	xberg_assert_output_contains "could not locate or install"
-	xberg_assert_output_contains "brew install xberg-io/tap/${BINARY_NAME}"
+	xberg_assert_output_contains "npm install -g @xberg-io/xberg-cli@${PINNED_VERSION}"
 	xberg_assert_output_contains "cargo install"
 }
 
@@ -238,7 +239,115 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 	[[ "$output" == *"CACHED:ran"* ]]
 }
 
+# --- npx ----------------------------------------------------------------------------------------
+
+# node and npx stubs. The npx stub records its argv one line per argument in $XBERG_STUB_BIN/npx.args
+# and announces itself, so the exact package spec and the pass-through are both observable. ~keep
+make_npx() {
+	xberg_stub node 'exit 0'
+	xberg_stub npx \
+		"printf '%s\\n' \"\$@\" >\"\$0.args\"" \
+		"printf 'NPX:ran\\n'" \
+		'exit 0'
+}
+
+@test "mcp-launch should_run_the_exact_pinned_npm_package_through_npx_and_pass_arguments_through" {
+	make_npx
+	launch mcp --transport stdio "a b"
+
+	xberg_assert_status 0
+	[[ "$output" == *"NPX:ran"* ]]
+	xberg_assert_file "$XBERG_STUB_BIN/npx.args" "--yes
+--quiet
+--no-fund
+--no-audit
+@xberg-io/xberg-cli@${PINNED_VERSION}
+mcp
+--transport
+stdio
+a b"
+}
+
+@test "mcp-launch should_prefer_a_path_binary_over_npx" {
+	make_npx
+	make_cli "$XBERG_STUB_BIN/$BINARY_NAME" ONPATH
+	launch
+
+	xberg_assert_status 0
+	[[ "$output" == *"ONPATH:ran"* ]]
+	[[ "$output" != *"NPX:ran"* ]]
+}
+
+@test "mcp-launch should_prefer_the_cached_binary_over_npx" {
+	make_npx
+	make_cli "$(cached_binary)" CACHED
+	launch
+
+	xberg_assert_status 0
+	[[ "$output" == *"CACHED:ran"* ]]
+	[[ "$output" != *"NPX:ran"* ]]
+}
+
+@test "mcp-launch should_use_npx_for_a_path_binary_older_than_the_pin" {
+	VERSION_REPORTED="0.0.1"
+	make_npx
+	make_cli "$XBERG_STUB_BIN/$BINARY_NAME" ONPATH
+	launch
+
+	xberg_assert_status 0
+	[[ "$output" == *"NPX:ran"* ]]
+	[[ "$output" != *"ONPATH:ran"* ]]
+}
+
+@test "mcp-launch should_reach_npx_before_any_download_in_auto_mode" {
+	make_npx
+	xberg_stub_trace curl
+	launch
+
+	xberg_assert_status 0
+	[[ "$output" == *"NPX:ran"* ]]
+	xberg_assert_trace_empty
+}
+
+@test "mcp-launch should_run_npx_when_the_launcher_mode_is_npx" {
+	LAUNCH_MODE="npx"
+	make_npx
+	launch serve
+
+	xberg_assert_status 0
+	[[ "$output" == *"NPX:ran"* ]]
+}
+
+@test "mcp-launch should_fail_in_npx_mode_without_node_and_not_fall_back_to_download" {
+	LAUNCH_MODE="npx"
+	xberg_stub_trace curl
+	launch
+
+	xberg_assert_status 1
+	xberg_assert_output_contains "could not locate or install"
+	xberg_assert_trace_empty
+}
+
+@test "mcp-launch should_fall_through_to_download_when_npx_is_missing" {
+	xberg_stub node 'exit 0'
+	xberg_stub_trace curl
+	launch
+
+	# curl is stubbed to succeed without writing the archive, so the download branch is entered
+	# and then fails on extraction; reaching it at all is the claim. ~keep
+	xberg_assert_status 1
+	xberg_assert_output_contains "downloading"
+}
+
 # --- brew ---------------------------------------------------------------------------------------
+
+@test "mcp-launch should_not_run_brew_in_auto_mode" {
+	xberg_stub_trace brew
+	launch
+
+	xberg_assert_status 1
+	xberg_assert_trace_empty
+}
 
 @test "mcp-launch should_install_through_brew_and_exec_what_it_put_on_path" {
 	LAUNCH_MODE="brew"

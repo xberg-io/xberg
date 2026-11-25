@@ -54,6 +54,47 @@ class LauncherDirectoryTests(unittest.TestCase):
             assert payload["config"] == "provider-model-route"
             assert payload["args"] == arguments
 
+    def test_should_run_pinned_npm_package_with_clean_stdout_when_no_binary_is_available(self) -> None:
+        """Without a cached or PATH binary the launcher execs the exact pinned npx package."""
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "plugin/scripts/mcp-launch.sh").read_text()
+        pin = re.search(r'(?m)^PINNED_VERSION="([^"]+)"', source)
+        assert pin is not None
+        with tempfile.TemporaryDirectory(prefix="mcp-launch-npx-") as temporary:
+            directory = Path(temporary)
+            stubs = directory / "stubs"
+            stubs.mkdir()
+            (stubs / "node").write_text("#!/bin/sh\nexit 0\n")
+            (stubs / "npx").write_text(f"#!{sys.executable}\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+            for stub in stubs.iterdir():
+                stub.chmod(0o755)
+            plugin = directory / "plugin"
+            plugin.mkdir()
+            environment = {
+                "PATH": f"{stubs}{os.pathsep}/usr/bin{os.pathsep}/bin",
+                "HOME": str(directory),
+                "CLAUDE_PLUGIN_ROOT": str(plugin),
+            }
+            result = subprocess.run(
+                ["bash", str(root / "plugin/scripts/mcp-launch.sh"), "mcp", "--transport", "stdio"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout) == [
+                "--yes",
+                "--quiet",
+                "--no-fund",
+                "--no-audit",
+                f"@xberg-io/xberg-cli@{pin[1]}",
+                "mcp",
+                "--transport",
+                "stdio",
+            ]
+
 
 if __name__ == "__main__":
     unittest.main()

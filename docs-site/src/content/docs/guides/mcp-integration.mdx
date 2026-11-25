@@ -34,7 +34,7 @@ If you install the [Xberg coding-agent plugin](/guides/ai-coding-assistants/), y
 }
 ```
 
-`mcp-launch.sh` resolves the CLI at runtime — a cached or on-`PATH` `xberg` first, then `npx -y @xberg-io/xberg-cli@latest`, `uvx --from xberg-cli xberg`, Homebrew, or a prebuilt release archive — so the server runs with no manual install. Override the strategy with `XBERG_LAUNCHER` (`auto` default, or `npx`, `uvx`, `brew`, `download`).
+`mcp-launch.sh` resolves the CLI at runtime, in this order, so the server runs with no manual install: a cached `xberg` in the plugin directory, an `xberg` on `PATH` at or above the plugin's pinned version, `npx --yes @xberg-io/xberg-cli@<pinned version>` when `node` and `npx` are available (the only tier that works in a sandbox with an npm registry mirror but no GitHub access), and finally the prebuilt GitHub release archive for the pinned version. Homebrew is never tried automatically. Override the strategy with `XBERG_LAUNCHER` (`auto` default, or `npx`, `brew`, `download`).
 
 To wire the same launcher into a client yourself without the CLI on `PATH`, point at either package directly:
 

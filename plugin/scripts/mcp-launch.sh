@@ -14,10 +14,11 @@ die() {
 
 LAUNCHER="${XBERG_LAUNCHER:-auto}"
 case "$LAUNCHER" in
-auto | brew | download) ;;
-*) die "invalid XBERG_LAUNCHER='$LAUNCHER' (expected auto|brew|download)" ;;
+auto | npx | brew | download) ;;
+*) die "invalid XBERG_LAUNCHER='$LAUNCHER' (expected auto|npx|brew|download)" ;;
 esac
 
+# brew is opt-in only: a sandbox without network cannot use it, so auto never reaches it. ~keep
 want() { [ "$LAUNCHER" = "auto" ] || [ "$LAUNCHER" = "$1" ]; }
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
@@ -62,7 +63,16 @@ if have "$BINARY_NAME"; then
   fi
 fi
 
-if want brew && have brew; then
+NPM_PACKAGE="@xberg-io/xberg-cli"
+
+# Runs the exact pinned CLI package. npx progress goes to stderr; --quiet/--no-fund/--no-audit
+# suppress the remaining npm notices so stdout carries only the MCP stdio protocol. ~keep
+if want npx && have node && have npx; then
+  log "running ${NPM_PACKAGE}@${PINNED_VERSION} via npx ..."
+  exec npx --yes --quiet --no-fund --no-audit "${NPM_PACKAGE}@${PINNED_VERSION}" "$@"
+fi
+
+if [ "$LAUNCHER" = "brew" ] && have brew; then
   log "installing via 'brew install xberg-io/tap/xberg' ..."
   if brew install xberg-io/tap/xberg >&2; then
     if have "$BINARY_NAME"; then
@@ -177,6 +187,7 @@ if want download; then
 fi
 
 die "could not locate or install xberg. Install it manually with one of:
+  npm install -g ${NPM_PACKAGE}@${PINNED_VERSION}
   brew install xberg-io/tap/xberg
   cargo install xberg-cli
   or download a prebuilt archive from https://github.com/xberg-io/xberg/releases/tag/v${PINNED_VERSION}

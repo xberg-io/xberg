@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "source_hash": "blake3:f468574fd379ff893b67333b30748f6893922d5d9d08c5eded8a0a3f01a0bce4",
+  "source_hash": "blake3:745a1d19b9f0e0eaf10c740318c422e6f4a5e294bb526f1e7151c30217236822",
   "outputs": {
     ".claude-plugin/plugin.json": {
       "content_hash": "blake3:9cd6d7656e9e1da1293190b9f5c17d9c66529ba2fe896f50d0f054549bca4067",
@@ -1547,7 +1547,7 @@
       "mode": "0644"
     },
     "scripts/mcp-launch.sh": {
-      "content_hash": "blake3:12827f7f7a992f8e6c8f14c68b30e5a392b854ec63634161a7d63c8f9f2ba69d",
+      "content_hash": "blake3:778dd6aa6f483ddd5e13342a664966528916b1036c68a71256ed2f27add85138",
       "mode": "0755"
     },
     "skills/xberg-batch-extraction/SKILL.md": {
