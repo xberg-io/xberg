@@ -502,60 +502,72 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
     };
 
     let mut position_groups: Vec<Vec<f64>> = Vec::new();
-
+    // Each word joins the earliest-created group whose first position is within
+    // the threshold. A group is only created when no first position is, so they
+    // lie pairwise farther apart than the threshold and a window around the word
+    // in this position-sorted index holds a handful of them. Positions are exact
+    // halves, so the widened window is a superset of the exact predicate. ~keep
+    let threshold = row_threshold as f64;
+    let mut group_firsts: Vec<(f64, usize)> = Vec::new();
     for word in seed_words {
         let y_center = word.y_center();
-
-        let mut found_group = false;
-        for group in &mut position_groups {
-            if let Some(&first_pos) = group.first()
-                && (y_center - first_pos).abs() <= row_threshold as f64
-            {
-                group.push(y_center);
-                found_group = true;
-                break;
+        let low = group_firsts.partition_point(|&(first, _)| first < y_center - threshold - 1.0);
+        let high = group_firsts.partition_point(|&(first, _)| first <= y_center + threshold + 1.0);
+        let earliest = group_firsts[low..high]
+            .iter()
+            .filter(|&&(first, _)| (y_center - first).abs() <= threshold)
+            .map(|&(_, group)| group)
+            .min();
+        match earliest {
+            Some(group) => position_groups[group].push(y_center),
+            None => {
+                let at = group_firsts.partition_point(|&(first, _)| first < y_center);
+                group_firsts.insert(at, (y_center, position_groups.len()));
+                position_groups.push(vec![y_center]);
             }
         }
-
-        if !found_group {
-            position_groups.push(vec![y_center]);
-        }
     }
 
-    let half_height = median_height / 2;
-    for word in tall_words {
-        let bottom = word.top.saturating_add(word.height);
-        let overlaps_seeded_row = position_groups
-            .iter()
-            .filter_map(|group| median_row_position(group))
-            .any(|row_y| {
-                let band_top = row_y.saturating_sub(half_height);
-                let band_bottom = row_y.saturating_add(half_height);
-                bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
-            });
-        if !overlaps_seeded_row {
-            position_groups.push(vec![word.y_center()]);
-        }
-    }
-
+    // A tall word that seeds a row is a one-position group whose median is its centre. ~keep
     let mut rows: Vec<u32> = position_groups
         .iter()
         .filter_map(|group| median_row_position(group))
         .collect();
+    let half_height = median_height / 2;
+    for word in tall_words {
+        let bottom = word.top.saturating_add(word.height);
+        let overlaps_seeded_row = rows.iter().any(|&row_y| {
+            let band_top = row_y.saturating_sub(half_height);
+            let band_bottom = row_y.saturating_add(half_height);
+            bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+        });
+        if !overlaps_seeded_row {
+            rows.push(word.y_center() as u32);
+        }
+    }
 
     rows.sort_unstable();
     rows
 }
 
-/// Find which row a word belongs to based on its y-center.
+/// Find which row a word belongs to based on its y-center: the nearest of the
+/// ascending `row_positions` ([`detect_rows`] output), the first on a tie.
 pub(crate) fn find_row_index(row_positions: &[u32], word: &HocrWord) -> Option<usize> {
+    debug_assert!(row_positions.is_sorted(), "row positions must ascend");
     let y_center = word.y_center() as u32;
 
-    row_positions
-        .iter()
-        .enumerate()
-        .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
-        .map(|(idx, _)| idx)
+    let at_or_above = row_positions.partition_point(|&row_y| row_y < y_center);
+    let below = at_or_above
+        .checked_sub(1)
+        .map(|nearest| row_positions.partition_point(|&row_y| row_y < row_positions[nearest]));
+    match (below, row_positions.get(at_or_above)) {
+        (Some(below), Some(&above_y)) if above_y.abs_diff(y_center) < row_positions[below].abs_diff(y_center) => {
+            Some(at_or_above)
+        }
+        (Some(below), _) => Some(below),
+        (None, Some(_)) => Some(at_or_above),
+        (None, None) => None,
+    }
 }
 
 /// Find the row whose median-height band overlaps `word` most, breaking ties by centre distance.
@@ -1875,6 +1887,131 @@ mod tests {
             height,
             confidence: 95.0,
         }
+    }
+
+    /// `detect_rows` as a first-fit scan over every group, re-deriving each group median per tall word.
+    fn detect_rows_oracle(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u32> {
+        if words.is_empty() {
+            return Vec::new();
+        }
+        let median_height = median_word_height(words);
+        let row_threshold = (median_height as f64 * row_threshold_ratio) as u32;
+        let maximum_seed_height = median_height.saturating_add(median_height / 2);
+        let (seed_words, tall_words): (Vec<&HocrWord>, Vec<&HocrWord>) =
+            words.iter().partition(|word| word.height <= maximum_seed_height);
+        let (seed_words, tall_words) = if seed_words.is_empty() {
+            (words.iter().collect(), Vec::new())
+        } else {
+            (seed_words, tall_words)
+        };
+        let mut position_groups: Vec<Vec<f64>> = Vec::new();
+        for word in seed_words {
+            let y_center = word.y_center();
+            match position_groups
+                .iter_mut()
+                .find(|group| (y_center - group[0]).abs() <= row_threshold as f64)
+            {
+                Some(group) => group.push(y_center),
+                None => position_groups.push(vec![y_center]),
+            }
+        }
+        let half_height = median_height / 2;
+        for word in tall_words {
+            let bottom = word.top.saturating_add(word.height);
+            let overlaps_seeded_row = position_groups
+                .iter()
+                .filter_map(|group| median_row_position(group))
+                .any(|row_y| {
+                    let band_top = row_y.saturating_sub(half_height);
+                    let band_bottom = row_y.saturating_add(half_height);
+                    bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+                });
+            if !overlaps_seeded_row {
+                position_groups.push(vec![word.y_center()]);
+            }
+        }
+        let mut rows: Vec<u32> = position_groups
+            .iter()
+            .filter_map(|group| median_row_position(group))
+            .collect();
+        rows.sort_unstable();
+        rows
+    }
+
+    /// `find_row_index` as a linear scan keeping the first nearest row.
+    fn find_row_index_oracle(row_positions: &[u32], word: &HocrWord) -> Option<usize> {
+        let y_center = word.y_center() as u32;
+        row_positions
+            .iter()
+            .enumerate()
+            .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
+            .map(|(index, _)| index)
+    }
+
+    /// A deterministic xorshift stream, so a failing seed reproduces.
+    struct Xorshift(u64);
+
+    impl Xorshift {
+        fn below(&mut self, bound: u32) -> u32 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % u64::from(bound)) as u32
+        }
+    }
+
+    fn random_row_words(rng: &mut Xorshift) -> Vec<HocrWord> {
+        let pitch = 1 + rng.below(30);
+        let rows = 1 + rng.below(25);
+        (0..rng.below(120))
+            .map(|index| {
+                let row = rng.below(rows);
+                let height = match rng.below(10) {
+                    0 => 0,
+                    1 => 25 + rng.below(40),
+                    _ => 8 + rng.below(5),
+                };
+                let top = (row * pitch + rng.below(9)).saturating_sub(rng.below(3) * 4);
+                word("w", index * 7 % 400, top, 10, height)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn detect_rows_and_find_row_index_match_their_linear_scans() {
+        let mut rng = Xorshift(0x2545_f491_4f6c_dd1d);
+        let mut multi_row_cases = 0;
+        for case in 0..4000 {
+            let words = random_row_words(&mut rng);
+            let ratio = [0.0, 0.3, 0.5, 1.0, 2.5][case % 5];
+            let rows = detect_rows(&words, ratio);
+            assert_eq!(rows, detect_rows_oracle(&words, ratio), "case {case}, ratio {ratio}");
+            multi_row_cases += usize::from(rows.len() > 3);
+            let mut duplicated = rows.clone();
+            duplicated.extend(rows.iter().step_by(2).copied());
+            duplicated.sort_unstable();
+            for positions in [&rows, &duplicated, &Vec::new()] {
+                for word in &words {
+                    assert_eq!(
+                        find_row_index(positions, word),
+                        find_row_index_oracle(positions, word),
+                        "case {case}, rows {positions:?}, word top {} height {}",
+                        word.top,
+                        word.height
+                    );
+                }
+            }
+        }
+        assert!(multi_row_cases > 1000, "too few multi-row cases: {multi_row_cases}");
+    }
+
+    #[test]
+    fn find_row_index_keeps_the_first_of_equally_near_rows() {
+        let probe = word("w", 0, 10, 10, 0);
+        assert_eq!(find_row_index(&[8, 8, 12, 12], &probe), Some(0));
+        assert_eq!(find_row_index(&[8, 11, 11], &probe), Some(1));
+        assert_eq!(find_row_index(&[10, 10], &probe), Some(0));
+        assert_eq!(find_row_index(&[], &probe), None);
     }
 
     #[test]
