@@ -397,22 +397,22 @@ fn extract_annotations_with_empty_body_fallback(
         });
     }
 
-    let fallback = (recovered_count > 0).then_some(AnnotationTextFallback {
-        native_pages,
+    let fallback = (recovered_count > 0).then(|| AnnotationTextFallback {
+        native_pages: native_pages.into_iter().map(str::to_owned).collect(),
         annotation_pages,
     });
     (None, fallback, warnings)
 }
 
 #[cfg(feature = "pdf")]
-fn native_page_texts(
-    native_text: &str,
-    page_contents: Option<&[PageContent]>,
+fn native_page_texts<'a>(
+    native_text: &'a str,
+    page_contents: Option<&'a [PageContent]>,
     boundaries: Option<&[PageBoundary]>,
     page_count: usize,
-) -> Vec<String> {
+) -> Vec<&'a str> {
     if let Some(pages) = page_contents.filter(|pages| pages.len() == page_count) {
-        return pages.iter().map(|page| page.content.clone()).collect();
+        return pages.iter().map(|page| page.content.as_str()).collect();
     }
     if let Some(boundaries) = boundaries.filter(|boundaries| boundaries.len() == page_count) {
         return boundaries
@@ -421,14 +421,13 @@ fn native_page_texts(
                 native_text
                     .get(boundary.byte_start..boundary.byte_end)
                     .unwrap_or_default()
-                    .to_string()
             })
             .collect();
     }
     if native_text.trim().is_empty() {
-        return vec![String::new(); page_count];
+        return vec![""; page_count];
     }
-    vec![native_text.to_string()]
+    vec![native_text]
 }
 
 #[cfg(feature = "pdf")]
@@ -1478,6 +1477,60 @@ mod tests {
         retain_segments_inside_page_margins, table_stage_failure_warning,
     };
     use crate::core::config::OutputFormat;
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn native_page_texts_borrows_page_text_instead_of_copying_it() {
+        let page = |page_number: u32, content: &str| crate::types::PageContent {
+            page_number,
+            content: content.to_owned(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+            geometry: None,
+            viewports: None,
+            image_preprocessing: None,
+        };
+        let pages = vec![page(1, "first"), page(2, "  ")];
+
+        let texts = super::native_page_texts("first\n\n  ", Some(&pages), None, 2);
+
+        assert_eq!(texts, ["first", "  "]);
+        assert_eq!(texts[0].as_ptr(), pages[0].content.as_ptr());
+        assert_eq!(texts[1].as_ptr(), pages[1].content.as_ptr());
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn native_page_texts_slices_boundaries_and_falls_back_to_the_whole_text() {
+        let text = "one\n\ntwo";
+        let boundaries = [
+            crate::types::PageBoundary {
+                byte_start: 0,
+                byte_end: 3,
+                page_number: 1,
+            },
+            crate::types::PageBoundary {
+                byte_start: 5,
+                byte_end: 8,
+                page_number: 2,
+            },
+        ];
+
+        assert_eq!(
+            super::native_page_texts(text, None, Some(&boundaries), 2),
+            ["one", "two"]
+        );
+        assert_eq!(super::native_page_texts(text, None, None, 2), [text]);
+        assert_eq!(super::native_page_texts(" \n", None, None, 3), ["", "", ""]);
+    }
 
     #[test]
     fn native_text_cancellation_remains_a_typed_cancellation() {
