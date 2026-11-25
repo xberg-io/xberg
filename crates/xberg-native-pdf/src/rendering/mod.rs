@@ -48,6 +48,8 @@ pub mod sidecar;
 mod text_contrast_probe;
 mod text_rasterizer;
 
+#[doc(hidden)]
+pub use page_renderer::budget_probe;
 pub use page_renderer::{ImageFormat, PageRenderer, RenderOptions, RenderedImage};
 pub use separation_renderer::{SeparationPlate, render_separation, render_separations};
 

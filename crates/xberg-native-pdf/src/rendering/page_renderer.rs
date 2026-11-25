@@ -10211,6 +10211,36 @@ mod tests {
     }
 }
 
+/// Allocation probes for `tests/image_budget_peak.rs`: each pairs an operation `render_image` runs
+/// with the bytes the image budget charges for it, so a counting allocator can hold one against the
+/// other.
+#[doc(hidden)]
+pub mod budget_probe {
+    /// What the image budget charges an in-place decode of `bytes` beyond the caller's encoded
+    /// buffer and canvas, or `None` for a JPEG it would not decode in place.
+    pub fn in_place_decode_bound(bytes: &[u8]) -> Option<u64> {
+        super::image_budget::single_scan_frame(bytes)
+            .then(|| super::image_budget::in_place_decode_bytes(bytes).ok())
+            .flatten()
+    }
+
+    /// Decode `bytes` in place at its `frame` size, as `render_image` does, returning that size.
+    pub fn decode_in_place(bytes: &[u8], frame: (u32, u32)) -> crate::Result<(u32, u32)> {
+        super::image_budget::decode_jpeg_into_rgba(bytes, frame).map(|image| image.dimensions())
+    }
+
+    /// What the image budget charges a pre-resize of a `source` RGBA raster to `target`.
+    pub fn resize_bound(source: (u32, u32), target: (u32, u32)) -> u64 {
+        super::image_budget::resize_working_bytes(source, target)
+    }
+
+    /// Pre-resize the RGBA `pixels` of a `source` raster to `target` as `render_image` does,
+    /// returning the length of the resized raster.
+    pub fn resize(pixels: &mut [u8], source: (u32, u32), target: (u32, u32)) -> Option<usize> {
+        super::raster_budget::resize_rgba(pixels, source.0, source.1, target.0, target.1).map(|resized| resized.len())
+    }
+}
+
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
