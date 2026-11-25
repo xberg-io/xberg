@@ -1557,7 +1557,7 @@ jobs:
           retention-days: 14
 
   ruby-gem:
-    name: Build Ruby gem (${{ matrix.label }})
+    name: Build Ruby gem (${{ matrix.label }}, ruby ${{ matrix.ruby }})
     needs: [prepare, check-rubygems, publish-crates]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_ruby == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
@@ -1574,12 +1574,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux }
-          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux }
-          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin }
+          # The ruby "3.3" leg of each platform builds that platform's gem; the 3.4 and 4.0 legs only
+          # contribute their extension, which publish-rubygems merges into the 3.3 leg's gem so one
+          # platform gem loads on every supported Ruby. Windows ships a 3.3-pinned gem. ~keep
+          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux, ruby: "3.3", layout: fat }
+          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux, ruby: "3.4", layout: extension }
+          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux, ruby: "4.0", layout: extension }
+          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux, ruby: "3.3", layout: fat }
+          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux, ruby: "3.4", layout: extension }
+          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux, ruby: "4.0", layout: extension }
+          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin, ruby: "3.3", layout: fat }
+          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin, ruby: "3.4", layout: extension }
+          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin, ruby: "4.0", layout: extension }
           - os: windows-latest
             label: windows-x86_64
             gem_platform: x64-mingw-ucrt
+            ruby: "3.3"
+            layout: pinned
             # This leg's binding features and the core features actually compiled are two
             # separate switches: `--no-default-features` here turns xberg-rb's OWN
             # `#[cfg(feature = "...")]`-gated match arms/fields off, while the Windows target
@@ -1631,11 +1642,11 @@ jobs:
           # sccache's rustc spawn hits Windows error 206 on long GNU compiler arguments. ~keep
           use-sccache: ${{ runner.os == 'Windows' && 'false' || 'true' }}
 
-      # Ruby 3.3 is the ABI the release gem ships; mise.ci.toml locks it. ~keep
+      # Ruby 3.3, 3.4 and 4.0 are the ABIs the release gems ship; mise.ci.toml locks them. ~keep
       - uses: xberg-io/actions/setup-mise@v1
         if: runner.os != 'Windows'
         with:
-          tools: ruby=3.3
+          tools: ruby=${{ matrix.ruby }}
           mise-env: ci
           config-ref: ${{ github.sha }}
 
@@ -1644,7 +1655,7 @@ jobs:
       - uses: ruby/setup-ruby@v1
         if: runner.os == 'Windows'
         with:
-          ruby-version: "3.3"
+          ruby-version: ${{ matrix.ruby }}
           bundler-cache: false
 
       - name: Install system dependencies
@@ -1688,7 +1699,8 @@ jobs:
         env:
           GEM_PLATFORM: ${{ matrix.gem_platform }}
           GEM_VERSION: ${{ needs.prepare.outputs.version }}
-          KEEP_SOURCE: ${{ matrix.label == 'linux-x86_64' }}
+          KEEP_SOURCE: ${{ matrix.label == 'linux-x86_64' && matrix.layout != 'extension' }}
+          GEM_LAYOUT: ${{ matrix.layout }}
           DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
         run: |
           set -euo pipefail
@@ -1699,12 +1711,21 @@ jobs:
           # normalizes prereleases (`1.5.0-rc.1` -> `1.5.0.pre.rc.1`); the raw prepare version
           # would not match those paths.
           GEM_VERSION="$(ruby -rrubygems -e 'print Gem::Version.new(ENV.fetch("GEM_VERSION"))')"
-          ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
+          ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE" "$GEM_LAYOUT"
 
       - uses: actions/upload-artifact@v7
+        if: matrix.layout != 'extension'
         with:
           name: rubygems-${{ matrix.label }}
           path: packages/ruby/pkg/*.gem
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.layout == 'extension'
+        with:
+          name: rubyext-${{ matrix.label }}-ruby${{ matrix.ruby }}
+          path: packages/ruby/pkg/ext
           if-no-files-found: error
           retention-days: 14
 
@@ -5184,10 +5205,16 @@ jobs:
             LICENSE
             THIRD_PARTY_LICENSES.md
             packages/ruby/xberg.gemspec
+            scripts/ci/merge-ruby-native-gems.rb
 
       - uses: actions/download-artifact@v8
         with:
           pattern: rubygems-*
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: rubyext-*
           path: dist
 
       - uses: xberg-io/actions/setup-mise@v1
@@ -5242,6 +5269,16 @@ jobs:
             exit 1
           }
           printf 'Gem inventory (%d): %s\n' "${#names[@]}" "${names[*]}"
+        shell: bash
+
+      # The 3.3 leg of each non-Windows platform built a fat gem holding only the Ruby 3.3 extension;
+      # add the 3.4 and 4.0 extensions so one gem per platform loads on every supported Ruby. The
+      # script fails unless every ABI is present, and the inventory above is unchanged. ~keep
+      - name: Merge the per-Ruby extensions into the platform gems
+        run: |
+          set -euo pipefail
+          ruby scripts/ci/merge-ruby-native-gems.rb dist 3.3.0,3.4.0,4.0.0 \
+            linux-x86_64:x86_64-linux linux-aarch64:aarch64-linux macos-arm64:arm64-darwin
         shell: bash
 
       # The gemspec lists THIRD_PARTY_LICENSES.md, so both notices are already inside each
